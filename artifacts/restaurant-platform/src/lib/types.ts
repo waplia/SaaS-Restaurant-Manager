@@ -334,3 +334,29 @@ export interface Supplier {
   email: string | null;
   phone: string | null;
 }
+
+export interface RestaurantInfo {
+  id: number;
+  name: string;
+  taxRate: string;
+  serviceCharge: string;
+  logoUrl: string | null;
+}
+
+export interface PosModifier {
+  id: number;
+  name: string;
+  price: string;
+  isDefault: boolean;
+  isAvailable: boolean;
+}
+
+export interface PosModifierGroup {
+  id: number;
+  menuItemId: number;
+  name: string;
+  isRequired: boolean;
+  minSelections: number;
+  maxSelections: number;
+  modifiers: PosModifier[];
+}

@@ -93,6 +93,44 @@ export function usePayOrder() {
   });
 }
 
+export function useRestaurantInfo() {
+  return useQuery({
+    queryKey: ["restaurant", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").RestaurantInfo>(`/restaurants/${RESTAURANT_ID}`),
+    staleTime: 60000,
+  });
+}
+
+export function useItemModifierGroups(menuItemId?: number) {
+  return useQuery({
+    queryKey: ["modifier-groups", menuItemId],
+    queryFn: async () => {
+      const groups = await apiGet<import("./types").PosModifierGroup[]>(`/items/${menuItemId}/modifier-groups`);
+      const withMods = await Promise.all(
+        groups.map(async g => {
+          const modifiers = await apiGet<import("./types").PosModifier[]>(`/modifier-groups/${g.id}/modifiers`);
+          return { ...g, modifiers: modifiers.filter(m => m.isAvailable) };
+        })
+      );
+      return withMods as import("./types").PosModifierGroup[];
+    },
+    enabled: !!menuItemId,
+    staleTime: 30000,
+  });
+}
+
+export function useSplitOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, splits }: { orderId: number; splits: Array<{ paymentMethod: string }> }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/split`, { splits }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["tables", RESTAURANT_ID] });
+    },
+  });
+}
+
 export function useOrderDetail(id?: number) {
   return useQuery({
     queryKey: ["orders", "detail", RESTAURANT_ID, id],

@@ -231,6 +231,34 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) =
   res.json({ ...updatedOrder, items });
 });
 
+router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { splits } = req.body;
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Order is already completed or cancelled" });
+  }
+
+  const splitMethods = (splits as Array<{ paymentMethod: string }>).map(s => s.paymentMethod).join(",");
+  const [updated] = await db.update(ordersTable).set({
+    paymentMethod: `split:${splitMethods}`,
+    paymentStatus: "paid",
+    status: "completed",
+    updatedAt: new Date(),
+  }).where(eq(ordersTable.id, orderId)).returning();
+
+  if (order.tableId) {
+    await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  }
+
+  broadcastEvent(restaurantId, "order:status", { id: orderId, status: "completed", paymentStatus: "paid", orderNumber: order.orderNumber });
+
+  res.json(updated);
+});
+
 router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
