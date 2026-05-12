@@ -4,7 +4,7 @@ import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
-  useOrderDetail, useAddOrderItem,
+  useOrderDetail,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -525,7 +525,6 @@ export default function PosPage() {
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const voidOrder = useVoidOrder();
-  const addOrderItem = useAddOrderItem();
   const { toast } = useToast();
 
   const { data: modifierGroups = [], isLoading: modGroupsLoading } = useItemModifierGroups(modPickerItem?.id);
@@ -591,26 +590,11 @@ export default function PosPage() {
 
   const handleMenuItemClick = useCallback((item: MenuItem) => {
     if (placedOrder) {
-      addOrderItem.mutate({ orderId: placedOrder.id, menuItemId: item.id, quantity: 1 }, {
-        onSuccess: (data: any) => {
-          if (data?.items) {
-            const resumedCart: CartItem[] = data.items.map((oi: any) => ({
-              menuItemId: oi.menuItemId,
-              name: oi.menuItemName,
-              basePrice: Number(oi.unitPrice),
-              modifiers: [],
-              unitPrice: Number(oi.unitPrice),
-              quantity: oi.quantity,
-            }));
-            setCart(resumedCart);
-            setPlacedOrder({ ...placedOrder, ...data, items: data.items });
-          }
-        },
-      });
+      toast({ title: "Order already placed", description: "Void the order to add new items, or pay to complete." });
       return;
     }
     setModPickerItem(item);
-  }, [placedOrder, addOrderItem]);
+  }, [placedOrder, toast]);
 
   const updateQty = useCallback((menuItemId: number, qty: number) => {
     if (qty <= 0) setCart(prev => prev.filter(c => c.menuItemId !== menuItemId));
@@ -800,9 +784,9 @@ export default function PosPage() {
           {/* Menu Grid */}
           <div className="flex-1 overflow-y-auto p-3">
             {placedOrder && (
-              <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-                Tap items to add them to the existing order
+              <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                <ReceiptText className="w-3.5 h-3.5 flex-shrink-0" />
+                Order placed — pay, split, or void to start a new one
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">

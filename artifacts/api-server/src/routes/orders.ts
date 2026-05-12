@@ -200,6 +200,9 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
+  }
 
   await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
   await db.delete(orderItemsTable).where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
