@@ -29,14 +29,14 @@ router.post("/restaurants/:restaurantId/customers", async (req, res) => {
 
 router.get("/restaurants/:restaurantId/customers/:id", async (req, res) => {
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, Number(req.params.id)));
-  if (!customer) return res.status(404).json({ error: "Not found" });
+  if (!customer) return void res.status(404).json({ error: "Not found" });
   res.json(customer);
 });
 
 router.patch("/restaurants/:restaurantId/customers/:id", async (req, res) => {
   const { name, email, phone, address, loyaltyPoints, notes, isActive } = req.body;
   const [updated] = await db.update(customersTable).set({ name, email, phone, address, loyaltyPoints, notes, isActive, updatedAt: new Date() }).where(eq(customersTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
@@ -58,7 +58,7 @@ router.patch("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
   if (validTo) updates.validTo = new Date(validTo);
   if (usageLimit !== undefined) updates.usageLimit = usageLimit;
   const [updated] = await db.update(couponsTable).set(updates).where(eq(couponsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
@@ -73,10 +73,10 @@ router.post("/restaurants/:restaurantId/coupons/validate", async (req, res) => {
   const now = new Date();
 
   const [coupon] = await db.select().from(couponsTable).where(and(eq(couponsTable.restaurantId, restaurantId), eq(couponsTable.code, code.toUpperCase()), eq(couponsTable.isActive, true)));
-  if (!coupon) return res.json({ valid: false, discountAmount: "0.00", message: "Invalid coupon code" });
-  if (coupon.validTo && new Date(coupon.validTo) < now) return res.json({ valid: false, discountAmount: "0.00", message: "Coupon expired" });
-  if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) return res.json({ valid: false, discountAmount: "0.00", message: "Coupon usage limit reached" });
-  if (coupon.minOrderAmount && Number(orderAmount) < Number(coupon.minOrderAmount)) return res.json({ valid: false, discountAmount: "0.00", message: `Minimum order amount is ${coupon.minOrderAmount}` });
+  if (!coupon) return void res.json({ valid: false, discountAmount: "0.00", message: "Invalid coupon code" });
+  if (coupon.validTo && new Date(coupon.validTo) < now) return void res.json({ valid: false, discountAmount: "0.00", message: "Coupon expired" });
+  if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) return void res.json({ valid: false, discountAmount: "0.00", message: "Coupon usage limit reached" });
+  if (coupon.minOrderAmount && Number(orderAmount) < Number(coupon.minOrderAmount)) return void res.json({ valid: false, discountAmount: "0.00", message: `Minimum order amount is ${coupon.minOrderAmount}` });
 
   let discount = 0;
   if (coupon.discountType === "percentage") discount = (Number(orderAmount) * Number(coupon.discountValue)) / 100;
@@ -100,7 +100,7 @@ router.post("/restaurants/:restaurantId/notifications/mark-read", async (req, re
   const restaurantId = Number(req.params.restaurantId);
   if (all) {
     const result = await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.restaurantId, restaurantId));
-    return res.json({ updated: result.rowCount ?? 0 });
+    return void res.json({ updated: result.rowCount ?? 0 });
   }
   if (ids?.length) {
     let updated = 0;
@@ -108,7 +108,7 @@ router.post("/restaurants/:restaurantId/notifications/mark-read", async (req, re
       await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.id, id));
       updated++;
     }
-    return res.json({ updated });
+    return void res.json({ updated });
   }
   res.json({ updated: 0 });
 });

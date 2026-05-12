@@ -20,7 +20,7 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
 router.patch("/restaurants/:restaurantId/tables/:id", async (req, res) => {
   const { tableNumber, capacity, status, positionX, positionY, shape, isActive } = req.body;
   const [updated] = await db.update(floorTablesTable).set({ tableNumber, capacity, status, positionX, positionY, shape, isActive, updatedAt: new Date() }).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, Number(req.params.restaurantId)))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
@@ -31,7 +31,7 @@ router.delete("/restaurants/:restaurantId/tables/:id", async (req, res) => {
 
 router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
   const [table] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, Number(req.params.id)));
-  if (!table) return res.status(404).json({ error: "Not found" });
+  if (!table) return void res.status(404).json({ error: "Not found" });
   const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
   res.json({ qrUrl: `${baseUrl}/order/${table.qrCode}`, tableNumber: table.tableNumber, svgData: "" });
 });
@@ -55,7 +55,7 @@ router.patch("/restaurants/:restaurantId/reservations/:id", async (req, res) => 
   const updates: Record<string, unknown> = { guestName, guestPhone, tableId, partySize, status, notes, updatedAt: new Date() };
   if (scheduledAt) updates.scheduledAt = new Date(scheduledAt);
   const [updated] = await db.update(reservationsTable).set(updates).where(and(eq(reservationsTable.id, Number(req.params.id)), eq(reservationsTable.restaurantId, Number(req.params.restaurantId)))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

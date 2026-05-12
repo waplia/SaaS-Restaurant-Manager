@@ -11,7 +11,7 @@ router.get("/subscription-plans", async (_req, res) => {
 
 router.get("/subscription-plans/:id", async (req, res) => {
   const plan = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, Number(req.params.id)));
-  if (!plan.length) return res.status(404).json({ error: "Not found" });
+  if (!plan.length) return void res.status(404).json({ error: "Not found" });
   res.json(plan[0]);
 });
 
@@ -37,26 +37,26 @@ router.post("/tenants", async (req, res) => {
 
 router.get("/tenants/:id", async (req, res) => {
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, Number(req.params.id)));
-  if (!tenant) return res.status(404).json({ error: "Not found" });
+  if (!tenant) return void res.status(404).json({ error: "Not found" });
   res.json(tenant);
 });
 
 router.patch("/tenants/:id", async (req, res) => {
   const { name, planId, planStatus, isActive, logoUrl, primaryColor } = req.body;
   const [updated] = await db.update(tenantsTable).set({ name, planId, planStatus, isActive, logoUrl, primaryColor, updatedAt: new Date() }).where(eq(tenantsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.post("/tenants/:id/suspend", async (req, res) => {
   const [updated] = await db.update(tenantsTable).set({ isSuspended: true, updatedAt: new Date() }).where(eq(tenantsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.post("/tenants/:id/activate", async (req, res) => {
   const [updated] = await db.update(tenantsTable).set({ isSuspended: false, isActive: true, updatedAt: new Date() }).where(eq(tenantsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

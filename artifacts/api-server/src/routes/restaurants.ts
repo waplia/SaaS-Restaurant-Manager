@@ -20,14 +20,14 @@ router.post("/restaurants", async (req, res) => {
 
 router.get("/restaurants/:id", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.id, Number(req.params.id)));
-  if (!restaurant) return res.status(404).json({ error: "Not found" });
+  if (!restaurant) return void res.status(404).json({ error: "Not found" });
   res.json(restaurant);
 });
 
 router.patch("/restaurants/:id", async (req, res) => {
   const { name, description, phone, email, address, city, taxRate, serviceCharge, logoUrl, openingTime, closingTime } = req.body;
   const [updated] = await db.update(restaurantsTable).set({ name, description, phone, email, address, city, taxRate, serviceCharge, logoUrl, openingTime, closingTime, updatedAt: new Date() }).where(eq(restaurantsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

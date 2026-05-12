@@ -11,12 +11,10 @@ import staffRouter from "./staff";
 import customersRouter from "./customers";
 import dashboardRouter from "./dashboard";
 import publicRouter from "./public";
-import seedRouter from "./seed";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
-router.use(seedRouter);
 router.use(tenantsRouter);
 router.use(restaurantsRouter);
 router.use(usersRouter);

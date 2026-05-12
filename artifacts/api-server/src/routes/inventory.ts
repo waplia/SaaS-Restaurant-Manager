@@ -29,7 +29,7 @@ router.post("/restaurants/:restaurantId/inventory", async (req, res) => {
 router.patch("/restaurants/:restaurantId/inventory/:id", async (req, res) => {
   const { name, unit, minStockLevel, costPerUnit, category, supplierId, isActive } = req.body;
   const [updated] = await db.update(inventoryItemsTable).set({ name, unit, minStockLevel, costPerUnit, category, supplierId, isActive, updatedAt: new Date() }).where(eq(inventoryItemsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json({ ...updated, isLowStock: Number(updated.currentStock) <= Number(updated.minStockLevel) });
 });
 
@@ -44,7 +44,7 @@ router.post("/restaurants/:restaurantId/inventory/:id/adjust", async (req, res) 
   const restaurantId = Number(req.params.restaurantId);
 
   const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
-  if (!item) return res.status(404).json({ error: "Not found" });
+  if (!item) return void res.status(404).json({ error: "Not found" });
 
   let newStock = Number(item.currentStock);
   if (type === "add" || type === "receive") newStock += Number(quantity);
@@ -71,7 +71,7 @@ router.post("/restaurants/:restaurantId/suppliers", async (req, res) => {
 router.patch("/restaurants/:restaurantId/suppliers/:id", async (req, res) => {
   const { name, contactPerson, phone, email, address, isActive } = req.body;
   const [updated] = await db.update(suppliersTable).set({ name, contactPerson, phone, email, address, isActive, updatedAt: new Date() }).where(eq(suppliersTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

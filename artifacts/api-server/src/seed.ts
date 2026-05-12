@@ -19,11 +19,11 @@ import {
 } from "./lib/db";
 import { eq } from "drizzle-orm";
 
-async function seed() {
+export async function seed(): Promise<void> {
   console.log("🌱 Starting seed...");
 
   // ── Subscription Plans ──────────────────────────────────────
-  const [starter, pro, enterprise] = await Promise.all([
+  const [starter, pro] = await Promise.all([
     db.insert(subscriptionPlansTable).values({
       name: "Starter", slug: "starter", price: "29.00", billingPeriod: "monthly",
       maxRestaurants: 1, maxBranches: 1, maxStaff: 5, maxTables: 10, maxMenuItems: 50, trialDays: 14,
@@ -37,14 +37,14 @@ async function seed() {
     db.insert(subscriptionPlansTable).values({
       name: "Enterprise", slug: "enterprise", price: "199.00", billingPeriod: "monthly",
       maxRestaurants: -1, maxBranches: -1, maxStaff: -1, maxTables: -1, maxMenuItems: -1, trialDays: 30,
-      features: ["All Pro features", "White-label", "API Access", "Dedicated Support", "Custom Integrations"],
+      features: ["All Pro features", "White-label", "API Access", "Dedicated Support"],
     }).onConflictDoNothing().returning(),
   ]);
 
   const starterPlan = starter[0] ?? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "starter")).then(r => r[0]);
   const proPlan = pro[0] ?? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "pro")).then(r => r[0]);
-  const enterprisePlan = enterprise[0] ?? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "enterprise")).then(r => r[0]);
 
+  if (!starterPlan || !proPlan) throw new Error("Failed to create/find plans");
   console.log("✅ Plans created");
 
   // ── Tenants ─────────────────────────────────────────────────
@@ -59,9 +59,10 @@ async function seed() {
     trialEndsAt: new Date(Date.now() + 10 * 86400000), primaryColor: "#dc2626",
   }).onConflictDoNothing().returning();
 
-  const spiceTenantId = spiceTenant?.id ?? (await db.select().from(tenantsTable).where(eq(tenantsTable.slug, "spice-garden")))[0].id;
-  const burgerTenantId = burgerTenant?.id ?? (await db.select().from(tenantsTable).where(eq(tenantsTable.slug, "burger-barn")))[0].id;
+  const spiceTenantId = spiceTenant?.id ?? (await db.select().from(tenantsTable).where(eq(tenantsTable.slug, "spice-garden")))[0]?.id;
+  const burgerTenantId = burgerTenant?.id ?? (await db.select().from(tenantsTable).where(eq(tenantsTable.slug, "burger-barn")))[0]?.id;
 
+  if (!spiceTenantId || !burgerTenantId) throw new Error("Failed to create/find tenants");
   console.log("✅ Tenants created");
 
   // ── Restaurants ─────────────────────────────────────────────
@@ -74,18 +75,17 @@ async function seed() {
     openingTime: "10:00", closingTime: "23:00",
   }).onConflictDoNothing().returning();
 
-  const [burgerRest] = await db.insert(restaurantsTable).values({
+  await db.insert(restaurantsTable).values({
     tenantId: burgerTenantId, name: "Burger Barn", slug: "burger-barn-main",
     description: "Juicy burgers, crispy fries, great vibes",
     phone: "+91 99887 76655", email: "hi@burgerbarn.com",
     address: "5 Connaught Place", city: "Delhi", country: "IN",
     taxRate: "5.00", serviceCharge: "0.00",
     openingTime: "11:00", closingTime: "22:00",
-  }).onConflictDoNothing().returning();
+  }).onConflictDoNothing();
 
-  const spiceRestId = spiceRest?.id ?? (await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, "spice-garden-main")))[0].id;
-  const burgerRestId = burgerRest?.id ?? (await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, "burger-barn-main")))[0].id;
-
+  const spiceRestId = spiceRest?.id ?? (await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, "spice-garden-main")))[0]?.id;
+  if (!spiceRestId) throw new Error("Failed to create/find Spice Garden restaurant");
   console.log("✅ Restaurants created");
 
   // ── Branches ────────────────────────────────────────────────
@@ -93,53 +93,40 @@ async function seed() {
   await db.insert(branchesTable).values({ restaurantId: spiceRestId, name: "Koramangala", address: "5th Block, Koramangala" }).onConflictDoNothing();
 
   // ── Users ────────────────────────────────────────────────────
-  const [superAdmin] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Alex Super", email: "admin@tabletrack.io",
-    passwordHash: "demo_hash_super", role: "super_admin",
-    isSuperAdmin: true,
-  }).onConflictDoNothing().returning();
+    passwordHash: "demo_hash_super", role: "super_admin", isSuperAdmin: true,
+  }).onConflictDoNothing();
 
-  const [owner1] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Priya Sharma", email: "priya@spicegarden.com",
     passwordHash: "demo_hash_owner1", role: "owner",
-    tenantId: spiceTenantId, restaurantId: spiceRestId,
-    phone: "+91 98765 43210",
-  }).onConflictDoNothing().returning();
+    tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 98765 43210",
+  }).onConflictDoNothing();
 
-  const [owner2] = await db.insert(usersTable).values({
-    name: "Raj Kumar", email: "raj@burgerbarn.com",
-    passwordHash: "demo_hash_owner2", role: "owner",
-    tenantId: burgerTenantId, restaurantId: burgerRestId,
-    phone: "+91 99887 76655",
-  }).onConflictDoNothing().returning();
-
-  const [waiter1] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Amit Patel", email: "amit@spicegarden.com",
     passwordHash: "demo_hash_waiter1", role: "waiter",
-    tenantId: spiceTenantId, restaurantId: spiceRestId,
-    phone: "+91 90000 11111",
-  }).onConflictDoNothing().returning();
+    tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 11111",
+  }).onConflictDoNothing();
 
-  const [waiter2] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Sunita Devi", email: "sunita@spicegarden.com",
     passwordHash: "demo_hash_waiter2", role: "waiter",
-    tenantId: spiceTenantId, restaurantId: spiceRestId,
-    phone: "+91 90000 22222",
-  }).onConflictDoNothing().returning();
+    tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 22222",
+  }).onConflictDoNothing();
 
-  const [chef1] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Chef Ramesh", email: "ramesh@spicegarden.com",
     passwordHash: "demo_hash_chef1", role: "kitchen",
-    tenantId: spiceTenantId, restaurantId: spiceRestId,
-    phone: "+91 90000 33333",
-  }).onConflictDoNothing().returning();
+    tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 33333",
+  }).onConflictDoNothing();
 
-  const [manager1] = await db.insert(usersTable).values({
+  await db.insert(usersTable).values({
     name: "Deepa Nair", email: "deepa@spicegarden.com",
     passwordHash: "demo_hash_manager1", role: "manager",
-    tenantId: spiceTenantId, restaurantId: spiceRestId,
-    phone: "+91 90000 44444",
-  }).onConflictDoNothing().returning();
+    tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 44444",
+  }).onConflictDoNothing();
 
   console.log("✅ Users created");
 
@@ -155,13 +142,13 @@ async function seed() {
     { tableNumber: "T8", capacity: 4, positionX: 200, positionY: 250, shape: "square" },
     { tableNumber: "BAR1", capacity: 1, positionX: 350, positionY: 50, shape: "round" },
     { tableNumber: "BAR2", capacity: 1, positionX: 350, positionY: 100, shape: "round" },
-  ];
+  ] as const;
 
-  const tables: number[] = [];
+  const tableIds: number[] = [];
   for (const t of tableData) {
     const qrCode = `spice-${t.tableNumber}-${Date.now()}`;
     const [tbl] = await db.insert(floorTablesTable).values({ restaurantId: spiceRestId, ...t, qrCode }).onConflictDoNothing().returning();
-    if (tbl) tables.push(tbl.id);
+    if (tbl) tableIds.push(tbl.id);
   }
 
   console.log("✅ Tables created");
@@ -172,7 +159,8 @@ async function seed() {
     description: "Our full menu", availableFrom: "10:00", availableTo: "23:00",
   }).onConflictDoNothing().returning();
 
-  const menuId = menu?.id ?? (await db.select().from(menusTable).where(eq(menusTable.restaurantId, spiceRestId)))[0].id;
+  const menuId = menu?.id ?? (await db.select().from(menusTable).where(eq(menusTable.restaurantId, spiceRestId)))[0]?.id;
+  if (!menuId) throw new Error("Failed to create/find menu");
 
   const [startersCat] = await db.insert(menuCategoriesTable).values({ menuId, restaurantId: spiceRestId, name: "Starters", sortOrder: 1 }).onConflictDoNothing().returning();
   const [mainCat] = await db.insert(menuCategoriesTable).values({ menuId, restaurantId: spiceRestId, name: "Main Course", sortOrder: 2 }).onConflictDoNothing().returning();
@@ -180,41 +168,56 @@ async function seed() {
   const [drinksCat] = await db.insert(menuCategoriesTable).values({ menuId, restaurantId: spiceRestId, name: "Beverages", sortOrder: 4 }).onConflictDoNothing().returning();
   const [dessertCat] = await db.insert(menuCategoriesTable).values({ menuId, restaurantId: spiceRestId, name: "Desserts", sortOrder: 5 }).onConflictDoNothing().returning();
 
-  const cats = { starters: startersCat, main: mainCat, bread: breadCat, drinks: drinksCat, dessert: dessertCat };
+  const existingCats = await db.select().from(menuCategoriesTable).where(eq(menuCategoriesTable.menuId, menuId));
+  const getCat = (name: string): number => {
+    const c = existingCats.find(c => c.name === name);
+    return c?.id ?? (startersCat?.id ?? existingCats[0]!.id);
+  };
 
-  const menuItems: Array<{ categoryId: number; name: string; description: string; price: string; isVeg: boolean; preparationTime: number; calories?: number; tags: string[] }> = [
-    { categoryId: cats.starters!.id, name: "Samosa (2 pcs)", description: "Crispy fried pastry with spiced potato filling", price: "80.00", isVeg: true, preparationTime: 10, calories: 150, tags: ["popular", "vegetarian"] },
-    { categoryId: cats.starters!.id, name: "Paneer Tikka", description: "Marinated paneer grilled in tandoor", price: "220.00", isVeg: true, preparationTime: 15, calories: 300, tags: ["popular", "vegetarian"] },
-    { categoryId: cats.starters!.id, name: "Chicken Tikka", description: "Marinated chicken grilled in tandoor", price: "280.00", isVeg: false, preparationTime: 20, calories: 350, tags: ["popular", "spicy"] },
-    { categoryId: cats.starters!.id, name: "Veg Spring Rolls", description: "Crispy rolls with mixed vegetable filling", price: "160.00", isVeg: true, preparationTime: 12, calories: 200, tags: ["vegetarian"] },
-    { categoryId: cats.starters!.id, name: "Soup of the Day", description: "Chef's special soup", price: "120.00", isVeg: true, preparationTime: 8, calories: 100, tags: [] },
+  interface MenuItemSeed {
+    categoryId: number;
+    name: string;
+    description: string;
+    price: string;
+    isVeg: boolean;
+    preparationTime: number;
+    calories?: number;
+    tags: string[];
+  }
 
-    { categoryId: cats.main!.id, name: "Butter Chicken", description: "Tender chicken in rich tomato butter gravy", price: "320.00", isVeg: false, preparationTime: 20, calories: 450, tags: ["bestseller", "spicy"] },
-    { categoryId: cats.main!.id, name: "Paneer Butter Masala", description: "Cottage cheese in creamy tomato gravy", price: "260.00", isVeg: true, preparationTime: 18, calories: 400, tags: ["bestseller", "vegetarian"] },
-    { categoryId: cats.main!.id, name: "Dal Makhani", description: "Slow-cooked black lentils with cream and butter", price: "200.00", isVeg: true, preparationTime: 25, calories: 350, tags: ["popular", "vegetarian"] },
-    { categoryId: cats.main!.id, name: "Chicken Biryani", description: "Fragrant basmati rice with spiced chicken", price: "380.00", isVeg: false, preparationTime: 30, calories: 600, tags: ["bestseller"] },
-    { categoryId: cats.main!.id, name: "Veg Biryani", description: "Fragrant basmati rice with mixed vegetables", price: "280.00", isVeg: true, preparationTime: 25, calories: 500, tags: ["popular", "vegetarian"] },
-    { categoryId: cats.main!.id, name: "Palak Paneer", description: "Cottage cheese in spiced spinach gravy", price: "240.00", isVeg: true, preparationTime: 20, calories: 380, tags: ["healthy", "vegetarian"] },
-    { categoryId: cats.main!.id, name: "Fish Curry", description: "Coastal style fish in coconut gravy", price: "360.00", isVeg: false, preparationTime: 22, calories: 420, tags: ["spicy"] },
+  const menuItems: MenuItemSeed[] = [
+    { categoryId: getCat("Starters"), name: "Samosa (2 pcs)", description: "Crispy fried pastry with spiced potato filling", price: "80.00", isVeg: true, preparationTime: 10, calories: 150, tags: ["popular", "vegetarian"] },
+    { categoryId: getCat("Starters"), name: "Paneer Tikka", description: "Marinated paneer grilled in tandoor", price: "220.00", isVeg: true, preparationTime: 15, calories: 300, tags: ["popular", "vegetarian"] },
+    { categoryId: getCat("Starters"), name: "Chicken Tikka", description: "Marinated chicken grilled in tandoor", price: "280.00", isVeg: false, preparationTime: 20, calories: 350, tags: ["popular", "spicy"] },
+    { categoryId: getCat("Starters"), name: "Veg Spring Rolls", description: "Crispy rolls with mixed vegetable filling", price: "160.00", isVeg: true, preparationTime: 12, calories: 200, tags: ["vegetarian"] },
+    { categoryId: getCat("Starters"), name: "Soup of the Day", description: "Chef's special soup", price: "120.00", isVeg: true, preparationTime: 8, calories: 100, tags: [] },
 
-    { categoryId: cats.bread!.id, name: "Naan", description: "Soft leavened bread from tandoor", price: "50.00", isVeg: true, preparationTime: 8, calories: 120, tags: [] },
-    { categoryId: cats.bread!.id, name: "Butter Naan", description: "Naan brushed with butter", price: "60.00", isVeg: true, preparationTime: 8, calories: 140, tags: ["popular"] },
-    { categoryId: cats.bread!.id, name: "Garlic Naan", description: "Naan topped with garlic and herbs", price: "70.00", isVeg: true, preparationTime: 10, calories: 150, tags: ["popular"] },
-    { categoryId: cats.bread!.id, name: "Tandoori Roti", description: "Whole wheat bread from tandoor", price: "40.00", isVeg: true, preparationTime: 6, calories: 90, tags: ["healthy"] },
-    { categoryId: cats.bread!.id, name: "Steamed Rice", description: "Plain basmati rice", price: "80.00", isVeg: true, preparationTime: 15, calories: 200, tags: [] },
+    { categoryId: getCat("Main Course"), name: "Butter Chicken", description: "Tender chicken in rich tomato butter gravy", price: "320.00", isVeg: false, preparationTime: 20, calories: 450, tags: ["bestseller", "spicy"] },
+    { categoryId: getCat("Main Course"), name: "Paneer Butter Masala", description: "Cottage cheese in creamy tomato gravy", price: "260.00", isVeg: true, preparationTime: 18, calories: 400, tags: ["bestseller", "vegetarian"] },
+    { categoryId: getCat("Main Course"), name: "Dal Makhani", description: "Slow-cooked black lentils with cream and butter", price: "200.00", isVeg: true, preparationTime: 25, calories: 350, tags: ["popular", "vegetarian"] },
+    { categoryId: getCat("Main Course"), name: "Chicken Biryani", description: "Fragrant basmati rice with spiced chicken", price: "380.00", isVeg: false, preparationTime: 30, calories: 600, tags: ["bestseller"] },
+    { categoryId: getCat("Main Course"), name: "Veg Biryani", description: "Fragrant basmati rice with mixed vegetables", price: "280.00", isVeg: true, preparationTime: 25, calories: 500, tags: ["popular", "vegetarian"] },
+    { categoryId: getCat("Main Course"), name: "Palak Paneer", description: "Cottage cheese in spiced spinach gravy", price: "240.00", isVeg: true, preparationTime: 20, calories: 380, tags: ["healthy", "vegetarian"] },
+    { categoryId: getCat("Main Course"), name: "Fish Curry", description: "Coastal style fish in coconut gravy", price: "360.00", isVeg: false, preparationTime: 22, calories: 420, tags: ["spicy"] },
 
-    { categoryId: cats.drinks!.id, name: "Sweet Lassi", description: "Chilled sweet yogurt drink", price: "80.00", isVeg: true, preparationTime: 5, calories: 200, tags: ["popular"] },
-    { categoryId: cats.drinks!.id, name: "Mango Lassi", description: "Chilled mango yogurt drink", price: "100.00", isVeg: true, preparationTime: 5, calories: 250, tags: ["popular"] },
-    { categoryId: cats.drinks!.id, name: "Masala Chai", description: "Spiced Indian tea with milk", price: "60.00", isVeg: true, preparationTime: 5, calories: 80, tags: [] },
-    { categoryId: cats.drinks!.id, name: "Fresh Lime Soda", description: "Freshly squeezed lime with soda", price: "70.00", isVeg: true, preparationTime: 3, calories: 50, tags: [] },
-    { categoryId: cats.drinks!.id, name: "Mineral Water", description: "500ml bottled water", price: "40.00", isVeg: true, preparationTime: 1, calories: 0, tags: [] },
+    { categoryId: getCat("Breads & Rice"), name: "Naan", description: "Soft leavened bread from tandoor", price: "50.00", isVeg: true, preparationTime: 8, calories: 120, tags: [] },
+    { categoryId: getCat("Breads & Rice"), name: "Butter Naan", description: "Naan brushed with butter", price: "60.00", isVeg: true, preparationTime: 8, calories: 140, tags: ["popular"] },
+    { categoryId: getCat("Breads & Rice"), name: "Garlic Naan", description: "Naan topped with garlic and herbs", price: "70.00", isVeg: true, preparationTime: 10, calories: 150, tags: ["popular"] },
+    { categoryId: getCat("Breads & Rice"), name: "Tandoori Roti", description: "Whole wheat bread from tandoor", price: "40.00", isVeg: true, preparationTime: 6, calories: 90, tags: ["healthy"] },
+    { categoryId: getCat("Breads & Rice"), name: "Steamed Rice", description: "Plain basmati rice", price: "80.00", isVeg: true, preparationTime: 15, calories: 200, tags: [] },
 
-    { categoryId: cats.dessert!.id, name: "Gulab Jamun", description: "Soft milk dumplings in sugar syrup", price: "100.00", isVeg: true, preparationTime: 5, calories: 250, tags: ["popular"] },
-    { categoryId: cats.dessert!.id, name: "Kheer", description: "Creamy rice pudding with cardamom", price: "120.00", isVeg: true, preparationTime: 5, calories: 300, tags: [] },
-    { categoryId: cats.dessert!.id, name: "Ice Cream", description: "Two scoops — vanilla, chocolate, or mango", price: "140.00", isVeg: true, preparationTime: 3, calories: 280, tags: [] },
+    { categoryId: getCat("Beverages"), name: "Sweet Lassi", description: "Chilled sweet yogurt drink", price: "80.00", isVeg: true, preparationTime: 5, calories: 200, tags: ["popular"] },
+    { categoryId: getCat("Beverages"), name: "Mango Lassi", description: "Chilled mango yogurt drink", price: "100.00", isVeg: true, preparationTime: 5, calories: 250, tags: ["popular"] },
+    { categoryId: getCat("Beverages"), name: "Masala Chai", description: "Spiced Indian tea with milk", price: "60.00", isVeg: true, preparationTime: 5, calories: 80, tags: [] },
+    { categoryId: getCat("Beverages"), name: "Fresh Lime Soda", description: "Freshly squeezed lime with soda", price: "70.00", isVeg: true, preparationTime: 3, calories: 50, tags: [] },
+    { categoryId: getCat("Beverages"), name: "Mineral Water", description: "500ml bottled water", price: "40.00", isVeg: true, preparationTime: 1, calories: 0, tags: [] },
+
+    { categoryId: getCat("Desserts"), name: "Gulab Jamun", description: "Soft milk dumplings in sugar syrup", price: "100.00", isVeg: true, preparationTime: 5, calories: 250, tags: ["popular"] },
+    { categoryId: getCat("Desserts"), name: "Kheer", description: "Creamy rice pudding with cardamom", price: "120.00", isVeg: true, preparationTime: 5, calories: 300, tags: [] },
+    { categoryId: getCat("Desserts"), name: "Ice Cream", description: "Two scoops — vanilla, chocolate, or mango", price: "140.00", isVeg: true, preparationTime: 3, calories: 280, tags: [] },
   ];
 
-  const insertedItems: typeof menuItemsTable.$inferSelect[] = [];
+  const insertedItems: Array<typeof menuItemsTable.$inferSelect> = [];
   for (const item of menuItems) {
     const [mi] = await db.insert(menuItemsTable).values({ ...item, restaurantId: spiceRestId }).onConflictDoNothing().returning();
     if (mi) insertedItems.push(mi);
@@ -261,22 +264,22 @@ async function seed() {
   console.log("✅ Customers created");
 
   // ── Orders ───────────────────────────────────────────────────
-  const occupiedTableIds = tables.slice(0, 2);
   const item1 = insertedItems.find(i => i.name === "Butter Chicken");
   const item2 = insertedItems.find(i => i.name === "Butter Naan");
   const item3 = insertedItems.find(i => i.name === "Paneer Tikka");
   const item4 = insertedItems.find(i => i.name === "Mango Lassi");
   const item5 = insertedItems.find(i => i.name === "Dal Makhani");
+  const [t1Id, t2Id] = tableIds;
 
-  if (item1 && item2 && occupiedTableIds[0]) {
+  if (item1 && item2 && t1Id) {
     const subtotal = Number(item1.price) * 2 + Number(item2.price) * 3;
     const tax = subtotal * 0.05;
     const service = subtotal * 0.10;
-    const total = subtotal + tax + service;
     const [order1] = await db.insert(ordersTable).values({
-      restaurantId: spiceRestId, tableId: occupiedTableIds[0], orderNumber: "ORD-DEMO001",
-      orderType: "dine_in", status: "confirmed", subtotal: subtotal.toFixed(2),
-      taxAmount: tax.toFixed(2), serviceCharge: service.toFixed(2), totalAmount: total.toFixed(2),
+      restaurantId: spiceRestId, tableId: t1Id, orderNumber: "ORD-DEMO001",
+      orderType: "dine_in", status: "confirmed",
+      subtotal: subtotal.toFixed(2), taxAmount: tax.toFixed(2),
+      serviceCharge: service.toFixed(2), totalAmount: (subtotal + tax + service).toFixed(2),
       customerName: "Rahul Mehta",
     }).onConflictDoNothing().returning();
     if (order1) {
@@ -288,16 +291,15 @@ async function seed() {
     }
   }
 
-  if (item3 && item4 && item5 && occupiedTableIds[1]) {
+  if (item3 && item4 && item5 && t2Id) {
     const subtotal = Number(item3.price) + Number(item4.price) * 2 + Number(item5.price);
     const tax = subtotal * 0.05;
     const service = subtotal * 0.10;
-    const total = subtotal + tax + service;
     const [order2] = await db.insert(ordersTable).values({
-      restaurantId: spiceRestId, tableId: occupiedTableIds[1], orderNumber: "ORD-DEMO002",
+      restaurantId: spiceRestId, tableId: t2Id, orderNumber: "ORD-DEMO002",
       orderType: "dine_in", status: "pending", isPriority: true,
       subtotal: subtotal.toFixed(2), taxAmount: tax.toFixed(2),
-      serviceCharge: service.toFixed(2), totalAmount: total.toFixed(2),
+      serviceCharge: service.toFixed(2), totalAmount: (subtotal + tax + service).toFixed(2),
     }).onConflictDoNothing().returning();
     if (order2) {
       await db.insert(orderItemsTable).values([
@@ -318,13 +320,12 @@ async function seed() {
       const subtotal = 300 + Math.random() * 700;
       const tax = subtotal * 0.05;
       const service = subtotal * 0.10;
-      const total = subtotal + tax + service;
       await db.insert(ordersTable).values({
         restaurantId: spiceRestId,
         orderNumber: `ORD-HIST-${d}-${i}`,
         orderType: "dine_in", status: "completed", paymentStatus: "paid", paymentMethod: "cash",
         subtotal: subtotal.toFixed(2), taxAmount: tax.toFixed(2),
-        serviceCharge: service.toFixed(2), totalAmount: total.toFixed(2),
+        serviceCharge: service.toFixed(2), totalAmount: (subtotal + tax + service).toFixed(2),
         createdAt: orderDate, updatedAt: orderDate,
       }).onConflictDoNothing();
     }
@@ -342,17 +343,6 @@ async function seed() {
   ]).onConflictDoNothing();
 
   console.log("✅ Notifications created");
-  console.log("\n🎉 Seed complete!");
-  console.log("\n📋 Demo Credentials:");
-  console.log("  Super Admin:    admin@tabletrack.io / demo_hash_super");
-  console.log("  Owner (Spice):  priya@spicegarden.com / demo_hash_owner1");
-  console.log("  Owner (Burger): raj@burgerbarn.com / demo_hash_owner2");
-  console.log("  Waiter:         amit@spicegarden.com / demo_hash_waiter1");
-  console.log("  Kitchen Staff:  ramesh@spicegarden.com / demo_hash_chef1");
-  console.log("  Manager:        deepa@spicegarden.com / demo_hash_manager1");
-  console.log("\n  Restaurant IDs: Spice Garden =", spiceRestId, "| Burger Barn =", burgerRestId);
+  console.log("🎉 Seed complete!");
+  console.log("Restaurant ID (Spice Garden):", spiceRestId);
 }
-
-seed()
-  .then(() => process.exit(0))
-  .catch((e) => { console.error(e); process.exit(1); });

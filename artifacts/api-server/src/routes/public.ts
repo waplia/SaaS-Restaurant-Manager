@@ -10,10 +10,10 @@ function generateOrderNumber(): string {
 
 router.get("/public/menu/:slug", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
-  if (!restaurant) return res.status(404).json({ error: "Restaurant not found" });
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
   const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
-  if (!menu) return res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, categories: [] });
+  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, categories: [] });
 
   const categories = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
   const enriched = await Promise.all(categories.map(async (cat) => {
@@ -61,7 +61,7 @@ router.post("/public/orders", async (req, res) => {
 
 router.get("/public/orders/:id", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, Number(req.params.id)));
-  if (!order) return res.status(404).json({ error: "Not found" });
+  if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
   res.json({ id: order.id, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount, items, createdAt: order.createdAt });
 });

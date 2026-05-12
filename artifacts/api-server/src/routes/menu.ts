@@ -18,7 +18,7 @@ router.post("/restaurants/:restaurantId/menus", async (req, res) => {
 router.patch("/restaurants/:restaurantId/menus/:id", async (req, res) => {
   const { name, description, availableFrom, availableTo, isActive, sortOrder } = req.body;
   const [updated] = await db.update(menusTable).set({ name, description, availableFrom, availableTo, isActive, sortOrder, updatedAt: new Date() }).where(eq(menusTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
@@ -44,7 +44,7 @@ router.post("/restaurants/:restaurantId/categories", async (req, res) => {
 router.patch("/restaurants/:restaurantId/categories/:id", async (req, res) => {
   const { name, description, imageUrl, sortOrder, isActive } = req.body;
   const [updated] = await db.update(menuCategoriesTable).set({ name, description, imageUrl, sortOrder, isActive, updatedAt: new Date() }).where(eq(menuCategoriesTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
@@ -70,14 +70,14 @@ router.post("/restaurants/:restaurantId/items", async (req, res) => {
 
 router.get("/restaurants/:restaurantId/items/:id", async (req, res) => {
   const [item] = await db.select().from(menuItemsTable).where(eq(menuItemsTable.id, Number(req.params.id)));
-  if (!item) return res.status(404).json({ error: "Not found" });
+  if (!item) return void res.status(404).json({ error: "Not found" });
   res.json(item);
 });
 
 router.patch("/restaurants/:restaurantId/items/:id", async (req, res) => {
   const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId } = req.body;
   const [updated] = await db.update(menuItemsTable).set({ name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() }).where(eq(menuItemsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

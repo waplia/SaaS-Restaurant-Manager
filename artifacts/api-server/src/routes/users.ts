@@ -58,7 +58,7 @@ router.get("/users/:id", async (req, res) => {
     lastLoginAt: usersTable.lastLoginAt,
     createdAt: usersTable.createdAt,
   }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
-  if (!user) return res.status(404).json({ error: "Not found" });
+  if (!user) return void res.status(404).json({ error: "Not found" });
   res.json(user);
 });
 
@@ -76,7 +76,7 @@ router.patch("/users/:id", async (req, res) => {
     lastLoginAt: usersTable.lastLoginAt,
     createdAt: usersTable.createdAt,
   });
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 

@@ -22,7 +22,7 @@ router.post("/restaurants/:restaurantId/attendance", async (req, res) => {
 router.patch("/restaurants/:restaurantId/attendance/:id/clock-out", async (req, res) => {
   const { notes } = req.body;
   const [existing] = await db.select().from(attendanceTable).where(eq(attendanceTable.id, Number(req.params.id)));
-  if (!existing) return res.status(404).json({ error: "Not found" });
+  if (!existing) return void res.status(404).json({ error: "Not found" });
 
   const clockOut = new Date();
   const totalHours = ((clockOut.getTime() - existing.clockIn.getTime()) / 3600000).toFixed(2);

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable } from "../lib/db";
+import { eq, and, desc, count } from "drizzle-orm";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
 
 const router = Router();
 
@@ -41,11 +41,12 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     enrichedItems.push({ menuItem: mi, qty: item.quantity, notes: item.notes, modifiers: item.modifiers });
   }
 
-  const [restaurant] = await db.execute<{ tax_rate: string; service_charge: string }>(
-    sql`SELECT tax_rate, service_charge FROM restaurants WHERE id = ${restaurantId}`
-  );
-  const taxRate = Number((restaurant as unknown as Record<string, unknown>).tax_rate ?? 5) / 100;
-  const serviceRate = Number((restaurant as unknown as Record<string, unknown>).service_charge ?? 0) / 100;
+  const [restaurantRow] = await db
+    .select({ taxRate: restaurantsTable.taxRate, serviceCharge: restaurantsTable.serviceCharge })
+    .from(restaurantsTable)
+    .where(eq(restaurantsTable.id, restaurantId));
+  const taxRate = Number(restaurantRow?.taxRate ?? 5) / 100;
+  const serviceRate = Number(restaurantRow?.serviceCharge ?? 0) / 100;
   const taxAmount = subtotal * taxRate;
   const serviceCharge = subtotal * serviceRate;
   const totalAmount = subtotal + taxAmount + serviceCharge;
@@ -94,7 +95,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, Number(req.params.id)));
-  if (!order) return res.status(404).json({ error: "Not found" });
+  if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
   res.json({ ...order, items });
 });
@@ -104,14 +105,14 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const updates: Record<string, unknown> = { notes, isPriority, customerName, discountAmount, updatedAt: new Date() };
   if (status) updates.status = status;
   const [updated] = await db.update(ordersTable).set(updates).where(eq(ordersTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   const { paymentMethod } = req.body;
   const [updated] = await db.update(ordersTable).set({ paymentMethod, paymentStatus: "paid", status: "completed", updatedAt: new Date() }).where(eq(ordersTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   if (updated.tableId) {
     await db.update(floorTablesTable).set({ status: "free" }).where(eq(floorTablesTable.id, updated.tableId));
   }
@@ -146,7 +147,7 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   if (status === "preparing") updates.startedAt = new Date();
   if (status === "ready" || status === "served") updates.completedAt = new Date();
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(eq(kitchenTicketsTable.id, Number(req.params.id))).returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
