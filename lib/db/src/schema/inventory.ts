@@ -56,6 +56,20 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const inventoryStockTable = pgTable("inventory_stock", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id").notNull().references(() => inventoryItemsTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  reservedQuantity: decimal("reserved_quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  lastCountedAt: timestamp("last_counted_at"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertInventoryStockSchema = createInsertSchema(inventoryStockTable).omit({ id: true, updatedAt: true });
+export type InsertInventoryStock = z.infer<typeof insertInventoryStockSchema>;
+export type InventoryStock = typeof inventoryStockTable.$inferSelect;
+
 export const insertInventoryItemSchema = createInsertSchema(inventoryItemsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;

@@ -2839,6 +2839,51 @@ components:
         name: { type: string }
         description: { type: string }
 
+    # ── Staff Profile ──
+    StaffProfile:
+      type: object
+      required: [id, userId, restaurantId, isActive, createdAt]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        restaurantId: { type: integer }
+        employeeCode: { type: ["string", "null"] }
+        jobTitle: { type: ["string", "null"] }
+        department: { type: ["string", "null"] }
+        salary: { type: ["string", "null"] }
+        hiredAt: { type: ["string", "null"] }
+        emergencyContact: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    # ── Inventory Stock ──
+    InventoryStock:
+      type: object
+      required: [id, itemId, restaurantId, quantity, reservedQuantity]
+      properties:
+        id: { type: integer }
+        itemId: { type: integer }
+        restaurantId: { type: integer }
+        quantity: { type: string, description: "Available stock quantity" }
+        reservedQuantity: { type: string, description: "Quantity reserved for pending orders" }
+        lastCountedAt: { type: ["string", "null"] }
+        updatedAt: { type: string }
+
+    # ── Loyalty Points Balance ──
+    LoyaltyPoints:
+      type: object
+      required: [id, customerId, restaurantId, balance, lifetimeEarned, lifetimeRedeemed]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        restaurantId: { type: integer }
+        balance: { type: integer, description: "Current redeemable point balance" }
+        lifetimeEarned: { type: integer }
+        lifetimeRedeemed: { type: integer }
+        updatedAt: { type: string }
+
     # ── Shifts ──
     Shift:
       type: object

@@ -19,6 +19,16 @@ export const customersTable = pgTable("customers", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const loyaltyPointsTable = pgTable("loyalty_points", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  balance: integer("balance").notNull().default(0),
+  lifetimeEarned: integer("lifetime_earned").notNull().default(0),
+  lifetimeRedeemed: integer("lifetime_redeemed").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const loyaltyTransactionsTable = pgTable("loyalty_transactions", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id),
@@ -58,6 +68,10 @@ export const notificationsTable = pgTable("notifications", {
   entityType: text("entity_type"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const insertLoyaltyPointsSchema = createInsertSchema(loyaltyPointsTable).omit({ id: true, updatedAt: true });
+export type InsertLoyaltyPoints = z.infer<typeof insertLoyaltyPointsSchema>;
+export type LoyaltyPoints = typeof loyaltyPointsTable.$inferSelect;
 
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;

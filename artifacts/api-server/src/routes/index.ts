@@ -11,6 +11,7 @@ import inventoryRouter from "./inventory";
 import shiftsRouter from "./shifts";
 import customersRouter from "./customers";
 import dashboardRouter from "./dashboard";
+import realtimeRouter from "./realtime";
 import publicRouter from "./public";
 
 const router: IRouter = Router();
@@ -27,6 +28,7 @@ router.use(inventoryRouter);
 router.use(shiftsRouter);
 router.use(customersRouter);
 router.use(dashboardRouter);
+router.use(realtimeRouter);
 router.use(publicRouter);
 
 export default router;
