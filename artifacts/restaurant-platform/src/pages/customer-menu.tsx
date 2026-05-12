@@ -1,17 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { ShoppingCart, X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, Clock, ChefHat, Truck, Loader2, CreditCard, Banknote } from "lucide-react";
+import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
 
-function apiPublicGet<T>(path: string): Promise<T> {
-  return fetch(`${API_BASE}${path}`).then(r => r.json());
+function apiPublicGet<T>(path: string, token?: string): Promise<T> {
+  const url = token ? `${API_BASE}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : `${API_BASE}${path}`;
+  return fetch(url).then(async r => {
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  });
 }
 
-function apiPublicPost<T>(path: string, body: unknown): Promise<T> {
-  return fetch(`${API_BASE}${path}`, {
+function apiPublicPost<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const url = token ? `${API_BASE}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : `${API_BASE}${path}`;
+  return fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -67,7 +72,6 @@ interface PublicMenu {
 
 interface SelectedModifier {
   groupId: number;
-  groupName: string;
   modifierId: number;
   name: string;
   price: string;
@@ -76,7 +80,8 @@ interface SelectedModifier {
 interface CartItem {
   menuItemId: number;
   name: string;
-  price: number;
+  basePrice: number;
+  modifierTotal: number;
   quantity: number;
   notes?: string;
   imageUrl?: string | null;
@@ -88,6 +93,7 @@ interface OrderResult {
   orderNumber: string;
   status: string;
   totalAmount: string;
+  guestToken: string;
 }
 
 interface OrderStatus {
@@ -98,6 +104,13 @@ interface OrderStatus {
   totalAmount: string;
   items: Array<{ menuItemName: string; quantity: number; totalPrice: string }>;
   createdAt: string;
+}
+
+interface PaymentIntent {
+  mode: "live" | "demo";
+  clientSecret: string | null;
+  intentId: string;
+  totalAmount: string;
 }
 
 const STATUS_STEPS = [
@@ -114,10 +127,8 @@ function statusIndex(status: string): number {
   return idx === -1 ? 0 : idx;
 }
 
-function getItemTotalPrice(item: PublicMenuItem, modifiers: SelectedModifier[], qty: number): number {
-  const base = Number(item.price);
-  const modTotal = modifiers.reduce((s, m) => s + Number(m.price), 0);
-  return (base + modTotal) * qty;
+function itemUnitPrice(basePrice: number, modifiers: SelectedModifier[]): number {
+  return basePrice + modifiers.reduce((s, m) => s + Number(m.price), 0);
 }
 
 export default function CustomerMenuPage() {
@@ -144,6 +155,7 @@ export default function CustomerMenuPage() {
   const [orderNotes, setOrderNotes] = useState("");
   const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
 
+  const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
@@ -171,14 +183,14 @@ export default function CustomerMenuPage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
-  const connectSocket = useCallback((orderId: number) => {
+  const connectSocket = useCallback((orderId: number, token: string) => {
     const socket = io((import.meta.env.VITE_API_URL ?? ""), {
       path: "/api/socket.io",
       transports: ["websocket", "polling"],
     });
     socketRef.current = socket;
     socket.on("connect", () => {
-      socket.emit("join:order", orderId);
+      socket.emit("join:order", { orderId, token });
     });
     socket.on("order:update", (data: { id: number; status: string; paymentStatus?: string }) => {
       if (data.id === orderId) {
@@ -190,9 +202,9 @@ export default function CustomerMenuPage() {
 
   useEffect(() => {
     if (!orderResult) return;
-    const cleanup = connectSocket(orderResult.orderId);
+    const cleanup = connectSocket(orderResult.orderId, orderResult.guestToken);
     const interval = setInterval(() => {
-      apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`)
+      apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`, orderResult.guestToken)
         .then(setOrderStatus)
         .catch(() => {});
     }, 15000);
@@ -200,7 +212,7 @@ export default function CustomerMenuPage() {
   }, [orderResult, connectSocket]);
 
   const cartItemCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + itemUnitPrice(i.basePrice, i.modifiers) * i.quantity, 0);
   const currency = menu?.currency ?? "INR";
   const currSymbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "₹";
 
@@ -212,7 +224,7 @@ export default function CustomerMenuPage() {
     for (const group of item.modifierGroups) {
       for (const mod of group.modifiers) {
         if (mod.isDefault) {
-          defaults.push({ groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price });
+          defaults.push({ groupId: group.id, modifierId: mod.id, name: mod.name, price: mod.price });
         }
       }
     }
@@ -230,25 +242,32 @@ export default function CustomerMenuPage() {
       }
 
       if (group.maxSelections === 1) {
-        const without = prev.filter(m => m.groupId !== group.id);
-        return [...without, { groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price }];
+        return [...prev.filter(m => m.groupId !== group.id), { groupId: group.id, modifierId: mod.id, name: mod.name, price: mod.price }];
       }
 
       if (groupSelected.length >= group.maxSelections) return prev;
-      return [...prev, { groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price }];
+      return [...prev, { groupId: group.id, modifierId: mod.id, name: mod.name, price: mod.price }];
     });
   }
 
   function addToCart(item: PublicMenuItem) {
     const modTotal = selectedModifiers.reduce((s, m) => s + Number(m.price), 0);
-    const unitPrice = Number(item.price) + modTotal;
     setCart(prev => {
-      const key = `${item.id}_${selectedModifiers.map(m => m.modifierId).sort().join("_")}`;
-      const existing = prev.find(c => c.menuItemId === item.id && JSON.stringify(c.modifiers.map(m => m.modifierId).sort()) === JSON.stringify(selectedModifiers.map(m => m.modifierId).sort()));
+      const modKey = selectedModifiers.map(m => m.modifierId).sort().join(",");
+      const existing = prev.find(c => c.menuItemId === item.id && c.modifiers.map(m => m.modifierId).sort().join(",") === modKey);
       if (existing) {
         return prev.map(c => c === existing ? { ...c, quantity: c.quantity + itemQty, notes: itemNotes || c.notes } : c);
       }
-      return [...prev, { menuItemId: item.id, name: item.name, price: unitPrice, quantity: itemQty, notes: itemNotes || undefined, imageUrl: item.imageUrl, modifiers: selectedModifiers }];
+      return [...prev, {
+        menuItemId: item.id,
+        name: item.name,
+        basePrice: Number(item.price),
+        modifierTotal: modTotal,
+        quantity: itemQty,
+        notes: itemNotes || undefined,
+        imageUrl: item.imageUrl,
+        modifiers: selectedModifiers,
+      }];
     });
     setSelectedItem(null);
     setItemQty(1);
@@ -279,20 +298,19 @@ export default function CustomerMenuPage() {
           menuItemId: c.menuItemId,
           quantity: c.quantity,
           notes: c.notes,
-          modifiers: c.modifiers.map(m => ({ name: m.name, price: m.price })),
+          modifierIds: c.modifiers.map(m => m.modifierId),
         })),
       });
       setOrderResult(result);
+      const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`, result.guestToken);
+      setOrderStatus(status);
+      setCart([]);
 
       if (payMethod === "card") {
+        const pi = await apiPublicPost<PaymentIntent>(`/public/orders/${result.orderId}/payment-intent`, {}, result.guestToken);
+        setPaymentIntent(pi);
         setView("payment");
-        const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`);
-        setOrderStatus(status);
-        setCart([]);
       } else {
-        const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`);
-        setOrderStatus(status);
-        setCart([]);
         setView("tracking");
       }
     } catch {
@@ -303,31 +321,36 @@ export default function CustomerMenuPage() {
   }
 
   async function processCardPayment() {
-    if (!orderResult) return;
+    if (!orderResult || !paymentIntent) return;
     setCardError(null);
 
     const rawNum = cardNumber.replace(/\s/g, "");
-    if (rawNum.length < 13 || rawNum.length > 19) {
-      setCardError("Please enter a valid card number.");
-      return;
-    }
-    if (!cardExpiry.match(/^\d{2}\/\d{2}$/)) {
-      setCardError("Please enter expiry as MM/YY.");
-      return;
-    }
-    if (cardCvc.length < 3) {
-      setCardError("Please enter a valid CVC.");
-      return;
-    }
+    if (rawNum.length < 13) { setCardError("Please enter a valid card number."); return; }
+    if (!cardExpiry.match(/^\d{2}\/\d{2}$/)) { setCardError("Please enter expiry as MM/YY."); return; }
+    if (cardCvc.length < 3) { setCardError("Please enter a valid CVC."); return; }
 
     setPlacing(true);
     try {
-      await apiPublicPost(`/public/orders/${orderResult.orderId}/pay`, { paymentMethod: "card" });
-      const status = await apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`);
+      if (paymentIntent.mode === "live" && paymentIntent.clientSecret) {
+        const { loadStripe } = await import("@stripe/stripe-js");
+        const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+        if (!stripePublicKey) throw new Error("Stripe public key not configured");
+        const stripe = await loadStripe(stripePublicKey);
+        if (!stripe) throw new Error("Stripe.js failed to load");
+        const { error } = await stripe.confirmCardPayment(paymentIntent.clientSecret, {
+          payment_method: {
+            card: { number: rawNum, exp_month: Number(cardExpiry.split("/")[0]), exp_year: Number("20" + cardExpiry.split("/")[1]), cvc: cardCvc },
+          } as never,
+        });
+        if (error) { setCardError(error.message ?? "Payment failed"); setPlacing(false); return; }
+      }
+
+      await apiPublicPost(`/public/orders/${orderResult.orderId}/pay`, { intentId: paymentIntent.intentId, paymentMethod: "card" }, orderResult.guestToken);
+      const status = await apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`, orderResult.guestToken);
       setOrderStatus(status);
       setView("tracking");
-    } catch {
-      setCardError("Payment failed. Please try again.");
+    } catch (e: unknown) {
+      setCardError(e instanceof Error ? e.message : "Payment failed. Please try again.");
     } finally {
       setPlacing(false);
     }
@@ -335,13 +358,17 @@ export default function CustomerMenuPage() {
 
   async function callWaiter() {
     if (!menu) return;
-    await apiPublicPost("/public/call-waiter", { restaurantId: menu.restaurantId, tableId });
-    alert("Waiter has been notified!");
+    try {
+      await apiPublicPost("/public/call-waiter", { restaurantId: menu.restaurantId, tableId });
+      alert("Waiter has been notified!");
+    } catch {
+      alert("Could not reach the waiter system. Please try again.");
+    }
   }
 
   async function submitFeedback() {
     if (rating === 0 || !orderResult) return;
-    await apiPublicPost("/public/feedback", { orderId: orderResult.orderId, rating, comment: feedbackComment || undefined });
+    await apiPublicPost("/public/feedback", { orderId: orderResult.orderId, rating, comment: feedbackComment || undefined, token: orderResult.guestToken });
     setFeedbackSubmitted(true);
   }
 
@@ -364,7 +391,7 @@ export default function CustomerMenuPage() {
     );
   }
 
-  if (view === "payment" && orderResult) {
+  if (view === "payment" && orderResult && paymentIntent) {
     return (
       <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
         <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -381,13 +408,15 @@ export default function CustomerMenuPage() {
               </div>
               <div>
                 <p className="font-semibold text-gray-900">Pay by Card</p>
-                <p className="text-sm text-gray-500">Amount: <span className="font-bold text-orange-500">{currSymbol}{Number(orderResult.totalAmount).toFixed(2)}</span></p>
+                <p className="text-sm text-gray-500">Amount: <span className="font-bold text-orange-500">{currSymbol}{Number(paymentIntent.totalAmount).toFixed(2)}</span></p>
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
-              Demo mode — use any test card details (e.g. 4242 4242 4242 4242, 12/26, 123)
-            </div>
+            {paymentIntent.mode === "demo" && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+                Demo mode — use any test details (e.g. 4242 4242 4242 4242, 12/26, 123)
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>
@@ -443,7 +472,7 @@ export default function CustomerMenuPage() {
             className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
           >
             {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
-            {placing ? "Processing…" : `Pay ${currSymbol}${Number(orderResult.totalAmount).toFixed(2)}`}
+            {placing ? "Processing…" : `Pay ${currSymbol}${Number(paymentIntent.totalAmount).toFixed(2)}`}
           </button>
         </div>
       </div>
@@ -525,7 +554,7 @@ export default function CustomerMenuPage() {
               <p className="font-semibold text-gray-800 mb-3">Rate your experience</p>
               <div className="flex gap-2 mb-3">
                 {[1, 2, 3, 4, 5].map(n => (
-                  <button key={n} onClick={() => setRating(n)} className={cn("w-10 h-10 rounded-full flex items-center justify-center text-lg transition", n <= rating ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-orange-100")}>
+                  <button key={n} onClick={() => setRating(n)} className={cn("w-10 h-10 rounded-full flex items-center justify-center transition", n <= rating ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-orange-100")}>
                     <Star className="w-5 h-5" fill={n <= rating ? "currentColor" : "none"} />
                   </button>
                 ))}
@@ -554,7 +583,7 @@ export default function CustomerMenuPage() {
           )}
 
           <button
-            onClick={() => { setView("menu"); setOrderResult(null); setOrderStatus(null); setFeedbackSubmitted(false); setRating(0); }}
+            onClick={() => { setView("menu"); setOrderResult(null); setOrderStatus(null); setPaymentIntent(null); setFeedbackSubmitted(false); setRating(0); }}
             className="w-full text-center text-sm text-gray-500 hover:text-orange-500 transition py-2"
           >
             Order more items
@@ -589,7 +618,7 @@ export default function CustomerMenuPage() {
                       </div>
                       <span className="text-sm text-gray-700">{item.name}</span>
                     </div>
-                    <span className="text-sm font-medium text-gray-800">{currSymbol}{(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="text-sm font-medium text-gray-800">{currSymbol}{(itemUnitPrice(item.basePrice, item.modifiers) * item.quantity).toFixed(2)}</span>
                   </div>
                   {item.modifiers.length > 0 && (
                     <p className="text-xs text-gray-400 ml-[68px] mt-0.5">{item.modifiers.map(m => m.name).join(", ")}</p>
@@ -597,7 +626,7 @@ export default function CustomerMenuPage() {
                 </div>
               ))}
               <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between">
-                <span className="font-semibold text-gray-800">Total</span>
+                <span className="font-semibold text-gray-800">Subtotal</span>
                 <span className="font-bold text-orange-500">{currSymbol}{cartTotal.toFixed(2)}</span>
               </div>
             </div>
@@ -606,27 +635,9 @@ export default function CustomerMenuPage() {
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <p className="font-semibold text-gray-800 mb-3">Your Details (optional)</p>
             <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Your name"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-              />
-              <input
-                type="tel"
-                placeholder="Phone number"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-              />
-              <textarea
-                placeholder="Special requests or notes"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
-                rows={2}
-                value={orderNotes}
-                onChange={e => setOrderNotes(e.target.value)}
-              />
+              <input type="text" placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+              <input type="tel" placeholder="Phone number" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+              <textarea placeholder="Special requests or notes" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" rows={2} value={orderNotes} onChange={e => setOrderNotes(e.target.value)} />
             </div>
           </div>
 
@@ -700,10 +711,7 @@ export default function CustomerMenuPage() {
 
       <div className="px-4 pt-4 pb-32 space-y-6">
         {menu.categories.map(cat => (
-          <div
-            key={cat.id}
-            ref={el => { categoryRefs.current[cat.id] = el; }}
-          >
+          <div key={cat.id} ref={el => { categoryRefs.current[cat.id] = el; }}>
             <h2 className="text-base font-bold text-gray-900 mb-3">{cat.name}</h2>
             <div className="space-y-3">
               {cat.items.map(item => {
@@ -715,9 +723,7 @@ export default function CustomerMenuPage() {
                     className="bg-white rounded-2xl shadow-sm overflow-hidden flex cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => openItemDetail(item)}
                   >
-                    {item.imageUrl && (
-                      <img src={item.imageUrl} alt={item.name} className="w-24 h-24 object-cover flex-shrink-0" />
-                    )}
+                    {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-24 h-24 object-cover flex-shrink-0" />}
                     <div className={cn("flex-1 p-3 flex flex-col justify-between", !item.imageUrl && "pl-4")}>
                       <div>
                         <p className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</p>
@@ -743,16 +749,12 @@ export default function CustomerMenuPage() {
                   </div>
                 );
               })}
-              {cat.items.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">No items available in this category.</p>
-              )}
+              {cat.items.length === 0 && <p className="text-sm text-gray-400 py-2">No items available in this category.</p>}
             </div>
           </div>
         ))}
         {menu.categories.length === 0 && (
-          <div className="text-center py-20">
-            <p className="text-gray-400">No menu items available.</p>
-          </div>
+          <div className="text-center py-20"><p className="text-gray-400">No menu items available.</p></div>
         )}
       </div>
 
@@ -786,14 +788,14 @@ export default function CustomerMenuPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
                     {item.modifiers.length > 0 && <p className="text-xs text-gray-400 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>}
-                    <p className="text-xs text-gray-500">{currSymbol}{item.price.toFixed(2)} each</p>
+                    <p className="text-xs text-gray-500">{currSymbol}{itemUnitPrice(item.basePrice, item.modifiers).toFixed(2)} each</p>
                   </div>
                   <div className="flex items-center gap-2 bg-orange-50 rounded-xl px-2 py-1">
                     <button onClick={() => updateQty(idx, -1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Minus className="w-3.5 h-3.5" /></button>
                     <span className="text-sm font-bold text-gray-800 w-5 text-center">{item.quantity}</span>
                     <button onClick={() => updateQty(idx, 1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Plus className="w-3.5 h-3.5" /></button>
                   </div>
-                  <span className="text-sm font-semibold text-gray-800 w-16 text-right">{currSymbol}{(item.price * item.quantity).toFixed(2)}</span>
+                  <span className="text-sm font-semibold text-gray-800 w-16 text-right">{currSymbol}{(itemUnitPrice(item.basePrice, item.modifiers) * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -829,7 +831,7 @@ export default function CustomerMenuPage() {
                 <span className="text-lg font-bold text-orange-500 ml-3">{currSymbol}{Number(selectedItem.price).toFixed(2)}</span>
               </div>
               {selectedItem.description && <p className="text-sm text-gray-500 mb-3">{selectedItem.description}</p>}
-              {selectedItem.calories && <p className="text-xs text-gray-400 mb-4">{selectedItem.calories} calories{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
+              {selectedItem.calories && <p className="text-xs text-gray-400 mb-4">{selectedItem.calories} cal{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
 
               {selectedItem.modifierGroups.map(group => (
                 <div key={group.id} className="mb-4">
@@ -846,17 +848,10 @@ export default function CustomerMenuPage() {
                         <button
                           key={mod.id}
                           onClick={() => toggleModifier(group, mod)}
-                          className={cn(
-                            "w-full flex items-center justify-between px-4 py-2.5 rounded-xl border-2 text-left transition",
-                            isSelected ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"
-                          )}
+                          className={cn("w-full flex items-center justify-between px-4 py-2.5 rounded-xl border-2 text-left transition", isSelected ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300")}
                         >
                           <div className="flex items-center gap-2">
-                            <div className={cn(
-                              "w-4 h-4 border-2 flex items-center justify-center flex-shrink-0",
-                              isRadio ? "rounded-full" : "rounded",
-                              isSelected ? "border-orange-500 bg-orange-500" : "border-gray-300"
-                            )}>
+                            <div className={cn("w-4 h-4 border-2 flex items-center justify-center flex-shrink-0", isRadio ? "rounded-full" : "rounded", isSelected ? "border-orange-500 bg-orange-500" : "border-gray-300")}>
                               {isSelected && <div className={cn("bg-white", isRadio ? "w-1.5 h-1.5 rounded-full" : "w-2 h-2 rounded-sm")} />}
                             </div>
                             <span className="text-sm text-gray-800">{mod.name}</span>
@@ -894,7 +889,7 @@ export default function CustomerMenuPage() {
                 onClick={() => addToCart(selectedItem)}
                 className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 hover:bg-orange-600 transition"
               >
-                Add to Cart · {currSymbol}{getItemTotalPrice(selectedItem, selectedModifiers, itemQty).toFixed(2)}
+                Add to Cart · {currSymbol}{(itemUnitPrice(Number(selectedItem.price), selectedModifiers) * itemQty).toFixed(2)}
               </button>
             </div>
           </div>

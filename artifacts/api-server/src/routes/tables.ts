@@ -58,7 +58,12 @@ router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
   const slug = restaurant?.slug ?? String(restaurantId);
   const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") || "";
   const qrUrl = `${baseUrl}/menu/${slug}/${table.id}`;
-  res.json({ qrUrl, tableNumber: table.tableNumber, svgData: "" });
+  let svgData = "";
+  try {
+    const QRCode = await import("qrcode");
+    svgData = await QRCode.toString(qrUrl || `menu/${slug}/${table.id}`, { type: "svg", margin: 1, width: 300 });
+  } catch { /* qrcode unavailable — svgData stays empty */ }
+  res.json({ qrUrl, tableNumber: table.tableNumber, svgData });
 });
 
 router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
