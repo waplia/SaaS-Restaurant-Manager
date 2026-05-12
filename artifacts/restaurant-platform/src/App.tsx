@@ -4,7 +4,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { Sidebar } from "@/components/layout/Sidebar";
 import NotFound from "@/pages/not-found";
 import DashboardPage from "@/pages/dashboard";
 import OrdersPage from "@/pages/orders";
@@ -32,20 +31,11 @@ const queryClient = new QueryClient({
   },
 });
 
-function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
-  );
-}
-
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="text-muted-foreground text-sm">Loading…</div></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
-  return <AppLayout><Component /></AppLayout>;
+  return <Component />;
 }
 
 function PublicOnlyRoute({ component: Component }: { component: React.ComponentType }) {

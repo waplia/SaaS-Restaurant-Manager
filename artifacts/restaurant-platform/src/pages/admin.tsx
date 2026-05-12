@@ -89,16 +89,43 @@ function StatusBadge({ tenant }: { tenant: Tenant }) {
   return <Badge variant="outline">{tenant.planStatus}</Badge>;
 }
 
-function PlanBadge({ tenant, plans }: { tenant: Tenant; plans: Plan[] }) {
+interface TenantUsage {
+  staffCount: number;
+  restaurantCount: number;
+  tableCount: number;
+  menuItemCount: number;
+}
+
+function UsageBar({ used, max, label }: { used: number; max: number; label: string }) {
+  const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
+  const color = pct >= 90 ? "bg-destructive" : pct >= 70 ? "bg-amber-500" : "bg-primary";
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      <span className="text-muted-foreground w-10 shrink-0">{label}</span>
+      <div className="flex-1 bg-muted rounded-full h-1.5 min-w-12">
+        <div className={`${color} h-1.5 rounded-full`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-muted-foreground tabular-nums">{used}/{max > 0 ? max : "∞"}</span>
+    </div>
+  );
+}
+
+function PlanBadge({ tenant, plans, usage }: { tenant: Tenant; plans: Plan[]; usage?: TenantUsage }) {
   const plan = plans.find(p => p.id === tenant.planId);
   if (!plan) return <span className="text-muted-foreground text-xs">No plan</span>;
   return (
-    <div className="flex items-center gap-1.5">
-      <Package className="w-3 h-3 text-primary" />
-      <span className="text-xs font-medium">{plan.name}</span>
-      <span className="text-xs text-muted-foreground">
-        {plan.maxStaff} staff · {plan.maxTables} tables · {plan.maxMenuItems} items
-      </span>
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <Package className="w-3 h-3 text-primary" />
+        <span className="text-xs font-medium">{plan.name}</span>
+      </div>
+      {usage && (
+        <div className="space-y-0.5 pl-4">
+          <UsageBar used={usage.staffCount} max={plan.maxStaff} label="Staff" />
+          <UsageBar used={usage.tableCount} max={plan.maxTables} label="Tables" />
+          <UsageBar used={usage.menuItemCount} max={plan.maxMenuItems} label="Menu" />
+        </div>
+      )}
     </div>
   );
 }
@@ -150,6 +177,11 @@ export default function AdminPage() {
   const { data: plans = [] } = useQuery<Plan[]>({
     queryKey: ["subscription-plans"],
     queryFn: () => apiFetch("/subscription-plans"),
+  });
+
+  const { data: usageMap = {} } = useQuery<Record<number, TenantUsage>>({
+    queryKey: ["admin", "tenant-usage"],
+    queryFn: () => apiFetch("/admin/tenant-usage"),
   });
 
   const suspendMutation = useMutation({
@@ -268,7 +300,7 @@ export default function AdminPage() {
                       <td className="px-6 py-4"><StatusBadge tenant={tenant} /></td>
                       <td className="px-6 py-4">
                         <div className="space-y-1.5">
-                          <PlanBadge tenant={tenant} plans={plans} />
+                          <PlanBadge tenant={tenant} plans={plans} usage={usageMap[tenant.id]} />
                           <PlanSelect
                             tenant={tenant}
                             plans={plans}

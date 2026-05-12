@@ -70,6 +70,40 @@ router.post("/tenants/:id/activate", requireSuperAdmin, async (req, res) => {
   res.json(updated);
 });
 
+router.get("/admin/tenant-usage", requireSuperAdmin, async (_req, res) => {
+  const usageRows = await db.execute<{
+    tenant_id: number;
+    staff_count: string;
+    restaurant_count: string;
+    table_count: string;
+    menu_item_count: string;
+  }>(`
+    SELECT
+      t.id as tenant_id,
+      COUNT(DISTINCT u.id) FILTER (WHERE u.is_active = true) as staff_count,
+      COUNT(DISTINCT r.id) as restaurant_count,
+      COUNT(DISTINCT ft.id) FILTER (WHERE ft.is_active = true) as table_count,
+      COUNT(DISTINCT mi.id) FILTER (WHERE mi.is_available = true) as menu_item_count
+    FROM tenants t
+    LEFT JOIN users u ON u.tenant_id = t.id
+    LEFT JOIN restaurants r ON r.tenant_id = t.id
+    LEFT JOIN floor_tables ft ON ft.restaurant_id = r.id
+    LEFT JOIN menu_items mi ON mi.restaurant_id = r.id
+    GROUP BY t.id
+  `);
+
+  const usage: Record<number, { staffCount: number; restaurantCount: number; tableCount: number; menuItemCount: number }> = {};
+  for (const row of usageRows.rows) {
+    usage[row.tenant_id] = {
+      staffCount: Number(row.staff_count ?? 0),
+      restaurantCount: Number(row.restaurant_count ?? 0),
+      tableCount: Number(row.table_count ?? 0),
+      menuItemCount: Number(row.menu_item_count ?? 0),
+    };
+  }
+  res.json(usage);
+});
+
 router.get("/admin/stats", requireSuperAdmin, async (_req, res) => {
   const [tenantStats, restaurantCount, orderStats] = await Promise.all([
     db.select().from(tenantsTable),
