@@ -319,8 +319,32 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
   const { createHmac } = await import("crypto");
 
-  // Verify each split leg payment proof
+  // ── Within-request deduplication of payment proof IDs ────────────────────
+  // Prevents the same proof from being submitted across multiple legs to inflate
+  // the verified total (e.g. reusing one ₹50 intent to cover two ₹50 legs).
+  const seenStripeIds = new Set<string>();
+  const seenRzpPayIds = new Set<string>();
   for (const split of splits) {
+    if (split.stripePaymentIntentId) {
+      if (seenStripeIds.has(split.stripePaymentIntentId)) {
+        return void res.status(400).json({ error: "Duplicate Stripe PaymentIntent ID across split legs — each leg must use a distinct payment" });
+      }
+      seenStripeIds.add(split.stripePaymentIntentId);
+    }
+    if (split.razorpayPaymentId) {
+      if (seenRzpPayIds.has(split.razorpayPaymentId)) {
+        return void res.status(400).json({ error: "Duplicate Razorpay payment ID across split legs — each leg must use a distinct payment" });
+      }
+      seenRzpPayIds.add(split.razorpayPaymentId);
+    }
+  }
+
+  // ── Per-leg verification — accumulate gateway-verified amounts ────────────
+  let verifiedTotal = 0; // in rupees, from gateway-confirmed amounts
+
+  for (const split of splits) {
+    let legVerifiedAmount = 0;
+
     // Strict enum validation per leg
     if (!["cash", "card", "upi"].includes(String(split.paymentMethod))) {
       return void res.status(400).json({ error: `Invalid payment method '${split.paymentMethod}' in split leg. Must be cash, card, or upi.` });
@@ -330,6 +354,9 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
       if (split.amountTendered !== undefined && Number(split.amountTendered) < Number(split.amount)) {
         return void res.status(400).json({ error: "Cash tendered is less than split amount" });
       }
+      // Cash cannot be externally verified — accept client-provided amount
+      legVerifiedAmount = Number(split.amount);
+
     } else if (split.paymentMethod === "card") {
       if (!split.stripePaymentIntentId) {
         return void res.status(400).json({ error: "Card split requires stripePaymentIntentId" });
@@ -337,6 +364,13 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
       if (stripeKey) {
         if (String(split.stripePaymentIntentId).startsWith("demo_")) {
           return void res.status(400).json({ error: "Demo intent IDs cannot be used when Stripe is configured" });
+        }
+        // DB-level idempotency: reject if this intent was already used for another order
+        const [existingStripeUse] = await db.select({ id: ordersTable.id })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.stripePaymentId, String(split.stripePaymentIntentId)), eq(ordersTable.restaurantId, restaurantId)));
+        if (existingStripeUse && existingStripeUse.id !== orderId) {
+          return void res.status(409).json({ error: "Card payment ID has already been used for another order" });
         }
         try {
           const stripe = new Stripe(stripeKey);
@@ -355,6 +389,8 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           if (intent.currency !== "inr") {
             return void res.status(400).json({ error: "Card payment currency mismatch" });
           }
+          // Use gateway-verified amount (not client-provided) for total accumulation
+          legVerifiedAmount = intent.amount / 100;
         } catch {
           return void res.status(400).json({ error: "Failed to verify card payment with Stripe" });
         }
@@ -362,7 +398,9 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
         if (!String(split.stripePaymentIntentId).startsWith("demo_")) {
           return void res.status(400).json({ error: "Stripe not configured; only demo payment IDs accepted" });
         }
+        legVerifiedAmount = Number(split.amount);
       }
+
     } else if (split.paymentMethod === "upi") {
       if (razorpayKeySecret && razorpayKeyId) {
         if (!split.razorpayPaymentId || !split.razorpayOrderId || !split.razorpaySignature) {
@@ -377,10 +415,16 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
         if (expectedSig !== String(split.razorpaySignature)) {
           return void res.status(400).json({ error: "Razorpay signature verification failed for UPI split" });
         }
+        // DB-level idempotency: reject if this payment ID was already used for another order
+        const [existingRzpUse] = await db.select({ id: ordersTable.id })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.stripePaymentId, String(split.razorpayPaymentId)), eq(ordersTable.restaurantId, restaurantId)));
+        if (existingRzpUse && existingRzpUse.id !== orderId) {
+          return void res.status(409).json({ error: "Razorpay payment ID has already been used for another order" });
+        }
         // Fetch payment + order from Razorpay API: verify captured status, amount, and internal order binding
         try {
           const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
-          // 1. Verify payment status and amount
           const rzpPayRes = await fetch(`https://api.razorpay.com/v1/payments/${split.razorpayPaymentId}`, {
             headers: { Authorization: authHeader },
           });
@@ -398,8 +442,7 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           if (rzpPay.order_id !== String(split.razorpayOrderId)) {
             return void res.status(400).json({ error: "Razorpay payment is not linked to the expected Razorpay order for this split leg" });
           }
-          // 2. Fetch the Razorpay order and verify notes.orderId + notes.restaurantId
-          //    This binds the payment to this specific internal order/restaurant, preventing replay
+          // Fetch the Razorpay order and verify notes.orderId + notes.restaurantId (cross-order replay prevention)
           const rzpOrdRes = await fetch(`https://api.razorpay.com/v1/orders/${split.razorpayOrderId}`, {
             headers: { Authorization: authHeader },
           });
@@ -410,6 +453,8 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           if (rzpOrd.notes?.orderId !== String(orderId) || rzpOrd.notes?.restaurantId !== String(restaurantId)) {
             return void res.status(400).json({ error: "Razorpay order for split leg does not belong to this internal order or restaurant" });
           }
+          // Use gateway-verified amount (not client-provided) for total accumulation
+          legVerifiedAmount = rzpPay.amount / 100;
         } catch {
           return void res.status(400).json({ error: "Failed to verify UPI payment with Razorpay" });
         }
@@ -417,8 +462,18 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
         if (split.razorpayPaymentId && !String(split.razorpayPaymentId).startsWith("demo_")) {
           return void res.status(400).json({ error: "Razorpay not configured; only demo payment IDs accepted" });
         }
+        legVerifiedAmount = Number(split.amount);
       }
     }
+
+    verifiedTotal += legVerifiedAmount;
+  }
+
+  // ── Final verified-total check (from gateway-confirmed amounts) ───────────
+  if (verifiedTotal < orderTotal - 0.01) {
+    return void res.status(400).json({
+      error: `Gateway-verified payment total ₹${verifiedTotal.toFixed(2)} is less than order total ₹${orderTotal.toFixed(2)}`,
+    });
   }
 
   const splitMethods = splits.map(s => s.paymentMethod).join(",");
