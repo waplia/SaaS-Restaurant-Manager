@@ -1,11 +1,13 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
-  Package, Users, UserCheck, BarChart3, Table2, Bell, Settings, Flame, Sun, Moon
+  Package, Users, UserCheck, BarChart3, Table2, Bell, Settings,
+  Flame, Sun, Moon, LogOut, ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/auth";
 import type { AppNotification } from "@/lib/types";
 
 const navItems = [
@@ -24,9 +26,15 @@ export function Sidebar() {
   const [location] = useLocation();
   const { data: notifications } = useNotifications();
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+
   const unread = Array.isArray(notifications)
     ? notifications.filter((n: AppNotification) => !n.isRead).length
     : 0;
+
+  const initials = user?.name
+    ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
 
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
@@ -36,7 +44,7 @@ export function Sidebar() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sidebar-foreground leading-tight">TableTrack</p>
-          <p className="text-xs text-muted-foreground">Spice Garden</p>
+          <p className="text-xs text-muted-foreground truncate">{user?.name ?? "Loading…"}</p>
         </div>
         <button
           onClick={toggleTheme}
@@ -78,11 +86,29 @@ export function Sidebar() {
           <Settings className="w-4 h-4" />
           Settings
         </Link>
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground mt-2 border-t border-sidebar-border pt-3">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">P</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sidebar-foreground font-medium truncate">Priya Sharma</p>
-            <p className="text-xs text-muted-foreground truncate">Owner</p>
+        {user?.isSuperAdmin && (
+          <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+            <ShieldCheck className="w-4 h-4" />
+            Admin Panel
+          </Link>
+        )}
+
+        <div className="mt-2 pt-3 border-t border-sidebar-border">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sidebar-foreground font-medium truncate text-sm">{user?.name ?? "—"}</p>
+              <p className="text-xs text-muted-foreground capitalize truncate">{user?.role ?? ""}</p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors flex-shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>

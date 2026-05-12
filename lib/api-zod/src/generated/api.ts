@@ -8,6 +8,111 @@
 import * as zod from "zod";
 
 /**
+ * @summary Register a new restaurant and owner account (starts 14-day trial)
+ */
+export const registerBodyPasswordMin = 8;
+
+export const RegisterBody = zod.object({
+  restaurantName: zod.string(),
+  ownerName: zod.string(),
+  email: zod.string(),
+  password: zod.string().min(registerBodyPasswordMin),
+});
+
+/**
+ * @summary Authenticate with email and password
+ */
+export const LoginBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+});
+
+export const LoginResponse = zod.object({
+  accessToken: zod.string(),
+  refreshToken: zod.string(),
+  user: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.string(),
+    tenantId: zod.number().nullish(),
+    restaurantId: zod.number().nullish(),
+    isSuperAdmin: zod.boolean().optional(),
+    avatarUrl: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    createdAt: zod.string().optional(),
+  }),
+  tenant: zod
+    .object({
+      id: zod.number().optional(),
+      name: zod.string().optional(),
+      planStatus: zod.string().optional(),
+      trialEndsAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Exchange a refresh token for a new access token
+ */
+export const RefreshTokenBody = zod.object({
+  refreshToken: zod.string(),
+});
+
+export const RefreshTokenResponse = zod.object({
+  accessToken: zod.string(),
+  refreshToken: zod.string(),
+});
+
+/**
+ * @summary Invalidate the current session
+ */
+export const LogoutResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Request a password reset link
+ */
+export const ForgotPasswordBody = zod.object({
+  email: zod.string(),
+});
+
+export const ForgotPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  resetToken: zod.string().optional(),
+});
+
+/**
+ * @summary Set a new password using a reset token
+ */
+export const ResetPasswordBody = zod.object({
+  token: zod.string(),
+  newPassword: zod.string(),
+});
+
+export const ResetPasswordResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Get the currently authenticated user
+ */
+export const GetMeResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  tenantId: zod.number().nullish(),
+  restaurantId: zod.number().nullish(),
+  isSuperAdmin: zod.boolean().optional(),
+  avatarUrl: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({

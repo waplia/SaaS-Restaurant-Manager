@@ -98,38 +98,47 @@ export async function seed(): Promise<void> {
   await db.insert(branchesTable).values({ restaurantId: spiceRestId, name: "Koramangala", address: "5th Block, Koramangala" }).onConflictDoNothing();
 
   // ── Users ────────────────────────────────────────────────────
+  // All demo accounts use password: password123
+  // Hash: bcrypt(password123, 12)
+  const PW = "$2b$12$StPxD0R12YFEbjqWFriAZOH4nCiwIKToJUtGKU3MbeA.TGRRPeIze";
+
+  await db.insert(usersTable).values({
+    name: "Admin Demo", email: "admin@demo.com",
+    passwordHash: PW, role: "super_admin", isSuperAdmin: true, isActive: true,
+  }).onConflictDoNothing();
+
   await db.insert(usersTable).values({
     name: "Alex Super", email: "admin@tabletrack.io",
-    passwordHash: "demo_hash_super", role: "super_admin", isSuperAdmin: true,
+    passwordHash: PW, role: "super_admin", isSuperAdmin: true, isActive: true,
   }).onConflictDoNothing();
 
   await db.insert(usersTable).values({
     name: "Priya Sharma", email: "priya@spicegarden.com",
-    passwordHash: "demo_hash_owner1", role: "owner",
+    passwordHash: PW, role: "owner", isActive: true,
     tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 98765 43210",
   }).onConflictDoNothing();
 
   await db.insert(usersTable).values({
     name: "Amit Patel", email: "amit@spicegarden.com",
-    passwordHash: "demo_hash_waiter1", role: "waiter",
+    passwordHash: PW, role: "waiter", isActive: true,
     tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 11111",
   }).onConflictDoNothing();
 
   await db.insert(usersTable).values({
     name: "Sunita Devi", email: "sunita@spicegarden.com",
-    passwordHash: "demo_hash_waiter2", role: "waiter",
+    passwordHash: PW, role: "waiter", isActive: true,
     tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 22222",
   }).onConflictDoNothing();
 
   await db.insert(usersTable).values({
     name: "Chef Ramesh", email: "ramesh@spicegarden.com",
-    passwordHash: "demo_hash_chef1", role: "kitchen",
+    passwordHash: PW, role: "kitchen", isActive: true,
     tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 33333",
   }).onConflictDoNothing();
 
   await db.insert(usersTable).values({
     name: "Deepa Nair", email: "deepa@spicegarden.com",
-    passwordHash: "demo_hash_manager1", role: "manager",
+    passwordHash: PW, role: "manager", isActive: true,
     tenantId: spiceTenantId, restaurantId: spiceRestId, phone: "+91 90000 44444",
   }).onConflictDoNothing();
 

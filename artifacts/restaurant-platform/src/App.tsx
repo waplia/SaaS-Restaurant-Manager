@@ -1,8 +1,10 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { Sidebar } from "@/components/layout/Sidebar";
 import NotFound from "@/pages/not-found";
 import DashboardPage from "@/pages/dashboard";
 import OrdersPage from "@/pages/orders";
@@ -15,6 +17,11 @@ import CustomersPage from "@/pages/customers";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
+import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
+import AdminPage from "@/pages/admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,20 +32,51 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">{children}</main>
+    </div>
+  );
+}
+
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="text-muted-foreground text-sm">Loading…</div></div>;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  return <AppLayout><Component /></AppLayout>;
+}
+
+function PublicOnlyRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) return null;
+  if (isAuthenticated) {
+    if (user?.isSuperAdmin) return <Redirect to="/admin" />;
+    return <Redirect to="/" />;
+  }
+  return <Component />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={DashboardPage} />
-      <Route path="/orders" component={OrdersPage} />
-      <Route path="/kitchen" component={KitchenPage} />
-      <Route path="/tables" component={TablesPage} />
-      <Route path="/menu" component={MenuPage} />
-      <Route path="/inventory" component={InventoryPage} />
-      <Route path="/staff" component={StaffPage} />
-      <Route path="/customers" component={CustomersPage} />
-      <Route path="/reports" component={ReportsPage} />
-      <Route path="/notifications" component={NotificationsPage} />
-      <Route path="/settings" component={SettingsPage} />
+      <Route path="/login" component={() => <PublicOnlyRoute component={LoginPage} />} />
+      <Route path="/register" component={() => <PublicOnlyRoute component={RegisterPage} />} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/admin" component={() => <ProtectedRoute component={AdminPage} />} />
+      <Route path="/" component={() => <ProtectedRoute component={DashboardPage} />} />
+      <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
+      <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
+      <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />
+      <Route path="/menu" component={() => <ProtectedRoute component={MenuPage} />} />
+      <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
+      <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
+      <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
+      <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
+      <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
+      <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -47,14 +85,16 @@ function Router() {
 function App() {
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

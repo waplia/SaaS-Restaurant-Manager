@@ -5,6 +5,56 @@
  * Restaurant Management SaaS API
  * OpenAPI spec version: 0.1.0
  */
+export interface RegisterInput {
+  restaurantName: string;
+  ownerName: string;
+  email: string;
+  /** @minLength 8 */
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  /** @nullable */
+  tenantId?: number | null;
+  /** @nullable */
+  restaurantId?: number | null;
+  isSuperAdmin?: boolean;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  createdAt?: string;
+}
+
+export type AuthResultTenant = {
+  id?: number;
+  name?: string;
+  planStatus?: string;
+  /** @nullable */
+  trialEndsAt?: string | null;
+};
+
+export interface AuthResult {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+  tenant?: AuthResultTenant;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1105,6 +1155,33 @@ export interface AdminStats {
   totalRevenue: string;
   planBreakdown?: AdminStatsPlanBreakdownItem[];
 }
+
+export type RefreshTokenBody = {
+  refreshToken: string;
+};
+
+export type Logout200 = {
+  success?: boolean;
+};
+
+export type ForgotPasswordBody = {
+  email: string;
+};
+
+export type ForgotPassword200 = {
+  success: boolean;
+  message: string;
+  resetToken?: string;
+};
+
+export type ResetPasswordBody = {
+  token: string;
+  newPassword: string;
+};
+
+export type ResetPassword200 = {
+  success?: boolean;
+};
 
 export type ListTenantsParams = {
   page?: number;

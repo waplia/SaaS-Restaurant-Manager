@@ -1,0 +1,121 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: number | null;
+  restaurantId: number | null;
+  isSuperAdmin?: boolean;
+}
+
+interface AuthState {
+  user: AuthUser | null;
+  accessToken: string | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+}
+
+interface AuthContextValue extends AuthState {
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  register: (data: RegisterInput) => Promise<void>;
+}
+
+export interface RegisterInput {
+  restaurantName: string;
+  ownerName: string;
+  email: string;
+  password: string;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+const TOKEN_KEY = "tt_access_token";
+const REFRESH_KEY = "tt_refresh_token";
+const USER_KEY = "tt_user";
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const API_BASE = `${BASE_URL}/api`;
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    accessToken: null,
+    isLoading: true,
+    isAuthenticated: false,
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const userRaw = localStorage.getItem(USER_KEY);
+    if (token && userRaw) {
+      try {
+        const user = JSON.parse(userRaw) as AuthUser;
+        setState({ user, accessToken: token, isLoading: false, isAuthenticated: true });
+      } catch {
+        setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
+      }
+    } else {
+      setState(s => ({ ...s, isLoading: false }));
+    }
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Login failed" }));
+      throw new Error(err.error ?? "Login failed");
+    }
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setState({ user: data.user, accessToken: data.accessToken, isLoading: false, isAuthenticated: true });
+  }, []);
+
+  const register = useCallback(async (input: RegisterInput) => {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Registration failed" }));
+      throw new Error(err.error ?? "Registration failed");
+    }
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setState({ user: data.user, accessToken: data.accessToken, isLoading: false, isAuthenticated: true });
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
+    setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ ...state, login, logout, register }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
+}
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
