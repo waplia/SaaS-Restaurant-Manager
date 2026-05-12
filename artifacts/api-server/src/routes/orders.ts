@@ -193,16 +193,24 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
       }))
     );
   } else {
-    // No modifiers: coalesce by menuItemId
+    // No modifiers: coalesce only with an existing modifier-free line for this menuItemId
     const existingItems = await db.select().from(orderItemsTable)
       .where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
-    if (existingItems.length > 0) {
-      const existing = existingItems[0];
-      const newQty = existing.quantity + qty;
+
+    // Find a line that has no modifiers attached (modifier-free lines only)
+    let targetLine: typeof existingItems[0] | null = null;
+    for (const ex of existingItems) {
+      const mods = await db.select().from(orderItemModifiersTable)
+        .where(eq(orderItemModifiersTable.orderItemId, ex.id));
+      if (mods.length === 0) { targetLine = ex; break; }
+    }
+
+    if (targetLine) {
+      const newQty = targetLine.quantity + qty;
       await db.update(orderItemsTable).set({
         quantity: newQty,
         totalPrice: (Number(mi.price) * newQty).toFixed(2),
-      }).where(eq(orderItemsTable.id, existing.id));
+      }).where(eq(orderItemsTable.id, targetLine.id));
     } else {
       await db.insert(orderItemsTable).values({
         orderId,
@@ -236,8 +244,13 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
     return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
   }
 
+  // Verify item belongs to this order before touching anything
+  const [targetItem] = await db.select().from(orderItemsTable)
+    .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
+  if (!targetItem) return void res.status(404).json({ error: "Item not found in this order" });
+
   await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
-  await db.delete(orderItemsTable).where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
+  await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
 
   const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
