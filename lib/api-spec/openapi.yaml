@@ -1017,6 +1017,157 @@ paths:
               schema:
                 $ref: "#/components/schemas/Order"
 
+  /restaurants/{restaurantId}/orders/{id}/items:
+    post:
+      operationId: addOrderItem
+      tags: [orders]
+      summary: Add an item to an existing open order
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrderItemInput"
+      responses:
+        "200":
+          description: Updated order with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "400":
+          description: Order is not editable
+        "404":
+          description: Order or menu item not found
+
+  /restaurants/{restaurantId}/orders/{id}/items/{itemId}:
+    delete:
+      operationId: removeOrderItem
+      tags: [orders]
+      summary: Remove a line item from an open order
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Updated order with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "400":
+          description: Order is already completed
+        "404":
+          description: Order or item not found
+
+  /restaurants/{restaurantId}/orders/{id}/discount:
+    post:
+      operationId: applyOrderDiscount
+      tags: [orders]
+      summary: Apply or update a discount on an order
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [discountAmount]
+              properties:
+                discountAmount: { type: number, description: "Flat discount in currency units" }
+      responses:
+        "200":
+          description: Updated order with recalculated totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          description: Order not found
+
+  /restaurants/{restaurantId}/orders/{id}/void:
+    post:
+      operationId: voidOrder
+      tags: [orders]
+      summary: Cancel/void an order that has not yet been completed
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Voided order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Cannot void a completed order
+        "404":
+          description: Order not found
+
+  /restaurants/{restaurantId}/orders/{id}/split:
+    post:
+      operationId: splitOrder
+      tags: [orders]
+      summary: Mark an order as paid via split payment across multiple methods
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [splits]
+              properties:
+                splits:
+                  type: array
+                  items:
+                    type: object
+                    required: [paymentMethod]
+                    properties:
+                      paymentMethod: { type: string, enum: [cash, card, upi] }
+      responses:
+        "200":
+          description: Completed order after split payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Order already completed or cancelled
+        "404":
+          description: Order not found
+
+  /restaurants/{restaurantId}/orders/{id}/payment-intent:
+    post:
+      operationId: createPaymentIntent
+      tags: [orders]
+      summary: Create a Stripe PaymentIntent for the order (returns demo intent when Stripe is not configured)
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: PaymentIntent details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentIntentResult"
+        "400":
+          description: Order is not payable
+        "404":
+          description: Order not found
+        "500":
+          description: Failed to create PaymentIntent with Stripe
+
   # ─── Kitchen ──────────────────────────────────────────────────
   /restaurants/{restaurantId}/kitchen/tickets:
     get:
@@ -2630,7 +2781,33 @@ components:
       properties:
         paymentMethod: { type: string }
         amountTendered: { type: string }
+        stripePaymentIntentId: { type: string, description: "Stripe PaymentIntent ID for card payments" }
         transactionId: { type: string }
+
+    PaymentIntentResult:
+      type: object
+      required: [clientSecret, intentId, mode]
+      properties:
+        clientSecret: { type: ["string", "null"], description: "Stripe PaymentIntent client secret; null in demo mode" }
+        intentId: { type: string, description: "Stripe PaymentIntent ID or demo intent placeholder" }
+        mode: { type: string, enum: [live, demo], description: "live = real Stripe; demo = Stripe not configured" }
+        totalAmount: { type: string, description: "Order total in currency units (included in demo mode)" }
+
+    AddOrderItemInput:
+      type: object
+      required: [menuItemId, quantity]
+      properties:
+        menuItemId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        notes: { type: string }
+        modifiers:
+          type: array
+          items:
+            type: object
+            required: [name, price]
+            properties:
+              name: { type: string }
+              price: { type: string }
 
     # ── Kitchen ──
     KitchenTicket:

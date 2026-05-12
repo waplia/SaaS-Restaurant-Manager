@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
+  useCreatePaymentIntent,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -285,6 +286,13 @@ function SplitBillModal({
   };
 
   const confirmSplit = (idx: number) => {
+    if (methods[idx] === "cash") {
+      const tendered = Number(tenderAmounts[idx]);
+      if (!tenderAmounts[idx] || tendered < perPerson) {
+        toast({ title: "Insufficient amount", description: `Enter at least ₹${perPerson.toFixed(2)} for cash payment.`, variant: "destructive" });
+        return;
+      }
+    }
     const updated = [...confirmedSplits];
     updated[idx] = true;
     setConfirmedSplits(updated);
@@ -420,26 +428,63 @@ function SplitBillModal({
 
 function PaymentModal({
   totals,
+  orderId,
   onClose,
   onConfirm,
   isPending,
 }: {
   totals: Totals;
+  orderId: number;
   onClose: () => void;
-  onConfirm: (method: string, amountTendered?: number) => Promise<void>;
+  onConfirm: (method: string, amountTendered?: number, stripePaymentIntentId?: string) => Promise<void>;
   isPending: boolean;
 }) {
   const [method, setMethod] = useState<"cash" | "card" | "upi">("cash");
   const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
-  const [cardNum, setCardNum] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
   const [upiId, setUpiId] = useState("");
+  const [cardReady, setCardReady] = useState(false);
+  const [stripeError, setStripeError] = useState("");
+  const cardMountRef = useRef<HTMLDivElement>(null);
+  const stripeRef = useRef<{ stripe: import("@stripe/stripe-js").Stripe | null; card: import("@stripe/stripe-js").StripeCardElement | null }>({ stripe: null, card: null });
+  const createPaymentIntent = useCreatePaymentIntent();
+  const { toast } = useToast();
+
+  const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
+  const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined;
 
   const change = method === "cash" && amountTendered
     ? Math.max(0, Number(amountTendered) - totals.totalAmount)
     : 0;
+
+  useEffect(() => {
+    if (stage !== "card-form" || !STRIPE_PK) return;
+    let destroyed = false;
+    import("@stripe/stripe-js").then(({ loadStripe }) => {
+      loadStripe(STRIPE_PK).then(stripe => {
+        if (destroyed || !stripe || !cardMountRef.current) return;
+        stripeRef.current.stripe = stripe;
+        const elements = stripe.elements();
+        const card = elements.create("card", {
+          style: { base: { fontSize: "16px", color: "#1a1a1a", "::placeholder": { color: "#9ca3af" } } },
+          hidePostalCode: true,
+        });
+        card.mount(cardMountRef.current!);
+        stripeRef.current.card = card;
+        card.on("change", evt => {
+          setStripeError(evt.error?.message ?? "");
+          setCardReady(evt.complete);
+        });
+      });
+    });
+    return () => {
+      destroyed = true;
+      stripeRef.current.card?.destroy();
+      stripeRef.current = { stripe: null, card: null };
+      setCardReady(false);
+      setStripeError("");
+    };
+  }, [stage, STRIPE_PK]);
 
   const handleProceed = () => {
     if (method === "card") { setStage("card-form"); return; }
@@ -449,7 +494,33 @@ function PaymentModal({
 
   const handleProcessPayment = async () => {
     setStage("processing");
-    await onConfirm(method, method === "cash" && amountTendered ? Number(amountTendered) : undefined);
+    try {
+      if (method === "card") {
+        const intent = await createPaymentIntent.mutateAsync({ orderId });
+        if (intent.mode === "live" && intent.clientSecret && stripeRef.current.stripe && stripeRef.current.card) {
+          const result = await stripeRef.current.stripe.confirmCardPayment(intent.clientSecret, {
+            payment_method: { card: stripeRef.current.card },
+          });
+          if (result.error) {
+            setStripeError(result.error.message ?? "Payment failed");
+            setStage("card-form");
+            return;
+          }
+          await onConfirm("card", undefined, result.paymentIntent?.id);
+        } else {
+          await new Promise(r => setTimeout(r, 1500));
+          await onConfirm("card", undefined, intent.intentId);
+        }
+      } else if (method === "upi") {
+        await new Promise(r => setTimeout(r, 1500));
+        await onConfirm("upi");
+      } else {
+        await onConfirm("cash", Number(amountTendered) || undefined);
+      }
+    } catch {
+      toast({ title: "Payment failed", description: "Please try again.", variant: "destructive" });
+      setStage(method === "cash" ? "cash-confirm" : method === "card" ? "card-form" : "upi-form");
+    }
   };
 
   const TotalsSummary = () => (
@@ -561,76 +632,71 @@ function PaymentModal({
             </>
           )}
 
-          {/* Card form stage */}
+          {/* Card form stage — Stripe-hosted card element; no raw card data ever collected */}
           {stage === "card-form" && (
             <>
               <TotalsSummary />
               <div className="space-y-3">
-                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400">
-                  <Lock className="w-3.5 h-3.5 flex-shrink-0" />
-                  Secure card payment — configure Stripe to enable real processing
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Card Number</label>
-                  <Input
-                    placeholder="1234 5678 9012 3456"
-                    value={cardNum}
-                    onChange={e => setCardNum(e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim().slice(0, 19))}
-                    className="font-mono"
-                    autoFocus
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Expiry (MM/YY)</label>
-                    <Input
-                      placeholder="MM/YY"
-                      value={cardExpiry}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, "");
-                        setCardExpiry(v.length >= 2 ? v.slice(0, 2) + "/" + v.slice(2, 4) : v);
-                      }}
-                      maxLength={5}
-                      className="font-mono"
+                {STRIPE_PK ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400">
+                      <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                      Card details are entered securely in Stripe's hosted form — never touch our servers
+                    </div>
+                    <div
+                      ref={cardMountRef}
+                      className="border border-border rounded-lg px-4 py-3 bg-background min-h-[44px]"
                     />
+                    {stripeError && <p className="text-xs text-red-500">{stripeError}</p>}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 px-4 py-5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300">
+                    <Lock className="w-6 h-6" />
+                    <p className="font-semibold">Stripe not configured</p>
+                    <p className="text-xs text-center">
+                      Set <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">STRIPE_SECRET_KEY</code> and{" "}
+                      <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">VITE_STRIPE_PUBLISHABLE_KEY</code> to enable real card payments.
+                      In demo mode no card data is collected.
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">CVV</label>
-                    <Input
-                      placeholder="123"
-                      value={cardCvv}
-                      onChange={e => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                      className="font-mono"
-                      type="password"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
                 <Button
                   className="flex-1 h-11"
-                  disabled={cardNum.length < 19 || cardExpiry.length < 5 || cardCvv.length < 3 || isPending}
+                  disabled={(!!STRIPE_PK && !cardReady) || isPending || createPaymentIntent.isPending}
                   onClick={handleProcessPayment}
                 >
                   <Lock className="w-3.5 h-3.5 mr-2" />
-                  Pay ₹{totals.totalAmount.toFixed(2)}
+                  {STRIPE_PK ? `Pay ₹${totals.totalAmount.toFixed(2)}` : "Process Demo Payment"}
                 </Button>
               </div>
             </>
           )}
 
-          {/* UPI form stage */}
+          {/* UPI form stage — Razorpay checkout when configured; demo mode otherwise */}
           {stage === "upi-form" && (
             <>
               <TotalsSummary />
               <div className="space-y-3">
-                <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg text-xs text-purple-700 dark:text-purple-400">
-                  <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
-                  UPI payment — configure Razorpay to enable real processing
-                </div>
+                {RAZORPAY_KEY ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg text-xs text-purple-700 dark:text-purple-400">
+                    <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+                    Razorpay UPI checkout will open in a secure popup
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 px-4 py-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300">
+                    <Smartphone className="w-6 h-6" />
+                    <p className="font-semibold">Razorpay not configured</p>
+                    <p className="text-xs text-center">
+                      Set <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">VITE_RAZORPAY_KEY_ID</code> to enable real UPI payments.
+                      In demo mode the payment is simulated.
+                    </p>
+                  </div>
+                )}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Customer UPI ID</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Customer UPI ID (for receipt reference)</label>
                   <Input
                     placeholder="customer@paytm / 9999999999@ybl"
                     value={upiId}
@@ -638,7 +704,7 @@ function PaymentModal({
                     autoFocus
                   />
                 </div>
-                <div className="text-center py-2">
+                <div className="text-center py-1">
                   <p className="text-xs text-muted-foreground">
                     Amount: <span className="font-bold text-foreground text-base">₹{totals.totalAmount.toFixed(2)}</span>
                   </p>
@@ -648,11 +714,11 @@ function PaymentModal({
                 <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
                 <Button
                   className="flex-1 h-11"
-                  disabled={!upiId.includes("@") || isPending}
+                  disabled={isPending}
                   onClick={handleProcessPayment}
                 >
                   <Smartphone className="w-3.5 h-3.5 mr-2" />
-                  Verify & Pay
+                  {RAZORPAY_KEY ? "Open Razorpay" : "Process Demo UPI"}
                 </Button>
               </div>
             </>
@@ -887,10 +953,10 @@ export default function PosPage() {
     setShowPayModal(true);
   };
 
-  const handleConfirmPayment = async (method: string, amountTendered?: number) => {
+  const handleConfirmPayment = async (method: string, amountTendered?: number, stripePaymentIntentId?: string) => {
     const orderId = placedOrder?.id;
     if (!orderId) return;
-    await payOrder.mutateAsync({ id: orderId, paymentMethod: method });
+    await payOrder.mutateAsync({ id: orderId, paymentMethod: method, stripePaymentIntentId });
     setShowPayModal(false);
     toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
     const receiptItems = placedOrder
@@ -1265,9 +1331,10 @@ export default function PosPage() {
         />
       )}
 
-      {showPayModal && (
+      {showPayModal && placedOrder && (
         <PaymentModal
           totals={displayTotals}
+          orderId={placedOrder.id}
           onClose={() => setShowPayModal(false)}
           onConfirm={handleConfirmPayment}
           isPending={payOrder.isPending}

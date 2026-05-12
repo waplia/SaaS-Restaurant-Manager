@@ -119,6 +119,15 @@ export function useItemModifierGroups(menuItemId?: number) {
   });
 }
 
+export function useCreatePaymentIntent() {
+  return useMutation({
+    mutationFn: ({ orderId }: { orderId: number }) =>
+      apiPost<import("./types").PaymentIntentResult>(
+        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/payment-intent`, {}
+      ),
+  });
+}
+
 export function useSplitOrder() {
   const qc = useQueryClient();
   return useMutation({

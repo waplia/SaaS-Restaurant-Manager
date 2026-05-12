@@ -119,6 +119,14 @@ export interface UpdateOrderInput {
 export interface PayOrderInput {
   id: number;
   paymentMethod: string;
+  stripePaymentIntentId?: string;
+}
+
+export interface PaymentIntentResult {
+  clientSecret: string | null;
+  intentId: string;
+  mode: "live" | "demo";
+  totalAmount?: string;
 }
 
 export interface AddOrderItemInput {

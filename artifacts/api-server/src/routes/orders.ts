@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
+import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -326,10 +327,67 @@ router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
   res.json(updated);
 });
 
+router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Order is not payable" });
+  }
+
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (stripeSecretKey) {
+    try {
+      const stripe = new Stripe(stripeSecretKey);
+      const intent = await stripe.paymentIntents.create({
+        amount: Math.round(Number(order.totalAmount) * 100),
+        currency: "inr",
+        metadata: { orderId: String(orderId), restaurantId: String(restaurantId) },
+      });
+      return res.json({ clientSecret: intent.client_secret, intentId: intent.id, mode: "live" });
+    } catch {
+      return void res.status(500).json({ error: "Failed to create payment intent" });
+    }
+  }
+
+  // No Stripe key — return demo intent for test/development environments
+  return res.json({
+    clientSecret: null,
+    intentId: `demo_pi_${orderId}_${Date.now()}`,
+    mode: "demo",
+    totalAmount: order.totalAmount,
+  });
+});
+
 router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { paymentMethod } = req.body;
-  const [updated] = await db.update(ordersTable).set({ paymentMethod, paymentStatus: "paid", status: "completed", updatedAt: new Date() }).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
+  const { paymentMethod, stripePaymentIntentId } = req.body;
+  const orderId = Number(req.params.id);
+
+  // If Stripe is configured and a live payment intent ID is provided, verify it before completing
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (stripeSecretKey && stripePaymentIntentId && !String(stripePaymentIntentId).startsWith("demo_")) {
+    try {
+      const stripe = new Stripe(stripeSecretKey);
+      const intent = await stripe.paymentIntents.retrieve(String(stripePaymentIntentId));
+      if (intent.status !== "succeeded") {
+        return void res.status(400).json({ error: `Payment not confirmed: ${intent.status}` });
+      }
+    } catch {
+      return void res.status(400).json({ error: "Failed to verify payment with Stripe" });
+    }
+  }
+
+  const [updated] = await db.update(ordersTable).set({
+    paymentMethod,
+    paymentStatus: "paid",
+    status: "completed",
+    stripePaymentId: stripePaymentIntentId ?? null,
+    updatedAt: new Date(),
+  }).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   if (updated.tableId) {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
