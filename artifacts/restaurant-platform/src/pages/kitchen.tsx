@@ -198,7 +198,7 @@ export default function KitchenPage() {
   const prevCountRef = useRef(0);
   const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-  const activeTickets = allTickets.filter((t: KitchenTicket) => t.status !== "served");
+  const activeTickets = allTickets.filter((t: KitchenTicket) => t.status === "new" || t.status === "preparing" || t.status === "ready");
   const newTickets = activeTickets.filter((t: KitchenTicket) => t.status === "new");
   const preparingTickets = activeTickets.filter((t: KitchenTicket) => t.status === "preparing");
   const readyTickets = activeTickets.filter((t: KitchenTicket) => t.status === "ready");
