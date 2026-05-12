@@ -146,6 +146,95 @@ router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "mana
   res.status(204).send();
 });
 
+router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const items = await db.select().from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
+  const categories = await db.select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name }).from(menuCategoriesTable).where(eq(menuCategoriesTable.restaurantId, restaurantId));
+  const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+  const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const headers = ["Name", "Price", "Category", "Veg", "Available", "Prep Time", "Calories", "Tags"];
+  const rows = items.map(item => [
+    item.name,
+    item.price,
+    catMap[item.categoryId] ?? "",
+    item.isVeg ? "Yes" : "No",
+    item.isAvailable ? "Yes" : "No",
+    item.preparationTime ?? "",
+    item.calories ?? "",
+    Array.isArray(item.tags) ? (item.tags as string[]).join(";") : "",
+  ].map(escape).join(","));
+
+  const csv = [headers.map(escape).join(","), ...rows].join("\n");
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="menu-items-${restaurantId}.csv"`);
+  res.send(csv);
+});
+
+router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+
+  const { items } = req.body as {
+    items: Array<{
+      name: string;
+      price: string;
+      categoryName?: string;
+      isVeg?: boolean;
+      preparationTime?: number;
+      calories?: number;
+      tags?: string[];
+    }>;
+  };
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return void res.status(400).json({ error: "items array is required" });
+  }
+
+  const categories = await db.select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name }).from(menuCategoriesTable).where(eq(menuCategoriesTable.restaurantId, restaurantId));
+  const catByName = Object.fromEntries(categories.map(c => [c.name.toLowerCase(), c.id]));
+  const defaultCatId = categories[0]?.id;
+
+  if (!defaultCatId) {
+    return void res.status(422).json({ error: "No categories exist for this restaurant. Create at least one category before importing." });
+  }
+
+  const errors: string[] = [];
+  const toInsert: typeof menuItemsTable.$inferInsert[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const row = items[i];
+    if (!row.name?.trim() || !row.price) {
+      errors.push(`Row ${i + 1}: name and price are required`);
+      continue;
+    }
+    const price = parseFloat(String(row.price));
+    if (isNaN(price) || price < 0) {
+      errors.push(`Row ${i + 1}: invalid price "${row.price}"`);
+      continue;
+    }
+    const catId = (row.categoryName ? catByName[row.categoryName.toLowerCase()] : undefined) ?? defaultCatId;
+    toInsert.push({
+      restaurantId,
+      categoryId: catId,
+      name: row.name.trim(),
+      price: String(price.toFixed(2)),
+      description: "",
+      isVeg: row.isVeg ?? false,
+      preparationTime: row.preparationTime ?? 15,
+      calories: row.calories ?? null,
+      tags: row.tags ?? null,
+    });
+  }
+
+  let imported = 0;
+  if (toInsert.length > 0) {
+    const inserted = await db.insert(menuItemsTable).values(toInsert).returning({ id: menuItemsTable.id });
+    imported = inserted.length;
+  }
+
+  res.json({ imported, skipped: items.length - imported - errors.length, errors });
+});
+
 router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
   const itemId = Number(req.params.itemId);
   const allowed = await resolveMenuItemTenantScope(itemId, req.user!);

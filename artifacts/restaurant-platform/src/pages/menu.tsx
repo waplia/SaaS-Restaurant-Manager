@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
 
+const RESTAURANT_ID = 1;
+
 function VegBadge({ isVeg }: { isVeg: boolean }) {
   return (
     <span className={cn(
@@ -337,29 +339,25 @@ export default function MenuPage() {
     }
   };
 
-  const handleExportCSV = () => {
-    const rows = [
-      ["Name", "Price", "Category", "Veg", "Available", "Prep Time", "Calories", "Tags"],
-      ...filteredItems.map((item: MenuItem) => [
-        item.name,
-        item.price,
-        categories.find((c: MenuCategory) => c.id === item.categoryId)?.name ?? "",
-        item.isVeg ? "Yes" : "No",
-        item.isAvailable ? "Yes" : "No",
-        item.preparationTime,
-        item.calories ?? "",
-        Array.isArray(item.tags) ? item.tags.join(";") : "",
-      ]),
-    ];
-    const csv = rows.map(r => r.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "menu-items.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Exported menu items" });
+  const handleExportCSV = async () => {
+    try {
+      const { getApiUrl } = await import("@/lib/api");
+      const token = localStorage.getItem("tt_access_token");
+      const res = await fetch(getApiUrl(`/restaurants/${RESTAURANT_ID}/items/export.csv`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "menu-items.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exported all menu items" });
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    }
   };
 
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -369,25 +367,40 @@ export default function MenuPage() {
     reader.onload = async (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split("\n").slice(1).filter(l => l.trim());
-      let imported = 0;
-      for (const line of lines) {
+      const parsedItems = lines.flatMap(line => {
         const cols = line.match(/("(?:[^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, "").replace(/""/g, '"')) ?? [];
         const [name, price, categoryName, vegStr, , prep, calories, tags] = cols;
-        if (!name || !price) continue;
-        const catId = categories.find((c: MenuCategory) => c.name.toLowerCase() === (categoryName ?? "").toLowerCase())?.id ?? categories[0]?.id;
-        if (!catId) continue;
-        try {
-          await createItem.mutateAsync({
-            name, price, description: "", categoryId: catId,
-            isVeg: vegStr?.toLowerCase() === "yes",
-            preparationTime: Number(prep) || 15,
-            calories: calories ? Number(calories) : undefined,
-            tags: tags ? tags.split(";").map(t => t.trim()).filter(Boolean) : undefined,
-          });
-          imported++;
-        } catch { /* skip invalid rows */ }
+        if (!name?.trim() || !price?.trim()) return [];
+        return [{
+          name: name.trim(),
+          price: price.trim(),
+          categoryName: categoryName?.trim() || undefined,
+          isVeg: vegStr?.toLowerCase() === "yes",
+          preparationTime: Number(prep) || 15,
+          calories: calories ? Number(calories) : undefined,
+          tags: tags ? tags.split(";").map((t: string) => t.trim()).filter(Boolean) : undefined,
+        }];
+      });
+
+      if (parsedItems.length === 0) {
+        toast({ title: "No valid rows found in CSV", variant: "destructive" });
+        return;
       }
-      toast({ title: `Imported ${imported} items` });
+
+      try {
+        const { apiPost } = await import("@/lib/api");
+        const result = await apiPost<{ imported: number; skipped: number; errors: string[] }>(
+          `/restaurants/${RESTAURANT_ID}/items/import`,
+          { items: parsedItems }
+        );
+        const msg = result.errors.length > 0
+          ? `Imported ${result.imported}, skipped ${result.skipped + result.errors.length}`
+          : `Imported ${result.imported} items`;
+        toast({ title: msg });
+        if (result.errors.length > 0) console.warn("Import errors:", result.errors);
+      } catch {
+        toast({ title: "Import failed", variant: "destructive" });
+      }
     };
     reader.readAsText(file);
     e.target.value = "";
