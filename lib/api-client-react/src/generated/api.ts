@@ -37,6 +37,8 @@ import type {
   CouponUpdate,
   CouponValidateInput,
   CouponValidateResult,
+  CreatePaymentIntentBody,
+  CreateRazorpayOrderBody,
   CreateRoleInput,
   CreateShiftInput,
   Customer,
@@ -5426,6 +5428,7 @@ export const getCreateRazorpayOrderUrl = (restaurantId: number, id: number) => {
 export const createRazorpayOrder = async (
   restaurantId: number,
   id: number,
+  createRazorpayOrderBody?: CreateRazorpayOrderBody,
   options?: RequestInit,
 ): Promise<RazorpayOrderResult> => {
   return customFetch<RazorpayOrderResult>(
@@ -5433,6 +5436,8 @@ export const createRazorpayOrder = async (
     {
       ...options,
       method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createRazorpayOrderBody),
     },
   );
 };
@@ -5444,14 +5449,18 @@ export const getCreateRazorpayOrderMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createRazorpayOrder>>,
     TError,
-    { restaurantId: number; id: number },
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreateRazorpayOrderBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createRazorpayOrder>>,
   TError,
-  { restaurantId: number; id: number },
+  { restaurantId: number; id: number; data: BodyType<CreateRazorpayOrderBody> },
   TContext
 > => {
   const mutationKey = ["createRazorpayOrder"];
@@ -5465,11 +5474,15 @@ export const getCreateRazorpayOrderMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createRazorpayOrder>>,
-    { restaurantId: number; id: number }
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreateRazorpayOrderBody>;
+    }
   > = (props) => {
-    const { restaurantId, id } = props ?? {};
+    const { restaurantId, id, data } = props ?? {};
 
-    return createRazorpayOrder(restaurantId, id, requestOptions);
+    return createRazorpayOrder(restaurantId, id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -5478,7 +5491,7 @@ export const getCreateRazorpayOrderMutationOptions = <
 export type CreateRazorpayOrderMutationResult = NonNullable<
   Awaited<ReturnType<typeof createRazorpayOrder>>
 >;
-
+export type CreateRazorpayOrderMutationBody = BodyType<CreateRazorpayOrderBody>;
 export type CreateRazorpayOrderMutationError = ErrorType<void>;
 
 /**
@@ -5491,14 +5504,18 @@ export const useCreateRazorpayOrder = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createRazorpayOrder>>,
     TError,
-    { restaurantId: number; id: number },
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreateRazorpayOrderBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createRazorpayOrder>>,
   TError,
-  { restaurantId: number; id: number },
+  { restaurantId: number; id: number; data: BodyType<CreateRazorpayOrderBody> },
   TContext
 > => {
   return useMutation(getCreateRazorpayOrderMutationOptions(options));
@@ -5514,6 +5531,7 @@ export const getCreatePaymentIntentUrl = (restaurantId: number, id: number) => {
 export const createPaymentIntent = async (
   restaurantId: number,
   id: number,
+  createPaymentIntentBody?: CreatePaymentIntentBody,
   options?: RequestInit,
 ): Promise<PaymentIntentResult> => {
   return customFetch<PaymentIntentResult>(
@@ -5521,6 +5539,8 @@ export const createPaymentIntent = async (
     {
       ...options,
       method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createPaymentIntentBody),
     },
   );
 };
@@ -5532,14 +5552,18 @@ export const getCreatePaymentIntentMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createPaymentIntent>>,
     TError,
-    { restaurantId: number; id: number },
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreatePaymentIntentBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createPaymentIntent>>,
   TError,
-  { restaurantId: number; id: number },
+  { restaurantId: number; id: number; data: BodyType<CreatePaymentIntentBody> },
   TContext
 > => {
   const mutationKey = ["createPaymentIntent"];
@@ -5553,11 +5577,15 @@ export const getCreatePaymentIntentMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createPaymentIntent>>,
-    { restaurantId: number; id: number }
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreatePaymentIntentBody>;
+    }
   > = (props) => {
-    const { restaurantId, id } = props ?? {};
+    const { restaurantId, id, data } = props ?? {};
 
-    return createPaymentIntent(restaurantId, id, requestOptions);
+    return createPaymentIntent(restaurantId, id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -5566,7 +5594,7 @@ export const getCreatePaymentIntentMutationOptions = <
 export type CreatePaymentIntentMutationResult = NonNullable<
   Awaited<ReturnType<typeof createPaymentIntent>>
 >;
-
+export type CreatePaymentIntentMutationBody = BodyType<CreatePaymentIntentBody>;
 export type CreatePaymentIntentMutationError = ErrorType<void>;
 
 /**
@@ -5579,14 +5607,18 @@ export const useCreatePaymentIntent = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createPaymentIntent>>,
     TError,
-    { restaurantId: number; id: number },
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<CreatePaymentIntentBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createPaymentIntent>>,
   TError,
-  { restaurantId: number; id: number },
+  { restaurantId: number; id: number; data: BodyType<CreatePaymentIntentBody> },
   TContext
 > => {
   return useMutation(getCreatePaymentIntentMutationOptions(options));

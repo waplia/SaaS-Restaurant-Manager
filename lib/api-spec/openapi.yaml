@@ -1131,9 +1131,15 @@ paths:
                   type: array
                   items:
                     type: object
-                    required: [paymentMethod]
+                    required: [paymentMethod, amount]
                     properties:
                       paymentMethod: { type: string, enum: [cash, card, upi] }
+                      amount: { type: number, description: "This leg's share of the order total (rupees)" }
+                      amountTendered: { type: number, description: "Cash tendered (cash legs only)" }
+                      stripePaymentIntentId: { type: string, description: "Stripe PaymentIntent ID (card legs)" }
+                      razorpayPaymentId: { type: string, description: "Razorpay payment ID (UPI legs)" }
+                      razorpayOrderId: { type: string, description: "Razorpay order ID (UPI legs)" }
+                      razorpaySignature: { type: string, description: "Razorpay HMAC signature (UPI legs)" }
       responses:
         "200":
           description: Completed order after split payment
@@ -1154,6 +1160,14 @@ paths:
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
         - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customAmount: { type: number, description: "Override amount in rupees (for split billing)" }
       responses:
         "200":
           description: Razorpay order details
@@ -1176,6 +1190,14 @@ paths:
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
         - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customAmount: { type: number, description: "Override amount in rupees (for split billing)" }
       responses:
         "200":
           description: PaymentIntent details
@@ -2801,9 +2823,12 @@ components:
       type: object
       required: [paymentMethod]
       properties:
-        paymentMethod: { type: string }
-        amountTendered: { type: string }
-        stripePaymentIntentId: { type: string, description: "Stripe PaymentIntent ID for card payments" }
+        paymentMethod: { type: string, enum: [cash, card, upi] }
+        amountTendered: { type: number }
+        stripePaymentIntentId: { type: string, description: "Stripe PaymentIntent ID (card payments)" }
+        razorpayPaymentId: { type: string, description: "Razorpay payment ID (UPI payments)" }
+        razorpayOrderId: { type: string, description: "Razorpay order ID (UPI payments)" }
+        razorpaySignature: { type: string, description: "Razorpay HMAC signature (UPI payments)" }
         transactionId: { type: string }
 
     RazorpayOrderResult:

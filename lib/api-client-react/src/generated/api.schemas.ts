@@ -551,11 +551,26 @@ export interface OrderUpdate {
   discountAmount?: string;
 }
 
+export type PaymentInputPaymentMethod =
+  (typeof PaymentInputPaymentMethod)[keyof typeof PaymentInputPaymentMethod];
+
+export const PaymentInputPaymentMethod = {
+  cash: "cash",
+  card: "card",
+  upi: "upi",
+} as const;
+
 export interface PaymentInput {
-  paymentMethod: string;
-  amountTendered?: string;
-  /** Stripe PaymentIntent ID for card payments */
+  paymentMethod: PaymentInputPaymentMethod;
+  amountTendered?: number;
+  /** Stripe PaymentIntent ID (card payments) */
   stripePaymentIntentId?: string;
+  /** Razorpay payment ID (UPI payments) */
+  razorpayPaymentId?: string;
+  /** Razorpay order ID (UPI payments) */
+  razorpayOrderId?: string;
+  /** Razorpay HMAC signature (UPI payments) */
+  razorpaySignature?: string;
   transactionId?: string;
 }
 
@@ -1317,10 +1332,32 @@ export const SplitOrderBodySplitsItemPaymentMethod = {
 
 export type SplitOrderBodySplitsItem = {
   paymentMethod: SplitOrderBodySplitsItemPaymentMethod;
+  /** This leg's share of the order total (rupees) */
+  amount: number;
+  /** Cash tendered (cash legs only) */
+  amountTendered?: number;
+  /** Stripe PaymentIntent ID (card legs) */
+  stripePaymentIntentId?: string;
+  /** Razorpay payment ID (UPI legs) */
+  razorpayPaymentId?: string;
+  /** Razorpay order ID (UPI legs) */
+  razorpayOrderId?: string;
+  /** Razorpay HMAC signature (UPI legs) */
+  razorpaySignature?: string;
 };
 
 export type SplitOrderBody = {
   splits: SplitOrderBodySplitsItem[];
+};
+
+export type CreateRazorpayOrderBody = {
+  /** Override amount in rupees (for split billing) */
+  customAmount?: number;
+};
+
+export type CreatePaymentIntentBody = {
+  /** Override amount in rupees (for split billing) */
+  customAmount?: number;
 };
 
 export type ListKitchenTicketsParams = {

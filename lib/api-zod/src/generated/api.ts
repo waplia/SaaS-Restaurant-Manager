@@ -1059,12 +1059,24 @@ export const PayOrderParams = zod.object({
 });
 
 export const PayOrderBody = zod.object({
-  paymentMethod: zod.string(),
-  amountTendered: zod.string().optional(),
+  paymentMethod: zod.enum(["cash", "card", "upi"]),
+  amountTendered: zod.number().optional(),
   stripePaymentIntentId: zod
     .string()
     .optional()
-    .describe("Stripe PaymentIntent ID for card payments"),
+    .describe("Stripe PaymentIntent ID (card payments)"),
+  razorpayPaymentId: zod
+    .string()
+    .optional()
+    .describe("Razorpay payment ID (UPI payments)"),
+  razorpayOrderId: zod
+    .string()
+    .optional()
+    .describe("Razorpay order ID (UPI payments)"),
+  razorpaySignature: zod
+    .string()
+    .optional()
+    .describe("Razorpay HMAC signature (UPI payments)"),
   transactionId: zod.string().optional(),
 });
 
@@ -1264,6 +1276,29 @@ export const SplitOrderBody = zod.object({
   splits: zod.array(
     zod.object({
       paymentMethod: zod.enum(["cash", "card", "upi"]),
+      amount: zod
+        .number()
+        .describe("This leg's share of the order total (rupees)"),
+      amountTendered: zod
+        .number()
+        .optional()
+        .describe("Cash tendered (cash legs only)"),
+      stripePaymentIntentId: zod
+        .string()
+        .optional()
+        .describe("Stripe PaymentIntent ID (card legs)"),
+      razorpayPaymentId: zod
+        .string()
+        .optional()
+        .describe("Razorpay payment ID (UPI legs)"),
+      razorpayOrderId: zod
+        .string()
+        .optional()
+        .describe("Razorpay order ID (UPI legs)"),
+      razorpaySignature: zod
+        .string()
+        .optional()
+        .describe("Razorpay HMAC signature (UPI legs)"),
     }),
   ),
 });
@@ -1299,6 +1334,13 @@ export const CreateRazorpayOrderParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const CreateRazorpayOrderBody = zod.object({
+  customAmount: zod
+    .number()
+    .optional()
+    .describe("Override amount in rupees (for split billing)"),
+});
+
 export const CreateRazorpayOrderResponse = zod.object({
   id: zod.string().describe("Razorpay order ID or demo placeholder"),
   amount: zod.number().describe("Amount in paise (INR subunit)"),
@@ -1316,6 +1358,13 @@ export const CreateRazorpayOrderResponse = zod.object({
 export const CreatePaymentIntentParams = zod.object({
   restaurantId: zod.coerce.number(),
   id: zod.coerce.number(),
+});
+
+export const CreatePaymentIntentBody = zod.object({
+  customAmount: zod
+    .number()
+    .optional()
+    .describe("Override amount in rupees (for split billing)"),
 });
 
 export const CreatePaymentIntentResponse = zod.object({
