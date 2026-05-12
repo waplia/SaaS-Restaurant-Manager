@@ -1,0 +1,48 @@
+import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const subscriptionPlansTable = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  billingPeriod: text("billing_period").notNull().default("monthly"),
+  maxRestaurants: integer("max_restaurants").notNull().default(1),
+  maxBranches: integer("max_branches").notNull().default(1),
+  maxStaff: integer("max_staff").notNull().default(10),
+  maxTables: integer("max_tables").notNull().default(20),
+  maxMenuItems: integer("max_menu_items").notNull().default(100),
+  trialDays: integer("trial_days").notNull().default(14),
+  features: text("features").array().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const tenantsTable = pgTable("tenants", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  planId: integer("plan_id").references(() => subscriptionPlansTable.id),
+  planStatus: text("plan_status").notNull().default("trial"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  subscriptionStartedAt: timestamp("subscription_started_at"),
+  subscriptionEndsAt: timestamp("subscription_ends_at"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  isActive: boolean("is_active").notNull().default(true),
+  isSuspended: boolean("is_suspended").notNull().default(false),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color").default("#f97316"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlansTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+
+export const insertTenantSchema = createInsertSchema(tenantsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenantsTable.$inferSelect;

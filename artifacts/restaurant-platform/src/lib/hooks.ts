@@ -1,0 +1,271 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
+
+const RESTAURANT_ID = 1;
+
+export function useRestaurantId() {
+  return RESTAURANT_ID;
+}
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: ["dashboard", "summary", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/summary`),
+    refetchInterval: 30000,
+  });
+}
+
+export function useRevenueTrend(period = "7d") {
+  return useQuery({
+    queryKey: ["dashboard", "revenue-trend", RESTAURANT_ID, period],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}`),
+  });
+}
+
+export function usePopularItems(limit = 8) {
+  return useQuery({
+    queryKey: ["dashboard", "popular-items", RESTAURANT_ID, limit],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/popular-items?limit=${limit}`),
+  });
+}
+
+export function useLiveKitchen() {
+  return useQuery({
+    queryKey: ["dashboard", "live-kitchen", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/live-kitchen`),
+    refetchInterval: 10000,
+  });
+}
+
+export function useStaffActivity() {
+  return useQuery({
+    queryKey: ["dashboard", "staff-activity", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/staff-activity`),
+  });
+}
+
+export function useOrders(params?: { status?: string; tableId?: number; page?: number }) {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.tableId) q.set("tableId", String(params.tableId));
+  if (params?.page) q.set("page", String(params.page));
+  return useQuery({
+    queryKey: ["orders", RESTAURANT_ID, params],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/orders?${q}`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useCreateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
+  });
+}
+
+export function usePayOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
+  });
+}
+
+export function useKitchenTickets(status?: string) {
+  const q = status ? `?status=${status}` : "";
+  return useQuery({
+    queryKey: ["kitchen", "tickets", RESTAURANT_ID, status],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/kitchen/tickets${q}`),
+    refetchInterval: 8000,
+  });
+}
+
+export function useUpdateTicketStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, { status }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["kitchen"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); },
+  });
+}
+
+export function useFloorTables() {
+  return useQuery({
+    queryKey: ["tables", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/tables`),
+    refetchInterval: 20000,
+  });
+}
+
+export function useCreateTable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/tables`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
+  });
+}
+
+export function useUpdateTable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
+  });
+}
+
+export function useMenus() {
+  return useQuery({
+    queryKey: ["menus", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/menus`),
+  });
+}
+
+export function useMenuCategories(menuId?: number) {
+  const q = menuId ? `?menuId=${menuId}` : "";
+  return useQuery({
+    queryKey: ["categories", RESTAURANT_ID, menuId],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/categories${q}`),
+  });
+}
+
+export function useMenuItems(params?: { categoryId?: number; search?: string }) {
+  const q = new URLSearchParams();
+  if (params?.categoryId) q.set("categoryId", String(params.categoryId));
+  if (params?.search) q.set("search", params.search);
+  return useQuery({
+    queryKey: ["items", RESTAURANT_ID, params],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/items?${q}`),
+  });
+}
+
+export function useCreateMenuItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/items`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
+  });
+}
+
+export function useUpdateMenuItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/items/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
+  });
+}
+
+export function useDeleteMenuItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/items/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
+  });
+}
+
+export function useInventory(params?: { lowStock?: boolean; search?: string }) {
+  const q = new URLSearchParams();
+  if (params?.lowStock) q.set("lowStock", "true");
+  if (params?.search) q.set("search", params.search);
+  return useQuery({
+    queryKey: ["inventory", RESTAURANT_ID, params],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/inventory?${q}`),
+  });
+}
+
+export function useCreateInventoryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+}
+
+export function useAdjustInventory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory/${id}/adjust`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+}
+
+export function useStaff(role?: string) {
+  const q = role ? `?role=${role}` : "";
+  return useQuery({
+    queryKey: ["staff", RESTAURANT_ID, role],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/staff${q}`),
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/users`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useCustomers(params?: { search?: string; page?: number }) {
+  const q = new URLSearchParams();
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  return useQuery({
+    queryKey: ["customers", RESTAURANT_ID, params],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/customers?${q}`),
+  });
+}
+
+export function useCreateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/customers`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
+  });
+}
+
+export function useReservations(params?: { date?: string; status?: string }) {
+  const q = new URLSearchParams();
+  if (params?.date) q.set("date", params.date);
+  if (params?.status) q.set("status", params.status);
+  return useQuery({
+    queryKey: ["reservations", RESTAURANT_ID, params],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/reservations?${q}`),
+  });
+}
+
+export function useCreateReservation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/reservations`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+  });
+}
+
+export function useSuppliers() {
+  return useQuery({
+    queryKey: ["suppliers", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/suppliers`),
+  });
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ["notifications", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/notifications`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useReports(period = "7d") {
+  return useQuery({
+    queryKey: ["reports", RESTAURANT_ID, period],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/reports?period=${period}`),
+  });
+}
