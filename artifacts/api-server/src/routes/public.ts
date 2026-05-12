@@ -128,20 +128,26 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.paymentStatus === "paid") return void res.json({ success: true, alreadyPaid: true, totalAmount: order.totalAmount });
 
+  const [restaurant] = await db.select({ currency: restaurantsTable.currency, slug: restaurantsTable.slug }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+  const currency = (restaurant?.currency ?? "INR").toLowerCase();
   const amountSmallestUnit = Math.round(Number(order.totalAmount) * 100);
   const stripeKey = process.env.STRIPE_SECRET_KEY;
 
   if (stripeKey) {
     try {
       const stripe = new Stripe(stripeKey);
-      const intent = await stripe.paymentIntents.create({
-        amount: amountSmallestUnit,
-        currency: (order.currency ?? "inr").toLowerCase(),
+      const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") ?? "";
+      const returnUrl = `${baseUrl}/menu/${restaurant?.slug ?? ""}/${order.tableId ?? ""}`;
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price_data: { currency, product_data: { name: `Order ${order.orderNumber}` }, unit_amount: amountSmallestUnit }, quantity: 1 }],
+        success_url: `${returnUrl}?order=${orderId}&token=${token}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: returnUrl,
         metadata: { orderId: String(orderId) },
       });
-      return res.json({ mode: "live", clientSecret: intent.client_secret, intentId: intent.id, totalAmount: order.totalAmount });
+      return res.json({ mode: "live", checkoutUrl: session.url, totalAmount: order.totalAmount });
     } catch {
-      return void res.status(500).json({ error: "Failed to create payment intent" });
+      return void res.status(500).json({ error: "Failed to create checkout session" });
     }
   }
 

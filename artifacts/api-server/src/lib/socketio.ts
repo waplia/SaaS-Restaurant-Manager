@@ -69,7 +69,8 @@ export function initSocketIO(httpServer: HTTPServer): Server {
         orderId = data;
       }
       if (!orderId || orderId <= 0) return;
-      if (socket.data.isGuest && !validateGuestToken(orderId, token)) return;
+      if (!socket.data.isGuest) return;
+      if (!validateGuestToken(orderId, token)) return;
       void socket.join(`order:${orderId}`);
     });
 

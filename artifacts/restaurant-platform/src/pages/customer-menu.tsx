@@ -106,10 +106,11 @@ interface OrderStatus {
   createdAt: string;
 }
 
-interface PaymentIntent {
+interface PaymentIntentResponse {
   mode: "live" | "demo";
-  clientSecret: string | null;
-  intentId: string;
+  clientSecret?: string | null;
+  checkoutUrl?: string;
+  intentId?: string;
   totalAmount: string;
 }
 
@@ -155,7 +156,7 @@ export default function CustomerMenuPage() {
   const [orderNotes, setOrderNotes] = useState("");
   const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
 
-  const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
+  const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
@@ -307,8 +308,12 @@ export default function CustomerMenuPage() {
       setCart([]);
 
       if (payMethod === "card") {
-        const pi = await apiPublicPost<PaymentIntent>(`/public/orders/${result.orderId}/payment-intent`, {}, result.guestToken);
+        const pi = await apiPublicPost<PaymentIntentResponse>(`/public/orders/${result.orderId}/payment-intent`, {}, result.guestToken);
         setPaymentIntent(pi);
+        if (pi.mode === "live" && pi.checkoutUrl) {
+          window.location.href = pi.checkoutUrl;
+          return;
+        }
         setView("payment");
       } else {
         setView("tracking");
@@ -324,6 +329,13 @@ export default function CustomerMenuPage() {
     if (!orderResult || !paymentIntent) return;
     setCardError(null);
 
+    if (paymentIntent.mode === "live") {
+      if (paymentIntent.checkoutUrl) {
+        window.location.href = paymentIntent.checkoutUrl;
+      }
+      return;
+    }
+
     const rawNum = cardNumber.replace(/\s/g, "");
     if (rawNum.length < 13) { setCardError("Please enter a valid card number."); return; }
     if (!cardExpiry.match(/^\d{2}\/\d{2}$/)) { setCardError("Please enter expiry as MM/YY."); return; }
@@ -331,20 +343,6 @@ export default function CustomerMenuPage() {
 
     setPlacing(true);
     try {
-      if (paymentIntent.mode === "live" && paymentIntent.clientSecret) {
-        const { loadStripe } = await import("@stripe/stripe-js");
-        const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-        if (!stripePublicKey) throw new Error("Stripe public key not configured");
-        const stripe = await loadStripe(stripePublicKey);
-        if (!stripe) throw new Error("Stripe.js failed to load");
-        const { error } = await stripe.confirmCardPayment(paymentIntent.clientSecret, {
-          payment_method: {
-            card: { number: rawNum, exp_month: Number(cardExpiry.split("/")[0]), exp_year: Number("20" + cardExpiry.split("/")[1]), cvc: cardCvc },
-          } as never,
-        });
-        if (error) { setCardError(error.message ?? "Payment failed"); setPlacing(false); return; }
-      }
-
       await apiPublicPost(`/public/orders/${orderResult.orderId}/pay`, { intentId: paymentIntent.intentId, paymentMethod: "card" }, orderResult.guestToken);
       const status = await apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`, orderResult.guestToken);
       setOrderStatus(status);
