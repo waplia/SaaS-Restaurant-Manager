@@ -252,6 +252,13 @@ function ModifierPickerModal({
   );
 }
 
+interface SplitProof {
+  stripePaymentIntentId?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
 function SplitBillModal({
   totalAmount, displayItems, totals, placedOrderId, restaurantName, orderNumber, tableLabel, orderType, customerName,
   onClose, onComplete,
@@ -272,8 +279,23 @@ function SplitBillModal({
   const [methods, setMethods] = useState<string[]>(["cash", "cash"]);
   const [tenderAmounts, setTenderAmounts] = useState<string[]>(["", ""]);
   const [confirmedSplits, setConfirmedSplits] = useState<boolean[]>([false, false]);
+  const [splitProofs, setSplitProofs] = useState<SplitProof[]>([{}, {}]);
+  const [activeCardIdx, setActiveCardIdx] = useState<number | null>(null);
+  const [splitCardReady, setSplitCardReady] = useState(false);
+  const [splitStripeError, setSplitStripeError] = useState("");
+  const [splitProcessing, setSplitProcessing] = useState(false);
+  const splitCardMountRef = useRef<HTMLDivElement>(null);
+  const splitStripeRef = useRef<{
+    stripe: import("@stripe/stripe-js").Stripe | null;
+    card: import("@stripe/stripe-js").StripeCardElement | null;
+  }>({ stripe: null, card: null });
+
   const splitOrder = useSplitOrder();
+  const createPaymentIntent = useCreatePaymentIntent();
+  const createRazorpayOrder = useCreateRazorpayOrder();
   const { toast } = useToast();
+
+  const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
 
   const perPerson = totalAmount / splitCount;
 
@@ -283,19 +305,46 @@ function SplitBillModal({
     setMethods(Array.from({ length: newCount }, (_, i) => methods[i] ?? "cash"));
     setTenderAmounts(Array.from({ length: newCount }, (_, i) => tenderAmounts[i] ?? ""));
     setConfirmedSplits(Array.from({ length: newCount }, (_, i) => confirmedSplits[i] ?? false));
+    setSplitProofs(Array.from({ length: newCount }, (_, i) => splitProofs[i] ?? {}));
   };
 
-  const confirmSplit = (idx: number) => {
-    if (methods[idx] === "cash") {
-      const tendered = Number(tenderAmounts[idx]);
-      if (!tenderAmounts[idx] || tendered < perPerson) {
-        toast({ title: "Insufficient amount", description: `Enter at least ₹${perPerson.toFixed(2)} for cash payment.`, variant: "destructive" });
-        return;
-      }
-    }
-    const updated = [...confirmedSplits];
-    updated[idx] = true;
-    setConfirmedSplits(updated);
+  // Mount / unmount Stripe CardElement whenever the active card split changes
+  useEffect(() => {
+    if (activeCardIdx === null || !STRIPE_PK) return;
+    let destroyed = false;
+    import("@stripe/stripe-js").then(({ loadStripe }) => {
+      loadStripe(STRIPE_PK).then(stripe => {
+        if (destroyed || !stripe || !splitCardMountRef.current) return;
+        splitStripeRef.current.stripe = stripe;
+        const elements = stripe.elements();
+        const card = elements.create("card", {
+          style: { base: { fontSize: "15px", color: "#1a1a1a", "::placeholder": { color: "#9ca3af" } } },
+          hidePostalCode: true,
+        });
+        card.mount(splitCardMountRef.current!);
+        splitStripeRef.current.card = card;
+        card.on("change", evt => {
+          setSplitStripeError(evt.error?.message ?? "");
+          setSplitCardReady(evt.complete);
+        });
+      });
+    });
+    return () => {
+      destroyed = true;
+      splitStripeRef.current.card?.destroy();
+      splitStripeRef.current = { stripe: null, card: null };
+      setSplitCardReady(false);
+      setSplitStripeError("");
+    };
+  }, [activeCardIdx, STRIPE_PK]);
+
+  const markSplitConfirmed = (idx: number, proof: SplitProof) => {
+    const updatedConfirmed = [...confirmedSplits];
+    updatedConfirmed[idx] = true;
+    setConfirmedSplits(updatedConfirmed);
+    const updatedProofs = [...splitProofs];
+    updatedProofs[idx] = proof;
+    setSplitProofs(updatedProofs);
     printReceipt({
       orderNumber, tableLabel, orderType, items: displayItems, totals,
       paymentMethod: methods[idx],
@@ -305,11 +354,108 @@ function SplitBillModal({
     });
   };
 
+  const processCardSplit = async (idx: number) => {
+    setSplitProcessing(true);
+    try {
+      const intent = await createPaymentIntent.mutateAsync({ orderId: placedOrderId, amount: perPerson });
+      if (intent.mode === "live" && intent.clientSecret && splitStripeRef.current.stripe && splitStripeRef.current.card) {
+        const result = await splitStripeRef.current.stripe.confirmCardPayment(intent.clientSecret, {
+          payment_method: { card: splitStripeRef.current.card },
+        });
+        if (result.error) {
+          setSplitStripeError(result.error.message ?? "Payment failed");
+          return;
+        }
+        markSplitConfirmed(idx, { stripePaymentIntentId: result.paymentIntent?.id });
+      } else {
+        // Demo mode — simulate processing delay
+        await new Promise(r => setTimeout(r, 1200));
+        markSplitConfirmed(idx, { stripePaymentIntentId: intent.intentId });
+      }
+      setActiveCardIdx(null);
+    } finally {
+      setSplitProcessing(false);
+    }
+  };
+
+  const confirmSplit = async (idx: number) => {
+    if (splitProcessing) return;
+
+    if (methods[idx] === "cash") {
+      const tendered = Number(tenderAmounts[idx]);
+      if (!tenderAmounts[idx] || tendered < perPerson) {
+        toast({ title: "Insufficient amount", description: `Enter at least ₹${perPerson.toFixed(2)} for cash payment.`, variant: "destructive" });
+        return;
+      }
+      markSplitConfirmed(idx, {});
+    } else if (methods[idx] === "card") {
+      // Expand inline card form; actual payment happens when "Pay" is clicked
+      if (activeCardIdx !== idx) {
+        setActiveCardIdx(idx);
+        setSplitCardReady(false);
+        setSplitStripeError("");
+      }
+    } else if (methods[idx] === "upi") {
+      setSplitProcessing(true);
+      try {
+        const rzpOrder = await createRazorpayOrder.mutateAsync({ orderId: placedOrderId, amount: perPerson });
+        if (rzpOrder.mode === "live" && rzpOrder.keyId) {
+          if (!(window as unknown as Record<string, unknown>).Razorpay) {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://checkout.razorpay.com/v1/checkout.js";
+              s.onload = () => resolve();
+              s.onerror = () => reject(new Error("Failed to load Razorpay"));
+              document.body.appendChild(s);
+            });
+          }
+          await new Promise<void>((resolve, reject) => {
+            const RazorpayClass = (window as unknown as { Razorpay: new (opts: Record<string, unknown>) => { open(): void } }).Razorpay;
+            const rzp = new RazorpayClass({
+              key: rzpOrder.keyId,
+              amount: rzpOrder.amount,
+              currency: rzpOrder.currency,
+              order_id: rzpOrder.id,
+              handler: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+                markSplitConfirmed(idx, {
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpaySignature: response.razorpay_signature,
+                });
+                resolve();
+              },
+              modal: { ondismiss: () => reject(new Error("cancelled")) },
+            });
+            rzp.open();
+          });
+        } else {
+          // Demo mode
+          await new Promise(r => setTimeout(r, 1200));
+          markSplitConfirmed(idx, { razorpayPaymentId: `demo_rzp_pay_split_${placedOrderId}_${idx}_${Date.now()}` });
+        }
+      } catch (e) {
+        if ((e as Error).message !== "cancelled") {
+          toast({ title: "UPI payment failed", variant: "destructive" });
+        }
+      } finally {
+        setSplitProcessing(false);
+      }
+    }
+  };
+
   const handleFinalize = async () => {
     try {
       await splitOrder.mutateAsync({
         orderId: placedOrderId,
-        splits: methods.map(m => ({ paymentMethod: m })),
+        splits: Array.from({ length: splitCount }, (_, idx) => ({
+          paymentMethod: methods[idx],
+          amount: perPerson,
+          amountTendered: methods[idx] === "cash" ? Number(tenderAmounts[idx]) : undefined,
+          stripePaymentIntentId: splitProofs[idx]?.stripePaymentIntentId,
+          razorpayPaymentId: splitProofs[idx]?.razorpayPaymentId,
+          razorpayOrderId: splitProofs[idx]?.razorpayOrderId,
+          razorpaySignature: splitProofs[idx]?.razorpaySignature,
+        })),
       });
       toast({ title: "Split payment complete!", description: `${splitCount} payments processed.` });
       onComplete();
@@ -318,7 +464,7 @@ function SplitBillModal({
     }
   };
 
-  const allConfirmed = confirmedSplits.every(Boolean);
+  const allConfirmed = confirmedSplits.slice(0, splitCount).every(Boolean);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -366,7 +512,10 @@ function SplitBillModal({
                     {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
                       <button
                         key={value}
-                        onClick={() => { const m = [...methods]; m[idx] = value; setMethods(m); }}
+                        onClick={() => {
+                          const m = [...methods]; m[idx] = value; setMethods(m);
+                          if (activeCardIdx === idx && value !== "card") setActiveCardIdx(null);
+                        }}
                         className={cn(
                           "flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium transition-all",
                           methods[idx] === value
@@ -378,23 +527,61 @@ function SplitBillModal({
                       </button>
                     ))}
                   </div>
+
                   {methods[idx] === "cash" && (
-                    <Input
-                      type="number"
-                      placeholder={`₹${perPerson.toFixed(2)}`}
-                      value={tenderAmounts[idx]}
-                      onChange={e => { const t = [...tenderAmounts]; t[idx] = e.target.value; setTenderAmounts(t); }}
-                      className="h-8 text-sm mb-2"
-                    />
+                    <>
+                      <Input
+                        type="number"
+                        placeholder={`₹${perPerson.toFixed(2)}`}
+                        value={tenderAmounts[idx]}
+                        onChange={e => { const t = [...tenderAmounts]; t[idx] = e.target.value; setTenderAmounts(t); }}
+                        className="h-8 text-sm mb-2"
+                      />
+                      {tenderAmounts[idx] && Number(tenderAmounts[idx]) > perPerson && (
+                        <div className="text-xs text-green-600 font-medium mb-2">
+                          Change: ₹{(Number(tenderAmounts[idx]) - perPerson).toFixed(2)}
+                        </div>
+                      )}
+                    </>
                   )}
-                  {methods[idx] === "cash" && tenderAmounts[idx] && Number(tenderAmounts[idx]) > perPerson && (
-                    <div className="text-xs text-green-600 font-medium mb-2">
-                      Change: ₹{(Number(tenderAmounts[idx]) - perPerson).toFixed(2)}
+
+                  {methods[idx] === "card" && activeCardIdx === idx && (
+                    <div className="mb-3 space-y-2">
+                      {STRIPE_PK ? (
+                        <>
+                          <div ref={splitCardMountRef} className="border border-border rounded-lg px-4 py-3 bg-background min-h-[44px]" />
+                          {splitStripeError && <p className="text-xs text-red-500">{splitStripeError}</p>}
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            disabled={!splitCardReady || splitProcessing}
+                            onClick={() => processCardSplit(idx)}
+                          >
+                            {splitProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Lock className="w-3.5 h-3.5 mr-1.5" />}
+                            Pay ₹{perPerson.toFixed(2)}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="sm" className="w-full" disabled={splitProcessing} onClick={() => processCardSplit(idx)}>
+                          {splitProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5 mr-1.5" />}
+                          Process Demo Card (₹{perPerson.toFixed(2)})
+                        </Button>
+                      )}
                     </div>
                   )}
-                  <Button size="sm" className="w-full" onClick={() => confirmSplit(idx)}>
-                    <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Confirm & Print Receipt
-                  </Button>
+
+                  {!(methods[idx] === "card" && activeCardIdx === idx) && (
+                    <Button size="sm" className="w-full" disabled={splitProcessing} onClick={() => confirmSplit(idx)}>
+                      {splitProcessing
+                        ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        : <CreditCard className="w-3.5 h-3.5 mr-1.5" />}
+                      {methods[idx] === "card"
+                        ? "Process Card Payment"
+                        : methods[idx] === "upi"
+                          ? "Open UPI Checkout"
+                          : "Confirm & Print Receipt"}
+                    </Button>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-green-600">

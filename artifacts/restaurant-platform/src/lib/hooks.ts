@@ -121,18 +121,20 @@ export function useItemModifierGroups(menuItemId?: number) {
 
 export function useCreatePaymentIntent() {
   return useMutation({
-    mutationFn: ({ orderId }: { orderId: number }) =>
+    mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
       apiPost<import("./types").PaymentIntentResult>(
-        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/payment-intent`, {}
+        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/payment-intent`,
+        amount !== undefined ? { customAmount: amount } : {}
       ),
   });
 }
 
 export function useCreateRazorpayOrder() {
   return useMutation({
-    mutationFn: ({ orderId }: { orderId: number }) =>
+    mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
       apiPost<import("./types").RazorpayOrderResult>(
-        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/razorpay-order`, {}
+        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/razorpay-order`,
+        amount !== undefined ? { customAmount: amount } : {}
       ),
   });
 }
@@ -140,7 +142,18 @@ export function useCreateRazorpayOrder() {
 export function useSplitOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, splits }: { orderId: number; splits: Array<{ paymentMethod: string }> }) =>
+    mutationFn: ({ orderId, splits }: {
+      orderId: number;
+      splits: Array<{
+        paymentMethod: string;
+        amount: number;
+        amountTendered?: number;
+        stripePaymentIntentId?: string;
+        razorpayPaymentId?: string;
+        razorpayOrderId?: string;
+        razorpaySignature?: string;
+      }>;
+    }) =>
       apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/split`, { splits }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });

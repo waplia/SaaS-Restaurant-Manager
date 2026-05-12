@@ -283,15 +283,95 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) =
 router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { splits } = req.body;
+  const { splits } = req.body as {
+    splits: Array<{
+      paymentMethod: string;
+      amount: number;
+      amountTendered?: number;
+      stripePaymentIntentId?: string;
+      razorpayPaymentId?: string;
+      razorpayOrderId?: string;
+      razorpaySignature?: string;
+    }>;
+  };
 
-  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.status === "completed" || order.status === "cancelled") {
     return void res.status(400).json({ error: "Order is already completed or cancelled" });
   }
+  if (!Array.isArray(splits) || splits.length < 2) {
+    return void res.status(400).json({ error: "Split requires at least 2 payment legs" });
+  }
 
-  const splitMethods = (splits as Array<{ paymentMethod: string }>).map(s => s.paymentMethod).join(",");
+  // Validate cumulative amount covers the order total
+  const cumulativeAmount = splits.reduce((sum, s) => sum + Number(s.amount), 0);
+  const orderTotal = Number(order.totalAmount);
+  if (cumulativeAmount < orderTotal - 0.01) {
+    return void res.status(400).json({
+      error: `Split total ₹${cumulativeAmount.toFixed(2)} is less than order total ₹${orderTotal.toFixed(2)}`,
+    });
+  }
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  // Verify each split leg payment proof
+  for (const split of splits) {
+    if (split.paymentMethod === "cash") {
+      if (split.amountTendered !== undefined && Number(split.amountTendered) < Number(split.amount)) {
+        return void res.status(400).json({ error: "Cash tendered is less than split amount" });
+      }
+    } else if (split.paymentMethod === "card") {
+      if (!split.stripePaymentIntentId) {
+        return void res.status(400).json({ error: "Card split requires stripePaymentIntentId" });
+      }
+      if (stripeKey) {
+        if (String(split.stripePaymentIntentId).startsWith("demo_")) {
+          return void res.status(400).json({ error: "Demo intent IDs cannot be used when Stripe is configured" });
+        }
+        try {
+          const stripe = new Stripe(stripeKey);
+          const intent = await stripe.paymentIntents.retrieve(String(split.stripePaymentIntentId));
+          if (intent.status !== "succeeded") {
+            return void res.status(400).json({ error: `Card payment not confirmed: ${intent.status}` });
+          }
+          // Allow ±1 rupee tolerance for rounding on split amounts
+          if (Math.abs(intent.amount - Math.round(Number(split.amount) * 100)) > 100) {
+            return void res.status(400).json({ error: "Card payment amount does not match split share" });
+          }
+        } catch {
+          return void res.status(400).json({ error: "Failed to verify card payment with Stripe" });
+        }
+      } else {
+        if (!String(split.stripePaymentIntentId).startsWith("demo_")) {
+          return void res.status(400).json({ error: "Stripe not configured; only demo payment IDs accepted" });
+        }
+      }
+    } else if (split.paymentMethod === "upi") {
+      if (razorpayKeySecret) {
+        if (!split.razorpayPaymentId || !split.razorpayOrderId || !split.razorpaySignature) {
+          return void res.status(400).json({ error: "UPI split requires razorpayPaymentId, razorpayOrderId, and razorpaySignature" });
+        }
+        if (String(split.razorpayPaymentId).startsWith("demo_")) {
+          return void res.status(400).json({ error: "Demo payment IDs cannot be used when Razorpay is configured" });
+        }
+        const { createHmac } = await import("crypto");
+        const body = `${split.razorpayOrderId}|${split.razorpayPaymentId}`;
+        const expectedSig = createHmac("sha256", razorpayKeySecret).update(body).digest("hex");
+        if (expectedSig !== String(split.razorpaySignature)) {
+          return void res.status(400).json({ error: "Razorpay signature verification failed for UPI split" });
+        }
+      } else {
+        if (split.razorpayPaymentId && !String(split.razorpayPaymentId).startsWith("demo_")) {
+          return void res.status(400).json({ error: "Razorpay not configured; only demo payment IDs accepted" });
+        }
+      }
+    }
+  }
+
+  const splitMethods = splits.map(s => s.paymentMethod).join(",");
   const [updated] = await db.update(ordersTable).set({
     paymentMethod: `split:${splitMethods}`,
     paymentStatus: "paid",
@@ -300,7 +380,8 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   }).where(eq(ordersTable.id, orderId)).returning();
 
   if (order.tableId) {
-    await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    await db.update(floorTablesTable).set({ status: "free" })
+      .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "completed", paymentStatus: "paid", orderNumber: order.orderNumber });
@@ -330,6 +411,7 @@ router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
 router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
+  const { customAmount } = req.body as { customAmount?: number };
 
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -338,12 +420,17 @@ router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, 
     return void res.status(400).json({ error: "Order is not payable" });
   }
 
+  // customAmount allows split payments to create a PI for a per-person share
+  const amountPaise = customAmount !== undefined
+    ? Math.round(Number(customAmount) * 100)
+    : Math.round(Number(order.totalAmount) * 100);
+
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   if (stripeSecretKey) {
     try {
       const stripe = new Stripe(stripeSecretKey);
       const intent = await stripe.paymentIntents.create({
-        amount: Math.round(Number(order.totalAmount) * 100),
+        amount: amountPaise,
         currency: "inr",
         metadata: { orderId: String(orderId), restaurantId: String(restaurantId) },
       });
@@ -365,6 +452,7 @@ router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, 
 router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
+  const { customAmount } = req.body as { customAmount?: number };
 
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -373,11 +461,15 @@ router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, 
     return void res.status(400).json({ error: "Order is not payable" });
   }
 
+  // customAmount allows split payments to create a Razorpay order for a per-person share
+  const amountPaise = customAmount !== undefined
+    ? Math.round(Number(customAmount) * 100)
+    : Math.round(Number(order.totalAmount) * 100);
+
   const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
   if (razorpayKeyId && razorpayKeySecret) {
     try {
-      const amountPaise = Math.round(Number(order.totalAmount) * 100);
       const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
       const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
         method: "POST",
@@ -402,7 +494,7 @@ router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, 
   // Demo mode — no Razorpay keys configured
   return res.json({
     id: `demo_rzp_order_${orderId}_${Date.now()}`,
-    amount: Math.round(Number(order.totalAmount) * 100),
+    amount: amountPaise,
     currency: "INR",
     keyId: null,
     mode: "demo",
