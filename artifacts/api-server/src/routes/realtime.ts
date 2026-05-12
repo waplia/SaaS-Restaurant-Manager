@@ -84,6 +84,10 @@ router.get(
         res.status(403).json({ error: "Access denied: cross-tenant request" });
         return;
       }
+      if (req.user!.restaurantId && req.user!.restaurantId !== restaurantId) {
+        res.status(403).json({ error: "Access denied: restaurant mismatch" });
+        return;
+      }
     }
 
     const lastEventIdHeader = req.headers["last-event-id"];
