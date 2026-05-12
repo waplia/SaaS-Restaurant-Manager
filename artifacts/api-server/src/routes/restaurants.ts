@@ -37,7 +37,6 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
       : null;
 
     if (plan && plan.maxRestaurants > 0) {
-      const [{ count }] = await db.select({ count: eq(restaurantsTable.tenantId, tenantId) }).from(restaurantsTable).where(eq(restaurantsTable.tenantId, tenantId));
       const existing = await db.select().from(restaurantsTable).where(eq(restaurantsTable.tenantId, tenantId));
       if (existing.length >= plan.maxRestaurants) {
         return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxRestaurants} restaurant(s). Upgrade to add more.` });

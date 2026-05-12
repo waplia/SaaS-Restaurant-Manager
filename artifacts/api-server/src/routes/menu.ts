@@ -8,6 +8,44 @@ const router = Router();
 
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
+/**
+ * Verifies that the menu item identified by itemId belongs to a restaurant
+ * that is within the authenticated user's tenant scope.
+ * Returns the menuItem row or null if not found/unauthorized.
+ */
+async function resolveMenuItemTenantScope(
+  itemId: number,
+  user: NonNullable<Express.Request["user"]>
+): Promise<boolean> {
+  if (user.isSuperAdmin) return true;
+  const [item] = await db
+    .select({ restaurantId: menuItemsTable.restaurantId })
+    .from(menuItemsTable)
+    .where(eq(menuItemsTable.id, itemId));
+  if (!item) return false;
+  const [restaurant] = await db
+    .select({ tenantId: restaurantsTable.tenantId })
+    .from(restaurantsTable)
+    .where(eq(restaurantsTable.id, item.restaurantId));
+  return restaurant?.tenantId === user.tenantId;
+}
+
+/**
+ * Verifies that a modifier group belongs to a menu item in the user's tenant.
+ */
+async function resolveModifierGroupTenantScope(
+  groupId: number,
+  user: NonNullable<Express.Request["user"]>
+): Promise<boolean> {
+  if (user.isSuperAdmin) return true;
+  const [group] = await db
+    .select({ menuItemId: modifierGroupsTable.menuItemId })
+    .from(modifierGroupsTable)
+    .where(eq(modifierGroupsTable.id, groupId));
+  if (!group) return false;
+  return resolveMenuItemTenantScope(group.menuItemId, user);
+}
+
 router.get("/restaurants/:restaurantId/menus", async (req, res) => {
   const rows = await db.select().from(menusTable).where(eq(menusTable.restaurantId, Number(req.params.restaurantId)));
   res.json(rows);
@@ -108,25 +146,37 @@ router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "mana
   res.status(204).send();
 });
 
-router.get("/items/:itemId/modifier-groups", async (req, res) => {
-  const rows = await db.select().from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, Number(req.params.itemId)));
+router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const itemId = Number(req.params.itemId);
+  const allowed = await resolveMenuItemTenantScope(itemId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  const rows = await db.select().from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, itemId));
   res.json(rows);
 });
 
 router.post("/items/:itemId/modifier-groups", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const itemId = Number(req.params.itemId);
+  const allowed = await resolveMenuItemTenantScope(itemId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
   const { name, isRequired, minSelections, maxSelections } = req.body;
-  const [group] = await db.insert(modifierGroupsTable).values({ menuItemId: Number(req.params.itemId), name, isRequired, minSelections, maxSelections }).returning();
+  const [group] = await db.insert(modifierGroupsTable).values({ menuItemId: itemId, name, isRequired, minSelections, maxSelections }).returning();
   res.status(201).json(group);
 });
 
-router.get("/modifier-groups/:groupId/modifiers", async (req, res) => {
-  const rows = await db.select().from(modifiersTable).where(eq(modifiersTable.groupId, Number(req.params.groupId)));
+router.get("/modifier-groups/:groupId/modifiers", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  const rows = await db.select().from(modifiersTable).where(eq(modifiersTable.groupId, groupId));
   res.json(rows);
 });
 
 router.post("/modifier-groups/:groupId/modifiers", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
   const { name, price, isDefault } = req.body;
-  const [modifier] = await db.insert(modifiersTable).values({ groupId: Number(req.params.groupId), name, price, isDefault }).returning();
+  const [modifier] = await db.insert(modifiersTable).values({ groupId, name, price, isDefault }).returning();
   res.status(201).json(modifier);
 });
 

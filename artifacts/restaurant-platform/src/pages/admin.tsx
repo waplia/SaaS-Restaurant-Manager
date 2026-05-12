@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
-  Clock, TrendingUp, Ban, RefreshCw, LogOut
+  Clock, TrendingUp, Ban, RefreshCw, LogOut, CreditCard, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ interface Tenant {
   id: number;
   name: string;
   slug: string;
+  planId: number | null;
   planStatus: string;
   isActive: boolean;
   isSuspended: boolean;
@@ -36,6 +37,18 @@ interface AdminStats {
   totalRevenue: string;
 }
 
+interface Plan {
+  id: number;
+  name: string;
+  slug: string;
+  price: string;
+  maxRestaurants: number;
+  maxBranches: number;
+  maxStaff: number;
+  maxTables: number;
+  maxMenuItems: number;
+}
+
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 function authHeader(): Record<string, string> {
@@ -49,8 +62,12 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json();
 }
 
-async function apiAction(path: string, method = "POST") {
-  const res = await fetch(`${BASE}/api${path}`, { method, headers: authHeader() });
+async function apiAction(path: string, method = "POST", body?: unknown) {
+  const res = await fetch(`${BASE}/api${path}`, {
+    method,
+    headers: { ...authHeader(), "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -61,13 +78,57 @@ function StatusBadge({ tenant }: { tenant: Tenant }) {
     const expires = tenant.trialEndsAt ? new Date(tenant.trialEndsAt) : null;
     const daysLeft = expires ? Math.ceil((expires.getTime() - Date.now()) / 86400000) : null;
     return (
-      <Badge variant="secondary">
+      <Badge variant="secondary" className="gap-1">
+        <Clock className="w-3 h-3" />
         Trial {daysLeft !== null ? `(${daysLeft}d left)` : ""}
       </Badge>
     );
   }
-  if (tenant.planStatus === "active") return <Badge variant="default">Active</Badge>;
+  if (tenant.planStatus === "active") return <Badge variant="default" className="gap-1"><CheckCircle className="w-3 h-3" />Active</Badge>;
+  if (tenant.planStatus === "expired") return <Badge variant="destructive">Expired</Badge>;
   return <Badge variant="outline">{tenant.planStatus}</Badge>;
+}
+
+function PlanBadge({ tenant, plans }: { tenant: Tenant; plans: Plan[] }) {
+  const plan = plans.find(p => p.id === tenant.planId);
+  if (!plan) return <span className="text-muted-foreground text-xs">No plan</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      <Package className="w-3 h-3 text-primary" />
+      <span className="text-xs font-medium">{plan.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {plan.maxStaff} staff · {plan.maxTables} tables · {plan.maxMenuItems} items
+      </span>
+    </div>
+  );
+}
+
+function PlanSelect({
+  tenant,
+  plans,
+  onChangePlan,
+  isPending,
+}: {
+  tenant: Tenant;
+  plans: Plan[];
+  onChangePlan: (tenantId: number, planId: number) => void;
+  isPending: boolean;
+}) {
+  return (
+    <select
+      className="text-xs border border-border rounded px-2 py-1 bg-background text-foreground"
+      value={tenant.planId ?? ""}
+      disabled={isPending}
+      onChange={e => onChangePlan(tenant.id, Number(e.target.value))}
+    >
+      <option value="" disabled>Change plan…</option>
+      {plans.map(p => (
+        <option key={p.id} value={p.id}>
+          {p.name} (${p.price}/mo)
+        </option>
+      ))}
+    </select>
+  );
 }
 
 export default function AdminPage() {
@@ -86,6 +147,11 @@ export default function AdminPage() {
     queryFn: () => apiFetch(`/tenants?page=${page}&limit=20`),
   });
 
+  const { data: plans = [] } = useQuery<Plan[]>({
+    queryKey: ["subscription-plans"],
+    queryFn: () => apiFetch("/subscription-plans"),
+  });
+
   const suspendMutation = useMutation({
     mutationFn: (id: number) => apiAction(`/tenants/${id}/suspend`),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin"] }); },
@@ -93,6 +159,12 @@ export default function AdminPage() {
 
   const activateMutation = useMutation({
     mutationFn: (id: number) => apiAction(`/tenants/${id}/activate`),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin"] }); },
+  });
+
+  const changePlanMutation = useMutation({
+    mutationFn: ({ id, planId }: { id: number; planId: number }) =>
+      apiAction(`/tenants/${id}`, "PATCH", { planId, planStatus: "active" }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin"] }); },
   });
 
@@ -117,6 +189,8 @@ export default function AdminPage() {
     { label: "Restaurants", value: stats?.totalRestaurants ?? "—", icon: Building2, color: "text-primary" },
     { label: "Total Orders", value: stats?.totalOrders ?? "—", icon: TrendingUp, color: "text-primary" },
   ];
+
+  const tenants = tenantData?.tenants ?? tenantData?.data ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -176,12 +250,14 @@ export default function AdminPage() {
                   <tr className="border-b border-border bg-muted/30">
                     <th className="px-6 py-3 text-left font-medium text-muted-foreground">Tenant</th>
                     <th className="px-6 py-3 text-left font-medium text-muted-foreground">Status</th>
+                    <th className="px-6 py-3 text-left font-medium text-muted-foreground">Plan & Limits</th>
+                    <th className="px-6 py-3 text-left font-medium text-muted-foreground">Trial Expiry</th>
                     <th className="px-6 py-3 text-left font-medium text-muted-foreground">Joined</th>
                     <th className="px-6 py-3 text-right font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(tenantData?.tenants ?? tenantData?.data ?? []).map(tenant => (
+                  {tenants.map(tenant => (
                     <tr key={tenant.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-4">
                         <div>
@@ -190,7 +266,23 @@ export default function AdminPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4"><StatusBadge tenant={tenant} /></td>
-                      <td className="px-6 py-4 text-muted-foreground">
+                      <td className="px-6 py-4">
+                        <div className="space-y-1.5">
+                          <PlanBadge tenant={tenant} plans={plans} />
+                          <PlanSelect
+                            tenant={tenant}
+                            plans={plans}
+                            onChangePlan={(id, planId) => changePlanMutation.mutate({ id, planId })}
+                            isPending={changePlanMutation.isPending}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground text-xs">
+                        {tenant.trialEndsAt
+                          ? new Date(tenant.trialEndsAt).toLocaleDateString()
+                          : <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground text-xs">
                         {new Date(tenant.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -212,9 +304,9 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
-                  {(tenantData?.tenants ?? tenantData?.data ?? []).length === 0 && (
+                  {tenants.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                         No tenants found.
                       </td>
                     </tr>

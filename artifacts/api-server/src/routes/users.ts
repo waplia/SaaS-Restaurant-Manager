@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, usersTable } from "../lib/db";
+import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 
 const router = Router();
@@ -39,6 +39,20 @@ router.get("/users", requireRole("owner", "manager", "super_admin"), async (req,
 router.post("/users", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, email, passwordHash, role, phone, restaurantId } = req.body;
   const tenantId = req.user!.isSuperAdmin ? (req.body.tenantId as number) : req.user!.tenantId;
+
+  if (!req.user!.isSuperAdmin && tenantId) {
+    const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (tenant?.planId) {
+      const [plan] = await db.select({ maxStaff: subscriptionPlansTable.maxStaff }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+      if (plan && plan.maxStaff > 0) {
+        const existing = await db.select({ id: usersTable.id }).from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.isActive, true)));
+        if (existing.length >= plan.maxStaff) {
+          return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxStaff} staff account(s). Upgrade to add more.` });
+        }
+      }
+    }
+  }
+
   const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning(userFields);
   res.status(201).json(user);
 });
