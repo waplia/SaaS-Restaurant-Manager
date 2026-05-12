@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
@@ -53,8 +53,14 @@ router.post("/public/orders", async (req, res) => {
     const modifierIds = item.modifierIds ?? [];
     let resolvedMods: Array<{ id: number; name: string; price: string }> = [];
     if (modifierIds.length > 0) {
-      const dbMods = await db.select().from(modifiersTable).where(and(inArray(modifiersTable.id, modifierIds), eq(modifiersTable.isAvailable, true)));
-      resolvedMods = dbMods.map(m => ({ id: m.id, name: m.name, price: m.price }));
+      const validGroups = await db.select({ id: modifierGroupsTable.id }).from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, mi.id));
+      const validGroupIds = validGroups.map(g => g.id);
+      if (validGroupIds.length > 0) {
+        const dbMods = await db.select().from(modifiersTable).where(
+          and(inArray(modifiersTable.id, modifierIds), inArray(modifiersTable.groupId, validGroupIds), eq(modifiersTable.isAvailable, true))
+        );
+        resolvedMods = dbMods.map(m => ({ id: m.id, name: m.name, price: m.price }));
+      }
     }
 
     const modTotal = resolvedMods.reduce((s, m) => s + Number(m.price), 0);
@@ -229,13 +235,23 @@ router.post("/public/orders/:id/pay", async (req, res) => {
 });
 
 router.post("/public/call-waiter", async (req, res) => {
-  const { restaurantId, tableId, message } = req.body;
+  const { restaurantId, tableId, token } = req.body;
   if (!restaurantId) return void res.status(400).json({ error: "restaurantId required" });
-  const [table] = tableId ? await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, tableId)) : [undefined];
-  const notifMessage = message ?? `Table ${(table as { tableNumber?: string } | undefined)?.tableNumber ?? tableId} is requesting assistance`;
+  if (!tableId) return void res.status(400).json({ error: "tableId required" });
+  const [table] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  if (!table) return void res.status(403).json({ error: "Invalid table or restaurant" });
+  if (token) {
+    const [activeOrder] = await db.select({ id: ordersTable.id }).from(ordersTable)
+      .where(and(eq(ordersTable.tableId, tableId), eq(ordersTable.restaurantId, restaurantId)))
+      .orderBy(desc(ordersTable.createdAt));
+    if (activeOrder && !validateGuestToken(activeOrder.id, token)) {
+      return void res.status(403).json({ error: "Invalid order token" });
+    }
+  }
+  const notifMessage = `Table ${table.tableNumber} is requesting assistance`;
   await db.insert(notificationsTable).values({ restaurantId, type: "waiter_call", title: "Waiter Called", message: notifMessage });
-  broadcastEvent(restaurantId, "waiter:call", { tableId, tableNumber: (table as { tableNumber?: string } | undefined)?.tableNumber ?? tableId, message: notifMessage });
-  res.json({ success: true, message: "Waiter has been notified" });
+  broadcastEvent(restaurantId, "waiter:call", { tableId, tableNumber: table.tableNumber, message: notifMessage });
+  return void res.json({ success: true, message: "Waiter has been notified" });
 });
 
 router.post("/public/feedback", async (req, res) => {
