@@ -2,6 +2,18 @@ import { Server } from "socket.io";
 import type { Server as HTTPServer } from "http";
 import { verifyToken } from "./auth";
 
+interface SocketUser {
+  restaurantId?: number;
+  tenantId?: number;
+  isSuperAdmin?: boolean;
+}
+
+declare module "socket.io" {
+  interface SocketData {
+    user?: SocketUser;
+  }
+}
+
 let io: Server | null = null;
 
 export function initSocketIO(httpServer: HTTPServer): Server {
@@ -21,7 +33,11 @@ export function initSocketIO(httpServer: HTTPServer): Server {
     try {
       const payload = verifyToken(token);
       if (payload.type !== "access") return next(new Error("Invalid token type"));
-      (socket as unknown as Record<string, unknown>).user = payload;
+      socket.data.user = {
+        restaurantId: payload.restaurantId,
+        tenantId: payload.tenantId,
+        isSuperAdmin: payload.isSuperAdmin,
+      };
       next();
     } catch {
       next(new Error("Invalid or expired token"));
@@ -29,8 +45,7 @@ export function initSocketIO(httpServer: HTTPServer): Server {
   });
 
   io.on("connection", (socket) => {
-    const user = (socket as unknown as Record<string, unknown>).user as { restaurantId?: number; tenantId?: number; isSuperAdmin?: boolean };
-    const restaurantId = user?.restaurantId;
+    const restaurantId = socket.data.user?.restaurantId;
     if (restaurantId) {
       void socket.join(`restaurant:${restaurantId}`);
     }

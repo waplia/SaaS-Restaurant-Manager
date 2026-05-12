@@ -61,7 +61,6 @@ const TREND_PERIODS = [
 ];
 
 export default function DashboardPage() {
-  const restaurantId = useRestaurantId();
   const [trendPeriod, setTrendPeriod] = useState("7d");
   const trendGroupBy = TREND_PERIODS.find(p => p.val === trendPeriod)?.groupBy ?? "daily";
 
