@@ -761,9 +761,16 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   if (status === "ready" || status === "served") updates.completedAt = new Date();
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
-
   broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
+  res.json(updated);
+});
 
+router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [existing] = await db.select().from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+  const [updated] = await db.update(kitchenTicketsTable).set({ isPriority: !existing.isPriority, updatedAt: new Date() }).where(eq(kitchenTicketsTable.id, existing.id)).returning();
+  broadcastEvent(restaurantId, "ticket:priority", { id: updated.id, isPriority: updated.isPriority, orderId: updated.orderId });
   res.json(updated);
 });
 

@@ -158,6 +158,9 @@ export interface FloorTable {
   tableNumber: string;
   capacity: number;
   status: string;
+  positionX: number;
+  positionY: number;
+  shape: string;
 }
 
 export interface CreateTableInput {
@@ -285,18 +288,37 @@ export interface CreateCustomerInput {
 
 export interface Reservation {
   id: number;
-  customerName: string;
+  restaurantId: number;
+  tableId: number | null;
+  guestName: string;
+  guestPhone: string | null;
+  guestEmail: string | null;
   partySize: number;
-  reservationTime: string;
+  scheduledAt: string;
   status: string;
   notes: string | null;
+  createdAt: string;
 }
 
 export interface CreateReservationInput {
-  customerName: string;
+  guestName: string;
+  guestPhone?: string;
+  guestEmail?: string;
+  tableId?: number;
   partySize: number;
-  reservationTime: string;
+  scheduledAt: string;
   notes?: string;
+}
+
+export interface UpdateReservationInput {
+  id: number;
+  guestName?: string;
+  guestPhone?: string;
+  partySize?: number;
+  scheduledAt?: string;
+  status?: string;
+  notes?: string;
+  tableId?: number | null;
 }
 
 export interface AppNotification {

@@ -1,31 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFloorTables, useUpdateTable, useCreateTable, useGetTableQr, useRestaurantInfo } from "@/lib/hooks";
+import {
+  useFloorTables, useUpdateTable, useCreateTable, useGetTableQr, useRestaurantInfo,
+  useReservations, useCreateReservation, useUpdateReservation, useDeleteReservation,
+  useMergeTables,
+} from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, QrCode, Download, X, Printer } from "lucide-react";
+import { Plus, Users, QrCode, Download, X, Printer, LayoutGrid, Move, Merge, CalendarDays, Calendar, Pencil, Trash2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { FloorTable } from "@/lib/types";
+import type { FloorTable, Reservation, CreateReservationInput } from "@/lib/types";
+import { format, formatDistanceToNow, parseISO, isWithinInterval, addMinutes, isPast } from "date-fns";
 
-const TABLE_STATUS: Record<string, { label: string; color: string }> = {
-  free: { label: "Free", color: "bg-green-100 border-green-300 text-green-800" },
-  occupied: { label: "Occupied", color: "bg-orange-100 border-orange-300 text-orange-800" },
-  reserved: { label: "Reserved", color: "bg-blue-100 border-blue-300 text-blue-800" },
-  cleaning: { label: "Cleaning", color: "bg-gray-100 border-gray-300 text-gray-600" },
+const TABLE_STATUS: Record<string, { label: string; bg: string; border: string; text: string; dot: string }> = {
+  free: { label: "Free", bg: "bg-green-100", border: "border-green-400", text: "text-green-800", dot: "bg-green-500" },
+  occupied: { label: "Occupied", bg: "bg-orange-100", border: "border-orange-400", text: "text-orange-800", dot: "bg-orange-500" },
+  reserved: { label: "Reserved", bg: "bg-blue-100", border: "border-blue-400", text: "text-blue-800", dot: "bg-blue-500" },
+  cleaning: { label: "Cleaning", bg: "bg-gray-100", border: "border-gray-400", text: "text-gray-600", dot: "bg-gray-400" },
 };
 
 function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restaurantName: string; onClose: () => void }) {
   const { data: qrData, isLoading } = useGetTableQr(table.id);
   const rawQrUrl = qrData?.qrUrl ?? "";
-  const qrUrl = rawQrUrl.startsWith("/")
-    ? `${window.location.origin}${rawQrUrl}`
-    : rawQrUrl;
-  const qrImageUrl = qrUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=300x300&margin=10`
-    : "";
+  const qrUrl = rawQrUrl.startsWith("/") ? `${window.location.origin}${rawQrUrl}` : rawQrUrl;
+  const svgData = (qrData as { svgData?: string } | undefined)?.svgData ?? "";
+  const svgBlob = svgData ? `data:image/svg+xml;base64,${btoa(svgData)}` : "";
+  const qrImageUrl = svgBlob || (qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=300x300&margin=10` : "");
 
   function downloadQr() {
     if (!qrImageUrl) return;
@@ -40,43 +43,35 @@ function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restau
     if (!qrUrl) return;
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit: "mm", format: "a4" });
-
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
     doc.text(restaurantName, 105, 30, { align: "center" });
-
     doc.setFontSize(16);
     doc.setFont("helvetica", "normal");
     doc.text(`Table ${table.tableNumber}`, 105, 44, { align: "center" });
-
     doc.setFontSize(10);
     doc.setTextColor(120, 120, 120);
     doc.text("Scan to order from your table", 105, 53, { align: "center" });
-
-    const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=600x600&margin=20`;
+    const imgUrl = svgBlob || `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=600x600&margin=20`;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = imgUrl;
-    await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); });
-
+    await new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); });
     try {
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth || 600;
       canvas.height = img.naturalHeight || 600;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0);
-      const dataUrl = canvas.toDataURL("image/png");
-      doc.addImage(dataUrl, "PNG", 55, 60, 100, 100);
+      doc.addImage(canvas.toDataURL("image/png"), "PNG", 55, 60, 100, 100);
     } catch {
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
       doc.text(qrUrl, 105, 110, { align: "center", maxWidth: 160 });
     }
-
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     doc.text("Powered by TableTrack", 105, 175, { align: "center" });
-
     doc.save(`table-${table.tableNumber}-qr.pdf`);
   }
 
@@ -87,30 +82,23 @@ function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restau
           <h2 className="text-lg font-semibold">Table {table.tableNumber} QR</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-accent"><X className="w-4 h-4" /></button>
         </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Generating QR…</div>
         ) : qrUrl ? (
           <>
             <div className="flex flex-col items-center mb-5">
-              <img
-                src={qrImageUrl}
-                alt={`QR for Table ${table.tableNumber}`}
-                className="w-48 h-48 rounded-xl border border-border"
-              />
+              {svgData ? (
+                <div className="w-48 h-48 rounded-xl border border-border overflow-hidden bg-white flex items-center justify-center p-2"
+                  dangerouslySetInnerHTML={{ __html: svgData }} />
+              ) : (
+                <img src={qrImageUrl} alt={`QR Table ${table.tableNumber}`} className="w-48 h-48 rounded-xl border border-border" />
+              )}
               <p className="text-xs text-muted-foreground mt-3 text-center break-all px-2">{qrUrl}</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 gap-2" onClick={downloadQr}>
-                <Download className="w-4 h-4" /> Download
-              </Button>
-              <Button className="flex-1 gap-2" onClick={printQrSheet}>
-                <Printer className="w-4 h-4" /> Print PDF
-              </Button>
+              <Button variant="outline" className="flex-1 gap-2" onClick={downloadQr}><Download className="w-4 h-4" /> Download</Button>
+              <Button className="flex-1 gap-2" onClick={printQrSheet}><Printer className="w-4 h-4" /> Print PDF</Button>
             </div>
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              Customers scan this to order from Table {table.tableNumber}
-            </p>
           </>
         ) : (
           <p className="text-sm text-destructive text-center py-8">Failed to load QR code.</p>
@@ -124,39 +112,336 @@ function TableCard({
   table,
   onStatusChange,
   onQr,
+  mergeMode,
+  mergeSelected,
+  onMergeSelect,
 }: {
   table: FloorTable;
   onStatusChange: (id: number, status: string) => void;
-  onQr: (table: FloorTable) => void;
+  onQr: (t: FloorTable) => void;
+  mergeMode: boolean;
+  mergeSelected: number[];
+  onMergeSelect: (id: number) => void;
 }) {
   const cfg = TABLE_STATUS[table.status] ?? TABLE_STATUS.free;
+  const isMergeSelected = mergeSelected.includes(table.id);
+
   return (
-    <div className={cn("border-2 rounded-xl p-4 hover:shadow-md transition-all", cfg.color)}>
+    <div
+      onClick={mergeMode ? () => onMergeSelect(table.id) : undefined}
+      className={cn(
+        "border-2 rounded-xl p-4 hover:shadow-md transition-all cursor-default",
+        mergeMode && "cursor-pointer",
+        isMergeSelected && "ring-4 ring-primary ring-offset-2",
+        cfg.bg, cfg.border,
+      )}
+    >
       <div className="flex items-start justify-between mb-2">
-        <p className="font-bold text-lg">{table.tableNumber}</p>
-        <div className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", cfg.color)}>{cfg.label}</div>
+        <div>
+          <p className="font-bold text-lg">{table.tableNumber}</p>
+          <div className="flex items-center gap-1 mt-0.5">
+            <div className={cn("w-2 h-2 rounded-full", cfg.dot)} />
+            <p className="text-xs font-medium">{cfg.label}</p>
+          </div>
+        </div>
+        {isMergeSelected && (
+          <div className="bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full">Selected</div>
+        )}
       </div>
       <div className="flex items-center gap-1 text-sm mb-3">
         <Users className="w-3.5 h-3.5" />
         <span>{table.capacity} seats</span>
       </div>
 
-      <button
-        onClick={() => onQr(table)}
-        className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg border border-current/30 hover:bg-white/40 transition mb-2"
-      >
-        <QrCode className="w-3.5 h-3.5" /> QR Code
-      </button>
-
-      {table.status !== "free" && (
-        <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => onStatusChange(table.id, "free")}>
-          Mark Free
-        </Button>
+      {!mergeMode && (
+        <>
+          <button onClick={() => onQr(table)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg border border-current/30 hover:bg-white/40 transition mb-2">
+            <QrCode className="w-3.5 h-3.5" /> QR Code
+          </button>
+          {table.status !== "free" && (
+            <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => onStatusChange(table.id, "free")}>Mark Free</Button>
+          )}
+          {table.status === "free" && (
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "occupied")}>Seat</Button>
+              <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "reserved")}>Reserve</Button>
+            </div>
+          )}
+        </>
       )}
-      {table.status === "free" && (
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "occupied")}>Seat</Button>
-          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "reserved")}>Reserve</Button>
+    </div>
+  );
+}
+
+function FloorPlanTable({
+  table,
+  onDrop,
+  onQr,
+  mergeMode,
+  mergeSelected,
+  onMergeSelect,
+}: {
+  table: FloorTable;
+  onDrop: (id: number, x: number, y: number) => void;
+  onQr: (t: FloorTable) => void;
+  mergeMode: boolean;
+  mergeSelected: number[];
+  onMergeSelect: (id: number) => void;
+}) {
+  const cfg = TABLE_STATUS[table.status] ?? TABLE_STATUS.free;
+  const isMergeSelected = mergeSelected.includes(table.id);
+  const dragOffset = useRef({ dx: 0, dy: 0 });
+  const elemRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (mergeMode) { onMergeSelect(table.id); return; }
+    e.preventDefault();
+    const rect = elemRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragOffset.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+
+    const onMove = (ev: MouseEvent) => {
+      const parent = elemRef.current?.parentElement?.getBoundingClientRect();
+      if (!parent || !elemRef.current) return;
+      const x = Math.max(0, Math.min(ev.clientX - parent.left - dragOffset.current.dx, parent.width - 100));
+      const y = Math.max(0, Math.min(ev.clientY - parent.top - dragOffset.current.dy, parent.height - 80));
+      elemRef.current.style.left = `${x}px`;
+      elemRef.current.style.top = `${y}px`;
+    };
+    const onUp = (ev: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      const parent = elemRef.current?.parentElement?.getBoundingClientRect();
+      if (!parent) return;
+      const x = Math.max(0, Math.min(ev.clientX - parent.left - dragOffset.current.dx, parent.width - 100));
+      const y = Math.max(0, Math.min(ev.clientY - parent.top - dragOffset.current.dy, parent.height - 80));
+      onDrop(table.id, Math.round(x), Math.round(y));
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [mergeMode, onMergeSelect, onDrop, table.id]);
+
+  return (
+    <div
+      ref={elemRef}
+      onMouseDown={handleMouseDown}
+      style={{ left: table.positionX || 20, top: table.positionY || 20 }}
+      className={cn(
+        "absolute w-24 select-none transition-shadow",
+        mergeMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+        isMergeSelected && "ring-4 ring-primary ring-offset-1 rounded-xl",
+      )}
+    >
+      <div className={cn("border-2 rounded-xl p-2 text-center shadow-sm hover:shadow-md transition-shadow", cfg.bg, cfg.border)}>
+        <div className="flex items-center justify-center gap-1 mb-1">
+          <div className={cn("w-2 h-2 rounded-full", cfg.dot)} />
+          {isMergeSelected && <div className="w-2 h-2 rounded-full bg-primary" />}
+        </div>
+        <p className="font-bold text-sm">{table.tableNumber}</p>
+        <p className="text-xs text-muted-foreground">{table.capacity}p</p>
+        <p className={cn("text-xs font-medium mt-0.5", cfg.text)}>{cfg.label}</p>
+        {!mergeMode && (
+          <button
+            onMouseDown={e => e.stopPropagation()}
+            onClick={() => onQr(table)}
+            className="mt-1 text-xs underline text-muted-foreground hover:text-foreground transition-colors"
+          >
+            QR
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReservationPanel({
+  tables,
+  onClose,
+}: {
+  tables: FloorTable[];
+  onClose: () => void;
+}) {
+  const { data: reservations = [], refetch } = useReservations();
+  const createReservation = useCreateReservation();
+  const updateReservation = useUpdateReservation();
+  const deleteReservation = useDeleteReservation();
+  const { toast } = useToast();
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<CreateReservationInput>({
+    guestName: "", partySize: 2, scheduledAt: "", tableId: undefined, guestPhone: "", notes: "",
+  });
+
+  const now = new Date();
+  const upcoming = [...(reservations as Reservation[])]
+    .filter(r => r.status !== "cancelled")
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
+  const handleCreate = async () => {
+    if (!form.guestName || !form.scheduledAt) {
+      toast({ title: "Guest name and time required", variant: "destructive" });
+      return;
+    }
+    try {
+      if (editingId) {
+        await updateReservation.mutateAsync({ id: editingId, ...form });
+        toast({ title: "Reservation updated" });
+      } else {
+        await createReservation.mutateAsync(form);
+        toast({ title: "Reservation added" });
+      }
+      setShowForm(false);
+      setEditingId(null);
+      setForm({ guestName: "", partySize: 2, scheduledAt: "", tableId: undefined, guestPhone: "", notes: "" });
+      void refetch();
+    } catch {
+      toast({ title: "Failed to save reservation", variant: "destructive" });
+    }
+  };
+
+  const handleEdit = (r: Reservation) => {
+    setEditingId(r.id);
+    setForm({
+      guestName: r.guestName,
+      partySize: r.partySize,
+      scheduledAt: r.scheduledAt ? r.scheduledAt.slice(0, 16) : "",
+      tableId: r.tableId ?? undefined,
+      guestPhone: r.guestPhone ?? "",
+      notes: r.notes ?? "",
+    });
+    setShowForm(true);
+  };
+
+  const handleCancel = async (id: number) => {
+    try {
+      await updateReservation.mutateAsync({ id, status: "cancelled" });
+      toast({ title: "Reservation cancelled" });
+      void refetch();
+    } catch {
+      toast({ title: "Failed to cancel", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteReservation.mutateAsync(id);
+      toast({ title: "Reservation deleted" });
+      void refetch();
+    } catch {
+      toast({ title: "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  function getArrivalLabel(scheduledAt: string) {
+    const t = parseISO(scheduledAt);
+    if (isPast(t)) return { text: formatDistanceToNow(t, { addSuffix: true }), past: true };
+    return { text: formatDistanceToNow(t, { addSuffix: true }), past: false };
+  }
+
+  function isSoon(scheduledAt: string) {
+    const t = parseISO(scheduledAt);
+    return isWithinInterval(now, { start: t, end: addMinutes(t, 15) }) || isWithinInterval(now, { start: addMinutes(t, -15), end: t });
+  }
+
+  return (
+    <div className="w-80 border-l border-border bg-card flex flex-col h-full shrink-0">
+      <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Reservations</h3>
+        </div>
+        <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {upcoming.length === 0 && !showForm && (
+          <div className="text-center py-8 text-muted-foreground text-sm">No upcoming reservations</div>
+        )}
+
+        {upcoming.map((r: Reservation) => {
+          const arr = getArrivalLabel(r.scheduledAt);
+          const soon = isSoon(r.scheduledAt);
+          const tbl = tables.find(t => t.id === r.tableId);
+          return (
+            <div key={r.id} className={cn("border rounded-xl p-3 space-y-1.5 text-sm transition-all", soon ? "border-orange-300 bg-orange-50" : "border-border bg-background")}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-foreground">{r.guestName}</p>
+                  <p className="text-xs text-muted-foreground">{r.partySize} guests{tbl ? ` · Table ${tbl.tableNumber}` : ""}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => handleEdit(r)} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => handleDelete(r.id)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-xs">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>{format(parseISO(r.scheduledAt), "MMM d, h:mm a")}</span>
+              </div>
+              <div className={cn("text-xs font-medium", arr.past ? "text-red-600" : soon ? "text-orange-600" : "text-muted-foreground")}>
+                {arr.text}
+                {soon && !arr.past && " · Arriving soon!"}
+              </div>
+              {r.guestPhone && <p className="text-xs text-muted-foreground">{r.guestPhone}</p>}
+              {r.notes && <p className="text-xs text-muted-foreground italic">{r.notes}</p>}
+              {!arr.past && (
+                <button onClick={() => handleCancel(r.id)} className="text-xs text-destructive hover:underline">Cancel reservation</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {showForm ? (
+        <div className="border-t border-border p-4 space-y-3">
+          <h4 className="font-medium text-sm">{editingId ? "Edit Reservation" : "New Reservation"}</h4>
+          <div>
+            <Label className="text-xs">Guest Name *</Label>
+            <Input className="h-8 text-sm" value={form.guestName} onChange={e => setForm(f => ({ ...f, guestName: e.target.value }))} placeholder="Guest name" />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label className="text-xs">Party Size</Label>
+              <Input className="h-8 text-sm" type="number" min="1" value={form.partySize} onChange={e => setForm(f => ({ ...f, partySize: Number(e.target.value) }))} />
+            </div>
+            <div className="flex-1">
+              <Label className="text-xs">Table</Label>
+              <select className="w-full h-8 text-sm border border-input rounded-md px-2 bg-background"
+                value={form.tableId ?? ""}
+                onChange={e => setForm(f => ({ ...f, tableId: e.target.value ? Number(e.target.value) : undefined }))}>
+                <option value="">Any</option>
+                {tables.filter(t => t.status === "free" || t.status === "reserved").map(t => (
+                  <option key={t.id} value={t.id}>Table {t.tableNumber}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Date & Time *</Label>
+            <Input className="h-8 text-sm" type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs">Phone</Label>
+            <Input className="h-8 text-sm" value={form.guestPhone ?? ""} onChange={e => setForm(f => ({ ...f, guestPhone: e.target.value }))} placeholder="+91 ..." />
+          </div>
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <Input className="h-8 text-sm" value={form.notes ?? ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Special requests..." />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</Button>
+            <Button size="sm" className="flex-1" onClick={handleCreate} disabled={createReservation.isPending || updateReservation.isPending}>
+              {editingId ? "Update" : "Add"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="border-t border-border p-4">
+          <Button className="w-full gap-2" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4" /> Add Reservation
+          </Button>
         </div>
       )}
     </div>
@@ -164,18 +449,26 @@ function TableCard({
 }
 
 export default function TablesPage() {
-  const { data: tables = [] } = useFloorTables();
+  const { data: tables = [], refetch: refetchTables } = useFloorTables();
   const { data: restaurantInfo } = useRestaurantInfo();
+  const { data: reservations = [] } = useReservations();
   const updateTable = useUpdateTable();
   const createTable = useCreateTable();
+  const mergeTables = useMergeTables();
   const { toast } = useToast();
+
+  const [viewMode, setViewMode] = useState<"grid" | "floorplan">("grid");
   const [showAdd, setShowAdd] = useState(false);
   const [newTable, setNewTable] = useState({ tableNumber: "", capacity: "4" });
   const [qrTable, setQrTable] = useState<FloorTable | null>(null);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSelected, setMergeSelected] = useState<number[]>([]);
+  const [showReservations, setShowReservations] = useState(false);
 
   const free = tables.filter((t: FloorTable) => t.status === "free").length;
   const occupied = tables.filter((t: FloorTable) => t.status === "occupied").length;
   const reserved = tables.filter((t: FloorTable) => t.status === "reserved").length;
+  const totalCovers = tables.filter((t: FloorTable) => t.status === "occupied").reduce((s: number, t: FloorTable) => s + t.capacity, 0);
 
   const handleStatusChange = async (id: number, status: string) => {
     try {
@@ -197,41 +490,183 @@ export default function TablesPage() {
     }
   };
 
+  const handleDrop = useCallback(async (id: number, x: number, y: number) => {
+    try {
+      await updateTable.mutateAsync({ id, positionX: x, positionY: y } as Parameters<typeof updateTable.mutateAsync>[0]);
+    } catch {
+    }
+  }, [updateTable]);
+
+  const handleMergeSelect = (id: number) => {
+    setMergeSelected(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
+  };
+
+  const handleMergeConfirm = async () => {
+    if (mergeSelected.length !== 2) {
+      toast({ title: "Select exactly 2 tables to merge", variant: "destructive" });
+      return;
+    }
+    try {
+      await mergeTables.mutateAsync({ sourceTableId: mergeSelected[0], targetTableId: mergeSelected[1] });
+      toast({ title: "Tables merged!", description: "Orders have been combined." });
+      setMergeMode(false);
+      setMergeSelected([]);
+    } catch {
+      toast({ title: "Merge failed", variant: "destructive" });
+    }
+  };
+
+  useEffect(() => {
+    if (reservations.length === 0) return;
+    const check = () => {
+      const now = new Date();
+      (reservations as Reservation[]).forEach(r => {
+        if (r.status === "cancelled" || !r.tableId) return;
+        const scheduled = parseISO(r.scheduledAt);
+        const window15 = isWithinInterval(now, { start: addMinutes(scheduled, -15), end: scheduled });
+        if (window15) {
+          const tbl = (tables as FloorTable[]).find(t => t.id === r.tableId);
+          if (tbl && tbl.status === "free") {
+            void updateTable.mutateAsync({ id: r.tableId, status: "reserved" });
+          }
+        }
+      });
+    };
+    check();
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, [reservations, tables, updateTable]);
+
+  const upcomingCount = (reservations as Reservation[]).filter(r => r.status !== "cancelled" && !isPast(parseISO(r.scheduledAt))).length;
+
   return (
     <Layout>
       <PageHeader
         title="Table Management"
-        subtitle={`${tables.length} tables · ${occupied} occupied · ${reserved} reserved · ${free} free`}
+        subtitle={`${tables.length} tables · ${occupied} occupied (${totalCovers} covers) · ${reserved} reserved · ${free} free`}
         actions={
-          <Button onClick={() => setShowAdd(true)}>
-            <Plus className="w-4 h-4 mr-2" /> Add Table
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              <button onClick={() => setViewMode("grid")}
+                className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+                <LayoutGrid className="w-3.5 h-3.5" /> Grid
+              </button>
+              <button onClick={() => setViewMode("floorplan")}
+                className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 border-l border-border transition-colors", viewMode === "floorplan" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+                <Move className="w-3.5 h-3.5" /> Floor Plan
+              </button>
+            </div>
+            <Button
+              variant={mergeMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setMergeMode(v => !v); setMergeSelected([]); }}
+            >
+              <Merge className="w-4 h-4 mr-1.5" />
+              {mergeMode ? "Cancel Merge" : "Merge"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="relative"
+              onClick={() => setShowReservations(v => !v)}
+            >
+              <CalendarDays className="w-4 h-4 mr-1.5" /> Reservations
+              {upcomingCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{upcomingCount}</span>
+              )}
+            </Button>
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Add Table
+            </Button>
+          </div>
         }
       />
-      <div className="p-6">
-        <div className="flex gap-4 mb-6">
-          {[
-            { label: "Free", count: free, color: "bg-green-100 text-green-700" },
-            { label: "Occupied", count: occupied, color: "bg-orange-100 text-orange-700" },
-            { label: "Reserved", count: reserved, color: "bg-blue-100 text-blue-700" },
-          ].map(s => (
-            <div key={s.label} className={cn("px-4 py-2 rounded-lg text-sm font-medium", s.color)}>
-              {s.count} {s.label}
-            </div>
-          ))}
-        </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {tables.map((table: FloorTable) => (
-            <TableCard key={table.id} table={table} onStatusChange={handleStatusChange} onQr={setQrTable} />
-          ))}
-        </div>
-
-        {tables.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">
-            <p className="text-lg font-medium mb-1">No tables yet</p>
-            <p className="text-sm">Add your first table to get started</p>
+      {mergeMode && (
+        <div className="mx-6 mt-0 mb-0 bg-primary/10 border border-primary/30 rounded-xl px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <Merge className="w-4 h-4 text-primary" />
+            <span className="font-medium text-primary">Merge Mode</span>
+            <span className="text-muted-foreground">
+              {mergeSelected.length === 0 ? "Select the source table" : mergeSelected.length === 1 ? "Now select the target table" : "Ready to merge"}
+            </span>
+            {mergeSelected.length > 0 && (
+              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                {mergeSelected.map(id => (tables as FloorTable[]).find(t => t.id === id)?.tableNumber ?? id).join(" → ")}
+              </span>
+            )}
           </div>
+          <Button size="sm" disabled={mergeSelected.length !== 2 || mergeTables.isPending} onClick={handleMergeConfirm}>
+            <ChevronRight className="w-4 h-4 mr-1" /> Merge Tables
+          </Button>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-auto p-6">
+          {viewMode === "grid" ? (
+            <>
+              <div className="flex gap-4 mb-6">
+                {[
+                  { label: "Free", count: free, cls: "bg-green-100 text-green-700" },
+                  { label: "Occupied", count: occupied, cls: "bg-orange-100 text-orange-700" },
+                  { label: "Reserved", count: reserved, cls: "bg-blue-100 text-blue-700" },
+                  { label: "Covers", count: totalCovers, cls: "bg-muted text-muted-foreground" },
+                ].map(s => (
+                  <div key={s.label} className={cn("px-4 py-2 rounded-lg text-sm font-medium", s.cls)}>
+                    {s.count} {s.label}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {(tables as FloorTable[]).map(table => (
+                  <TableCard
+                    key={table.id}
+                    table={table}
+                    onStatusChange={handleStatusChange}
+                    onQr={setQrTable}
+                    mergeMode={mergeMode}
+                    mergeSelected={mergeSelected}
+                    onMergeSelect={handleMergeSelect}
+                  />
+                ))}
+              </div>
+              {tables.length === 0 && (
+                <div className="text-center py-16 text-muted-foreground">
+                  <p className="text-lg font-medium mb-1">No tables yet</p>
+                  <p className="text-sm">Add your first table to get started</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="relative w-full bg-muted/30 rounded-2xl border-2 border-dashed border-border/60 overflow-hidden" style={{ minHeight: "600px" }}>
+              <div className="absolute top-3 left-3 text-xs text-muted-foreground">Drag tables to position them on the floor plan</div>
+              {(tables as FloorTable[]).map(table => (
+                <FloorPlanTable
+                  key={table.id}
+                  table={table}
+                  onDrop={handleDrop}
+                  onQr={setQrTable}
+                  mergeMode={mergeMode}
+                  mergeSelected={mergeSelected}
+                  onMergeSelect={handleMergeSelect}
+                />
+              ))}
+              {tables.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                  Add tables to see them on the floor plan
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {showReservations && (
+          <ReservationPanel tables={tables as FloorTable[]} onClose={() => setShowReservations(false)} />
         )}
       </div>
 
@@ -241,7 +676,7 @@ export default function TablesPage() {
             <h2 className="text-lg font-semibold mb-4">Add Table</h2>
             <div className="space-y-4">
               <div>
-                <Label>Table Number</Label>
+                <Label>Table Number / Name</Label>
                 <Input placeholder="e.g. T11" value={newTable.tableNumber} onChange={e => setNewTable(p => ({ ...p, tableNumber: e.target.value }))} />
               </div>
               <div>
@@ -258,11 +693,7 @@ export default function TablesPage() {
       )}
 
       {qrTable && (
-        <QrModal
-          table={qrTable}
-          restaurantName={restaurantInfo?.name ?? "Restaurant"}
-          onClose={() => setQrTable(null)}
-        />
+        <QrModal table={qrTable} restaurantName={restaurantInfo?.name ?? "Restaurant"} onClose={() => setQrTable(null)} />
       )}
     </Layout>
   );

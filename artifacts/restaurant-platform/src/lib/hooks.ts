@@ -8,7 +8,7 @@ import type {
   InventoryItem, CreateInventoryItemInput, AdjustInventoryInput,
   StaffMember, CreateUserInput,
   CustomersResponse, CreateCustomerInput,
-  CreateReservationInput,
+  CreateReservationInput, UpdateReservationInput, Reservation,
   AppNotification,
   ReportsData,
   Supplier,
@@ -393,6 +393,41 @@ export function useCreateReservation() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
   });
 }
+
+export function useUpdateReservation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateReservationInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/reservations/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["reservations"] }); qc.invalidateQueries({ queryKey: ["tables"] }); },
+  });
+}
+
+export function useDeleteReservation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/reservations/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["reservations"] }); qc.invalidateQueries({ queryKey: ["tables"] }); },
+  });
+}
+
+export function useUpdateTicketPriority() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/priority`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kitchen"] }),
+  });
+}
+
+export function useMergeTables() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceTableId, targetTableId }: { sourceTableId: number; targetTableId: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/tables/merge`, { sourceTableId, targetTableId }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tables"] }); qc.invalidateQueries({ queryKey: ["orders"] }); },
+  });
+}
+
+export { type Reservation };
 
 export function useSuppliers() {
   return useQuery({
