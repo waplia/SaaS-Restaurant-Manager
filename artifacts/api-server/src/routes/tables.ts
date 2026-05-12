@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
+import { eq, and, or, inArray } from "drizzle-orm";
+import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -79,32 +79,42 @@ router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "man
   if (srcTable.status !== "occupied") return void res.status(400).json({ error: "Source table must be occupied" });
   if (tgtTable.status !== "occupied") return void res.status(400).json({ error: "Target table must be occupied" });
 
-  const { ordersTable, orderItemsTable } = await import("../lib/db");
-  const { eq: eqI, and: andI, or, inArray } = await import("drizzle-orm");
+  const activeStatuses = [eq(ordersTable.status, "pending"), eq(ordersTable.status, "preparing")];
+  const [srcOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.tableId, Number(sourceTableId)), eq(ordersTable.restaurantId, restaurantId), or(...activeStatuses))).orderBy(ordersTable.createdAt);
+  const [tgtOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.tableId, Number(targetTableId)), eq(ordersTable.restaurantId, restaurantId), or(...activeStatuses))).orderBy(ordersTable.createdAt);
 
-  const activeStatuses = [eqI(ordersTable.status, "pending"), eqI(ordersTable.status, "preparing")];
-  const [srcOrder] = await db.select().from(ordersTable).where(andI(eqI(ordersTable.tableId, Number(sourceTableId)), eqI(ordersTable.restaurantId, restaurantId), or(...activeStatuses))).orderBy(ordersTable.createdAt);
-  const [tgtOrder] = await db.select().from(ordersTable).where(andI(eqI(ordersTable.tableId, Number(targetTableId)), eqI(ordersTable.restaurantId, restaurantId), or(...activeStatuses))).orderBy(ordersTable.createdAt);
+  let cancelledTicketId: number | null = null;
 
-  if (srcOrder && tgtOrder) {
-    const srcItems = await db.select().from(orderItemsTable).where(eqI(orderItemsTable.orderId, srcOrder.id));
-    if (srcItems.length > 0) {
-      await db.update(orderItemsTable).set({ orderId: tgtOrder.id }).where(inArray(orderItemsTable.id, srcItems.map(i => i.id)));
+  await db.transaction(async (tx) => {
+    if (srcOrder && tgtOrder) {
+      const srcItems = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, srcOrder.id));
+      if (srcItems.length > 0) {
+        await tx.update(orderItemsTable).set({ orderId: tgtOrder.id }).where(inArray(orderItemsTable.id, srcItems.map(i => i.id)));
+      }
+      const newTotal = (Number(tgtOrder.totalAmount) + Number(srcOrder.totalAmount)).toFixed(2);
+      await tx.update(ordersTable).set({ totalAmount: newTotal, updatedAt: new Date() }).where(eq(ordersTable.id, tgtOrder.id));
+      await tx.update(ordersTable).set({ status: "cancelled", tableId: null, updatedAt: new Date() }).where(eq(ordersTable.id, srcOrder.id));
+      // Cancel the source kitchen ticket
+      const [srcTicket] = await tx.update(kitchenTicketsTable)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(and(eq(kitchenTicketsTable.orderId, srcOrder.id), eq(kitchenTicketsTable.restaurantId, restaurantId)))
+        .returning();
+      if (srcTicket) cancelledTicketId = srcTicket.id;
+    } else if (srcOrder && !tgtOrder) {
+      await tx.update(ordersTable).set({ tableId: Number(targetTableId), updatedAt: new Date() }).where(eq(ordersTable.id, srcOrder.id));
+      await tx.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eq(floorTablesTable.id, Number(targetTableId)));
     }
-    const newTotal = (Number(tgtOrder.totalAmount) + Number(srcOrder.totalAmount)).toFixed(2);
-    await db.update(ordersTable).set({ totalAmount: newTotal, updatedAt: new Date() }).where(eqI(ordersTable.id, tgtOrder.id));
-    await db.update(ordersTable).set({ status: "cancelled", tableId: null, updatedAt: new Date() }).where(eqI(ordersTable.id, srcOrder.id));
-  } else if (srcOrder && !tgtOrder) {
-    await db.update(ordersTable).set({ tableId: Number(targetTableId), updatedAt: new Date() }).where(eqI(ordersTable.id, srcOrder.id));
-    await db.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eqI(floorTablesTable.id, Number(targetTableId)));
-  }
+    await tx.update(floorTablesTable).set({ status: "free", updatedAt: new Date() }).where(eq(floorTablesTable.id, Number(sourceTableId)));
+  });
 
-  await db.update(floorTablesTable).set({ status: "free", updatedAt: new Date() }).where(eqI(floorTablesTable.id, Number(sourceTableId)));
-  const [updatedSrc] = await db.select().from(floorTablesTable).where(eqI(floorTablesTable.id, Number(sourceTableId)));
-  const [updatedTgt] = await db.select().from(floorTablesTable).where(eqI(floorTablesTable.id, Number(targetTableId)));
+  const [updatedSrc] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, Number(sourceTableId)));
+  const [updatedTgt] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, Number(targetTableId)));
 
   const { broadcastEvent } = await import("../lib/socketio");
   broadcastEvent(restaurantId, "tables:merged", { sourceTableId, targetTableId });
+  if (cancelledTicketId !== null) {
+    broadcastEvent(restaurantId, "ticket:status", { id: cancelledTicketId, status: "cancelled", orderId: srcOrder!.id });
+  }
 
   res.json({ success: true, sourceTable: updatedSrc, targetTable: updatedTgt });
 });
@@ -118,16 +128,13 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
     return void res.status(400).json({ error: "targetTableId and at least one itemId are required" });
   }
 
-  const { ordersTable, orderItemsTable } = await import("../lib/db");
-  const { eq: eqI, and: andI, inArray, or } = await import("drizzle-orm");
-
-  const [srcOrder] = await db.select().from(ordersTable).where(andI(eqI(ordersTable.id, orderId), eqI(ordersTable.restaurantId, restaurantId)));
+  const [srcOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!srcOrder) return void res.status(404).json({ error: "Source order not found" });
 
-  const [tgtTable] = await db.select().from(floorTablesTable).where(andI(eqI(floorTablesTable.id, Number(targetTableId)), eq(floorTablesTable.restaurantId, restaurantId)));
+  const [tgtTable] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(targetTableId)), eq(floorTablesTable.restaurantId, restaurantId)));
   if (!tgtTable) return void res.status(404).json({ error: "Target table not found" });
 
-  const allSrcItems = await db.select().from(orderItemsTable).where(eqI(orderItemsTable.orderId, orderId));
+  const allSrcItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
   const toMove = allSrcItems.filter(i => (itemIds as number[]).includes(i.id));
   if (toMove.length === 0) return void res.status(400).json({ error: "None of the specified items belong to this order" });
   if (toMove.length === allSrcItems.length) return void res.status(400).json({ error: "Cannot move all items — use merge instead" });
@@ -135,34 +142,43 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
   const movedTotal = toMove.reduce((s, i) => s + Number(i.unitPrice) * Number(i.quantity), 0);
   const newSrcTotal = Math.max(0, Number(srcOrder.totalAmount) - movedTotal).toFixed(2);
 
-  const [existingTgtOrder] = await db.select().from(ordersTable).where(andI(eqI(ordersTable.tableId, Number(targetTableId)), eqI(ordersTable.restaurantId, restaurantId), or(eqI(ordersTable.status, "pending"), eqI(ordersTable.status, "preparing"))));
+  const [existingTgtOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.tableId, Number(targetTableId)), eq(ordersTable.restaurantId, restaurantId), or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "preparing"))));
 
   let targetOrderId: number;
-  if (existingTgtOrder) {
-    targetOrderId = existingTgtOrder.id;
-    await db.update(ordersTable).set({ totalAmount: (Number(existingTgtOrder.totalAmount) + movedTotal).toFixed(2), updatedAt: new Date() }).where(eqI(ordersTable.id, existingTgtOrder.id));
-  } else {
-    const splitOrderNumber = `SPL-${Date.now().toString(36).toUpperCase()}`;
-    const [newOrder] = await db.insert(ordersTable).values({
-      restaurantId,
-      tableId: Number(targetTableId),
-      orderNumber: splitOrderNumber,
-      orderType: srcOrder.orderType,
-      status: "pending",
-      paymentStatus: "unpaid",
-      totalAmount: movedTotal.toFixed(2),
-    }).returning();
-    targetOrderId = newOrder.id;
-    await db.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eqI(floorTablesTable.id, Number(targetTableId)));
-  }
+  let newTicketId: number | null = null;
 
-  await db.update(orderItemsTable).set({ orderId: targetOrderId }).where(inArray(orderItemsTable.id, toMove.map(i => i.id)));
-  await db.update(ordersTable).set({ totalAmount: newSrcTotal, updatedAt: new Date() }).where(eqI(ordersTable.id, orderId));
+  await db.transaction(async (tx) => {
+    if (existingTgtOrder) {
+      targetOrderId = existingTgtOrder.id;
+      await tx.update(ordersTable).set({ totalAmount: (Number(existingTgtOrder.totalAmount) + movedTotal).toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, existingTgtOrder.id));
+    } else {
+      const splitOrderNumber = `SPL-${Date.now().toString(36).toUpperCase()}`;
+      const [newOrder] = await tx.insert(ordersTable).values({
+        restaurantId,
+        tableId: Number(targetTableId),
+        orderNumber: splitOrderNumber,
+        orderType: srcOrder.orderType,
+        status: "pending",
+        paymentStatus: "unpaid",
+        totalAmount: movedTotal.toFixed(2),
+      }).returning();
+      targetOrderId = newOrder.id;
+      await tx.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eq(floorTablesTable.id, Number(targetTableId)));
+      // Create kitchen ticket for the new split order
+      const [newTicket] = await tx.insert(kitchenTicketsTable).values({ orderId: targetOrderId, restaurantId, isPriority: false }).returning();
+      newTicketId = newTicket.id;
+    }
+    await tx.update(orderItemsTable).set({ orderId: targetOrderId! }).where(inArray(orderItemsTable.id, toMove.map(i => i.id)));
+    await tx.update(ordersTable).set({ totalAmount: newSrcTotal, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  });
 
   const { broadcastEvent } = await import("../lib/socketio");
-  broadcastEvent(restaurantId, "order:split", { sourceOrderId: orderId, targetOrderId, targetTableId, itemCount: toMove.length });
+  broadcastEvent(restaurantId, "order:split", { sourceOrderId: orderId, targetOrderId: targetOrderId!, targetTableId, itemCount: toMove.length });
+  if (newTicketId !== null) {
+    broadcastEvent(restaurantId, "order:new", { id: targetOrderId!, restaurantId, tableId: Number(targetTableId), orderNumber: `SPL-ticket` });
+  }
 
-  res.json({ success: true, sourceOrderId: orderId, targetOrderId, itemsMoved: toMove.length });
+  res.json({ success: true, sourceOrderId: orderId, targetOrderId: targetOrderId!, itemsMoved: toMove.length });
 });
 
 router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
