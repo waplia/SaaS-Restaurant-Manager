@@ -45,6 +45,18 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), async (req
     return void res.status(400).json({ error: "Password must be at least 6 characters" });
   }
 
+  const callerRole = req.user!.role;
+  const ALLOWED_TARGET_ROLES: Record<string, string[]> = {
+    owner: ["manager", "waiter", "kitchen", "cashier"],
+    manager: ["waiter", "kitchen", "cashier"],
+  };
+  if (!req.user!.isSuperAdmin) {
+    const allowed = ALLOWED_TARGET_ROLES[callerRole] ?? [];
+    if (!allowed.includes(role)) {
+      return void res.status(403).json({ error: `A ${callerRole} cannot assign the role "${role}". Allowed: ${allowed.join(", ")}` });
+    }
+  }
+
   if (!req.user!.isSuperAdmin && tenantId) {
     const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (tenant?.planId) {

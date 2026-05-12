@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -85,6 +86,15 @@ function TeamTab({
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter" });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generatedCreds, setGeneratedCreds] = useState<{ name: string; password: string } | null>(null);
+
+  const { user } = useAuth();
+  const ALLOWED_ASSIGNABLE: Record<string, string[]> = {
+    owner: ["manager", "waiter", "kitchen", "cashier"],
+    manager: ["waiter", "kitchen", "cashier"],
+  };
+  const assignableRoles = user?.isSuperAdmin
+    ? ["owner", "manager", "waiter", "kitchen", "cashier"]
+    : (ALLOWED_ASSIGNABLE[user?.role ?? ""] ?? ["waiter", "kitchen", "cashier"]);
 
   const roles = ["owner", "manager", "waiter", "kitchen", "cashier"];
   const byRole = (role: string) => staff.filter((s: StaffMember) => s.role === role).length;
@@ -264,7 +274,7 @@ function TeamTab({
               <div>
                 <Label>Role</Label>
                 <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
-                  {Object.entries(ROLE_CONFIG).map(([r, c]) => <option key={r} value={r}>{c.label}</option>)}
+                  {assignableRoles.map(r => <option key={r} value={r}>{ROLE_CONFIG[r]?.label ?? r}</option>)}
                 </select>
               </div>
               <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">A unique temporary password will be generated and shown to you after adding the staff member.</p>
