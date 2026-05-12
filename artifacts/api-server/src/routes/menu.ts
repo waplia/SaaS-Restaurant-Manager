@@ -17,13 +17,13 @@ router.post("/restaurants/:restaurantId/menus", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/menus/:id", async (req, res) => {
   const { name, description, availableFrom, availableTo, isActive, sortOrder } = req.body;
-  const [updated] = await db.update(menusTable).set({ name, description, availableFrom, availableTo, isActive, sortOrder, updatedAt: new Date() }).where(eq(menusTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(menusTable).set({ name, description, availableFrom, availableTo, isActive, sortOrder, updatedAt: new Date() }).where(and(eq(menusTable.id, Number(req.params.id)), eq(menusTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.delete("/restaurants/:restaurantId/menus/:id", async (req, res) => {
-  await db.delete(menusTable).where(eq(menusTable.id, Number(req.params.id)));
+  await db.delete(menusTable).where(and(eq(menusTable.id, Number(req.params.id)), eq(menusTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 
@@ -43,13 +43,13 @@ router.post("/restaurants/:restaurantId/categories", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/categories/:id", async (req, res) => {
   const { name, description, imageUrl, sortOrder, isActive } = req.body;
-  const [updated] = await db.update(menuCategoriesTable).set({ name, description, imageUrl, sortOrder, isActive, updatedAt: new Date() }).where(eq(menuCategoriesTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(menuCategoriesTable).set({ name, description, imageUrl, sortOrder, isActive, updatedAt: new Date() }).where(and(eq(menuCategoriesTable.id, Number(req.params.id)), eq(menuCategoriesTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.delete("/restaurants/:restaurantId/categories/:id", async (req, res) => {
-  await db.delete(menuCategoriesTable).where(eq(menuCategoriesTable.id, Number(req.params.id)));
+  await db.delete(menuCategoriesTable).where(and(eq(menuCategoriesTable.id, Number(req.params.id)), eq(menuCategoriesTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 
@@ -82,7 +82,7 @@ router.patch("/restaurants/:restaurantId/items/:id", async (req, res) => {
 });
 
 router.delete("/restaurants/:restaurantId/items/:id", async (req, res) => {
-  await db.delete(menuItemsTable).where(eq(menuItemsTable.id, Number(req.params.id)));
+  await db.delete(menuItemsTable).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 

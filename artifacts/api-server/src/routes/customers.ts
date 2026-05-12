@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and, ilike, count, desc, sql } from "drizzle-orm";
-import { db, customersTable, couponsTable, notificationsTable } from "../lib/db";
+import { eq, and, ilike, count, desc } from "drizzle-orm";
+import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable } from "../lib/db";
 
 const router = Router();
 
@@ -40,6 +40,31 @@ router.patch("/restaurants/:restaurantId/customers/:id", async (req, res) => {
   res.json(updated);
 });
 
+router.get("/restaurants/:restaurantId/customers/:id/loyalty", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!customer) return void res.status(404).json({ error: "Not found" });
+  const transactions = await db.select().from(loyaltyTransactionsTable).where(and(eq(loyaltyTransactionsTable.customerId, customerId), eq(loyaltyTransactionsTable.restaurantId, restaurantId))).orderBy(desc(loyaltyTransactionsTable.createdAt)).limit(50);
+  res.json({ balance: customer.loyaltyPoints, transactions });
+});
+
+router.post("/restaurants/:restaurantId/customers/:id/loyalty", async (req, res) => {
+  const { points, type, reason, orderId } = req.body;
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!customer) return void res.status(404).json({ error: "Not found" });
+
+  const delta = type === "redeem" ? -Math.abs(Number(points)) : Math.abs(Number(points));
+  const newBalance = Math.max(0, customer.loyaltyPoints + delta);
+
+  await db.update(customersTable).set({ loyaltyPoints: newBalance, updatedAt: new Date() }).where(eq(customersTable.id, customerId));
+  const [tx] = await db.insert(loyaltyTransactionsTable).values({ customerId, restaurantId, points: delta, type: type ?? "earn", reason, orderId }).returning();
+  res.status(201).json({ balance: newBalance, transaction: tx });
+});
+
 router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
   const rows = await db.select().from(couponsTable).where(eq(couponsTable.restaurantId, Number(req.params.restaurantId)));
   res.json(rows);
@@ -57,13 +82,13 @@ router.patch("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
   if (isActive !== undefined) updates.isActive = isActive;
   if (validTo) updates.validTo = new Date(validTo);
   if (usageLimit !== undefined) updates.usageLimit = usageLimit;
-  const [updated] = await db.update(couponsTable).set(updates).where(eq(couponsTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(couponsTable).set(updates).where(and(eq(couponsTable.id, Number(req.params.id)), eq(couponsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.delete("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
-  await db.update(couponsTable).set({ isActive: false }).where(eq(couponsTable.id, Number(req.params.id)));
+  await db.update(couponsTable).set({ isActive: false }).where(and(eq(couponsTable.id, Number(req.params.id)), eq(couponsTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 
@@ -104,8 +129,8 @@ router.post("/restaurants/:restaurantId/notifications/mark-read", async (req, re
   }
   if (ids?.length) {
     let updated = 0;
-    for (const id of ids) {
-      await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.id, id));
+    for (const id of ids as number[]) {
+      await db.update(notificationsTable).set({ isRead: true }).where(and(eq(notificationsTable.id, id), eq(notificationsTable.restaurantId, restaurantId)));
       updated++;
     }
     return void res.json({ updated });

@@ -34,7 +34,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const enrichedItems: Array<{ menuItem: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }> = [];
 
   for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }>) {
-    const [mi] = await db.select().from(menuItemsTable).where(eq(menuItemsTable.id, item.menuItemId));
+    const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
     const modTotal = (item.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
     subtotal += (Number(mi.price) + modTotal) * item.quantity;
@@ -87,7 +87,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   await db.insert(kitchenTicketsTable).values({ orderId: order.id, restaurantId, isPriority: isPriority ?? false });
 
   if (tableId) {
-    await db.update(floorTablesTable).set({ status: "occupied" }).where(eq(floorTablesTable.id, tableId));
+    await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
   res.status(201).json(order);
@@ -112,11 +112,12 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const { paymentMethod } = req.body;
-  const [updated] = await db.update(ordersTable).set({ paymentMethod, paymentStatus: "paid", status: "completed", updatedAt: new Date() }).where(eq(ordersTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(ordersTable).set({ paymentMethod, paymentStatus: "paid", status: "completed", updatedAt: new Date() }).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   if (updated.tableId) {
-    await db.update(floorTablesTable).set({ status: "free" }).where(eq(floorTablesTable.id, updated.tableId));
+    await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
   res.json(updated);
 });
@@ -130,11 +131,11 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
   const tickets = await db.select().from(kitchenTicketsTable).where(and(...conditions)).orderBy(desc(kitchenTicketsTable.isPriority), kitchenTicketsTable.createdAt);
 
   const enriched = await Promise.all(tickets.map(async (t) => {
-    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, t.orderId));
+    const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, t.orderId), eq(ordersTable.restaurantId, restaurantId)));
     const items = order ? await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id)) : [];
     let tableNumber: string | null = null;
     if (order?.tableId) {
-      const [tbl] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, order.tableId));
+      const [tbl] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
       tableNumber = tbl?.tableNumber ?? null;
     }
     return { ...t, orderNumber: order?.orderNumber ?? "", tableNumber, orderType: order?.orderType ?? "dine_in", items };
@@ -144,11 +145,12 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
 });
 
 router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const { status } = req.body;
   const updates: Record<string, unknown> = { status, updatedAt: new Date() };
   if (status === "preparing") updates.startedAt = new Date();
   if (status === "ready" || status === "served") updates.completedAt = new Date();
-  const [updated] = await db.update(kitchenTicketsTable).set(updates).where(eq(kitchenTicketsTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });

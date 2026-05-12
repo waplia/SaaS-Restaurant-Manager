@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, ilike, lte, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable } from "../lib/db";
 
 const router = Router();
@@ -28,13 +28,13 @@ router.post("/restaurants/:restaurantId/inventory", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/inventory/:id", async (req, res) => {
   const { name, unit, minStockLevel, costPerUnit, category, supplierId, isActive } = req.body;
-  const [updated] = await db.update(inventoryItemsTable).set({ name, unit, minStockLevel, costPerUnit, category, supplierId, isActive, updatedAt: new Date() }).where(eq(inventoryItemsTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(inventoryItemsTable).set({ name, unit, minStockLevel, costPerUnit, category, supplierId, isActive, updatedAt: new Date() }).where(and(eq(inventoryItemsTable.id, Number(req.params.id)), eq(inventoryItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json({ ...updated, isLowStock: Number(updated.currentStock) <= Number(updated.minStockLevel) });
 });
 
 router.delete("/restaurants/:restaurantId/inventory/:id", async (req, res) => {
-  await db.update(inventoryItemsTable).set({ isActive: false }).where(eq(inventoryItemsTable.id, Number(req.params.id)));
+  await db.update(inventoryItemsTable).set({ isActive: false }).where(and(eq(inventoryItemsTable.id, Number(req.params.id)), eq(inventoryItemsTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 
@@ -43,7 +43,7 @@ router.post("/restaurants/:restaurantId/inventory/:id/adjust", async (req, res) 
   const id = Number(req.params.id);
   const restaurantId = Number(req.params.restaurantId);
 
-  const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
+  const [item] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, id), eq(inventoryItemsTable.restaurantId, restaurantId)));
   if (!item) return void res.status(404).json({ error: "Not found" });
 
   let newStock = Number(item.currentStock);
@@ -51,7 +51,7 @@ router.post("/restaurants/:restaurantId/inventory/:id/adjust", async (req, res) 
   else if (type === "remove" || type === "use") newStock -= Number(quantity);
   else newStock = Number(quantity);
 
-  const [updated] = await db.update(inventoryItemsTable).set({ currentStock: Math.max(0, newStock).toFixed(3), updatedAt: new Date() }).where(eq(inventoryItemsTable.id, id)).returning();
+  const [updated] = await db.update(inventoryItemsTable).set({ currentStock: Math.max(0, newStock).toFixed(3), updatedAt: new Date() }).where(and(eq(inventoryItemsTable.id, id), eq(inventoryItemsTable.restaurantId, restaurantId))).returning();
   await db.insert(inventoryTransactionsTable).values({ itemId: id, restaurantId, type, quantity, notes });
 
   res.json({ ...updated!, isLowStock: Number(updated!.currentStock) <= Number(updated!.minStockLevel) });
@@ -70,13 +70,13 @@ router.post("/restaurants/:restaurantId/suppliers", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/suppliers/:id", async (req, res) => {
   const { name, contactPerson, phone, email, address, isActive } = req.body;
-  const [updated] = await db.update(suppliersTable).set({ name, contactPerson, phone, email, address, isActive, updatedAt: new Date() }).where(eq(suppliersTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(suppliersTable).set({ name, contactPerson, phone, email, address, isActive, updatedAt: new Date() }).where(and(eq(suppliersTable.id, Number(req.params.id)), eq(suppliersTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
 router.delete("/restaurants/:restaurantId/suppliers/:id", async (req, res) => {
-  await db.update(suppliersTable).set({ isActive: false }).where(eq(suppliersTable.id, Number(req.params.id)));
+  await db.update(suppliersTable).set({ isActive: false }).where(and(eq(suppliersTable.id, Number(req.params.id)), eq(suppliersTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
 
