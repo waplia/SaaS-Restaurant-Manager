@@ -76,6 +76,8 @@ router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "man
   const [srcTable] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(sourceTableId)), eq(floorTablesTable.restaurantId, restaurantId)));
   const [tgtTable] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(targetTableId)), eq(floorTablesTable.restaurantId, restaurantId)));
   if (!srcTable || !tgtTable) return void res.status(404).json({ error: "One or both tables not found" });
+  if (srcTable.status !== "occupied") return void res.status(400).json({ error: "Source table must be occupied" });
+  if (tgtTable.status !== "occupied") return void res.status(400).json({ error: "Target table must be occupied" });
 
   const { ordersTable, orderItemsTable } = await import("../lib/db");
   const { eq: eqI, and: andI, or, inArray } = await import("drizzle-orm");

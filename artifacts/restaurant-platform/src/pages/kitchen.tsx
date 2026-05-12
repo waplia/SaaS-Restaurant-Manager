@@ -223,7 +223,7 @@ export default function KitchenPage() {
   }, [updatePriority, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem("tt_access_token");
     const socket = io(API_BASE, {
       path: "/api/socket.io",
       auth: token ? { token } : undefined,
