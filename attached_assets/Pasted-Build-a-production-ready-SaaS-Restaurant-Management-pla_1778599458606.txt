@@ -1,0 +1,248 @@
+Build a production-ready SaaS Restaurant Management platform inspired by TableTrack. The app should support multi-restaurant tenants, POS, QR ordering, kitchen management, waiter management, subscriptions, analytics, and customer ordering.
+
+Tech Stack:
+
+* Frontend: Next.js 15 + TypeScript + TailwindCSS + shadcn/ui
+* Mobile App: React Native Expo
+* Backend: Node.js + Express or NestJS
+* Database: PostgreSQL with Prisma ORM
+* Authentication: JWT + Role Based Access
+* Realtime: Socket.io
+* Storage: AWS S3 compatible
+* Payments: Razorpay + Stripe
+* Deployment ready with Docker
+* Clean scalable architecture
+
+Main Goal:
+Create a modern SaaS restaurant platform where multiple restaurants can register and manage their operations from separate dashboards.
+
+Required Modules:
+
+1. SaaS Multi Tenant System
+
+* Super Admin Panel
+* Restaurant Owner Dashboard
+* Subscription Plans
+* Monthly/Yearly Billing
+* Trial Period
+* Tenant isolation
+* Usage limits based on plans
+* White label branding support
+
+2. Restaurant Dashboard
+
+* Overview analytics
+* Sales reports
+* Revenue charts
+* Order analytics
+* Popular items
+* Staff activity
+* Live kitchen monitoring
+
+3. POS System
+
+* Fast billing interface
+* Table wise orders
+* Dine in / takeaway / delivery
+* Split bills
+* Discount support
+* Tax management
+* Multiple payment methods
+* Thermal receipt printing
+* Order notes
+* Modifier support
+
+4. QR Code Ordering
+
+* Generate QR for each table
+* Customer scans QR and orders
+* Mobile responsive customer ordering UI
+* Live order tracking
+* Add to cart
+* Payment gateway integration
+* Call waiter button
+* Customer feedback
+
+5. Kitchen Management
+
+* Kitchen Display System (KDS)
+* Live incoming orders
+* Order status updates
+* Ready / preparing / served states
+* Kitchen sound notifications
+* Priority orders
+
+6. Table Management
+
+* Visual restaurant floor layout
+* Table status colors
+* Merge/split tables
+* Reservation management
+* Occupancy tracking
+
+7. Menu Management
+
+* Categories and subcategories
+* Add-ons and modifiers
+* Variants
+* Availability scheduling
+* Menu images
+* Bulk import/export
+* Multiple menus
+
+8. Inventory Management
+
+* Ingredient tracking
+* Stock alerts
+* Purchase management
+* Supplier management
+* Inventory deduction after orders
+* Waste tracking
+
+9. Staff Management
+
+* Roles and permissions
+* Waiter accounts
+* Kitchen staff accounts
+* Attendance
+* Shift management
+* Activity logs
+
+10. Customer Management
+
+* Customer profiles
+* Loyalty points
+* Order history
+* Saved addresses
+* Offers and coupons
+
+11. Reports & Analytics
+
+* Daily/monthly/yearly sales
+* Tax reports
+* Expense reports
+* Inventory reports
+* Staff performance
+* Export PDF/Excel
+
+12. Notification System
+
+* WhatsApp notifications
+* Email notifications
+* Push notifications
+* Real-time alerts
+
+13. Mobile App Features
+
+* Restaurant owner app
+* Waiter app
+* Customer ordering app
+* Push notifications
+* Live order updates
+* Offline support for POS
+
+14. UI/UX Requirements
+
+* Modern premium design
+* Dark/light mode
+* Orange + white branding theme
+* Fully responsive
+* Smooth animations
+* Mobile-first design
+* Beautiful dashboard cards
+
+15. Advanced Features
+
+* Multi branch support
+* Multi language support
+* AI sales insights
+* AI demand prediction
+* AI smart recommendations
+* Voice order taking
+* Expense tracking
+* Delivery executive tracking
+
+16. Security
+
+* Rate limiting
+* Audit logs
+* Secure APIs
+* Data isolation
+* Backup system
+* GDPR ready
+
+17. Dev Requirements
+
+* Create complete database schema
+* Seed demo restaurant data
+* Create REST APIs
+* Proper folder structure
+* Environment variables
+* API documentation
+* Docker setup
+* README.md
+
+18. Deliverables
+
+* Working web app
+* Working mobile app
+* Admin dashboard
+* Backend APIs
+* SQL schema
+* Deployment scripts
+* Demo credentials
+* Testing setup
+
+Pages Needed:
+
+* Landing Page
+* Pricing
+* Login/Register
+* Restaurant Dashboard
+* POS Screen
+* Kitchen Screen
+* QR Menu
+* Customer Checkout
+* Staff Management
+* Reports
+* Settings
+
+Important:
+
+* Build step-by-step automatically
+* First create architecture and database
+* Then authentication
+* Then dashboard
+* Then POS
+* Then customer ordering
+* Then remaining modules
+* Keep code clean and modular
+* Continuously test and fix errors automatically
+* Create reusable components
+* Use professional enterprise-level UI
+* Add dummy demo data everywhere
+
+The design should feel like:
+
+* Toast POS
+* Petpooja
+* Square POS
+* Shopify Admin
+* Modern SaaS dashboards
+
+Also:
+
+* Automatically debug errors
+* Run app after each module
+* Create mobile APK build support
+* Ensure Android compatibility
+* Optimize performance
+* Add proper loading states and error handling
+
+At the end:
+
+* Generate full setup instructions
+* Generate deployment instructions
+* Generate admin credentials
+* Generate API documentation
+* Generate screenshots of major pages
