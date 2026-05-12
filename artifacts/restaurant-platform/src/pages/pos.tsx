@@ -1,24 +1,22 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
 import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
-  useOrderDetail,
+  useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail } from "@/lib/types";
+import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check,
+  Loader2, Check, Lock,
 } from "lucide-react";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CartModifier {
   name: string;
@@ -26,6 +24,7 @@ interface CartModifier {
 }
 
 interface CartItem {
+  lineKey: string;
   menuItemId: number;
   name: string;
   basePrice: number;
@@ -42,7 +41,12 @@ interface Totals {
   totalAmount: number;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+type PayStage = "select" | "cash-confirm" | "card-form" | "upi-form" | "processing";
+
+function makeLineKey(menuItemId: number, modifiers: CartModifier[]): string {
+  const modKey = [...modifiers].sort((a, b) => a.name.localeCompare(b.name)).map(m => m.name).join("|");
+  return modKey ? `${menuItemId}:${modKey}` : String(menuItemId);
+}
 
 const ORDER_TYPES = [
   { value: "dine_in", label: "Dine-in", icon: Utensils },
@@ -62,38 +66,36 @@ const TABLE_STATUS_STYLE: Record<string, string> = {
   reserved: "bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
 };
 
-// ─── Receipt Printer ──────────────────────────────────────────────────────────
-
-function printReceipt({
-  orderNumber, tableLabel, orderType, cart, totals,
-  paymentMethod, amountTendered, customerName, restaurantName,
-  splitIndex, splitTotal,
-}: {
-  orderNumber: string; tableLabel: string; orderType: string; cart: CartItem[];
-  totals: Totals; paymentMethod: string; amountTendered?: number;
-  customerName?: string; restaurantName?: string;
-  splitIndex?: number; splitTotal?: number;
+function printReceipt(args: {
+  orderNumber: string;
+  tableLabel: string;
+  orderType: string;
+  items: Array<{ name: string; unitPrice: number; quantity: number; modifiers: CartModifier[] }>;
+  totals: Totals;
+  paymentMethod: string;
+  amountTendered?: number;
+  customerName?: string;
+  restaurantName?: string;
+  splitIndex?: number;
+  splitTotal?: number;
 }) {
+  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, splitIndex, splitTotal } = args;
   const change = amountTendered ? Math.max(0, amountTendered - (splitTotal ?? totals.totalAmount)) : 0;
   const displayTotal = splitTotal ?? totals.totalAmount;
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><title>Receipt ${orderNumber}</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Courier New',monospace; font-size:13px; width:80mm; margin:0 auto; padding:10px; color:#000; }
-  .center { text-align:center; }
-  .bold { font-weight:bold; }
-  .dash { border-top:1px dashed #555; margin:6px 0; }
-  .row { display:flex; justify-content:space-between; margin:3px 0; }
-  .sm { font-size:11px; color:#444; }
-  h1 { font-size:18px; font-weight:bold; margin-bottom:2px; }
-  .total-row { font-size:16px; font-weight:bold; margin-top:4px; }
+<html><head><meta charset="utf-8"/><title>Receipt ${orderNumber}</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Courier New',monospace; font-size:13px; width:80mm; margin:0 auto; padding:10px; }
+.center { text-align:center; }
+.bold { font-weight:bold; }
+.dash { border-top:1px dashed #555; margin:6px 0; }
+.row { display:flex; justify-content:space-between; margin:3px 0; }
+.sm { font-size:11px; color:#444; }
+h1 { font-size:18px; font-weight:bold; margin-bottom:2px; }
+.total-row { font-size:16px; font-weight:bold; margin-top:4px; }
 </style></head>
 <body>
-<div class="center">
-  <h1>${restaurantName ?? "TableTrack"}</h1>
-  <div class="sm">POS Receipt</div>
-</div>
+<div class="center"><h1>${restaurantName ?? "TableTrack"}</h1><div class="sm">POS Receipt</div></div>
 <div class="dash"></div>
 <div class="center">
   <div class="bold">${orderNumber}${splitIndex !== undefined ? ` (Split ${splitIndex + 1})` : ""}</div>
@@ -104,7 +106,7 @@ function printReceipt({
 <div class="dash"></div>
 <div class="sm bold row"><span>ITEM</span><span>AMT</span></div>
 <div class="dash"></div>
-${cart.map(item => `
+${items.map(item => `
 <div class="row"><span class="sm">${item.name} ×${item.quantity}</span><span class="sm">₹${(item.unitPrice * item.quantity).toFixed(2)}</span></div>
 ${item.modifiers.map(m => `<div class="sm" style="color:#666;margin-left:6px">+ ${m.name}: ₹${m.price.toFixed(2)}</div>`).join("")}
 `).join("")}
@@ -126,8 +128,6 @@ ${change > 0 ? `<div class="row bold sm"><span>Change</span><span>₹${change.to
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
 }
 
-// ─── Modifier Picker Modal ─────────────────────────────────────────────────────
-
 function ModifierPickerModal({
   item, groups, isLoading, onConfirm, onClose,
 }: {
@@ -143,7 +143,7 @@ function ModifierPickerModal({
     if (!isLoading && groups.length === 0) {
       onConfirm(item, []);
     }
-  }, [isLoading, groups.length]);
+  }, [isLoading, groups.length, item, onConfirm]);
 
   const toggleModifier = (groupId: number, modId: number, maxSelections: number) => {
     setSelected(prev => {
@@ -159,10 +159,10 @@ function ModifierPickerModal({
   };
 
   const selectedModifiers: CartModifier[] = groups.flatMap(group =>
-    [...(selected[group.id] ?? [])].map(modId => {
+    [...(selected[group.id] ?? [])].flatMap(modId => {
       const mod = group.modifiers.find(m => m.id === modId);
-      return mod ? { name: mod.name, price: Number(mod.price) } : null;
-    }).filter(Boolean) as CartModifier[]
+      return mod ? [{ name: mod.name, price: Number(mod.price) }] : [];
+    })
   );
 
   const canConfirm = groups.every(g => {
@@ -189,7 +189,9 @@ function ModifierPickerModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
             <h2 className="font-semibold text-foreground">{item.name}</h2>
-            <p className="text-xs text-muted-foreground">Base: ₹{item.price}{modTotal > 0 ? ` + ₹${modTotal.toFixed(2)} modifiers` : ""}</p>
+            <p className="text-xs text-muted-foreground">
+              Base: ₹{item.price}{modTotal > 0 ? ` + ₹${modTotal.toFixed(2)} modifiers` : ""}
+            </p>
           </div>
           <Button variant="ghost" size="sm" aria-label="Close" onClick={onClose}><X className="w-4 h-4" /></Button>
         </div>
@@ -198,8 +200,12 @@ function ModifierPickerModal({
             <div key={group.id}>
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-sm font-semibold text-foreground">{group.name}</p>
-                {group.isRequired && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">Required</span>}
-                {group.maxSelections > 1 && <span className="text-xs text-muted-foreground">Pick up to {group.maxSelections}</span>}
+                {group.isRequired && (
+                  <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">Required</span>
+                )}
+                {group.maxSelections > 1 && (
+                  <span className="text-xs text-muted-foreground">Pick up to {group.maxSelections}</span>
+                )}
               </div>
               <div className="space-y-1.5">
                 {group.modifiers.map(mod => {
@@ -216,14 +222,17 @@ function ModifierPickerModal({
                       )}
                     >
                       <span className="flex items-center gap-2">
-                        <div className={cn("w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0",
+                        <div className={cn(
+                          "w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0",
                           isSelected ? "bg-primary border-primary" : "border-border"
                         )}>
                           {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
                         </div>
                         {mod.name}
                       </span>
-                      {Number(mod.price) > 0 && <span className="text-primary font-medium">+₹{mod.price}</span>}
+                      {Number(mod.price) > 0 && (
+                        <span className="text-primary font-medium">+₹{mod.price}</span>
+                      )}
                     </button>
                   );
                 })}
@@ -232,11 +241,7 @@ function ModifierPickerModal({
           ))}
         </div>
         <div className="px-5 pb-5 flex-shrink-0 border-t border-border pt-4">
-          <Button
-            className="w-full"
-            disabled={!canConfirm}
-            onClick={() => onConfirm(item, selectedModifiers)}
-          >
+          <Button className="w-full" disabled={!canConfirm} onClick={() => onConfirm(item, selectedModifiers)}>
             <Plus className="w-4 h-4 mr-2" />
             Add to Order · ₹{(Number(item.price) + modTotal).toFixed(2)}
           </Button>
@@ -246,16 +251,21 @@ function ModifierPickerModal({
   );
 }
 
-// ─── Split Bill Modal ──────────────────────────────────────────────────────────
-
 function SplitBillModal({
-  totalAmount, cart, placedOrderId, restaurantName, orderNumber, tableLabel, orderType, customerName, totals,
+  totalAmount, displayItems, totals, placedOrderId, restaurantName, orderNumber, tableLabel, orderType, customerName,
   onClose, onComplete,
 }: {
-  totalAmount: number; cart: CartItem[]; placedOrderId: number;
-  restaurantName?: string; orderNumber: string; tableLabel: string;
-  orderType: string; customerName?: string; totals: Totals;
-  onClose: () => void; onComplete: () => void;
+  totalAmount: number;
+  displayItems: Array<{ name: string; unitPrice: number; quantity: number; modifiers: CartModifier[] }>;
+  totals: Totals;
+  placedOrderId: number;
+  restaurantName?: string;
+  orderNumber: string;
+  tableLabel: string;
+  orderType: string;
+  customerName?: string;
+  onClose: () => void;
+  onComplete: () => void;
 }) {
   const [splitCount, setSplitCount] = useState(2);
   const [methods, setMethods] = useState<string[]>(["cash", "cash"]);
@@ -275,11 +285,11 @@ function SplitBillModal({
   };
 
   const confirmSplit = (idx: number) => {
-    const newConfirmed = [...confirmedSplits];
-    newConfirmed[idx] = true;
-    setConfirmedSplits(newConfirmed);
+    const updated = [...confirmedSplits];
+    updated[idx] = true;
+    setConfirmedSplits(updated);
     printReceipt({
-      orderNumber, tableLabel, orderType, cart, totals,
+      orderNumber, tableLabel, orderType, items: displayItems, totals,
       paymentMethod: methods[idx],
       amountTendered: methods[idx] === "cash" && tenderAmounts[idx] ? Number(tenderAmounts[idx]) : undefined,
       customerName, restaurantName,
@@ -314,17 +324,21 @@ function SplitBillModal({
 
         <div className="p-5 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium text-foreground">Total: ₹{totalAmount.toFixed(2)}</span>
+            <span className="text-sm font-medium">Total: ₹{totalAmount.toFixed(2)}</span>
             <span className="text-sm text-muted-foreground">Per person: ₹{perPerson.toFixed(2)}</span>
           </div>
           <div className="flex items-center gap-3 mt-3">
-            <span className="text-sm text-foreground">Split between</span>
+            <span className="text-sm">Split between</span>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="w-8 h-8 p-0" onClick={() => updateCount(splitCount - 1)}><Minus className="w-3 h-3" /></Button>
+              <Button size="sm" variant="outline" className="w-8 h-8 p-0" onClick={() => updateCount(splitCount - 1)}>
+                <Minus className="w-3 h-3" />
+              </Button>
               <span className="w-8 text-center font-bold text-lg">{splitCount}</span>
-              <Button size="sm" variant="outline" className="w-8 h-8 p-0" onClick={() => updateCount(splitCount + 1)}><Plus className="w-3 h-3" /></Button>
+              <Button size="sm" variant="outline" className="w-8 h-8 p-0" onClick={() => updateCount(splitCount + 1)}>
+                <Plus className="w-3 h-3" />
+              </Button>
             </div>
-            <span className="text-sm text-foreground">people</span>
+            <span className="text-sm">people</span>
           </div>
         </div>
 
@@ -342,18 +356,28 @@ function SplitBillModal({
                 <>
                   <div className="grid grid-cols-3 gap-1.5 mb-3">
                     {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
-                      <button key={value} onClick={() => { const m = [...methods]; m[idx] = value; setMethods(m); }}
-                        className={cn("flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium transition-all",
-                          methods[idx] === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                      <button
+                        key={value}
+                        onClick={() => { const m = [...methods]; m[idx] = value; setMethods(m); }}
+                        className={cn(
+                          "flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium transition-all",
+                          methods[idx] === value
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:border-primary/40"
+                        )}
+                      >
                         <Icon className="w-4 h-4" />{label}
                       </button>
                     ))}
                   </div>
                   {methods[idx] === "cash" && (
-                    <Input type="number" placeholder={`₹${perPerson.toFixed(2)}`}
+                    <Input
+                      type="number"
+                      placeholder={`₹${perPerson.toFixed(2)}`}
                       value={tenderAmounts[idx]}
                       onChange={e => { const t = [...tenderAmounts]; t[idx] = e.target.value; setTenderAmounts(t); }}
-                      className="h-8 text-sm mb-2" />
+                      className="h-8 text-sm mb-2"
+                    />
                   )}
                   {methods[idx] === "cash" && tenderAmounts[idx] && Number(tenderAmounts[idx]) > perPerson && (
                     <div className="text-xs text-green-600 font-medium mb-2">
@@ -375,30 +399,83 @@ function SplitBillModal({
         </div>
 
         <div className="px-5 pb-5 flex-shrink-0 border-t border-border pt-4">
-          <Button className="w-full" disabled={!allConfirmed || splitOrder.isPending} onClick={handleFinalize}>
-            <Check className="w-4 h-4 mr-2" />
+          <Button
+            className="w-full"
+            disabled={!allConfirmed || splitOrder.isPending}
+            onClick={handleFinalize}
+          >
+            {splitOrder.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
             Finalize Split Payment
           </Button>
-          {!allConfirmed && <p className="text-xs text-muted-foreground text-center mt-2">Confirm all {splitCount} payments first</p>}
+          {!allConfirmed && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Confirm all {splitCount} payments first
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Payment Modal ─────────────────────────────────────────────────────────────
-
 function PaymentModal({
-  cart, totals, onClose, onConfirm, isPending,
+  totals,
+  onClose,
+  onConfirm,
+  isPending,
 }: {
-  cart: CartItem[]; totals: Totals;
+  totals: Totals;
   onClose: () => void;
-  onConfirm: (method: string, amountTendered?: number) => void;
+  onConfirm: (method: string, amountTendered?: number) => Promise<void>;
   isPending: boolean;
 }) {
-  const [method, setMethod] = useState("cash");
+  const [method, setMethod] = useState<"cash" | "card" | "upi">("cash");
+  const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
-  const change = method === "cash" && amountTendered ? Math.max(0, Number(amountTendered) - totals.totalAmount) : 0;
+  const [cardNum, setCardNum] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [upiId, setUpiId] = useState("");
+
+  const change = method === "cash" && amountTendered
+    ? Math.max(0, Number(amountTendered) - totals.totalAmount)
+    : 0;
+
+  const handleProceed = () => {
+    if (method === "card") { setStage("card-form"); return; }
+    if (method === "upi") { setStage("upi-form"); return; }
+    setStage("cash-confirm");
+  };
+
+  const handleProcessPayment = async () => {
+    setStage("processing");
+    await onConfirm(method, method === "cash" && amountTendered ? Number(amountTendered) : undefined);
+  };
+
+  const TotalsSummary = () => (
+    <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-1.5">
+      <div className="flex justify-between text-sm text-muted-foreground">
+        <span>Subtotal</span><span>₹{totals.subtotal.toFixed(2)}</span>
+      </div>
+      <div className="flex justify-between text-sm text-muted-foreground">
+        <span>Tax</span><span>₹{totals.taxAmount.toFixed(2)}</span>
+      </div>
+      {totals.serviceCharge > 0 && (
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <span>Service Charge</span><span>₹{totals.serviceCharge.toFixed(2)}</span>
+        </div>
+      )}
+      {totals.discountAmount > 0 && (
+        <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+          <span>Discount</span><span>-₹{totals.discountAmount.toFixed(2)}</span>
+        </div>
+      )}
+      <div className="flex justify-between font-bold text-xl border-t border-border pt-2">
+        <span>Total</span>
+        <span className="text-primary">₹{totals.totalAmount.toFixed(2)}</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -407,93 +484,195 @@ function PaymentModal({
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-primary" /> Process Payment
           </h2>
-          <Button variant="ghost" size="sm" aria-label="Close" onClick={onClose}><X className="w-4 h-4" /></Button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div className="bg-muted/60 rounded-xl p-4 space-y-1.5 border border-border">
-            {cart.map(item => (
-              <div key={item.menuItemId} className="text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground truncate mr-2">{item.name} × {item.quantity}</span>
-                  <span className="flex-shrink-0">₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
-                </div>
-                {item.modifiers.map((m, i) => (
-                  <div key={i} className="text-xs text-muted-foreground/70 ml-3">+ {m.name} ₹{m.price.toFixed(2)}</div>
-                ))}
-              </div>
-            ))}
-            <div className="border-t border-border mt-2 pt-2 space-y-1">
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Subtotal</span><span>₹{totals.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Tax</span><span>₹{totals.taxAmount.toFixed(2)}</span>
-              </div>
-              {totals.serviceCharge > 0 && (
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Service Charge</span><span>₹{totals.serviceCharge.toFixed(2)}</span>
-                </div>
-              )}
-              {totals.discountAmount > 0 && (
-                <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
-                  <span>Discount</span><span>-₹{totals.discountAmount.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-xl border-t border-border pt-2 mt-1">
-                <span>Total</span><span className="text-primary">₹{totals.totalAmount.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">
-              {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
-                <button key={value} onClick={() => setMethod(value)}
-                  className={cn("flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all",
-                    method === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
-                  <Icon className="w-5 h-5" />{label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {method === "cash" && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Amount Tendered</label>
-              <Input type="number" placeholder={`₹${totals.totalAmount.toFixed(2)}`}
-                value={amountTendered} onChange={e => setAmountTendered(e.target.value)}
-                className="text-base font-mono" autoFocus />
-              {change > 0 && (
-                <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2 flex justify-between">
-                  <span className="text-green-700 dark:text-green-400 font-medium">Change</span>
-                  <span className="text-green-700 dark:text-green-400 font-bold text-xl">₹{change.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex gap-2 flex-wrap">
-                {[100, 200, 500, 1000, 2000].map(amt => (
-                  <Button key={amt} size="sm" variant="outline" className="text-xs h-7" onClick={() => setAmountTendered(String(amt))}>₹{amt}</Button>
-                ))}
-                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setAmountTendered(totals.totalAmount.toFixed(2))}>Exact</Button>
-              </div>
-            </div>
+          {stage !== "processing" && (
+            <Button variant="ghost" size="sm" aria-label="Close" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
           )}
         </div>
 
-        <div className="px-6 pb-6">
-          <Button className="w-full h-12 text-base font-semibold" disabled={isPending}
-            onClick={() => onConfirm(method, method === "cash" && amountTendered ? Number(amountTendered) : undefined)}>
-            <CreditCard className="w-4 h-4 mr-2" />
-            Confirm Payment · ₹{totals.totalAmount.toFixed(2)}
-          </Button>
+        <div className="p-6 space-y-5">
+          {/* Method select stage */}
+          {stage === "select" && (
+            <>
+              <TotalsSummary />
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      onClick={() => setMethod(value as "cash" | "card" | "upi")}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all",
+                        method === value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/50"
+                      )}
+                    >
+                      <Icon className="w-5 h-5" />{label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Button className="w-full h-11" onClick={handleProceed}>
+                Continue with {method === "cash" ? "Cash" : method === "card" ? "Card" : "UPI"}
+              </Button>
+            </>
+          )}
+
+          {/* Cash confirm stage */}
+          {stage === "cash-confirm" && (
+            <>
+              <TotalsSummary />
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Amount Tendered</label>
+                <Input
+                  type="number"
+                  placeholder={`₹${totals.totalAmount.toFixed(2)}`}
+                  value={amountTendered}
+                  onChange={e => setAmountTendered(e.target.value)}
+                  className="text-base font-mono"
+                  autoFocus
+                />
+                {change > 0 && (
+                  <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2 flex justify-between">
+                    <span className="text-green-700 dark:text-green-400 font-medium">Change</span>
+                    <span className="text-green-700 dark:text-green-400 font-bold text-xl">₹{change.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex gap-2 flex-wrap">
+                  {[100, 200, 500, 1000, 2000].map(amt => (
+                    <Button key={amt} size="sm" variant="outline" className="text-xs h-7" onClick={() => setAmountTendered(String(amt))}>
+                      ₹{amt}
+                    </Button>
+                  ))}
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setAmountTendered(totals.totalAmount.toFixed(2))}>
+                    Exact
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
+                <Button className="flex-1 h-11" disabled={isPending} onClick={handleProcessPayment}>
+                  Confirm Cash Payment
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Card form stage */}
+          {stage === "card-form" && (
+            <>
+              <TotalsSummary />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400">
+                  <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                  Secure card payment — configure Stripe to enable real processing
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Card Number</label>
+                  <Input
+                    placeholder="1234 5678 9012 3456"
+                    value={cardNum}
+                    onChange={e => setCardNum(e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim().slice(0, 19))}
+                    className="font-mono"
+                    autoFocus
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Expiry (MM/YY)</label>
+                    <Input
+                      placeholder="MM/YY"
+                      value={cardExpiry}
+                      onChange={e => {
+                        const v = e.target.value.replace(/\D/g, "");
+                        setCardExpiry(v.length >= 2 ? v.slice(0, 2) + "/" + v.slice(2, 4) : v);
+                      }}
+                      maxLength={5}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">CVV</label>
+                    <Input
+                      placeholder="123"
+                      value={cardCvv}
+                      onChange={e => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      className="font-mono"
+                      type="password"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
+                <Button
+                  className="flex-1 h-11"
+                  disabled={cardNum.length < 19 || cardExpiry.length < 5 || cardCvv.length < 3 || isPending}
+                  onClick={handleProcessPayment}
+                >
+                  <Lock className="w-3.5 h-3.5 mr-2" />
+                  Pay ₹{totals.totalAmount.toFixed(2)}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* UPI form stage */}
+          {stage === "upi-form" && (
+            <>
+              <TotalsSummary />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg text-xs text-purple-700 dark:text-purple-400">
+                  <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+                  UPI payment — configure Razorpay to enable real processing
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Customer UPI ID</label>
+                  <Input
+                    placeholder="customer@paytm / 9999999999@ybl"
+                    value={upiId}
+                    onChange={e => setUpiId(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="text-center py-2">
+                  <p className="text-xs text-muted-foreground">
+                    Amount: <span className="font-bold text-foreground text-base">₹{totals.totalAmount.toFixed(2)}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
+                <Button
+                  className="flex-1 h-11"
+                  disabled={!upiId.includes("@") || isPending}
+                  onClick={handleProcessPayment}
+                >
+                  <Smartphone className="w-3.5 h-3.5 mr-2" />
+                  Verify & Pay
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Processing stage */}
+          {stage === "processing" && (
+            <div className="py-8 flex flex-col items-center gap-4">
+              <Loader2 className="w-12 h-12 animate-spin text-primary" />
+              <p className="text-base font-medium text-foreground">Processing payment…</p>
+              <p className="text-sm text-muted-foreground">
+                {method === "card" ? "Contacting payment gateway" : method === "upi" ? "Awaiting UPI confirmation" : "Confirming payment"}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-
-// ─── Main POS Page ─────────────────────────────────────────────────────────────
 
 export default function PosPage() {
   const { data: restaurant } = useRestaurantInfo();
@@ -525,17 +704,23 @@ export default function PosPage() {
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const voidOrder = useVoidOrder();
+  const addOrderItem = useAddOrderItem();
+  const removeOrderItem = useRemoveOrderItem();
+  const applyDiscount = useApplyDiscount();
   const { toast } = useToast();
 
   const { data: modifierGroups = [], isLoading: modGroupsLoading } = useItemModifierGroups(modPickerItem?.id);
 
-  // Table resume: load existing active order when occupied table is selected
-  const tableActiveOrder = selectedTableId ? activeOrders.find(o => o.tableId === selectedTableId) : null;
+  // Table resume: load existing active order when selecting an occupied table
+  const tableActiveOrder = selectedTableId && !placedOrder
+    ? activeOrders.find(o => o.tableId === selectedTableId)
+    : null;
   const { data: tableOrderDetail } = useOrderDetail(tableActiveOrder?.id);
 
   useEffect(() => {
     if (tableOrderDetail && !placedOrder) {
       const resumedCart: CartItem[] = tableOrderDetail.items.map(oi => ({
+        lineKey: String(oi.id),
         menuItemId: oi.menuItemId,
         name: oi.menuItemName,
         basePrice: Number(oi.unitPrice),
@@ -549,15 +734,29 @@ export default function PosPage() {
     }
   }, [tableOrderDetail?.id]);
 
-  // Local estimate totals (before order placement)
+  // Live order detail (refreshed after add/remove item, discount changes)
+  const { data: liveDetail } = useOrderDetail(placedOrder?.id);
+
+  // Items shown in the ticket: server state after placement, local cart before
+  const liveItems: OrderItem[] = useMemo(() => {
+    if (!placedOrder) return [];
+    return liveDetail?.items ?? placedOrder.items;
+  }, [placedOrder, liveDetail]);
+
+  // Totals: server-accurate after placement, local estimate before
   const discountAmount = Number(discount) || 0;
   const localSubtotal = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
   const localTaxAmount = localSubtotal * taxRate;
   const localServiceCharge = localSubtotal * serviceRate;
   const localTotal = Math.max(0, localSubtotal + localTaxAmount + localServiceCharge - discountAmount);
 
-  // Server-accurate totals (after order placement)
-  const serverTotals: Totals | null = placedOrder ? {
+  const serverTotals: Totals | null = liveDetail ? {
+    subtotal: Number(liveDetail.subtotal),
+    taxAmount: Number(liveDetail.taxAmount),
+    serviceCharge: Number(liveDetail.serviceCharge),
+    discountAmount: Number(liveDetail.discountAmount),
+    totalAmount: Number(liveDetail.totalAmount),
+  } : placedOrder ? {
     subtotal: Number(placedOrder.subtotal),
     taxAmount: Number(placedOrder.taxAmount),
     serviceCharge: Number(placedOrder.serviceCharge),
@@ -565,7 +764,6 @@ export default function PosPage() {
     totalAmount: Number(placedOrder.totalAmount),
   } : null;
 
-  // Use server totals when available, fall back to local estimate
   const displayTotals: Totals = serverTotals ?? {
     subtotal: localSubtotal,
     taxAmount: localTaxAmount,
@@ -574,36 +772,70 @@ export default function PosPage() {
     totalAmount: localTotal,
   };
 
-  const addToCartWithModifiers = useCallback((item: MenuItem, modifiers: CartModifier[]) => {
-    const unitPrice = Number(item.price) + modifiers.reduce((s, m) => s + m.price, 0);
-    setCart(prev => {
-      const existing = prev.find(c => c.menuItemId === item.id && JSON.stringify(c.modifiers) === JSON.stringify(modifiers));
-      if (existing) return prev.map(c =>
-        c.menuItemId === item.id && JSON.stringify(c.modifiers) === JSON.stringify(modifiers)
-          ? { ...c, quantity: c.quantity + 1 }
-          : c
-      );
-      return [...prev, { menuItemId: item.id, name: item.name, basePrice: Number(item.price), modifiers, unitPrice, quantity: 1 }];
-    });
-    setModPickerItem(null);
-  }, []);
+  // Modifier picker resolves differently for pre vs post placement
+  const handleModifierConfirm = useCallback((item: MenuItem, modifiers: CartModifier[]) => {
+    if (placedOrder) {
+      addOrderItem.mutate({
+        orderId: placedOrder.id,
+        menuItemId: item.id,
+        quantity: 1,
+        modifiers: modifiers.length > 0
+          ? modifiers.map(m => ({ name: m.name, price: m.price.toFixed(2) }))
+          : undefined,
+      }, {
+        onSuccess: () => {
+          setModPickerItem(null);
+          toast({ title: `${item.name} added to order` });
+        },
+      });
+    } else {
+      const lineKey = makeLineKey(item.id, modifiers);
+      const unitPrice = Number(item.price) + modifiers.reduce((s, m) => s + m.price, 0);
+      setCart(prev => {
+        const existing = prev.find(c => c.lineKey === lineKey);
+        if (existing) {
+          return prev.map(c => c.lineKey === lineKey ? { ...c, quantity: c.quantity + 1 } : c);
+        }
+        return [...prev, {
+          lineKey,
+          menuItemId: item.id,
+          name: item.name,
+          basePrice: Number(item.price),
+          modifiers,
+          unitPrice,
+          quantity: 1,
+        }];
+      });
+      setModPickerItem(null);
+    }
+  }, [placedOrder, addOrderItem, toast]);
 
   const handleMenuItemClick = useCallback((item: MenuItem) => {
-    if (placedOrder) {
-      toast({ title: "Order already placed", description: "Void the order to add new items, or pay to complete." });
-      return;
-    }
     setModPickerItem(item);
-  }, [placedOrder, toast]);
-
-  const updateQty = useCallback((menuItemId: number, qty: number) => {
-    if (qty <= 0) setCart(prev => prev.filter(c => c.menuItemId !== menuItemId));
-    else setCart(prev => prev.map(c => c.menuItemId === menuItemId ? { ...c, quantity: qty } : c));
   }, []);
 
-  const removeFromCart = useCallback((menuItemId: number) => {
-    setCart(prev => prev.filter(c => c.menuItemId !== menuItemId));
+  const updateQty = useCallback((lineKey: string, qty: number) => {
+    if (qty <= 0) setCart(prev => prev.filter(c => c.lineKey !== lineKey));
+    else setCart(prev => prev.map(c => c.lineKey === lineKey ? { ...c, quantity: qty } : c));
   }, []);
+
+  const removeFromCart = useCallback((lineKey: string) => {
+    setCart(prev => prev.filter(c => c.lineKey !== lineKey));
+  }, []);
+
+  const removeOrderItemById = useCallback((itemId: number) => {
+    if (!placedOrder) return;
+    removeOrderItem.mutate({ orderId: placedOrder.id, itemId }, {
+      onSuccess: () => toast({ title: "Item removed" }),
+    });
+  }, [placedOrder, removeOrderItem, toast]);
+
+  const handleDiscountBlur = () => {
+    if (!placedOrder) return;
+    applyDiscount.mutate({ orderId: placedOrder.id, discountAmount }, {
+      onSuccess: () => toast({ title: "Discount updated" }),
+    });
+  };
 
   const selectedTable = (tables as FloorTable[]).find(t => t.id === selectedTableId);
 
@@ -644,34 +876,33 @@ export default function PosPage() {
   };
 
   const handlePayNow = async () => {
-    if (cart.length === 0) { toast({ title: "Cart is empty", variant: "destructive" }); return; }
-    let order = placedOrder;
-    if (!order) { order = await handlePlaceOrder(); if (!order) return; }
+    if (cart.length === 0 && liveItems.length === 0) {
+      toast({ title: "Cart is empty", variant: "destructive" });
+      return;
+    }
+    if (!placedOrder) {
+      const order = await handlePlaceOrder();
+      if (!order) return;
+    }
     setShowPayModal(true);
   };
 
   const handleConfirmPayment = async (method: string, amountTendered?: number) => {
     const orderId = placedOrder?.id;
     if (!orderId) return;
-    try {
-      await payOrder.mutateAsync({ id: orderId, paymentMethod: method });
-      setShowPayModal(false);
-      toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
-      printReceipt({
-        orderNumber: placedOrder?.orderNumber ?? "",
-        tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
-        orderType,
-        cart,
-        totals: displayTotals,
-        paymentMethod: method,
-        amountTendered,
-        customerName,
-        restaurantName: restaurant?.name,
-      });
-      handleNewOrder();
-    } catch {
-      toast({ title: "Payment failed", variant: "destructive" });
-    }
+    await payOrder.mutateAsync({ id: orderId, paymentMethod: method });
+    setShowPayModal(false);
+    toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
+    const receiptItems = placedOrder
+      ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
+      : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
+    printReceipt({
+      orderNumber: placedOrder?.orderNumber ?? "",
+      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
+      orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
+      amountTendered, customerName, restaurantName: restaurant?.name,
+    });
+    handleNewOrder();
   };
 
   const handleVoid = async () => {
@@ -692,14 +923,19 @@ export default function PosPage() {
     setShowPayModal(false); setShowSplitModal(false);
   };
 
+  // Receipt items for modals (works pre and post placement)
+  const receiptDisplayItems = placedOrder
+    ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] as CartModifier[] }))
+    : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
+
   return (
     <Layout>
       <div className="flex h-[calc(100vh-0px)] overflow-hidden bg-background">
 
-        {/* ── LEFT PANEL ── */}
+        {/* Left panel */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Table Grid */}
+          {/* Table grid */}
           <div className="border-b border-border flex-shrink-0">
             <button
               className="flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
@@ -739,7 +975,9 @@ export default function PosPage() {
                       <span className="text-[9px] opacity-70 font-normal">{table.capacity}p</span>
                     </button>
                   ))}
-                  {tables.length === 0 && <p className="col-span-full text-xs text-muted-foreground py-2 text-center">No tables configured</p>}
+                  {tables.length === 0 && (
+                    <p className="col-span-full text-xs text-muted-foreground py-2 text-center">No tables configured</p>
+                  )}
                 </div>
                 <div className="flex gap-4 mt-2 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-500" />Free</span>
@@ -750,55 +988,67 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Order Type + Customer */}
+          {/* Order type + customer name */}
           <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0 flex-wrap">
             {ORDER_TYPES.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
-                onClick={() => { setOrderType(value); if (value !== "dine_in") setSelectedTableId(null); }}
+                onClick={() => {
+                  setOrderType(value);
+                  if (value !== "dine_in") setSelectedTableId(null);
+                }}
                 disabled={!!placedOrder}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0",
-                  orderType === value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50",
+                  orderType === value
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-primary/50",
                   placedOrder && "opacity-50 cursor-not-allowed"
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />{label}
               </button>
             ))}
-            <Input className="h-8 text-xs flex-1 min-w-32 max-w-48 ml-auto"
+            <Input
+              className="h-8 text-xs flex-1 min-w-32 max-w-48 ml-auto"
               placeholder="Customer name (optional)"
               value={customerName}
               onChange={e => setCustomerName(e.target.value)}
-              disabled={!!placedOrder} />
+              disabled={!!placedOrder}
+            />
           </div>
 
-          {/* Category Filter */}
+          {/* Category filter */}
           <div className="flex gap-1.5 px-4 py-2 border-b border-border overflow-x-auto flex-shrink-0">
             <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)} className="flex-shrink-0 h-7 text-xs px-3">All</Button>
             {(categories as MenuCategory[]).map(c => (
-              <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">{c.name}</Button>
+              <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">
+                {c.name}
+              </Button>
             ))}
           </div>
 
-          {/* Menu Grid */}
+          {/* Menu grid */}
           <div className="flex-1 overflow-y-auto p-3">
             {placedOrder && (
-              <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                <ReceiptText className="w-3.5 h-3.5 flex-shrink-0" />
-                Order placed — pay, split, or void to start a new one
+              <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+                Tap items to add more to this order
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
               {(menuItems as MenuItem[]).filter(i => i.isAvailable).map(item => {
                 const inCart = cart.find(c => c.menuItemId === item.id);
+                const inLive = placedOrder ? liveItems.some(li => li.menuItemId === item.id) : false;
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleMenuItemClick(item)}
                     className={cn(
                       "relative text-left p-3 rounded-xl border-2 transition-all hover:shadow-sm",
-                      inCart ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-accent"
+                      (inCart || inLive)
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50 hover:bg-accent"
                     )}
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
@@ -806,9 +1056,9 @@ export default function PosPage() {
                       <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
                     </div>
                     <p className="text-sm font-bold text-primary">₹{item.price}</p>
-                    {inCart && (
+                    {(inCart || inLive) && (
                       <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
-                        {inCart.quantity}
+                        {inCart?.quantity ?? liveItems.filter(li => li.menuItemId === item.id).reduce((s, li) => s + li.quantity, 0)}
                       </div>
                     )}
                   </button>
@@ -824,7 +1074,7 @@ export default function PosPage() {
           </div>
         </div>
 
-        {/* ── RIGHT PANEL — Order Ticket ── */}
+        {/* Right panel — Order ticket */}
         <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border">
 
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -847,57 +1097,94 @@ export default function PosPage() {
           {placedOrder && (
             <div className="mx-4 mt-3 px-4 py-2.5 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-xl">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400">{placedOrder.orderNumber} — placed</p>
-              <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Kitchen notified · Ready for payment</p>
+              <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Kitchen notified · Tap menu items to add more</p>
             </div>
           )}
 
+          {/* Item list */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
-            {cart.length === 0 ? (
+            {!placedOrder && cart.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground pb-12">
                 <ShoppingBag className="w-10 h-10 mb-3 opacity-20" />
                 <p className="text-sm font-medium">Cart is empty</p>
                 <p className="text-xs mt-1 opacity-60">Tap items from the menu</p>
               </div>
-            ) : (
-              cart.map((item, i) => (
-                <div key={`${item.menuItemId}-${i}`} className="flex items-start gap-2 py-2 border-b border-border/40 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    {item.modifiers.length > 0 && (
-                      <p className="text-xs text-muted-foreground/70 truncate">
-                        {item.modifiers.map(m => m.name).join(", ")}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      ₹{item.unitPrice.toFixed(2)} × {item.quantity} = <span className="font-medium text-foreground">₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
-                    </p>
-                  </div>
-                  {!placedOrder && (
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
-                      <button onClick={() => updateQty(item.menuItemId, item.quantity - 1)} className="w-6 h-6 rounded bg-secondary hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition-colors"><Minus className="w-3 h-3" /></button>
-                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                      <button onClick={() => updateQty(item.menuItemId, item.quantity + 1)} className="w-6 h-6 rounded bg-secondary hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"><Plus className="w-3 h-3" /></button>
-                      <button onClick={() => removeFromCart(item.menuItemId)} className="w-6 h-6 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors ml-0.5"><X className="w-3 h-3" /></button>
-                    </div>
-                  )}
-                </div>
-              ))
             )}
+
+            {/* Pre-placement: local cart items */}
+            {!placedOrder && cart.map(item => (
+              <div key={item.lineKey} className="flex items-start gap-2 py-2 border-b border-border/40 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{item.name}</p>
+                  {item.modifiers.length > 0 && (
+                    <p className="text-xs text-muted-foreground/70 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    ₹{item.unitPrice.toFixed(2)} × {item.quantity} = <span className="font-medium text-foreground">₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <button onClick={() => updateQty(item.lineKey, item.quantity - 1)} className="w-6 h-6 rounded bg-secondary hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition-colors"><Minus className="w-3 h-3" /></button>
+                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                  <button onClick={() => updateQty(item.lineKey, item.quantity + 1)} className="w-6 h-6 rounded bg-secondary hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"><Plus className="w-3 h-3" /></button>
+                  <button onClick={() => removeFromCart(item.lineKey)} className="w-6 h-6 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors ml-0.5"><X className="w-3 h-3" /></button>
+                </div>
+              </div>
+            ))}
+
+            {/* Post-placement: server items with API controls */}
+            {placedOrder && liveItems.map(item => (
+              <div key={item.id} className="flex items-start gap-2 py-2 border-b border-border/40 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{item.menuItemName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ₹{Number(item.unitPrice).toFixed(2)} × {item.quantity} = <span className="font-medium text-foreground">₹{Number(item.totalPrice).toFixed(2)}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      addOrderItem.mutate({ orderId: placedOrder.id, menuItemId: item.menuItemId, quantity: 1 }, {
+                        onSuccess: () => toast({ title: `${item.menuItemName} +1` }),
+                      });
+                    }}
+                    disabled={addOrderItem.isPending}
+                    className="w-6 h-6 rounded bg-secondary hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                  <button
+                    onClick={() => removeOrderItemById(item.id)}
+                    disabled={removeOrderItem.isPending}
+                    className="w-6 h-6 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {cart.length > 0 && (
+          {/* Totals + actions */}
+          {(cart.length > 0 || placedOrder) && (
             <div className="border-t border-border px-4 py-4 space-y-3 flex-shrink-0">
-              {!placedOrder && (
-                <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <Input type="number" placeholder="Discount (₹)" value={discount}
-                    onChange={e => setDiscount(e.target.value)} className="h-8 text-sm" min="0" />
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <Input
+                  type="number"
+                  placeholder="Discount (₹)"
+                  value={discount}
+                  onChange={e => setDiscount(e.target.value)}
+                  onBlur={handleDiscountBlur}
+                  className="h-8 text-sm"
+                  min="0"
+                />
+              </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Subtotal ({cart.reduce((s, c) => s + c.quantity, 0)} items)</span>
+                  <span>Subtotal ({(placedOrder ? liveItems : cart).reduce((s, c) => s + c.quantity, 0)} items)</span>
                   <span>₹{displayTotals.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
@@ -927,7 +1214,9 @@ export default function PosPage() {
               <div className="grid grid-cols-2 gap-2">
                 {!placedOrder ? (
                   <>
-                    <Button variant="outline" size="sm" disabled={createOrder.isPending} onClick={handlePlaceOrder}>Place Order</Button>
+                    <Button variant="outline" size="sm" disabled={createOrder.isPending} onClick={handlePlaceOrder}>
+                      Place Order
+                    </Button>
                     <Button size="sm" disabled={createOrder.isPending || payOrder.isPending} onClick={handlePayNow}>
                       <CreditCard className="w-3.5 h-3.5 mr-1.5" />Pay Now
                     </Button>
@@ -948,9 +1237,10 @@ export default function PosPage() {
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => {
                     printReceipt({
-                      orderNumber: placedOrder.orderNumber, tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
-                      orderType, cart, totals: displayTotals, paymentMethod: "pending",
-                      customerName, restaurantName: restaurant?.name,
+                      orderNumber: placedOrder.orderNumber,
+                      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
+                      orderType, items: receiptDisplayItems, totals: displayTotals,
+                      paymentMethod: "pending", customerName, restaurantName: restaurant?.name,
                     });
                   }}>
                     <Printer className="w-3 h-3 mr-1" />Print KOT
@@ -965,21 +1255,18 @@ export default function PosPage() {
         </div>
       </div>
 
-      {/* Modifier Picker Modal */}
       {modPickerItem && (
         <ModifierPickerModal
           item={modPickerItem}
           groups={modifierGroups}
           isLoading={modGroupsLoading}
-          onConfirm={addToCartWithModifiers}
+          onConfirm={handleModifierConfirm}
           onClose={() => setModPickerItem(null)}
         />
       )}
 
-      {/* Payment Modal */}
       {showPayModal && (
         <PaymentModal
-          cart={cart}
           totals={displayTotals}
           onClose={() => setShowPayModal(false)}
           onConfirm={handleConfirmPayment}
@@ -987,18 +1274,17 @@ export default function PosPage() {
         />
       )}
 
-      {/* Split Bill Modal */}
       {showSplitModal && placedOrder && (
         <SplitBillModal
           totalAmount={displayTotals.totalAmount}
-          cart={cart}
+          displayItems={receiptDisplayItems}
+          totals={displayTotals}
           placedOrderId={placedOrder.id}
           restaurantName={restaurant?.name}
           orderNumber={placedOrder.orderNumber}
           tableLabel={selectedTable ? `Table ${selectedTable.tableNumber}` : ""}
           orderType={orderType}
           customerName={customerName}
-          totals={displayTotals}
           onClose={() => setShowSplitModal(false)}
           onComplete={handleNewOrder}
         />

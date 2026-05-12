@@ -122,7 +122,8 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
 
   broadcastEvent(restaurantId, "order:new", order);
 
-  res.status(201).json(order);
+  const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  res.status(201).json({ ...order, items: createdItems });
 });
 
 router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
@@ -149,7 +150,7 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { menuItemId, quantity, notes } = req.body;
+  const { menuItemId, quantity, notes, modifiers } = req.body;
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
@@ -160,20 +161,21 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
   if (!mi) return void res.status(404).json({ error: "Menu item not found" });
 
-  const unitPrice = Number(mi.price);
   const qty = Number(quantity) || 1;
+  const hasModifiers = Array.isArray(modifiers) && modifiers.length > 0;
 
-  const existingItems = await db.select().from(orderItemsTable).where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
+  let modifierAdditional = 0;
+  if (hasModifiers) {
+    modifierAdditional = (modifiers as { name: string; price: string }[])
+      .reduce((sum, m) => sum + Number(m.price ?? 0), 0);
+  }
+  const unitPrice = Number(mi.price) + modifierAdditional;
 
-  if (existingItems.length > 0) {
-    const existing = existingItems[0];
-    const newQty = existing.quantity + qty;
-    await db.update(orderItemsTable).set({
-      quantity: newQty,
-      totalPrice: (unitPrice * newQty).toFixed(2),
-    }).where(eq(orderItemsTable.id, existing.id));
-  } else {
-    await db.insert(orderItemsTable).values({
+  let newItemId: number | undefined;
+
+  if (hasModifiers) {
+    // Items with modifiers always create a new line (modifier-distinct)
+    const [newItem] = await db.insert(orderItemsTable).values({
       orderId,
       menuItemId: mi.id,
       menuItemName: mi.name,
@@ -181,7 +183,37 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
       unitPrice: unitPrice.toFixed(2),
       totalPrice: (unitPrice * qty).toFixed(2),
       notes,
-    });
+    }).returning();
+    newItemId = newItem.id;
+    await db.insert(orderItemModifiersTable).values(
+      (modifiers as { name: string; price: string }[]).map(m => ({
+        orderItemId: newItemId!,
+        modifierName: m.name,
+        price: Number(m.price ?? 0).toFixed(2),
+      }))
+    );
+  } else {
+    // No modifiers: coalesce by menuItemId
+    const existingItems = await db.select().from(orderItemsTable)
+      .where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
+    if (existingItems.length > 0) {
+      const existing = existingItems[0];
+      const newQty = existing.quantity + qty;
+      await db.update(orderItemsTable).set({
+        quantity: newQty,
+        totalPrice: (Number(mi.price) * newQty).toFixed(2),
+      }).where(eq(orderItemsTable.id, existing.id));
+    } else {
+      await db.insert(orderItemsTable).values({
+        orderId,
+        menuItemId: mi.id,
+        menuItemName: mi.name,
+        quantity: qty,
+        unitPrice: Number(mi.price).toFixed(2),
+        totalPrice: (Number(mi.price) * qty).toFixed(2),
+        notes,
+      });
+    }
   }
 
   const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));

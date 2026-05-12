@@ -125,6 +125,7 @@ export interface AddOrderItemInput {
   orderId: number;
   menuItemId: number;
   quantity: number;
+  modifiers?: { name: string; price: string }[];
   notes?: string;
 }
 
