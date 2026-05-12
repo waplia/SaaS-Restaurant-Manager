@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { ShoppingCart, X, Plus, Minus, ChevronDown, Star, Bell, ArrowLeft, CheckCircle, Clock, ChefHat, Truck, Loader2 } from "lucide-react";
+import { ShoppingCart, X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, Clock, ChefHat, Truck, Loader2, CreditCard, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
@@ -15,7 +15,26 @@ function apiPublicPost<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).then(r => r.json());
+  }).then(async r => {
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  });
+}
+
+interface PublicModifier {
+  id: number;
+  name: string;
+  price: string;
+  isDefault: boolean;
+}
+
+interface PublicModifierGroup {
+  id: number;
+  name: string;
+  isRequired: boolean;
+  minSelections: number;
+  maxSelections: number;
+  modifiers: PublicModifier[];
 }
 
 interface PublicMenuItem {
@@ -27,6 +46,7 @@ interface PublicMenuItem {
   isAvailable: boolean;
   calories: number | null;
   prepTime: number | null;
+  modifierGroups: PublicModifierGroup[];
 }
 
 interface PublicMenuCategory {
@@ -45,6 +65,14 @@ interface PublicMenu {
   categories: PublicMenuCategory[];
 }
 
+interface SelectedModifier {
+  groupId: number;
+  groupName: string;
+  modifierId: number;
+  name: string;
+  price: string;
+}
+
 interface CartItem {
   menuItemId: number;
   name: string;
@@ -52,6 +80,7 @@ interface CartItem {
   quantity: number;
   notes?: string;
   imageUrl?: string | null;
+  modifiers: SelectedModifier[];
 }
 
 interface OrderResult {
@@ -85,6 +114,12 @@ function statusIndex(status: string): number {
   return idx === -1 ? 0 : idx;
 }
 
+function getItemTotalPrice(item: PublicMenuItem, modifiers: SelectedModifier[], qty: number): number {
+  const base = Number(item.price);
+  const modTotal = modifiers.reduce((s, m) => s + Number(m.price), 0);
+  return (base + modTotal) * qty;
+}
+
 export default function CustomerMenuPage() {
   const params = useParams<{ slug: string; tableId: string }>();
   const slug = params.slug ?? "";
@@ -97,15 +132,22 @@ export default function CustomerMenuPage() {
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
+
   const [selectedItem, setSelectedItem] = useState<PublicMenuItem | null>(null);
   const [itemQty, setItemQty] = useState(1);
   const [itemNotes, setItemNotes] = useState("");
+  const [selectedModifiers, setSelectedModifiers] = useState<SelectedModifier[]>([]);
 
-  const [view, setView] = useState<"menu" | "checkout" | "tracking">("menu");
+  const [view, setView] = useState<"menu" | "checkout" | "payment" | "tracking">("menu");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
   const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
+
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [cardError, setCardError] = useState<string | null>(null);
 
   const [placing, setPlacing] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
@@ -117,7 +159,6 @@ export default function CustomerMenuPage() {
 
   const socketRef = useRef<Socket | null>(null);
   const categoryRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -158,24 +199,65 @@ export default function CustomerMenuPage() {
     return () => { cleanup(); clearInterval(interval); };
   }, [orderResult, connectSocket]);
 
-  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const cartItemCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const currency = menu?.currency ?? "INR";
   const currSymbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "₹";
 
+  function openItemDetail(item: PublicMenuItem) {
+    setSelectedItem(item);
+    setItemQty(1);
+    setItemNotes("");
+    const defaults: SelectedModifier[] = [];
+    for (const group of item.modifierGroups) {
+      for (const mod of group.modifiers) {
+        if (mod.isDefault) {
+          defaults.push({ groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price });
+        }
+      }
+    }
+    setSelectedModifiers(defaults);
+  }
+
+  function toggleModifier(group: PublicModifierGroup, mod: PublicModifier) {
+    setSelectedModifiers(prev => {
+      const isSelected = prev.some(m => m.modifierId === mod.id);
+      const groupSelected = prev.filter(m => m.groupId === group.id);
+
+      if (isSelected) {
+        if (group.isRequired && groupSelected.length === 1) return prev;
+        return prev.filter(m => m.modifierId !== mod.id);
+      }
+
+      if (group.maxSelections === 1) {
+        const without = prev.filter(m => m.groupId !== group.id);
+        return [...without, { groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price }];
+      }
+
+      if (groupSelected.length >= group.maxSelections) return prev;
+      return [...prev, { groupId: group.id, groupName: group.name, modifierId: mod.id, name: mod.name, price: mod.price }];
+    });
+  }
+
   function addToCart(item: PublicMenuItem) {
+    const modTotal = selectedModifiers.reduce((s, m) => s + Number(m.price), 0);
+    const unitPrice = Number(item.price) + modTotal;
     setCart(prev => {
-      const existing = prev.find(c => c.menuItemId === item.id);
-      if (existing) return prev.map(c => c.menuItemId === item.id ? { ...c, quantity: c.quantity + itemQty, notes: itemNotes || c.notes } : c);
-      return [...prev, { menuItemId: item.id, name: item.name, price: Number(item.price), quantity: itemQty, notes: itemNotes || undefined, imageUrl: item.imageUrl }];
+      const key = `${item.id}_${selectedModifiers.map(m => m.modifierId).sort().join("_")}`;
+      const existing = prev.find(c => c.menuItemId === item.id && JSON.stringify(c.modifiers.map(m => m.modifierId).sort()) === JSON.stringify(selectedModifiers.map(m => m.modifierId).sort()));
+      if (existing) {
+        return prev.map(c => c === existing ? { ...c, quantity: c.quantity + itemQty, notes: itemNotes || c.notes } : c);
+      }
+      return [...prev, { menuItemId: item.id, name: item.name, price: unitPrice, quantity: itemQty, notes: itemNotes || undefined, imageUrl: item.imageUrl, modifiers: selectedModifiers }];
     });
     setSelectedItem(null);
     setItemQty(1);
     setItemNotes("");
+    setSelectedModifiers([]);
   }
 
-  function updateQty(menuItemId: number, delta: number) {
-    setCart(prev => prev.map(c => c.menuItemId === menuItemId ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
+  function updateQty(cartIdx: number, delta: number) {
+    setCart(prev => prev.map((c, i) => i === cartIdx ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
   }
 
   function scrollToCategory(catId: number) {
@@ -193,13 +275,26 @@ export default function CustomerMenuPage() {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         notes: orderNotes.trim() || undefined,
-        items: cart.map(c => ({ menuItemId: c.menuItemId, quantity: c.quantity, notes: c.notes })),
+        items: cart.map(c => ({
+          menuItemId: c.menuItemId,
+          quantity: c.quantity,
+          notes: c.notes,
+          modifiers: c.modifiers.map(m => ({ name: m.name, price: m.price })),
+        })),
       });
       setOrderResult(result);
-      const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`);
-      setOrderStatus(status);
-      setCart([]);
-      setView("tracking");
+
+      if (payMethod === "card") {
+        setView("payment");
+        const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`);
+        setOrderStatus(status);
+        setCart([]);
+      } else {
+        const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`);
+        setOrderStatus(status);
+        setCart([]);
+        setView("tracking");
+      }
     } catch {
       alert("Failed to place order. Please try again.");
     } finally {
@@ -207,8 +302,40 @@ export default function CustomerMenuPage() {
     }
   }
 
+  async function processCardPayment() {
+    if (!orderResult) return;
+    setCardError(null);
+
+    const rawNum = cardNumber.replace(/\s/g, "");
+    if (rawNum.length < 13 || rawNum.length > 19) {
+      setCardError("Please enter a valid card number.");
+      return;
+    }
+    if (!cardExpiry.match(/^\d{2}\/\d{2}$/)) {
+      setCardError("Please enter expiry as MM/YY.");
+      return;
+    }
+    if (cardCvc.length < 3) {
+      setCardError("Please enter a valid CVC.");
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      await apiPublicPost(`/public/orders/${orderResult.orderId}/pay`, { paymentMethod: "card" });
+      const status = await apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`);
+      setOrderStatus(status);
+      setView("tracking");
+    } catch {
+      setCardError("Payment failed. Please try again.");
+    } finally {
+      setPlacing(false);
+    }
+  }
+
   async function callWaiter() {
-    await apiPublicPost("/public/call-waiter", { restaurantId: menu!.restaurantId, tableId });
+    if (!menu) return;
+    await apiPublicPost("/public/call-waiter", { restaurantId: menu.restaurantId, tableId });
     alert("Waiter has been notified!");
   }
 
@@ -237,6 +364,92 @@ export default function CustomerMenuPage() {
     );
   }
 
+  if (view === "payment" && orderResult) {
+    return (
+      <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
+        <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => setView("checkout")} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <p className="font-bold text-gray-900">Card Payment</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-orange-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">Pay by Card</p>
+                <p className="text-sm text-gray-500">Amount: <span className="font-bold text-orange-500">{currSymbol}{Number(orderResult.totalAmount).toFixed(2)}</span></p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+              Demo mode — use any test card details (e.g. 4242 4242 4242 4242, 12/26, 123)
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Card Number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="4242 4242 4242 4242"
+                  maxLength={19}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 tracking-widest"
+                  value={cardNumber}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, "").slice(0, 16);
+                    setCardNumber(v.replace(/(.{4})/g, "$1 ").trim());
+                  }}
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Expiry</label>
+                  <input
+                    type="text"
+                    placeholder="MM/YY"
+                    maxLength={5}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    value={cardExpiry}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                      setCardExpiry(v.length > 2 ? `${v.slice(0, 2)}/${v.slice(2)}` : v);
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">CVC</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="123"
+                    maxLength={4}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    value={cardCvc}
+                    onChange={e => setCardCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  />
+                </div>
+              </div>
+              {cardError && <p className="text-xs text-red-500">{cardError}</p>}
+            </div>
+          </div>
+
+          <button
+            onClick={processCardPayment}
+            disabled={placing}
+            className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
+          >
+            {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+            {placing ? "Processing…" : `Pay ${currSymbol}${Number(orderResult.totalAmount).toFixed(2)}`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (view === "tracking" && orderResult && orderStatus) {
     const currentIdx = statusIndex(orderStatus.status);
     const isServed = orderStatus.status === "served" || orderStatus.status === "completed";
@@ -255,7 +468,12 @@ export default function CustomerMenuPage() {
           <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
             <p className="text-sm text-gray-500 mb-1">Order Number</p>
             <p className="text-2xl font-bold text-gray-900">{orderResult.orderNumber}</p>
-            <p className="text-sm text-gray-500 mt-1">Total: <span className="font-semibold text-gray-800">{currSymbol}{Number(orderStatus.totalAmount).toFixed(2)}</span></p>
+            <div className="flex items-center gap-3 mt-2">
+              <p className="text-sm text-gray-500">Total: <span className="font-semibold text-gray-800">{currSymbol}{Number(orderStatus.totalAmount).toFixed(2)}</span></p>
+              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", orderStatus.paymentStatus === "paid" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700")}>
+                {orderStatus.paymentStatus === "paid" ? "Paid" : "Pay at Counter"}
+              </span>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
@@ -359,23 +577,28 @@ export default function CustomerMenuPage() {
         <div className="p-4 space-y-4">
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <p className="font-semibold text-gray-800 mb-3">Your Order</p>
-            <div className="space-y-2">
-              {cart.map(item => (
-                <div key={item.menuItemId} className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-orange-50 rounded-lg">
-                      <button onClick={() => updateQty(item.menuItemId, -1)} className="w-7 h-7 flex items-center justify-center text-orange-500"><Minus className="w-3 h-3" /></button>
-                      <span className="text-sm font-bold w-5 text-center">{item.quantity}</span>
-                      <button onClick={() => updateQty(item.menuItemId, 1)} className="w-7 h-7 flex items-center justify-center text-orange-500"><Plus className="w-3 h-3" /></button>
+            <div className="space-y-3">
+              {cart.map((item, idx) => (
+                <div key={idx}>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 bg-orange-50 rounded-lg">
+                        <button onClick={() => updateQty(idx, -1)} className="w-7 h-7 flex items-center justify-center text-orange-500"><Minus className="w-3 h-3" /></button>
+                        <span className="text-sm font-bold w-5 text-center">{item.quantity}</span>
+                        <button onClick={() => updateQty(idx, 1)} className="w-7 h-7 flex items-center justify-center text-orange-500"><Plus className="w-3 h-3" /></button>
+                      </div>
+                      <span className="text-sm text-gray-700">{item.name}</span>
                     </div>
-                    <span className="text-sm text-gray-700">{item.name}</span>
+                    <span className="text-sm font-medium text-gray-800">{currSymbol}{(item.price * item.quantity).toFixed(2)}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-800">{currSymbol}{(item.price * item.quantity).toFixed(2)}</span>
+                  {item.modifiers.length > 0 && (
+                    <p className="text-xs text-gray-400 ml-[68px] mt-0.5">{item.modifiers.map(m => m.name).join(", ")}</p>
+                  )}
                 </div>
               ))}
               <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between">
                 <span className="font-semibold text-gray-800">Total</span>
-                <span className="font-bold text-orange-500">{currSymbol}{totalPrice.toFixed(2)}</span>
+                <span className="font-bold text-orange-500">{currSymbol}{cartTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -412,9 +635,18 @@ export default function CustomerMenuPage() {
             <div className="space-y-2">
               <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "pay_at_counter" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
                 <input type="radio" name="pay" value="pay_at_counter" checked={payMethod === "pay_at_counter"} onChange={() => setPayMethod("pay_at_counter")} className="accent-orange-500" />
+                <Banknote className="w-5 h-5 text-gray-500" />
                 <div>
                   <p className="font-medium text-gray-800 text-sm">Pay at Counter</p>
-                  <p className="text-xs text-gray-500">Pay cash or card when served</p>
+                  <p className="text-xs text-gray-500">Cash or card when served</p>
+                </div>
+              </label>
+              <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "card" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
+                <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-orange-500" />
+                <CreditCard className="w-5 h-5 text-gray-500" />
+                <div>
+                  <p className="font-medium text-gray-800 text-sm">Pay by Card Online</p>
+                  <p className="text-xs text-gray-500">Secure card payment now</p>
                 </div>
               </label>
             </div>
@@ -426,7 +658,7 @@ export default function CustomerMenuPage() {
             className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
           >
             {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-            {placing ? "Placing Order…" : `Place Order · ${currSymbol}${totalPrice.toFixed(2)}`}
+            {placing ? "Placing Order…" : payMethod === "card" ? `Continue to Payment · ${currSymbol}${cartTotal.toFixed(2)}` : `Place Order · ${currSymbol}${cartTotal.toFixed(2)}`}
           </button>
         </div>
       </div>
@@ -466,7 +698,7 @@ export default function CustomerMenuPage() {
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="px-4 pt-4 pb-32 space-y-6">
+      <div className="px-4 pt-4 pb-32 space-y-6">
         {menu.categories.map(cat => (
           <div
             key={cat.id}
@@ -475,12 +707,13 @@ export default function CustomerMenuPage() {
             <h2 className="text-base font-bold text-gray-900 mb-3">{cat.name}</h2>
             <div className="space-y-3">
               {cat.items.map(item => {
-                const cartItem = cart.find(c => c.menuItemId === item.id);
+                const cartCount = cart.filter(c => c.menuItemId === item.id).reduce((s, c) => s + c.quantity, 0);
+                const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
                 return (
                   <div
                     key={item.id}
                     className="bg-white rounded-2xl shadow-sm overflow-hidden flex cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => { setSelectedItem(item); setItemQty(1); setItemNotes(""); }}
+                    onClick={() => openItemDetail(item)}
                   >
                     {item.imageUrl && (
                       <img src={item.imageUrl} alt={item.name} className="w-24 h-24 object-cover flex-shrink-0" />
@@ -489,23 +722,21 @@ export default function CustomerMenuPage() {
                       <div>
                         <p className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</p>
                         {item.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>}
-                        {item.calories && <p className="text-xs text-gray-400 mt-0.5">{item.calories} cal</p>}
+                        <div className="flex gap-2 mt-0.5">
+                          {item.calories && <p className="text-xs text-gray-400">{item.calories} cal</p>}
+                          {hasModifiers && <p className="text-xs text-orange-400">Customizable</p>}
+                        </div>
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <span className="font-bold text-orange-500">{currSymbol}{Number(item.price).toFixed(2)}</span>
-                        {cartItem ? (
-                          <div className="flex items-center gap-1.5 bg-orange-500 text-white rounded-full px-2 py-1" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded-full"><Minus className="w-3 h-3" /></button>
-                            <span className="text-xs font-bold w-4 text-center">{cartItem.quantity}</span>
-                            <button onClick={() => updateQty(item.id, 1)} className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded-full"><Plus className="w-3 h-3" /></button>
+                        {cartCount > 0 ? (
+                          <div className="flex items-center gap-1 bg-orange-500 text-white rounded-full px-2.5 py-1 text-xs font-bold">
+                            <ShoppingCart className="w-3 h-3" />{cartCount}
                           </div>
                         ) : (
-                          <button
-                            onClick={e => { e.stopPropagation(); setSelectedItem(item); setItemQty(1); setItemNotes(""); }}
-                            className="w-7 h-7 bg-orange-500 text-white rounded-full flex items-center justify-center hover:bg-orange-600 transition"
-                          >
+                          <div className="w-7 h-7 bg-orange-500 text-white rounded-full flex items-center justify-center">
                             <Plus className="w-4 h-4" />
-                          </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -525,17 +756,17 @@ export default function CustomerMenuPage() {
         )}
       </div>
 
-      {totalItems > 0 && !showCart && (
+      {cartItemCount > 0 && !showCart && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-30">
           <button
             onClick={() => setShowCart(true)}
             className="w-full bg-orange-500 text-white font-bold rounded-2xl py-4 px-5 flex items-center justify-between shadow-xl hover:bg-orange-600 transition"
           >
             <div className="flex items-center gap-2">
-              <div className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm font-bold">{totalItems}</div>
+              <div className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm font-bold">{cartItemCount}</div>
               <span>View Cart</span>
             </div>
-            <span>{currSymbol}{totalPrice.toFixed(2)}</span>
+            <span>{currSymbol}{cartTotal.toFixed(2)}</span>
           </button>
         </div>
       )}
@@ -549,17 +780,18 @@ export default function CustomerMenuPage() {
               <button onClick={() => setShowCart(false)} className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="overflow-y-auto flex-1 px-5 py-3 space-y-3">
-              {cart.map(item => (
-                <div key={item.menuItemId} className="flex items-center gap-3">
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-3">
                   {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                    {item.modifiers.length > 0 && <p className="text-xs text-gray-400 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>}
                     <p className="text-xs text-gray-500">{currSymbol}{item.price.toFixed(2)} each</p>
                   </div>
                   <div className="flex items-center gap-2 bg-orange-50 rounded-xl px-2 py-1">
-                    <button onClick={() => updateQty(item.menuItemId, -1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Minus className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => updateQty(idx, -1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Minus className="w-3.5 h-3.5" /></button>
                     <span className="text-sm font-bold text-gray-800 w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.menuItemId, 1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Plus className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => updateQty(idx, 1)} className="w-6 h-6 flex items-center justify-center text-orange-500"><Plus className="w-3.5 h-3.5" /></button>
                   </div>
                   <span className="text-sm font-semibold text-gray-800 w-16 text-right">{currSymbol}{(item.price * item.quantity).toFixed(2)}</span>
                 </div>
@@ -568,7 +800,7 @@ export default function CustomerMenuPage() {
             <div className="px-5 py-4 border-t border-gray-100">
               <div className="flex justify-between text-base font-bold text-gray-900 mb-4">
                 <span>Total</span>
-                <span className="text-orange-500">{currSymbol}{totalPrice.toFixed(2)}</span>
+                <span className="text-orange-500">{currSymbol}{cartTotal.toFixed(2)}</span>
               </div>
               <button
                 onClick={() => { setShowCart(false); setView("checkout"); }}
@@ -584,7 +816,7 @@ export default function CustomerMenuPage() {
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedItem(null)} />
-          <div className="relative bg-white rounded-t-3xl max-h-[85vh] flex flex-col">
+          <div className="relative bg-white rounded-t-3xl max-h-[90vh] flex flex-col">
             {selectedItem.imageUrl && (
               <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-48 object-cover rounded-t-3xl flex-shrink-0" />
             )}
@@ -597,7 +829,45 @@ export default function CustomerMenuPage() {
                 <span className="text-lg font-bold text-orange-500 ml-3">{currSymbol}{Number(selectedItem.price).toFixed(2)}</span>
               </div>
               {selectedItem.description && <p className="text-sm text-gray-500 mb-3">{selectedItem.description}</p>}
-              {selectedItem.calories && <p className="text-xs text-gray-400 mb-3">{selectedItem.calories} calories{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
+              {selectedItem.calories && <p className="text-xs text-gray-400 mb-4">{selectedItem.calories} calories{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
+
+              {selectedItem.modifierGroups.map(group => (
+                <div key={group.id} className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-semibold text-gray-800">{group.name}</p>
+                    {group.isRequired && <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">Required</span>}
+                    {group.maxSelections > 1 && <span className="text-xs text-gray-400">Pick up to {group.maxSelections}</span>}
+                  </div>
+                  <div className="space-y-2">
+                    {group.modifiers.map(mod => {
+                      const isSelected = selectedModifiers.some(m => m.modifierId === mod.id);
+                      const isRadio = group.maxSelections === 1;
+                      return (
+                        <button
+                          key={mod.id}
+                          onClick={() => toggleModifier(group, mod)}
+                          className={cn(
+                            "w-full flex items-center justify-between px-4 py-2.5 rounded-xl border-2 text-left transition",
+                            isSelected ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "w-4 h-4 border-2 flex items-center justify-center flex-shrink-0",
+                              isRadio ? "rounded-full" : "rounded",
+                              isSelected ? "border-orange-500 bg-orange-500" : "border-gray-300"
+                            )}>
+                              {isSelected && <div className={cn("bg-white", isRadio ? "w-1.5 h-1.5 rounded-full" : "w-2 h-2 rounded-sm")} />}
+                            </div>
+                            <span className="text-sm text-gray-800">{mod.name}</span>
+                          </div>
+                          {Number(mod.price) > 0 && <span className="text-sm font-medium text-orange-500">+{currSymbol}{Number(mod.price).toFixed(2)}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
 
               <div className="mb-4">
                 <p className="text-sm font-semibold text-gray-700 mb-2">Special Notes</p>
@@ -610,7 +880,7 @@ export default function CustomerMenuPage() {
                 />
               </div>
 
-              <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-4 mb-2">
                 <p className="text-sm font-semibold text-gray-700">Quantity</p>
                 <div className="flex items-center gap-3 bg-orange-50 rounded-xl px-3 py-2">
                   <button onClick={() => setItemQty(q => Math.max(1, q - 1))} className="w-7 h-7 flex items-center justify-center text-orange-500 hover:bg-orange-100 rounded-full"><Minus className="w-4 h-4" /></button>
@@ -624,7 +894,7 @@ export default function CustomerMenuPage() {
                 onClick={() => addToCart(selectedItem)}
                 className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 hover:bg-orange-600 transition"
               >
-                Add to Cart · {currSymbol}{(Number(selectedItem.price) * itemQty).toFixed(2)}
+                Add to Cart · {currSymbol}{getItemTotalPrice(selectedItem, selectedModifiers, itemQty).toFixed(2)}
               </button>
             </div>
           </div>
