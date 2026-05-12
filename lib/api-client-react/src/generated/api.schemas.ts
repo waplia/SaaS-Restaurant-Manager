@@ -1309,7 +1309,13 @@ export type GetStaffActivityParams = {
 
 export type GetReportsParams = {
   period?: GetReportsPeriod;
+  /**
+   * ISO date string (YYYY-MM-DD)
+   */
   from?: string;
+  /**
+   * ISO date string (YYYY-MM-DD)
+   */
   to?: string;
   groupBy?: GetReportsGroupBy;
 };

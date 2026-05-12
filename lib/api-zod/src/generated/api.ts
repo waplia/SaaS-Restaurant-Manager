@@ -1743,8 +1743,8 @@ export const GetReportsParams = zod.object({
 
 export const GetReportsQueryParams = zod.object({
   period: zod.enum(["7d", "30d", "90d", "1m", "1y"]).optional(),
-  from: zod.date().optional(),
-  to: zod.date().optional(),
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
   groupBy: zod.enum(["daily", "monthly", "yearly"]).optional(),
 });
 

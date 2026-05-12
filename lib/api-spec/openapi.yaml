@@ -1585,8 +1585,8 @@ paths:
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
         - { name: period, in: query, schema: { type: string, enum: [7d, 30d, 90d, 1m, 1y] } }
-        - { name: from, in: query, schema: { type: string, format: date } }
-        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: from, in: query, schema: { type: string, description: "ISO date string (YYYY-MM-DD)" } }
+        - { name: to, in: query, schema: { type: string, description: "ISO date string (YYYY-MM-DD)" } }
         - { name: groupBy, in: query, schema: { type: string, enum: [daily, monthly, yearly] } }
       responses:
         "200":
