@@ -315,10 +315,17 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+  const { createHmac } = await import("crypto");
 
   // Verify each split leg payment proof
   for (const split of splits) {
+    // Strict enum validation per leg
+    if (!["cash", "card", "upi"].includes(String(split.paymentMethod))) {
+      return void res.status(400).json({ error: `Invalid payment method '${split.paymentMethod}' in split leg. Must be cash, card, or upi.` });
+    }
+
     if (split.paymentMethod === "cash") {
       if (split.amountTendered !== undefined && Number(split.amountTendered) < Number(split.amount)) {
         return void res.status(400).json({ error: "Cash tendered is less than split amount" });
@@ -337,9 +344,16 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           if (intent.status !== "succeeded") {
             return void res.status(400).json({ error: `Card payment not confirmed: ${intent.status}` });
           }
-          // Allow ±1 rupee tolerance for rounding on split amounts
+          // Verify the intent was created for this exact order/restaurant (prevent replay across orders)
+          if (intent.metadata?.orderId !== String(orderId) || intent.metadata?.restaurantId !== String(restaurantId)) {
+            return void res.status(400).json({ error: "Card payment was not created for this order" });
+          }
+          // Allow ±₹1 tolerance for floating-point rounding on split amounts
           if (Math.abs(intent.amount - Math.round(Number(split.amount) * 100)) > 100) {
             return void res.status(400).json({ error: "Card payment amount does not match split share" });
+          }
+          if (intent.currency !== "inr") {
+            return void res.status(400).json({ error: "Card payment currency mismatch" });
           }
         } catch {
           return void res.status(400).json({ error: "Failed to verify card payment with Stripe" });
@@ -350,18 +364,41 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
         }
       }
     } else if (split.paymentMethod === "upi") {
-      if (razorpayKeySecret) {
+      if (razorpayKeySecret && razorpayKeyId) {
         if (!split.razorpayPaymentId || !split.razorpayOrderId || !split.razorpaySignature) {
           return void res.status(400).json({ error: "UPI split requires razorpayPaymentId, razorpayOrderId, and razorpaySignature" });
         }
         if (String(split.razorpayPaymentId).startsWith("demo_")) {
           return void res.status(400).json({ error: "Demo payment IDs cannot be used when Razorpay is configured" });
         }
-        const { createHmac } = await import("crypto");
-        const body = `${split.razorpayOrderId}|${split.razorpayPaymentId}`;
-        const expectedSig = createHmac("sha256", razorpayKeySecret).update(body).digest("hex");
+        // Verify HMAC signature
+        const sigBody = `${split.razorpayOrderId}|${split.razorpayPaymentId}`;
+        const expectedSig = createHmac("sha256", razorpayKeySecret).update(sigBody).digest("hex");
         if (expectedSig !== String(split.razorpaySignature)) {
           return void res.status(400).json({ error: "Razorpay signature verification failed for UPI split" });
+        }
+        // Fetch payment from Razorpay API: verify captured status, amount, and order linkage
+        try {
+          const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
+          const rzpPayRes = await fetch(`https://api.razorpay.com/v1/payments/${split.razorpayPaymentId}`, {
+            headers: { Authorization: authHeader },
+          });
+          if (!rzpPayRes.ok) {
+            return void res.status(400).json({ error: "Failed to fetch Razorpay payment details" });
+          }
+          const rzpPay = await rzpPayRes.json() as { status: string; amount: number; currency: string; order_id: string };
+          if (rzpPay.status !== "captured") {
+            return void res.status(400).json({ error: `Razorpay payment not captured: ${rzpPay.status}` });
+          }
+          const expectedPaise = Math.round(Number(split.amount) * 100);
+          if (Math.abs(rzpPay.amount - expectedPaise) > 100) {
+            return void res.status(400).json({ error: "Razorpay payment amount does not match split share" });
+          }
+          if (rzpPay.order_id !== String(split.razorpayOrderId)) {
+            return void res.status(400).json({ error: "Razorpay payment is not linked to the expected Razorpay order for this split leg" });
+          }
+        } catch {
+          return void res.status(400).json({ error: "Failed to verify UPI payment with Razorpay" });
         }
       } else {
         if (split.razorpayPaymentId && !String(split.razorpayPaymentId).startsWith("demo_")) {
@@ -506,6 +543,11 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   const orderId = Number(req.params.id);
   const { paymentMethod, stripePaymentIntentId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
 
+  // Strict payment method enum validation
+  if (!["cash", "card", "upi"].includes(String(paymentMethod))) {
+    return void res.status(400).json({ error: `Invalid payment method '${paymentMethod}'. Must be cash, card, or upi.` });
+  }
+
   // Load order — verify it exists and is payable before touching payment gateway
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -554,8 +596,9 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
 
   // ── UPI / Razorpay payment verification ───────────────────────────────────
   if (paymentMethod === "upi") {
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
     const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (razorpayKeySecret) {
+    if (razorpayKeySecret && razorpayKeyId) {
       if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
         return void res.status(400).json({ error: "UPI payments require razorpayPaymentId, razorpayOrderId, and razorpaySignature" });
       }
@@ -564,10 +607,33 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
       }
       // Verify Razorpay HMAC signature
       const { createHmac } = await import("crypto");
-      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
-      const expectedSig = createHmac("sha256", razorpayKeySecret).update(body).digest("hex");
+      const sigBody = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const expectedSig = createHmac("sha256", razorpayKeySecret).update(sigBody).digest("hex");
       if (expectedSig !== String(razorpaySignature)) {
         return void res.status(400).json({ error: "Razorpay signature verification failed" });
+      }
+      // Fetch payment from Razorpay API and verify captured status, amount, and order linkage
+      try {
+        const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
+        const rzpPayRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpayPaymentId}`, {
+          headers: { Authorization: authHeader },
+        });
+        if (!rzpPayRes.ok) {
+          return void res.status(400).json({ error: "Failed to fetch Razorpay payment details" });
+        }
+        const rzpPay = await rzpPayRes.json() as { status: string; amount: number; currency: string; order_id: string };
+        if (rzpPay.status !== "captured") {
+          return void res.status(400).json({ error: `Razorpay payment not captured: ${rzpPay.status}` });
+        }
+        const expectedPaise = Math.round(Number(order.totalAmount) * 100);
+        if (Math.abs(rzpPay.amount - expectedPaise) > 100) {
+          return void res.status(400).json({ error: "Razorpay payment amount does not match order total" });
+        }
+        if (rzpPay.order_id !== String(razorpayOrderId)) {
+          return void res.status(400).json({ error: "Razorpay payment is not linked to the expected Razorpay order" });
+        }
+      } catch {
+        return void res.status(400).json({ error: "Failed to verify UPI payment with Razorpay" });
       }
     } else {
       // Razorpay not configured — only accept demo payment IDs
