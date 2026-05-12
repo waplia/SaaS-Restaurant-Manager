@@ -854,13 +854,32 @@ export interface LiveKitchenStatus {
   tickets: KitchenTicket[];
 }
 
+export interface TaxByDayPoint {
+  date: string;
+  tax: string;
+  revenue: string;
+  orders: number;
+  effectiveRate: string;
+}
+
+export interface StaffPerformancePoint {
+  userId: number;
+  name: string;
+  orderCount: number;
+  totalRevenue: string;
+  totalHours: string;
+}
+
 export interface ReportsData {
   totalRevenue: string;
   totalOrders: number;
   totalTax: string;
   avgOrderValue: string;
+  effectiveTaxRate: string;
   revenueByDay?: RevenueTrendPoint[];
+  taxByDay?: TaxByDayPoint[];
   topItems?: PopularItem[];
+  staffPerformance?: StaffPerformancePoint[];
 }
 
 export interface Role {
@@ -1256,8 +1275,29 @@ export type ListNotificationsParams = {
 };
 
 export type GetRevenueTrendParams = {
-  period?: string;
+  period?: GetRevenueTrendPeriod;
+  groupBy?: GetRevenueTrendGroupBy;
 };
+
+export type GetRevenueTrendPeriod =
+  (typeof GetRevenueTrendPeriod)[keyof typeof GetRevenueTrendPeriod];
+
+export const GetRevenueTrendPeriod = {
+  "7d": "7d",
+  "30d": "30d",
+  "90d": "90d",
+  "1m": "1m",
+  "1y": "1y",
+} as const;
+
+export type GetRevenueTrendGroupBy =
+  (typeof GetRevenueTrendGroupBy)[keyof typeof GetRevenueTrendGroupBy];
+
+export const GetRevenueTrendGroupBy = {
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
 
 export type GetPopularItemsParams = {
   limit?: number;
@@ -1268,10 +1308,31 @@ export type GetStaffActivityParams = {
 };
 
 export type GetReportsParams = {
-  period?: string;
+  period?: GetReportsPeriod;
   from?: string;
   to?: string;
+  groupBy?: GetReportsGroupBy;
 };
+
+export type GetReportsPeriod =
+  (typeof GetReportsPeriod)[keyof typeof GetReportsPeriod];
+
+export const GetReportsPeriod = {
+  "7d": "7d",
+  "30d": "30d",
+  "90d": "90d",
+  "1m": "1m",
+  "1y": "1y",
+} as const;
+
+export type GetReportsGroupBy =
+  (typeof GetReportsGroupBy)[keyof typeof GetReportsGroupBy];
+
+export const GetReportsGroupBy = {
+  daily: "daily",
+  monthly: "monthly",
+  yearly: "yearly",
+} as const;
 
 export type ListRolesParams = {
   tenantId?: number;

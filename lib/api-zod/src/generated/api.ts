@@ -1650,7 +1650,8 @@ export const GetRevenueTrendParams = zod.object({
 });
 
 export const GetRevenueTrendQueryParams = zod.object({
-  period: zod.coerce.string().optional(),
+  period: zod.enum(["7d", "30d", "90d", "1m", "1y"]).optional(),
+  groupBy: zod.enum(["daily", "weekly", "monthly"]).optional(),
 });
 
 export const GetRevenueTrendResponseItem = zod.object({
@@ -1741,9 +1742,10 @@ export const GetReportsParams = zod.object({
 });
 
 export const GetReportsQueryParams = zod.object({
-  period: zod.coerce.string().optional(),
-  from: zod.coerce.string().optional(),
-  to: zod.coerce.string().optional(),
+  period: zod.enum(["7d", "30d", "90d", "1m", "1y"]).optional(),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+  groupBy: zod.enum(["daily", "monthly", "yearly"]).optional(),
 });
 
 export const GetReportsResponse = zod.object({
@@ -1751,12 +1753,24 @@ export const GetReportsResponse = zod.object({
   totalOrders: zod.number(),
   totalTax: zod.string(),
   avgOrderValue: zod.string(),
+  effectiveTaxRate: zod.string(),
   revenueByDay: zod
     .array(
       zod.object({
         date: zod.string(),
         revenue: zod.string(),
         orders: zod.number(),
+      }),
+    )
+    .optional(),
+  taxByDay: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        tax: zod.string(),
+        revenue: zod.string(),
+        orders: zod.number(),
+        effectiveRate: zod.string(),
       }),
     )
     .optional(),
@@ -1769,6 +1783,17 @@ export const GetReportsResponse = zod.object({
         revenue: zod.string(),
         imageUrl: zod.string().nullish(),
         categoryName: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  staffPerformance: zod
+    .array(
+      zod.object({
+        userId: zod.number(),
+        name: zod.string(),
+        orderCount: zod.number(),
+        totalRevenue: zod.string(),
+        totalHours: zod.string(),
       }),
     )
     .optional(),
