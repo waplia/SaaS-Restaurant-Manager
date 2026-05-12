@@ -1146,6 +1146,28 @@ paths:
         "404":
           description: Order not found
 
+  /restaurants/{restaurantId}/orders/{id}/razorpay-order:
+    post:
+      operationId: createRazorpayOrder
+      tags: [orders]
+      summary: Create a Razorpay order for UPI/card checkout (returns demo order when Razorpay is not configured)
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Razorpay order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpayOrderResult"
+        "400":
+          description: Order is not payable
+        "404":
+          description: Order not found
+        "500":
+          description: Failed to create Razorpay order
+
   /restaurants/{restaurantId}/orders/{id}/payment-intent:
     post:
       operationId: createPaymentIntent
@@ -2783,6 +2805,16 @@ components:
         amountTendered: { type: string }
         stripePaymentIntentId: { type: string, description: "Stripe PaymentIntent ID for card payments" }
         transactionId: { type: string }
+
+    RazorpayOrderResult:
+      type: object
+      required: [id, amount, currency, mode]
+      properties:
+        id: { type: string, description: "Razorpay order ID or demo placeholder" }
+        amount: { type: integer, description: "Amount in paise (INR subunit)" }
+        currency: { type: string, example: "INR" }
+        keyId: { type: ["string", "null"], description: "Razorpay publishable key ID; null in demo mode" }
+        mode: { type: string, enum: [live, demo] }
 
     PaymentIntentResult:
       type: object

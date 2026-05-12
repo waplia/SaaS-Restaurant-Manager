@@ -120,6 +120,17 @@ export interface PayOrderInput {
   id: number;
   paymentMethod: string;
   stripePaymentIntentId?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
+export interface RazorpayOrderResult {
+  id: string;
+  amount: number;
+  currency: string;
+  keyId: string | null;
+  mode: "live" | "demo";
 }
 
 export interface PaymentIntentResult {

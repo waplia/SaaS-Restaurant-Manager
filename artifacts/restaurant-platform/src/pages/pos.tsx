@@ -5,7 +5,7 @@ import {
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
-  useCreatePaymentIntent,
+  useCreatePaymentIntent, useCreateRazorpayOrder,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -426,6 +426,14 @@ function SplitBillModal({
   );
 }
 
+interface PaymentConfirmDetails {
+  amountTendered?: number;
+  stripePaymentIntentId?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
 function PaymentModal({
   totals,
   orderId,
@@ -436,7 +444,7 @@ function PaymentModal({
   totals: Totals;
   orderId: number;
   onClose: () => void;
-  onConfirm: (method: string, amountTendered?: number, stripePaymentIntentId?: string) => Promise<void>;
+  onConfirm: (method: string, details?: PaymentConfirmDetails) => Promise<void>;
   isPending: boolean;
 }) {
   const [method, setMethod] = useState<"cash" | "card" | "upi">("cash");
@@ -448,6 +456,7 @@ function PaymentModal({
   const cardMountRef = useRef<HTMLDivElement>(null);
   const stripeRef = useRef<{ stripe: import("@stripe/stripe-js").Stripe | null; card: import("@stripe/stripe-js").StripeCardElement | null }>({ stripe: null, card: null });
   const createPaymentIntent = useCreatePaymentIntent();
+  const createRazorpayOrder = useCreateRazorpayOrder();
   const { toast } = useToast();
 
   const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
@@ -506,16 +515,55 @@ function PaymentModal({
             setStage("card-form");
             return;
           }
-          await onConfirm("card", undefined, result.paymentIntent?.id);
+          await onConfirm("card", { stripePaymentIntentId: result.paymentIntent?.id });
         } else {
           await new Promise(r => setTimeout(r, 1500));
-          await onConfirm("card", undefined, intent.intentId);
+          await onConfirm("card", { stripePaymentIntentId: intent.intentId });
         }
       } else if (method === "upi") {
-        await new Promise(r => setTimeout(r, 1500));
-        await onConfirm("upi");
+        const rzpOrder = await createRazorpayOrder.mutateAsync({ orderId });
+        if (rzpOrder.mode === "live" && rzpOrder.keyId) {
+          // Load Razorpay checkout.js script once
+          if (!(window as unknown as Record<string, unknown>).Razorpay) {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://checkout.razorpay.com/v1/checkout.js";
+              s.onload = () => resolve();
+              s.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+              document.body.appendChild(s);
+            });
+          }
+          // Open Razorpay hosted checkout — card/UPI/wallet selection handled by Razorpay
+          await new Promise<void>((resolve, reject) => {
+            const rzp = new (window as unknown as { Razorpay: new (opts: Record<string, unknown>) => { open(): void } }).Razorpay({
+              key: rzpOrder.keyId,
+              amount: rzpOrder.amount,
+              currency: rzpOrder.currency,
+              order_id: rzpOrder.id,
+              handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+                await onConfirm("upi", {
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpaySignature: response.razorpay_signature,
+                });
+                resolve();
+              },
+              modal: {
+                ondismiss: () => {
+                  setStage("upi-form");
+                  reject(new Error("Payment cancelled"));
+                },
+              },
+            });
+            rzp.open();
+          });
+        } else {
+          // Demo mode — simulate gateway latency then mark paid
+          await new Promise(r => setTimeout(r, 1500));
+          await onConfirm("upi", { razorpayPaymentId: `demo_rzp_pay_${orderId}_${Date.now()}` });
+        }
       } else {
-        await onConfirm("cash", Number(amountTendered) || undefined);
+        await onConfirm("cash", { amountTendered: Number(amountTendered) || undefined });
       }
     } catch {
       toast({ title: "Payment failed", description: "Please try again.", variant: "destructive" });
@@ -953,10 +1001,17 @@ export default function PosPage() {
     setShowPayModal(true);
   };
 
-  const handleConfirmPayment = async (method: string, amountTendered?: number, stripePaymentIntentId?: string) => {
+  const handleConfirmPayment = async (method: string, details?: PaymentConfirmDetails) => {
     const orderId = placedOrder?.id;
     if (!orderId) return;
-    await payOrder.mutateAsync({ id: orderId, paymentMethod: method, stripePaymentIntentId });
+    await payOrder.mutateAsync({
+      id: orderId,
+      paymentMethod: method,
+      stripePaymentIntentId: details?.stripePaymentIntentId,
+      razorpayPaymentId: details?.razorpayPaymentId,
+      razorpayOrderId: details?.razorpayOrderId,
+      razorpaySignature: details?.razorpaySignature,
+    });
     setShowPayModal(false);
     toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
     const receiptItems = placedOrder
@@ -966,7 +1021,7 @@ export default function PosPage() {
       orderNumber: placedOrder?.orderNumber ?? "",
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
-      amountTendered, customerName, restaurantName: restaurant?.name,
+      amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name,
     });
     handleNewOrder();
   };

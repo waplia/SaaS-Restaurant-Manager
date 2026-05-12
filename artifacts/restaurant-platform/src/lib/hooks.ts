@@ -128,6 +128,15 @@ export function useCreatePaymentIntent() {
   });
 }
 
+export function useCreateRazorpayOrder() {
+  return useMutation({
+    mutationFn: ({ orderId }: { orderId: number }) =>
+      apiPost<import("./types").RazorpayOrderResult>(
+        `/restaurants/${RESTAURANT_ID}/orders/${orderId}/razorpay-order`, {}
+      ),
+  });
+}
+
 export function useSplitOrder() {
   const qc = useQueryClient();
   return useMutation({

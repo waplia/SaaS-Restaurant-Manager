@@ -362,30 +362,135 @@ router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, 
   });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { paymentMethod, stripePaymentIntentId } = req.body;
   const orderId = Number(req.params.id);
 
-  // If Stripe is configured and a live payment intent ID is provided, verify it before completing
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  if (stripeSecretKey && stripePaymentIntentId && !String(stripePaymentIntentId).startsWith("demo_")) {
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Order is not payable" });
+  }
+
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (razorpayKeyId && razorpayKeySecret) {
     try {
-      const stripe = new Stripe(stripeSecretKey);
-      const intent = await stripe.paymentIntents.retrieve(String(stripePaymentIntentId));
-      if (intent.status !== "succeeded") {
-        return void res.status(400).json({ error: `Payment not confirmed: ${intent.status}` });
+      const amountPaise = Math.round(Number(order.totalAmount) * 100);
+      const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
+      const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: "INR",
+          notes: { orderId: String(orderId), restaurantId: String(restaurantId) },
+        }),
+      });
+      if (!rzpRes.ok) {
+        const err = await rzpRes.json().catch(() => ({})) as Record<string, unknown>;
+        return void res.status(502).json({ error: "Razorpay order creation failed", details: err });
       }
+      const rzpOrder = await rzpRes.json() as { id: string; amount: number; currency: string };
+      return res.json({ id: rzpOrder.id, amount: rzpOrder.amount, currency: rzpOrder.currency, keyId: razorpayKeyId, mode: "live" });
     } catch {
-      return void res.status(400).json({ error: "Failed to verify payment with Stripe" });
+      return void res.status(500).json({ error: "Failed to create Razorpay order" });
     }
   }
 
+  // Demo mode — no Razorpay keys configured
+  return res.json({
+    id: `demo_rzp_order_${orderId}_${Date.now()}`,
+    amount: Math.round(Number(order.totalAmount) * 100),
+    currency: "INR",
+    keyId: null,
+    mode: "demo",
+  });
+});
+
+router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { paymentMethod, stripePaymentIntentId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+
+  // Load order — verify it exists and is payable before touching payment gateway
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Order is already completed or cancelled" });
+  }
+
+  // ── Card payment verification ──────────────────────────────────────────────
+  if (paymentMethod === "card") {
+    if (!stripePaymentIntentId) {
+      return void res.status(400).json({ error: "Card payments require a Stripe PaymentIntent ID" });
+    }
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (stripeSecretKey) {
+      if (String(stripePaymentIntentId).startsWith("demo_")) {
+        return void res.status(400).json({ error: "Demo intent IDs cannot be used when Stripe is configured" });
+      }
+      try {
+        const stripe = new Stripe(stripeSecretKey);
+        const intent = await stripe.paymentIntents.retrieve(String(stripePaymentIntentId));
+        if (intent.status !== "succeeded") {
+          return void res.status(400).json({ error: `Payment not confirmed: ${intent.status}` });
+        }
+        // Verify the intent actually belongs to this order/restaurant (prevent replay attacks)
+        if (intent.metadata?.orderId !== String(orderId) || intent.metadata?.restaurantId !== String(restaurantId)) {
+          return void res.status(400).json({ error: "PaymentIntent does not belong to this order" });
+        }
+        const expectedPaise = Math.round(Number(order.totalAmount) * 100);
+        if (intent.amount !== expectedPaise) {
+          return void res.status(400).json({ error: "PaymentIntent amount does not match order total" });
+        }
+        if (intent.currency !== "inr") {
+          return void res.status(400).json({ error: "PaymentIntent currency mismatch" });
+        }
+      } catch {
+        return void res.status(400).json({ error: "Failed to verify PaymentIntent with Stripe" });
+      }
+    } else {
+      // Stripe not configured — only accept demo intent IDs
+      if (!String(stripePaymentIntentId).startsWith("demo_")) {
+        return void res.status(400).json({ error: "Stripe is not configured; only demo payment IDs are accepted" });
+      }
+    }
+  }
+
+  // ── UPI / Razorpay payment verification ───────────────────────────────────
+  if (paymentMethod === "upi") {
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (razorpayKeySecret) {
+      if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+        return void res.status(400).json({ error: "UPI payments require razorpayPaymentId, razorpayOrderId, and razorpaySignature" });
+      }
+      if (String(razorpayPaymentId).startsWith("demo_")) {
+        return void res.status(400).json({ error: "Demo payment IDs cannot be used when Razorpay is configured" });
+      }
+      // Verify Razorpay HMAC signature
+      const { createHmac } = await import("crypto");
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const expectedSig = createHmac("sha256", razorpayKeySecret).update(body).digest("hex");
+      if (expectedSig !== String(razorpaySignature)) {
+        return void res.status(400).json({ error: "Razorpay signature verification failed" });
+      }
+    } else {
+      // Razorpay not configured — only accept demo payment IDs
+      if (razorpayPaymentId && !String(razorpayPaymentId).startsWith("demo_")) {
+        return void res.status(400).json({ error: "Razorpay is not configured; only demo payment IDs are accepted" });
+      }
+    }
+  }
+
+  const storedPaymentId = stripePaymentIntentId ?? razorpayPaymentId ?? null;
   const [updated] = await db.update(ordersTable).set({
     paymentMethod,
     paymentStatus: "paid",
     status: "completed",
-    stripePaymentId: stripePaymentIntentId ?? null,
+    stripePaymentId: storedPaymentId,
     updatedAt: new Date(),
   }).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
