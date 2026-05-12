@@ -1,93 +1,91 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, usersTable } from "../lib/db";
+import { requireRole } from "../middleware/authorize";
 
 const router = Router();
 
-router.get("/users", async (req, res) => {
-  const { restaurantId, role } = req.query;
-  let query = db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    avatarUrl: usersTable.avatarUrl,
-    isActive: usersTable.isActive,
-    restaurantId: usersTable.restaurantId,
-    lastLoginAt: usersTable.lastLoginAt,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable);
+const userFields = {
+  id: usersTable.id,
+  name: usersTable.name,
+  email: usersTable.email,
+  role: usersTable.role,
+  phone: usersTable.phone,
+  avatarUrl: usersTable.avatarUrl,
+  isActive: usersTable.isActive,
+  restaurantId: usersTable.restaurantId,
+  tenantId: usersTable.tenantId,
+  lastLoginAt: usersTable.lastLoginAt,
+  createdAt: usersTable.createdAt,
+};
 
-  const conditions = [];
+router.get("/users", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const { restaurantId, role } = req.query;
+  const conditions: ReturnType<typeof eq>[] = [];
+
+  if (!req.user!.isSuperAdmin) {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) return void res.status(403).json({ error: "No tenant" });
+    conditions.push(eq(usersTable.tenantId, tenantId));
+  }
+
   if (restaurantId) conditions.push(eq(usersTable.restaurantId, Number(restaurantId)));
   if (role) conditions.push(eq(usersTable.role, String(role)));
-  if (conditions.length) query = query.where(and(...conditions)) as typeof query;
 
-  const rows = await query;
+  const rows = await db.select(userFields).from(usersTable).where(conditions.length ? and(...conditions) : undefined);
   res.json(rows);
 });
 
-router.post("/users", async (req, res) => {
-  const { name, email, passwordHash, role, phone, restaurantId, tenantId } = req.body;
-  const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    avatarUrl: usersTable.avatarUrl,
-    isActive: usersTable.isActive,
-    restaurantId: usersTable.restaurantId,
-    lastLoginAt: usersTable.lastLoginAt,
-    createdAt: usersTable.createdAt,
-  });
+router.post("/users", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const { name, email, passwordHash, role, phone, restaurantId } = req.body;
+  const tenantId = req.user!.isSuperAdmin ? (req.body.tenantId as number) : req.user!.tenantId;
+  const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning(userFields);
   res.status(201).json(user);
 });
 
-router.get("/users/:id", async (req, res) => {
-  const [user] = await db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    avatarUrl: usersTable.avatarUrl,
-    isActive: usersTable.isActive,
-    restaurantId: usersTable.restaurantId,
-    lastLoginAt: usersTable.lastLoginAt,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
+router.get("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const [user] = await db.select(userFields).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
   if (!user) return void res.status(404).json({ error: "Not found" });
+  if (!req.user!.isSuperAdmin && user.tenantId !== req.user!.tenantId) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
   res.json(user);
 });
 
-router.patch("/users/:id", async (req, res) => {
+router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const [existing] = await db.select({ id: usersTable.id, tenantId: usersTable.tenantId }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+  if (!req.user!.isSuperAdmin && existing.tenantId !== req.user!.tenantId) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
   const { name, phone, role, isActive, avatarUrl } = req.body;
-  const [updated] = await db.update(usersTable).set({ name, phone, role, isActive, avatarUrl, updatedAt: new Date() }).where(eq(usersTable.id, Number(req.params.id))).returning({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    avatarUrl: usersTable.avatarUrl,
-    isActive: usersTable.isActive,
-    restaurantId: usersTable.restaurantId,
-    lastLoginAt: usersTable.lastLoginAt,
-    createdAt: usersTable.createdAt,
-  });
-  if (!updated) return void res.status(404).json({ error: "Not found" });
+  const [updated] = await db.update(usersTable)
+    .set({ name, phone, role, isActive, avatarUrl, updatedAt: new Date() })
+    .where(eq(usersTable.id, Number(req.params.id)))
+    .returning(userFields);
   res.json(updated);
 });
 
-router.delete("/users/:id", async (req, res) => {
+router.delete("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const [existing] = await db.select({ id: usersTable.id, tenantId: usersTable.tenantId }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+  if (!req.user!.isSuperAdmin && existing.tenantId !== req.user!.tenantId) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
   await db.update(usersTable).set({ isActive: false }).where(eq(usersTable.id, Number(req.params.id)));
   res.status(204).send();
 });
 
-router.get("/restaurants/:restaurantId/staff", async (req, res) => {
+router.get("/restaurants/:restaurantId/staff", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const { role } = req.query;
-  const conditions: ReturnType<typeof eq>[] = [eq(usersTable.restaurantId, Number(req.params.restaurantId))];
+  const conditions: ReturnType<typeof eq>[] = [eq(usersTable.restaurantId, restaurantId)];
+
+  if (!req.user!.isSuperAdmin) {
+    const tenantId = req.user!.tenantId;
+    if (tenantId) conditions.push(eq(usersTable.tenantId, tenantId));
+  }
+
   if (role) conditions.push(eq(usersTable.role, String(role)));
   const rows = await db.select({
     id: usersTable.id,

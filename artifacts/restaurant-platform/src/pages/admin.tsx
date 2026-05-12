@@ -22,6 +22,7 @@ interface Tenant {
 
 interface TenantList {
   tenants: Tenant[];
+  data?: Tenant[];
   total: number;
 }
 
@@ -180,7 +181,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(tenantData?.tenants ?? []).map(tenant => (
+                  {(tenantData?.tenants ?? tenantData?.data ?? []).map(tenant => (
                     <tr key={tenant.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-4">
                         <div>
@@ -211,7 +212,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
-                  {(tenantData?.tenants ?? []).length === 0 && (
+                  {(tenantData?.tenants ?? tenantData?.data ?? []).length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
                         No tenants found.

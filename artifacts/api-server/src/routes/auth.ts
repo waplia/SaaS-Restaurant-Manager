@@ -206,7 +206,7 @@ router.post("/auth/forgot-password", async (req, res) => {
     .where(eq(usersTable.email, email.toLowerCase()));
 
   if (user) {
-    const resetToken = signAccessToken({
+    const _resetToken = signAccessToken({
       sub: user.id,
       email: user.email,
       role: "reset",
@@ -214,12 +214,7 @@ router.post("/auth/forgot-password", async (req, res) => {
       restaurantId: null,
       isSuperAdmin: false,
     });
-    res.json({
-      success: true,
-      message: "If an account with that email exists, a reset link has been sent.",
-      resetToken,
-    });
-    return;
+    console.info(`[password-reset] token for ${user.email}: ${_resetToken}`);
   }
   res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
 });

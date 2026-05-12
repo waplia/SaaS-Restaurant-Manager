@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
+import { authenticate } from "../middleware/authenticate";
 import healthRouter from "./health";
 import authRouter from "./auth";
+import publicRouter from "./public";
 import tenantsRouter from "./tenants";
 import restaurantsRouter from "./restaurants";
 import usersRouter from "./users";
@@ -13,12 +15,15 @@ import shiftsRouter from "./shifts";
 import customersRouter from "./customers";
 import dashboardRouter from "./dashboard";
 import realtimeRouter from "./realtime";
-import publicRouter from "./public";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(publicRouter);
+
+router.use(authenticate);
+
 router.use(tenantsRouter);
 router.use(restaurantsRouter);
 router.use(usersRouter);
@@ -31,6 +36,5 @@ router.use(shiftsRouter);
 router.use(customersRouter);
 router.use(dashboardRouter);
 router.use(realtimeRouter);
-router.use(publicRouter);
 
 export default router;
