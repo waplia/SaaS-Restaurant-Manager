@@ -23,6 +23,7 @@ import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
+import PosPage from "@/pages/pos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
+      <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
       <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />

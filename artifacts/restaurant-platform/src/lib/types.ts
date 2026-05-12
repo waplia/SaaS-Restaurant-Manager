@@ -75,21 +75,62 @@ export interface OrdersResponse {
   page: number;
 }
 
+export interface OrderItem {
+  id: number;
+  orderId: number;
+  menuItemId: number;
+  menuItemName: string;
+  quantity: number;
+  unitPrice: string;
+  totalPrice: string;
+  notes: string | null;
+  status: string;
+}
+
+export interface OrderDetail extends Order {
+  subtotal: string;
+  taxAmount: string;
+  serviceCharge: string;
+  discountAmount: string;
+  notes: string | null;
+  customerPhone: string | null;
+  items: OrderItem[];
+}
+
 export interface CreateOrderInput {
   tableId?: number;
   orderType: string;
-  items: { menuItemId: number; quantity: number }[];
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string;
+  discountAmount?: string;
+  isPriority?: boolean;
+  items: { menuItemId: number; quantity: number; notes?: string }[];
 }
 
 export interface UpdateOrderInput {
   id: number;
   status?: string;
   paymentStatus?: string;
+  discountAmount?: string;
+  notes?: string;
 }
 
 export interface PayOrderInput {
   id: number;
   paymentMethod: string;
+}
+
+export interface AddOrderItemInput {
+  orderId: number;
+  menuItemId: number;
+  quantity: number;
+  notes?: string;
+}
+
+export interface ApplyDiscountInput {
+  orderId: number;
+  discountAmount: number;
 }
 
 export interface FloorTable {

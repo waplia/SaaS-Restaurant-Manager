@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Bell, Settings,
-  Flame, Sun, Moon, LogOut, ShieldCheck
+  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/lib/hooks";
@@ -12,7 +12,8 @@ import type { AppNotification } from "@/lib/types";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orders", label: "Orders & POS", icon: ShoppingCart },
+  { href: "/pos", label: "POS Terminal", icon: Monitor },
+  { href: "/orders", label: "Orders", icon: ShoppingCart },
   { href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { href: "/tables", label: "Tables", icon: Table2 },
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },

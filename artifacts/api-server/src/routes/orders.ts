@@ -13,6 +13,34 @@ function generateOrderNumber(): string {
   return `ORD-${Date.now().toString(36).toUpperCase()}`;
 }
 
+async function getRestaurantRates(restaurantId: number) {
+  const [row] = await db
+    .select({ taxRate: restaurantsTable.taxRate, serviceCharge: restaurantsTable.serviceCharge })
+    .from(restaurantsTable)
+    .where(eq(restaurantsTable.id, restaurantId));
+  return {
+    taxRate: Number(row?.taxRate ?? 5) / 100,
+    serviceRate: Number(row?.serviceCharge ?? 0) / 100,
+  };
+}
+
+async function recalculateOrderTotals(orderId: number, restaurantId: number, discountAmount: number) {
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const subtotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
+  const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
+  const taxAmount = subtotal * taxRate;
+  const serviceCharge = subtotal * serviceRate;
+  const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge - discountAmount);
+  await db.update(ordersTable).set({
+    subtotal: subtotal.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    serviceCharge: serviceCharge.toFixed(2),
+    totalAmount: totalAmount.toFixed(2),
+    updatedAt: new Date(),
+  }).where(eq(ordersTable.id, orderId));
+  return { subtotal, taxAmount, serviceCharge, totalAmount };
+}
+
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   const { status, tableId, page, limit } = req.query;
   const pg = Number(page) || 1;
@@ -33,7 +61,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, isPriority, items } = req.body;
+  const { tableId, orderType, notes, customerName, customerPhone, isPriority, items, discountAmount } = req.body;
 
   let subtotal = 0;
   const enrichedItems: Array<{ menuItem: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }> = [];
@@ -46,15 +74,11 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     enrichedItems.push({ menuItem: mi, qty: item.quantity, notes: item.notes, modifiers: item.modifiers });
   }
 
-  const [restaurantRow] = await db
-    .select({ taxRate: restaurantsTable.taxRate, serviceCharge: restaurantsTable.serviceCharge })
-    .from(restaurantsTable)
-    .where(eq(restaurantsTable.id, restaurantId));
-  const taxRate = Number(restaurantRow?.taxRate ?? 5) / 100;
-  const serviceRate = Number(restaurantRow?.serviceCharge ?? 0) / 100;
+  const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
   const taxAmount = subtotal * taxRate;
   const serviceCharge = subtotal * serviceRate;
-  const totalAmount = subtotal + taxAmount + serviceCharge;
+  const discountAmt = Number(discountAmount ?? 0);
+  const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge - discountAmt);
 
   const [order] = await db.insert(ordersTable).values({
     restaurantId,
@@ -68,6 +92,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     subtotal: subtotal.toFixed(2),
     taxAmount: taxAmount.toFixed(2),
     serviceCharge: serviceCharge.toFixed(2),
+    discountAmount: discountAmt.toFixed(2),
     totalAmount: totalAmount.toFixed(2),
   }).returning();
 
@@ -117,6 +142,110 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   if (!updated) return void res.status(404).json({ error: "Not found" });
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
+
+  res.json(updated);
+});
+
+router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { menuItemId, quantity, notes } = req.body;
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
+  }
+
+  const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
+  if (!mi) return void res.status(404).json({ error: "Menu item not found" });
+
+  const unitPrice = Number(mi.price);
+  const qty = Number(quantity) || 1;
+
+  const existingItems = await db.select().from(orderItemsTable).where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
+
+  if (existingItems.length > 0) {
+    const existing = existingItems[0];
+    const newQty = existing.quantity + qty;
+    await db.update(orderItemsTable).set({
+      quantity: newQty,
+      totalPrice: (unitPrice * newQty).toFixed(2),
+    }).where(eq(orderItemsTable.id, existing.id));
+  } else {
+    await db.insert(orderItemsTable).values({
+      orderId,
+      menuItemId: mi.id,
+      menuItemName: mi.name,
+      quantity: qty,
+      unitPrice: unitPrice.toFixed(2),
+      totalPrice: (unitPrice * qty).toFixed(2),
+      notes,
+    });
+  }
+
+  const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals });
+
+  res.json({ ...updatedOrder, items });
+});
+
+router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+
+  await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
+  await db.delete(orderItemsTable).where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
+
+  const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals });
+
+  res.json({ ...updatedOrder, items });
+});
+
+router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { discountAmount } = req.body;
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+
+  const discount = Math.max(0, Number(discountAmount ?? 0));
+  await db.update(ordersTable).set({ discountAmount: discount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+
+  await recalculateOrderTotals(orderId, restaurantId, discount);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  res.json({ ...updatedOrder, items });
+});
+
+router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed") return void res.status(400).json({ error: "Cannot void a completed order" });
+
+  const [updated] = await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, orderId)).returning();
+
+  if (order.tableId) {
+    await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  }
+
+  broadcastEvent(restaurantId, "order:status", { id: orderId, status: "cancelled", orderNumber: order.orderNumber });
 
   res.json(updated);
 });

@@ -93,6 +93,61 @@ export function usePayOrder() {
   });
 }
 
+export function useOrderDetail(id?: number) {
+  return useQuery({
+    queryKey: ["orders", "detail", RESTAURANT_ID, id],
+    queryFn: () => apiGet<import("./types").OrderDetail>(`/restaurants/${RESTAURANT_ID}/orders/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useAddOrderItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, ...data }: import("./types").AddOrderItemInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items`, data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useRemoveOrderItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, itemId }: { orderId: number; itemId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items/${itemId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+export function useApplyDiscount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, discountAmount }: import("./types").ApplyDiscountInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discount`, { discountAmount }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useVoidOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: number) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/void`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["tables", RESTAURANT_ID] });
+    },
+  });
+}
+
 export function useKitchenTickets(status?: string) {
   const q = status ? `?status=${status}` : "";
   return useQuery({
