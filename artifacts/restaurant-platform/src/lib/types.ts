@@ -266,12 +266,22 @@ export interface StaffPerformanceItem {
   totalHours: string;
 }
 
+export interface TaxByDayItem {
+  date: string;
+  tax: string;
+  orders: number;
+  revenue: string;
+  effectiveRate: string;
+}
+
 export interface ReportsData {
   totalRevenue: string;
   totalOrders: number;
   avgOrderValue: string;
   totalTax: string;
+  effectiveTaxRate: string;
   revenueByDay: RevenueByDayItem[];
+  taxByDay: TaxByDayItem[];
   topItems: TopItem[];
   staffPerformance: StaffPerformanceItem[];
 }

@@ -164,11 +164,12 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   const totalTax = orders.reduce((s, o) => s + Number(o.taxAmount), 0);
   const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
 
-  const byDay: Record<string, { revenue: number; orders: number }> = {};
+  const byDay: Record<string, { revenue: number; tax: number; orders: number }> = {};
   for (const o of orders) {
     const key = o.createdAt.toISOString().split("T")[0];
-    if (!byDay[key]) byDay[key] = { revenue: 0, orders: 0 };
+    if (!byDay[key]) byDay[key] = { revenue: 0, tax: 0, orders: 0 };
     byDay[key].revenue += Number(o.totalAmount);
+    byDay[key].tax += Number(o.taxAmount);
     byDay[key].orders++;
   }
 
@@ -224,14 +225,23 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     LIMIT 20
   `);
 
+  const effectiveTaxRate = totalRevenue > 0 ? ((totalTax / totalRevenue) * 100).toFixed(2) : "0.00";
+  const sortedDays = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
+
   res.json({
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,
     totalTax: totalTax.toFixed(2),
+    effectiveTaxRate,
     avgOrderValue: avgOrderValue.toFixed(2),
-    revenueByDay: Object.entries(byDay)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
+    revenueByDay: sortedDays.map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
+    taxByDay: sortedDays.map(([date, v]) => ({
+      date,
+      tax: v.tax.toFixed(2),
+      revenue: v.revenue.toFixed(2),
+      orders: v.orders,
+      effectiveRate: v.revenue > 0 ? ((v.tax / v.revenue) * 100).toFixed(1) : "0.0",
+    })),
     topItems: topItemsRows.map(r => ({ ...r, imageUrl: null, categoryName: null })),
     staffPerformance: staffPerfRows.rows.map(r => ({
       userId: r.user_id,

@@ -3,7 +3,7 @@ import { eq, and, desc, count } from "drizzle-orm";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
-import { broadcastEvent } from "./realtime";
+import { broadcastEvent } from "../lib/socketio";
 
 const router = Router();
 

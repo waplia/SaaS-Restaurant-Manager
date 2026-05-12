@@ -7,17 +7,19 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { format } from "date-fns";
-import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users } from "lucide-react";
+import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RevenueByDayItem, TopItem, StaffPerformanceItem } from "@/lib/types";
+import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem } from "@/lib/types";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const COLORS = [
   "hsl(24 95% 53%)", "hsl(142 72% 45%)", "hsl(217 91% 60%)",
   "hsl(280 65% 60%)", "hsl(348 83% 55%)",
 ];
 
-type Tab = "sales" | "staff";
+type Tab = "sales" | "tax" | "staff";
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -50,6 +52,12 @@ export default function ReportsPage() {
         (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => [r.date, String(r.revenue), String(r.orders)]),
         ["Date", "Revenue", "Orders"],
       );
+    } else if (tab === "tax") {
+      exportCSV(
+        `tax-report-${new Date().toISOString().slice(0, 10)}.csv`,
+        (reports.taxByDay ?? []).map((r: TaxByDayItem) => [r.date, r.tax, r.revenue, String(r.orders), `${r.effectiveRate}%`]),
+        ["Date", "Tax Collected", "Revenue", "Orders", "Effective Rate"],
+      );
     } else {
       exportCSV(
         `staff-report-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -62,6 +70,7 @@ export default function ReportsPage() {
   function handleExportExcel() {
     if (!reports) return;
     const wb = XLSX.utils.book_new();
+
     const salesRows = (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => ({
       Date: r.date,
       Revenue: Number(r.revenue),
@@ -69,6 +78,16 @@ export default function ReportsPage() {
       "Avg Order": r.orders > 0 ? Number((Number(r.revenue) / r.orders).toFixed(2)) : 0,
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(salesRows), "Sales");
+
+    const taxRows = (reports.taxByDay ?? []).map((r: TaxByDayItem) => ({
+      Date: r.date,
+      "Tax Collected": Number(r.tax),
+      Revenue: Number(r.revenue),
+      Orders: r.orders,
+      "Effective Rate (%)": Number(r.effectiveRate),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taxRows), "Tax");
+
     const staffRows = (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => ({
       "Staff Member": s.name,
       "Orders Handled": s.orderCount,
@@ -77,14 +96,90 @@ export default function ReportsPage() {
       "Revenue / Order": s.orderCount > 0 ? Number((Number(s.totalRevenue) / s.orderCount).toFixed(2)) : 0,
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
+
     const summaryRows = [
       { Metric: "Total Revenue", Value: Number(reports.totalRevenue) },
       { Metric: "Total Orders", Value: reports.totalOrders },
       { Metric: "Avg Order Value", Value: Number(reports.avgOrderValue) },
       { Metric: "Tax Collected", Value: Number(reports.totalTax) },
+      { Metric: "Effective Tax Rate (%)", Value: Number(reports.effectiveTaxRate ?? 0) },
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
+
     XLSX.writeFile(wb, `tabletrack-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  function handleExportPDF() {
+    if (!reports) return;
+    const doc = new jsPDF();
+    const dateStr = new Date().toLocaleDateString();
+
+    doc.setFontSize(18);
+    doc.text("TableTrack — Analytics Report", 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${dateStr}`, 14, 26);
+
+    doc.setFontSize(13);
+    doc.text("Summary", 14, 36);
+    autoTable(doc, {
+      startY: 40,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Total Revenue", `₹${Number(reports.totalRevenue).toLocaleString()}`],
+        ["Total Orders", String(reports.totalOrders)],
+        ["Avg Order Value", `₹${Number(reports.avgOrderValue).toFixed(2)}`],
+        ["Tax Collected", `₹${Number(reports.totalTax).toLocaleString()}`],
+        ["Effective Tax Rate", `${reports.effectiveTaxRate ?? "0.00"}%`],
+      ],
+    });
+
+    const afterSummary = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
+    doc.setFontSize(13);
+    doc.text("Daily Revenue", 14, afterSummary + 10);
+    autoTable(doc, {
+      startY: afterSummary + 14,
+      head: [["Date", "Revenue", "Orders", "Avg Order"]],
+      body: (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => [
+        r.date,
+        `₹${Number(r.revenue).toLocaleString()}`,
+        String(r.orders),
+        r.orders > 0 ? `₹${(Number(r.revenue) / r.orders).toFixed(0)}` : "–",
+      ]),
+    });
+
+    const afterRevenue = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 140;
+    doc.addPage();
+    doc.setFontSize(13);
+    doc.text("Tax Breakdown", 14, 18);
+    autoTable(doc, {
+      startY: 22,
+      head: [["Date", "Tax Collected", "Revenue", "Orders", "Rate"]],
+      body: (reports.taxByDay ?? []).map((r: TaxByDayItem) => [
+        r.date,
+        `₹${Number(r.tax).toLocaleString()}`,
+        `₹${Number(r.revenue).toLocaleString()}`,
+        String(r.orders),
+        `${r.effectiveRate}%`,
+      ]),
+    });
+
+    const afterTax = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
+    doc.setFontSize(13);
+    doc.text("Staff Performance", 14, afterTax + 10);
+    autoTable(doc, {
+      startY: afterTax + 14,
+      head: [["Staff Member", "Orders", "Revenue", "Hours", "Rev/Order"]],
+      body: (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => [
+        s.name,
+        String(s.orderCount),
+        `₹${Number(s.totalRevenue).toLocaleString()}`,
+        `${s.totalHours}h`,
+        s.orderCount > 0 ? `₹${(Number(s.totalRevenue) / s.orderCount).toFixed(0)}` : "–",
+      ]),
+    });
+
+    void afterRevenue;
+    doc.save(`tabletrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   const statCards = [
@@ -106,6 +201,9 @@ export default function ReportsPage() {
             </Button>
             <Button size="sm" variant="outline" onClick={handleExportExcel} disabled={!reports}>
               <Download className="w-4 h-4 mr-1.5" /> Excel
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleExportPDF} disabled={!reports}>
+              <Download className="w-4 h-4 mr-1.5" /> PDF
             </Button>
           </div>
         }
@@ -171,7 +269,11 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex gap-1 border-b border-border">
-          {([{ label: "Sales", val: "sales" as Tab }, { label: "Staff Performance", val: "staff" as Tab }]).map(({ label, val }) => (
+          {([
+            { label: "Sales", val: "sales" as Tab },
+            { label: "Tax", val: "tax" as Tab },
+            { label: "Staff Performance", val: "staff" as Tab },
+          ]).map(({ label, val }) => (
             <button
               key={val}
               onClick={() => setTab(val)}
@@ -277,6 +379,97 @@ export default function ReportsPage() {
                           <td className="px-5 py-2.5 text-right text-muted-foreground">
                             {row.orders > 0 ? `₹${(Number(row.revenue) / row.orders).toFixed(0)}` : "–"}
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "tax" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-sm text-muted-foreground mb-1">Total Tax Collected</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {isLoading ? "–" : reports ? `₹${Number(reports.totalTax).toLocaleString()}` : "–"}
+                </p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-sm text-muted-foreground mb-1">Effective Tax Rate</p>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl font-bold text-foreground">
+                    {isLoading ? "–" : reports?.effectiveTaxRate ?? "0.00"}
+                  </p>
+                  <span className="text-muted-foreground text-sm">%</span>
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Percent className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Tax / Revenue Ratio</p>
+                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {isLoading || !reports ? "–" : Number(reports.totalRevenue) > 0
+                    ? `${((Number(reports.totalTax) / Number(reports.totalRevenue)) * 100).toFixed(1)}%`
+                    : "0%"}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-xl p-5">
+              <h3 className="font-semibold text-foreground mb-4">Daily Tax Collection</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={reports?.taxByDay ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="taxGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(280 65% 60%)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(280 65% 60%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
+                    try { return format(new Date(d + "T12:00:00"), "MMM d"); } catch { return d; }
+                  }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                  <Tooltip
+                    formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Tax"]}
+                    labelFormatter={(d: string) => { try { return format(new Date(d + "T12:00:00"), "MMMM d, yyyy"); } catch { return d; } }}
+                  />
+                  <Area type="monotone" dataKey="tax" stroke="hsl(280 65% 60%)" fill="url(#taxGrad)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {(reports?.taxByDay?.length ?? 0) > 0 && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <h3 className="font-semibold text-foreground">Daily Tax Breakdown</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Date</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Orders</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Revenue</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Tax Collected</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Effective Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(reports?.taxByDay ?? []).slice().reverse().map((row: TaxByDayItem) => (
+                        <tr key={row.date} className="border-t border-border hover:bg-muted/20">
+                          <td className="px-5 py-2.5 text-foreground">
+                            {(() => { try { return format(new Date(row.date + "T12:00:00"), "MMM d, yyyy"); } catch { return row.date; } })()}
+                          </td>
+                          <td className="px-5 py-2.5 text-right text-foreground">{row.orders}</td>
+                          <td className="px-5 py-2.5 text-right text-foreground">₹{Number(row.revenue).toLocaleString()}</td>
+                          <td className="px-5 py-2.5 text-right font-medium text-foreground">₹{Number(row.tax).toLocaleString()}</td>
+                          <td className="px-5 py-2.5 text-right text-muted-foreground">{row.effectiveRate}%</td>
                         </tr>
                       ))}
                     </tbody>
