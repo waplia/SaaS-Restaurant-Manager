@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, ordersTable, orderItemsTable, floorTablesTable, notificationsTable } from "../lib/db";
+import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 
 const router = Router();
 
@@ -55,6 +56,8 @@ router.post("/public/orders", async (req, res) => {
     await db.update(floorTablesTable).set({ status: "occupied" }).where(eq(floorTablesTable.id, tableId));
     await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New Order", message: `New order from table. Order: ${order.orderNumber}` });
   }
+
+  broadcastEvent(restaurantId, "order:new", { id: order.id, orderNumber: order.orderNumber, status: order.status, tableId });
 
   res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount });
 });

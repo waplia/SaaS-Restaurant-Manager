@@ -11,6 +11,7 @@ interface SocketUser {
 declare module "socket.io" {
   interface SocketData {
     user?: SocketUser;
+    isGuest?: boolean;
   }
 }
 
@@ -29,10 +30,15 @@ export function initSocketIO(httpServer: HTTPServer): Server {
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined
       ?? socket.handshake.query?.token as string | undefined;
-    if (!token) return next(new Error("Missing token"));
+    if (!token) {
+      socket.data.isGuest = true;
+      socket.data.user = undefined;
+      return next();
+    }
     try {
       const payload = verifyToken(token);
       if (payload.type !== "access") return next(new Error("Invalid token type"));
+      socket.data.isGuest = false;
       socket.data.user = {
         restaurantId: payload.restaurantId,
         tenantId: payload.tenantId,
@@ -40,7 +46,9 @@ export function initSocketIO(httpServer: HTTPServer): Server {
       };
       next();
     } catch {
-      next(new Error("Invalid or expired token"));
+      socket.data.isGuest = true;
+      socket.data.user = undefined;
+      next();
     }
   });
 
@@ -49,6 +57,18 @@ export function initSocketIO(httpServer: HTTPServer): Server {
     if (restaurantId) {
       void socket.join(`restaurant:${restaurantId}`);
     }
+
+    socket.on("join:order", (orderId: unknown) => {
+      if (typeof orderId === "number" && orderId > 0) {
+        void socket.join(`order:${orderId}`);
+      }
+    });
+
+    socket.on("leave:order", (orderId: unknown) => {
+      if (typeof orderId === "number" && orderId > 0) {
+        void socket.leave(`order:${orderId}`);
+      }
+    });
   });
 
   return io;
@@ -57,4 +77,9 @@ export function initSocketIO(httpServer: HTTPServer): Server {
 export function broadcastEvent(restaurantId: number, event: string, data: unknown): void {
   if (!io) return;
   io.to(`restaurant:${restaurantId}`).emit(event, data);
+}
+
+export function broadcastOrderUpdate(orderId: number, data: unknown): void {
+  if (!io) return;
+  io.to(`order:${orderId}`).emit("order:update", data);
 }

@@ -51,10 +51,14 @@ router.delete("/restaurants/:restaurantId/tables/:id", requireRole("owner", "man
 });
 
 router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const [table] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, Number(req.params.id)));
   if (!table) return void res.status(404).json({ error: "Not found" });
-  const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-  res.json({ qrUrl: `${baseUrl}/order/${table.qrCode}`, tableNumber: table.tableNumber, svgData: "" });
+  const [restaurant] = await db.select({ slug: restaurantsTable.slug }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const slug = restaurant?.slug ?? String(restaurantId);
+  const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") || "";
+  const qrUrl = `${baseUrl}/menu/${slug}/${table.id}`;
+  res.json({ qrUrl, tableNumber: table.tableNumber, svgData: "" });
 });
 
 router.get("/restaurants/:restaurantId/reservations", async (req, res) => {

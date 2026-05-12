@@ -24,6 +24,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
 import PosPage from "@/pages/pos";
+import CustomerMenuPage from "@/pages/customer-menu";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
+      <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route component={NotFound} />
     </Switch>
   );

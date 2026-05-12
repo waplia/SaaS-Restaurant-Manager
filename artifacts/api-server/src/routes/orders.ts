@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
-import { broadcastEvent } from "../lib/socketio";
+import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 
 const router = Router();
 
@@ -144,6 +144,7 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   if (!updated) return void res.status(404).json({ error: "Not found" });
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
+  broadcastOrderUpdate(updated.id, { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
 
   res.json(updated);
 });
@@ -725,6 +726,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   }
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
+  broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
 
   res.json(updated);
 });

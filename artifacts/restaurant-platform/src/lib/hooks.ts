@@ -258,6 +258,15 @@ export function useUpdateTable() {
   });
 }
 
+export function useGetTableQr(tableId: number | null) {
+  return useQuery({
+    queryKey: ["table-qr", RESTAURANT_ID, tableId],
+    queryFn: () => apiGet<{ qrUrl: string; tableNumber: string }>(`/restaurants/${RESTAURANT_ID}/tables/${tableId}/qr`),
+    enabled: tableId !== null,
+    staleTime: 60000,
+  });
+}
+
 export function useMenus() {
   return useQuery({
     queryKey: ["menus", RESTAURANT_ID],
