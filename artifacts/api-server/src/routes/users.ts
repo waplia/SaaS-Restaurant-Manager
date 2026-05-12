@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { hashPassword } from "../lib/auth";
 
 const router = Router();
 
@@ -37,8 +38,12 @@ router.get("/users", requireRole("owner", "manager", "super_admin"), async (req,
 });
 
 router.post("/users", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, email, passwordHash, role, phone, restaurantId } = req.body;
+  const { name, email, password, role, phone, restaurantId } = req.body;
   const tenantId = req.user!.isSuperAdmin ? (req.body.tenantId as number) : req.user!.tenantId;
+
+  if (!password || typeof password !== "string" || password.length < 6) {
+    return void res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
 
   if (!req.user!.isSuperAdmin && tenantId) {
     const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
@@ -53,6 +58,7 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), async (req
     }
   }
 
+  const passwordHash = await hashPassword(password);
   const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning(userFields);
   res.status(201).json(user);
 });

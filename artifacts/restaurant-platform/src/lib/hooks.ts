@@ -16,6 +16,7 @@ import type {
   AppNotification,
   ReportsData,
   Supplier,
+  Role, Permission,
 } from "./types";
 
 const RESTAURANT_ID = 1;
@@ -642,5 +643,65 @@ export function useDeleteUser() {
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/users/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useRoles() {
+  return useQuery({
+    queryKey: ["roles"],
+    queryFn: () => apiGet<Role[]>("/roles"),
+  });
+}
+
+export function usePermissions() {
+  return useQuery({
+    queryKey: ["permissions"],
+    queryFn: () => apiGet<Permission[]>("/permissions"),
+  });
+}
+
+export function useRoleWithPermissions(roleId: number | null) {
+  return useQuery({
+    queryKey: ["roles", roleId, "permissions"],
+    queryFn: () => apiGet<Role>(`/roles/${roleId}`),
+    enabled: roleId !== null,
+  });
+}
+
+export function useCreateRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; slug: string; description?: string }) => apiPost<Role>("/roles", data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["roles"] }),
+  });
+}
+
+export function useDeleteRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/roles/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["roles"] }),
+  });
+}
+
+export function useAddRolePermission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ roleId, permissionId }: { roleId: number; permissionId: number }) =>
+      apiPost(`/roles/${roleId}/permissions`, { permissionId }),
+    onSuccess: (_d, { roleId }) => {
+      qc.invalidateQueries({ queryKey: ["roles", roleId, "permissions"] });
+    },
+  });
+}
+
+export function useRemoveRolePermission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ roleId, permissionId }: { roleId: number; permissionId: number }) =>
+      apiDelete(`/roles/${roleId}/permissions/${permissionId}`),
+    onSuccess: (_d, { roleId }) => {
+      qc.invalidateQueries({ queryKey: ["roles", roleId, "permissions"] });
+    },
   });
 }

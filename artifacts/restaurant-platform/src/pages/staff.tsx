@@ -7,6 +7,8 @@ import {
   useStaffShifts, useCreateStaffShift,
   useAttendance, useClockIn, useClockOut,
   useAuditLogs,
+  useRoles, usePermissions, useRoleWithPermissions, useCreateRole, useDeleteRole,
+  useAddRolePermission, useRemoveRolePermission,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog } from "@/lib/types";
+import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog, Role, Permission } from "@/lib/types";
 
 function generateTempPassword(): string {
   const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -46,7 +48,7 @@ const ALL_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS: Record<string, string> = { mon: "M", tue: "T", wed: "W", thu: "T", fri: "F", sat: "S", sun: "S" };
 const DAY_FULL: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 
-type TabType = "team" | "shifts" | "attendance" | "activity";
+type TabType = "team" | "shifts" | "attendance" | "activity" | "roles";
 
 function formatDateTime(iso: string) {
   try {
@@ -91,7 +93,7 @@ function TeamTab({
     if (!form.name || !form.email) return;
     const tempPassword = generateTempPassword();
     try {
-      await createUser.mutateAsync({ ...form, passwordHash: tempPassword, restaurantId: 1, tenantId: 1 });
+      await createUser.mutateAsync({ ...form, password: tempPassword, restaurantId: 1, tenantId: 1 });
       setGeneratedCreds({ name: form.name, password: tempPassword });
       setShowAdd(false);
       setForm({ name: "", email: "", phone: "", role: "waiter" });
@@ -717,6 +719,165 @@ function ActivityTab() {
   );
 }
 
+function RolesTab() {
+  const { data: roles = [] } = useRoles();
+  const { data: permissions = [] } = usePermissions();
+  const createRole = useCreateRole();
+  const deleteRole = useDeleteRole();
+  const addPerm = useAddRolePermission();
+  const removePerm = useRemoveRolePermission();
+  const { toast } = useToast();
+
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const { data: selectedRole } = useRoleWithPermissions(selectedRoleId);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", description: "" });
+
+  const grantedIds = new Set((selectedRole?.permissions ?? []).map((p: Permission) => p.id));
+
+  const resourceGroups = permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+    if (!acc[p.resource]) acc[p.resource] = [];
+    acc[p.resource].push(p);
+    return acc;
+  }, {});
+
+  const handleCreateRole = async () => {
+    if (!createForm.name.trim()) return;
+    const slug = createForm.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    try {
+      const role = await createRole.mutateAsync({ name: createForm.name, slug, description: createForm.description || undefined });
+      toast({ title: "Role created" });
+      setSelectedRoleId(role.id);
+      setShowCreate(false);
+      setCreateForm({ name: "", description: "" });
+    } catch {
+      toast({ title: "Failed to create role", variant: "destructive" });
+    }
+  };
+
+  const handleTogglePermission = async (permissionId: number) => {
+    if (!selectedRoleId || selectedRole?.isSystem) return;
+    try {
+      if (grantedIds.has(permissionId)) {
+        await removePerm.mutateAsync({ roleId: selectedRoleId, permissionId });
+      } else {
+        await addPerm.mutateAsync({ roleId: selectedRoleId, permissionId });
+      }
+    } catch {
+      toast({ title: "Failed to update permission", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteRole = async (id: number) => {
+    if (!confirm("Delete this role? This cannot be undone.")) return;
+    try {
+      await deleteRole.mutateAsync(id);
+      toast({ title: "Role deleted" });
+      if (selectedRoleId === id) setSelectedRoleId(null);
+    } catch {
+      toast({ title: "Delete failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="md:col-span-1">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">Roles</h3>
+          <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="w-3.5 h-3.5 mr-1" /> New Role</Button>
+        </div>
+
+        {showCreate && (
+          <div className="bg-card border border-border rounded-xl p-4 mb-3 space-y-3">
+            <div><Label>Role Name</Label><Input placeholder="e.g. Supervisor" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} /></div>
+            <div><Label>Description</Label><Input placeholder="Optional description" value={createForm.description} onChange={e => setCreateForm(p => ({ ...p, description: e.target.value }))} /></div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleCreateRole} disabled={createRole.isPending}>Create</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1">
+          {roles.map((role: Role) => (
+            <div
+              key={role.id}
+              onClick={() => setSelectedRoleId(role.id === selectedRoleId ? null : role.id)}
+              className={cn(
+                "flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer border transition-colors",
+                selectedRoleId === role.id ? "bg-primary/10 border-primary/30 text-primary" : "border-transparent hover:bg-muted/40 text-foreground"
+              )}
+            >
+              <div>
+                <p className="text-sm font-medium">{role.name}</p>
+                {role.isSystem && <span className="text-[10px] text-muted-foreground uppercase tracking-wide">System role</span>}
+                {role.description && !role.isSystem && <p className="text-xs text-muted-foreground">{role.description}</p>}
+              </div>
+              {!role.isSystem && (
+                <button onClick={e => { e.stopPropagation(); handleDeleteRole(role.id); }} className="text-muted-foreground hover:text-destructive transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+          {roles.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">No roles found</p>}
+        </div>
+      </div>
+
+      <div className="md:col-span-2">
+        {selectedRole ? (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="w-5 h-5 text-primary" />
+              <div>
+                <h3 className="text-sm font-semibold">{selectedRole.name} — Permissions</h3>
+                {selectedRole.isSystem && <p className="text-xs text-amber-600">System roles cannot be modified</p>}
+              </div>
+            </div>
+            <div className="space-y-5">
+              {Object.entries(resourceGroups).map(([resource, perms]) => (
+                <div key={resource}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 capitalize">{resource.replace(/_/g, " ")}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {perms.map((perm: Permission) => {
+                      const granted = grantedIds.has(perm.id);
+                      return (
+                        <button
+                          key={perm.id}
+                          disabled={selectedRole.isSystem}
+                          onClick={() => handleTogglePermission(perm.id)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
+                            granted ? "bg-green-50 border-green-200 text-green-800" : "bg-card border-border text-muted-foreground hover:bg-muted/40"
+                          )}
+                        >
+                          <div className={cn("w-4 h-4 rounded flex items-center justify-center flex-shrink-0", granted ? "bg-green-500 text-white" : "border border-border bg-background")}>
+                            {granted && <CheckCircle2 className="w-3 h-3" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium capitalize">{perm.action.replace(/_/g, " ")}</p>
+                            {perm.description && <p className="text-[10px] text-muted-foreground">{perm.description}</p>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {permissions.length === 0 && <p className="text-sm text-muted-foreground">No permissions defined</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Shield className="w-12 h-12 mb-3 opacity-20" />
+            <p className="text-sm">Select a role to view and edit its permissions</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function StaffPage() {
   const [tab, setTab] = useState<TabType>("team");
   const [roleFilter, setRoleFilter] = useState<string | undefined>();
@@ -729,6 +890,7 @@ export default function StaffPage() {
     { id: "shifts", label: "Shifts", icon: Calendar },
     { id: "attendance", label: "Attendance", icon: Clock },
     { id: "activity", label: "Activity Log", icon: Activity },
+    { id: "roles", label: "Roles & Permissions", icon: Shield },
   ];
 
   return (
@@ -777,6 +939,7 @@ export default function StaffPage() {
         {tab === "shifts" && <ShiftsTab staff={allStaff} />}
         {tab === "attendance" && <AttendanceTab staff={allStaff} />}
         {tab === "activity" && <ActivityTab />}
+        {tab === "roles" && <RolesTab />}
       </div>
     </Layout>
   );

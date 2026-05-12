@@ -278,9 +278,31 @@ export interface CreateUserInput {
   email: string;
   phone: string;
   role: string;
-  passwordHash: string;
+  password: string;
   restaurantId: number;
   tenantId: number;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  tenantId: number | null;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+  permissions?: Permission[];
+}
+
+export interface Permission {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  resource: string;
+  action: string;
+  createdAt: string;
 }
 
 export interface Customer {
