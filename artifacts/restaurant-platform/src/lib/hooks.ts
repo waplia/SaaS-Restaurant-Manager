@@ -427,6 +427,15 @@ export function useMergeTables() {
   });
 }
 
+export function useSplitOrderToTable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, targetTableId, itemIds }: { orderId: number; targetTableId: number; itemIds: number[] }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/split-to-table`, { targetTableId, itemIds }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tables"] }); qc.invalidateQueries({ queryKey: ["orders"] }); },
+  });
+}
+
 export { type Reservation };
 
 export function useSuppliers() {

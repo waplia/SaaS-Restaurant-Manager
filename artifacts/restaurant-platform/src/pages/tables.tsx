@@ -4,12 +4,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useFloorTables, useUpdateTable, useCreateTable, useGetTableQr, useRestaurantInfo,
   useReservations, useCreateReservation, useUpdateReservation, useDeleteReservation,
-  useMergeTables,
+  useMergeTables, useSplitOrderToTable, useOrders,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, QrCode, Download, X, Printer, LayoutGrid, Move, Merge, CalendarDays, Calendar, Pencil, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Users, QrCode, Download, X, Printer, LayoutGrid, Move, Merge, CalendarDays, Calendar, Pencil, Trash2, ChevronRight, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, Reservation, CreateReservationInput } from "@/lib/types";
@@ -20,7 +20,10 @@ const TABLE_STATUS: Record<string, { label: string; bg: string; border: string; 
   occupied: { label: "Occupied", bg: "bg-orange-100", border: "border-orange-400", text: "text-orange-800", dot: "bg-orange-500" },
   reserved: { label: "Reserved", bg: "bg-blue-100", border: "border-blue-400", text: "text-blue-800", dot: "bg-blue-500" },
   cleaning: { label: "Cleaning", bg: "bg-gray-100", border: "border-gray-400", text: "text-gray-600", dot: "bg-gray-400" },
+  dirty: { label: "Dirty", bg: "bg-red-100", border: "border-red-400", text: "text-red-700", dot: "bg-red-500" },
 };
+
+const UNKNOWN_STATUS = { label: "Unknown", bg: "bg-muted", border: "border-border", text: "text-muted-foreground", dot: "bg-muted-foreground" };
 
 function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restaurantName: string; onClose: () => void }) {
   const { data: qrData, isLoading } = useGetTableQr(table.id);
@@ -108,10 +111,114 @@ function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restau
   );
 }
 
+function SplitOrderModal({
+  table,
+  allTables,
+  onClose,
+}: {
+  table: FloorTable;
+  allTables: FloorTable[];
+  onClose: () => void;
+}) {
+  const { data: ordersData } = useOrders({ tableId: table.id, status: "pending" });
+  const { data: preparingData } = useOrders({ tableId: table.id, status: "preparing" });
+  const splitOrder = useSplitOrderToTable();
+  const { toast } = useToast();
+
+  const activeOrder = (ordersData?.data?.[0] ?? preparingData?.data?.[0]) as { id: number; items?: { id: number; menuItemName?: string; quantity: number; unitPrice: string | number }[] } | undefined;
+  const items = activeOrder?.items ?? [];
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [targetTableId, setTargetTableId] = useState<number | "">("");
+
+  const handleConfirm = async () => {
+    if (!activeOrder) { toast({ title: "No active order found on this table", variant: "destructive" }); return; }
+    if (selectedItemIds.length === 0) { toast({ title: "Select at least one item to move", variant: "destructive" }); return; }
+    if (!targetTableId) { toast({ title: "Select a target table", variant: "destructive" }); return; }
+    if (selectedItemIds.length === items.length) { toast({ title: "Cannot move all items — use Merge instead", variant: "destructive" }); return; }
+    try {
+      await splitOrder.mutateAsync({ orderId: activeOrder.id, targetTableId: Number(targetTableId), itemIds: selectedItemIds });
+      toast({ title: "Order split!", description: `${selectedItemIds.length} item(s) moved to Table ${allTables.find(t => t.id === Number(targetTableId))?.tableNumber}.` });
+      onClose();
+    } catch {
+      toast({ title: "Split failed", variant: "destructive" });
+    }
+  };
+
+  const toggleItem = (id: number) => setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Split Order — Table {table.tableNumber}</h2>
+            <p className="text-sm text-muted-foreground">Select items to move to another table</p>
+          </div>
+          <button aria-label="Close" onClick={onClose} className="p-1 rounded-lg hover:bg-accent"><X className="w-4 h-4" /></button>
+        </div>
+
+        {!activeOrder ? (
+          <p className="text-sm text-muted-foreground text-center py-8">No active order on this table</p>
+        ) : items.length < 2 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Need at least 2 items to split an order</p>
+        ) : (
+          <>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Items to move</p>
+              {items.map(item => (
+                <label key={item.id} className={cn("flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors", selectedItemIds.includes(item.id) ? "border-primary bg-primary/5" : "border-border hover:bg-accent")}>
+                  <input type="checkbox" checked={selectedItemIds.includes(item.id)} onChange={() => toggleItem(item.id)} className="accent-primary" />
+                  <span className="font-medium text-sm flex-1">{item.menuItemName ?? `Item #${item.id}`}</span>
+                  <span className="text-xs text-muted-foreground">{item.quantity}×</span>
+                  <span className="text-xs font-medium">₹{(Number(item.unitPrice) * item.quantity).toFixed(0)}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mb-5">
+              <Label className="text-xs">Move to table</Label>
+              <select
+                className="w-full h-9 text-sm border border-input rounded-md px-2 bg-background mt-1"
+                value={targetTableId}
+                onChange={e => setTargetTableId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">Select table…</option>
+                {allTables.filter(t => t.id !== table.id).map(t => (
+                  <option key={t.id} value={t.id}>Table {t.tableNumber} ({TABLE_STATUS[t.status]?.label ?? t.status})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button className="flex-1 gap-2" onClick={handleConfirm} disabled={splitOrder.isPending || selectedItemIds.length === 0 || !targetTableId}>
+                <Scissors className="w-4 h-4" /> Split {selectedItemIds.length > 0 ? `(${selectedItemIds.length})` : ""}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TableCard({
   table,
   onStatusChange,
   onQr,
+  onSplit,
   mergeMode,
   mergeSelected,
   onMergeSelect,
@@ -119,11 +226,12 @@ function TableCard({
   table: FloorTable;
   onStatusChange: (id: number, status: string) => void;
   onQr: (t: FloorTable) => void;
+  onSplit: (t: FloorTable) => void;
   mergeMode: boolean;
   mergeSelected: number[];
   onMergeSelect: (id: number) => void;
 }) {
-  const cfg = TABLE_STATUS[table.status] ?? TABLE_STATUS.free;
+  const cfg = TABLE_STATUS[table.status] ?? UNKNOWN_STATUS;
   const isMergeSelected = mergeSelected.includes(table.id);
 
   return (
@@ -159,14 +267,30 @@ function TableCard({
             className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg border border-current/30 hover:bg-white/40 transition mb-2">
             <QrCode className="w-3.5 h-3.5" /> QR Code
           </button>
+          {table.status === "occupied" && (
+            <Button size="sm" variant="outline" className="w-full text-xs mb-1 gap-1" onClick={() => onSplit(table)}>
+              <Scissors className="w-3 h-3" /> Split Order
+            </Button>
+          )}
           {table.status !== "free" && (
-            <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => onStatusChange(table.id, "free")}>Mark Free</Button>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "free")}>Mark Free</Button>
+              {table.status === "occupied" && (
+                <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "dirty")}>Dirty</Button>
+              )}
+            </div>
           )}
           {table.status === "free" && (
             <div className="flex gap-1">
               <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "occupied")}>Seat</Button>
               <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => onStatusChange(table.id, "reserved")}>Reserve</Button>
             </div>
+          )}
+          {table.status === "dirty" && (
+            <Button size="sm" variant="outline" className="w-full text-xs mt-1" onClick={() => onStatusChange(table.id, "cleaning")}>Mark Cleaning</Button>
+          )}
+          {table.status === "cleaning" && (
+            <Button size="sm" variant="outline" className="w-full text-xs mt-1" onClick={() => onStatusChange(table.id, "free")}>Mark Clean</Button>
           )}
         </>
       )}
@@ -189,7 +313,7 @@ function FloorPlanTable({
   mergeSelected: number[];
   onMergeSelect: (id: number) => void;
 }) {
-  const cfg = TABLE_STATUS[table.status] ?? TABLE_STATUS.free;
+  const cfg = TABLE_STATUS[table.status] ?? UNKNOWN_STATUS;
   const isMergeSelected = mergeSelected.includes(table.id);
   const dragOffset = useRef({ dx: 0, dy: 0 });
   const elemRef = useRef<HTMLDivElement>(null);
@@ -449,7 +573,7 @@ function ReservationPanel({
 }
 
 export default function TablesPage() {
-  const { data: tables = [], refetch: refetchTables } = useFloorTables();
+  const { data: tables = [] } = useFloorTables();
   const { data: restaurantInfo } = useRestaurantInfo();
   const { data: reservations = [] } = useReservations();
   const updateTable = useUpdateTable();
@@ -464,6 +588,7 @@ export default function TablesPage() {
   const [mergeMode, setMergeMode] = useState(false);
   const [mergeSelected, setMergeSelected] = useState<number[]>([]);
   const [showReservations, setShowReservations] = useState(false);
+  const [splitTable, setSplitTable] = useState<FloorTable | null>(null);
 
   const free = tables.filter((t: FloorTable) => t.status === "free").length;
   const occupied = tables.filter((t: FloorTable) => t.status === "occupied").length;
@@ -629,6 +754,7 @@ export default function TablesPage() {
                     table={table}
                     onStatusChange={handleStatusChange}
                     onQr={setQrTable}
+                    onSplit={setSplitTable}
                     mergeMode={mergeMode}
                     mergeSelected={mergeSelected}
                     onMergeSelect={handleMergeSelect}
@@ -694,6 +820,10 @@ export default function TablesPage() {
 
       {qrTable && (
         <QrModal table={qrTable} restaurantName={restaurantInfo?.name ?? "Restaurant"} onClose={() => setQrTable(null)} />
+      )}
+
+      {splitTable && (
+        <SplitOrderModal table={splitTable} allTables={tables as FloorTable[]} onClose={() => setSplitTable(null)} />
       )}
     </Layout>
   );
