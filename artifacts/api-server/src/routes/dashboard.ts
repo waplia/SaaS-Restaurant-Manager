@@ -119,7 +119,11 @@ router.get("/restaurants/:restaurantId/dashboard/popular-items", async (req, res
       revenue: sql<string>`cast(sum(${orderItemsTable.totalPrice}) as text)`,
     })
     .from(orderItemsTable)
-    .innerJoin(ordersTable, and(eq(orderItemsTable.orderId, ordersTable.id), eq(ordersTable.restaurantId, restaurantId)))
+    .innerJoin(ordersTable, and(
+      eq(orderItemsTable.orderId, ordersTable.id),
+      eq(ordersTable.restaurantId, restaurantId),
+      gte(ordersTable.createdAt, from),
+    ))
     .groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName)
     .orderBy(desc(sql`count(*)`))
     .limit(limit);
@@ -209,15 +213,13 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     revenue: sql<string>`cast(sum(${orderItemsTable.totalPrice}) as text)`,
   }).from(orderItemsTable).innerJoin(ordersTable, and(eq(orderItemsTable.orderId, ordersTable.id), dateCondition!)).groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName).orderBy(desc(sql`count(*)`)).limit(10);
 
-  const toClause = fromStr && toStr ? `AND o.created_at <= '${to.toISOString()}'` : "";
-  const toAttClause = fromStr && toStr ? `AND a.clock_in <= '${to.toISOString()}'` : "";
   const staffPerfRows = await db.execute<{
     user_id: number;
     name: string;
     order_count: string;
     total_revenue: string;
     total_hours: string;
-  }>(`
+  }>(sql`
     WITH order_stats AS (
       SELECT
         o.waiter_id AS user_id,
@@ -226,8 +228,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
       FROM orders o
       WHERE o.restaurant_id = ${restaurantId}
         AND o.waiter_id IS NOT NULL
-        AND o.created_at >= '${from.toISOString()}'
-        ${toClause}
+        AND o.created_at >= ${from}
+        ${to ? sql`AND o.created_at <= ${to}` : sql``}
       GROUP BY o.waiter_id
     ),
     attendance_stats AS (
@@ -236,8 +238,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
         COALESCE(SUM(a.total_hours), 0) AS total_hours
       FROM attendance a
       WHERE a.restaurant_id = ${restaurantId}
-        AND a.clock_in >= '${from.toISOString()}'
-        ${toAttClause}
+        AND a.clock_in >= ${from}
+        ${to ? sql`AND a.clock_in <= ${to}` : sql``}
       GROUP BY a.user_id
     )
     SELECT
