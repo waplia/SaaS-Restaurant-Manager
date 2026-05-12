@@ -28,10 +28,10 @@ export function useDashboardSummary() {
   });
 }
 
-export function useRevenueTrend(period = "7d") {
+export function useRevenueTrend(period = "7d", groupBy = "daily") {
   return useQuery({
-    queryKey: ["dashboard", "revenue-trend", RESTAURANT_ID, period],
-    queryFn: () => apiGet<RevenueTrendItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}`),
+    queryKey: ["dashboard", "revenue-trend", RESTAURANT_ID, period, groupBy],
+    queryFn: () => apiGet<RevenueTrendItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}&groupBy=${groupBy}`),
   });
 }
 

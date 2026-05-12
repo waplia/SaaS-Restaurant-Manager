@@ -56,19 +56,20 @@ function KitchenStatusBadge({ status }: { status: string }) {
 }
 
 const TREND_PERIODS = [
-  { label: "Daily (7d)", val: "7d" },
-  { label: "Weekly (30d)", val: "30d" },
-  { label: "Monthly (90d)", val: "90d" },
+  { label: "Daily (7d)", val: "7d", groupBy: "daily" },
+  { label: "Weekly (30d)", val: "30d", groupBy: "weekly" },
+  { label: "Monthly (90d)", val: "90d", groupBy: "monthly" },
 ];
 
 export default function DashboardPage() {
   const restaurantId = useRestaurantId();
   const [trendPeriod, setTrendPeriod] = useState("7d");
+  const trendGroupBy = TREND_PERIODS.find(p => p.val === trendPeriod)?.groupBy ?? "daily";
 
   useSocket(restaurantId);
 
   const { data: summary } = useDashboardSummary();
-  const { data: trendData = [] } = useRevenueTrend(trendPeriod);
+  const { data: trendData = [] } = useRevenueTrend(trendPeriod, trendGroupBy);
   const { data: popularItems = [] } = usePopularItems(6);
   const { data: kitchenData } = useLiveKitchen();
   const { data: activityData = [] } = useStaffActivity();
@@ -145,12 +146,22 @@ export default function DashboardPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
-                  try { return format(new Date(d + "T12:00:00"), trendPeriod === "7d" ? "EEE" : "MMM d"); } catch { return d; }
+                  try {
+                    if (trendGroupBy === "monthly") return format(new Date(d + "-01T12:00:00"), "MMM yyyy");
+                    if (trendGroupBy === "weekly") return `Wk ${format(new Date(d + "T12:00:00"), "MMM d")}`;
+                    return format(new Date(d + "T12:00:00"), "EEE MMM d");
+                  } catch { return d; }
                 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
                 <Tooltip
                   formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Revenue"]}
-                  labelFormatter={(d: string) => { try { return format(new Date(d + "T12:00:00"), "MMMM d, yyyy"); } catch { return d; } }}
+                  labelFormatter={(d: string) => {
+                    try {
+                      if (trendGroupBy === "monthly") return format(new Date(d + "-01T12:00:00"), "MMMM yyyy");
+                      if (trendGroupBy === "weekly") return `Week of ${format(new Date(d + "T12:00:00"), "MMMM d, yyyy")}`;
+                      return format(new Date(d + "T12:00:00"), "EEEE, MMMM d, yyyy");
+                    } catch { return d; }
+                  }}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="hsl(24 95% 53%)" fill="url(#revGrad)" strokeWidth={2} dot={false} />
               </AreaChart>
