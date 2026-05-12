@@ -372,9 +372,9 @@ export default function MenuPage() {
       let imported = 0;
       for (const line of lines) {
         const cols = line.match(/("(?:[^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, "").replace(/""/g, '"')) ?? [];
-        const [name, price, , vegStr, , prep, calories, tags] = cols;
-        if (!name || !price || !itemForm.categoryId) continue;
-        const catId = categories[0]?.id;
+        const [name, price, categoryName, vegStr, , prep, calories, tags] = cols;
+        if (!name || !price) continue;
+        const catId = categories.find((c: MenuCategory) => c.name.toLowerCase() === (categoryName ?? "").toLowerCase())?.id ?? categories[0]?.id;
         if (!catId) continue;
         try {
           await createItem.mutateAsync({

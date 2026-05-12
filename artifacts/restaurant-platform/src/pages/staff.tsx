@@ -20,6 +20,20 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog } from "@/lib/types";
 
+function generateTempPassword(): string {
+  const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "!@#$";
+  const all = upper + lower + digits + special;
+  let pwd = upper[Math.floor(Math.random() * upper.length)]
+    + lower[Math.floor(Math.random() * lower.length)]
+    + digits[Math.floor(Math.random() * digits.length)]
+    + special[Math.floor(Math.random() * special.length)];
+  for (let i = 4; i < 10; i++) pwd += all[Math.floor(Math.random() * all.length)];
+  return pwd.split("").sort(() => Math.random() - 0.5).join("");
+}
+
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   owner: { label: "Owner", color: "bg-purple-100 text-purple-700" },
   manager: { label: "Manager", color: "bg-blue-100 text-blue-700" },
@@ -66,19 +80,21 @@ function TeamTab({
   const deleteUser = useDeleteUser();
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter", passwordHash: "Welcome@123" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter" });
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [generatedCreds, setGeneratedCreds] = useState<{ name: string; password: string } | null>(null);
 
   const roles = ["owner", "manager", "waiter", "kitchen", "cashier"];
   const byRole = (role: string) => staff.filter((s: StaffMember) => s.role === role).length;
 
   const handleAdd = async () => {
     if (!form.name || !form.email) return;
+    const tempPassword = generateTempPassword();
     try {
-      await createUser.mutateAsync({ ...form, restaurantId: 1, tenantId: 1 });
-      toast({ title: "Staff member added!" });
+      await createUser.mutateAsync({ ...form, passwordHash: tempPassword, restaurantId: 1, tenantId: 1 });
+      setGeneratedCreds({ name: form.name, password: tempPassword });
       setShowAdd(false);
-      setForm({ name: "", email: "", phone: "", role: "waiter", passwordHash: "Welcome@123" });
+      setForm({ name: "", email: "", phone: "", role: "waiter" });
     } catch {
       toast({ title: "Failed to add staff member", variant: "destructive" });
     }
@@ -126,6 +142,7 @@ function TeamTab({
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Name</th>
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">Contact</th>
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Role</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden lg:table-cell">Last Active</th>
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
               <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Actions</th>
             </tr>
@@ -161,6 +178,11 @@ function TeamTab({
                     <td className="px-4 py-3">
                       <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", roleConfig.color)}>{roleConfig.label}</span>
                     </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">
+                        {member.lastLoginAt ? formatDateTime(member.lastLoginAt) : member.createdAt ? `Joined ${formatDate(member.createdAt)}` : "—"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={cn("text-xs font-medium flex items-center gap-1", member.isActive ? "text-green-600" : "text-red-500")}>
                         {member.isActive ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -183,11 +205,12 @@ function TeamTab({
                   </tr>
                   {isExpanded && (
                     <tr key={`exp-${member.id}`} className="border-b border-border last:border-0 bg-muted/5">
-                      <td colSpan={5} className="px-4 py-3">
-                        <div className="flex items-center gap-6 text-xs text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
                           <div className="flex items-center gap-1.5"><Mail className="w-3 h-3" />{member.email}</div>
                           {member.phone && <div className="flex items-center gap-1.5"><Phone className="w-3 h-3" />{member.phone}</div>}
                           <div className="flex items-center gap-1.5"><Shield className="w-3 h-3" />Role: {roleConfig.label}</div>
+                          {member.createdAt && <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />Joined: {formatDate(member.createdAt)}</div>}
                         </div>
                       </td>
                     </tr>
@@ -196,7 +219,7 @@ function TeamTab({
               );
             })}
             {staff.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-16 text-muted-foreground">
+              <tr><td colSpan={6} className="text-center py-16 text-muted-foreground">
                 <User className="w-10 h-10 mx-auto mb-3 opacity-20" />
                 <p className="text-sm">No staff found</p>
               </td></tr>
@@ -204,6 +227,26 @@ function TeamTab({
           </tbody>
         </table>
       </div>
+
+      {generatedCreds && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-green-600 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Staff Added</h2>
+              <button onClick={() => setGeneratedCreds(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{generatedCreds.name} has been added. Share these credentials securely — they won't be shown again.</p>
+            <div className="bg-muted/60 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Temporary Password</span>
+              </div>
+              <p className="font-mono text-lg font-bold tracking-widest text-foreground select-all">{generatedCreds.password}</p>
+              <p className="text-xs text-orange-600 font-medium">Ask the staff member to change this password on first login.</p>
+            </div>
+            <Button className="w-full mt-4" onClick={() => { navigator.clipboard?.writeText(generatedCreds.password); setGeneratedCreds(null); }}>Copy & Close</Button>
+          </div>
+        </div>
+      )}
 
       {showAdd && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -222,7 +265,7 @@ function TeamTab({
                   {Object.entries(ROLE_CONFIG).map(([r, c]) => <option key={r} value={r}>{c.label}</option>)}
                 </select>
               </div>
-              <div><Label>Default Password</Label><Input value={form.passwordHash} onChange={e => setForm(p => ({ ...p, passwordHash: e.target.value }))} /></div>
+              <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">A unique temporary password will be generated and shown to you after adding the staff member.</p>
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => setShowAdd(false)}>Cancel</Button>
                 <Button className="flex-1" onClick={handleAdd} disabled={createUser.isPending}>Add Staff</Button>
@@ -376,6 +419,58 @@ function ShiftsTab({ staff }: { staff: StaffMember[] }) {
           </div>
         )}
       </div>
+
+      {shifts.filter((s: Shift) => s.isActive).length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-3">Weekly Schedule</h3>
+          <div className="bg-card border border-border rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 w-36">Shift</th>
+                  {ALL_DAYS.map(day => (
+                    <th key={day} className="text-center text-xs font-medium text-muted-foreground px-2 py-2.5">{DAY_FULL[day]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.filter((s: Shift) => s.isActive).map((shift: Shift) => {
+                  const assignees = getStaffForShift(shift.id);
+                  return (
+                    <tr key={shift.id} className="border-b border-border last:border-0 hover:bg-muted/10">
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-semibold text-foreground">{shift.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{shift.startTime}–{shift.endTime}</p>
+                      </td>
+                      {ALL_DAYS.map(day => {
+                        const active = Array.isArray(shift.days) && shift.days.includes(day);
+                        return (
+                          <td key={day} className="px-2 py-3 text-center">
+                            {active ? (
+                              assignees.length > 0 ? (
+                                <div className="flex flex-col gap-0.5 items-center">
+                                  {assignees.slice(0, 2).map((s: StaffMember) => (
+                                    <span key={s.id} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium leading-tight">{s.name.split(" ")[0]}</span>
+                                  ))}
+                                  {assignees.length > 2 && <span className="text-[10px] text-muted-foreground">+{assignees.length - 2}</span>}
+                                </div>
+                              ) : (
+                                <span className="inline-block w-3 h-3 rounded-full bg-primary/20" title="Shift runs, no one assigned" />
+                              )
+                            ) : (
+                              <span className="inline-block w-2 h-0.5 rounded bg-muted-foreground/20" />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {showAssign && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

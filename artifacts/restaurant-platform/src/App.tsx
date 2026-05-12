@@ -82,6 +82,7 @@ function Router() {
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
       <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />
       <Route path="/menu" component={() => <ProtectedRoute component={MenuPage} />} />
+      <Route path="/menu-management" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />

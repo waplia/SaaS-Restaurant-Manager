@@ -269,6 +269,8 @@ export interface StaffMember {
   phone: string | null;
   role: string;
   isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
 }
 
 export interface CreateUserInput {
