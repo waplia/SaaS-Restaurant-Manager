@@ -53,7 +53,7 @@ function PublicOnlyRoute({ component: Component }: { component: React.ComponentT
   if (isLoading) return null;
   if (isAuthenticated) {
     if (user?.isSuperAdmin) return <Redirect to="/admin" />;
-    return <Redirect to="/" />;
+    return <Redirect to="/dashboard" />;
   }
   return <Component />;
 }
@@ -73,7 +73,8 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
-      <Route path="/" component={() => <ProtectedRoute component={DashboardPage} />} />
+      <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
       <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />

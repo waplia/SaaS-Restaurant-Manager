@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth";
 import type { AppNotification } from "@/lib/types";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/orders", label: "Orders & POS", icon: ShoppingCart },
   { href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { href: "/tables", label: "Tables", icon: Table2 },
