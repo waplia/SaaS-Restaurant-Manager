@@ -176,14 +176,21 @@ export interface UpdateTableInput {
 export interface Menu {
   id: number;
   name: string;
+  description: string | null;
+  availableFrom: string | null;
+  availableTo: string | null;
   isActive: boolean;
+  sortOrder: number;
 }
 
 export interface MenuCategory {
   id: number;
   name: string;
   menuId: number;
+  description: string | null;
+  imageUrl: string | null;
   sortOrder: number;
+  isActive: boolean;
 }
 
 export interface MenuItem {
@@ -195,6 +202,10 @@ export interface MenuItem {
   isVeg: boolean;
   isAvailable: boolean;
   preparationTime: number;
+  imageUrl: string | null;
+  calories: number | null;
+  tags: string[] | null;
+  sortOrder: number;
 }
 
 export interface CreateMenuItemInput {
@@ -204,6 +215,9 @@ export interface CreateMenuItemInput {
   categoryId: number;
   isVeg: boolean;
   preparationTime: number;
+  imageUrl?: string;
+  calories?: number;
+  tags?: string[];
 }
 
 export interface UpdateMenuItemInput {
@@ -215,6 +229,10 @@ export interface UpdateMenuItemInput {
   isVeg?: boolean;
   isAvailable?: boolean;
   preparationTime?: number;
+  imageUrl?: string;
+  calories?: number;
+  tags?: string[];
+  sortOrder?: number;
 }
 
 export interface InventoryItem {
@@ -401,4 +419,130 @@ export interface PosModifierGroup {
   minSelections: number;
   maxSelections: number;
   modifiers: PosModifier[];
+}
+
+export interface ModifierGroup {
+  id: number;
+  menuItemId: number;
+  name: string;
+  isRequired: boolean;
+  minSelections: number;
+  maxSelections: number;
+}
+
+export interface Modifier {
+  id: number;
+  groupId: number;
+  name: string;
+  price: string;
+  isDefault: boolean;
+  isAvailable: boolean;
+}
+
+export interface Shift {
+  id: number;
+  restaurantId: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+  days: string[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface StaffShift {
+  id: number;
+  userId: number;
+  shiftId: number;
+  restaurantId: number;
+  date: string;
+}
+
+export interface AttendanceRecord {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  clockIn: string;
+  clockOut: string | null;
+  totalHours: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: number;
+  restaurantId: number | null;
+  userId: number | null;
+  action: string;
+  entity: string;
+  entityId: number | null;
+  details: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+
+export interface CreateShiftInput {
+  name: string;
+  startTime: string;
+  endTime: string;
+  days: string[];
+}
+
+export interface CreateStaffShiftInput {
+  userId: number;
+  shiftId: number;
+  date: string;
+}
+
+export interface ClockInInput {
+  userId: number;
+  notes?: string;
+}
+
+export interface CreateMenuInput {
+  name: string;
+  description?: string;
+  availableFrom?: string;
+  availableTo?: string;
+}
+
+export interface UpdateMenuInput {
+  id: number;
+  name?: string;
+  description?: string;
+  availableFrom?: string | null;
+  availableTo?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface CreateCategoryInput {
+  menuId: number;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  sortOrder?: number;
+}
+
+export interface UpdateCategoryInput {
+  id: number;
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface CreateModifierGroupInput {
+  name: string;
+  isRequired?: boolean;
+  minSelections?: number;
+  maxSelections?: number;
+}
+
+export interface CreateModifierInput {
+  name: string;
+  price: string;
+  isDefault?: boolean;
 }

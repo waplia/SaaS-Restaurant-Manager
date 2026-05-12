@@ -5,8 +5,12 @@ import type {
   OrdersResponse, CreateOrderInput, UpdateOrderInput, PayOrderInput,
   FloorTable, CreateTableInput, UpdateTableInput,
   Menu, MenuCategory, MenuItem, CreateMenuItemInput, UpdateMenuItemInput,
+  CreateMenuInput, UpdateMenuInput, CreateCategoryInput, UpdateCategoryInput,
+  ModifierGroup, Modifier, CreateModifierGroupInput, CreateModifierInput,
   InventoryItem, CreateInventoryItemInput, AdjustInventoryInput,
   StaffMember, CreateUserInput,
+  Shift, StaffShift, AttendanceRecord, AuditLog,
+  CreateShiftInput, CreateStaffShiftInput, ClockInInput,
   CustomersResponse, CreateCustomerInput,
   CreateReservationInput, UpdateReservationInput, Reservation,
   AppNotification,
@@ -460,5 +464,183 @@ export function useReports(period = "7d", custom?: { from: string; to: string },
   return useQuery({
     queryKey: ["reports", RESTAURANT_ID, period, custom, groupBy],
     queryFn: () => apiGet<ReportsData>(`/restaurants/${RESTAURANT_ID}/dashboard/reports?${q}`),
+  });
+}
+
+export function useCreateMenu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateMenuInput) => apiPost<Menu>(`/restaurants/${RESTAURANT_ID}/menus`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["menus"] }),
+  });
+}
+
+export function useUpdateMenu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateMenuInput) => apiPatch<Menu>(`/restaurants/${RESTAURANT_ID}/menus/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["menus"] }),
+  });
+}
+
+export function useDeleteMenu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/menus/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["menus"] }),
+  });
+}
+
+export function useCreateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCategoryInput) => apiPost<MenuCategory>(`/restaurants/${RESTAURANT_ID}/categories`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
+  });
+}
+
+export function useUpdateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateCategoryInput) => apiPatch<MenuCategory>(`/restaurants/${RESTAURANT_ID}/categories/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
+  });
+}
+
+export function useDeleteCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/categories/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["categories"] }); qc.invalidateQueries({ queryKey: ["items"] }); },
+  });
+}
+
+export function useModifierGroups(menuItemId?: number) {
+  return useQuery({
+    queryKey: ["modifier-groups-mgmt", menuItemId],
+    queryFn: () => apiGet<ModifierGroup[]>(`/items/${menuItemId}/modifier-groups`),
+    enabled: !!menuItemId,
+  });
+}
+
+export function useModifiers(groupId?: number) {
+  return useQuery({
+    queryKey: ["modifiers", groupId],
+    queryFn: () => apiGet<Modifier[]>(`/modifier-groups/${groupId}/modifiers`),
+    enabled: !!groupId,
+  });
+}
+
+export function useCreateModifierGroup(menuItemId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateModifierGroupInput) => apiPost<ModifierGroup>(`/items/${menuItemId}/modifier-groups`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["modifier-groups-mgmt", menuItemId] }),
+  });
+}
+
+export function useCreateModifier(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateModifierInput) => apiPost<Modifier>(`/modifier-groups/${groupId}/modifiers`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["modifiers", groupId] }),
+  });
+}
+
+export function useShifts() {
+  return useQuery({
+    queryKey: ["shifts", RESTAURANT_ID],
+    queryFn: () => apiGet<Shift[]>(`/restaurants/${RESTAURANT_ID}/shifts`),
+  });
+}
+
+export function useCreateShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateShiftInput) => apiPost<Shift>(`/restaurants/${RESTAURANT_ID}/shifts`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
+  });
+}
+
+export function useUpdateShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<CreateShiftInput> & { id: number }) => apiPatch<Shift>(`/restaurants/${RESTAURANT_ID}/shifts/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
+  });
+}
+
+export function useDeleteShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/shifts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
+  });
+}
+
+export function useStaffShifts(userId?: number) {
+  const q = userId ? `?userId=${userId}` : "";
+  return useQuery({
+    queryKey: ["staff-shifts", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<StaffShift[]>(`/restaurants/${RESTAURANT_ID}/staff-shifts${q}`),
+  });
+}
+
+export function useCreateStaffShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateStaffShiftInput) => apiPost<StaffShift>(`/restaurants/${RESTAURANT_ID}/staff-shifts`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}
+
+export function useAttendance(userId?: number) {
+  const q = userId ? `?userId=${userId}` : "";
+  return useQuery({
+    queryKey: ["attendance", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<AttendanceRecord[]>(`/restaurants/${RESTAURANT_ID}/attendance${q}`),
+  });
+}
+
+export function useClockIn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ClockInInput) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function useClockOut() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, notes }: { id: number; notes?: string }) => apiPatch<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/${id}/clock-out`, { notes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function useAuditLogs(params?: { userId?: number; action?: string; page?: number }) {
+  const q = new URLSearchParams();
+  if (params?.userId) q.set("userId", String(params.userId));
+  if (params?.action) q.set("action", params.action);
+  if (params?.page) q.set("page", String(params.page));
+  return useQuery({
+    queryKey: ["audit-logs", RESTAURANT_ID, params],
+    queryFn: () => apiGet<AuditLog[]>(`/restaurants/${RESTAURANT_ID}/audit-logs?${q}`),
+  });
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name?: string; phone?: string; role?: string; isActive?: boolean }) => apiPatch(`/users/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/users/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });
 }
