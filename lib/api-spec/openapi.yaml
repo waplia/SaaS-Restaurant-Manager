@@ -1518,7 +1518,8 @@ paths:
       tags: [dashboard]
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
-        - { name: period, in: query, schema: { type: string } }
+        - { name: period, in: query, schema: { type: string, enum: [7d, 30d, 90d, 1m, 1y] } }
+        - { name: groupBy, in: query, schema: { type: string, enum: [daily, weekly, monthly] } }
       responses:
         "200":
           description: Revenue trend data
@@ -1583,9 +1584,10 @@ paths:
       tags: [dashboard]
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
-        - { name: period, in: query, schema: { type: string } }
-        - { name: from, in: query, schema: { type: string } }
-        - { name: to, in: query, schema: { type: string } }
+        - { name: period, in: query, schema: { type: string, enum: [7d, 30d, 90d, 1m, 1y] } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: groupBy, in: query, schema: { type: string, enum: [daily, monthly, yearly] } }
       responses:
         "200":
           description: Reports data
@@ -2969,22 +2971,51 @@ components:
           items:
             $ref: "#/components/schemas/KitchenTicket"
 
+    TaxByDayPoint:
+      type: object
+      required: [date, tax, revenue, orders, effectiveRate]
+      properties:
+        date: { type: string }
+        tax: { type: string }
+        revenue: { type: string }
+        orders: { type: integer }
+        effectiveRate: { type: string }
+
+    StaffPerformancePoint:
+      type: object
+      required: [userId, name, orderCount, totalRevenue, totalHours]
+      properties:
+        userId: { type: integer }
+        name: { type: string }
+        orderCount: { type: integer }
+        totalRevenue: { type: string }
+        totalHours: { type: string }
+
     ReportsData:
       type: object
-      required: [totalRevenue, totalOrders, totalTax, avgOrderValue]
+      required: [totalRevenue, totalOrders, totalTax, avgOrderValue, effectiveTaxRate]
       properties:
         totalRevenue: { type: string }
         totalOrders: { type: integer }
         totalTax: { type: string }
         avgOrderValue: { type: string }
+        effectiveTaxRate: { type: string }
         revenueByDay:
           type: array
           items:
             $ref: "#/components/schemas/RevenueTrendPoint"
+        taxByDay:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxByDayPoint"
         topItems:
           type: array
           items:
             $ref: "#/components/schemas/PopularItem"
+        staffPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffPerformancePoint"
 
     # ── Roles & Permissions ──
     Role:

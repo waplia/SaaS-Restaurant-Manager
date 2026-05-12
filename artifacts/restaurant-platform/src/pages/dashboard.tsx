@@ -56,9 +56,9 @@ function KitchenStatusBadge({ status }: { status: string }) {
 }
 
 const TREND_PERIODS = [
-  { label: "7 Days", val: "7d" },
-  { label: "30 Days", val: "30d" },
-  { label: "90 Days", val: "90d" },
+  { label: "Daily (7d)", val: "7d" },
+  { label: "Weekly (30d)", val: "30d" },
+  { label: "Monthly (90d)", val: "90d" },
 ];
 
 export default function DashboardPage() {

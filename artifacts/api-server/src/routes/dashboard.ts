@@ -59,21 +59,47 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
   from.setDate(from.getDate() - days);
   from.setHours(0, 0, 0, 0);
 
+  const groupBy = String(req.query.groupBy ?? "daily");
   const orders = await db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from)));
 
-  const byDay: Record<string, { revenue: number; orders: number }> = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(from);
-    d.setDate(d.getDate() + i);
-    const key = d.toISOString().split("T")[0];
-    byDay[key] = { revenue: 0, orders: 0 };
-  }
-  for (const o of orders) {
-    const key = o.createdAt.toISOString().split("T")[0];
-    if (byDay[key]) { byDay[key].revenue += Number(o.totalAmount); byDay[key].orders++; }
+  type Bucket = { revenue: number; orders: number };
+  const buckets: Record<string, Bucket> = {};
+
+  if (groupBy === "weekly") {
+    for (let i = 0; i < days; i += 7) {
+      const d = new Date(from);
+      d.setDate(d.getDate() + i);
+      buckets[d.toISOString().split("T")[0]] = { revenue: 0, orders: 0 };
+    }
+    for (const o of orders) {
+      const diff = Math.floor((o.createdAt.getTime() - from.getTime()) / (7 * 86400000));
+      const weekStart = new Date(from);
+      weekStart.setDate(weekStart.getDate() + diff * 7);
+      const key = weekStart.toISOString().split("T")[0];
+      if (!buckets[key]) buckets[key] = { revenue: 0, orders: 0 };
+      buckets[key].revenue += Number(o.totalAmount);
+      buckets[key].orders++;
+    }
+  } else if (groupBy === "monthly") {
+    for (const o of orders) {
+      const key = o.createdAt.toISOString().slice(0, 7);
+      if (!buckets[key]) buckets[key] = { revenue: 0, orders: 0 };
+      buckets[key].revenue += Number(o.totalAmount);
+      buckets[key].orders++;
+    }
+  } else {
+    for (let i = 0; i < days; i++) {
+      const d = new Date(from);
+      d.setDate(d.getDate() + i);
+      buckets[d.toISOString().split("T")[0]] = { revenue: 0, orders: 0 };
+    }
+    for (const o of orders) {
+      const key = o.createdAt.toISOString().split("T")[0];
+      if (buckets[key]) { buckets[key].revenue += Number(o.totalAmount); buckets[key].orders++; }
+    }
   }
 
-  res.json(Object.entries(byDay).map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })));
+  res.json(Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })));
 });
 
 router.get("/restaurants/:restaurantId/dashboard/popular-items", async (req, res) => {
@@ -225,8 +251,28 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     LIMIT 20
   `);
 
+  const groupByParam = String(req.query.groupBy ?? "daily");
+  type AggBucket = { revenue: number; tax: number; orders: number };
+  const aggBuckets: Record<string, AggBucket> = {};
+
+  for (const [date, v] of Object.entries(byDay)) {
+    let key: string;
+    if (groupByParam === "yearly") {
+      key = date.slice(0, 4);
+    } else if (groupByParam === "monthly") {
+      key = date.slice(0, 7);
+    } else {
+      key = date;
+    }
+    if (!aggBuckets[key]) aggBuckets[key] = { revenue: 0, tax: 0, orders: 0 };
+    aggBuckets[key].revenue += v.revenue;
+    aggBuckets[key].tax += v.tax;
+    aggBuckets[key].orders += v.orders;
+  }
+
+  const sortedBuckets = Object.entries(aggBuckets).sort(([a], [b]) => a.localeCompare(b));
+
   const effectiveTaxRate = totalRevenue > 0 ? ((totalTax / totalRevenue) * 100).toFixed(2) : "0.00";
-  const sortedDays = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
 
   res.json({
     totalRevenue: totalRevenue.toFixed(2),
@@ -234,8 +280,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     totalTax: totalTax.toFixed(2),
     effectiveTaxRate,
     avgOrderValue: avgOrderValue.toFixed(2),
-    revenueByDay: sortedDays.map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
-    taxByDay: sortedDays.map(([date, v]) => ({
+    revenueByDay: sortedBuckets.map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
+    taxByDay: sortedBuckets.map(([date, v]) => ({
       date,
       tax: v.tax.toFixed(2),
       revenue: v.revenue.toFixed(2),

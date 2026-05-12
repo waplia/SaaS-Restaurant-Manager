@@ -31,6 +31,7 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["dashboard", "live-kitchen", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "revenue-trend", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "popular-items", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["reports", restaurantId] });
     });
 
     socket.on("order:status", () => {
@@ -38,6 +39,7 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["dashboard", "summary", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "revenue-trend", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "popular-items", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["reports", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
     });
 

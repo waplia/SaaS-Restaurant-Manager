@@ -276,10 +276,12 @@ export function useNotifications() {
   });
 }
 
-export function useReports(period = "7d", custom?: { from: string; to: string }) {
-  const q = custom ? `from=${custom.from}&to=${custom.to}` : `period=${period}`;
+export function useReports(period = "7d", custom?: { from: string; to: string }, groupBy = "daily") {
+  const q = custom
+    ? `from=${custom.from}&to=${custom.to}&groupBy=${groupBy}`
+    : `period=${period}&groupBy=${groupBy}`;
   return useQuery({
-    queryKey: ["reports", RESTAURANT_ID, period, custom],
+    queryKey: ["reports", RESTAURANT_ID, period, custom, groupBy],
     queryFn: () => apiGet<ReportsData>(`/restaurants/${RESTAURANT_ID}/dashboard/reports?${q}`),
   });
 }

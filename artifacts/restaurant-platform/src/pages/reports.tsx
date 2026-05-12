@@ -20,6 +20,7 @@ const COLORS = [
 ];
 
 type Tab = "sales" | "tax" | "staff";
+type ViewMode = "daily" | "monthly" | "yearly";
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -35,6 +36,7 @@ function exportCSV(filename: string, rows: string[][], headers: string[]) {
 export default function ReportsPage() {
   const [period, setPeriod] = useState("30d");
   const [tab, setTab] = useState<Tab>("sales");
+  const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [useCustom, setUseCustom] = useState(false);
@@ -42,6 +44,7 @@ export default function ReportsPage() {
   const { data: reports, isLoading } = useReports(
     useCustom && customFrom && customTo ? `custom|${customFrom}|${customTo}` : period,
     useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : undefined,
+    viewMode,
   );
 
   function handleExportCSV() {
@@ -147,7 +150,6 @@ export default function ReportsPage() {
       ]),
     });
 
-    const afterRevenue = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 140;
     doc.addPage();
     doc.setFontSize(13);
     doc.text("Tax Breakdown", 14, 18);
@@ -178,7 +180,6 @@ export default function ReportsPage() {
       ]),
     });
 
-    void afterRevenue;
     doc.save(`tabletrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
@@ -226,6 +227,20 @@ export default function ReportsPage() {
               >
                 {label}
               </Button>
+            ))}
+          </div>
+
+          <div className="flex gap-1 border border-border rounded-lg p-0.5 bg-muted/30">
+            {(["daily", "monthly", "yearly"] as ViewMode[]).map(v => (
+              <button
+                key={v}
+                onClick={() => setViewMode(v)}
+                className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
+                  viewMode === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v}
+              </button>
             ))}
           </div>
 
