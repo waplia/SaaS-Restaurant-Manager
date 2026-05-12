@@ -1655,20 +1655,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RolePermission"
+
+  /roles/{id}/permissions/{permissionId}:
     delete:
       operationId: removePermissionFromRole
       tags: [permissions]
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [permissionId]
-              properties:
-                permissionId: { type: integer }
+        - { name: permissionId, in: path, required: true, schema: { type: integer } }
       responses:
         "204":
           description: Permission removed

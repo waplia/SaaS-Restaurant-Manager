@@ -1771,6 +1771,285 @@ export const SubmitFeedbackBody = zod.object({
 });
 
 /**
+ * @summary List all roles for the current tenant
+ */
+export const ListRolesQueryParams = zod.object({
+  tenantId: zod.coerce.number().optional(),
+});
+
+export const ListRolesResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  tenantId: zod.number(),
+  isSystem: zod.boolean().optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string().optional(),
+});
+export const ListRolesResponse = zod.array(ListRolesResponseItem);
+
+/**
+ * @summary Create a new role
+ */
+export const CreateRoleBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().optional(),
+  tenantId: zod.number(),
+});
+
+export const GetRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetRoleResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    slug: zod.string(),
+    description: zod.string().nullish(),
+    tenantId: zod.number(),
+    isSystem: zod.boolean().optional(),
+    createdAt: zod.string(),
+    updatedAt: zod.string().optional(),
+  })
+  .and(
+    zod.object({
+      permissions: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            name: zod.string(),
+            resource: zod.string(),
+            action: zod.string(),
+            description: zod.string().nullish(),
+            createdAt: zod.string().optional(),
+          }),
+        )
+        .optional(),
+    }),
+  );
+
+export const UpdateRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRoleBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().optional(),
+});
+
+export const UpdateRoleResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  tenantId: zod.number(),
+  isSystem: zod.boolean().optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string().optional(),
+});
+
+export const DeleteRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all available permissions
+ */
+export const ListPermissionsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  resource: zod.string(),
+  action: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+export const ListPermissionsResponse = zod.array(ListPermissionsResponseItem);
+
+export const GetRolePermissionsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetRolePermissionsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  resource: zod.string(),
+  action: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.string().optional(),
+});
+export const GetRolePermissionsResponse = zod.array(
+  GetRolePermissionsResponseItem,
+);
+
+export const AssignPermissionToRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AssignPermissionToRoleBody = zod.object({
+  permissionId: zod.number(),
+});
+
+export const RemovePermissionFromRoleParams = zod.object({
+  id: zod.coerce.number(),
+  permissionId: zod.coerce.number(),
+});
+
+/**
+ * @summary List shift definitions for a restaurant
+ */
+export const ListShiftsParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const ListShiftsResponseItem = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number(),
+  name: zod.string(),
+  startTime: zod.string().describe("HH:MM 24h format"),
+  endTime: zod.string().describe("HH:MM 24h format"),
+  days: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  updatedAt: zod.string().optional(),
+});
+export const ListShiftsResponse = zod.array(ListShiftsResponseItem);
+
+export const CreateShiftParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const CreateShiftBody = zod.object({
+  name: zod.string(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  days: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateShiftParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const UpdateShiftBody = zod.object({
+  name: zod.string().optional(),
+  startTime: zod.string().optional(),
+  endTime: zod.string().optional(),
+  days: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateShiftResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number(),
+  name: zod.string(),
+  startTime: zod.string().describe("HH:MM 24h format"),
+  endTime: zod.string().describe("HH:MM 24h format"),
+  days: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  updatedAt: zod.string().optional(),
+});
+
+export const DeleteShiftParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List assigned staff shifts
+ */
+export const ListStaffShiftsParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const ListStaffShiftsQueryParams = zod.object({
+  userId: zod.coerce.number().optional(),
+  date: zod.coerce.string().optional(),
+});
+
+export const ListStaffShiftsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  shiftId: zod.number(),
+  restaurantId: zod.number(),
+  date: zod.string(),
+  createdAt: zod.string().optional(),
+});
+export const ListStaffShiftsResponse = zod.array(ListStaffShiftsResponseItem);
+
+export const AssignStaffShiftParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const AssignStaffShiftBody = zod.object({
+  userId: zod.number(),
+  shiftId: zod.number(),
+  date: zod.string(),
+});
+
+/**
+ * @summary Get customer loyalty balance and transaction history
+ */
+export const GetCustomerLoyaltyParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  customerId: zod.coerce.number(),
+});
+
+export const GetCustomerLoyaltyResponse = zod.object({
+  customerId: zod.number(),
+  balance: zod.number(),
+  transactions: zod.array(
+    zod.object({
+      id: zod.number(),
+      customerId: zod.number(),
+      restaurantId: zod.number(),
+      orderId: zod.number().nullish(),
+      type: zod.enum(["earn", "redeem", "adjust"]),
+      points: zod.number(),
+      description: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Earn or redeem loyalty points
+ */
+export const RecordLoyaltyTransactionParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  customerId: zod.coerce.number(),
+});
+
+export const RecordLoyaltyTransactionBody = zod.object({
+  type: zod.enum(["earn", "redeem", "adjust"]),
+  points: zod.number(),
+  orderId: zod.number().optional(),
+  description: zod.string().optional(),
+});
+
+/**
+ * @summary Server-Sent Events stream for real-time restaurant updates.
+Emits typed events: new_order, order_status_changed, ticket_status_changed,
+low_stock_alert, table_status_changed, new_notification.
+Clients should reconnect automatically on disconnect.
+
+ */
+export const SubscribeRestaurantEventsParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const SubscribeRestaurantEventsHeader = zod.object({
+  lastEventId: zod
+    .string()
+    .optional()
+    .describe("Resume from last received event ID"),
+});
+
+/**
  * @summary Super admin platform stats
  */
 export const GetAdminStatsResponse = zod.object({

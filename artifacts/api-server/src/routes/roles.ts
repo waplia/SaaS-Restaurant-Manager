@@ -47,6 +47,15 @@ router.get("/permissions", async (_req, res) => {
   res.json(rows);
 });
 
+router.get("/roles/:id/permissions", async (req, res) => {
+  const permRows = await db
+    .select({ permission: permissionsTable })
+    .from(rolePermissionsTable)
+    .innerJoin(permissionsTable, eq(rolePermissionsTable.permissionId, permissionsTable.id))
+    .where(eq(rolePermissionsTable.roleId, Number(req.params.id)));
+  res.json(permRows.map(r => r.permission));
+});
+
 router.post("/roles/:id/permissions", async (req, res) => {
   const { permissionId } = req.body;
   const [entry] = await db.insert(rolePermissionsTable).values({ roleId: Number(req.params.id), permissionId }).onConflictDoNothing().returning();

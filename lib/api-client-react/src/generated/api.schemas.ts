@@ -813,6 +813,218 @@ export interface ReportsData {
   topItems?: PopularItem[];
 }
 
+export interface Role {
+  id: number;
+  name: string;
+  slug: string;
+  /** @nullable */
+  description?: string | null;
+  tenantId: number;
+  isSystem?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Permission {
+  id: number;
+  name: string;
+  resource: string;
+  action: string;
+  /** @nullable */
+  description?: string | null;
+  createdAt?: string;
+}
+
+export type RoleWithPermissions = Role & {
+  permissions?: Permission[];
+};
+
+export interface RolePermission {
+  roleId: number;
+  permissionId: number;
+  createdAt?: string;
+}
+
+export interface CreateRoleInput {
+  name: string;
+  slug: string;
+  description?: string;
+  tenantId: number;
+}
+
+export interface UpdateRoleInput {
+  name?: string;
+  description?: string;
+}
+
+export interface StaffProfile {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  /** @nullable */
+  employeeCode?: string | null;
+  /** @nullable */
+  jobTitle?: string | null;
+  /** @nullable */
+  department?: string | null;
+  /** @nullable */
+  salary?: string | null;
+  /** @nullable */
+  hiredAt?: string | null;
+  /** @nullable */
+  emergencyContact?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface InventoryStock {
+  id: number;
+  itemId: number;
+  restaurantId: number;
+  /** Available stock quantity */
+  quantity: string;
+  /** Quantity reserved for pending orders */
+  reservedQuantity: string;
+  /** @nullable */
+  lastCountedAt?: string | null;
+  updatedAt?: string;
+}
+
+export interface LoyaltyPoints {
+  id: number;
+  customerId: number;
+  restaurantId: number;
+  /** Current redeemable point balance */
+  balance: number;
+  lifetimeEarned: number;
+  lifetimeRedeemed: number;
+  updatedAt?: string;
+}
+
+export interface Shift {
+  id: number;
+  restaurantId: number;
+  name: string;
+  /** HH:MM 24h format */
+  startTime: string;
+  /** HH:MM 24h format */
+  endTime: string;
+  days?: string[];
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StaffShift {
+  id: number;
+  userId: number;
+  shiftId: number;
+  restaurantId: number;
+  date: string;
+  createdAt?: string;
+}
+
+export interface CreateShiftInput {
+  name: string;
+  startTime: string;
+  endTime: string;
+  days?: string[];
+  isActive?: boolean;
+}
+
+export interface UpdateShiftInput {
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  days?: string[];
+  isActive?: boolean;
+}
+
+export interface AssignStaffShiftInput {
+  userId: number;
+  shiftId: number;
+  date: string;
+}
+
+export type LoyaltyTransactionType =
+  (typeof LoyaltyTransactionType)[keyof typeof LoyaltyTransactionType];
+
+export const LoyaltyTransactionType = {
+  earn: "earn",
+  redeem: "redeem",
+  adjust: "adjust",
+} as const;
+
+export interface LoyaltyTransaction {
+  id: number;
+  customerId: number;
+  restaurantId: number;
+  /** @nullable */
+  orderId?: number | null;
+  type: LoyaltyTransactionType;
+  points: number;
+  /** @nullable */
+  description?: string | null;
+  createdAt: string;
+}
+
+export interface LoyaltyAccount {
+  customerId: number;
+  balance: number;
+  transactions: LoyaltyTransaction[];
+}
+
+export type LoyaltyTransactionInputType =
+  (typeof LoyaltyTransactionInputType)[keyof typeof LoyaltyTransactionInputType];
+
+export const LoyaltyTransactionInputType = {
+  earn: "earn",
+  redeem: "redeem",
+  adjust: "adjust",
+} as const;
+
+export interface LoyaltyTransactionInput {
+  type: LoyaltyTransactionInputType;
+  points: number;
+  orderId?: number;
+  description?: string;
+}
+
+export type SSEEventEvent = (typeof SSEEventEvent)[keyof typeof SSEEventEvent];
+
+export const SSEEventEvent = {
+  new_order: "new_order",
+  order_status_changed: "order_status_changed",
+  ticket_status_changed: "ticket_status_changed",
+  low_stock_alert: "low_stock_alert",
+  table_status_changed: "table_status_changed",
+  new_notification: "new_notification",
+} as const;
+
+/**
+ * Event-specific payload; matches the relevant entity schema
+ */
+export type SSEEventData = { [key: string]: unknown };
+
+/**
+ * Server-Sent Event envelope. The `event` field identifies the event type,
+`data` contains the JSON payload. Clients subscribe to
+GET /restaurants/{id}/events and should reconnect on disconnect
+(standard EventSource reconnection). Polling fallback uses the existing
+dashboard/kitchen/notification endpoints with their configured refetchIntervals.
+
+ */
+export interface SSEEvent {
+  event: SSEEventEvent;
+  /** Event-specific payload; matches the relevant entity schema */
+  data: SSEEventData;
+  /** Event ID for LastEventID reconnection */
+  id?: string;
+}
+
 export interface PublicMenuCategory {
   id: number;
   name: string;
@@ -982,4 +1194,17 @@ export type GetReportsParams = {
   period?: string;
   from?: string;
   to?: string;
+};
+
+export type ListRolesParams = {
+  tenantId?: number;
+};
+
+export type AssignPermissionToRoleBody = {
+  permissionId: number;
+};
+
+export type ListStaffShiftsParams = {
+  userId?: number;
+  date?: string;
 };
