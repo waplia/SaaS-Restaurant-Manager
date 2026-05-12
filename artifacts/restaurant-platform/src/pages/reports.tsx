@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RevenueByDayItem, TopItem, StaffPerformanceItem } from "@/lib/types";
+import * as XLSX from "xlsx";
 
 const COLORS = [
   "hsl(24 95% 53%)", "hsl(142 72% 45%)", "hsl(217 91% 60%)",
@@ -58,8 +59,32 @@ export default function ReportsPage() {
     }
   }
 
-  function handleExportPDF() {
-    window.print();
+  function handleExportExcel() {
+    if (!reports) return;
+    const wb = XLSX.utils.book_new();
+    const salesRows = (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => ({
+      Date: r.date,
+      Revenue: Number(r.revenue),
+      Orders: r.orders,
+      "Avg Order": r.orders > 0 ? Number((Number(r.revenue) / r.orders).toFixed(2)) : 0,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(salesRows), "Sales");
+    const staffRows = (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => ({
+      "Staff Member": s.name,
+      "Orders Handled": s.orderCount,
+      "Revenue Generated": Number(s.totalRevenue),
+      "Hours Worked": Number(s.totalHours),
+      "Revenue / Order": s.orderCount > 0 ? Number((Number(s.totalRevenue) / s.orderCount).toFixed(2)) : 0,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
+    const summaryRows = [
+      { Metric: "Total Revenue", Value: Number(reports.totalRevenue) },
+      { Metric: "Total Orders", Value: reports.totalOrders },
+      { Metric: "Avg Order Value", Value: Number(reports.avgOrderValue) },
+      { Metric: "Tax Collected", Value: Number(reports.totalTax) },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
+    XLSX.writeFile(wb, `tabletrack-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const statCards = [
@@ -79,16 +104,22 @@ export default function ReportsPage() {
             <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!reports}>
               <Download className="w-4 h-4 mr-1.5" /> CSV
             </Button>
-            <Button size="sm" variant="outline" onClick={handleExportPDF}>
-              <Download className="w-4 h-4 mr-1.5" /> PDF
+            <Button size="sm" variant="outline" onClick={handleExportExcel} disabled={!reports}>
+              <Download className="w-4 h-4 mr-1.5" /> Excel
             </Button>
           </div>
         }
       />
       <div className="p-6 space-y-6">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1">
-            {[{ label: "7 Days", val: "7d" }, { label: "30 Days", val: "30d" }, { label: "90 Days", val: "90d" }].map(({ label, val }) => (
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { label: "7 Days", val: "7d" },
+              { label: "30 Days", val: "30d" },
+              { label: "90 Days", val: "90d" },
+              { label: "1 Month", val: "1m" },
+              { label: "1 Year", val: "1y" },
+            ].map(({ label, val }) => (
               <Button
                 key={val}
                 size="sm"

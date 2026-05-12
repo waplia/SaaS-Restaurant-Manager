@@ -147,8 +147,11 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     to = new Date(String(toStr));
     to.setHours(23, 59, 59, 999);
   } else {
-    const days = String(period) === "30d" ? 30 : String(period) === "90d" ? 90 : 7;
-    from.setDate(from.getDate() - days);
+    const p = String(period);
+    if (p === "1y") { from.setFullYear(from.getFullYear() - 1); }
+    else if (p === "1m" || p === "30d") { from.setMonth(from.getMonth() - 1); }
+    else if (p === "90d") { from.setDate(from.getDate() - 90); }
+    else { from.setDate(from.getDate() - 7); }
   }
   from.setHours(0, 0, 0, 0);
 
@@ -176,6 +179,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     revenue: sql<string>`cast(sum(${orderItemsTable.totalPrice}) as text)`,
   }).from(orderItemsTable).innerJoin(ordersTable, and(eq(orderItemsTable.orderId, ordersTable.id), dateCondition!)).groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName).orderBy(desc(sql`count(*)`)).limit(10);
 
+  const toClause = fromStr && toStr ? `AND o.created_at <= '${to.toISOString()}'` : "";
+  const toAttClause = fromStr && toStr ? `AND a.clock_in <= '${to.toISOString()}'` : "";
   const staffPerfRows = await db.execute<{
     user_id: number;
     name: string;
@@ -183,18 +188,39 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     total_revenue: string;
     total_hours: string;
   }>(`
+    WITH order_stats AS (
+      SELECT
+        o.waiter_id AS user_id,
+        COUNT(o.id)::int AS order_count,
+        COALESCE(SUM(o.total_amount), 0) AS total_revenue
+      FROM orders o
+      WHERE o.restaurant_id = ${restaurantId}
+        AND o.waiter_id IS NOT NULL
+        AND o.created_at >= '${from.toISOString()}'
+        ${toClause}
+      GROUP BY o.waiter_id
+    ),
+    attendance_stats AS (
+      SELECT
+        a.user_id,
+        COALESCE(SUM(a.total_hours), 0) AS total_hours
+      FROM attendance a
+      WHERE a.restaurant_id = ${restaurantId}
+        AND a.clock_in >= '${from.toISOString()}'
+        ${toAttClause}
+      GROUP BY a.user_id
+    )
     SELECT
-      u.id as user_id,
+      u.id AS user_id,
       u.name,
-      COUNT(DISTINCT o.id)::int as order_count,
-      COALESCE(SUM(o.total_amount), 0)::text as total_revenue,
-      COALESCE(SUM(a.total_hours), 0)::text as total_hours
+      COALESCE(os.order_count, 0)::text AS order_count,
+      COALESCE(os.total_revenue, 0)::text AS total_revenue,
+      COALESCE(att.total_hours, 0)::text AS total_hours
     FROM users u
-    LEFT JOIN orders o ON o.waiter_id = u.id AND o.restaurant_id = ${restaurantId} AND o.created_at >= '${from.toISOString()}'
-    LEFT JOIN attendance a ON a.user_id = u.id AND a.restaurant_id = ${restaurantId} AND a.clock_in >= '${from.toISOString()}'
+    LEFT JOIN order_stats os ON os.user_id = u.id
+    LEFT JOIN attendance_stats att ON att.user_id = u.id
     WHERE u.restaurant_id = ${restaurantId} AND u.is_active = true
-    GROUP BY u.id, u.name
-    ORDER BY order_count DESC
+    ORDER BY COALESCE(os.order_count, 0) DESC
     LIMIT 20
   `);
 

@@ -29,11 +29,15 @@ export function useSSE(restaurantId: number) {
         void qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         void qc.invalidateQueries({ queryKey: ["dashboard", "summary", restaurantId] });
         void qc.invalidateQueries({ queryKey: ["dashboard", "live-kitchen", restaurantId] });
+        void qc.invalidateQueries({ queryKey: ["dashboard", "revenue-trend", restaurantId] });
+        void qc.invalidateQueries({ queryKey: ["dashboard", "popular-items", restaurantId] });
       });
 
       es.addEventListener("order:status", () => {
         void qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
         void qc.invalidateQueries({ queryKey: ["dashboard", "summary", restaurantId] });
+        void qc.invalidateQueries({ queryKey: ["dashboard", "revenue-trend", restaurantId] });
+        void qc.invalidateQueries({ queryKey: ["dashboard", "popular-items", restaurantId] });
         void qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
       });
 
