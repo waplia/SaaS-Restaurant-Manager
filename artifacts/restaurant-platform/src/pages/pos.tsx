@@ -77,10 +77,11 @@ function printReceipt(args: {
   amountTendered?: number;
   customerName?: string;
   restaurantName?: string;
+  logoUrl?: string;
   splitIndex?: number;
   splitTotal?: number;
 }) {
-  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, splitIndex, splitTotal } = args;
+  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, splitIndex, splitTotal } = args;
   const change = amountTendered ? Math.max(0, amountTendered - (splitTotal ?? totals.totalAmount)) : 0;
   const displayTotal = splitTotal ?? totals.totalAmount;
   const html = `<!DOCTYPE html>
@@ -94,9 +95,10 @@ body { font-family:'Courier New',monospace; font-size:13px; width:80mm; margin:0
 .sm { font-size:11px; color:#444; }
 h1 { font-size:18px; font-weight:bold; margin-bottom:2px; }
 .total-row { font-size:16px; font-weight:bold; margin-top:4px; }
+.logo { max-width:60mm; max-height:24mm; object-fit:contain; margin-bottom:4px; }
 </style></head>
 <body>
-<div class="center"><h1>${restaurantName ?? "TableTrack"}</h1><div class="sm">POS Receipt</div></div>
+<div class="center">${logoUrl ? `<img src="${logoUrl}" class="logo" alt="logo"/>` : ""}<h1>${restaurantName ?? "TableTrack"}</h1><div class="sm">POS Receipt</div></div>
 <div class="dash"></div>
 <div class="center">
   <div class="bold">${orderNumber}${splitIndex !== undefined ? ` (Split ${splitIndex + 1})` : ""}</div>
@@ -260,7 +262,7 @@ interface SplitProof {
 }
 
 function SplitBillModal({
-  totalAmount, displayItems, totals, placedOrderId, restaurantName, orderNumber, tableLabel, orderType, customerName,
+  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, orderNumber, tableLabel, orderType, customerName,
   onClose, onComplete,
 }: {
   totalAmount: number;
@@ -268,6 +270,7 @@ function SplitBillModal({
   totals: Totals;
   placedOrderId: number;
   restaurantName?: string;
+  logoUrl?: string;
   orderNumber: string;
   tableLabel: string;
   orderType: string;
@@ -349,7 +352,7 @@ function SplitBillModal({
       orderNumber, tableLabel, orderType, items: displayItems, totals,
       paymentMethod: methods[idx],
       amountTendered: methods[idx] === "cash" && tenderAmounts[idx] ? Number(tenderAmounts[idx]) : undefined,
-      customerName, restaurantName,
+      customerName, restaurantName, logoUrl,
       splitIndex: idx, splitTotal: perPerson,
     });
   };
@@ -1208,7 +1211,7 @@ export default function PosPage() {
       orderNumber: placedOrder?.orderNumber ?? "",
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
-      amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name,
+      amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
     });
     handleNewOrder();
   };
@@ -1548,7 +1551,7 @@ export default function PosPage() {
                       orderNumber: placedOrder.orderNumber,
                       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
                       orderType, items: receiptDisplayItems, totals: displayTotals,
-                      paymentMethod: "pending", customerName, restaurantName: restaurant?.name,
+                      paymentMethod: "pending", customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
                     });
                   }}>
                     <Printer className="w-3 h-3 mr-1" />Print KOT
@@ -1590,6 +1593,7 @@ export default function PosPage() {
           totals={displayTotals}
           placedOrderId={placedOrder.id}
           restaurantName={restaurant?.name}
+          logoUrl={restaurant?.logoUrl ?? undefined}
           orderNumber={placedOrder.orderNumber}
           tableLabel={selectedTable ? `Table ${selectedTable.tableNumber}` : ""}
           orderType={orderType}

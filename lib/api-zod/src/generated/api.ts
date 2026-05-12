@@ -1061,6 +1061,10 @@ export const PayOrderParams = zod.object({
 export const PayOrderBody = zod.object({
   paymentMethod: zod.string(),
   amountTendered: zod.string().optional(),
+  stripePaymentIntentId: zod
+    .string()
+    .optional()
+    .describe("Stripe PaymentIntent ID for card payments"),
   transactionId: zod.string().optional(),
 });
 
@@ -1085,6 +1089,250 @@ export const PayOrderResponse = zod.object({
   isPriority: zod.boolean().optional(),
   createdAt: zod.string().optional(),
   updatedAt: zod.string().optional(),
+});
+
+/**
+ * @summary Add an item to an existing open order
+ */
+export const AddOrderItemParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const AddOrderItemBody = zod.object({
+  menuItemId: zod.number(),
+  quantity: zod.number().min(1),
+  notes: zod.string().optional(),
+  modifiers: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        price: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+export const AddOrderItemResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number().optional(),
+  tableId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      menuItemId: zod.number().optional(),
+      menuItemName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.string(),
+      totalPrice: zod.string(),
+      notes: zod.string().nullish(),
+      status: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Remove a line item from an open order
+ */
+export const RemoveOrderItemParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+  itemId: zod.coerce.number(),
+});
+
+export const RemoveOrderItemResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number().optional(),
+  tableId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      menuItemId: zod.number().optional(),
+      menuItemName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.string(),
+      totalPrice: zod.string(),
+      notes: zod.string().nullish(),
+      status: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Apply or update a discount on an order
+ */
+export const ApplyOrderDiscountParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const ApplyOrderDiscountBody = zod.object({
+  discountAmount: zod.number().describe("Flat discount in currency units"),
+});
+
+export const ApplyOrderDiscountResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number().optional(),
+  tableId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      menuItemId: zod.number().optional(),
+      menuItemName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.string(),
+      totalPrice: zod.string(),
+      notes: zod.string().nullish(),
+      status: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Cancel/void an order that has not yet been completed
+ */
+export const VoidOrderParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const VoidOrderResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number(),
+  tableId: zod.number().nullish(),
+  waiterId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  paymentMethod: zod.string().nullish(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  serviceCharge: zod.string().optional(),
+  discountAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  customerPhone: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  updatedAt: zod.string().optional(),
+});
+
+/**
+ * @summary Mark an order as paid via split payment across multiple methods
+ */
+export const SplitOrderParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const SplitOrderBody = zod.object({
+  splits: zod.array(
+    zod.object({
+      paymentMethod: zod.enum(["cash", "card", "upi"]),
+    }),
+  ),
+});
+
+export const SplitOrderResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number(),
+  tableId: zod.number().nullish(),
+  waiterId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  paymentMethod: zod.string().nullish(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  serviceCharge: zod.string().optional(),
+  discountAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  customerPhone: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  updatedAt: zod.string().optional(),
+});
+
+/**
+ * @summary Create a Razorpay order for UPI/card checkout (returns demo order when Razorpay is not configured)
+ */
+export const CreateRazorpayOrderParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const CreateRazorpayOrderResponse = zod.object({
+  id: zod.string().describe("Razorpay order ID or demo placeholder"),
+  amount: zod.number().describe("Amount in paise (INR subunit)"),
+  currency: zod.string(),
+  keyId: zod
+    .string()
+    .nullish()
+    .describe("Razorpay publishable key ID; null in demo mode"),
+  mode: zod.enum(["live", "demo"]),
+});
+
+/**
+ * @summary Create a Stripe PaymentIntent for the order (returns demo intent when Stripe is not configured)
+ */
+export const CreatePaymentIntentParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const CreatePaymentIntentResponse = zod.object({
+  clientSecret: zod
+    .string()
+    .nullable()
+    .describe("Stripe PaymentIntent client secret; null in demo mode"),
+  intentId: zod
+    .string()
+    .describe("Stripe PaymentIntent ID or demo intent placeholder"),
+  mode: zod
+    .enum(["live", "demo"])
+    .describe("live = real Stripe; demo = Stripe not configured"),
+  totalAmount: zod
+    .string()
+    .optional()
+    .describe("Order total in currency units (included in demo mode)"),
 });
 
 export const ListKitchenTicketsParams = zod.object({

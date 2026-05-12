@@ -319,9 +319,8 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
   const { createHmac } = await import("crypto");
 
-  // ── Within-request deduplication of payment proof IDs ────────────────────
-  // Prevents the same proof from being submitted across multiple legs to inflate
-  // the verified total (e.g. reusing one ₹50 intent to cover two ₹50 legs).
+  // Deduplicate payment proof IDs within the request to prevent the same proof
+  // from covering multiple legs (e.g. one ₹50 intent used for two ₹50 legs).
   const seenStripeIds = new Set<string>();
   const seenRzpPayIds = new Set<string>();
   for (const split of splits) {
@@ -339,8 +338,8 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
     }
   }
 
-  // ── Per-leg verification — accumulate gateway-verified amounts ────────────
-  let verifiedTotal = 0; // in rupees, from gateway-confirmed amounts
+  // Verify each leg and accumulate gateway-confirmed amounts
+  let verifiedTotal = 0;
 
   for (const split of splits) {
     let legVerifiedAmount = 0;
@@ -469,7 +468,7 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
     verifiedTotal += legVerifiedAmount;
   }
 
-  // ── Final verified-total check (from gateway-confirmed amounts) ───────────
+  // Ensure gateway-verified amounts cover the full order total
   if (verifiedTotal < orderTotal - 0.01) {
     return void res.status(400).json({
       error: `Gateway-verified payment total ₹${verifiedTotal.toFixed(2)} is less than order total ₹${orderTotal.toFixed(2)}`,
@@ -624,7 +623,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
     return void res.status(400).json({ error: "Order is already completed or cancelled" });
   }
 
-  // ── Card payment verification ──────────────────────────────────────────────
+  // Card payment verification
   if (paymentMethod === "card") {
     if (!stripePaymentIntentId) {
       return void res.status(400).json({ error: "Card payments require a Stripe PaymentIntent ID" });
@@ -662,7 +661,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
     }
   }
 
-  // ── UPI / Razorpay payment verification ───────────────────────────────────
+  // UPI / Razorpay payment verification
   if (paymentMethod === "upi") {
     const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
     const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;

@@ -17,7 +17,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddOrderItemInput,
   AdminStats,
+  ApplyOrderDiscountBody,
   AssignPermissionToRoleBody,
   AssignStaffShiftInput,
   AttendanceRecord,
@@ -103,6 +105,7 @@ import type {
   OrderList,
   OrderUpdate,
   PaymentInput,
+  PaymentIntentResult,
   Permission,
   PopularItem,
   PublicMenu,
@@ -110,6 +113,7 @@ import type {
   PublicOrderResult,
   PublicOrderStatus,
   QrCodeData,
+  RazorpayOrderResult,
   RefreshTokenBody,
   RegisterInput,
   ReportsData,
@@ -127,6 +131,7 @@ import type {
   RoleWithPermissions,
   SSEEvent,
   Shift,
+  SplitOrderBody,
   StaffActivityItem,
   StaffMember,
   StaffShift,
@@ -4959,6 +4964,632 @@ export const usePayOrder = <
   TContext
 > => {
   return useMutation(getPayOrderMutationOptions(options));
+};
+
+/**
+ * @summary Add an item to an existing open order
+ */
+export const getAddOrderItemUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/items`;
+};
+
+export const addOrderItem = async (
+  restaurantId: number,
+  id: number,
+  addOrderItemInput: AddOrderItemInput,
+  options?: RequestInit,
+): Promise<OrderDetail> => {
+  return customFetch<OrderDetail>(getAddOrderItemUrl(restaurantId, id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addOrderItemInput),
+  });
+};
+
+export const getAddOrderItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addOrderItem>>,
+    TError,
+    { restaurantId: number; id: number; data: BodyType<AddOrderItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addOrderItem>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<AddOrderItemInput> },
+  TContext
+> => {
+  const mutationKey = ["addOrderItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addOrderItem>>,
+    { restaurantId: number; id: number; data: BodyType<AddOrderItemInput> }
+  > = (props) => {
+    const { restaurantId, id, data } = props ?? {};
+
+    return addOrderItem(restaurantId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddOrderItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addOrderItem>>
+>;
+export type AddOrderItemMutationBody = BodyType<AddOrderItemInput>;
+export type AddOrderItemMutationError = ErrorType<void>;
+
+/**
+ * @summary Add an item to an existing open order
+ */
+export const useAddOrderItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addOrderItem>>,
+    TError,
+    { restaurantId: number; id: number; data: BodyType<AddOrderItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addOrderItem>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<AddOrderItemInput> },
+  TContext
+> => {
+  return useMutation(getAddOrderItemMutationOptions(options));
+};
+
+/**
+ * @summary Remove a line item from an open order
+ */
+export const getRemoveOrderItemUrl = (
+  restaurantId: number,
+  id: number,
+  itemId: number,
+) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/items/${itemId}`;
+};
+
+export const removeOrderItem = async (
+  restaurantId: number,
+  id: number,
+  itemId: number,
+  options?: RequestInit,
+): Promise<OrderDetail> => {
+  return customFetch<OrderDetail>(
+    getRemoveOrderItemUrl(restaurantId, id, itemId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveOrderItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrderItem>>,
+    TError,
+    { restaurantId: number; id: number; itemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeOrderItem>>,
+  TError,
+  { restaurantId: number; id: number; itemId: number },
+  TContext
+> => {
+  const mutationKey = ["removeOrderItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeOrderItem>>,
+    { restaurantId: number; id: number; itemId: number }
+  > = (props) => {
+    const { restaurantId, id, itemId } = props ?? {};
+
+    return removeOrderItem(restaurantId, id, itemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveOrderItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeOrderItem>>
+>;
+
+export type RemoveOrderItemMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a line item from an open order
+ */
+export const useRemoveOrderItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrderItem>>,
+    TError,
+    { restaurantId: number; id: number; itemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeOrderItem>>,
+  TError,
+  { restaurantId: number; id: number; itemId: number },
+  TContext
+> => {
+  return useMutation(getRemoveOrderItemMutationOptions(options));
+};
+
+/**
+ * @summary Apply or update a discount on an order
+ */
+export const getApplyOrderDiscountUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/discount`;
+};
+
+export const applyOrderDiscount = async (
+  restaurantId: number,
+  id: number,
+  applyOrderDiscountBody: ApplyOrderDiscountBody,
+  options?: RequestInit,
+): Promise<OrderDetail> => {
+  return customFetch<OrderDetail>(getApplyOrderDiscountUrl(restaurantId, id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(applyOrderDiscountBody),
+  });
+};
+
+export const getApplyOrderDiscountMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOrderDiscount>>,
+    TError,
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<ApplyOrderDiscountBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyOrderDiscount>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
+  TContext
+> => {
+  const mutationKey = ["applyOrderDiscount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyOrderDiscount>>,
+    { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> }
+  > = (props) => {
+    const { restaurantId, id, data } = props ?? {};
+
+    return applyOrderDiscount(restaurantId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyOrderDiscountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyOrderDiscount>>
+>;
+export type ApplyOrderDiscountMutationBody = BodyType<ApplyOrderDiscountBody>;
+export type ApplyOrderDiscountMutationError = ErrorType<void>;
+
+/**
+ * @summary Apply or update a discount on an order
+ */
+export const useApplyOrderDiscount = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOrderDiscount>>,
+    TError,
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<ApplyOrderDiscountBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyOrderDiscount>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
+  TContext
+> => {
+  return useMutation(getApplyOrderDiscountMutationOptions(options));
+};
+
+/**
+ * @summary Cancel/void an order that has not yet been completed
+ */
+export const getVoidOrderUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/void`;
+};
+
+export const voidOrder = async (
+  restaurantId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<Order> => {
+  return customFetch<Order>(getVoidOrderUrl(restaurantId, id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getVoidOrderMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof voidOrder>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof voidOrder>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["voidOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof voidOrder>>,
+    { restaurantId: number; id: number }
+  > = (props) => {
+    const { restaurantId, id } = props ?? {};
+
+    return voidOrder(restaurantId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VoidOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof voidOrder>>
+>;
+
+export type VoidOrderMutationError = ErrorType<void>;
+
+/**
+ * @summary Cancel/void an order that has not yet been completed
+ */
+export const useVoidOrder = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof voidOrder>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof voidOrder>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  return useMutation(getVoidOrderMutationOptions(options));
+};
+
+/**
+ * @summary Mark an order as paid via split payment across multiple methods
+ */
+export const getSplitOrderUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/split`;
+};
+
+export const splitOrder = async (
+  restaurantId: number,
+  id: number,
+  splitOrderBody: SplitOrderBody,
+  options?: RequestInit,
+): Promise<Order> => {
+  return customFetch<Order>(getSplitOrderUrl(restaurantId, id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(splitOrderBody),
+  });
+};
+
+export const getSplitOrderMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof splitOrder>>,
+    TError,
+    { restaurantId: number; id: number; data: BodyType<SplitOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof splitOrder>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<SplitOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["splitOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof splitOrder>>,
+    { restaurantId: number; id: number; data: BodyType<SplitOrderBody> }
+  > = (props) => {
+    const { restaurantId, id, data } = props ?? {};
+
+    return splitOrder(restaurantId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SplitOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof splitOrder>>
+>;
+export type SplitOrderMutationBody = BodyType<SplitOrderBody>;
+export type SplitOrderMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark an order as paid via split payment across multiple methods
+ */
+export const useSplitOrder = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof splitOrder>>,
+    TError,
+    { restaurantId: number; id: number; data: BodyType<SplitOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof splitOrder>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<SplitOrderBody> },
+  TContext
+> => {
+  return useMutation(getSplitOrderMutationOptions(options));
+};
+
+/**
+ * @summary Create a Razorpay order for UPI/card checkout (returns demo order when Razorpay is not configured)
+ */
+export const getCreateRazorpayOrderUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/razorpay-order`;
+};
+
+export const createRazorpayOrder = async (
+  restaurantId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<RazorpayOrderResult> => {
+  return customFetch<RazorpayOrderResult>(
+    getCreateRazorpayOrderUrl(restaurantId, id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getCreateRazorpayOrderMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRazorpayOrder>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["createRazorpayOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    { restaurantId: number; id: number }
+  > = (props) => {
+    const { restaurantId, id } = props ?? {};
+
+    return createRazorpayOrder(restaurantId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRazorpayOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRazorpayOrder>>
+>;
+
+export type CreateRazorpayOrderMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a Razorpay order for UPI/card checkout (returns demo order when Razorpay is not configured)
+ */
+export const useCreateRazorpayOrder = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRazorpayOrder>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  return useMutation(getCreateRazorpayOrderMutationOptions(options));
+};
+
+/**
+ * @summary Create a Stripe PaymentIntent for the order (returns demo intent when Stripe is not configured)
+ */
+export const getCreatePaymentIntentUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/payment-intent`;
+};
+
+export const createPaymentIntent = async (
+  restaurantId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<PaymentIntentResult> => {
+  return customFetch<PaymentIntentResult>(
+    getCreatePaymentIntentUrl(restaurantId, id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getCreatePaymentIntentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPaymentIntent>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPaymentIntent>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["createPaymentIntent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPaymentIntent>>,
+    { restaurantId: number; id: number }
+  > = (props) => {
+    const { restaurantId, id } = props ?? {};
+
+    return createPaymentIntent(restaurantId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePaymentIntentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPaymentIntent>>
+>;
+
+export type CreatePaymentIntentMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a Stripe PaymentIntent for the order (returns demo intent when Stripe is not configured)
+ */
+export const useCreatePaymentIntent = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPaymentIntent>>,
+    TError,
+    { restaurantId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPaymentIntent>>,
+  TError,
+  { restaurantId: number; id: number },
+  TContext
+> => {
+  return useMutation(getCreatePaymentIntentMutationOptions(options));
 };
 
 export const getListKitchenTicketsUrl = (

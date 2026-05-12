@@ -554,7 +554,69 @@ export interface OrderUpdate {
 export interface PaymentInput {
   paymentMethod: string;
   amountTendered?: string;
+  /** Stripe PaymentIntent ID for card payments */
+  stripePaymentIntentId?: string;
   transactionId?: string;
+}
+
+export type RazorpayOrderResultMode =
+  (typeof RazorpayOrderResultMode)[keyof typeof RazorpayOrderResultMode];
+
+export const RazorpayOrderResultMode = {
+  live: "live",
+  demo: "demo",
+} as const;
+
+export interface RazorpayOrderResult {
+  /** Razorpay order ID or demo placeholder */
+  id: string;
+  /** Amount in paise (INR subunit) */
+  amount: number;
+  currency: string;
+  /**
+   * Razorpay publishable key ID; null in demo mode
+   * @nullable
+   */
+  keyId?: string | null;
+  mode: RazorpayOrderResultMode;
+}
+
+/**
+ * live = real Stripe; demo = Stripe not configured
+ */
+export type PaymentIntentResultMode =
+  (typeof PaymentIntentResultMode)[keyof typeof PaymentIntentResultMode];
+
+export const PaymentIntentResultMode = {
+  live: "live",
+  demo: "demo",
+} as const;
+
+export interface PaymentIntentResult {
+  /**
+   * Stripe PaymentIntent client secret; null in demo mode
+   * @nullable
+   */
+  clientSecret: string | null;
+  /** Stripe PaymentIntent ID or demo intent placeholder */
+  intentId: string;
+  /** live = real Stripe; demo = Stripe not configured */
+  mode: PaymentIntentResultMode;
+  /** Order total in currency units (included in demo mode) */
+  totalAmount?: string;
+}
+
+export type AddOrderItemInputModifiersItem = {
+  name: string;
+  price: string;
+};
+
+export interface AddOrderItemInput {
+  menuItemId: number;
+  /** @minimum 1 */
+  quantity: number;
+  notes?: string;
+  modifiers?: AddOrderItemInputModifiersItem[];
 }
 
 export interface KitchenTicket {
@@ -1237,6 +1299,28 @@ export type ListOrdersParams = {
   date?: string;
   page?: number;
   limit?: number;
+};
+
+export type ApplyOrderDiscountBody = {
+  /** Flat discount in currency units */
+  discountAmount: number;
+};
+
+export type SplitOrderBodySplitsItemPaymentMethod =
+  (typeof SplitOrderBodySplitsItemPaymentMethod)[keyof typeof SplitOrderBodySplitsItemPaymentMethod];
+
+export const SplitOrderBodySplitsItemPaymentMethod = {
+  cash: "cash",
+  card: "card",
+  upi: "upi",
+} as const;
+
+export type SplitOrderBodySplitsItem = {
+  paymentMethod: SplitOrderBodySplitsItemPaymentMethod;
+};
+
+export type SplitOrderBody = {
+  splits: SplitOrderBodySplitsItem[];
 };
 
 export type ListKitchenTicketsParams = {
