@@ -24,10 +24,15 @@ tags:
   - name: inventory
   - name: suppliers
   - name: staff
+  - name: shifts
+  - name: roles
+  - name: permissions
   - name: customers
+  - name: loyalty
   - name: coupons
   - name: notifications
   - name: dashboard
+  - name: realtime
   - name: public
 
 paths:
@@ -1522,6 +1527,316 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackResult"
 
+  # ─── Roles & Permissions ──────────────────────────────────────
+  /roles:
+    get:
+      operationId: listRoles
+      tags: [roles]
+      summary: List all roles for the current tenant
+      parameters:
+        - { name: tenantId, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+    post:
+      operationId: createRole
+      tags: [roles]
+      summary: Create a new role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleInput"
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+
+  /roles/{id}:
+    get:
+      operationId: getRole
+      tags: [roles]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Role with permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateRole
+      tags: [roles]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleInput"
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+    delete:
+      operationId: deleteRole
+      tags: [roles]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /permissions:
+    get:
+      operationId: listPermissions
+      tags: [permissions]
+      summary: List all available permissions
+      responses:
+        "200":
+          description: List of permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Permission"
+
+  /roles/{id}/permissions:
+    get:
+      operationId: getRolePermissions
+      tags: [permissions]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Permissions assigned to role
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Permission"
+    post:
+      operationId: assignPermissionToRole
+      tags: [permissions]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionId]
+              properties:
+                permissionId: { type: integer }
+      responses:
+        "201":
+          description: Permission assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RolePermission"
+    delete:
+      operationId: removePermissionFromRole
+      tags: [permissions]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionId]
+              properties:
+                permissionId: { type: integer }
+      responses:
+        "204":
+          description: Permission removed
+
+  # ─── Shifts ───────────────────────────────────────────────────
+  /restaurants/{restaurantId}/shifts:
+    get:
+      operationId: listShifts
+      tags: [shifts]
+      summary: List shift definitions for a restaurant
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+    post:
+      operationId: createShift
+      tags: [shifts]
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShiftInput"
+      responses:
+        "201":
+          description: Created shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /restaurants/{restaurantId}/shifts/{id}:
+    patch:
+      operationId: updateShift
+      tags: [shifts]
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShiftInput"
+      responses:
+        "200":
+          description: Updated shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+    delete:
+      operationId: deleteShift
+      tags: [shifts]
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /restaurants/{restaurantId}/staff-shifts:
+    get:
+      operationId: listStaffShifts
+      tags: [shifts]
+      summary: List assigned staff shifts
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: userId, in: query, schema: { type: integer } }
+        - { name: date, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: List of staff shift assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffShift"
+    post:
+      operationId: assignStaffShift
+      tags: [shifts]
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignStaffShiftInput"
+      responses:
+        "201":
+          description: Staff shift assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffShift"
+
+  # ─── Loyalty ──────────────────────────────────────────────────
+  /restaurants/{restaurantId}/customers/{customerId}/loyalty:
+    get:
+      operationId: getCustomerLoyalty
+      tags: [loyalty]
+      summary: Get customer loyalty balance and transaction history
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: customerId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Loyalty balance and recent transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyAccount"
+    post:
+      operationId: recordLoyaltyTransaction
+      tags: [loyalty]
+      summary: Earn or redeem loyalty points
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: customerId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoyaltyTransactionInput"
+      responses:
+        "201":
+          description: Transaction recorded, returns updated balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyTransaction"
+
+  # ─── Realtime (SSE) ───────────────────────────────────────────
+  /restaurants/{restaurantId}/events:
+    get:
+      operationId: subscribeRestaurantEvents
+      tags: [realtime]
+      summary: |
+        Server-Sent Events stream for real-time restaurant updates.
+        Emits typed events: new_order, order_status_changed, ticket_status_changed,
+        low_stock_alert, table_status_changed, new_notification.
+        Clients should reconnect automatically on disconnect.
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - name: lastEventId
+          in: header
+          description: Resume from last received event ID
+          schema: { type: string }
+      responses:
+        "200":
+          description: SSE stream — text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SSEEvent"
+
   # ─── Super Admin ──────────────────────────────────────────────
   /admin/stats:
     get:
@@ -2465,6 +2780,185 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PopularItem"
+
+    # ── Roles & Permissions ──
+    Role:
+      type: object
+      required: [id, name, slug, tenantId, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: ["string", "null"] }
+        tenantId: { type: integer }
+        isSystem: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    RoleWithPermissions:
+      allOf:
+        - $ref: "#/components/schemas/Role"
+        - type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Permission"
+
+    Permission:
+      type: object
+      required: [id, name, resource, action]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        resource: { type: string }
+        action: { type: string }
+        description: { type: ["string", "null"] }
+        createdAt: { type: string }
+
+    RolePermission:
+      type: object
+      required: [roleId, permissionId]
+      properties:
+        roleId: { type: integer }
+        permissionId: { type: integer }
+        createdAt: { type: string }
+
+    CreateRoleInput:
+      type: object
+      required: [name, slug, tenantId]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        tenantId: { type: integer }
+
+    UpdateRoleInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+
+    # ── Shifts ──
+    Shift:
+      type: object
+      required: [id, restaurantId, name, startTime, endTime]
+      properties:
+        id: { type: integer }
+        restaurantId: { type: integer }
+        name: { type: string }
+        startTime: { type: string, description: "HH:MM 24h format" }
+        endTime: { type: string, description: "HH:MM 24h format" }
+        days:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    StaffShift:
+      type: object
+      required: [id, userId, shiftId, restaurantId, date]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        shiftId: { type: integer }
+        restaurantId: { type: integer }
+        date: { type: string }
+        createdAt: { type: string }
+
+    CreateShiftInput:
+      type: object
+      required: [name, startTime, endTime]
+      properties:
+        name: { type: string }
+        startTime: { type: string }
+        endTime: { type: string }
+        days:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+
+    UpdateShiftInput:
+      type: object
+      properties:
+        name: { type: string }
+        startTime: { type: string }
+        endTime: { type: string }
+        days:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+
+    AssignStaffShiftInput:
+      type: object
+      required: [userId, shiftId, date]
+      properties:
+        userId: { type: integer }
+        shiftId: { type: integer }
+        date: { type: string }
+
+    # ── Loyalty ──
+    LoyaltyAccount:
+      type: object
+      required: [customerId, balance, transactions]
+      properties:
+        customerId: { type: integer }
+        balance: { type: integer }
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyTransaction"
+
+    LoyaltyTransaction:
+      type: object
+      required: [id, customerId, restaurantId, type, points, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        restaurantId: { type: integer }
+        orderId: { type: ["integer", "null"] }
+        type: { type: string, enum: [earn, redeem, adjust] }
+        points: { type: integer }
+        description: { type: ["string", "null"] }
+        createdAt: { type: string }
+
+    LoyaltyTransactionInput:
+      type: object
+      required: [type, points]
+      properties:
+        type: { type: string, enum: [earn, redeem, adjust] }
+        points: { type: integer }
+        orderId: { type: integer }
+        description: { type: string }
+
+    # ── Realtime SSE ──
+    SSEEvent:
+      type: object
+      required: [event, data]
+      description: |
+        Server-Sent Event envelope. The `event` field identifies the event type,
+        `data` contains the JSON payload. Clients subscribe to
+        GET /restaurants/{id}/events and should reconnect on disconnect
+        (standard EventSource reconnection). Polling fallback uses the existing
+        dashboard/kitchen/notification endpoints with their configured refetchIntervals.
+      properties:
+        event:
+          type: string
+          enum:
+            - new_order
+            - order_status_changed
+            - ticket_status_changed
+            - low_stock_alert
+            - table_status_changed
+            - new_notification
+        data:
+          type: object
+          description: Event-specific payload; matches the relevant entity schema
+          additionalProperties: true
+        id:
+          type: string
+          description: Event ID for LastEventID reconnection
 
     # ── Public / Customer Ordering ──
     PublicMenu:
