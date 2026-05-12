@@ -377,9 +377,10 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
         if (expectedSig !== String(split.razorpaySignature)) {
           return void res.status(400).json({ error: "Razorpay signature verification failed for UPI split" });
         }
-        // Fetch payment from Razorpay API: verify captured status, amount, and order linkage
+        // Fetch payment + order from Razorpay API: verify captured status, amount, and internal order binding
         try {
           const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
+          // 1. Verify payment status and amount
           const rzpPayRes = await fetch(`https://api.razorpay.com/v1/payments/${split.razorpayPaymentId}`, {
             headers: { Authorization: authHeader },
           });
@@ -396,6 +397,18 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           }
           if (rzpPay.order_id !== String(split.razorpayOrderId)) {
             return void res.status(400).json({ error: "Razorpay payment is not linked to the expected Razorpay order for this split leg" });
+          }
+          // 2. Fetch the Razorpay order and verify notes.orderId + notes.restaurantId
+          //    This binds the payment to this specific internal order/restaurant, preventing replay
+          const rzpOrdRes = await fetch(`https://api.razorpay.com/v1/orders/${split.razorpayOrderId}`, {
+            headers: { Authorization: authHeader },
+          });
+          if (!rzpOrdRes.ok) {
+            return void res.status(400).json({ error: "Failed to fetch Razorpay order details for split leg" });
+          }
+          const rzpOrd = await rzpOrdRes.json() as { id: string; notes: Record<string, string> };
+          if (rzpOrd.notes?.orderId !== String(orderId) || rzpOrd.notes?.restaurantId !== String(restaurantId)) {
+            return void res.status(400).json({ error: "Razorpay order for split leg does not belong to this internal order or restaurant" });
           }
         } catch {
           return void res.status(400).json({ error: "Failed to verify UPI payment with Razorpay" });
@@ -612,9 +625,10 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
       if (expectedSig !== String(razorpaySignature)) {
         return void res.status(400).json({ error: "Razorpay signature verification failed" });
       }
-      // Fetch payment from Razorpay API and verify captured status, amount, and order linkage
+      // Fetch payment + order from Razorpay API and verify captured status, amount, and internal order binding
       try {
         const authHeader = `Basic ${Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64")}`;
+        // 1. Verify payment status and amount
         const rzpPayRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpayPaymentId}`, {
           headers: { Authorization: authHeader },
         });
@@ -631,6 +645,25 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         }
         if (rzpPay.order_id !== String(razorpayOrderId)) {
           return void res.status(400).json({ error: "Razorpay payment is not linked to the expected Razorpay order" });
+        }
+        // 2. Fetch the Razorpay order and verify notes.orderId + notes.restaurantId
+        //    This binds the payment to this specific internal order/restaurant, preventing replay
+        const rzpOrdRes = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, {
+          headers: { Authorization: authHeader },
+        });
+        if (!rzpOrdRes.ok) {
+          return void res.status(400).json({ error: "Failed to fetch Razorpay order details" });
+        }
+        const rzpOrd = await rzpOrdRes.json() as { id: string; notes: Record<string, string> };
+        if (rzpOrd.notes?.orderId !== String(orderId) || rzpOrd.notes?.restaurantId !== String(restaurantId)) {
+          return void res.status(400).json({ error: "Razorpay order does not belong to this internal order or restaurant" });
+        }
+        // 3. Idempotency: ensure this payment ID has not been used for a different order
+        const [existingUse] = await db.select({ id: ordersTable.id })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.stripePaymentId, String(razorpayPaymentId)), eq(ordersTable.restaurantId, restaurantId)));
+        if (existingUse && existingUse.id !== orderId) {
+          return void res.status(409).json({ error: "Razorpay payment ID has already been used for another order" });
         }
       } catch {
         return void res.status(400).json({ error: "Failed to verify UPI payment with Razorpay" });
