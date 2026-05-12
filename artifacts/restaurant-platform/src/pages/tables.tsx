@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useFloorTables, useUpdateTable, useCreateTable, useGetTableQr, useRestaurantInfo,
   useReservations, useCreateReservation, useUpdateReservation, useDeleteReservation,
-  useMergeTables, useSplitOrderToTable, useOrders,
+  useMergeTables, useSplitOrderToTable, useOrders, useOrderDetail,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,21 +122,22 @@ function SplitOrderModal({
 }) {
   const { data: ordersData } = useOrders({ tableId: table.id, status: "pending" });
   const { data: preparingData } = useOrders({ tableId: table.id, status: "preparing" });
+  const activeOrderId = ordersData?.data?.[0]?.id ?? preparingData?.data?.[0]?.id;
+  const { data: orderDetail, isLoading: detailLoading } = useOrderDetail(activeOrderId);
   const splitOrder = useSplitOrderToTable();
   const { toast } = useToast();
 
-  const activeOrder = (ordersData?.data?.[0] ?? preparingData?.data?.[0]) as { id: number; items?: { id: number; menuItemName?: string; quantity: number; unitPrice: string | number }[] } | undefined;
-  const items = activeOrder?.items ?? [];
+  const items = orderDetail?.items ?? [];
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [targetTableId, setTargetTableId] = useState<number | "">("");
 
   const handleConfirm = async () => {
-    if (!activeOrder) { toast({ title: "No active order found on this table", variant: "destructive" }); return; }
+    if (!orderDetail) { toast({ title: "No active order found on this table", variant: "destructive" }); return; }
     if (selectedItemIds.length === 0) { toast({ title: "Select at least one item to move", variant: "destructive" }); return; }
     if (!targetTableId) { toast({ title: "Select a target table", variant: "destructive" }); return; }
     if (selectedItemIds.length === items.length) { toast({ title: "Cannot move all items — use Merge instead", variant: "destructive" }); return; }
     try {
-      await splitOrder.mutateAsync({ orderId: activeOrder.id, targetTableId: Number(targetTableId), itemIds: selectedItemIds });
+      await splitOrder.mutateAsync({ orderId: orderDetail.id, targetTableId: Number(targetTableId), itemIds: selectedItemIds });
       toast({ title: "Order split!", description: `${selectedItemIds.length} item(s) moved to Table ${allTables.find(t => t.id === Number(targetTableId))?.tableNumber}.` });
       onClose();
     } catch {
@@ -169,7 +170,9 @@ function SplitOrderModal({
           <button aria-label="Close" onClick={onClose} className="p-1 rounded-lg hover:bg-accent"><X className="w-4 h-4" /></button>
         </div>
 
-        {!activeOrder ? (
+        {detailLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Loading order…</p>
+        ) : !activeOrderId || !orderDetail ? (
           <p className="text-sm text-muted-foreground text-center py-8">No active order on this table</p>
         ) : items.length < 2 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Need at least 2 items to split an order</p>
@@ -216,6 +219,7 @@ function SplitOrderModal({
 
 function TableCard({
   table,
+  reservation,
   onStatusChange,
   onQr,
   onSplit,
@@ -224,6 +228,7 @@ function TableCard({
   onMergeSelect,
 }: {
   table: FloorTable;
+  reservation?: Reservation;
   onStatusChange: (id: number, status: string) => void;
   onQr: (t: FloorTable) => void;
   onSplit: (t: FloorTable) => void;
@@ -256,10 +261,18 @@ function TableCard({
           <div className="bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full">Selected</div>
         )}
       </div>
-      <div className="flex items-center gap-1 text-sm mb-3">
-        <Users className="w-3.5 h-3.5" />
-        <span>{table.capacity} seats</span>
-      </div>
+      {table.status === "reserved" && reservation ? (
+        <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-2">
+          <p className="text-xs font-semibold text-blue-800 truncate">{reservation.guestName}</p>
+          <p className="text-xs text-blue-600">{format(parseISO(reservation.scheduledAt), "h:mm a")}</p>
+          <p className="text-xs text-blue-500">{reservation.partySize} guests</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 text-sm mb-3">
+          <Users className="w-3.5 h-3.5" />
+          <span>{table.capacity} seats</span>
+        </div>
+      )}
 
       {!mergeMode && (
         <>
@@ -752,6 +765,7 @@ export default function TablesPage() {
                   <TableCard
                     key={table.id}
                     table={table}
+                    reservation={(reservations as Reservation[]).find(r => r.tableId === table.id && r.status !== "cancelled")}
                     onStatusChange={handleStatusChange}
                     onQr={setQrTable}
                     onSplit={setSplitTable}
