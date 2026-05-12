@@ -1,28 +1,32 @@
 import { Router } from "express";
 import { eq, and, ilike } from "drizzle-orm";
-import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable } from "../lib/db";
+import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
+
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/menus", async (req, res) => {
   const rows = await db.select().from(menusTable).where(eq(menusTable.restaurantId, Number(req.params.restaurantId)));
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/menus", async (req, res) => {
+router.post("/restaurants/:restaurantId/menus", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, description, availableFrom, availableTo } = req.body;
   const [menu] = await db.insert(menusTable).values({ restaurantId: Number(req.params.restaurantId), name, description, availableFrom, availableTo }).returning();
   res.status(201).json(menu);
 });
 
-router.patch("/restaurants/:restaurantId/menus/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/menus/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, description, availableFrom, availableTo, isActive, sortOrder } = req.body;
   const [updated] = await db.update(menusTable).set({ name, description, availableFrom, availableTo, isActive, sortOrder, updatedAt: new Date() }).where(and(eq(menusTable.id, Number(req.params.id)), eq(menusTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/menus/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/menus/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   await db.delete(menusTable).where(and(eq(menusTable.id, Number(req.params.id)), eq(menusTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
@@ -35,20 +39,20 @@ router.get("/restaurants/:restaurantId/categories", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/categories", async (req, res) => {
+router.post("/restaurants/:restaurantId/categories", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { menuId, name, description, imageUrl, sortOrder } = req.body;
   const [cat] = await db.insert(menuCategoriesTable).values({ restaurantId: Number(req.params.restaurantId), menuId, name, description, imageUrl, sortOrder }).returning();
   res.status(201).json(cat);
 });
 
-router.patch("/restaurants/:restaurantId/categories/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/categories/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, description, imageUrl, sortOrder, isActive } = req.body;
   const [updated] = await db.update(menuCategoriesTable).set({ name, description, imageUrl, sortOrder, isActive, updatedAt: new Date() }).where(and(eq(menuCategoriesTable.id, Number(req.params.id)), eq(menuCategoriesTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/categories/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/categories/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   await db.delete(menuCategoriesTable).where(and(eq(menuCategoriesTable.id, Number(req.params.id)), eq(menuCategoriesTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
@@ -62,9 +66,27 @@ router.get("/restaurants/:restaurantId/items", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/items", async (req, res) => {
+router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+
+  if (!req.user!.isSuperAdmin) {
+    const [restaurant] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    if (restaurant?.tenantId) {
+      const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, restaurant.tenantId));
+      if (tenant?.planId) {
+        const [plan] = await db.select({ maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        if (plan && plan.maxMenuItems > 0) {
+          const existing = await db.select().from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
+          if (existing.length >= plan.maxMenuItems) {
+            return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxMenuItems} menu item(s). Upgrade to add more.` });
+          }
+        }
+      }
+    }
+  }
+
   const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags } = req.body;
-  const [item] = await db.insert(menuItemsTable).values({ restaurantId: Number(req.params.restaurantId), categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags }).returning();
+  const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags }).returning();
   res.status(201).json(item);
 });
 
@@ -74,14 +96,14 @@ router.get("/restaurants/:restaurantId/items/:id", async (req, res) => {
   res.json(item);
 });
 
-router.patch("/restaurants/:restaurantId/items/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId } = req.body;
   const [updated] = await db.update(menuItemsTable).set({ name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() }).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/items/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   await db.delete(menuItemsTable).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
@@ -91,7 +113,7 @@ router.get("/items/:itemId/modifier-groups", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/items/:itemId/modifier-groups", async (req, res) => {
+router.post("/items/:itemId/modifier-groups", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, isRequired, minSelections, maxSelections } = req.body;
   const [group] = await db.insert(modifierGroupsTable).values({ menuItemId: Number(req.params.itemId), name, isRequired, minSelections, maxSelections }).returning();
   res.status(201).json(group);
@@ -102,7 +124,7 @@ router.get("/modifier-groups/:groupId/modifiers", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/modifier-groups/:groupId/modifiers", async (req, res) => {
+router.post("/modifier-groups/:groupId/modifiers", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, price, isDefault } = req.body;
   const [modifier] = await db.insert(modifiersTable).values({ groupId: Number(req.params.groupId), name, price, isDefault }).returning();
   res.status(201).json(modifier);

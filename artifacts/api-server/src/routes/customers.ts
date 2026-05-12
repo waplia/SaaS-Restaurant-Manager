@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
 import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable } from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
+
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/customers", async (req, res) => {
   const { search, page, limit } = req.query;
@@ -21,7 +25,7 @@ router.get("/restaurants/:restaurantId/customers", async (req, res) => {
   res.json({ data: rows, total: totalRows[0]?.count ?? 0 });
 });
 
-router.post("/restaurants/:restaurantId/customers", async (req, res) => {
+router.post("/restaurants/:restaurantId/customers", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
   const { name, email, phone, address, notes } = req.body;
   const [customer] = await db.insert(customersTable).values({ restaurantId: Number(req.params.restaurantId), name, email, phone, address, notes }).returning();
   res.status(201).json(customer);
@@ -33,7 +37,7 @@ router.get("/restaurants/:restaurantId/customers/:id", async (req, res) => {
   res.json(customer);
 });
 
-router.patch("/restaurants/:restaurantId/customers/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { name, email, phone, address, loyaltyPoints, notes, isActive } = req.body;
   const [updated] = await db.update(customersTable).set({ name, email, phone, address, loyaltyPoints, notes, isActive, updatedAt: new Date() }).where(and(eq(customersTable.id, Number(req.params.id)), eq(customersTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
@@ -49,7 +53,7 @@ router.get("/restaurants/:restaurantId/customers/:id/loyalty", async (req, res) 
   res.json({ balance: customer.loyaltyPoints, transactions });
 });
 
-router.post("/restaurants/:restaurantId/customers/:id/loyalty", async (req, res) => {
+router.post("/restaurants/:restaurantId/customers/:id/loyalty", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { points, type, reason, orderId } = req.body;
   const restaurantId = Number(req.params.restaurantId);
   const customerId = Number(req.params.id);
@@ -70,13 +74,13 @@ router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/coupons", async (req, res) => {
+router.post("/restaurants/:restaurantId/coupons", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { code, discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom, validTo } = req.body;
   const [coupon] = await db.insert(couponsTable).values({ restaurantId: Number(req.params.restaurantId), code: code.toUpperCase(), discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom: validFrom ? new Date(validFrom) : new Date(), validTo: validTo ? new Date(validTo) : undefined }).returning();
   res.status(201).json(coupon);
 });
 
-router.patch("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/coupons/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const { isActive, validTo, usageLimit } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (isActive !== undefined) updates.isActive = isActive;
@@ -87,7 +91,7 @@ router.patch("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/coupons/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/coupons/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   await db.update(couponsTable).set({ isActive: false }).where(and(eq(couponsTable.id, Number(req.params.id)), eq(couponsTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
 });
@@ -120,7 +124,7 @@ router.get("/restaurants/:restaurantId/notifications", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/notifications/mark-read", async (req, res) => {
+router.post("/restaurants/:restaurantId/notifications/mark-read", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
   const { ids, all } = req.body;
   const restaurantId = Number(req.params.restaurantId);
   if (all) {

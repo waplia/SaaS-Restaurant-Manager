@@ -6,7 +6,9 @@ import {
   comparePassword,
   signAccessToken,
   signRefreshToken,
+  signResetToken,
   verifyToken,
+  verifyResetToken,
 } from "../lib/auth";
 import { authenticate } from "../middleware/authenticate";
 
@@ -206,15 +208,10 @@ router.post("/auth/forgot-password", async (req, res) => {
     .where(eq(usersTable.email, email.toLowerCase()));
 
   if (user) {
-    const _resetToken = signAccessToken({
-      sub: user.id,
-      email: user.email,
-      role: "reset",
-      tenantId: null,
-      restaurantId: null,
-      isSuperAdmin: false,
-    });
-    console.info(`[password-reset] token for ${user.email}: ${_resetToken}`);
+    const _resetToken = signResetToken({ sub: user.id, email: user.email });
+    if (process.env.NODE_ENV === "development") {
+      console.info(`[dev-only] password-reset token for user id=${user.id}`);
+    }
   }
   res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
 });
@@ -226,8 +223,8 @@ router.post("/auth/reset-password", async (req, res) => {
     return;
   }
   try {
-    const payload = verifyToken(token);
-    if (payload.role !== "reset") {
+    const payload = verifyResetToken(token);
+    if (payload.type !== "reset") {
       res.status(400).json({ error: "Invalid reset token" });
       return;
     }

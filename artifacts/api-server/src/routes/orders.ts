@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
+
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
   return `ORD-${Date.now().toString(36).toUpperCase()}`;

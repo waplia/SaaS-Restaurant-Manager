@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { eq, and, gte, desc, count, sql } from "drizzle-orm";
 import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable } from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
+
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
@@ -22,7 +26,7 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     db.select({ count: count() }).from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.restaurantId, restaurantId), sql`status IN ('new','preparing')`)),
     db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.restaurantId, restaurantId)),
     db.select({ count: count() }).from(notificationsTable).where(and(eq(notificationsTable.restaurantId, restaurantId), eq(notificationsTable.isRead, false))),
-    db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}` )),
+    db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`)),
   ]);
 
   const todayRevenue = todayOrdersRows.reduce((s, o) => s + Number(o.totalAmount), 0);
