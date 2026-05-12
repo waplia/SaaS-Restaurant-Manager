@@ -19,6 +19,17 @@ export const customersTable = pgTable("customers", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const loyaltyTransactionsTable = pgTable("loyalty_transactions", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  points: integer("points").notNull(),
+  type: text("type").notNull().default("earn"),
+  reason: text("reason"),
+  orderId: integer("order_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const couponsTable = pgTable("coupons", {
   id: serial("id").primaryKey(),
   restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
@@ -51,6 +62,10 @@ export const notificationsTable = pgTable("notifications", {
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customersTable.$inferSelect;
+
+export const insertLoyaltyTransactionSchema = createInsertSchema(loyaltyTransactionsTable).omit({ id: true, createdAt: true });
+export type InsertLoyaltyTransaction = z.infer<typeof insertLoyaltyTransactionSchema>;
+export type LoyaltyTransaction = typeof loyaltyTransactionsTable.$inferSelect;
 
 export const insertCouponSchema = createInsertSchema(couponsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCoupon = z.infer<typeof insertCouponSchema>;

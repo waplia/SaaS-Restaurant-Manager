@@ -23,26 +23,31 @@ export async function seed(): Promise<void> {
   console.log("🌱 Starting seed...");
 
   // ── Subscription Plans ──────────────────────────────────────
-  const [starter, pro] = await Promise.all([
+  await Promise.all([
+    db.insert(subscriptionPlansTable).values({
+      name: "Free Trial", slug: "free-trial", price: "0.00", billingPeriod: "monthly",
+      maxRestaurants: 1, maxBranches: 1, maxStaff: 3, maxTables: 5, maxMenuItems: 20, trialDays: 14,
+      features: ["POS", "Basic Reports"],
+    }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Starter", slug: "starter", price: "29.00", billingPeriod: "monthly",
       maxRestaurants: 1, maxBranches: 1, maxStaff: 5, maxTables: 10, maxMenuItems: 50, trialDays: 14,
       features: ["POS", "QR Ordering", "Basic Reports"],
-    }).onConflictDoNothing().returning(),
+    }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Pro", slug: "pro", price: "79.00", billingPeriod: "monthly",
       maxRestaurants: 3, maxBranches: 5, maxStaff: 25, maxTables: 50, maxMenuItems: 300, trialDays: 14,
       features: ["POS", "QR Ordering", "Kitchen Display", "Inventory", "Advanced Reports", "Multi-branch"],
-    }).onConflictDoNothing().returning(),
+    }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Enterprise", slug: "enterprise", price: "199.00", billingPeriod: "monthly",
       maxRestaurants: -1, maxBranches: -1, maxStaff: -1, maxTables: -1, maxMenuItems: -1, trialDays: 30,
       features: ["All Pro features", "White-label", "API Access", "Dedicated Support"],
-    }).onConflictDoNothing().returning(),
+    }).onConflictDoNothing(),
   ]);
 
-  const starterPlan = starter[0] ?? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "starter")).then(r => r[0]);
-  const proPlan = pro[0] ?? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "pro")).then(r => r[0]);
+  const starterPlan = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "starter")).then(r => r[0]);
+  const proPlan = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "pro")).then(r => r[0]);
 
   if (!starterPlan || !proPlan) throw new Error("Failed to create/find plans");
   console.log("✅ Plans created");

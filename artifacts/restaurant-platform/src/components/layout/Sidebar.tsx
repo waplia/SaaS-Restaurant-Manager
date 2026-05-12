@@ -1,10 +1,17 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
-  Package, Users, UserCheck, BarChart3, Table2, Bell, Settings, Flame
+  Package, Users, UserCheck, BarChart3, Table2, Bell, Settings, Flame, Sun, Moon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/lib/hooks";
+import { useTheme } from "@/lib/theme";
+
+interface Notification {
+  id: number;
+  isRead: boolean;
+  [key: string]: unknown;
+}
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -21,7 +28,10 @@ const navItems = [
 export function Sidebar() {
   const [location] = useLocation();
   const { data: notifications } = useNotifications();
-  const unread = Array.isArray(notifications) ? notifications.filter((n: any) => !n.isRead).length : 0;
+  const { theme, toggleTheme } = useTheme();
+  const unread = Array.isArray(notifications)
+    ? notifications.filter((n: Notification) => !n.isRead).length
+    : 0;
 
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
@@ -29,10 +39,17 @@ export function Sidebar() {
         <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
           <Flame className="w-5 h-5 text-white" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-bold text-sidebar-foreground leading-tight">TableTrack</p>
           <p className="text-xs text-muted-foreground">Spice Garden</p>
         </div>
+        <button
+          onClick={toggleTheme}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors flex-shrink-0"
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

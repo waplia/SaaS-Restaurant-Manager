@@ -28,14 +28,14 @@ router.post("/restaurants/:restaurantId/customers", async (req, res) => {
 });
 
 router.get("/restaurants/:restaurantId/customers/:id", async (req, res) => {
-  const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, Number(req.params.id)));
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, Number(req.params.id)), eq(customersTable.restaurantId, Number(req.params.restaurantId))));
   if (!customer) return void res.status(404).json({ error: "Not found" });
   res.json(customer);
 });
 
 router.patch("/restaurants/:restaurantId/customers/:id", async (req, res) => {
   const { name, email, phone, address, loyaltyPoints, notes, isActive } = req.body;
-  const [updated] = await db.update(customersTable).set({ name, email, phone, address, loyaltyPoints, notes, isActive, updatedAt: new Date() }).where(eq(customersTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(customersTable).set({ name, email, phone, address, loyaltyPoints, notes, isActive, updatedAt: new Date() }).where(and(eq(customersTable.id, Number(req.params.id)), eq(customersTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });

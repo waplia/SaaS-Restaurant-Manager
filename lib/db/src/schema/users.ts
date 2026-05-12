@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
@@ -21,6 +21,42 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const rolesTable = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  description: text("description"),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.slug, t.tenantId)]);
+
+export const permissionsTable = pgTable("permissions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  resource: text("resource").notNull(),
+  action: text("action").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const rolePermissionsTable = pgTable("role_permissions", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => rolesTable.id),
+  permissionId: integer("permission_id").notNull().references(() => permissionsTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.roleId, t.permissionId)]);
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
+
+export const insertRoleSchema = createInsertSchema(rolesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+export type Role = typeof rolesTable.$inferSelect;
+
+export const insertPermissionSchema = createInsertSchema(permissionsTable).omit({ id: true, createdAt: true });
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+export type Permission = typeof permissionsTable.$inferSelect;

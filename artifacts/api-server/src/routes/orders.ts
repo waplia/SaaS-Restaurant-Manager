@@ -94,17 +94,19 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
 });
 
 router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
-  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, Number(req.params.id)));
+  const restaurantId = Number(req.params.restaurantId);
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
   res.json({ ...order, items });
 });
 
 router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const { status, notes, isPriority, customerName, discountAmount } = req.body;
   const updates: Record<string, unknown> = { notes, isPriority, customerName, discountAmount, updatedAt: new Date() };
   if (status) updates.status = status;
-  const [updated] = await db.update(ordersTable).set(updates).where(eq(ordersTable.id, Number(req.params.id))).returning();
+  const [updated] = await db.update(ordersTable).set(updates).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });
