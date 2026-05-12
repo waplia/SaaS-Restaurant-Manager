@@ -47,6 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
   });
 
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
+    setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const userRaw = localStorage.getItem(USER_KEY);
@@ -61,6 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState(s => ({ ...s, isLoading: false }));
     }
   }, []);
+
+  useEffect(() => {
+    window.addEventListener("tt:logout", clearAuth);
+    return () => window.removeEventListener("tt:logout", clearAuth);
+  }, [clearAuth]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -116,6 +128,3 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}

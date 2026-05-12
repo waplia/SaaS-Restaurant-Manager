@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { getStoredToken } from "@/lib/auth";
+import { apiFetch, apiAction } from "@/lib/api";
 
 interface Tenant {
   id: number;
@@ -49,28 +49,6 @@ interface Plan {
   maxMenuItems: number;
 }
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-
-function authHeader(): Record<string, string> {
-  const token = getStoredToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, { headers: authHeader() });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-async function apiAction(path: string, method = "POST", body?: unknown) {
-  const res = await fetch(`${BASE}/api${path}`, {
-    method,
-    headers: { ...authHeader(), "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
 
 function StatusBadge({ tenant }: { tenant: Tenant }) {
   if (tenant.isSuspended) return <Badge variant="destructive">Suspended</Badge>;

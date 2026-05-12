@@ -38,6 +38,14 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function SuperAdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="text-muted-foreground text-sm">Loading…</div></div>;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  if (!user?.isSuperAdmin) return <Redirect to="/" />;
+  return <Component />;
+}
+
 function PublicOnlyRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) return null;
@@ -55,7 +63,7 @@ function Router() {
       <Route path="/register" component={() => <PublicOnlyRoute component={RegisterPage} />} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
-      <Route path="/admin" component={() => <ProtectedRoute component={AdminPage} />} />
+      <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
