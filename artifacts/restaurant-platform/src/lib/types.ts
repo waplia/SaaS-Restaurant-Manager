@@ -258,6 +258,14 @@ export interface TopItem {
   orderCount: number;
 }
 
+export interface StaffPerformanceItem {
+  userId: number;
+  name: string;
+  orderCount: number;
+  totalRevenue: string;
+  totalHours: string;
+}
+
 export interface ReportsData {
   totalRevenue: string;
   totalOrders: number;
@@ -265,6 +273,7 @@ export interface ReportsData {
   totalTax: string;
   revenueByDay: RevenueByDayItem[];
   topItems: TopItem[];
+  staffPerformance: StaffPerformanceItem[];
 }
 
 export interface Supplier {

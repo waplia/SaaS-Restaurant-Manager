@@ -21,6 +21,7 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(publicRouter);
+router.use(realtimeRouter);
 
 router.use(authenticate);
 
@@ -35,6 +36,5 @@ router.use(inventoryRouter);
 router.use(shiftsRouter);
 router.use(customersRouter);
 router.use(dashboardRouter);
-router.use(realtimeRouter);
 
 export default router;

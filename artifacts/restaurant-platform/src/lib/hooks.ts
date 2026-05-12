@@ -276,9 +276,10 @@ export function useNotifications() {
   });
 }
 
-export function useReports(period = "7d") {
+export function useReports(period = "7d", custom?: { from: string; to: string }) {
+  const q = custom ? `from=${custom.from}&to=${custom.to}` : `period=${period}`;
   return useQuery({
-    queryKey: ["reports", RESTAURANT_ID, period],
-    queryFn: () => apiGet<ReportsData>(`/restaurants/${RESTAURANT_ID}/dashboard/reports?period=${period}`),
+    queryKey: ["reports", RESTAURANT_ID, period, custom],
+    queryFn: () => apiGet<ReportsData>(`/restaurants/${RESTAURANT_ID}/dashboard/reports?${q}`),
   });
 }

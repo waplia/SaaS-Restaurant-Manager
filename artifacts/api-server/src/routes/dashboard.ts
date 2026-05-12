@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and, gte, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable } from "../lib/db";
+import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
+import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -145,13 +145,18 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   if (fromStr && toStr) {
     from = new Date(String(fromStr));
     to = new Date(String(toStr));
+    to.setHours(23, 59, 59, 999);
   } else {
     const days = String(period) === "30d" ? 30 : String(period) === "90d" ? 90 : 7;
     from.setDate(from.getDate() - days);
   }
   from.setHours(0, 0, 0, 0);
 
-  const orders = await db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from)));
+  const dateCondition = fromStr && toStr
+    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to))
+    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from));
+
+  const orders = await db.select().from(ordersTable).where(dateCondition);
   const totalRevenue = orders.reduce((s, o) => s + Number(o.totalAmount), 0);
   const totalTax = orders.reduce((s, o) => s + Number(o.taxAmount), 0);
   const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
@@ -169,15 +174,46 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
     name: orderItemsTable.menuItemName,
     orderCount: sql<number>`cast(count(*) as int)`,
     revenue: sql<string>`cast(sum(${orderItemsTable.totalPrice}) as text)`,
-  }).from(orderItemsTable).innerJoin(ordersTable, and(eq(orderItemsTable.orderId, ordersTable.id), eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from))).groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName).orderBy(desc(sql`count(*)`)).limit(10);
+  }).from(orderItemsTable).innerJoin(ordersTable, and(eq(orderItemsTable.orderId, ordersTable.id), dateCondition!)).groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName).orderBy(desc(sql`count(*)`)).limit(10);
+
+  const staffPerfRows = await db.execute<{
+    user_id: number;
+    name: string;
+    order_count: string;
+    total_revenue: string;
+    total_hours: string;
+  }>(`
+    SELECT
+      u.id as user_id,
+      u.name,
+      COUNT(DISTINCT o.id)::int as order_count,
+      COALESCE(SUM(o.total_amount), 0)::text as total_revenue,
+      COALESCE(SUM(a.total_hours), 0)::text as total_hours
+    FROM users u
+    LEFT JOIN orders o ON o.waiter_id = u.id AND o.restaurant_id = ${restaurantId} AND o.created_at >= '${from.toISOString()}'
+    LEFT JOIN attendance a ON a.user_id = u.id AND a.restaurant_id = ${restaurantId} AND a.clock_in >= '${from.toISOString()}'
+    WHERE u.restaurant_id = ${restaurantId} AND u.is_active = true
+    GROUP BY u.id, u.name
+    ORDER BY order_count DESC
+    LIMIT 20
+  `);
 
   res.json({
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,
     totalTax: totalTax.toFixed(2),
     avgOrderValue: avgOrderValue.toFixed(2),
-    revenueByDay: Object.entries(byDay).map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
+    revenueByDay: Object.entries(byDay)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date, revenue: v.revenue.toFixed(2), orders: v.orders })),
     topItems: topItemsRows.map(r => ({ ...r, imageUrl: null, categoryName: null })),
+    staffPerformance: staffPerfRows.rows.map(r => ({
+      userId: r.user_id,
+      name: r.name,
+      orderCount: Number(r.order_count),
+      totalRevenue: r.total_revenue,
+      totalHours: Number(r.total_hours).toFixed(1),
+    })),
   });
 });
 

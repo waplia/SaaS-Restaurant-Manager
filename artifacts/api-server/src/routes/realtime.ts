@@ -3,12 +3,14 @@ import { db } from "@workspace/db";
 import { notificationsTable, restaurantsTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { requireRole } from "../middleware/authorize";
+import { verifyToken } from "../lib/auth";
+import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
 
 interface SSEClient {
   restaurantId: number;
-  res: import("express").Response;
+  res: Response;
   lastEventId: number;
 }
 
@@ -30,8 +32,37 @@ export function broadcastEvent(
   }
 }
 
+function authenticateSSE(req: Request, res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  let rawToken: string | undefined;
+
+  if (header?.startsWith("Bearer ")) {
+    rawToken = header.slice(7);
+  } else if (typeof req.query.token === "string") {
+    rawToken = req.query.token;
+  }
+
+  if (!rawToken) {
+    res.status(401).json({ error: "Missing token" });
+    return;
+  }
+
+  try {
+    const payload = verifyToken(rawToken);
+    if (payload.type !== "access") {
+      res.status(401).json({ error: "Invalid token type" });
+      return;
+    }
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
 router.get(
   "/restaurants/:restaurantId/events",
+  authenticateSSE,
   requireRole("owner", "manager", "waiter", "kitchen", "super_admin"),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);

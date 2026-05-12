@@ -3,6 +3,7 @@ import { eq, and, desc, count } from "drizzle-orm";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { broadcastEvent } from "./realtime";
 
 const router = Router();
 
@@ -94,6 +95,8 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
+  broadcastEvent(restaurantId, "order:new", order);
+
   res.status(201).json(order);
 });
 
@@ -112,6 +115,9 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   if (status) updates.status = status;
   const [updated] = await db.update(ordersTable).set(updates).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
+
   res.json(updated);
 });
 
@@ -123,6 +129,9 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   if (updated.tableId) {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
+
+  broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
+
   res.json(updated);
 });
 
@@ -156,6 +165,9 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   if (status === "ready" || status === "served") updates.completedAt = new Date();
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
+
   res.json(updated);
 });
 
