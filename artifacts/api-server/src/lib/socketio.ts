@@ -5,8 +5,12 @@ import { verifyToken } from "./auth";
 let io: Server | null = null;
 
 export function initSocketIO(httpServer: HTTPServer): Server {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+    : true;
+
   io = new Server(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true },
     path: "/api/socket.io",
   });
 
