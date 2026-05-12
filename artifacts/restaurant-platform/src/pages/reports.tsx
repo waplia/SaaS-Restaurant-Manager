@@ -19,6 +19,30 @@ const COLORS = [
   "hsl(280 65% 60%)", "hsl(348 83% 55%)",
 ];
 
+function fmtDateTick(d: string, viewMode: string): string {
+  try {
+    if (viewMode === "yearly") return d.slice(0, 4);
+    if (viewMode === "monthly") return format(new Date(d + "-01T12:00:00"), "MMM yyyy");
+    return format(new Date(d + "T12:00:00"), "MMM d");
+  } catch { return d; }
+}
+
+function fmtDateLabel(d: string, viewMode: string): string {
+  try {
+    if (viewMode === "yearly") return d.slice(0, 4);
+    if (viewMode === "monthly") return format(new Date(d + "-01T12:00:00"), "MMMM yyyy");
+    return format(new Date(d + "T12:00:00"), "MMMM d, yyyy");
+  } catch { return d; }
+}
+
+function fmtTableDate(d: string, viewMode: string): string {
+  try {
+    if (viewMode === "yearly") return d.slice(0, 4);
+    if (viewMode === "monthly") return format(new Date(d + "-01T12:00:00"), "MMMM yyyy");
+    return format(new Date(d + "T12:00:00"), "MMM d, yyyy");
+  } catch { return d; }
+}
+
 type Tab = "sales" | "tax" | "staff";
 type ViewMode = "daily" | "monthly" | "yearly";
 
@@ -314,13 +338,11 @@ export default function ReportsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
-                    try { return format(new Date(d + "T12:00:00"), "MMM d"); } catch { return d; }
-                  }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => fmtDateTick(d, viewMode)} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
                   <Tooltip
                     formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Revenue"]}
-                    labelFormatter={(d: string) => { try { return format(new Date(d + "T12:00:00"), "MMMM d, yyyy"); } catch { return d; } }}
+                    labelFormatter={(d: string) => fmtDateLabel(d, viewMode)}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="hsl(24 95% 53%)" fill="url(#repGrad)" strokeWidth={2} dot={false} />
                 </AreaChart>
@@ -387,7 +409,7 @@ export default function ReportsPage() {
                       {(reports?.revenueByDay ?? []).slice().reverse().map((row: RevenueByDayItem) => (
                         <tr key={row.date} className="border-t border-border hover:bg-muted/20">
                           <td className="px-5 py-2.5 text-foreground">
-                            {(() => { try { return format(new Date(row.date + "T12:00:00"), "MMM d, yyyy"); } catch { return row.date; } })()}
+                            {fmtTableDate(row.date, viewMode)}
                           </td>
                           <td className="px-5 py-2.5 text-right text-foreground">{row.orders}</td>
                           <td className="px-5 py-2.5 text-right font-medium text-foreground">₹{Number(row.revenue).toLocaleString()}</td>
@@ -446,13 +468,11 @@ export default function ReportsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
-                    try { return format(new Date(d + "T12:00:00"), "MMM d"); } catch { return d; }
-                  }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => fmtDateTick(d, viewMode)} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
                   <Tooltip
                     formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Tax"]}
-                    labelFormatter={(d: string) => { try { return format(new Date(d + "T12:00:00"), "MMMM d, yyyy"); } catch { return d; } }}
+                    labelFormatter={(d: string) => fmtDateLabel(d, viewMode)}
                   />
                   <Area type="monotone" dataKey="tax" stroke="hsl(280 65% 60%)" fill="url(#taxGrad)" strokeWidth={2} dot={false} />
                 </AreaChart>
@@ -479,7 +499,7 @@ export default function ReportsPage() {
                       {(reports?.taxByDay ?? []).slice().reverse().map((row: TaxByDayItem) => (
                         <tr key={row.date} className="border-t border-border hover:bg-muted/20">
                           <td className="px-5 py-2.5 text-foreground">
-                            {(() => { try { return format(new Date(row.date + "T12:00:00"), "MMM d, yyyy"); } catch { return row.date; } })()}
+                            {fmtTableDate(row.date, viewMode)}
                           </td>
                           <td className="px-5 py-2.5 text-right text-foreground">{row.orders}</td>
                           <td className="px-5 py-2.5 text-right text-foreground">₹{Number(row.revenue).toLocaleString()}</td>

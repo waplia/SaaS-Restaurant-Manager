@@ -84,11 +84,16 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
       buckets[key].orders++;
     }
   } else if (groupBy === "monthly") {
+    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    const end = new Date();
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 7);
+      buckets[key] = { revenue: 0, orders: 0 };
+      cur.setMonth(cur.getMonth() + 1);
+    }
     for (const o of orders) {
       const key = o.createdAt.toISOString().slice(0, 7);
-      if (!buckets[key]) buckets[key] = { revenue: 0, orders: 0 };
-      buckets[key].revenue += Number(o.totalAmount);
-      buckets[key].orders++;
+      if (buckets[key]) { buckets[key].revenue += Number(o.totalAmount); buckets[key].orders++; }
     }
   } else {
     for (let i = 0; i < days; i++) {
