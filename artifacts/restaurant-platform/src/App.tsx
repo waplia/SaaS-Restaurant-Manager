@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { useSocket } from "@/lib/realtime";
+import { useRestaurantId } from "@/lib/hooks";
 import NotFound from "@/pages/not-found";
 import DashboardPage from "@/pages/dashboard";
 import OrdersPage from "@/pages/orders";
@@ -56,6 +58,13 @@ function PublicOnlyRoute({ component: Component }: { component: React.ComponentT
   return <Component />;
 }
 
+function SocketMount() {
+  const { isAuthenticated } = useAuth();
+  const restaurantId = useRestaurantId();
+  useSocket(isAuthenticated ? restaurantId : 0);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -87,6 +96,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <SocketMount />
               <Router />
             </WouterRouter>
             <Toaster />

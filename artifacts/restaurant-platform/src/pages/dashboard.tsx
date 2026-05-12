@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useDashboardSummary, useRevenueTrend, usePopularItems, useLiveKitchen, useStaffActivity, useRestaurantId } from "@/lib/hooks";
-import { useSocket } from "@/lib/realtime";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,8 +64,6 @@ export default function DashboardPage() {
   const restaurantId = useRestaurantId();
   const [trendPeriod, setTrendPeriod] = useState("7d");
   const trendGroupBy = TREND_PERIODS.find(p => p.val === trendPeriod)?.groupBy ?? "daily";
-
-  useSocket(restaurantId);
 
   const { data: summary } = useDashboardSummary();
   const { data: trendData = [] } = useRevenueTrend(trendPeriod, trendGroupBy);

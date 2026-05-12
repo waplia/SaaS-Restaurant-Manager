@@ -54,9 +54,12 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
 router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const period = String(req.query.period ?? "7d");
-  const days = period === "30d" ? 30 : period === "90d" ? 90 : 7;
   const from = new Date();
-  from.setDate(from.getDate() - days);
+  if (period === "1y") { from.setFullYear(from.getFullYear() - 1); }
+  else if (period === "1m" || period === "30d") { from.setMonth(from.getMonth() - 1); }
+  else if (period === "90d") { from.setDate(from.getDate() - 90); }
+  else { from.setDate(from.getDate() - 7); }
+  const days = Math.ceil((new Date().getTime() - from.getTime()) / 86400000);
   from.setHours(0, 0, 0, 0);
 
   const groupBy = String(req.query.groupBy ?? "daily");
