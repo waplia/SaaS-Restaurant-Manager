@@ -6,12 +6,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
-
-interface Notification {
-  id: number;
-  isRead: boolean;
-  [key: string]: unknown;
-}
+import type { AppNotification } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -30,7 +25,7 @@ export function Sidebar() {
   const { data: notifications } = useNotifications();
   const { theme, toggleTheme } = useTheme();
   const unread = Array.isArray(notifications)
-    ? notifications.filter((n: Notification) => !n.isRead).length
+    ? notifications.filter((n: AppNotification) => !n.isRead).length
     : 0;
 
   return (

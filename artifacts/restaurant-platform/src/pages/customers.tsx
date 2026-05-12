@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Mail, Phone, Star, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import type { Customer } from "@/lib/types";
 
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const { data: customersData } = useCustomers({ search: search || undefined, page });
-  const customers = (customersData as any)?.data ?? [];
-  const total = (customersData as any)?.total ?? 0;
+  const customers: Customer[] = customersData?.data ?? [];
+  const total: number = customersData?.total ?? 0;
   const createCustomer = useCreateCustomer();
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
@@ -60,7 +61,7 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((c: any) => (
+              {customers.map((c: Customer) => (
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/10">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">

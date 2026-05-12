@@ -6,7 +6,7 @@ import { AlertTriangle, Clock, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import type { KitchenTicket, KitchenTicketItem } from "@/lib/types";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "New", color: "border-l-blue-500 bg-blue-50", next: "preparing", nextLabel: "Start Preparing" },
@@ -15,7 +15,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; next?: strin
   served: { label: "Served", color: "border-l-gray-300 bg-gray-50" },
 };
 
-function TicketCard({ ticket, onUpdate }: { ticket: any; onUpdate: (id: number, status: string) => void }) {
+function TicketCard({ ticket, onUpdate }: { ticket: KitchenTicket; onUpdate: (id: number, status: string) => void }) {
   const cfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.new;
   const age = formatDistanceToNow(new Date(ticket.createdAt), { addSuffix: false });
   const isOld = (Date.now() - new Date(ticket.createdAt).getTime()) > 15 * 60 * 1000;
@@ -39,7 +39,7 @@ function TicketCard({ ticket, onUpdate }: { ticket: any; onUpdate: (id: number, 
       </div>
 
       <div className="space-y-1">
-        {(ticket.items ?? []).map((item: any) => (
+        {(ticket.items ?? []).map((item: KitchenTicketItem) => (
           <div key={item.id} className="flex items-center gap-2 text-sm">
             <span className="font-bold text-foreground">{item.quantity}×</span>
             <span className="text-foreground">{item.menuItemName}</span>
@@ -58,14 +58,13 @@ function TicketCard({ ticket, onUpdate }: { ticket: any; onUpdate: (id: number, 
 }
 
 export default function KitchenPage() {
-  const { data: allTickets, refetch } = useKitchenTickets();
+  const { data: allTickets = [], refetch } = useKitchenTickets();
   const updateStatus = useUpdateTicketStatus();
   const { toast } = useToast();
 
-  const tickets = (allTickets as any[]) ?? [];
-  const newTickets = tickets.filter(t => t.status === "new");
-  const preparingTickets = tickets.filter(t => t.status === "preparing");
-  const readyTickets = tickets.filter(t => t.status === "ready");
+  const newTickets = allTickets.filter((t: KitchenTicket) => t.status === "new");
+  const preparingTickets = allTickets.filter((t: KitchenTicket) => t.status === "preparing");
+  const readyTickets = allTickets.filter((t: KitchenTicket) => t.status === "ready");
 
   const handleUpdate = async (id: number, status: string) => {
     try {
@@ -89,7 +88,6 @@ export default function KitchenPage() {
 
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* New */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-3 h-3 rounded-full bg-blue-500" />
@@ -97,14 +95,13 @@ export default function KitchenPage() {
               <span className="ml-auto bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{newTickets.length}</span>
             </div>
             <div className="space-y-3">
-              {newTickets.sort((a, b) => b.isPriority - a.isPriority).map(t => (
+              {newTickets.sort((a, b) => Number(b.isPriority) - Number(a.isPriority)).map((t: KitchenTicket) => (
                 <TicketCard key={t.id} ticket={t} onUpdate={handleUpdate} />
               ))}
               {newTickets.length === 0 && <div className="text-center py-8 text-muted-foreground text-sm">No new orders</div>}
             </div>
           </div>
 
-          {/* Preparing */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-3 h-3 rounded-full bg-yellow-500" />
@@ -112,14 +109,13 @@ export default function KitchenPage() {
               <span className="ml-auto bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">{preparingTickets.length}</span>
             </div>
             <div className="space-y-3">
-              {preparingTickets.sort((a, b) => b.isPriority - a.isPriority).map(t => (
+              {preparingTickets.sort((a, b) => Number(b.isPriority) - Number(a.isPriority)).map((t: KitchenTicket) => (
                 <TicketCard key={t.id} ticket={t} onUpdate={handleUpdate} />
               ))}
               {preparingTickets.length === 0 && <div className="text-center py-8 text-muted-foreground text-sm">Nothing preparing</div>}
             </div>
           </div>
 
-          {/* Ready */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -127,7 +123,7 @@ export default function KitchenPage() {
               <span className="ml-auto bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">{readyTickets.length}</span>
             </div>
             <div className="space-y-3">
-              {readyTickets.map(t => (
+              {readyTickets.map((t: KitchenTicket) => (
                 <TicketCard key={t.id} ticket={t} onUpdate={handleUpdate} />
               ))}
               {readyTickets.length === 0 && <div className="text-center py-8 text-muted-foreground text-sm">Nothing ready yet</div>}

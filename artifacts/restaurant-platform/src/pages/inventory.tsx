@@ -5,24 +5,31 @@ import { useInventory, useCreateInventoryItem, useAdjustInventory } from "@/lib/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, AlertTriangle, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { Plus, AlertTriangle, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import type { InventoryItem } from "@/lib/types";
+
+function stockPercent(item: InventoryItem): number {
+  const cur = Number(item.currentStock);
+  const min = Number(item.minStockLevel);
+  const max = min * 3 || 10;
+  return Math.min(100, (cur / max) * 100);
+}
 
 export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
-  const { data: items } = useInventory({ lowStock: lowStockOnly || undefined, search: search || undefined });
-  const itemsArr = (items as any[]) ?? [];
+  const { data: items = [] } = useInventory({ lowStock: lowStockOnly || undefined, search: search || undefined });
   const createItem = useCreateInventoryItem();
   const adjustInventory = useAdjustInventory();
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
-  const [adjustItem, setAdjustItem] = useState<any>(null);
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState({ name: "", unit: "kg", currentStock: "0", minStockLevel: "0", costPerUnit: "0", category: "general" });
   const [adjustForm, setAdjustForm] = useState({ type: "add", quantity: "", notes: "" });
 
-  const lowStockCount = itemsArr.filter(i => i.isLowStock).length;
+  const lowStockCount = items.filter((i: InventoryItem) => i.isLowStock).length;
 
   const handleAdd = async () => {
     try {
@@ -46,18 +53,11 @@ export default function InventoryPage() {
     }
   };
 
-  const stockPercent = (item: any) => {
-    const cur = Number(item.currentStock);
-    const min = Number(item.minStockLevel);
-    const max = min * 3 || 10;
-    return Math.min(100, (cur / max) * 100);
-  };
-
   return (
     <Layout>
       <PageHeader
         title="Inventory"
-        subtitle={`${itemsArr.length} items · ${lowStockCount} low stock alerts`}
+        subtitle={`${items.length} items · ${lowStockCount} low stock alerts`}
         actions={
           <Button onClick={() => setShowAdd(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Item
@@ -93,7 +93,7 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {itemsArr.map((item: any) => (
+              {items.map((item: InventoryItem) => (
                 <tr key={item.id} className={cn("border-b border-border last:border-0", item.isLowStock && "bg-red-50/50")}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export default function InventoryPage() {
                   </td>
                 </tr>
               ))}
-              {itemsArr.length === 0 && (
+              {items.length === 0 && (
                 <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No inventory items</td></tr>
               )}
             </tbody>

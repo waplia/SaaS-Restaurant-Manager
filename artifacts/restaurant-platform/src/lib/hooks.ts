@@ -1,5 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
+import type {
+  DashboardSummary, RevenueTrendItem, PopularItem, LiveKitchenData, AuditLogEntry,
+  OrdersResponse, CreateOrderInput, UpdateOrderInput, PayOrderInput,
+  FloorTable, CreateTableInput, UpdateTableInput,
+  Menu, MenuCategory, MenuItem, CreateMenuItemInput, UpdateMenuItemInput,
+  InventoryItem, CreateInventoryItemInput, AdjustInventoryInput,
+  StaffMember, CreateUserInput,
+  CustomersResponse, CreateCustomerInput,
+  CreateReservationInput,
+  AppNotification,
+  ReportsData,
+  Supplier,
+} from "./types";
 
 const RESTAURANT_ID = 1;
 
@@ -10,7 +23,7 @@ export function useRestaurantId() {
 export function useDashboardSummary() {
   return useQuery({
     queryKey: ["dashboard", "summary", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/summary`),
+    queryFn: () => apiGet<DashboardSummary>(`/restaurants/${RESTAURANT_ID}/dashboard/summary`),
     refetchInterval: 30000,
   });
 }
@@ -18,21 +31,21 @@ export function useDashboardSummary() {
 export function useRevenueTrend(period = "7d") {
   return useQuery({
     queryKey: ["dashboard", "revenue-trend", RESTAURANT_ID, period],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}`),
+    queryFn: () => apiGet<RevenueTrendItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}`),
   });
 }
 
 export function usePopularItems(limit = 8) {
   return useQuery({
     queryKey: ["dashboard", "popular-items", RESTAURANT_ID, limit],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/popular-items?limit=${limit}`),
+    queryFn: () => apiGet<PopularItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/popular-items?limit=${limit}`),
   });
 }
 
 export function useLiveKitchen() {
   return useQuery({
     queryKey: ["dashboard", "live-kitchen", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/live-kitchen`),
+    queryFn: () => apiGet<LiveKitchenData>(`/restaurants/${RESTAURANT_ID}/dashboard/live-kitchen`),
     refetchInterval: 10000,
   });
 }
@@ -40,7 +53,7 @@ export function useLiveKitchen() {
 export function useStaffActivity() {
   return useQuery({
     queryKey: ["dashboard", "staff-activity", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/staff-activity`),
+    queryFn: () => apiGet<AuditLogEntry[]>(`/restaurants/${RESTAURANT_ID}/dashboard/staff-activity`),
   });
 }
 
@@ -51,7 +64,7 @@ export function useOrders(params?: { status?: string; tableId?: number; page?: n
   if (params?.page) q.set("page", String(params.page));
   return useQuery({
     queryKey: ["orders", RESTAURANT_ID, params],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/orders?${q}`),
+    queryFn: () => apiGet<OrdersResponse>(`/restaurants/${RESTAURANT_ID}/orders?${q}`),
     refetchInterval: 15000,
   });
 }
@@ -59,7 +72,7 @@ export function useOrders(params?: { status?: string; tableId?: number; page?: n
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data),
+    mutationFn: (data: CreateOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -67,7 +80,7 @@ export function useCreateOrder() {
 export function useUpdateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateOrderInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -75,7 +88,7 @@ export function useUpdateOrder() {
 export function usePayOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data),
+    mutationFn: ({ id, ...data }: PayOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -84,7 +97,7 @@ export function useKitchenTickets(status?: string) {
   const q = status ? `?status=${status}` : "";
   return useQuery({
     queryKey: ["kitchen", "tickets", RESTAURANT_ID, status],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/kitchen/tickets${q}`),
+    queryFn: () => apiGet<import("./types").KitchenTicket[]>(`/restaurants/${RESTAURANT_ID}/kitchen/tickets${q}`),
     refetchInterval: 8000,
   });
 }
@@ -100,7 +113,7 @@ export function useUpdateTicketStatus() {
 export function useFloorTables() {
   return useQuery({
     queryKey: ["tables", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/tables`),
+    queryFn: () => apiGet<FloorTable[]>(`/restaurants/${RESTAURANT_ID}/tables`),
     refetchInterval: 20000,
   });
 }
@@ -108,7 +121,7 @@ export function useFloorTables() {
 export function useCreateTable() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/tables`, data),
+    mutationFn: (data: CreateTableInput) => apiPost(`/restaurants/${RESTAURANT_ID}/tables`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
   });
 }
@@ -116,7 +129,7 @@ export function useCreateTable() {
 export function useUpdateTable() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateTableInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
   });
 }
@@ -124,7 +137,7 @@ export function useUpdateTable() {
 export function useMenus() {
   return useQuery({
     queryKey: ["menus", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/menus`),
+    queryFn: () => apiGet<Menu[]>(`/restaurants/${RESTAURANT_ID}/menus`),
   });
 }
 
@@ -132,7 +145,7 @@ export function useMenuCategories(menuId?: number) {
   const q = menuId ? `?menuId=${menuId}` : "";
   return useQuery({
     queryKey: ["categories", RESTAURANT_ID, menuId],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/categories${q}`),
+    queryFn: () => apiGet<MenuCategory[]>(`/restaurants/${RESTAURANT_ID}/categories${q}`),
   });
 }
 
@@ -142,14 +155,14 @@ export function useMenuItems(params?: { categoryId?: number; search?: string }) 
   if (params?.search) q.set("search", params.search);
   return useQuery({
     queryKey: ["items", RESTAURANT_ID, params],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/items?${q}`),
+    queryFn: () => apiGet<MenuItem[]>(`/restaurants/${RESTAURANT_ID}/items?${q}`),
   });
 }
 
 export function useCreateMenuItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/items`, data),
+    mutationFn: (data: CreateMenuItemInput) => apiPost(`/restaurants/${RESTAURANT_ID}/items`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
   });
 }
@@ -157,7 +170,7 @@ export function useCreateMenuItem() {
 export function useUpdateMenuItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}/items/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateMenuItemInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/items/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["items"] }),
   });
 }
@@ -176,14 +189,14 @@ export function useInventory(params?: { lowStock?: boolean; search?: string }) {
   if (params?.search) q.set("search", params.search);
   return useQuery({
     queryKey: ["inventory", RESTAURANT_ID, params],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/inventory?${q}`),
+    queryFn: () => apiGet<InventoryItem[]>(`/restaurants/${RESTAURANT_ID}/inventory?${q}`),
   });
 }
 
 export function useCreateInventoryItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory`, data),
+    mutationFn: (data: CreateInventoryItemInput) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
@@ -191,7 +204,7 @@ export function useCreateInventoryItem() {
 export function useAdjustInventory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory/${id}/adjust`, data),
+    mutationFn: ({ id, ...data }: AdjustInventoryInput) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory/${id}/adjust`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
@@ -200,14 +213,14 @@ export function useStaff(role?: string) {
   const q = role ? `?role=${role}` : "";
   return useQuery({
     queryKey: ["staff", RESTAURANT_ID, role],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/staff${q}`),
+    queryFn: () => apiGet<StaffMember[]>(`/restaurants/${RESTAURANT_ID}/staff${q}`),
   });
 }
 
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/users`, data),
+    mutationFn: (data: CreateUserInput) => apiPost(`/users`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });
 }
@@ -218,14 +231,14 @@ export function useCustomers(params?: { search?: string; page?: number }) {
   if (params?.page) q.set("page", String(params.page));
   return useQuery({
     queryKey: ["customers", RESTAURANT_ID, params],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/customers?${q}`),
+    queryFn: () => apiGet<CustomersResponse>(`/restaurants/${RESTAURANT_ID}/customers?${q}`),
   });
 }
 
 export function useCreateCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/customers`, data),
+    mutationFn: (data: CreateCustomerInput) => apiPost(`/restaurants/${RESTAURANT_ID}/customers`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
   });
 }
@@ -236,14 +249,14 @@ export function useReservations(params?: { date?: string; status?: string }) {
   if (params?.status) q.set("status", params.status);
   return useQuery({
     queryKey: ["reservations", RESTAURANT_ID, params],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/reservations?${q}`),
+    queryFn: () => apiGet<import("./types").Reservation[]>(`/restaurants/${RESTAURANT_ID}/reservations?${q}`),
   });
 }
 
 export function useCreateReservation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: unknown) => apiPost(`/restaurants/${RESTAURANT_ID}/reservations`, data),
+    mutationFn: (data: CreateReservationInput) => apiPost(`/restaurants/${RESTAURANT_ID}/reservations`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
   });
 }
@@ -251,14 +264,14 @@ export function useCreateReservation() {
 export function useSuppliers() {
   return useQuery({
     queryKey: ["suppliers", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/suppliers`),
+    queryFn: () => apiGet<Supplier[]>(`/restaurants/${RESTAURANT_ID}/suppliers`),
   });
 }
 
 export function useNotifications() {
   return useQuery({
     queryKey: ["notifications", RESTAURANT_ID],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/notifications`),
+    queryFn: () => apiGet<AppNotification[]>(`/restaurants/${RESTAURANT_ID}/notifications`),
     refetchInterval: 15000,
   });
 }
@@ -266,6 +279,6 @@ export function useNotifications() {
 export function useReports(period = "7d") {
   return useQuery({
     queryKey: ["reports", RESTAURANT_ID, period],
-    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/dashboard/reports?period=${period}`),
+    queryFn: () => apiGet<ReportsData>(`/restaurants/${RESTAURANT_ID}/dashboard/reports?period=${period}`),
   });
 }

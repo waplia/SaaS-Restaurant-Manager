@@ -8,16 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Plus, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import type { FloorTable } from "@/lib/types";
 
-const TABLE_STATUS = {
+const TABLE_STATUS: Record<string, { label: string; color: string }> = {
   free: { label: "Free", color: "bg-green-100 border-green-300 text-green-800" },
   occupied: { label: "Occupied", color: "bg-orange-100 border-orange-300 text-orange-800" },
   reserved: { label: "Reserved", color: "bg-blue-100 border-blue-300 text-blue-800" },
   cleaning: { label: "Cleaning", color: "bg-gray-100 border-gray-300 text-gray-600" },
 };
 
-function TableCard({ table, onStatusChange }: { table: any; onStatusChange: (id: number, status: string) => void }) {
-  const cfg = TABLE_STATUS[table.status as keyof typeof TABLE_STATUS] ?? TABLE_STATUS.free;
+function TableCard({ table, onStatusChange }: { table: FloorTable; onStatusChange: (id: number, status: string) => void }) {
+  const cfg = TABLE_STATUS[table.status] ?? TABLE_STATUS.free;
   return (
     <div className={cn("border-2 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all", cfg.color)}>
       <div className="flex items-start justify-between mb-2">
@@ -44,17 +45,16 @@ function TableCard({ table, onStatusChange }: { table: any; onStatusChange: (id:
 }
 
 export default function TablesPage() {
-  const { data: tables } = useFloorTables();
+  const { data: tables = [] } = useFloorTables();
   const updateTable = useUpdateTable();
   const createTable = useCreateTable();
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
   const [newTable, setNewTable] = useState({ tableNumber: "", capacity: "4" });
 
-  const tablesArr = (tables as any[]) ?? [];
-  const free = tablesArr.filter(t => t.status === "free").length;
-  const occupied = tablesArr.filter(t => t.status === "occupied").length;
-  const reserved = tablesArr.filter(t => t.status === "reserved").length;
+  const free = tables.filter((t: FloorTable) => t.status === "free").length;
+  const occupied = tables.filter((t: FloorTable) => t.status === "occupied").length;
+  const reserved = tables.filter((t: FloorTable) => t.status === "reserved").length;
 
   const handleStatusChange = async (id: number, status: string) => {
     try {
@@ -80,7 +80,7 @@ export default function TablesPage() {
     <Layout>
       <PageHeader
         title="Table Management"
-        subtitle={`${tablesArr.length} tables · ${occupied} occupied · ${reserved} reserved · ${free} free`}
+        subtitle={`${tables.length} tables · ${occupied} occupied · ${reserved} reserved · ${free} free`}
         actions={
           <Button onClick={() => setShowAdd(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Table
@@ -88,7 +88,6 @@ export default function TablesPage() {
         }
       />
       <div className="p-6">
-        {/* Summary bar */}
         <div className="flex gap-4 mb-6">
           {[
             { label: "Free", count: free, color: "bg-green-100 text-green-700" },
@@ -102,12 +101,12 @@ export default function TablesPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {tablesArr.map((table: any) => (
+          {tables.map((table: FloorTable) => (
             <TableCard key={table.id} table={table} onStatusChange={handleStatusChange} />
           ))}
         </div>
 
-        {tablesArr.length === 0 && (
+        {tables.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <p className="text-lg font-medium mb-1">No tables yet</p>
             <p className="text-sm">Add your first table to get started</p>

@@ -4,39 +4,36 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useMenus, useMenuCategories, useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Leaf, Tag } from "lucide-react";
+import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import type { Menu, MenuCategory, MenuItem } from "@/lib/types";
 
 function ItemBadge({ isVeg }: { isVeg: boolean }) {
   return (
     <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded border", isVeg ? "border-green-400 text-green-600" : "border-red-400 text-red-600")}>
-      {isVeg ? "●" : "●"}
+      ●
     </span>
   );
 }
 
 export default function MenuPage() {
-  const { data: menus } = useMenus();
-  const menusArr = (menus as any[]) ?? [];
-  const firstMenu = menusArr[0];
-  const { data: categories } = useMenuCategories(firstMenu?.id);
-  const catsArr = (categories as any[]) ?? [];
+  const { data: menus = [] } = useMenus();
+  const firstMenu: Menu | undefined = menus[0];
+  const { data: categories = [] } = useMenuCategories(firstMenu?.id);
   const [selectedCat, setSelectedCat] = useState<number | undefined>();
   const [search, setSearch] = useState("");
-  const { data: items } = useMenuItems({ categoryId: selectedCat, search: search || undefined });
-  const itemsArr = (items as any[]) ?? [];
+  const { data: items = [] } = useMenuItems({ categoryId: selectedCat, search: search || undefined });
   const updateItem = useUpdateMenuItem();
   const deleteItem = useDeleteMenuItem();
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
-  const [editItem, setEditItem] = useState<any>(null);
+  const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const createItem = useCreateMenuItem();
   const [form, setForm] = useState({ name: "", price: "", description: "", categoryId: "", isVeg: true, preparationTime: "15" });
 
-  const handleToggleAvailable = async (item: any) => {
+  const handleToggleAvailable = async (item: MenuItem) => {
     try {
       await updateItem.mutateAsync({ id: item.id, isAvailable: !item.isAvailable });
     } catch {
@@ -76,7 +73,7 @@ export default function MenuPage() {
     <Layout>
       <PageHeader
         title="Menu Management"
-        subtitle={`${itemsArr.length} items`}
+        subtitle={`${items.length} items`}
         actions={
           <Button onClick={() => setShowAdd(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Item
@@ -90,7 +87,7 @@ export default function MenuPage() {
             <Input placeholder="Search items..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56" />
           </div>
           <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)}>All</Button>
-          {catsArr.map((c: any) => (
+          {categories.map((c: MenuCategory) => (
             <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)}>{c.name}</Button>
           ))}
         </div>
@@ -108,7 +105,7 @@ export default function MenuPage() {
               </tr>
             </thead>
             <tbody>
-              {itemsArr.map((item: any) => (
+              {items.map((item: MenuItem) => (
                 <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/10">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -120,7 +117,7 @@ export default function MenuPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <span className="text-xs text-muted-foreground">{catsArr.find(c => c.id === item.categoryId)?.name ?? "–"}</span>
+                    <span className="text-xs text-muted-foreground">{categories.find((c: MenuCategory) => c.id === item.categoryId)?.name ?? "–"}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-semibold text-foreground">₹{item.price}</span>
@@ -145,7 +142,7 @@ export default function MenuPage() {
                   </td>
                 </tr>
               ))}
-              {itemsArr.length === 0 && (
+              {items.length === 0 && (
                 <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No items found</td></tr>
               )}
             </tbody>
@@ -167,7 +164,7 @@ export default function MenuPage() {
                   <Label>Category</Label>
                   <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}>
                     <option value="">Select category</option>
-                    {catsArr.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {categories.map((c: MenuCategory) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2 flex items-center gap-3">

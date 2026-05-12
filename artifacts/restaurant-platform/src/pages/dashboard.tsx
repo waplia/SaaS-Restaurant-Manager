@@ -1,10 +1,11 @@
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useDashboardSummary, useRevenueTrend, usePopularItems, useLiveKitchen, useStaffActivity } from "@/lib/hooks";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Bell, Clock } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import type { DashboardSummary, RevenueTrendItem, PopularItem, KitchenTicket, AuditLogEntry } from "@/lib/types";
 
 function StatCard({ title, value, subtitle, icon: Icon, trend, trendValue, color = "orange" }: {
   title: string; value: string | number; subtitle?: string; icon: React.ComponentType<{ className?: string }>;
@@ -48,32 +49,24 @@ function KitchenStatusBadge({ status }: { status: string }) {
 
 export default function DashboardPage() {
   const { data: summary, isLoading } = useDashboardSummary();
-  const { data: trend } = useRevenueTrend("7d");
-  const { data: popular } = usePopularItems(6);
-  const { data: kitchen } = useLiveKitchen();
-  const { data: activity } = useStaffActivity();
-
-  const s = summary as any;
-  const trendData = (trend as any[]) ?? [];
-  const popularItems = (popular as any[]) ?? [];
-  const kitchenData = kitchen as any;
-  const activityData = (activity as any[]) ?? [];
+  const { data: trendData = [] } = useRevenueTrend("7d");
+  const { data: popularItems = [] } = usePopularItems(6);
+  const { data: kitchenData } = useLiveKitchen();
+  const { data: activityData = [] } = useStaffActivity();
 
   return (
     <Layout>
       <PageHeader title="Dashboard" subtitle={`${format(new Date(), "EEEE, MMMM d")} · Spice Garden, Bangalore`} />
 
       <div className="p-6 space-y-6">
-        {/* Stats grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Today's Revenue" value={s ? `₹${Number(s.todayRevenue).toLocaleString()}` : "–"} icon={DollarSign} trend="up" trendValue={s?.revenueGrowth} color="orange" />
-          <StatCard title="Today's Orders" value={s?.todayOrders ?? "–"} subtitle={`Avg ₹${s?.avgOrderValue ?? "0"}`} icon={ShoppingBag} trend="up" trendValue={s?.ordersGrowth} color="blue" />
-          <StatCard title="Active Tables" value={s ? `${s.activeTables}/${s.totalTables}` : "–"} subtitle="tables occupied" icon={Table2} color="green" />
-          <StatCard title="Kitchen Queue" value={s?.pendingTickets ?? "–"} subtitle={s?.lowStockAlerts > 0 ? `${s.lowStockAlerts} low stock alerts` : "All stock good"} icon={ChefHat} color="purple" />
+          <StatCard title="Today's Revenue" value={summary ? `₹${Number(summary.todayRevenue).toLocaleString()}` : "–"} icon={DollarSign} trend="up" trendValue={summary?.revenueGrowth} color="orange" />
+          <StatCard title="Today's Orders" value={summary?.todayOrders ?? "–"} subtitle={`Avg ₹${summary?.avgOrderValue ?? "0"}`} icon={ShoppingBag} trend="up" trendValue={summary?.ordersGrowth} color="blue" />
+          <StatCard title="Active Tables" value={summary ? `${summary.activeTables}/${summary.totalTables}` : "–"} subtitle="tables occupied" icon={Table2} color="green" />
+          <StatCard title="Kitchen Queue" value={summary?.pendingTickets ?? "–"} subtitle={(summary?.lowStockAlerts ?? 0) > 0 ? `${summary!.lowStockAlerts} low stock alerts` : "All stock good"} icon={ChefHat} color="purple" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Revenue trend */}
           <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">
             <h3 className="font-semibold text-foreground mb-4">Revenue — Last 7 Days</h3>
             <ResponsiveContainer width="100%" height={200}>
@@ -85,19 +78,18 @@ export default function DashboardPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d) => format(new Date(d), "MMM d")} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v}`} />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => format(new Date(d), "MMM d")} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v}`} />
                 <Tooltip formatter={(v: number) => [`₹${v}`, "Revenue"]} />
                 <Area type="monotone" dataKey="revenue" stroke="hsl(24 95% 53%)" fill="url(#revGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Popular items */}
           <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="font-semibold text-foreground mb-4">Top Items (30d)</h3>
             <div className="space-y-3">
-              {popularItems.slice(0, 5).map((item: any, i: number) => (
+              {popularItems.slice(0, 5).map((item: PopularItem, i: number) => (
                 <div key={item.menuItemId} className="flex items-center gap-3">
                   <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}</span>
                   <div className="flex-1 min-w-0">
@@ -113,7 +105,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Live kitchen */}
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Live Kitchen</h3>
@@ -124,7 +115,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {(kitchenData?.tickets ?? []).slice(0, 5).map((t: any) => (
+              {(kitchenData?.tickets ?? []).slice(0, 5).map((t: KitchenTicket) => (
                 <div key={t.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div className="flex items-center gap-2">
                     {t.isPriority && <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />}
@@ -140,11 +131,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Staff activity */}
           <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="font-semibold text-foreground mb-4">Recent Activity</h3>
             <div className="space-y-3">
-              {activityData.slice(0, 6).map((a: any) => (
+              {activityData.slice(0, 6).map((a: AuditLogEntry) => (
                 <div key={a.id} className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0 mt-0.5">
                     {(a.userName ?? "?")[0]}

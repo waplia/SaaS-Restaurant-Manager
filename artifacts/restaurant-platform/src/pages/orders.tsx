@@ -3,13 +3,12 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, usePayOrder, useUpdateOrder } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, CreditCard, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle } from "lucide-react";
+import { Plus, CreditCard, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
+import type { Order, FloorTable, MenuCategory, MenuItem, Menu } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -29,7 +28,12 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   cancelled: XCircle,
 };
 
-function OrderCard({ order, onPay, onUpdateStatus }: { order: any; onPay: (id: number) => void; onUpdateStatus: (id: number, status: string) => void }) {
+function nextStatus(status: string): string {
+  const flow: Record<string, string> = { pending: "confirmed", confirmed: "preparing", preparing: "ready", ready: "served" };
+  return flow[status] ?? status;
+}
+
+function OrderCard({ order, onPay, onUpdateStatus }: { order: Order; onPay: (id: number) => void; onUpdateStatus: (id: number, status: string) => void }) {
   const Icon = STATUS_ICONS[order.status] ?? Clock;
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-3">
@@ -52,7 +56,7 @@ function OrderCard({ order, onPay, onUpdateStatus }: { order: any; onPay: (id: n
         <p className="font-bold text-foreground">₹{Number(order.totalAmount).toLocaleString()}</p>
         <div className="flex gap-2">
           {order.status !== "completed" && order.status !== "cancelled" && (
-            <Button size="sm" variant="outline" onClick={() => onUpdateStatus(order.id, order.status === "pending" ? "confirmed" : order.status === "confirmed" ? "preparing" : order.status === "preparing" ? "ready" : "served")}>
+            <Button size="sm" variant="outline" onClick={() => onUpdateStatus(order.id, nextStatus(order.status))}>
               Next
             </Button>
           )}
@@ -68,22 +72,18 @@ function OrderCard({ order, onPay, onUpdateStatus }: { order: any; onPay: (id: n
 }
 
 function NewOrderModal({ onClose }: { onClose: () => void }) {
-  const { data: tables } = useFloorTables();
-  const { data: menus } = useMenus();
-  const menusArr = (menus as any[]) ?? [];
-  const firstMenu = menusArr[0];
-  const { data: categories } = useMenuCategories(firstMenu?.id);
-  const catsArr = (categories as any[]) ?? [];
+  const { data: tables = [] } = useFloorTables();
+  const { data: menus = [] } = useMenus();
+  const firstMenu: Menu | undefined = menus[0];
+  const { data: categories = [] } = useMenuCategories(firstMenu?.id);
   const [selectedCat, setSelectedCat] = useState<number | undefined>();
-  const { data: items } = useMenuItems({ categoryId: selectedCat });
-  const itemsArr = (items as any[]) ?? [];
-  const tablesArr = (tables as any[]) ?? [];
+  const { data: items = [] } = useMenuItems({ categoryId: selectedCat });
   const [tableId, setTableId] = useState<string>("");
-  const [cart, setCart] = useState<Array<{ item: any; qty: number }>>([]);
+  const [cart, setCart] = useState<Array<{ item: MenuItem; qty: number }>>([]);
   const createOrder = useCreateOrder();
   const { toast } = useToast();
 
-  const addToCart = (item: any) => {
+  const addToCart = (item: MenuItem) => {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id);
       if (existing) return prev.map(c => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c);
@@ -121,20 +121,20 @@ function NewOrderModal({ onClose }: { onClose: () => void }) {
               <Select value={tableId} onValueChange={setTableId}>
                 <SelectTrigger><SelectValue placeholder="Select table (optional)" /></SelectTrigger>
                 <SelectContent>
-                  {tablesArr.filter((t: any) => t.status === "free").map((t: any) => (
+                  {tables.filter((t: FloorTable) => t.status === "free").map((t: FloorTable) => (
                     <SelectItem key={t.id} value={String(t.id)}>Table {t.tableNumber} ({t.capacity} seats)</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)}>All</Button>
-                {catsArr.map((c: any) => (
+                {categories.map((c: MenuCategory) => (
                   <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)}>{c.name}</Button>
                 ))}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4 grid grid-cols-2 gap-2">
-              {itemsArr.filter((i: any) => i.isAvailable).map((item: any) => (
+              {items.filter((i: MenuItem) => i.isAvailable).map((item: MenuItem) => (
                 <button key={item.id} onClick={() => addToCart(item)} className="text-left p-3 border border-border rounded-lg hover:border-primary hover:bg-accent transition-all">
                   <p className="text-sm font-medium text-foreground">{item.name}</p>
                   <p className="text-xs text-muted-foreground">₹{item.price}</p>
@@ -179,7 +179,7 @@ export default function OrdersPage() {
   const updateOrder = useUpdateOrder();
   const { toast } = useToast();
 
-  const orders = (ordersData as any)?.data ?? [];
+  const orders: Order[] = ordersData?.data ?? [];
 
   const handlePay = async (id: number) => {
     try {
@@ -220,12 +220,12 @@ export default function OrdersPage() {
           ))}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {orders.map((order: any) => (
+          {orders.map((order: Order) => (
             <OrderCard key={order.id} order={order} onPay={handlePay} onUpdateStatus={handleUpdateStatus} />
           ))}
           {orders.length === 0 && (
             <div className="col-span-full text-center py-16 text-muted-foreground">
-              <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <BagIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No orders found</p>
             </div>
           )}
@@ -236,7 +236,7 @@ export default function OrdersPage() {
   );
 }
 
-function ShoppingBag({ className }: { className?: string }) {
+function BagIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />

@@ -4,6 +4,7 @@ import { useNotifications } from "@/lib/hooks";
 import { Bell, AlertTriangle, ChefHat, Phone, Calendar, Info } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { AppNotification } from "@/lib/types";
 
 const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
   new_order: { icon: ChefHat, color: "bg-blue-100 text-blue-600" },
@@ -15,15 +16,14 @@ const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: stri
 };
 
 export default function NotificationsPage() {
-  const { data } = useNotifications();
-  const notifications = (data as any[]) ?? [];
+  const { data: notifications = [] } = useNotifications();
 
   return (
     <Layout>
-      <PageHeader title="Notifications" subtitle={`${notifications.filter((n: any) => !n.isRead).length} unread`} />
+      <PageHeader title="Notifications" subtitle={`${notifications.filter((n: AppNotification) => !n.isRead).length} unread`} />
       <div className="p-6 max-w-2xl">
         <div className="space-y-3">
-          {notifications.map((n: any) => {
+          {notifications.map((n: AppNotification) => {
             const cfg = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.system;
             const Icon = cfg.icon;
             return (

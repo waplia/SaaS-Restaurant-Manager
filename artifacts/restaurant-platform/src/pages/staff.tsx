@@ -5,9 +5,10 @@ import { useStaff, useCreateUser } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, User, Phone, Mail, Shield } from "lucide-react";
+import { Plus, User, Phone, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import type { StaffMember } from "@/lib/types";
 
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   owner: { label: "Owner", color: "bg-purple-100 text-purple-700" },
@@ -17,7 +18,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   cashier: { label: "Cashier", color: "bg-yellow-100 text-yellow-700" },
 };
 
-function StaffCard({ member }: { member: any }) {
+function StaffCard({ member }: { member: StaffMember }) {
   const roleConfig = ROLE_CONFIG[member.role] ?? { label: member.role, color: "bg-gray-100 text-gray-600" };
   const initials = member.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2);
 
@@ -43,14 +44,13 @@ function StaffCard({ member }: { member: any }) {
 
 export default function StaffPage() {
   const [roleFilter, setRoleFilter] = useState<string | undefined>();
-  const { data: staff } = useStaff(roleFilter);
-  const staffArr = (staff as any[]) ?? [];
+  const { data: staff = [] } = useStaff(roleFilter);
   const createUser = useCreateUser();
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter", passwordHash: "default_hash" });
 
-  const byRole = (role: string) => staffArr.filter(s => s.role === role).length;
+  const byRole = (role: string) => staff.filter((s: StaffMember) => s.role === role).length;
   const roles = ["owner", "manager", "waiter", "kitchen", "cashier"];
 
   const handleAdd = async () => {
@@ -69,7 +69,7 @@ export default function StaffPage() {
     <Layout>
       <PageHeader
         title="Staff Management"
-        subtitle={`${staffArr.length} team members`}
+        subtitle={`${staff.length} team members`}
         actions={
           <Button onClick={() => setShowAdd(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Staff
@@ -77,10 +77,9 @@ export default function StaffPage() {
         }
       />
       <div className="p-6">
-        {/* Role summary */}
         <div className="flex gap-3 mb-6 flex-wrap">
           <button onClick={() => setRoleFilter(undefined)} className={cn("text-sm px-3 py-1.5 rounded-lg border", !roleFilter ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted")}>
-            All ({staffArr.length})
+            All ({staff.length})
           </button>
           {roles.map(role => {
             const cfg = ROLE_CONFIG[role];
@@ -94,10 +93,10 @@ export default function StaffPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {staffArr.map((member: any) => (
+          {staff.map((member: StaffMember) => (
             <StaffCard key={member.id} member={member} />
           ))}
-          {staffArr.length === 0 && (
+          {staff.length === 0 && (
             <div className="col-span-full text-center py-16 text-muted-foreground">
               <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No staff found</p>
