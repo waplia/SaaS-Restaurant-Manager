@@ -95,7 +95,10 @@ router.post("/public/orders", async (req, res) => {
   await db.insert(kitchenTicketsTable).values({ orderId: order.id, restaurantId, isPriority: false });
 
   if (tableId) {
-    await db.update(floorTablesTable).set({ status: "occupied" }).where(eq(floorTablesTable.id, tableId));
+    const [validTable] = await db.select({ id: floorTablesTable.id }).from(floorTablesTable).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    if (validTable) {
+      await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    }
     await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
   }
 
@@ -103,6 +106,36 @@ router.post("/public/orders", async (req, res) => {
 
   const guestToken = generateGuestToken(order.id);
   res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount, guestToken });
+});
+
+router.get("/public/orders/verify-session", async (req, res) => {
+  const { orderId, token, sessionId } = req.query as { orderId?: string; token?: string; sessionId?: string };
+  const id = Number(orderId);
+  if (!id || !validateGuestToken(id, token)) {
+    return void res.status(403).json({ error: "Invalid or missing order token" });
+  }
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.paymentStatus === "paid") {
+    return res.json({ verified: true, paymentStatus: "paid", orderId: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount });
+  }
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (stripeKey && sessionId) {
+    try {
+      const stripe = new Stripe(stripeKey);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (session.payment_status === "paid" && String(session.metadata?.orderId) === String(id)) {
+        await db.update(ordersTable).set({ paymentStatus: "paid", status: "preparing" }).where(eq(ordersTable.id, id));
+        broadcastOrderUpdate(id, { id, paymentStatus: "paid", status: "preparing" });
+        broadcastEvent(order.restaurantId, "order:update", { id, paymentStatus: "paid", status: "preparing" });
+        return res.json({ verified: true, paymentStatus: "paid", orderId: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount });
+      }
+      return res.json({ verified: false, paymentStatus: session.payment_status });
+    } catch {
+      return void res.status(500).json({ error: "Failed to verify session" });
+    }
+  }
+  return void res.json({ verified: false, paymentStatus: order.paymentStatus });
 });
 
 router.get("/public/orders/:id", async (req, res) => {
@@ -114,7 +147,7 @@ router.get("/public/orders/:id", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
-  res.json({ id: order.id, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount, items, createdAt: order.createdAt });
+  return void res.json({ id: order.id, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount, items, createdAt: order.createdAt });
 });
 
 router.post("/public/orders/:id/payment-intent", async (req, res) => {

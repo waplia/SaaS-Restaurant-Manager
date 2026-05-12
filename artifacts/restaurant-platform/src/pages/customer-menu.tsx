@@ -137,6 +137,11 @@ export default function CustomerMenuPage() {
   const slug = params.slug ?? "";
   const tableId = Number(params.tableId ?? "0");
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const stripeReturnOrderId = urlParams.get("order");
+  const stripeReturnToken = urlParams.get("token");
+  const stripeReturnSession = urlParams.get("session_id");
+
   const [menu, setMenu] = useState<PublicMenu | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +204,28 @@ export default function CustomerMenuPage() {
       }
     });
     return () => { socket.disconnect(); socketRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!stripeReturnOrderId || !stripeReturnToken) return;
+    const orderId = Number(stripeReturnOrderId);
+    const token = stripeReturnToken;
+    const sessionId = stripeReturnSession ?? undefined;
+    const qs = new URLSearchParams();
+    qs.set("orderId", String(orderId));
+    qs.set("token", token);
+    if (sessionId) qs.set("sessionId", sessionId);
+    apiPublicGet<{ verified: boolean; paymentStatus: string; orderId: number; orderNumber: string; totalAmount: string }>(`/public/orders/verify-session?${qs}`)
+      .then(result => {
+        setOrderResult({ orderId: result.orderId, orderNumber: result.orderNumber, guestToken: token, totalAmount: result.totalAmount, status: result.paymentStatus === "paid" ? "preparing" : "pending" });
+        return apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`, token);
+      })
+      .then(status => {
+        setOrderStatus(status);
+        setView("tracking");
+        window.history.replaceState({}, "", window.location.pathname);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

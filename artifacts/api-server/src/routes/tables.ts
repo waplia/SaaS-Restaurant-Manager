@@ -52,7 +52,7 @@ router.delete("/restaurants/:restaurantId/tables/:id", requireRole("owner", "man
 
 router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const [table] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, Number(req.params.id)));
+  const [table] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, restaurantId)));
   if (!table) return void res.status(404).json({ error: "Not found" });
   const [restaurant] = await db.select({ slug: restaurantsTable.slug }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
   const slug = restaurant?.slug ?? String(restaurantId);
