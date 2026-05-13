@@ -119,6 +119,7 @@ export function Sidebar() {
           }
         }
       }
+      if (changed) saveOpenState(next);
       return changed ? next : prev;
     });
   }, [location, visibleEntries]);
