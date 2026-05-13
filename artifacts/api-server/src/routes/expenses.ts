@@ -85,7 +85,7 @@ async function assertCategoryBelongsToRestaurant(restaurantId: number, categoryI
   return Boolean(cat);
 }
 
-async function generateDueRecurringExpenses(restaurantId: number) {
+export async function generateDueRecurringExpenses(restaurantId: number) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().slice(0, 10);

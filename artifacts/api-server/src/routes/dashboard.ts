@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
 import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable } from "../lib/db";
+import { generateDueRecurringExpenses } from "./expenses";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -15,6 +16,11 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
 
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthStartStr = monthStart.toISOString().slice(0, 10);
+
+  // Ensure recurring templates that became due are materialized into expenses
+  // before we read this month's totals — otherwise the dashboard can show stale
+  // figures for users who don't visit the Expenses page first.
+  await generateDueRecurringExpenses(restaurantId).catch(() => undefined);
 
   const [
     todayOrdersRows,
@@ -291,6 +297,9 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   const sortedBuckets = Object.entries(aggBuckets).sort(([a], [b]) => a.localeCompare(b));
 
   const effectiveTaxRate = totalRevenue > 0 ? ((totalTax / totalRevenue) * 100).toFixed(2) : "0.00";
+
+  // Same catch-up before reading expense aggregates for the analytics window.
+  await generateDueRecurringExpenses(restaurantId).catch(() => undefined);
 
   const expenseConditions: Parameters<typeof and>[0][] = [eq(expensesTable.restaurantId, restaurantId)];
   expenseConditions.push(gte(expensesTable.expenseDate, from.toISOString().slice(0, 10)));
