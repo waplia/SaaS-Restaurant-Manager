@@ -39,7 +39,7 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/reports/sales", label: "Sales", icon: TrendingUp },
       { kind: "link", href: "/reports/tax", label: "Tax", icon: Percent },
-      { kind: "link", href: "/reports/staff", label: "Staff Performance", icon: Users },
+      { kind: "link", href: "/reports/staff", label: "Staff", icon: Users },
       { kind: "link", href: "/reports/payments", label: "Payments", icon: Wallet },
     ],
   },
