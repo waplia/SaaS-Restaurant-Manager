@@ -1434,7 +1434,7 @@ export default function PosPage() {
                       <p className="text-sm font-medium leading-tight line-clamp-2 flex-1">{item.name}</p>
                       <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
                     </div>
-                    <p className="text-sm font-bold text-primary">₹{item.price}</p>
+                    <span className="inline-flex items-center text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full ring-1 ring-primary/20">₹{item.price}</span>
                     {(inCart || inLive) && (
                       <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
                         {inCart?.quantity ?? liveItems.filter(li => li.menuItemId === item.id).reduce((s, li) => s + li.quantity, 0)}
@@ -1547,7 +1547,7 @@ export default function PosPage() {
 
           {/* Totals + actions — sticky footer summary */}
           {(cart.length > 0 || placedOrder) && (
-            <div className="border-t border-border px-4 py-4 space-y-3 flex-shrink-0 bg-card/60 backdrop-blur-sm shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.06)]">
+            <div className="sticky bottom-0 border-t border-border px-4 py-4 space-y-3 flex-shrink-0 bg-card/80 backdrop-blur-md shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.08)]">
               <div className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <Input
