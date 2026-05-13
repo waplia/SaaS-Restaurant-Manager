@@ -357,14 +357,14 @@ export default function ReportsPage() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-card border border-border rounded-xl p-4">
+            <div key={label} className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+                <p className="text-sm text-muted-foreground font-medium">{label}</p>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ring-1 ring-current/10 ${color}`}>
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground">{isLoading ? "–" : value}</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">{isLoading ? "–" : value}</p>
             </div>
           ))}
         </div>
@@ -435,18 +435,19 @@ export default function ReportsPage() {
                 <AreaChart data={reports?.revenueByDay ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="repGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(24 95% 53%)" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="hsl(24 95% 53%)" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(20 92% 46%)" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="hsl(20 92% 46%)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => fmtDateTick(d, viewMode)} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                  <CartesianGrid strokeDasharray="3 6" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(d: string) => fmtDateTick(d, viewMode)} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
                   <Tooltip
+                    contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
                     formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Revenue"]}
                     labelFormatter={(d: string) => fmtDateLabel(d, viewMode)}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="hsl(24 95% 53%)" fill="url(#repGrad)" strokeWidth={2} dot={false} />
+                  <Area type="monotone" dataKey="revenue" stroke="hsl(20 92% 46%)" fill="url(#repGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -456,13 +457,13 @@ export default function ReportsPage() {
                 <h3 className="font-semibold text-foreground mb-4">Orders Per Day</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={reports?.revenueByDay ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
+                    <CartesianGrid strokeDasharray="3 6" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(d: string) => {
                       try { return format(new Date(d + "T12:00:00"), "MMM d"); } catch { return d; }
                     }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Bar dataKey="orders" fill="hsl(217 91% 60%)" radius={[4, 4, 0, 0]} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "hsl(var(--muted) / 0.4)" }} />
+                    <Bar dataKey="orders" fill="hsl(217 91% 60%)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

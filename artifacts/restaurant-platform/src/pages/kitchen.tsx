@@ -88,8 +88,8 @@ function TicketCard({
   return (
     <div
       className={cn(
-        "border rounded-xl p-4 space-y-3 transition-all duration-200 shadow-sm",
-        ticket.isPriority ? "border-orange-400 bg-orange-50 text-orange-950 ring-2 ring-orange-300/60" : `border-border/60 ${cfg.col}`,
+        "border rounded-xl p-4 space-y-3 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5",
+        ticket.isPriority ? "border-orange-400 bg-orange-50 text-orange-950 ring-2 ring-orange-300/60 dark:bg-orange-950/30 dark:text-orange-100 dark:border-orange-500" : `border-border/60 ${cfg.col}`,
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -145,7 +145,7 @@ function TicketCard({
       {cfg.next && (
         <button
           onClick={() => onUpdate(ticket.id, cfg.next!)}
-          className={cn("w-full py-2 rounded-lg text-sm font-semibold transition-colors", cfg.nextClass)}
+          className={cn("w-full py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-[0.98] shadow-sm hover:shadow-md", cfg.nextClass)}
         >
           {cfg.nextLabel}
         </button>

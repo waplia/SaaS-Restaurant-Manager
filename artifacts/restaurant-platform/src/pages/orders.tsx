@@ -35,7 +35,7 @@ function OrderCard({ order, onOpen }: { order: Order; onOpen: (id: number) => vo
     <button
       type="button"
       onClick={() => onOpen(order.id)}
-      className="w-full text-left bg-card border border-border rounded-xl p-4 space-y-3 hover:border-primary hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+      className="group w-full text-left bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200"
     >
       <div className="flex items-start justify-between">
         <div>
@@ -47,8 +47,8 @@ function OrderCard({ order, onOpen }: { order: Order; onOpen: (id: number) => vo
             {order.tableId ? `Table ${order.tableId}` : order.orderType} · {format(new Date(order.createdAt), "h:mm a")}
           </p>
         </div>
-        <span className={cn("text-xs font-medium px-2 py-1 rounded-full capitalize", STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600")}>
-          {order.status}
+        <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full capitalize ring-1 ring-inset ring-current/10", STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground")}>
+          {order.status.replace(/_/g, " ")}
         </span>
       </div>
       {order.customerName && <p className="text-xs text-muted-foreground">Customer: {order.customerName}</p>}
@@ -196,9 +196,12 @@ export default function OrdersPage() {
             <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} />
           ))}
           {orders.length === 0 && (
-            <div className="col-span-full text-center py-16 text-muted-foreground">
-              <BagIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>No orders found</p>
+            <div className="col-span-full flex flex-col items-center justify-center text-center py-20 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
+              <div className="w-14 h-14 rounded-full bg-muted/60 flex items-center justify-center mb-3">
+                <BagIcon className="w-7 h-7 opacity-50" />
+              </div>
+              <p className="font-medium text-foreground/80">No orders found</p>
+              <p className="text-xs mt-1">Try a different filter or create a new order</p>
             </div>
           )}
         </div>

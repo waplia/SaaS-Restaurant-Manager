@@ -243,7 +243,7 @@ function TableCard({
     <div
       onClick={mergeMode ? () => onMergeSelect(table.id) : undefined}
       className={cn(
-        "border-2 rounded-xl p-4 hover:shadow-md transition-all cursor-default",
+        "border-2 rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default",
         mergeMode && "cursor-pointer",
         isMergeSelected && "ring-4 ring-primary ring-offset-2",
         cfg.bg, cfg.border, cfg.text,

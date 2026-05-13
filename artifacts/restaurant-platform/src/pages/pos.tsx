@@ -1424,10 +1424,10 @@ export default function PosPage() {
                     key={item.id}
                     onClick={() => handleMenuItemClick(item)}
                     className={cn(
-                      "relative text-left p-3 rounded-xl border-2 transition-all hover:shadow-sm",
+                      "group relative text-left p-3 rounded-xl border-2 transition-all duration-150 active:scale-[0.98] hover:shadow-md hover:-translate-y-0.5",
                       (inCart || inLive)
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 hover:bg-accent"
+                        ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 shadow-sm shadow-primary/20"
+                        : "border-border hover:border-primary/50 hover:bg-accent/40"
                     )}
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
@@ -1454,7 +1454,7 @@ export default function PosPage() {
         </div>
 
         {/* Right panel — Order ticket */}
-        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border">
+        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border shadow-[-4px_0_16px_-8px_hsl(0_0%_0%/0.08)]">
 
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <div>
