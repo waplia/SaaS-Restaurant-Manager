@@ -182,8 +182,8 @@ export function Sidebar() {
                 aria-controls={panelId}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  childActive && !isOpen
-                    ? "text-sidebar-foreground bg-sidebar-accent/40"
+                  childActive
+                    ? "text-sidebar-foreground bg-sidebar-accent/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
