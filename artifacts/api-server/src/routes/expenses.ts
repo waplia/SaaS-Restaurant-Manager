@@ -256,6 +256,19 @@ router.get("/restaurants/:restaurantId/recurring-expenses", async (req, res) => 
   res.json(rows);
 });
 
+const ALLOWED_FREQUENCIES = ["daily", "weekly", "monthly", "yearly"] as const;
+function normalizeFrequency(v: unknown): typeof ALLOWED_FREQUENCIES[number] | null {
+  return (ALLOWED_FREQUENCIES as readonly string[]).includes(String(v)) ? v as typeof ALLOWED_FREQUENCIES[number] : null;
+}
+function normalizeDayOfMonth(v: unknown): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 31) return null;
+  return n;
+}
+function isValidDateStr(v: unknown): v is string {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
+}
+
 router.post("/restaurants/:restaurantId/recurring-expenses", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { name, categoryId, amount, frequency, dayOfMonth, payee, paymentMethod, notes, nextRunDate } = req.body;
@@ -263,12 +276,17 @@ router.post("/restaurants/:restaurantId/recurring-expenses", async (req, res) =>
   if (!(await assertCategoryBelongsToRestaurant(restaurantId, Number(categoryId)))) {
     return void res.status(400).json({ error: "Invalid categoryId" });
   }
+  const freq = normalizeFrequency(frequency ?? "monthly");
+  if (!freq) return void res.status(400).json({ error: `frequency must be one of ${ALLOWED_FREQUENCIES.join(", ")}` });
+  const dom = dayOfMonth === undefined || dayOfMonth === null ? 1 : normalizeDayOfMonth(dayOfMonth);
+  if (dom === null) return void res.status(400).json({ error: "dayOfMonth must be an integer 1-31" });
   const startDate = nextRunDate ?? new Date().toISOString().slice(0, 10);
+  if (!isValidDateStr(startDate)) return void res.status(400).json({ error: "nextRunDate must be YYYY-MM-DD" });
   const [tpl] = await db.insert(recurringExpensesTable).values({
     restaurantId,
     name, categoryId: Number(categoryId), amount: String(amount),
-    frequency: frequency ?? "monthly",
-    dayOfMonth: Number(dayOfMonth) || 1,
+    frequency: freq,
+    dayOfMonth: dom,
     payee, paymentMethod, notes,
     nextRunDate: startDate,
   }).returning();
@@ -287,12 +305,23 @@ router.patch("/restaurants/:restaurantId/recurring-expenses/:id", async (req, re
     updates.categoryId = Number(categoryId);
   }
   if (amount !== undefined) updates.amount = String(amount);
-  if (frequency !== undefined) updates.frequency = frequency;
-  if (dayOfMonth !== undefined) updates.dayOfMonth = Number(dayOfMonth);
+  if (frequency !== undefined) {
+    const freq = normalizeFrequency(frequency);
+    if (!freq) return void res.status(400).json({ error: `frequency must be one of ${ALLOWED_FREQUENCIES.join(", ")}` });
+    updates.frequency = freq;
+  }
+  if (dayOfMonth !== undefined) {
+    const dom = normalizeDayOfMonth(dayOfMonth);
+    if (dom === null) return void res.status(400).json({ error: "dayOfMonth must be an integer 1-31" });
+    updates.dayOfMonth = dom;
+  }
   if (payee !== undefined) updates.payee = payee;
   if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
   if (notes !== undefined) updates.notes = notes;
-  if (nextRunDate !== undefined) updates.nextRunDate = nextRunDate;
+  if (nextRunDate !== undefined) {
+    if (!isValidDateStr(nextRunDate)) return void res.status(400).json({ error: "nextRunDate must be YYYY-MM-DD" });
+    updates.nextRunDate = nextRunDate;
+  }
   if (isActive !== undefined) updates.isActive = isActive;
   const [updated] = await db.update(recurringExpensesTable).set(updates)
     .where(and(eq(recurringExpensesTable.id, Number(req.params.id)), eq(recurringExpensesTable.restaurantId, Number(req.params.restaurantId))))

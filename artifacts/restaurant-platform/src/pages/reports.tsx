@@ -207,11 +207,14 @@ export default function ReportsPage() {
     doc.save(`tabletrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
-  const netProfitNum = reports ? Number(reports.netProfit ?? 0) : 0;
+  const hasExpenseAccess = reports?.totalExpenses != null;
+  const netProfitNum = hasExpenseAccess ? Number(reports?.netProfit ?? 0) : 0;
   const statCards = [
     { label: "Total Revenue", value: reports ? `₹${Number(reports.totalRevenue).toLocaleString()}` : "–", icon: DollarSign, color: "bg-orange-100 text-orange-600" },
-    { label: "Total Expenses", value: reports ? `₹${Number(reports.totalExpenses ?? 0).toLocaleString()}` : "–", icon: Receipt, color: "bg-rose-100 text-rose-600" },
-    { label: "Net Profit", value: reports ? `₹${netProfitNum.toLocaleString()}` : "–", icon: TrendingUp, color: netProfitNum >= 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600" },
+    ...(hasExpenseAccess ? [
+      { label: "Total Expenses", value: `₹${Number(reports?.totalExpenses ?? 0).toLocaleString()}`, icon: Receipt, color: "bg-rose-100 text-rose-600" },
+      { label: "Net Profit", value: `₹${netProfitNum.toLocaleString()}`, icon: TrendingUp, color: netProfitNum >= 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600" },
+    ] : []),
     { label: "Total Orders", value: reports?.totalOrders ?? "–", icon: ShoppingBag, color: "bg-blue-100 text-blue-600" },
   ];
 
@@ -308,7 +311,7 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        {(reports?.expensesByCategory?.length ?? 0) > 0 && (
+        {hasExpenseAccess && (reports?.expensesByCategory?.length ?? 0) > 0 && (
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Expenses by Category</h3>
