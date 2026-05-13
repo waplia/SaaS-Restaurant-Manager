@@ -92,6 +92,9 @@ export interface OrderDetail extends Order {
   taxAmount: string;
   serviceCharge: string;
   discountAmount: string;
+  couponCode: string | null;
+  loyaltyPointsRedeemed: number | null;
+  customerId: number | null;
   notes: string | null;
   customerPhone: string | null;
   items: OrderItem[];

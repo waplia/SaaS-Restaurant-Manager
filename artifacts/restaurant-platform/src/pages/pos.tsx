@@ -6,7 +6,7 @@ import {
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
   useCreatePaymentIntent, useCreateRazorpayOrder,
-  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone,
+  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1003,6 +1003,7 @@ export default function PosPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
   const [loyaltyRedeem, setLoyaltyRedeem] = useState("");
+  const [couponInput, setCouponInput] = useState("");
   const [showPayModal, setShowPayModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showTableGrid, setShowTableGrid] = useState(true);
@@ -1016,6 +1017,7 @@ export default function PosPage() {
   const removeOrderItem = useRemoveOrderItem();
   const applyDiscount = useApplyDiscount();
   const applyLoyalty = useApplyLoyalty();
+  const applyCoupon = useApplyCoupon();
   const { toast } = useToast();
 
   // Phone-based customer lookup for loyalty linking
@@ -1171,6 +1173,18 @@ export default function PosPage() {
     });
   };
 
+  const handleApplyCoupon = () => {
+    if (!placedOrder) { toast({ title: "Place order first", variant: "destructive" }); return; }
+    if (!couponInput.trim()) return;
+    applyCoupon.mutate({ orderId: placedOrder.id, code: couponInput.trim().toUpperCase() }, {
+      onSuccess: (data: { couponApplied?: { code: string; discountAmount: string } }) => {
+        toast({ title: `Coupon applied`, description: `${data?.couponApplied?.code} — ₹${data?.couponApplied?.discountAmount} off` });
+        setCouponInput("");
+      },
+      onError: (err: Error) => toast({ title: "Invalid coupon", description: err.message, variant: "destructive" }),
+    });
+  };
+
   const selectedTable = (tables as FloorTable[]).find(t => t.id === selectedTableId);
 
   const handleSelectTable = (table: FloorTable) => {
@@ -1261,7 +1275,7 @@ export default function PosPage() {
 
   const handleNewOrder = () => {
     setCart([]); setDiscount(""); setCustomerName("");
-    setCustomerPhone(""); setPhoneQuery(""); setLinkedCustomerId(null); setLoyaltyRedeem("");
+    setCustomerPhone(""); setPhoneQuery(""); setLinkedCustomerId(null); setLoyaltyRedeem(""); setCouponInput("");
     setSelectedTableId(null); setPlacedOrder(null);
     setShowPayModal(false); setShowSplitModal(false);
   };
@@ -1551,6 +1565,29 @@ export default function PosPage() {
                   min="0"
                 />
               </div>
+
+              {/* Coupon code apply — only when order is placed */}
+              {placedOrder && !liveDetail?.couponCode && (
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <Input
+                    placeholder="Coupon code"
+                    value={couponInput}
+                    onChange={e => setCouponInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleApplyCoupon()}
+                    className="h-8 text-sm flex-1 uppercase"
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3 flex-shrink-0" onClick={handleApplyCoupon} disabled={applyCoupon.isPending || !couponInput.trim()}>
+                    {applyCoupon.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                  </Button>
+                </div>
+              )}
+              {liveDetail?.couponCode && (
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Coupon <strong>{liveDetail.couponCode}</strong> applied</span>
+                </div>
+              )}
 
               {/* Loyalty redemption — only when a customer is linked and order placed */}
               {linkedCustomerId && placedOrder && (loyaltyAccount?.balance ?? 0) > 0 && (

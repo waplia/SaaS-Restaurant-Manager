@@ -49,7 +49,7 @@ async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, r
   const pointsEarned = Math.floor(Number(paidOrder.totalAmount) / 100);
   const pointsRedeemed = paidOrder.loyaltyPointsRedeemed ?? 0;
 
-  const [customer] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, totalOrders: customersTable.totalOrders, totalSpent: customersTable.totalSpent }).from(customersTable).where(eq(customersTable.id, customerId));
+  const [customer] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, totalOrders: customersTable.totalOrders, totalSpent: customersTable.totalSpent }).from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
   if (!customer) return;
 
   const txns: Array<typeof loyaltyTransactionsTable.$inferInsert> = [];
@@ -184,6 +184,14 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const discountAmt = Number(discountAmount ?? 0);
   const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge - discountAmt);
 
+  // Validate customerId belongs to this restaurant (tenant isolation)
+  let resolvedCustomerId: number | undefined;
+  if (customerId) {
+    const [cust] = await db.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.id, Number(customerId)), eq(customersTable.restaurantId, restaurantId)));
+    resolvedCustomerId = cust?.id;
+  }
+
   const [order] = await db.insert(ordersTable).values({
     restaurantId,
     tableId,
@@ -192,7 +200,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     notes,
     customerName,
     customerPhone,
-    customerId: customerId ? Number(customerId) : undefined,
+    customerId: resolvedCustomerId,
     isPriority: isPriority ?? false,
     subtotal: subtotal.toFixed(2),
     taxAmount: taxAmount.toFixed(2),
@@ -445,17 +453,21 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, re
     return void res.status(400).json({ error: `Minimum order amount is ₹${coupon.minOrderAmount}` });
   }
 
-  let discount = coupon.discountType === "percentage"
+  let couponDiscount = coupon.discountType === "percentage"
     ? (subtotal * Number(coupon.discountValue)) / 100
     : Number(coupon.discountValue);
-  if (coupon.maxDiscountAmount) discount = Math.min(discount, Number(coupon.maxDiscountAmount));
+  if (coupon.maxDiscountAmount) couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscountAmount));
 
-  await db.update(ordersTable).set({ couponCode: coupon.code, discountAmount: discount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
-  await recalculateOrderTotals(orderId, restaurantId, discount);
+  // Preserve any already-applied loyalty redemption discount
+  const loyaltyDiscount = order.loyaltyPointsRedeemed ?? 0;
+  const totalDiscount = couponDiscount + loyaltyDiscount;
+
+  await db.update(ordersTable).set({ couponCode: coupon.code, discountAmount: totalDiscount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  await recalculateOrderTotals(orderId, restaurantId, totalDiscount);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
-  res.json({ ...updatedOrder, items, couponApplied: { code: coupon.code, discountAmount: discount.toFixed(2), discountType: coupon.discountType } });
+  res.json({ ...updatedOrder, items, couponApplied: { code: coupon.code, discountAmount: couponDiscount.toFixed(2), discountType: coupon.discountType } });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {

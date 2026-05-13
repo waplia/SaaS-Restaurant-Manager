@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, ilike, count, desc } from "drizzle-orm";
+import { eq, and, ilike, or, count, desc } from "drizzle-orm";
 import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable, customerAddressesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -15,8 +15,8 @@ router.get("/restaurants/:restaurantId/customers", async (req, res) => {
   const offset = (pg - 1) * lim;
   const restaurantId = Number(req.params.restaurantId);
 
-  const conditions: ReturnType<typeof eq | typeof ilike>[] = [eq(customersTable.restaurantId, restaurantId)];
-  if (search) conditions.push(ilike(customersTable.name, `%${search}%`));
+  const conditions = [eq(customersTable.restaurantId, restaurantId)] as Parameters<typeof and>[0][];
+  if (search) conditions.push(or(ilike(customersTable.name, `%${search}%`), ilike(customersTable.phone, `%${search}%`)) as Parameters<typeof and>[0]);
 
   const [rows, totalRows] = await Promise.all([
     db.select().from(customersTable).where(and(...conditions)).orderBy(desc(customersTable.createdAt)).limit(lim).offset(offset),
