@@ -15,6 +15,7 @@ import MenuPage from "@/pages/menu";
 import InventoryPage from "@/pages/inventory";
 import StaffPage from "@/pages/staff";
 import CustomersPage from "@/pages/customers";
+import ExpensesPage from "@/pages/expenses";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
+      <Route path="/expenses" component={() => <ProtectedRoute component={ExpensesPage} />} />
       <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />

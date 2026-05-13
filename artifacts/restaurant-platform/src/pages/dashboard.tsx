@@ -3,7 +3,8 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useDashboardSummary, useRevenueTrend, usePopularItems, useLiveKitchen, useStaffActivity, useRestaurantId } from "@/lib/hooks";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -113,6 +114,26 @@ export default function DashboardPage() {
             color="purple"
           />
         </div>
+
+        <Link
+          href="/expenses"
+          className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center">
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">This Month's Expenses</p>
+                <p className="text-2xl font-bold text-foreground mt-0.5">
+                  ₹{Number(s?.monthlyExpenses ?? 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+            </div>
+            <span className="text-sm text-primary font-medium">Manage →</span>
+          </div>
+        </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">

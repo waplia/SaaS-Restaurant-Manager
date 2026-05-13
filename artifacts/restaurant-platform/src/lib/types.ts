@@ -8,6 +8,84 @@ export interface DashboardSummary {
   totalTables: number;
   pendingTickets: number;
   lowStockAlerts: number;
+  monthlyExpenses?: string;
+}
+
+export interface ExpenseCategory {
+  id: number;
+  restaurantId: number;
+  name: string;
+  color: string;
+  icon: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Expense {
+  id: number;
+  restaurantId: number;
+  categoryId: number;
+  amount: string;
+  expenseDate: string;
+  payee: string | null;
+  paymentMethod: string | null;
+  notes: string | null;
+  receiptUrl: string | null;
+  recurringTemplateId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpensesResponse {
+  data: Expense[];
+  total: number;
+  totalAmount: string;
+  page: number;
+}
+
+export interface RecurringExpense {
+  id: number;
+  restaurantId: number;
+  categoryId: number;
+  name: string;
+  amount: string;
+  frequency: string;
+  dayOfMonth: number;
+  payee: string | null;
+  paymentMethod: string | null;
+  notes: string | null;
+  nextRunDate: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExpenseInput {
+  categoryId: number;
+  amount: string;
+  expenseDate: string;
+  payee?: string;
+  paymentMethod?: string;
+  notes?: string;
+  receiptUrl?: string;
+}
+
+export interface CreateRecurringExpenseInput {
+  name: string;
+  categoryId: number;
+  amount: string;
+  frequency: string;
+  dayOfMonth?: number;
+  payee?: string;
+  paymentMethod?: string;
+  notes?: string;
+  nextRunDate?: string;
+}
+
+export interface ExpenseSummary {
+  total: string;
+  byCategory: { categoryId: number; categoryName: string; color: string; total: string; count: number }[];
 }
 
 export interface RevenueTrendItem {
@@ -555,6 +633,9 @@ export interface ReportsData {
   taxByDay: TaxByDayItem[];
   topItems: TopItem[];
   staffPerformance: StaffPerformanceItem[];
+  totalExpenses?: string;
+  netProfit?: string;
+  expensesByCategory?: { categoryId: number; categoryName: string; color: string; total: string }[];
 }
 
 export interface Supplier {

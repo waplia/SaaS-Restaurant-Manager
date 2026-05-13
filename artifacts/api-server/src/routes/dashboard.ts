@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable } from "../lib/db";
+import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -13,6 +13,9 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthStartStr = monthStart.toISOString().slice(0, 10);
+
   const [
     todayOrdersRows,
     allTables,
@@ -20,6 +23,7 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     lowStockItems,
     unreadNotifs,
     yesterdayOrders,
+    monthExpensesRow,
   ] = await Promise.all([
     db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, today))),
     db.select().from(floorTablesTable).where(and(eq(floorTablesTable.restaurantId, restaurantId), eq(floorTablesTable.isActive, true))),
@@ -27,6 +31,7 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.restaurantId, restaurantId)),
     db.select({ count: count() }).from(notificationsTable).where(and(eq(notificationsTable.restaurantId, restaurantId), eq(notificationsTable.isRead, false))),
     db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`)),
+    db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(and(eq(expensesTable.restaurantId, restaurantId), gte(expensesTable.expenseDate, monthStartStr))),
   ]);
 
   const todayRevenue = todayOrdersRows.reduce((s, o) => s + Number(o.totalAmount), 0);
@@ -48,6 +53,9 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     ordersGrowth,
     lowStockAlerts,
     unreadNotifications: unreadNotifs[0]?.count ?? 0,
+    monthlyExpenses: ["owner", "manager", "super_admin"].includes(req.user?.role ?? "")
+      ? Number(monthExpensesRow[0]?.sum ?? "0").toFixed(2)
+      : null,
   });
 });
 
@@ -284,6 +292,25 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
 
   const effectiveTaxRate = totalRevenue > 0 ? ((totalTax / totalRevenue) * 100).toFixed(2) : "0.00";
 
+  const expenseConditions: Parameters<typeof and>[0][] = [eq(expensesTable.restaurantId, restaurantId)];
+  expenseConditions.push(gte(expensesTable.expenseDate, from.toISOString().slice(0, 10)));
+  if (fromStr && toStr) expenseConditions.push(lte(expensesTable.expenseDate, to.toISOString().slice(0, 10)));
+  const expenseWhere = and(...expenseConditions);
+
+  const [expenseTotalRow, expenseByCat] = await Promise.all([
+    db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(expenseWhere),
+    db.select({
+      categoryId: expensesTable.categoryId,
+      categoryName: expenseCategoriesTable.name,
+      color: expenseCategoriesTable.color,
+      total: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text`,
+    }).from(expensesTable).innerJoin(expenseCategoriesTable, eq(expensesTable.categoryId, expenseCategoriesTable.id))
+      .where(expenseWhere).groupBy(expensesTable.categoryId, expenseCategoriesTable.name, expenseCategoriesTable.color),
+  ]);
+
+  const totalExpenses = Number(expenseTotalRow[0]?.sum ?? "0");
+  const netProfit = totalRevenue - totalExpenses;
+
   res.json({
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,
@@ -306,6 +333,13 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
       totalRevenue: r.total_revenue,
       totalHours: Number(r.total_hours).toFixed(1),
     })),
+    ...(["owner", "manager", "super_admin"].includes(req.user?.role ?? "")
+      ? {
+          totalExpenses: totalExpenses.toFixed(2),
+          netProfit: netProfit.toFixed(2),
+          expensesByCategory: expenseByCat.map(c => ({ ...c, total: Number(c.total).toFixed(2) })),
+        }
+      : { totalExpenses: null, netProfit: null, expensesByCategory: [] }),
   });
 });
 

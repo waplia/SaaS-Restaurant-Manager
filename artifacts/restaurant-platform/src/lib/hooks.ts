@@ -994,3 +994,136 @@ export function useMockActivate() {
 
 export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };
+
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: ["expense-categories", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").ExpenseCategory[]>(`/restaurants/${RESTAURANT_ID}/expense-categories`),
+  });
+}
+
+export function useCreateExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; color?: string; icon?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/expense-categories`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+  });
+}
+
+export function useUpdateExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name?: string; color?: string; icon?: string; isActive?: boolean }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/expense-categories/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+  });
+}
+
+export function useDeleteExpenseCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/expense-categories/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+  });
+}
+
+export function useExpenses(params?: { from?: string; to?: string; categoryId?: number; search?: string; page?: number }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.categoryId) q.set("categoryId", String(params.categoryId));
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  return useQuery({
+    queryKey: ["expenses", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").ExpensesResponse>(`/restaurants/${RESTAURANT_ID}/expenses?${q}`),
+  });
+}
+
+export function useCreateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateExpenseInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/expenses`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-summary"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "summary"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+    },
+  });
+}
+
+export function useUpdateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<import("./types").CreateExpenseInput> & { id: number }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/expenses/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-summary"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "summary"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+    },
+  });
+}
+
+export function useDeleteExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/expenses/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-summary"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "summary"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+    },
+  });
+}
+
+export function useExpenseSummary(params?: { from?: string; to?: string }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["expense-summary", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").ExpenseSummary>(`/restaurants/${RESTAURANT_ID}/expenses/summary?${q}`),
+  });
+}
+
+export function useRecurringExpenses() {
+  return useQuery({
+    queryKey: ["recurring-expenses", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").RecurringExpense[]>(`/restaurants/${RESTAURANT_ID}/recurring-expenses`),
+  });
+}
+
+export function useCreateRecurringExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateRecurringExpenseInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/recurring-expenses`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["recurring-expenses"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+  });
+}
+
+export function useUpdateRecurringExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<import("./types").CreateRecurringExpenseInput> & { id: number; isActive?: boolean }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/recurring-expenses/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring-expenses"] }),
+  });
+}
+
+export function useDeleteRecurringExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recurring-expenses/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring-expenses"] }),
+  });
+}

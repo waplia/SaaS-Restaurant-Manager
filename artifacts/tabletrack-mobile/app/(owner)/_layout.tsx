@@ -22,6 +22,10 @@ function NativeOwnerTabs() {
         <Icon sf={{ default: "flame", selected: "flame.fill" }} />
         <Label>Kitchen</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="expenses">
+        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
+        <Label>Expenses</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
         <Label>Profile</Label>
@@ -81,6 +85,14 @@ function ClassicOwnerTabs() {
           title: "Kitchen",
           tabBarIcon: ({ color }) =>
             isIOS ? <SymbolView name="flame.fill" tintColor={color} size={22} /> : <Feather name="activity" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="expenses"
+        options={{
+          title: "Expenses",
+          tabBarIcon: ({ color }) =>
+            isIOS ? <SymbolView name="creditcard.fill" tintColor={color} size={22} /> : <Feather name="credit-card" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

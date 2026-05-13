@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
-  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor
+  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -19,6 +19,7 @@ const navItems = [
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/staff", label: "Staff", icon: UserCheck },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
   { href: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
@@ -51,7 +52,8 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon, roles }) => {
+          if (roles && user?.role && !user.isSuperAdmin && !roles.includes(user.role)) return null;
           const active = href === "/" ? location === "/" : location.startsWith(href);
           return (
             <Link key={href} href={href} className={cn(
