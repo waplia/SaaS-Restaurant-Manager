@@ -396,6 +396,16 @@ export interface UpdateCustomerInput {
   isActive?: boolean;
 }
 
+export interface CustomerAddress {
+  id: number;
+  customerId: number;
+  restaurantId: number;
+  label: string;
+  address: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
 export interface LoyaltyTransaction {
   id: number;
   customerId: number;

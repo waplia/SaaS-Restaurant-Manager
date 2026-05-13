@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
-import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable } from "../lib/db";
+import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable, customerAddressesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -113,6 +113,56 @@ router.post("/restaurants/:restaurantId/coupons/validate", async (req, res) => {
   if (coupon.maxDiscountAmount) discount = Math.min(discount, Number(coupon.maxDiscountAmount));
 
   res.json({ valid: true, discountAmount: discount.toFixed(2), message: null });
+});
+
+router.get("/restaurants/:restaurantId/customers/:id/addresses", async (req, res) => {
+  const customerId = Number(req.params.id);
+  const restaurantId = Number(req.params.restaurantId);
+  const addresses = await db.select().from(customerAddressesTable)
+    .where(and(eq(customerAddressesTable.customerId, customerId), eq(customerAddressesTable.restaurantId, restaurantId)))
+    .orderBy(desc(customerAddressesTable.createdAt));
+  res.json(addresses);
+});
+
+router.post("/restaurants/:restaurantId/customers/:id/addresses", async (req, res) => {
+  const customerId = Number(req.params.id);
+  const restaurantId = Number(req.params.restaurantId);
+  const { address, label, isDefault } = req.body;
+  if (isDefault) {
+    await db.update(customerAddressesTable).set({ isDefault: false })
+      .where(and(eq(customerAddressesTable.customerId, customerId), eq(customerAddressesTable.restaurantId, restaurantId)));
+  }
+  const [newAddr] = await db.insert(customerAddressesTable).values({
+    customerId, restaurantId, address, label: label ?? "Home", isDefault: isDefault ?? false,
+  }).returning();
+  res.status(201).json(newAddr);
+});
+
+router.patch("/restaurants/:restaurantId/customers/:id/addresses/:addressId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const customerId = Number(req.params.id);
+  const restaurantId = Number(req.params.restaurantId);
+  const addressId = Number(req.params.addressId);
+  const { address, label, isDefault } = req.body;
+  if (isDefault) {
+    await db.update(customerAddressesTable).set({ isDefault: false })
+      .where(and(eq(customerAddressesTable.customerId, customerId), eq(customerAddressesTable.restaurantId, restaurantId)));
+  }
+  const updates: Record<string, unknown> = {};
+  if (address !== undefined) updates.address = address;
+  if (label !== undefined) updates.label = label;
+  if (isDefault !== undefined) updates.isDefault = isDefault;
+  const [updated] = await db.update(customerAddressesTable).set(updates)
+    .where(and(eq(customerAddressesTable.id, addressId), eq(customerAddressesTable.customerId, customerId))).returning();
+  if (!updated) return void res.status(404).json({ error: "Address not found" });
+  res.json(updated);
+});
+
+router.delete("/restaurants/:restaurantId/customers/:id/addresses/:addressId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const customerId = Number(req.params.id);
+  const addressId = Number(req.params.addressId);
+  await db.delete(customerAddressesTable)
+    .where(and(eq(customerAddressesTable.id, addressId), eq(customerAddressesTable.customerId, customerId)));
+  res.status(204).send();
 });
 
 router.get("/restaurants/:restaurantId/notifications", async (req, res) => {

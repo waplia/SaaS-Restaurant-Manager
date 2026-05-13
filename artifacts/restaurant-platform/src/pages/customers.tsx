@@ -5,7 +5,7 @@ import {
   useCustomers, useCreateCustomer, useUpdateCustomer,
   useCustomerLoyalty, useAddLoyaltyPoints,
   useCoupons, useCreateCoupon, useUpdateCoupon, useDeleteCoupon,
-  useCustomerOrders,
+  useCustomerOrders, useCustomerAddresses, useCreateCustomerAddress, useDeleteCustomerAddress,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,11 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Mail, Phone, Star, ShoppingBag, X, Pencil,
   Gift, Trash2, Tag, Users, ChevronRight, ArrowUpCircle, ArrowDownCircle, Clock,
-  Receipt, MapPin,
+  Receipt, MapPin, Home, Building, Navigation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { Customer, LoyaltyTransaction, Coupon, Order } from "@/lib/types";
+import type { Customer, LoyaltyTransaction, Coupon, Order, CustomerAddress } from "@/lib/types";
 
 const TABS = ["Customers", "Coupons"] as const;
 type Tab = typeof TABS[number];
@@ -31,9 +31,18 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+const ADDRESS_LABEL_ICONS: Record<string, React.ReactNode> = {
+  Home: <Home className="w-3 h-3" />,
+  Work: <Building className="w-3 h-3" />,
+  Other: <Navigation className="w-3 h-3" />,
+};
+
 function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const { data: loyalty } = useCustomerLoyalty(customer.id);
   const { data: ordersData } = useCustomerOrders(customer.id);
+  const { data: addresses = [] } = useCustomerAddresses(customer.id);
+  const createAddress = useCreateCustomerAddress();
+  const deleteAddress = useDeleteCustomerAddress();
   const customerOrders: Order[] = ordersData?.data ?? [];
   const addLoyaltyPoints = useAddLoyaltyPoints();
   const updateCustomer = useUpdateCustomer();
@@ -42,6 +51,8 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: customer.name, email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "", notes: customer.notes ?? "" });
   const [loyaltyForm, setLoyaltyForm] = useState({ points: "", type: "earn", reason: "" });
+  const [addingAddress, setAddingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({ address: "", label: "Home" });
 
   const handleSave = async () => {
     try {
@@ -61,6 +72,18 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
       setLoyaltyForm({ points: "", type: "earn", reason: "" });
     } catch {
       toast({ title: "Failed to update points", variant: "destructive" });
+    }
+  };
+
+  const handleAddAddress = async () => {
+    if (!addressForm.address.trim()) return;
+    try {
+      await createAddress.mutateAsync({ customerId: customer.id, address: addressForm.address.trim(), label: addressForm.label });
+      toast({ title: "Address saved!" });
+      setAddressForm({ address: "", label: "Home" });
+      setAddingAddress(false);
+    } catch {
+      toast({ title: "Failed to save address", variant: "destructive" });
     }
   };
 
@@ -136,6 +159,52 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
               {customer.notes && (
                 <p className="text-xs bg-muted/50 rounded-lg px-3 py-2 text-muted-foreground mt-2">{customer.notes}</p>
               )}
+            </div>
+
+            <div className="px-4 py-3 border-t border-border">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Addresses</h3>
+                <button onClick={() => setAddingAddress(!addingAddress)} className="text-xs text-primary hover:underline flex items-center gap-0.5">
+                  <Plus className="w-3 h-3" /> Add
+                </button>
+              </div>
+              {addingAddress && (
+                <div className="space-y-2 mb-3 p-2.5 bg-muted/30 rounded-lg">
+                  <div className="flex gap-1.5">
+                    {["Home", "Work", "Other"].map(lbl => (
+                      <button key={lbl} onClick={() => setAddressForm(p => ({ ...p, label: lbl }))}
+                        className={cn("flex-1 text-xs py-1 rounded border", addressForm.label === lbl ? "bg-primary text-white border-primary" : "border-border text-muted-foreground")}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <Input placeholder="Street address, city…" value={addressForm.address} onChange={e => setAddressForm(p => ({ ...p, address: e.target.value }))} className="h-8 text-xs" />
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => setAddingAddress(false)}>Cancel</Button>
+                    <Button size="sm" className="flex-1 h-7 text-xs" onClick={handleAddAddress} disabled={createAddress.isPending || !addressForm.address.trim()}>Save</Button>
+                  </div>
+                </div>
+              )}
+              {(addresses as CustomerAddress[]).length === 0 && !addingAddress && (
+                <p className="text-xs text-muted-foreground italic">No saved addresses</p>
+              )}
+              <div className="space-y-1.5">
+                {(addresses as CustomerAddress[]).map((addr: CustomerAddress) => (
+                  <div key={addr.id} className="flex items-start gap-2 group">
+                    <span className={cn("mt-0.5 p-1 rounded-md flex-shrink-0", addr.isDefault ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground")}>
+                      {ADDRESS_LABEL_ICONS[addr.label] ?? <MapPin className="w-3 h-3" />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase">{addr.label}{addr.isDefault && " · Default"}</p>
+                      <p className="text-xs text-foreground leading-tight">{addr.address}</p>
+                    </div>
+                    <button onClick={() => deleteAddress.mutate({ customerId: customer.id, addressId: addr.id })}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive/70 hover:text-destructive p-0.5 flex-shrink-0">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="px-4 py-3 border-t border-border">

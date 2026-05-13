@@ -27,6 +27,7 @@ export const ordersTable = pgTable("orders", {
   customerId: integer("customer_id"),
   isPriority: boolean("is_priority").notNull().default(false),
   stripePaymentId: text("stripe_payment_id"),
+  couponCode: text("coupon_code"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

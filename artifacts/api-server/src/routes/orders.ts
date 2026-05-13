@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
@@ -41,6 +41,62 @@ async function deductInventoryForOrder(orderId: number, restaurantId: number): P
       }
     }
   }
+}
+
+async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, restaurantId: number): Promise<void> {
+  if (!paidOrder.customerId) return;
+  const pointsEarned = Math.floor(Number(paidOrder.totalAmount) / 100);
+  if (pointsEarned <= 0) return;
+  const customerId = paidOrder.customerId;
+  await db.insert(loyaltyTransactionsTable).values({
+    customerId,
+    restaurantId,
+    points: pointsEarned,
+    type: "earn",
+    reason: `Order #${paidOrder.orderNumber}`,
+    orderId: paidOrder.id,
+  });
+  const [customer] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, totalOrders: customersTable.totalOrders, totalSpent: customersTable.totalSpent }).from(customersTable).where(eq(customersTable.id, customerId));
+  if (customer) {
+    await db.update(customersTable).set({
+      loyaltyPoints: customer.loyaltyPoints + pointsEarned,
+      totalOrders: customer.totalOrders + 1,
+      totalSpent: (Number(customer.totalSpent) + Number(paidOrder.totalAmount)).toFixed(2),
+      updatedAt: new Date(),
+    }).where(eq(customersTable.id, customerId));
+  }
+}
+
+async function updateCouponUsage(couponCode: string | null, restaurantId: number): Promise<void> {
+  if (!couponCode) return;
+  const [coupon] = await db.select({ id: couponsTable.id, usageCount: couponsTable.usageCount }).from(couponsTable)
+    .where(and(eq(couponsTable.code, couponCode.toUpperCase()), eq(couponsTable.restaurantId, restaurantId)));
+  if (coupon) {
+    await db.update(couponsTable).set({ usageCount: coupon.usageCount + 1, updatedAt: new Date() })
+      .where(eq(couponsTable.id, coupon.id));
+  }
+}
+
+async function handleOrderCompletion(orderId: number, restaurantId: number, paidOrder: typeof ordersTable.$inferSelect): Promise<void> {
+  await Promise.allSettled([
+    deductInventoryForOrder(orderId, restaurantId).catch(async (err) => {
+      console.error(`[OrderCompletion] Inventory deduction failed for order ${orderId}:`, err);
+      await db.insert(notificationsTable).values({
+        restaurantId,
+        type: "system_error",
+        title: "Inventory Deduction Failed",
+        message: `Auto-deduction failed for order #${paidOrder.orderNumber}. Please adjust stock manually.`,
+        entityId: orderId,
+        entityType: "order",
+      }).catch(() => {});
+    }),
+    earnLoyaltyForOrder(paidOrder, restaurantId).catch((err) => {
+      console.error(`[OrderCompletion] Loyalty earn failed for order ${orderId}:`, err);
+    }),
+    updateCouponUsage(paidOrder.couponCode, restaurantId).catch((err) => {
+      console.error(`[OrderCompletion] Coupon usage update failed for order ${orderId}:`, err);
+    }),
+  ]);
 }
 
 const router = Router();
@@ -319,6 +375,42 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) =
   res.json({ ...updatedOrder, items });
 });
 
+router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { code } = req.body;
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot apply coupon to a completed or cancelled order" });
+  }
+
+  const now = new Date();
+  const [coupon] = await db.select().from(couponsTable).where(
+    and(eq(couponsTable.restaurantId, restaurantId), eq(couponsTable.code, String(code).toUpperCase()), eq(couponsTable.isActive, true))
+  );
+  if (!coupon) return void res.status(400).json({ error: "Invalid coupon code" });
+  if (coupon.validTo && new Date(coupon.validTo) < now) return void res.status(400).json({ error: "Coupon has expired" });
+  if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) return void res.status(400).json({ error: "Coupon usage limit reached" });
+  const subtotal = Number(order.subtotal);
+  if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {
+    return void res.status(400).json({ error: `Minimum order amount is ₹${coupon.minOrderAmount}` });
+  }
+
+  let discount = coupon.discountType === "percentage"
+    ? (subtotal * Number(coupon.discountValue)) / 100
+    : Number(coupon.discountValue);
+  if (coupon.maxDiscountAmount) discount = Math.min(discount, Number(coupon.maxDiscountAmount));
+
+  await db.update(ordersTable).set({ couponCode: coupon.code, discountAmount: discount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  await recalculateOrderTotals(orderId, restaurantId, discount);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  res.json({ ...updatedOrder, items, couponApplied: { code: coupon.code, discountAmount: discount.toFixed(2), discountType: coupon.discountType } });
+});
+
 router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
@@ -517,7 +609,7 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
       .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
-  deductInventoryForOrder(orderId, restaurantId).catch(() => {});
+  handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "completed", paymentStatus: "paid", orderNumber: order.orderNumber });
 
   res.json(updated);
@@ -764,7 +856,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
-  deductInventoryForOrder(orderId, restaurantId).catch(() => {});
+  handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
 

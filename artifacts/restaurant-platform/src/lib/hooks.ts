@@ -897,5 +897,42 @@ export function useDeleteRecipeMapping() {
   });
 }
 
+export function useCustomerAddresses(customerId: number | null) {
+  return useQuery({
+    queryKey: ["customer-addresses", customerId],
+    queryFn: () => apiGet<import("./types").CustomerAddress[]>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/addresses`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useCreateCustomerAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, address, label, isDefault }: { customerId: number; address: string; label?: string; isDefault?: boolean }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/addresses`, { address, label, isDefault }),
+    onSuccess: (_: unknown, vars: { customerId: number; address: string; label?: string; isDefault?: boolean }) =>
+      qc.invalidateQueries({ queryKey: ["customer-addresses", vars.customerId] }),
+  });
+}
+
+export function useDeleteCustomerAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, addressId }: { customerId: number; addressId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/addresses/${addressId}`),
+    onSuccess: (_: unknown, vars: { customerId: number; addressId: number }) =>
+      qc.invalidateQueries({ queryKey: ["customer-addresses", vars.customerId] }),
+  });
+}
+
+export function useApplyCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, code }: { orderId: number; code: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/apply-coupon`, { code }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
 export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };

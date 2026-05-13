@@ -57,6 +57,20 @@ export const couponsTable = pgTable("coupons", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const customerAddressesTable = pgTable("customer_addresses", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  label: text("label").notNull().default("Home"),
+  address: text("address").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCustomerAddressSchema = createInsertSchema(customerAddressesTable).omit({ id: true, createdAt: true });
+export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
+export type CustomerAddress = typeof customerAddressesTable.$inferSelect;
+
 export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
   restaurantId: integer("restaurant_id").references(() => restaurantsTable.id),
