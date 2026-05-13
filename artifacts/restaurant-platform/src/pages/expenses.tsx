@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ import {
   useRecurringExpenses, useCreateRecurringExpense, useUpdateRecurringExpense, useDeleteRecurringExpense,
   useExpenseSummary,
 } from "@/lib/hooks";
-import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar } from "lucide-react";
+import { apiPost, getApiUrl } from "@/lib/api";
+import { RESTAURANT_ID } from "@/lib/hooks";
+import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, RecurringExpense } from "@/lib/types";
 
@@ -32,17 +34,43 @@ function fmtDate(d: string) {
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function monthAgoStr() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
 
+async function uploadReceipt(file: File): Promise<string> {
+  const presign = await apiPost<{ uploadURL: string; objectPath: string }>(
+    `/restaurants/${RESTAURANT_ID}/storage/uploads/request-url`,
+    { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
+  );
+  const put = await fetch(presign.uploadURL, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+  return presign.objectPath;
+}
+
+function receiptHref(objectPath: string | null | undefined): string | null {
+  if (!objectPath) return null;
+  if (/^https?:\/\//.test(objectPath)) return objectPath;
+  if (objectPath.startsWith("/objects/")) {
+    return getApiUrl(`/restaurants/${RESTAURANT_ID}/storage${objectPath}`);
+  }
+  return objectPath;
+}
+
 function ExpensesTab() {
   const { toast } = useToast();
   const [from, setFrom] = useState(monthAgoStr());
   const [to, setTo] = useState(todayStr());
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: cats = [] } = useExpenseCategories();
-  const { data: exp } = useExpenses({ from, to, categoryId: categoryId || undefined, search: search || undefined });
+  const { data: exp } = useExpenses({ from, to, categoryId: categoryId || undefined, search: search || undefined, page });
   const { data: summary } = useExpenseSummary({ from, to });
   const create = useCreateExpense();
   const update = useUpdateExpense();
@@ -201,6 +229,24 @@ function ExpensesTab() {
             )}
           </tbody>
         </table>
+        {(exp?.totalPages ?? 1) > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20 text-sm">
+            <span className="text-muted-foreground">
+              Page {exp?.page ?? 1} of {exp?.totalPages ?? 1} · {exp?.total ?? 0} total
+            </span>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" disabled={(exp?.page ?? 1) <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}>
+                <ChevronLeft className="w-4 h-4" /> Prev
+              </Button>
+              <Button size="sm" variant="outline"
+                disabled={(exp?.page ?? 1) >= (exp?.totalPages ?? 1)}
+                onClick={() => setPage(p => p + 1)}>
+                Next <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showAdd && (
@@ -249,8 +295,50 @@ function ExpensesTab() {
                 <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="mt-1" />
               </div>
               <div>
-                <Label>Receipt URL (optional)</Label>
-                <Input value={form.receiptUrl} onChange={e => setForm({ ...form, receiptUrl: e.target.value })} className="mt-1" placeholder="https://…" />
+                <Label>Receipt (optional)</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    if (file.size > 10 * 1024 * 1024) {
+                      toast({ title: "File too large (max 10MB)", variant: "destructive" });
+                      return;
+                    }
+                    setUploading(true);
+                    try {
+                      const objectPath = await uploadReceipt(file);
+                      setForm(f => ({ ...f, receiptUrl: objectPath }));
+                      toast({ title: "Receipt uploaded" });
+                    } catch {
+                      toast({ title: "Upload failed", variant: "destructive" });
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                />
+                <div className="mt-1 flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}>
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    {uploading ? "Uploading…" : form.receiptUrl ? "Replace receipt" : "Upload receipt"}
+                  </Button>
+                  {form.receiptUrl && (
+                    <>
+                      <a href={receiptHref(form.receiptUrl) ?? "#"} target="_blank" rel="noreferrer"
+                        className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                        <FileImage className="w-3.5 h-3.5" /> View
+                      </a>
+                      <button type="button" onClick={() => setForm(f => ({ ...f, receiptUrl: "" }))}
+                        className="text-xs text-muted-foreground hover:text-destructive">Remove</button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">

@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Alert,
+  View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Alert, Image,
   ActivityIndicator, Platform, RefreshControl, KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 
@@ -29,6 +30,43 @@ export default function MobileExpensesScreen() {
   const [payee, setPayee] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [receiptPath, setReceiptPath] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function pickAndUploadReceipt() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Allow photo access to attach a receipt.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setUploading(true);
+    try {
+      const fileName = asset.fileName ?? `receipt-${Date.now()}.jpg`;
+      const contentType = asset.mimeType ?? "image/jpeg";
+      const blob = await (await fetch(asset.uri)).blob();
+      const presign = await customFetch<{ uploadURL: string; objectPath: string }>(
+        `/restaurants/${restaurantId}/storage/uploads/request-url`,
+        { method: "POST", body: JSON.stringify({ name: fileName, size: blob.size, contentType }) },
+      );
+      const put = await fetch(presign.uploadURL, {
+        method: "PUT", headers: { "Content-Type": contentType }, body: blob,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      setReceiptUri(asset.uri);
+      setReceiptPath(presign.objectPath);
+    } catch {
+      Alert.alert("Upload failed", "Could not upload receipt. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const { data: cats = [] } = useQuery({
     queryKey: ["expense-categories", restaurantId],
@@ -45,6 +83,7 @@ export default function MobileExpensesScreen() {
       customFetch(`/restaurants/${restaurantId}/expenses`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       setAmount(""); setPayee(""); setNotes(""); setCategoryId(null); setPaymentMethod("cash");
+      setReceiptUri(null); setReceiptPath(null);
       qc.invalidateQueries({ queryKey: ["expenses"] });
       Alert.alert("Saved", "Expense recorded.");
     },
@@ -67,6 +106,7 @@ export default function MobileExpensesScreen() {
       payee: payee || undefined,
       paymentMethod,
       notes: notes || undefined,
+      receiptUrl: receiptPath || undefined,
     });
   };
 
@@ -169,6 +209,32 @@ export default function MobileExpensesScreen() {
             style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
             multiline
           />
+
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Receipt (optional)</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}>
+            <TouchableOpacity
+              onPress={pickAndUploadReceipt}
+              disabled={uploading}
+              style={[styles.chip, { borderColor: colors.border, paddingVertical: 8, paddingHorizontal: 12 }]}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="camera-outline" size={16} color={colors.foreground} />
+              )}
+              <Text style={[styles.chipText, { color: colors.foreground }]}>
+                {uploading ? "Uploading…" : receiptPath ? "Replace" : "Add receipt"}
+              </Text>
+            </TouchableOpacity>
+            {receiptUri && (
+              <>
+                <Image source={{ uri: receiptUri }} style={{ width: 36, height: 36, borderRadius: 6 }} />
+                <TouchableOpacity onPress={() => { setReceiptUri(null); setReceiptPath(null); }}>
+                  <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
 
           <TouchableOpacity
             onPress={handleSubmit}

@@ -308,6 +308,45 @@ export default function ReportsPage() {
           ))}
         </div>
 
+        {(reports?.expensesByCategory?.length ?? 0) > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground">Expenses by Category</h3>
+              <span className="text-xs text-muted-foreground">
+                ₹{Number(reports?.totalExpenses ?? 0).toLocaleString()} total
+              </span>
+            </div>
+            {(() => {
+              const rows = reports?.expensesByCategory ?? [];
+              const max = Math.max(...rows.map(r => Number(r.total)), 1);
+              return (
+                <div className="space-y-2.5">
+                  {rows.map(r => {
+                    const pct = (Number(r.total) / max) * 100;
+                    const total = Number(reports?.totalExpenses ?? 0);
+                    const share = total > 0 ? (Number(r.total) / total) * 100 : 0;
+                    return (
+                      <div key={r.categoryId} className="flex items-center gap-3 text-sm">
+                        <div className="flex items-center gap-2 w-44 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: r.color }} />
+                          <span className="text-foreground font-medium truncate">{r.categoryName}</span>
+                        </div>
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: r.color }} />
+                        </div>
+                        <span className="text-foreground font-semibold w-24 text-right tabular-nums">
+                          ₹{Number(r.total).toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-muted-foreground w-12 text-right tabular-nums">{share.toFixed(0)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         <div className="flex gap-1 border-b border-border">
           {([
             { label: "Sales", val: "sales" as Tab },

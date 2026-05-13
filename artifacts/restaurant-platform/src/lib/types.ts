@@ -42,6 +42,8 @@ export interface ExpensesResponse {
   total: number;
   totalAmount: string;
   page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface RecurringExpense {

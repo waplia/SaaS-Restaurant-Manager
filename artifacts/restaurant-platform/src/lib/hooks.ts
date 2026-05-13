@@ -22,7 +22,7 @@ import type {
   Role, Permission,
 } from "./types";
 
-const RESTAURANT_ID = 1;
+export const RESTAURANT_ID = 1;
 
 export function useRestaurantId() {
   return RESTAURANT_ID;

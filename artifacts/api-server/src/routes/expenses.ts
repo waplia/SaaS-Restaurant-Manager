@@ -132,8 +132,8 @@ router.get("/restaurants/:restaurantId/expenses", async (req, res) => {
   await generateDueRecurringExpenses(restaurantId);
 
   const { from, to, categoryId, search, page, limit } = req.query;
-  const pg = Number(page) || 1;
-  const lim = Number(limit) || 50;
+  const pg = Math.max(1, Number(page) || 1);
+  const lim = Math.min(200, Math.max(1, Number(limit) || 50));
   const offset = (pg - 1) * lim;
 
   const conditions: Parameters<typeof and>[0][] = [eq(expensesTable.restaurantId, restaurantId)];
@@ -149,11 +149,14 @@ router.get("/restaurants/:restaurantId/expenses", async (req, res) => {
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(where),
   ]);
 
+  const total = totalRows[0]?.count ?? 0;
   res.json({
     data: rows,
-    total: totalRows[0]?.count ?? 0,
+    total,
     totalAmount: totalAmount[0]?.sum ?? "0",
     page: pg,
+    limit: lim,
+    totalPages: Math.max(1, Math.ceil(total / lim)),
   });
 });
 
