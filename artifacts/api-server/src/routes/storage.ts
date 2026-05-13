@@ -31,28 +31,66 @@ router.post(
       return;
     }
     try {
-      const restaurantId = Number(req.params.restaurantId);
       const { name, size, contentType } = parsed.data;
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
       const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-
-      // Persist tenant ownership so future reads can be authorized.
-      try {
-        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-        await setObjectAclPolicy(objectFile, {
-          restaurantId: String(restaurantId),
-          uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
-          visibility: "private",
-        });
-      } catch {
-        // ACL is also re-asserted on first read; the file may not yet be visible immediately
-        // after presign. We'll rely on the lazy enforcement path as well.
-      }
-
+      // Note: ACL is written by the matching POST /finalize call AFTER the
+      // client successfully PUTs the object. Pre-PUT setMetadata would fail
+      // because the object does not yet exist.
       res.json({ uploadURL, objectPath, metadata: { name, size, contentType } });
     } catch (error) {
       req.log.error({ err: error }, "Error generating upload URL");
       res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  },
+);
+
+const FinalizeUploadBody = z.object({
+  objectPath: z.string().min(1),
+});
+
+/**
+ * Called by the client AFTER a successful PUT to the presigned URL. Writes
+ * the tenant-scoped ACL policy onto the now-existing object. Without this
+ * step, the read endpoint will refuse to serve the object (403).
+ */
+router.post(
+  "/restaurants/:restaurantId/storage/uploads/finalize",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req: Request, res: Response) => {
+    const parsed = FinalizeUploadBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "objectPath required" });
+      return;
+    }
+    const { objectPath } = parsed.data;
+    if (!objectPath.startsWith("/objects/")) {
+      res.status(400).json({ error: "Invalid objectPath" });
+      return;
+    }
+    try {
+      const restaurantId = Number(req.params.restaurantId);
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const existing = await getObjectAclPolicy(objectFile);
+      if (existing && existing.restaurantId !== String(restaurantId)) {
+        // Object already claimed by another tenant — refuse to overwrite.
+        res.status(403).json({ error: "Object already owned by another tenant" });
+        return;
+      }
+      await setObjectAclPolicy(objectFile, {
+        restaurantId: String(restaurantId),
+        uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
+        visibility: "private",
+      });
+      res.json({ ok: true, objectPath });
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        res.status(404).json({ error: "Object not found — upload may not have completed" });
+        return;
+      }
+      req.log.error({ err: error }, "Error finalizing upload");
+      res.status(500).json({ error: "Failed to finalize upload" });
     }
   },
 );

@@ -45,6 +45,7 @@ async function uploadReceipt(file: File): Promise<string> {
     body: file,
   });
   if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+  await apiPost(`/restaurants/${RESTAURANT_ID}/storage/uploads/finalize`, { objectPath: presign.objectPath });
   return presign.objectPath;
 }
 

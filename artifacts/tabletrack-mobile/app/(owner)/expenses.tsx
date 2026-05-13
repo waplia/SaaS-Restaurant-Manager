@@ -59,6 +59,9 @@ export default function MobileExpensesScreen() {
         method: "PUT", headers: { "Content-Type": contentType }, body: blob,
       });
       if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      await customFetch(`/restaurants/${restaurantId}/storage/uploads/finalize`, {
+        method: "POST", body: JSON.stringify({ objectPath: presign.objectPath }),
+      });
       setReceiptUri(asset.uri);
       setReceiptPath(presign.objectPath);
     } catch {
