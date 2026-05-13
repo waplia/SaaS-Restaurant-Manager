@@ -6,6 +6,7 @@ import {
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
   useCreatePaymentIntent, useCreateRazorpayOrder,
+  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check, Lock,
+  Loader2, Check, Lock, Star, UserCheck,
 } from "lucide-react";
 
 interface CartModifier {
@@ -999,6 +1000,9 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
+  const [loyaltyRedeem, setLoyaltyRedeem] = useState("");
   const [showPayModal, setShowPayModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showTableGrid, setShowTableGrid] = useState(true);
@@ -1011,7 +1015,13 @@ export default function PosPage() {
   const addOrderItem = useAddOrderItem();
   const removeOrderItem = useRemoveOrderItem();
   const applyDiscount = useApplyDiscount();
+  const applyLoyalty = useApplyLoyalty();
   const { toast } = useToast();
+
+  // Phone-based customer lookup for loyalty linking
+  const [phoneQuery, setPhoneQuery] = useState("");
+  const { data: foundCustomer } = useCustomerByPhone(phoneQuery);
+  const { data: loyaltyAccount } = useCustomerLoyalty(linkedCustomerId);
 
   const { data: modifierGroups = [], isLoading: modGroupsLoading } = useItemModifierGroups(modPickerItem?.id);
 
@@ -1141,6 +1151,26 @@ export default function PosPage() {
     });
   };
 
+  const handleLinkCustomer = () => {
+    if (!foundCustomer) {
+      toast({ title: "No customer found", description: "Try a different phone number.", variant: "destructive" });
+      return;
+    }
+    setLinkedCustomerId(foundCustomer.id);
+    setCustomerName(foundCustomer.name);
+    toast({ title: `Linked: ${foundCustomer.name}`, description: `Loyalty balance: ${foundCustomer.loyaltyPoints} pts` });
+  };
+
+  const handleApplyLoyalty = () => {
+    if (!placedOrder) { toast({ title: "Place order first", variant: "destructive" }); return; }
+    const pts = Math.floor(Number(loyaltyRedeem) || 0);
+    if (pts <= 0) return;
+    applyLoyalty.mutate({ orderId: placedOrder.id, points: pts }, {
+      onSuccess: () => toast({ title: `${pts} pts redeemed`, description: `₹${pts} off applied` }),
+      onError: (err: Error) => toast({ title: "Failed to apply loyalty", description: err.message, variant: "destructive" }),
+    });
+  };
+
   const selectedTable = (tables as FloorTable[]).find(t => t.id === selectedTableId);
 
   const handleSelectTable = (table: FloorTable) => {
@@ -1161,6 +1191,7 @@ export default function PosPage() {
         tableId: selectedTableId ?? undefined,
         orderType,
         customerName: customerName || undefined,
+        customerId: linkedCustomerId ?? undefined,
         discountAmount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         items: cart.map(c => ({
           menuItemId: c.menuItemId,
@@ -1230,6 +1261,7 @@ export default function PosPage() {
 
   const handleNewOrder = () => {
     setCart([]); setDiscount(""); setCustomerName("");
+    setCustomerPhone(""); setPhoneQuery(""); setLinkedCustomerId(null); setLoyaltyRedeem("");
     setSelectedTableId(null); setPlacedOrder(null);
     setShowPayModal(false); setShowSplitModal(false);
   };
@@ -1328,6 +1360,33 @@ export default function PosPage() {
               disabled={!!placedOrder}
             />
           </div>
+
+          {/* Customer phone lookup for loyalty */}
+          {!placedOrder && !linkedCustomerId && (
+            <div className="flex gap-1.5 px-4 pb-2">
+              <Input
+                className="h-7 text-xs flex-1"
+                placeholder="Phone to link loyalty (optional)"
+                value={customerPhone}
+                onChange={e => { setCustomerPhone(e.target.value); setPhoneQuery(e.target.value); }}
+              />
+              <Button size="sm" variant="outline" className="h-7 text-xs px-2 flex-shrink-0" onClick={handleLinkCustomer} disabled={!foundCustomer}>
+                <UserCheck className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+          {linkedCustomerId && (
+            <div className="flex items-center gap-1.5 px-4 pb-2 text-xs text-primary">
+              <Star className="w-3.5 h-3.5 fill-primary" />
+              <span className="font-medium">{customerName}</span>
+              <span className="text-muted-foreground">· {loyaltyAccount?.balance ?? 0} pts available</span>
+              {!placedOrder && (
+                <button onClick={() => { setLinkedCustomerId(null); setCustomerPhone(""); setPhoneQuery(""); }} className="ml-auto text-muted-foreground hover:text-destructive">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Category filter */}
           <div className="flex gap-1.5 px-4 py-2 border-b border-border overflow-x-auto flex-shrink-0">
@@ -1492,6 +1551,25 @@ export default function PosPage() {
                   min="0"
                 />
               </div>
+
+              {/* Loyalty redemption — only when a customer is linked and order placed */}
+              {linkedCustomerId && placedOrder && (loyaltyAccount?.balance ?? 0) > 0 && (
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-primary flex-shrink-0" />
+                  <Input
+                    type="number"
+                    placeholder={`Redeem pts (max ${loyaltyAccount?.balance ?? 0})`}
+                    value={loyaltyRedeem}
+                    onChange={e => setLoyaltyRedeem(e.target.value)}
+                    className="h-8 text-sm flex-1"
+                    min="0"
+                    max={loyaltyAccount?.balance ?? 0}
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3 flex-shrink-0" onClick={handleApplyLoyalty} disabled={applyLoyalty.isPending || !loyaltyRedeem}>
+                    {applyLoyalty.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <div className="flex justify-between text-sm text-muted-foreground">

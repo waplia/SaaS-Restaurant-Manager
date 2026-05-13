@@ -102,6 +102,7 @@ export interface CreateOrderInput {
   orderType: string;
   customerName?: string;
   customerPhone?: string;
+  customerId?: number;
   notes?: string;
   discountAmount?: string;
   isPriority?: boolean;

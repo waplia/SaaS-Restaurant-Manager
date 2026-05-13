@@ -45,26 +45,35 @@ async function deductInventoryForOrder(orderId: number, restaurantId: number): P
 
 async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, restaurantId: number): Promise<void> {
   if (!paidOrder.customerId) return;
-  const pointsEarned = Math.floor(Number(paidOrder.totalAmount) / 100);
-  if (pointsEarned <= 0) return;
   const customerId = paidOrder.customerId;
-  await db.insert(loyaltyTransactionsTable).values({
-    customerId,
-    restaurantId,
-    points: pointsEarned,
-    type: "earn",
-    reason: `Order #${paidOrder.orderNumber}`,
-    orderId: paidOrder.id,
-  });
+  const pointsEarned = Math.floor(Number(paidOrder.totalAmount) / 100);
+  const pointsRedeemed = paidOrder.loyaltyPointsRedeemed ?? 0;
+
   const [customer] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, totalOrders: customersTable.totalOrders, totalSpent: customersTable.totalSpent }).from(customersTable).where(eq(customersTable.id, customerId));
-  if (customer) {
-    await db.update(customersTable).set({
-      loyaltyPoints: customer.loyaltyPoints + pointsEarned,
-      totalOrders: customer.totalOrders + 1,
-      totalSpent: (Number(customer.totalSpent) + Number(paidOrder.totalAmount)).toFixed(2),
-      updatedAt: new Date(),
-    }).where(eq(customersTable.id, customerId));
+  if (!customer) return;
+
+  const txns: Array<typeof loyaltyTransactionsTable.$inferInsert> = [];
+  let balanceDelta = 0;
+
+  if (pointsEarned > 0) {
+    txns.push({ customerId, restaurantId, points: pointsEarned, type: "earn", reason: `Order #${paidOrder.orderNumber}`, orderId: paidOrder.id });
+    balanceDelta += pointsEarned;
   }
+  if (pointsRedeemed > 0) {
+    const deduct = Math.min(pointsRedeemed, customer.loyaltyPoints + balanceDelta);
+    if (deduct > 0) {
+      txns.push({ customerId, restaurantId, points: -deduct, type: "redeem", reason: `Redeemed for order #${paidOrder.orderNumber}`, orderId: paidOrder.id });
+      balanceDelta -= deduct;
+    }
+  }
+
+  if (txns.length > 0) await db.insert(loyaltyTransactionsTable).values(txns);
+  await db.update(customersTable).set({
+    loyaltyPoints: Math.max(0, customer.loyaltyPoints + balanceDelta),
+    totalOrders: customer.totalOrders + 1,
+    totalSpent: (Number(customer.totalSpent) + Number(paidOrder.totalAmount)).toFixed(2),
+    updatedAt: new Date(),
+  }).where(eq(customersTable.id, customerId));
 }
 
 async function updateCouponUsage(couponCode: string | null, restaurantId: number): Promise<void> {
@@ -156,7 +165,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, isPriority, items, discountAmount } = req.body;
+  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, discountAmount } = req.body;
 
   let subtotal = 0;
   const enrichedItems: Array<{ menuItem: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }> = [];
@@ -183,6 +192,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     notes,
     customerName,
     customerPhone,
+    customerId: customerId ? Number(customerId) : undefined,
     isPriority: isPriority ?? false,
     subtotal: subtotal.toFixed(2),
     taxAmount: taxAmount.toFixed(2),
@@ -373,6 +383,43 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) =
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
   res.json({ ...updatedOrder, items });
+});
+
+router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { points } = req.body;
+  const pointsToRedeem = Math.max(0, Math.floor(Number(points ?? 0)));
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot apply loyalty to a completed or cancelled order" });
+  }
+  if (!order.customerId) return void res.status(400).json({ error: "Order has no linked customer" });
+
+  const [customer] = await db.select({ id: customersTable.id, loyaltyPoints: customersTable.loyaltyPoints }).from(customersTable)
+    .where(and(eq(customersTable.id, order.customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!customer) return void res.status(404).json({ error: "Customer not found" });
+  if (customer.loyaltyPoints < pointsToRedeem) {
+    return void res.status(400).json({ error: `Insufficient loyalty points. Available: ${customer.loyaltyPoints}` });
+  }
+
+  const loyaltyDiscount = pointsToRedeem;
+  const existingCouponDiscount = order.couponCode ? Number(order.discountAmount) : 0;
+  const totalDiscount = existingCouponDiscount + loyaltyDiscount;
+
+  await db.update(ordersTable).set({
+    loyaltyPointsRedeemed: pointsToRedeem,
+    discountAmount: totalDiscount.toFixed(2),
+    updatedAt: new Date(),
+  }).where(eq(ordersTable.id, orderId));
+
+  await recalculateOrderTotals(orderId, restaurantId, totalDiscount);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  res.json({ ...updatedOrder, items, loyaltyApplied: { pointsRedeemed: pointsToRedeem, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - pointsToRedeem } });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, res) => {

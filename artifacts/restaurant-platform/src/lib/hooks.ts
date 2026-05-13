@@ -934,5 +934,26 @@ export function useApplyCoupon() {
   });
 }
 
+export function useApplyLoyalty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, points }: { orderId: number; points: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/apply-loyalty`, { points }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+export function useCustomerByPhone(phone: string | null) {
+  return useQuery({
+    queryKey: ["customers", "phone", RESTAURANT_ID, phone],
+    queryFn: () => apiGet<{ data: import("./types").Customer[]; total: number }>(`/restaurants/${RESTAURANT_ID}/customers?search=${encodeURIComponent(phone!)}`),
+    enabled: !!phone && phone.length >= 6,
+    select: (res) => (res.data ?? [])[0] ?? null,
+  });
+}
+
 export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };
