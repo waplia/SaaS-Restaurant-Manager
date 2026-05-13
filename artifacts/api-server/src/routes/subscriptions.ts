@@ -138,6 +138,9 @@ router.post("/restaurants/:restaurantId/subscription/portal", requireRole("owner
 });
 
 router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole("owner", "super_admin"), async (req, res) => {
+  if (getStripe()) {
+    return void res.status(403).json({ error: "Stripe is configured — use the checkout flow instead of mock-activate." });
+  }
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
   const { planId } = req.body as { planId: number };

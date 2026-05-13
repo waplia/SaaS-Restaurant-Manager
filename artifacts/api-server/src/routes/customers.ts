@@ -183,6 +183,51 @@ router.get("/restaurants/:restaurantId/notifications", async (req, res) => {
   res.json(rows);
 });
 
+router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const { type, title, message, entityId, entityType, emailRecipients, whatsappRecipients } = req.body as {
+    type: string;
+    title: string;
+    message: string;
+    entityId?: number;
+    entityType?: string;
+    emailRecipients?: string[];
+    whatsappRecipients?: string[];
+  };
+
+  if (!type || !title || !message) {
+    return void res.status(400).json({ error: "type, title, and message are required" });
+  }
+
+  const [notification] = await db.insert(notificationsTable).values({
+    restaurantId,
+    type,
+    title,
+    message,
+    entityId: entityId ?? null,
+    entityType: entityType ?? null,
+  }).returning();
+
+  const { broadcastEvent } = await import("../lib/socketio");
+  broadcastEvent(restaurantId, "notification:new", { type, id: notification.id });
+
+  if (emailRecipients?.length) {
+    const { sendEmail } = await import("../lib/notifications");
+    for (const to of emailRecipients) {
+      sendEmail({ to, subject: title, html: `<p>${message}</p>`, text: message }).catch(console.error);
+    }
+  }
+
+  if (whatsappRecipients?.length) {
+    const { sendWhatsApp } = await import("../lib/notifications");
+    for (const to of whatsappRecipients) {
+      sendWhatsApp({ to, body: `${title}: ${message}` }).catch(console.error);
+    }
+  }
+
+  res.status(201).json(notification);
+});
+
 router.post("/restaurants/:restaurantId/notifications/mark-read", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
   const { ids, all } = req.body;
   const restaurantId = Number(req.params.restaurantId);

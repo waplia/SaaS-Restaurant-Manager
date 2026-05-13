@@ -106,6 +106,7 @@ router.post("/public/orders", async (req, res) => {
       await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
     }
     await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
+    broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
   }
 
   broadcastEvent(restaurantId, "order:new", { id: order.id, orderNumber: order.orderNumber, status: order.status, tableId });
@@ -250,6 +251,7 @@ router.post("/public/call-waiter", async (req, res) => {
   }
   const notifMessage = `Table ${table.tableNumber} is requesting assistance`;
   await db.insert(notificationsTable).values({ restaurantId, type: "waiter_call", title: "Waiter Called", message: notifMessage });
+  broadcastEvent(restaurantId, "notification:new", { type: "waiter_call" });
   broadcastEvent(restaurantId, "waiter:call", { tableId, tableNumber: table.tableNumber, message: notifMessage });
   return void res.json({ success: true, message: "Waiter has been notified" });
 });

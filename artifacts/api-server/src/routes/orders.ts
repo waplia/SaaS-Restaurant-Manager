@@ -261,6 +261,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   }
 
   broadcastEvent(restaurantId, "order:new", order);
+  broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
 
   const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
   res.status(201).json({ ...order, items: createdItems });
@@ -995,6 +996,20 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
+
+  if (status === "ready") {
+    broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
+    const [order] = await db.select({ customerId: ordersTable.customerId, orderNumber: ordersTable.orderNumber })
+      .from(ordersTable).where(eq(ordersTable.id, updated.orderId));
+    if (order?.customerId) {
+      const [customer] = await db.select({ phone: customersTable.phone, name: customersTable.name })
+        .from(customersTable).where(eq(customersTable.id, order.customerId));
+      if (customer?.phone) {
+        sendWhatsApp({ to: customer.phone, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
+      }
+    }
+  }
+
   res.json(updated);
 });
 

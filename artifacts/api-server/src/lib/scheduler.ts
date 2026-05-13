@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { db } from "./db";
-import { eq, and, gte, lte, sum, count, desc } from "drizzle-orm";
-import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable } from "../lib/db";
+import { eq, and, gte, lte, lt, sum, count, desc } from "drizzle-orm";
+import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable } from "../lib/db";
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { logger } from "./logger";
 
@@ -67,5 +67,50 @@ export function startScheduler(): void {
     }
   }, { timezone: "Asia/Kolkata" });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST");
+  cron.schedule("0 0 * * *", async () => {
+    logger.info("Running trial-expiry enforcement job");
+    try {
+      const now = new Date();
+      const expiredTenants = await db
+        .select()
+        .from(tenantsTable)
+        .where(and(eq(tenantsTable.planStatus, "trial"), lt(tenantsTable.trialEndsAt, now), eq(tenantsTable.isActive, true)));
+
+      for (const tenant of expiredTenants) {
+        const restaurants = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name })
+          .from(restaurantsTable)
+          .where(eq(restaurantsTable.tenantId, tenant.id));
+
+        for (const restaurant of restaurants) {
+          await db.insert(notificationsTable).values({
+            restaurantId: restaurant.id,
+            type: "system_error",
+            title: "Trial Expired",
+            message: "Your free trial has ended. Upgrade to a paid plan to continue using TableTrack.",
+          }).catch(() => {});
+
+          const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+            .from(usersTable)
+            .where(and(eq(usersTable.restaurantId, restaurant.id), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+
+          for (const owner of owners) {
+            if (owner.email) {
+              await sendEmail({
+                to: owner.email,
+                subject: `Your TableTrack trial for ${restaurant.name} has expired`,
+                html: `<p>Hi ${owner.name ?? "there"},</p><p>Your 14-day free trial for <strong>${restaurant.name}</strong> on TableTrack has expired.</p><p>Upgrade now to continue managing your restaurant without interruption.</p><p><a href="${process.env.VITE_APP_URL ?? "https://tabletrack.app"}/settings/subscription" style="background:#f97316;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">Upgrade Now</a></p>`,
+                text: `Your TableTrack trial for ${restaurant.name} has expired. Visit your subscription settings to upgrade.`,
+              }).catch(console.error);
+            }
+          }
+        }
+      }
+
+      logger.info({ count: expiredTenants.length }, "Trial-expiry job complete");
+    } catch (err) {
+      logger.error({ err }, "Trial-expiry job failed");
+    }
+  }, { timezone: "Asia/Kolkata" });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry check at 00:00 IST");
 }
