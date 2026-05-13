@@ -115,25 +115,27 @@ export default function DashboardPage() {
           />
         </div>
 
-        <Link
-          href="/expenses"
-          className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center">
-                <Receipt className="w-5 h-5" />
+        {s?.monthlyExpenses != null && (
+          <Link
+            href="/expenses"
+            className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">This Month's Expenses</p>
+                  <p className="text-2xl font-bold text-foreground mt-0.5">
+                    ₹{Number(s.monthlyExpenses).toLocaleString("en-IN")}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">This Month's Expenses</p>
-                <p className="text-2xl font-bold text-foreground mt-0.5">
-                  ₹{Number(s?.monthlyExpenses ?? 0).toLocaleString("en-IN")}
-                </p>
-              </div>
+              <span className="text-sm text-primary font-medium">Manage →</span>
             </div>
-            <span className="text-sm text-primary font-medium">Manage →</span>
-          </div>
-        </Link>
+          </Link>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">

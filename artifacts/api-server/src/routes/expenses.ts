@@ -38,13 +38,13 @@ const router = Router();
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess);
 
 const DEFAULT_CATEGORIES = [
-  { name: "Rent", color: "#ef4444", icon: "Home" },
-  { name: "Salaries", color: "#3b82f6", icon: "Users" },
-  { name: "Utilities", color: "#eab308", icon: "Zap" },
-  { name: "Supplies", color: "#22c55e", icon: "Package" },
-  { name: "Maintenance", color: "#a855f7", icon: "Wrench" },
-  { name: "Marketing", color: "#ec4899", icon: "Megaphone" },
-  { name: "Misc", color: "#64748b", icon: "Receipt" },
+  { name: "Rent", color: "#ef4444", icon: "building" },
+  { name: "Salaries", color: "#3b82f6", icon: "users" },
+  { name: "Utilities", color: "#eab308", icon: "zap" },
+  { name: "Supplies", color: "#22c55e", icon: "package" },
+  { name: "Maintenance", color: "#a855f7", icon: "wrench" },
+  { name: "Marketing", color: "#ec4899", icon: "sparkles" },
+  { name: "Misc", color: "#64748b", icon: "receipt" },
 ];
 
 async function ensureDefaultCategories(restaurantId: number) {

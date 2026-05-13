@@ -211,11 +211,13 @@ export default function ReportsPage() {
   const netProfitNum = hasExpenseAccess ? Number(reports?.netProfit ?? 0) : 0;
   const statCards = [
     { label: "Total Revenue", value: reports ? `₹${Number(reports.totalRevenue).toLocaleString()}` : "–", icon: DollarSign, color: "bg-orange-100 text-orange-600" },
+    { label: "Avg Order Value", value: reports ? `₹${Number(reports.avgOrderValue ?? 0).toFixed(2)}` : "–", icon: TrendingUp, color: "bg-purple-100 text-purple-600" },
+    { label: "Tax Collected", value: reports ? `₹${Number(reports.totalTax ?? 0).toLocaleString()}` : "–", icon: Receipt, color: "bg-amber-100 text-amber-600" },
+    { label: "Total Orders", value: reports?.totalOrders ?? "–", icon: ShoppingBag, color: "bg-blue-100 text-blue-600" },
     ...(hasExpenseAccess ? [
       { label: "Total Expenses", value: `₹${Number(reports?.totalExpenses ?? 0).toLocaleString()}`, icon: Receipt, color: "bg-rose-100 text-rose-600" },
       { label: "Net Profit", value: `₹${netProfitNum.toLocaleString()}`, icon: TrendingUp, color: netProfitNum >= 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600" },
     ] : []),
-    { label: "Total Orders", value: reports?.totalOrders ?? "–", icon: ShoppingBag, color: "bg-blue-100 text-blue-600" },
   ];
 
   return (
