@@ -13,7 +13,7 @@ import { io } from "socket.io-client";
 const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; badge: string; next?: string; nextLabel?: string; nextClass?: string }> = {
   new: {
     label: "New",
-    col: "bg-blue-50/60 border-blue-200",
+    col: "bg-blue-50/60 border-blue-200 text-blue-950",
     dot: "bg-blue-500",
     badge: "bg-blue-100 text-blue-700",
     next: "preparing",
@@ -22,7 +22,7 @@ const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; b
   },
   preparing: {
     label: "Preparing",
-    col: "bg-amber-50/60 border-amber-200",
+    col: "bg-amber-50/60 border-amber-200 text-amber-950",
     dot: "bg-amber-500",
     badge: "bg-amber-100 text-amber-700",
     next: "ready",
@@ -31,14 +31,14 @@ const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; b
   },
   ready: {
     label: "Ready to Serve",
-    col: "bg-green-50/60 border-green-200",
+    col: "bg-green-50/60 border-green-200 text-green-950",
     dot: "bg-green-500",
     badge: "bg-green-100 text-green-700",
     next: "served",
     nextLabel: "Mark Served",
     nextClass: "bg-green-600 hover:bg-green-700 text-white",
   },
-  served: { label: "Served", col: "bg-gray-50 border-gray-200", dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
+  served: { label: "Served", col: "bg-gray-50 border-gray-200 text-gray-800", dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
 };
 
 function playBeep() {
@@ -89,20 +89,20 @@ function TicketCard({
     <div
       className={cn(
         "border rounded-xl p-4 space-y-3 transition-all duration-200 shadow-sm",
-        ticket.isPriority ? "border-orange-400 bg-orange-50 ring-2 ring-orange-300/60" : `border-border/60 ${cfg.col}`,
+        ticket.isPriority ? "border-orange-400 bg-orange-50 text-orange-950 ring-2 ring-orange-300/60" : `border-border/60 ${cfg.col}`,
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="font-bold text-foreground">{ticket.orderNumber}</p>
+            <p className="font-bold">{ticket.orderNumber}</p>
             {ticket.isPriority && (
               <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded-full">
                 <AlertTriangle className="w-3 h-3" /> PRIORITY
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5 truncate">
+          <p className="text-sm opacity-70 mt-0.5 truncate">
             {ticket.tableNumber ? `Table ${ticket.tableNumber}` : (ticket.orderType ?? "dine_in").replace(/_/g, " ")}
           </p>
         </div>
@@ -132,9 +132,9 @@ function TicketCard({
       <div className="space-y-1 border-t border-border/40 pt-2">
         {(ticket.items ?? []).map((item: KitchenTicketItem) => (
           <div key={item.id} className="flex items-baseline gap-2 text-sm">
-            <span className="font-bold text-foreground w-6 shrink-0">{item.quantity}×</span>
-            <span className="text-foreground font-medium">{item.menuItemName}</span>
-            {item.notes && <span className="text-xs text-muted-foreground italic ml-auto">({item.notes})</span>}
+            <span className="font-bold w-6 shrink-0">{item.quantity}×</span>
+            <span className="font-medium">{item.menuItemName}</span>
+            {item.notes && <span className="text-xs opacity-70 italic ml-auto">({item.notes})</span>}
           </div>
         ))}
         {(!ticket.items || ticket.items.length === 0) && (
