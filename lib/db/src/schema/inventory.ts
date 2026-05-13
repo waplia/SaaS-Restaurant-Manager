@@ -66,6 +66,21 @@ export const inventoryStockTable = pgTable("inventory_stock", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const recipeMappingsTable = pgTable("recipe_mappings", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  menuItemId: integer("menu_item_id").notNull(),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  unit: text("unit").notNull().default("kg"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertRecipeMappingSchema = createInsertSchema(recipeMappingsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertRecipeMapping = z.infer<typeof insertRecipeMappingSchema>;
+export type RecipeMapping = typeof recipeMappingsTable.$inferSelect;
+
 export const insertInventoryStockSchema = createInsertSchema(inventoryStockTable).omit({ id: true, updatedAt: true });
 export type InsertInventoryStock = z.infer<typeof insertInventoryStockSchema>;
 export type InventoryStock = typeof inventoryStockTable.$inferSelect;

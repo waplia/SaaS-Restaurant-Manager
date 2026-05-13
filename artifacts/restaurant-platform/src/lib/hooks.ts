@@ -856,5 +856,46 @@ export function useDeleteCoupon() {
   });
 }
 
+export function useCustomerOrders(customerId: number | null) {
+  return useQuery({
+    queryKey: ["orders", "customer", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<{ data: import("./types").Order[]; total: number }>(`/restaurants/${RESTAURANT_ID}/orders?customerId=${customerId}&limit=20`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useWasteLog() {
+  return useQuery({
+    queryKey: ["inventory", "waste-log", RESTAURANT_ID],
+    queryFn: () => apiGet<(import("./types").InventoryTransaction & { itemName: string; unit: string })[]>(`/restaurants/${RESTAURANT_ID}/inventory/waste-log`),
+  });
+}
+
+export function useRecipeMappings(params?: { menuItemId?: number; inventoryItemId?: number }) {
+  const q = new URLSearchParams();
+  if (params?.menuItemId) q.set("menuItemId", String(params.menuItemId));
+  if (params?.inventoryItemId) q.set("inventoryItemId", String(params.inventoryItemId));
+  return useQuery({
+    queryKey: ["recipe-mappings", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").RecipeMapping[]>(`/restaurants/${RESTAURANT_ID}/recipe-mappings?${q}`),
+  });
+}
+
+export function useCreateRecipeMapping() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateRecipeMappingInput) => apiPost(`/restaurants/${RESTAURANT_ID}/recipe-mappings`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipe-mappings"] }),
+  });
+}
+
+export function useDeleteRecipeMapping() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recipe-mappings/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipe-mappings"] }),
+  });
+}
+
 export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };

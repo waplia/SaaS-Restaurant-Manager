@@ -3,7 +3,7 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem,
-  useAdjustInventory, useInventoryTransactions,
+  useAdjustInventory, useInventoryTransactions, useWasteLog,
   useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useDeletePurchaseOrder,
 } from "@/lib/hooks";
@@ -11,15 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Plus, AlertTriangle, Search, Pencil, Trash2, X, ChevronRight,
+  Plus, AlertTriangle, Search, Pencil, Trash2, X,
   Package, Truck, ClipboardList, ArrowUpCircle, ArrowDownCircle,
-  Building2, Phone, Mail, MapPin, RefreshCw,
+  Building2, Phone, Mail, MapPin, RefreshCw, Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryItem, Supplier, PurchaseOrder, InventoryTransaction } from "@/lib/types";
 
-const TABS = ["Stock", "Suppliers", "Purchase Orders"] as const;
+const TABS = ["Stock", "Suppliers", "Purchase Orders", "Waste Log"] as const;
 type Tab = typeof TABS[number];
 
 const CATEGORIES = ["general", "produce", "meat", "dairy", "dry goods", "beverages", "spices", "oils", "packaging"];
@@ -86,7 +86,7 @@ function StockTab() {
   const handleAdd = async () => {
     if (!form.name) return;
     try {
-      await createItem.mutateAsync({ ...form, supplierId: form.supplierId ? Number(form.supplierId) : undefined } as any);
+      await createItem.mutateAsync({ ...form, supplierId: form.supplierId ? Number(form.supplierId) : undefined });
       toast({ title: "Item added!" });
       setShowAdd(false);
       setForm({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "" });
@@ -663,6 +663,115 @@ function PurchaseOrdersTab() {
   );
 }
 
+function WasteLogTab() {
+  const { data: wasteLogs = [] } = useWasteLog();
+  const { data: items = [] } = useInventory();
+  const adjustInventory = useAdjustInventory();
+  const { toast } = useToast();
+
+  const [showLog, setShowLog] = useState(false);
+  const [form, setForm] = useState({ itemId: "", quantity: "", notes: "" });
+
+  const handleLog = async () => {
+    if (!form.itemId || !form.quantity) return;
+    try {
+      await adjustInventory.mutateAsync({ id: Number(form.itemId), type: "waste", quantity: form.quantity, notes: form.notes || "Waste logged" });
+      toast({ title: "Waste logged!" });
+      setShowLog(false);
+      setForm({ itemId: "", quantity: "", notes: "" });
+    } catch {
+      toast({ title: "Failed to log waste", variant: "destructive" });
+    }
+  };
+
+  const selectedItem = items.find((i: InventoryItem) => i.id === Number(form.itemId)) as InventoryItem | undefined;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <p className="text-sm text-muted-foreground">Track spoilage and discarded inventory to reduce waste and improve cost control.</p>
+        </div>
+        <Button size="sm" onClick={() => setShowLog(true)}>
+          <Plus className="w-4 h-4 mr-1.5" /> Log Waste
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Item</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Quantity Wasted</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">Reason</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(wasteLogs as (InventoryTransaction & { itemName: string; unit: string })[]).map(log => (
+              <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/10">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
+                      <Flame className="w-3.5 h-3.5 text-red-500" />
+                    </div>
+                    <span className="text-sm font-medium">{log.itemName}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="text-sm font-semibold text-red-600">-{Number(log.quantity).toFixed(1)} {log.unit}</span>
+                </td>
+                <td className="px-4 py-3 hidden md:table-cell">
+                  <span className="text-sm text-muted-foreground">{log.notes || "—"}</span>
+                </td>
+                <td className="px-4 py-3 hidden sm:table-cell text-sm text-muted-foreground">{formatDate(log.createdAt)}</td>
+              </tr>
+            ))}
+            {(wasteLogs as InventoryTransaction[]).length === 0 && (
+              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground">
+                <Flame className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                No waste logged yet
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showLog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Log Waste</h2>
+              <button onClick={() => setShowLog(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label>Ingredient *</Label>
+                <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.itemId} onChange={e => setForm(p => ({ ...p, itemId: e.target.value }))}>
+                  <option value="">Select item...</option>
+                  {(items as InventoryItem[]).map(i => <option key={i.id} value={i.id}>{i.name} ({Number(i.currentStock).toFixed(1)} {i.unit} available)</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Quantity Wasted {selectedItem ? `(${selectedItem.unit})` : ""} *</Label>
+                <Input type="number" min="0" step="0.001" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} placeholder="0" />
+              </div>
+              <div>
+                <Label>Reason / Notes *</Label>
+                <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="e.g. Expired, Dropped, Spoiled..." />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setShowLog(false)}>Cancel</Button>
+                <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={handleLog} disabled={adjustInventory.isPending || !form.itemId || !form.quantity}>Log Waste</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const [tab, setTab] = useState<Tab>("Stock");
   const { data: items = [] } = useInventory();
@@ -675,7 +784,7 @@ export default function InventoryPage() {
         subtitle={`${items.length} items tracked${lowStockCount > 0 ? ` · ${lowStockCount} low stock` : ""}`}
       />
       <div className="p-6">
-        <div className="flex gap-1 mb-6 bg-muted/40 rounded-xl p-1 w-fit">
+        <div className="flex gap-1 mb-6 bg-muted/40 rounded-xl p-1 w-fit flex-wrap">
           {TABS.map(t => (
             <button
               key={t}
@@ -688,6 +797,7 @@ export default function InventoryPage() {
               {t === "Stock" && <Package className="w-3.5 h-3.5" />}
               {t === "Suppliers" && <Truck className="w-3.5 h-3.5" />}
               {t === "Purchase Orders" && <ClipboardList className="w-3.5 h-3.5" />}
+              {t === "Waste Log" && <Flame className="w-3.5 h-3.5" />}
               {t}
               {t === "Stock" && lowStockCount > 0 && (
                 <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{lowStockCount}</span>
@@ -699,6 +809,7 @@ export default function InventoryPage() {
         {tab === "Stock" && <StockTab />}
         {tab === "Suppliers" && <SuppliersTab />}
         {tab === "Purchase Orders" && <PurchaseOrdersTab />}
+        {tab === "Waste Log" && <WasteLogTab />}
       </div>
     </Layout>
   );

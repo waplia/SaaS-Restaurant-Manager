@@ -1,10 +1,47 @@
 import { Router } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+
+async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  for (const item of items) {
+    const mappings = await db.select().from(recipeMappingsTable).where(
+      and(eq(recipeMappingsTable.menuItemId, item.menuItemId), eq(recipeMappingsTable.restaurantId, restaurantId))
+    );
+    for (const mapping of mappings) {
+      const totalDeduct = Number(mapping.quantity) * item.quantity;
+      const [inv] = await db.select().from(inventoryItemsTable).where(
+        and(eq(inventoryItemsTable.id, mapping.inventoryItemId), eq(inventoryItemsTable.restaurantId, restaurantId))
+      );
+      if (!inv) continue;
+      const newStock = Math.max(0, Number(inv.currentStock) - totalDeduct);
+      await db.update(inventoryItemsTable).set({ currentStock: newStock.toFixed(3), updatedAt: new Date() }).where(eq(inventoryItemsTable.id, inv.id));
+      await db.insert(inventoryTransactionsTable).values({
+        itemId: inv.id,
+        restaurantId,
+        type: "use",
+        quantity: totalDeduct.toFixed(3),
+        notes: `Auto-deducted for order #${orderId}`,
+        referenceId: orderId,
+        referenceType: "order",
+      });
+      if (newStock <= Number(inv.minStockLevel)) {
+        await db.insert(notificationsTable).values({
+          restaurantId,
+          type: "low_stock",
+          title: "Low Stock Alert",
+          message: `${inv.name} is running low (${newStock.toFixed(1)} ${inv.unit} remaining, min: ${Number(inv.minStockLevel).toFixed(1)} ${inv.unit})`,
+          entityId: inv.id,
+          entityType: "inventory_item",
+        });
+      }
+    }
+  }
+}
 
 const router = Router();
 
@@ -43,7 +80,7 @@ async function recalculateOrderTotals(orderId: number, restaurantId: number, dis
 }
 
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
-  const { status, tableId, page, limit } = req.query;
+  const { status, tableId, customerId, page, limit } = req.query;
   const pg = Number(page) || 1;
   const lim = Number(limit) || 50;
   const offset = (pg - 1) * lim;
@@ -52,6 +89,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   const conditions: ReturnType<typeof eq>[] = [eq(ordersTable.restaurantId, restaurantId)];
   if (status) conditions.push(eq(ordersTable.status, String(status)));
   if (tableId) conditions.push(eq(ordersTable.tableId, Number(tableId)));
+  if (customerId) conditions.push(eq(ordersTable.customerId, Number(customerId)));
 
   const [rows, totalRows] = await Promise.all([
     db.select().from(ordersTable).where(and(...conditions)).orderBy(desc(ordersTable.createdAt)).limit(lim).offset(offset),
@@ -479,6 +517,7 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
       .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
+  deductInventoryForOrder(orderId, restaurantId).catch(() => {});
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "completed", paymentStatus: "paid", orderNumber: order.orderNumber });
 
   res.json(updated);
@@ -725,6 +764,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
+  deductInventoryForOrder(orderId, restaurantId).catch(() => {});
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
 

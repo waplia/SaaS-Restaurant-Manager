@@ -300,6 +300,24 @@ export interface CreateInventoryItemInput {
   minStockLevel: string;
   costPerUnit: string;
   category: string;
+  supplierId?: number | null;
+}
+
+export interface RecipeMapping {
+  id: number;
+  restaurantId: number;
+  menuItemId: number;
+  inventoryItemId: number;
+  quantity: string;
+  unit: string;
+  createdAt: string;
+}
+
+export interface CreateRecipeMappingInput {
+  menuItemId: number;
+  inventoryItemId: number;
+  quantity: string;
+  unit: string;
 }
 
 export interface AdjustInventoryInput {

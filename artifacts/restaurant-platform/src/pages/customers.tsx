@@ -5,6 +5,7 @@ import {
   useCustomers, useCreateCustomer, useUpdateCustomer,
   useCustomerLoyalty, useAddLoyaltyPoints,
   useCoupons, useCreateCoupon, useUpdateCoupon, useDeleteCoupon,
+  useCustomerOrders,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +13,11 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Mail, Phone, Star, ShoppingBag, X, Pencil,
   Gift, Trash2, Tag, Users, ChevronRight, ArrowUpCircle, ArrowDownCircle, Clock,
+  Receipt, MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { Customer, LoyaltyTransaction, Coupon } from "@/lib/types";
+import type { Customer, LoyaltyTransaction, Coupon, Order } from "@/lib/types";
 
 const TABS = ["Customers", "Coupons"] as const;
 type Tab = typeof TABS[number];
@@ -31,6 +33,8 @@ function formatDateTime(d: string) {
 
 function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const { data: loyalty } = useCustomerLoyalty(customer.id);
+  const { data: ordersData } = useCustomerOrders(customer.id);
+  const customerOrders: Order[] = ordersData?.data ?? [];
   const addLoyaltyPoints = useAddLoyaltyPoints();
   const updateCustomer = useUpdateCustomer();
   const { toast } = useToast();
@@ -126,7 +130,7 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
               )}
               {customer.address && (
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
-                  <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />{customer.address}
+                  <MapPin className="w-3.5 h-3.5 flex-shrink-0" />{customer.address}
                 </p>
               )}
               {customer.notes && (
@@ -175,6 +179,34 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
                       <span className={cn("text-sm font-bold", tx.points > 0 ? "text-green-600" : "text-red-600")}>
                         {tx.points > 0 ? "+" : ""}{tx.points}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {customerOrders.length > 0 && (
+              <div className="px-4 pb-4 border-t border-border">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-3 mb-2">Order History</h3>
+                <div className="space-y-2">
+                  {customerOrders.map((order: Order) => (
+                    <div key={order.id} className="flex items-start gap-2 py-2 border-b border-border/30 last:border-0">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Receipt className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-xs font-semibold">#{order.orderNumber}</p>
+                          <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", order.status === "completed" ? "bg-green-100 text-green-700" : order.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700")}>
+                            {order.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground capitalize">{order.orderType?.replace("_", " ")}</p>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{formatDateTime(order.createdAt)}</p>
+                          <p className="text-xs font-bold text-primary">₹{Number(order.totalAmount).toLocaleString()}</p>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
