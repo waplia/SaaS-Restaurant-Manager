@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo } from "@/lib/hooks";
+import { useDeliveryExecutives, useAssignRider } from "@/lib/delivery";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle } from "lucide-react";
+import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { printOrder } from "@/lib/printOrder";
 
@@ -13,6 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-100 text-blue-700",
   preparing: "bg-orange-100 text-orange-700",
   ready: "bg-purple-100 text-purple-700",
+  out_for_delivery: "bg-cyan-100 text-cyan-700",
   served: "bg-gray-100 text-gray-600",
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-600",
@@ -36,6 +39,10 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
   const { data: restaurant } = useRestaurantInfo();
   const payOrder = usePayOrder();
   const updateOrder = useUpdateOrder();
+  const assignRider = useAssignRider();
+  const { data: riders = [] } = useDeliveryExecutives();
+  const [showAssign, setShowAssign] = useState(false);
+  const [selectedRider, setSelectedRider] = useState<number | "">("");
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -128,6 +135,19 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
         phone: restaurant?.phone,
       },
     });
+  };
+
+  const handleAssignRider = async () => {
+    if (!order || !selectedRider) return;
+    try {
+      await assignRider.mutateAsync({ orderId: order.id, riderId: Number(selectedRider) });
+      toast({ title: "Rider assigned" });
+      setShowAssign(false);
+      setSelectedRider("");
+      refreshDetail();
+    } catch (e) {
+      toast({ title: "Assign failed", description: e instanceof Error ? e.message : undefined, variant: "destructive" });
+    }
   };
 
   const open = orderId !== null;
@@ -223,6 +243,46 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
               </div>
 
             </div>
+
+            {order.orderType === "delivery" && order.status !== "completed" && order.status !== "cancelled" && (
+              <div className="border-t border-border px-6 py-3 space-y-2 bg-muted/30">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Truck className="w-4 h-4 text-cyan-600" />
+                  <span>Delivery</span>
+                </div>
+                {!showAssign ? (
+                  <Button size="sm" variant="outline" className="w-full" onClick={() => setShowAssign(true)}>
+                    Assign Rider
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedRider}
+                      onChange={(e) => setSelectedRider(e.target.value ? Number(e.target.value) : "")}
+                      className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
+                    >
+                      <option value="">Select a rider…</option>
+                      {riders.filter(r => r.isActive).map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.activeDeliveries} active)
+                        </option>
+                      ))}
+                    </select>
+                    {riders.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No delivery executives. Add one from the Staff page.</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" className="flex-1" onClick={() => { setShowAssign(false); setSelectedRider(""); }}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" className="flex-1" onClick={handleAssignRider} disabled={!selectedRider || assignRider.isPending}>
+                        {assignRider.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Assign"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="border-t border-border px-6 py-4 space-y-2">
               <div className="flex gap-2">

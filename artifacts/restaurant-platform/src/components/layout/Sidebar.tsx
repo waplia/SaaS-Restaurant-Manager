@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
-  ChevronDown, Coins, TrendingUp, Percent,
+  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -26,6 +26,13 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
+  {
+    kind: "group", key: "delivery", label: "Delivery", icon: Truck,
+    children: [
+      { kind: "link", href: "/delivery/executives", label: "Delivery Executives", icon: Truck, roles: ["owner", "manager"] },
+      { kind: "link", href: "/delivery/cod", label: "COD Monitoring", icon: Banknote, roles: ["owner", "manager"] },
+    ],
+  },
   {
     kind: "group", key: "finance", label: "Finance", icon: Coins,
     children: [

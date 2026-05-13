@@ -43,6 +43,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   waiter: { label: "Waiter", color: "bg-green-100 text-green-700" },
   kitchen: { label: "Kitchen", color: "bg-orange-100 text-orange-700" },
   cashier: { label: "Cashier", color: "bg-yellow-100 text-yellow-700" },
+  delivery_executive: { label: "Delivery Executive", color: "bg-cyan-100 text-cyan-700" },
 };
 
 const ALL_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -89,14 +90,14 @@ function TeamTab({
 
   const { user } = useAuth();
   const ALLOWED_ASSIGNABLE: Record<string, string[]> = {
-    owner: ["manager", "waiter", "kitchen", "cashier"],
-    manager: ["waiter", "kitchen", "cashier"],
+    owner: ["manager", "waiter", "kitchen", "cashier", "delivery_executive"],
+    manager: ["waiter", "kitchen", "cashier", "delivery_executive"],
   };
   const assignableRoles = user?.isSuperAdmin
-    ? ["owner", "manager", "waiter", "kitchen", "cashier"]
-    : (ALLOWED_ASSIGNABLE[user?.role ?? ""] ?? ["waiter", "kitchen", "cashier"]);
+    ? ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"]
+    : (ALLOWED_ASSIGNABLE[user?.role ?? ""] ?? ["waiter", "kitchen", "cashier", "delivery_executive"]);
 
-  const roles = ["owner", "manager", "waiter", "kitchen", "cashier"];
+  const roles = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"];
   const byRole = (role: string) => staff.filter((s: StaffMember) => s.role === role).length;
 
   const handleAdd = async () => {

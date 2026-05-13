@@ -16,6 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-100 text-blue-700",
   preparing: "bg-orange-100 text-orange-700",
   ready: "bg-purple-100 text-purple-700",
+  out_for_delivery: "bg-cyan-100 text-cyan-700",
   served: "bg-gray-100 text-gray-600",
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-600",
@@ -169,7 +170,7 @@ export default function OrdersPage() {
 
   const orders: Order[] = ordersData?.data ?? [];
 
-  const statuses = ["all", "pending", "confirmed", "preparing", "ready", "completed", "cancelled"];
+  const statuses = ["all", "pending", "confirmed", "preparing", "ready", "out_for_delivery", "completed", "cancelled"];
 
   return (
     <Layout>

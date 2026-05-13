@@ -137,7 +137,7 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
   return `ORD-${Date.now().toString(36).toUpperCase()}`;

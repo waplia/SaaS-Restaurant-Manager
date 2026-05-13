@@ -47,8 +47,8 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), async (req
 
   const callerRole = req.user!.role;
   const ALLOWED_TARGET_ROLES: Record<string, string[]> = {
-    owner: ["manager", "waiter", "kitchen", "cashier"],
-    manager: ["waiter", "kitchen", "cashier"],
+    owner: ["manager", "waiter", "kitchen", "cashier", "delivery_executive"],
+    manager: ["waiter", "kitchen", "cashier", "delivery_executive"],
   };
   if (!req.user!.isSuperAdmin) {
     const allowed = ALLOWED_TARGET_ROLES[callerRole] ?? [];

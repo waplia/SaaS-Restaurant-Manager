@@ -6,6 +6,7 @@ export type AppRole =
   | "manager"
   | "waiter"
   | "kitchen"
+  | "delivery_executive"
   | "customer";
 
 export function requireRole(...roles: AppRole[]) {

@@ -17,6 +17,7 @@ import dashboardRouter from "./dashboard";
 import expensesRouter from "./expenses";
 import storageRouter from "./storage";
 import paymentsRouter from "./payments";
+import deliveryRouter from "./delivery";
 import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
 
@@ -44,6 +45,7 @@ router.use(dashboardRouter);
 router.use(expensesRouter);
 router.use(storageRouter);
 router.use(paymentsRouter);
+router.use(deliveryRouter);
 router.use(subscriptionsRouter);
 
 export default router;

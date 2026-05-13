@@ -76,6 +76,39 @@ export async function sendWhatsApp(opts: {
   }
 }
 
+export async function sendPush(opts: {
+  to: string | string[];
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}): Promise<void> {
+  const tokens = (Array.isArray(opts.to) ? opts.to : [opts.to]).filter(t => typeof t === "string" && t.startsWith("ExponentPushToken"));
+  if (tokens.length === 0) {
+    logger.info({ to: opts.to, title: opts.title }, "[Push stub] No valid Expo push tokens");
+    return;
+  }
+  const messages = tokens.map(token => ({
+    to: token,
+    sound: "default",
+    title: opts.title,
+    body: opts.body,
+    data: opts.data ?? {},
+  }));
+  try {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(messages),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      logger.error({ status: res.status, text }, "Expo push error");
+    }
+  } catch (err) {
+    logger.error({ err }, "Failed to send push notification");
+  }
+}
+
 export function orderConfirmationEmail(opts: {
   customerName: string;
   orderNumber: string;
