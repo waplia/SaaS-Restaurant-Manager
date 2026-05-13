@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable } from "../lib/db";
+import { eq, and, desc } from "drizzle-orm";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -59,6 +59,51 @@ router.post("/restaurants/:restaurantId/inventory/:id/adjust", requireRole("owne
   await db.insert(inventoryTransactionsTable).values({ itemId: id, restaurantId, type, quantity, notes });
 
   res.json({ ...updated!, isLowStock: Number(updated!.currentStock) <= Number(updated!.minStockLevel) });
+});
+
+router.get("/restaurants/:restaurantId/inventory/:id/transactions", async (req, res) => {
+  const rows = await db.select().from(inventoryTransactionsTable)
+    .where(and(eq(inventoryTransactionsTable.itemId, Number(req.params.id)), eq(inventoryTransactionsTable.restaurantId, Number(req.params.restaurantId))))
+    .orderBy(desc(inventoryTransactionsTable.createdAt)).limit(50);
+  res.json(rows);
+});
+
+router.get("/restaurants/:restaurantId/purchase-orders", async (req, res) => {
+  const rows = await db.select().from(purchaseOrdersTable)
+    .where(eq(purchaseOrdersTable.restaurantId, Number(req.params.restaurantId)))
+    .orderBy(desc(purchaseOrdersTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const { supplierId, totalAmount, notes } = req.body;
+  const [po] = await db.insert(purchaseOrdersTable).values({
+    restaurantId: Number(req.params.restaurantId),
+    supplierId: supplierId || null,
+    totalAmount: totalAmount || "0.00",
+    notes,
+    status: "pending",
+    orderedAt: new Date(),
+  }).returning();
+  res.status(201).json(po);
+});
+
+router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const { status, notes, totalAmount } = req.body;
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (status) updates.status = status;
+  if (notes !== undefined) updates.notes = notes;
+  if (totalAmount !== undefined) updates.totalAmount = totalAmount;
+  if (status === "received") updates.receivedAt = new Date();
+  const [updated] = await db.update(purchaseOrdersTable).set(updates)
+    .where(and(eq(purchaseOrdersTable.id, Number(req.params.id)), eq(purchaseOrdersTable.restaurantId, Number(req.params.restaurantId)))).returning();
+  if (!updated) return void res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+router.delete("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  await db.delete(purchaseOrdersTable).where(and(eq(purchaseOrdersTable.id, Number(req.params.id)), eq(purchaseOrdersTable.restaurantId, Number(req.params.restaurantId))));
+  res.status(204).send();
 });
 
 router.get("/restaurants/:restaurantId/suppliers", async (req, res) => {

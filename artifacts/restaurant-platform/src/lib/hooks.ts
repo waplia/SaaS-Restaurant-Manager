@@ -7,15 +7,18 @@ import type {
   Menu, MenuCategory, MenuItem, CreateMenuItemInput, UpdateMenuItemInput,
   CreateMenuInput, UpdateMenuInput, CreateCategoryInput, UpdateCategoryInput,
   ModifierGroup, Modifier, CreateModifierGroupInput, CreateModifierInput,
-  InventoryItem, CreateInventoryItemInput, AdjustInventoryInput,
+  InventoryItem, CreateInventoryItemInput, AdjustInventoryInput, UpdateInventoryItemInput,
+  InventoryTransaction, PurchaseOrder, CreatePurchaseOrderInput,
   StaffMember, CreateUserInput,
   Shift, StaffShift, AttendanceRecord, AuditLog,
   CreateShiftInput, CreateStaffShiftInput, ClockInInput,
-  CustomersResponse, CreateCustomerInput,
+  Customer, CustomersResponse, CreateCustomerInput, UpdateCustomerInput,
+  LoyaltyAccount, LoyaltyTransaction,
+  Coupon, CreateCouponInput, UpdateCouponInput,
   CreateReservationInput, UpdateReservationInput, Reservation,
   AppNotification,
   ReportsData,
-  Supplier,
+  Supplier, CreateSupplierInput, UpdateSupplierInput,
   Role, Permission,
 } from "./types";
 
@@ -705,3 +708,153 @@ export function useRemoveRolePermission() {
     },
   });
 }
+
+export function useUpdateInventoryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateInventoryItemInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/inventory/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+}
+
+export function useDeleteInventoryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/inventory/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+}
+
+export function useInventoryTransactions(itemId: number | null) {
+  return useQuery({
+    queryKey: ["inventory", "transactions", RESTAURANT_ID, itemId],
+    queryFn: () => apiGet<InventoryTransaction[]>(`/restaurants/${RESTAURANT_ID}/inventory/${itemId}/transactions`),
+    enabled: itemId !== null,
+  });
+}
+
+export function useCreateSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateSupplierInput) => apiPost(`/restaurants/${RESTAURANT_ID}/suppliers`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["suppliers"] }),
+  });
+}
+
+export function useUpdateSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateSupplierInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/suppliers/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["suppliers"] }),
+  });
+}
+
+export function useDeleteSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/suppliers/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["suppliers"] }),
+  });
+}
+
+export function usePurchaseOrders() {
+  return useQuery({
+    queryKey: ["purchase-orders", RESTAURANT_ID],
+    queryFn: () => apiGet<PurchaseOrder[]>(`/restaurants/${RESTAURANT_ID}/purchase-orders`),
+  });
+}
+
+export function useCreatePurchaseOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreatePurchaseOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/purchase-orders`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
+  });
+}
+
+export function useUpdatePurchaseOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; status?: string; notes?: string; totalAmount?: string }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
+  });
+}
+
+export function useDeletePurchaseOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
+  });
+}
+
+export function useCustomer(id: number | null) {
+  return useQuery({
+    queryKey: ["customers", RESTAURANT_ID, id],
+    queryFn: () => apiGet<Customer>(`/restaurants/${RESTAURANT_ID}/customers/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export function useUpdateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateCustomerInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/customers/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
+  });
+}
+
+export function useCustomerLoyalty(customerId: number | null) {
+  return useQuery({
+    queryKey: ["customers", "loyalty", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<LoyaltyAccount>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/loyalty`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useAddLoyaltyPoints() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, ...data }: { customerId: number; points: number; type: string; reason?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/loyalty`, data),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["customers", "loyalty", RESTAURANT_ID, customerId] });
+    },
+  });
+}
+
+export function useCoupons() {
+  return useQuery({
+    queryKey: ["coupons", RESTAURANT_ID],
+    queryFn: () => apiGet<Coupon[]>(`/restaurants/${RESTAURANT_ID}/coupons`),
+  });
+}
+
+export function useCreateCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCouponInput) => apiPost(`/restaurants/${RESTAURANT_ID}/coupons`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export function useUpdateCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateCouponInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/coupons/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export function useDeleteCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/coupons/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
+export { type Supplier, type PurchaseOrder, type InventoryTransaction };

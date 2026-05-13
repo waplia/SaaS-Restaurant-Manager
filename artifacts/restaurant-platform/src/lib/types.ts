@@ -237,13 +237,60 @@ export interface UpdateMenuItemInput {
 
 export interface InventoryItem {
   id: number;
+  restaurantId: number;
+  supplierId: number | null;
   name: string;
   unit: string;
   currentStock: string;
   minStockLevel: string;
   costPerUnit: string;
   category: string;
+  isActive: boolean;
   isLowStock: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryTransaction {
+  id: number;
+  itemId: number;
+  restaurantId: number;
+  type: string;
+  quantity: string;
+  notes: string | null;
+  referenceId: number | null;
+  referenceType: string | null;
+  createdAt: string;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  restaurantId: number;
+  supplierId: number | null;
+  status: string;
+  totalAmount: string;
+  notes: string | null;
+  orderedAt: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePurchaseOrderInput {
+  supplierId?: number;
+  totalAmount: string;
+  notes?: string;
+}
+
+export interface UpdateInventoryItemInput {
+  id: number;
+  name?: string;
+  unit?: string;
+  minStockLevel?: string;
+  costPerUnit?: string;
+  category?: string;
+  supplierId?: number | null;
+  isActive?: boolean;
 }
 
 export interface CreateInventoryItemInput {
@@ -307,12 +354,79 @@ export interface Permission {
 
 export interface Customer {
   id: number;
+  restaurantId: number;
   name: string;
   email: string | null;
   phone: string | null;
+  address: string | null;
+  notes: string | null;
   totalOrders: number;
   totalSpent: string;
   loyaltyPoints: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateCustomerInput {
+  id: number;
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface LoyaltyTransaction {
+  id: number;
+  customerId: number;
+  restaurantId: number;
+  points: number;
+  type: string;
+  reason: string | null;
+  orderId: number | null;
+  createdAt: string;
+}
+
+export interface LoyaltyAccount {
+  balance: number;
+  transactions: LoyaltyTransaction[];
+}
+
+export interface Coupon {
+  id: number;
+  restaurantId: number;
+  code: string;
+  discountType: string;
+  discountValue: string;
+  minOrderAmount: string | null;
+  maxDiscountAmount: string | null;
+  usageLimit: number | null;
+  usageCount: number;
+  isActive: boolean;
+  validFrom: string;
+  validTo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCouponInput {
+  code: string;
+  discountType: "percentage" | "flat";
+  discountValue: string;
+  minOrderAmount?: string;
+  maxDiscountAmount?: string;
+  usageLimit?: number;
+  validFrom?: string;
+  validTo?: string;
+}
+
+export interface UpdateCouponInput {
+  id: number;
+  isActive?: boolean;
+  validTo?: string;
+  usageLimit?: number;
 }
 
 export interface CustomersResponse {
@@ -413,10 +527,33 @@ export interface ReportsData {
 
 export interface Supplier {
   id: number;
+  restaurantId: number;
   name: string;
-  contactName: string | null;
+  contactPerson: string | null;
   email: string | null;
   phone: string | null;
+  address: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSupplierInput {
+  name: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface UpdateSupplierInput {
+  id: number;
+  name?: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  isActive?: boolean;
 }
 
 export interface RestaurantInfo {
