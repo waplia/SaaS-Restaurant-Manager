@@ -193,9 +193,10 @@ export function Sidebar() {
               </button>
               <div
                 id={panelId}
+                aria-hidden={!isOpen}
                 className={cn(
                   "grid transition-all duration-200 ease-out",
-                  isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                  isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 pointer-events-none"
                 )}
               >
                 <div className="overflow-hidden">
@@ -204,12 +205,18 @@ export function Sidebar() {
                       const ChildIcon = c.icon;
                       const active = isActiveHref(location, c.href);
                       return (
-                        <Link key={c.href} href={c.href} className={cn(
-                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
-                          active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}>
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          tabIndex={isOpen ? 0 : -1}
+                          aria-hidden={!isOpen}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                            active
+                              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          )}
+                        >
                           <ChildIcon className="w-3.5 h-3.5 flex-shrink-0" />
                           {c.label}
                         </Link>
