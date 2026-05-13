@@ -94,11 +94,22 @@ export default function ReportsPage() {
         (reports.taxByDay ?? []).map((r: TaxByDayItem) => [r.date, r.tax, r.revenue, String(r.orders), `${r.effectiveRate}%`]),
         ["Date", "Tax Collected", "Revenue", "Orders", "Effective Rate"],
       );
-    } else {
+    } else if (tab === "staff") {
       exportCSV(
         `staff-report-${new Date().toISOString().slice(0, 10)}.csv`,
         (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => [s.name, String(s.orderCount), s.totalRevenue, s.totalHours]),
         ["Staff Name", "Orders Handled", "Revenue Generated", "Hours Worked"],
+      );
+    } else {
+      exportCSV(
+        `payments-report-${new Date().toISOString().slice(0, 10)}.csv`,
+        (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => [
+          p.direction === "in" ? "Money In" : "Money Out",
+          p.method,
+          String(p.count),
+          String(p.total),
+        ]),
+        ["Direction", "Method", "Count", "Total"],
       );
     }
   }
