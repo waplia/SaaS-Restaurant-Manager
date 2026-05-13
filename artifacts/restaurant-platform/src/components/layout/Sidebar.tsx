@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
-  ChevronDown, Briefcase, BookOpen, Coins,
+  ChevronDown, Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -18,29 +18,14 @@ type NavEntry = LinkItem | GroupItem;
 
 const navConfig: NavEntry[] = [
   { kind: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  {
-    kind: "group", key: "operations", label: "Operations", icon: Briefcase,
-    children: [
-      { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor },
-      { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
-      { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
-      { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
-    ],
-  },
-  {
-    kind: "group", key: "catalog", label: "Menu & Inventory", icon: BookOpen,
-    children: [
-      { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
-      { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
-    ],
-  },
-  {
-    kind: "group", key: "people", label: "People", icon: Users,
-    children: [
-      { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
-      { kind: "link", href: "/customers", label: "Customers", icon: Users },
-    ],
-  },
+  { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor },
+  { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
+  { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
+  { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
+  { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
+  { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
+  { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
+  { kind: "link", href: "/customers", label: "Customers", icon: Users },
   {
     kind: "group", key: "finance", label: "Finance", icon: Coins,
     children: [
