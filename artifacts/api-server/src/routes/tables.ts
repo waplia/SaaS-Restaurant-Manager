@@ -57,12 +57,18 @@ router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
   if (!table) return void res.status(404).json({ error: "Not found" });
   const [restaurant] = await db.select({ slug: restaurantsTable.slug }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
   const slug = restaurant?.slug ?? String(restaurantId);
-  const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") || "";
+  const envBase = process.env.PUBLIC_URL?.replace(/\/$/, "");
+  const forwardedProto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
+  const forwardedHost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
+  const host = forwardedHost ?? req.get("host") ?? "";
+  const proto = forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+  const requestBase = host ? `${proto}://${host}` : "";
+  const baseUrl = envBase || requestBase;
   const qrUrl = `${baseUrl}/menu/${slug}/${table.id}`;
   let svgData = "";
   try {
     const QRCode = await import("qrcode");
-    svgData = await QRCode.toString(qrUrl || `menu/${slug}/${table.id}`, { type: "svg", margin: 1, width: 300 });
+    svgData = await QRCode.toString(qrUrl, { type: "svg", margin: 1, width: 300 });
   } catch { /* qrcode unavailable — svgData stays empty */ }
   res.json({ qrUrl, tableNumber: table.tableNumber, svgData });
 });
