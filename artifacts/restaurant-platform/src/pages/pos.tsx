@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
+import { printOrder } from "@/lib/printOrder";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
@@ -83,53 +84,30 @@ function printReceipt(args: {
   splitTotal?: number;
 }) {
   const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, splitIndex, splitTotal } = args;
-  const change = amountTendered ? Math.max(0, amountTendered - (splitTotal ?? totals.totalAmount)) : 0;
-  const displayTotal = splitTotal ?? totals.totalAmount;
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><title>Receipt ${orderNumber}</title><style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Courier New',monospace; font-size:13px; width:80mm; margin:0 auto; padding:10px; }
-.center { text-align:center; }
-.bold { font-weight:bold; }
-.dash { border-top:1px dashed #555; margin:6px 0; }
-.row { display:flex; justify-content:space-between; margin:3px 0; }
-.sm { font-size:11px; color:#444; }
-h1 { font-size:18px; font-weight:bold; margin-bottom:2px; }
-.total-row { font-size:16px; font-weight:bold; margin-top:4px; }
-.logo { max-width:60mm; max-height:24mm; object-fit:contain; margin-bottom:4px; }
-</style></head>
-<body>
-<div class="center">${logoUrl ? `<img src="${logoUrl}" class="logo" alt="logo"/>` : ""}<h1>${restaurantName ?? "TableTrack"}</h1><div class="sm">POS Receipt</div></div>
-<div class="dash"></div>
-<div class="center">
-  <div class="bold">${orderNumber}${splitIndex !== undefined ? ` (Split ${splitIndex + 1})` : ""}</div>
-  <div class="sm">${new Date().toLocaleString("en-IN")}</div>
-  <div class="sm">${tableLabel || orderType.replace("_", "-").toUpperCase()}</div>
-  ${customerName ? `<div class="sm">Customer: ${customerName}</div>` : ""}
-</div>
-<div class="dash"></div>
-<div class="sm bold row"><span>ITEM</span><span>AMT</span></div>
-<div class="dash"></div>
-${items.map(item => `
-<div class="row"><span class="sm">${item.name} ×${item.quantity}</span><span class="sm">₹${(item.unitPrice * item.quantity).toFixed(2)}</span></div>
-${item.modifiers.map(m => `<div class="sm" style="color:#666;margin-left:6px">+ ${m.name}: ₹${m.price.toFixed(2)}</div>`).join("")}
-`).join("")}
-<div class="dash"></div>
-<div class="row"><span class="sm">Subtotal</span><span class="sm">₹${totals.subtotal.toFixed(2)}</span></div>
-<div class="row"><span class="sm">Tax</span><span class="sm">₹${totals.taxAmount.toFixed(2)}</span></div>
-${totals.serviceCharge > 0 ? `<div class="row"><span class="sm">Service Charge</span><span class="sm">₹${totals.serviceCharge.toFixed(2)}</span></div>` : ""}
-${totals.discountAmount > 0 ? `<div class="row"><span class="sm">Discount</span><span class="sm">-₹${totals.discountAmount.toFixed(2)}</span></div>` : ""}
-<div class="dash"></div>
-<div class="row total-row"><span>${splitIndex !== undefined ? "YOUR SHARE" : "TOTAL"}</span><span>₹${displayTotal.toFixed(2)}</span></div>
-<div class="dash"></div>
-<div class="row sm"><span>Payment</span><span>${paymentMethod.toUpperCase()}</span></div>
-${amountTendered ? `<div class="row sm"><span>Tendered</span><span>₹${amountTendered.toFixed(2)}</span></div>` : ""}
-${change > 0 ? `<div class="row bold sm"><span>Change</span><span>₹${change.toFixed(2)}</span></div>` : ""}
-<div class="dash"></div>
-<div class="center sm">Thank you for dining with us!</div>
-</body></html>`;
-  const w = window.open("", "_blank", "width=340,height=700");
-  if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
+  printOrder({
+    size: "thermal-80mm",
+    documentTitle: paymentMethod === "pending" ? "Order Receipt" : "Receipt",
+    orderNumber,
+    tableLabel,
+    orderType,
+    customerName,
+    items: items.map(it => ({
+      name: it.name,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      lineTotal: it.unitPrice * it.quantity,
+      modifiers: it.modifiers,
+    })),
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    serviceCharge: totals.serviceCharge,
+    discountAmount: totals.discountAmount,
+    totalAmount: totals.totalAmount,
+    payment: paymentMethod === "pending" ? undefined : { method: paymentMethod, tendered: amountTendered },
+    splitIndex,
+    splitTotal,
+    restaurant: { name: restaurantName, logoUrl },
+  });
 }
 
 function ModifierPickerModal({

@@ -1,11 +1,12 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useOrderDetail, usePayOrder, useUpdateOrder } from "@/lib/hooks";
+import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo } from "@/lib/hooks";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { printOrder } from "@/lib/printOrder";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -32,6 +33,7 @@ interface OrderDetailDrawerProps {
 
 export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) {
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId ?? undefined);
+  const { data: restaurant } = useRestaurantInfo();
   const payOrder = usePayOrder();
   const updateOrder = useUpdateOrder();
   const { toast } = useToast();
@@ -89,7 +91,34 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!order) return;
+    printOrder({
+      size: "a5",
+      documentTitle: order.paymentStatus === "paid" ? "Tax Invoice" : "Receipt",
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      tableLabel: order.tableId ? `Table ${order.tableId}` : undefined,
+      orderType: order.orderType,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      items: (order.items ?? []).map((it) => ({
+        name: it.menuItemName,
+        quantity: it.quantity,
+        unitPrice: Number(it.unitPrice),
+        lineTotal: Number(it.totalPrice),
+        notes: it.notes,
+      })),
+      subtotal: Number(order.subtotal ?? 0),
+      taxAmount: Number(order.taxAmount ?? 0),
+      serviceCharge: Number(order.serviceCharge ?? 0),
+      discountAmount: Number(order.discountAmount ?? 0),
+      totalAmount: Number(order.totalAmount ?? 0),
+      payment: order.paymentStatus === "paid" ? { method: "paid" } : undefined,
+      restaurant: {
+        name: restaurant?.name,
+        logoUrl: restaurant?.logoUrl,
+      },
+    });
   };
 
   const open = orderId !== null;
