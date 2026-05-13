@@ -9,21 +9,22 @@ import type { Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { OrderCard } from "@/components/OrderCard";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth } from "@/context/AuthContext";
 
-const RESTAURANT_ID = 1;
 const STATUSES = ["all", "pending", "in_progress", "ready", "completed"];
 
 export default function OrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { restaurantId } = useAuth();
   const [activeStatus, setActiveStatus] = useState("all");
 
   const params = activeStatus !== "all" ? { status: activeStatus, limit: 50 } : { limit: 50 };
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getListOrdersQueryKey(RESTAURANT_ID, params),
-    queryFn: () => listOrders(RESTAURANT_ID, params),
+    queryKey: getListOrdersQueryKey(restaurantId, params),
+    queryFn: () => listOrders(restaurantId, params),
   });
 
   const orders = ((data as { orders?: Order[] } | null)?.orders ?? (Array.isArray(data) ? data : [])) as Order[];
@@ -68,7 +69,7 @@ export default function OrdersScreen() {
             <OrderCard
               orderNumber={o.orderNumber ?? String(o.id)}
               tableLabel={(o as unknown as { tableLabel?: string | null }).tableLabel}
-              itemCount={o.items?.length ?? 0}
+              itemCount={(o as { items?: unknown[] }).items?.length ?? 0}
               total={o.totalAmount ?? 0}
               status={o.status ?? "pending"}
               orderType={o.orderType ?? "dine_in"}

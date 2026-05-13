@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, Platform,
+  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,31 +9,66 @@ import * as Haptics from "expo-haptics";
 import { useCreatePublicOrder } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
+import { useNetworkStatus } from "@/hooks/useOfflineCache";
 import { EmptyState } from "@/components/EmptyState";
+
+interface PublicOrderFull {
+  orderId: number;
+  orderNumber: string;
+  status: string;
+  totalAmount: string;
+  guestToken: string;
+}
 
 export default function CartScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { cart, updateQuantity, clearCart, total, itemCount } = useCart();
   const [placing, setPlacing] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<"cart" | "pay">("cart");
+  const [orderResult, setOrderResult] = useState<PublicOrderFull | null>(null);
+  const [payingStripe, setPayingStripe] = useState(false);
   const isWeb = Platform.OS === "web";
+  const isOnline = useNetworkStatus();
 
   const createPublicOrder = useCreatePublicOrder();
 
+  const restaurantId = cart.restaurantId;
+  const tableId = cart.tableId;
+
+  if (!restaurantId || !tableId) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="No table selected"
+          message="Please scan a table QR code before ordering."
+          actionLabel="Scan QR Code"
+          onAction={() => router.replace("/(customer)" as any)}
+        />
+      </View>
+    );
+  }
+
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) return;
+    if (!isOnline) {
+      Alert.alert("No Connection", "You appear to be offline. Please check your internet connection and try again.");
+      return;
+    }
     setPlacing(true);
     try {
-      const result = await createPublicOrder.mutateAsync({
+      const result = (await createPublicOrder.mutateAsync({
         data: {
-          restaurantId: cart.restaurantId ?? 1,
-          tableId: cart.tableId ?? 1,
+          restaurantId,
+          tableId,
           items: cart.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
         },
-      });
+      })) as PublicOrderFull;
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      clearCart();
-      router.replace(`/(customer)/track?orderId=${result.orderId}&orderNumber=${result.orderNumber}` as `/${string}`);
+      setOrderResult(result);
+      setPaymentStep("pay");
     } catch {
       Alert.alert("Order Failed", "Could not place your order. Please try again.");
     } finally {
@@ -41,7 +76,57 @@ export default function CartScreen() {
     }
   };
 
-  if (cart.items.length === 0) {
+  const handleGetPaymentIntent = async () => {
+    if (!orderResult) return;
+    setPayingStripe(true);
+    try {
+      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const resp = await fetch(
+        `${baseUrl}/api/public/orders/${orderResult.orderId}/payment-intent?token=${orderResult.guestToken}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+      );
+      const data = (await resp.json()) as { mode: string; checkoutUrl?: string | null; totalAmount: string; clientSecret?: string | null; intentId?: string };
+
+      if (data.mode === "live" && data.checkoutUrl) {
+        clearCart();
+        await Linking.openURL(data.checkoutUrl);
+        router.replace(
+          `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+        );
+      } else {
+        const demoResp = await fetch(
+          `${baseUrl}/api/public/orders/${orderResult.orderId}/pay?token=${orderResult.guestToken}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ intentId: data.intentId ?? `demo_pi_${orderResult.orderId}_${Date.now()}`, paymentMethod: "cash" }),
+          }
+        );
+        if (demoResp.ok) {
+          clearCart();
+          router.replace(
+            `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+          );
+        } else {
+          Alert.alert("Payment Failed", "Could not process payment. Please try again.");
+        }
+      }
+    } catch {
+      Alert.alert("Error", "Payment failed. Please try again.");
+    } finally {
+      setPayingStripe(false);
+    }
+  };
+
+  const handleCashPayment = () => {
+    if (!orderResult) return;
+    clearCart();
+    router.replace(
+      `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+    );
+  };
+
+  if (cart.items.length === 0 && paymentStep === "cart") {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <EmptyState
@@ -55,8 +140,61 @@ export default function CartScreen() {
     );
   }
 
+  if (paymentStep === "pay" && orderResult) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.payHeader, { paddingTop: isWeb ? 67 + 16 : insets.top + 16, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={[styles.successIcon, { backgroundColor: "#22c55e20" }]}>
+            <Ionicons name="checkmark-circle" size={32} color="#22c55e" />
+          </View>
+          <Text style={[styles.payTitle, { color: colors.foreground }]}>Order Placed!</Text>
+          <Text style={[styles.paySubtitle, { color: colors.mutedForeground }]}>
+            #{orderResult.orderNumber} · ₹{Number(orderResult.totalAmount).toLocaleString()}
+          </Text>
+        </View>
+
+        <View style={[styles.payOptions, { paddingBottom: isWeb ? 34 : insets.bottom }]}>
+          <Text style={[styles.payLabel, { color: colors.mutedForeground }]}>Choose how to pay</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.payBtn, { backgroundColor: colors.primary, opacity: pressed || payingStripe ? 0.8 : 1 }]}
+            onPress={handleGetPaymentIntent}
+            disabled={payingStripe}
+          >
+            {payingStripe ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="card-outline" size={20} color="#fff" />
+                <Text style={styles.payBtnText}>Pay Online (Card / UPI)</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.payBtnSecondary, { borderColor: colors.border, backgroundColor: colors.card, opacity: pressed ? 0.7 : 1 }]}
+            onPress={handleCashPayment}
+          >
+            <Ionicons name="cash-outline" size={20} color={colors.foreground} />
+            <Text style={[styles.payBtnSecondaryText, { color: colors.foreground }]}>Pay by Cash at Counter</Text>
+          </Pressable>
+
+          <Text style={[styles.payNote, { color: colors.mutedForeground }]}>
+            Your order has been sent to the kitchen. Track its progress on the next screen.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {!isOnline && (
+        <View style={[styles.offlineBanner, { backgroundColor: "#f59e0b" }]}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+          <Text style={styles.offlineText}>You're offline — ordering is unavailable</Text>
+        </View>
+      )}
       <FlatList
         data={cart.items}
         keyExtractor={(item) => String(item.menuItemId)}
@@ -88,7 +226,9 @@ export default function CartScreen() {
                 <Ionicons name="add" size={14} color="#fff" />
               </Pressable>
             </View>
-            <Text style={[styles.subTotal, { color: colors.foreground }]}>₹{(item.price * item.quantity).toLocaleString()}</Text>
+            <Text style={[styles.subTotal, { color: colors.foreground }]}>
+              ₹{(item.price * item.quantity).toLocaleString()}
+            </Text>
           </View>
         )}
       />
@@ -99,14 +239,19 @@ export default function CartScreen() {
           <Text style={[styles.totalAmount, { color: colors.foreground }]}>₹{total.toLocaleString()}</Text>
         </View>
         <Pressable
-          style={({ pressed }) => [styles.placeBtn, { backgroundColor: colors.primary, opacity: pressed || placing ? 0.8 : 1 }]}
+          style={({ pressed }) => [
+            styles.placeBtn,
+            { backgroundColor: isOnline ? colors.primary : colors.muted, opacity: pressed || placing ? 0.8 : 1 },
+          ]}
           onPress={handlePlaceOrder}
-          disabled={placing}
+          disabled={placing || !isOnline}
         >
           {placing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.placeBtnText}>Place Order</Text>
+            <Text style={[styles.placeBtnText, { color: isOnline ? "#fff" : colors.mutedForeground }]}>
+              {isOnline ? "Place Order" : "Offline"}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -116,6 +261,8 @@ export default function CartScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  offlineBanner: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
+  offlineText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
   list: { padding: 16, gap: 8 },
   cartRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
   cartInfo: { flex: 1, gap: 2 },
@@ -130,5 +277,16 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
   totalAmount: { fontSize: 20, fontFamily: "Inter_700Bold" },
   placeBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", justifyContent: "center" },
-  placeBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  placeBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  payHeader: { alignItems: "center", gap: 8, paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
+  successIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  payTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  paySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  payOptions: { flex: 1, padding: 20, gap: 12, justifyContent: "center" },
+  payLabel: { fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 4 },
+  payBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 12, paddingVertical: 16 },
+  payBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  payBtnSecondary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 12, paddingVertical: 14, borderWidth: 1 },
+  payBtnSecondaryText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  payNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18, marginTop: 8 },
 });

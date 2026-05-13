@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator,
   ScrollView, Alert, Platform,
 } from "react-native";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,14 +12,15 @@ import {
   listMenuCategories, getListMenuCategoriesQueryKey,
   listMenuItems, getListMenuItemsQueryKey,
   listOrders, getListOrdersQueryKey,
-  useCreateOrder, useAddOrderItem,
+  useCreateOrder,
 } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
+import * as SecureStore from "expo-secure-store";
 import type { MenuCategory, MenuItem, Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
 import { EmptyState } from "@/components/EmptyState";
-
-const RESTAURANT_ID = 1;
+import { useAuth } from "@/context/AuthContext";
 
 interface CartItem {
   menuItemId: number;
@@ -35,6 +36,7 @@ export default function WaiterOrderScreen() {
   const navigation = useNavigation();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
+  const { restaurantId } = useAuth();
   const numTableId = Number(tableId);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
@@ -42,25 +44,37 @@ export default function WaiterOrderScreen() {
   const [sendingToKitchen, setSendingToKitchen] = useState(false);
 
   const { data: categories } = useQuery({
-    queryKey: getListMenuCategoriesQueryKey(RESTAURANT_ID),
-    queryFn: () => listMenuCategories(RESTAURANT_ID),
+    queryKey: getListMenuCategoriesQueryKey(restaurantId),
+    queryFn: () => listMenuCategories(restaurantId),
   });
 
   const menuParams = selectedCategoryId ? { categoryId: selectedCategoryId } : {};
   const { data: menuItems } = useQuery({
-    queryKey: getListMenuItemsQueryKey(RESTAURANT_ID, menuParams),
-    queryFn: () => listMenuItems(RESTAURANT_ID, menuParams),
+    queryKey: getListMenuItemsQueryKey(restaurantId, menuParams),
+    queryFn: () => listMenuItems(restaurantId, menuParams),
     enabled: selectedCategoryId !== null,
   });
 
   const ordersParams = { tableId: numTableId, status: "pending,in_progress", limit: 1 };
   const { data: ordersData } = useQuery({
-    queryKey: getListOrdersQueryKey(RESTAURANT_ID, ordersParams),
-    queryFn: () => listOrders(RESTAURANT_ID, ordersParams),
+    queryKey: getListOrdersQueryKey(restaurantId, ordersParams),
+    queryFn: () => listOrders(restaurantId, ordersParams),
   });
 
   const createOrder = useCreateOrder();
-  const addOrderItem = useAddOrderItem();
+  const addItemMutation = useMutation({
+    mutationFn: async ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number } }) => {
+      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const token = await SecureStore.getItemAsync("accessToken");
+      const resp = await fetch(`${baseUrl}/api/restaurants/${rid}/orders/${id}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify(data),
+      });
+      if (!resp.ok) throw new Error("Failed to add item to order");
+      return resp.json();
+    },
+  });
 
   const categoryList = (Array.isArray(categories) ? categories : []) as MenuCategory[];
   const itemList = (Array.isArray(menuItems) ? menuItems : []) as MenuItem[];
@@ -106,20 +120,20 @@ export default function WaiterOrderScreen() {
       let orderId = activeOrder?.id;
       if (!orderId) {
         const newOrder = await createOrder.mutateAsync({
-          restaurantId: RESTAURANT_ID,
+          restaurantId,
           data: { tableId: numTableId, orderType: "dine_in", items: [] },
         });
         orderId = newOrder.id;
       }
       for (const item of cart) {
-        await addOrderItem.mutateAsync({
-          restaurantId: RESTAURANT_ID,
+        await addItemMutation.mutateAsync({
+          rid: restaurantId,
           id: orderId!,
           data: { menuItemId: item.menuItemId, quantity: item.quantity },
         });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      qc.invalidateQueries({ queryKey: getListOrdersQueryKey(RESTAURANT_ID) });
+      qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
       setCart([]);
       Alert.alert("Sent!", "Items sent to kitchen.");
     } catch {
@@ -132,12 +146,19 @@ export default function WaiterOrderScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {activeOrder ? (
-        <View style={[styles.activeOrderBanner, { backgroundColor: colors.accent, borderColor: colors.primary + "40" }]}>
+        <Pressable
+          style={[styles.activeOrderBanner, { backgroundColor: colors.accent, borderColor: colors.primary + "40" }]}
+          onPress={() => router.push(`/(waiter)/bill/${activeOrder.id}` as any)}
+        >
           <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
           <Text style={[styles.activeOrderText, { color: colors.primary }]}>
             Active order #{(activeOrder as unknown as { orderNumber?: string }).orderNumber ?? activeOrder.id}
           </Text>
-        </View>
+          <View style={styles.billChip}>
+            <Ionicons name="receipt-outline" size={13} color={colors.primary} />
+            <Text style={[styles.billChipText, { color: colors.primary }]}>View Bill</Text>
+          </View>
+        </Pressable>
       ) : null}
 
       <ScrollView
@@ -230,5 +251,7 @@ const styles = StyleSheet.create({
   orderSummaryLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
   orderSummaryTotal: { fontSize: 18, fontFamily: "Inter_700Bold" },
   sendBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13, marginBottom: 4 },
+  billChip: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" as const },
+  billChipText: { fontSize: 11, fontFamily: "Inter_500Medium" },
   sendBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

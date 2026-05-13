@@ -9,8 +9,7 @@ import { listNotifications, getListNotificationsQueryKey } from "@workspace/api-
 import type { NotificationItem } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { EmptyState } from "@/components/EmptyState";
-
-const RESTAURANT_ID = 1;
+import { useAuth } from "@/context/AuthContext";
 
 const TYPE_ICONS: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
   new_order: { icon: "receipt-outline", color: "#f97316" },
@@ -25,12 +24,13 @@ export default function NotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { restaurantId } = useAuth();
 
-  const params = { limit: 50 };
+  const params = {};
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getListNotificationsQueryKey(RESTAURANT_ID, params),
-    queryFn: () => listNotifications(RESTAURANT_ID, params),
+    queryKey: getListNotificationsQueryKey(restaurantId, params),
+    queryFn: () => listNotifications(restaurantId, params),
     refetchInterval: 30_000,
   });
 
@@ -45,7 +45,7 @@ export default function NotificationsScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : notifications.length === 0 ? (
-        <EmptyState icon="bell-outline" title="No alerts" message="Notifications for orders and kitchen events will appear here." />
+        <EmptyState icon="notifications-outline" title="No alerts" message="Notifications for orders and kitchen events will appear here." />
       ) : (
         <FlatList
           data={notifications}

@@ -10,17 +10,17 @@ import type { FloorTable } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { TableCard } from "@/components/TableCard";
 import { EmptyState } from "@/components/EmptyState";
-
-const RESTAURANT_ID = 1;
+import { useAuth } from "@/context/AuthContext";
 
 export default function TablesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { restaurantId } = useAuth();
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getListFloorTablesQueryKey(RESTAURANT_ID),
-    queryFn: () => listFloorTables(RESTAURANT_ID),
+    queryKey: getListFloorTablesQueryKey(restaurantId),
+    queryFn: () => listFloorTables(restaurantId),
     refetchInterval: 20_000,
   });
 
@@ -50,10 +50,10 @@ export default function TablesScreen() {
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
           renderItem={({ item: t }) => (
             <TableCard
-              label={t.label ?? `T${t.id}`}
+              label={t.tableNumber ?? `T${t.id}`}
               capacity={t.capacity ?? 4}
               status={t.status ?? "available"}
-              onPress={() => router.push(`/(waiter)/order/${t.id}` as `/${string}`)}
+              onPress={() => router.push(`/(waiter)/order/${t.id}` as any)}
             />
           )}
         />

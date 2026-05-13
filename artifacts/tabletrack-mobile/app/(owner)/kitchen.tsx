@@ -13,20 +13,20 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { KitchenTicketCard } from "@/components/KitchenTicketCard";
 import { EmptyState } from "@/components/EmptyState";
-
-const RESTAURANT_ID = 1;
+import { useAuth } from "@/context/AuthContext";
 
 export default function KitchenScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const qc = useQueryClient();
+  const { restaurantId } = useAuth();
 
   const params = { status: "pending,in_progress" };
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getListKitchenTicketsQueryKey(RESTAURANT_ID, params),
-    queryFn: () => listKitchenTickets(RESTAURANT_ID, params),
+    queryKey: getListKitchenTicketsQueryKey(restaurantId, params),
+    queryFn: () => listKitchenTickets(restaurantId, params),
     refetchInterval: 15_000,
   });
 
@@ -42,8 +42,8 @@ export default function KitchenScreen() {
         onPress: async () => {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            await updateStatus.mutateAsync({ restaurantId: RESTAURANT_ID, id: ticketId, data: { status: "ready" } });
-            qc.invalidateQueries({ queryKey: getListKitchenTicketsQueryKey(RESTAURANT_ID, params) });
+            await updateStatus.mutateAsync({ restaurantId, id: ticketId, data: { status: "ready" } });
+            qc.invalidateQueries({ queryKey: getListKitchenTicketsQueryKey(restaurantId, params) });
           } catch {
             Alert.alert("Error", "Could not update ticket status.");
           }
@@ -76,7 +76,7 @@ export default function KitchenScreen() {
               ticketId={t.id}
               orderNumber={(t as unknown as { orderNumber?: string }).orderNumber ?? String(t.id)}
               tableLabel={(t as unknown as { tableLabel?: string | null }).tableLabel}
-              items={(t.items ?? []) as Array<{ name: string; quantity: number; notes?: string | null }>}
+              items={(t.items ?? []).map((i) => ({ name: (i as unknown as { menuItemName?: string }).menuItemName ?? "", quantity: i.quantity ?? 1, notes: (i as unknown as { notes?: string | null }).notes ?? null }))}
               status={t.status ?? "pending"}
               createdAt={t.createdAt ?? new Date().toISOString()}
               onMarkReady={handleMarkReady}

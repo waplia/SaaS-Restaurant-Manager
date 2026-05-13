@@ -12,23 +12,23 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { StatCard } from "@/components/StatCard";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth } from "@/context/AuthContext";
 import type { DashboardSummary, Order } from "@workspace/api-client-react";
-
-const RESTAURANT_ID = 1;
 
 export default function OwnerDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { restaurantId } = useAuth();
 
   const { data: dashboard, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getGetDashboardSummaryQueryKey(RESTAURANT_ID),
-    queryFn: () => getDashboardSummary(RESTAURANT_ID),
+    queryKey: getGetDashboardSummaryQueryKey(restaurantId),
+    queryFn: () => getDashboardSummary(restaurantId),
   });
 
   const { data: ordersData } = useQuery({
-    queryKey: [...getListOrdersQueryKey(RESTAURANT_ID, { status: "in_progress", limit: 5 })],
-    queryFn: () => listOrders(RESTAURANT_ID, { status: "in_progress", limit: 5 }),
+    queryKey: [...getListOrdersQueryKey(restaurantId, { status: "in_progress", limit: 5 })],
+    queryFn: () => listOrders(restaurantId, { status: "in_progress", limit: 5 }),
   });
 
   if (isLoading) {
@@ -51,7 +51,7 @@ export default function OwnerDashboard() {
   const revenue = Number(ds.todayRevenue ?? 0).toLocaleString("en-IN");
   const orders = ds.todayOrders ?? 0;
   const activeTables = ds.activeTables ?? 0;
-  const pendingKitchen = ds.pendingKitchenTickets ?? 0;
+  const pendingKitchen = ds.pendingTickets ?? 0;
 
   const orderList = ((ordersData as { orders?: Order[] } | null)?.orders ?? (Array.isArray(ordersData) ? ordersData : [])) as Order[];
 
@@ -86,7 +86,7 @@ export default function OwnerDashboard() {
               <View>
                 <Text style={[styles.orderNum, { color: colors.foreground }]}>#{o.orderNumber}</Text>
                 <Text style={[styles.orderMeta, { color: colors.mutedForeground }]}>
-                  {(o.items?.length ?? 0)} item{(o.items?.length ?? 0) !== 1 ? "s" : ""}
+                  {((o as { items?: unknown[] }).items?.length ?? 0)} item{((o as { items?: unknown[] }).items?.length ?? 0) !== 1 ? "s" : ""}
                 </Text>
               </View>
               <Text style={[styles.orderTotal, { color: colors.primary }]}>

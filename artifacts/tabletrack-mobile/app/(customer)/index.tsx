@@ -116,7 +116,7 @@ export default function QRScanScreen() {
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
-        barcodeScannerEnabled
+        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         onBarcodeScanned={scanned ? undefined : handleBarcodeScan}
       />
       <View style={[styles.overlay, { paddingTop: insets.top + 16 }]}>
