@@ -91,7 +91,7 @@ export default function CartScreen() {
         clearCart();
         await Linking.openURL(data.checkoutUrl);
         router.replace(
-          `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+          `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
         );
       } else {
         const demoResp = await fetch(
@@ -105,7 +105,7 @@ export default function CartScreen() {
         if (demoResp.ok) {
           clearCart();
           router.replace(
-            `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+            `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
           );
         } else {
           Alert.alert("Payment Failed", "Could not process payment. Please try again.");
@@ -122,7 +122,7 @@ export default function CartScreen() {
     if (!orderResult) return;
     clearCart();
     router.replace(
-      `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}` as any
+      `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
     );
   };
 

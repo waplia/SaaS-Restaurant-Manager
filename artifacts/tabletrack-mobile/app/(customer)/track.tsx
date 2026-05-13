@@ -29,10 +29,12 @@ const STEPS = [
 const STATUS_ORDER = ["pending", "in_progress", "ready", "served", "completed"];
 
 export default function TrackOrderScreen() {
-  const { orderId, orderNumber, guestToken } = useLocalSearchParams<{
+  const { orderId, orderNumber, guestToken, restaurantId, tableId } = useLocalSearchParams<{
     orderId: string;
     orderNumber: string;
     guestToken: string;
+    restaurantId: string;
+    tableId: string;
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -65,8 +67,8 @@ export default function TrackOrderScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          restaurantId: 1,
-          tableId: 1,
+          restaurantId: Number(restaurantId ?? 0),
+          tableId: Number(tableId ?? 0),
           token: guestToken ?? "",
         }),
       });

@@ -37,6 +37,8 @@ export default function LoginScreen() {
         router.replace("/(waiter)/(tabs)");
       } else if (role === "kitchen") {
         router.replace("/(waiter)/(tabs)/notifications");
+      } else if (role === "customer") {
+        router.replace("/(customer)");
       } else {
         router.replace("/(owner)");
       }

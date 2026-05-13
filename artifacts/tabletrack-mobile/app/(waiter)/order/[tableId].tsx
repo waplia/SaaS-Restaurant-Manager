@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator,
   ScrollView, Alert, Platform,
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   listMenuCategories, getListMenuCategoriesQueryKey,
   listMenuItems, getListMenuItemsQueryKey,
@@ -21,12 +22,19 @@ import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
+import { useNetworkStatus, useOfflineCache } from "@/hooks/useOfflineCache";
 
 interface CartItem {
   menuItemId: number;
   name: string;
   price: number;
   quantity: number;
+}
+
+interface QueuedOrder {
+  tableId: number;
+  items: CartItem[];
+  queuedAt: number;
 }
 
 export default function WaiterOrderScreen() {
@@ -38,28 +46,88 @@ export default function WaiterOrderScreen() {
   const isWeb = Platform.OS === "web";
   const { restaurantId } = useAuth();
   const numTableId = Number(tableId);
+  const isOnline = useNetworkStatus();
+  const wasOnlineRef = useRef(isOnline);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [sendingToKitchen, setSendingToKitchen] = useState(false);
+  const [offlineCategories, setOfflineCategories] = useState<MenuCategory[]>([]);
+  const [offlineItems, setOfflineItems] = useState<MenuItem[]>([]);
 
-  const { data: categories } = useQuery({
+  const catCacheKey = `menu_cats_${restaurantId}`;
+  const itemsCacheKey = (catId: number) => `menu_items_${restaurantId}_${catId}`;
+  const queueCacheKey = `offline_order_queue_${restaurantId}`;
+  const { readCache: readCatCache, writeCache: writeCatCache } = useOfflineCache<MenuCategory[]>(catCacheKey);
+  const { readCache: readQueueCache, writeCache: writeQueueCache, clearCache: clearQueueCache } = useOfflineCache<QueuedOrder[]>(queueCacheKey);
+
+  const { data: categories, isSuccess: catsLoaded } = useQuery({
     queryKey: getListMenuCategoriesQueryKey(restaurantId),
     queryFn: () => listMenuCategories(restaurantId),
+    enabled: isOnline,
+    staleTime: 5 * 60 * 1000,
   });
 
   const menuParams = selectedCategoryId ? { categoryId: selectedCategoryId } : {};
-  const { data: menuItems } = useQuery({
+  const { data: menuItems, isSuccess: itemsLoaded } = useQuery({
     queryKey: getListMenuItemsQueryKey(restaurantId, menuParams),
     queryFn: () => listMenuItems(restaurantId, menuParams),
-    enabled: selectedCategoryId !== null,
+    enabled: isOnline && selectedCategoryId !== null,
+    staleTime: 5 * 60 * 1000,
   });
 
   const ordersParams = { tableId: numTableId, status: "pending,in_progress", limit: 1 };
   const { data: ordersData } = useQuery({
     queryKey: getListOrdersQueryKey(restaurantId, ordersParams),
     queryFn: () => listOrders(restaurantId, ordersParams),
+    enabled: isOnline,
   });
+
+  useEffect(() => {
+    if (catsLoaded && categories) {
+      const catList = (Array.isArray(categories) ? categories : []) as MenuCategory[];
+      writeCatCache(catList);
+    }
+  }, [catsLoaded, categories]);
+
+  useEffect(() => {
+    if (itemsLoaded && menuItems && selectedCategoryId !== null) {
+      const items = (Array.isArray(menuItems) ? menuItems : []) as MenuItem[];
+      AsyncStorage.setItem(itemsCacheKey(selectedCategoryId), JSON.stringify({ ts: Date.now(), data: items })).catch(() => {});
+    }
+  }, [itemsLoaded, menuItems, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!isOnline) {
+      readCatCache().then((cats) => {
+        if (cats && cats.length > 0) {
+          setOfflineCategories(cats);
+          if (selectedCategoryId === null) {
+            setSelectedCategoryId(cats[0].id);
+          }
+        }
+      });
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (!isOnline && selectedCategoryId !== null) {
+      AsyncStorage.getItem(itemsCacheKey(selectedCategoryId)).then((raw) => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw) as { ts: number; data: MenuItem[] };
+          setOfflineItems(parsed.data ?? []);
+        } catch {}
+      });
+    }
+  }, [isOnline, selectedCategoryId]);
+
+  useEffect(() => {
+    if (isOnline && !wasOnlineRef.current) {
+      flushOfflineQueue();
+    }
+    wasOnlineRef.current = isOnline;
+  }, [isOnline]);
 
   const createOrder = useCreateOrder();
   const addItemMutation = useMutation({
@@ -76,8 +144,12 @@ export default function WaiterOrderScreen() {
     },
   });
 
-  const categoryList = (Array.isArray(categories) ? categories : []) as MenuCategory[];
-  const itemList = (Array.isArray(menuItems) ? menuItems : []) as MenuItem[];
+  const categoryList = (isOnline
+    ? (Array.isArray(categories) ? categories : [])
+    : offlineCategories) as MenuCategory[];
+  const itemList = (isOnline
+    ? (Array.isArray(menuItems) ? menuItems : [])
+    : offlineItems) as MenuItem[];
   const activeOrders = ((ordersData as { orders?: Order[] } | null)?.orders ?? (Array.isArray(ordersData) ? ordersData : [])) as Order[];
   const activeOrder = activeOrders[0] ?? null;
 
@@ -107,8 +179,48 @@ export default function WaiterOrderScreen() {
     });
   };
 
-  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
-  const totalAmount = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const submitOrderItems = async (cartItems: CartItem[]): Promise<void> => {
+    let orderId = activeOrder?.id;
+    if (!orderId) {
+      const newOrder = await createOrder.mutateAsync({
+        restaurantId,
+        data: { tableId: numTableId, orderType: "dine_in", items: [] },
+      });
+      orderId = newOrder.id;
+    }
+    for (const item of cartItems) {
+      await addItemMutation.mutateAsync({
+        rid: restaurantId,
+        id: orderId!,
+        data: { menuItemId: item.menuItemId, quantity: item.quantity },
+      });
+    }
+    qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
+  };
+
+  const flushOfflineQueue = async () => {
+    const queue = await readQueueCache();
+    if (!queue || queue.length === 0) return;
+    let successCount = 0;
+    const failed: QueuedOrder[] = [];
+    for (const entry of queue) {
+      try {
+        await submitOrderItems(entry.items);
+        successCount++;
+      } catch {
+        failed.push(entry);
+      }
+    }
+    if (failed.length > 0) {
+      await writeQueueCache(failed);
+    } else {
+      await clearQueueCache();
+    }
+    if (successCount > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Back Online", `${successCount} queued order${successCount > 1 ? "s" : ""} sent to kitchen.`);
+    }
+  };
 
   const handleSendToKitchen = async () => {
     if (cart.length === 0) {
@@ -117,23 +229,16 @@ export default function WaiterOrderScreen() {
     }
     setSendingToKitchen(true);
     try {
-      let orderId = activeOrder?.id;
-      if (!orderId) {
-        const newOrder = await createOrder.mutateAsync({
-          restaurantId,
-          data: { tableId: numTableId, orderType: "dine_in", items: [] },
-        });
-        orderId = newOrder.id;
+      if (!isOnline) {
+        const existing = (await readQueueCache()) ?? [];
+        await writeQueueCache([...existing, { tableId: numTableId, items: [...cart], queuedAt: Date.now() }]);
+        setCart([]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert("Saved Offline", "You're offline. The order will be sent to the kitchen automatically when you reconnect.");
+        return;
       }
-      for (const item of cart) {
-        await addItemMutation.mutateAsync({
-          rid: restaurantId,
-          id: orderId!,
-          data: { menuItemId: item.menuItemId, quantity: item.quantity },
-        });
-      }
+      await submitOrderItems(cart);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
       setCart([]);
       Alert.alert("Sent!", "Items sent to kitchen.");
     } catch {
@@ -143,8 +248,18 @@ export default function WaiterOrderScreen() {
     }
   };
 
+  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
+  const totalAmount = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {!isOnline && (
+        <View style={[styles.offlineBanner, { backgroundColor: "#f59e0b" }]}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+          <Text style={styles.offlineBannerText}>Offline — showing cached menu. Orders will queue.</Text>
+        </View>
+      )}
+
       {activeOrder ? (
         <Pressable
           style={[styles.activeOrderBanner, { backgroundColor: colors.accent, borderColor: colors.primary + "40" }]}
@@ -187,7 +302,7 @@ export default function WaiterOrderScreen() {
       </ScrollView>
 
       {itemList.length === 0 ? (
-        <EmptyState icon="fast-food-outline" title="No items" message="No menu items in this category." />
+        <EmptyState icon="fast-food-outline" title="No items" message={isOnline ? "No menu items in this category." : "No cached items. Connect to load menu."} />
       ) : (
         <FlatList
           data={itemList}
@@ -218,7 +333,7 @@ export default function WaiterOrderScreen() {
             <Text style={[styles.orderSummaryTotal, { color: colors.foreground }]}>₹{totalAmount.toLocaleString()}</Text>
           </View>
           <Pressable
-            style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.primary, opacity: pressed || sendingToKitchen ? 0.8 : 1 }]}
+            style={({ pressed }) => [styles.sendBtn, { backgroundColor: isOnline ? colors.primary : "#f59e0b", opacity: pressed || sendingToKitchen ? 0.8 : 1 }]}
             onPress={handleSendToKitchen}
             disabled={sendingToKitchen}
           >
@@ -226,8 +341,8 @@ export default function WaiterOrderScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="flame-outline" size={18} color="#fff" />
-                <Text style={styles.sendBtnText}>Send to Kitchen</Text>
+                <Ionicons name={isOnline ? "flame-outline" : "cloud-offline-outline"} size={18} color="#fff" />
+                <Text style={styles.sendBtnText}>{isOnline ? "Send to Kitchen" : "Queue Order (Offline)"}</Text>
               </>
             )}
           </Pressable>
@@ -239,6 +354,8 @@ export default function WaiterOrderScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  offlineBanner: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 6 },
+  offlineBannerText: { fontSize: 11, color: "#fff", fontFamily: "Inter_500Medium", flex: 1 },
   activeOrderBanner: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
   activeOrderText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   categoryBar: { borderBottomWidth: 1, flexGrow: 0 },
