@@ -80,11 +80,7 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
 
   const stripe = getStripe();
   if (!stripe) {
-    return void res.json({
-      url: successUrl + `?mock=1&planId=${planId}`,
-      mock: true,
-      message: "Stripe not configured — using mock checkout",
-    });
+    return void res.json({ url: null, mock: true, message: "Stripe not configured — using mock checkout" });
   }
 
   let customerId = tenant.stripeCustomerId;

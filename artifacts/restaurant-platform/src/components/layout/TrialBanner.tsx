@@ -1,6 +1,6 @@
 import { useSubscription } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AlertTriangle, X, Lock } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -60,12 +60,15 @@ export function TrialBanner() {
 export function TrialPaywall() {
   const { user } = useAuth();
   const { data } = useSubscription(RESTAURANT_ID);
+  const [location] = useLocation();
 
   if (!user) return null;
   if (!data?.tenant) return null;
 
   const { planStatus, isTrialExpired } = data.tenant;
   if (planStatus !== "trial" || !isTrialExpired) return null;
+
+  if (location.startsWith("/settings/subscription") || location.startsWith("/settings/billing")) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
