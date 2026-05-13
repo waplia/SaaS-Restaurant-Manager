@@ -1,31 +1,77 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
+  ChevronDown, Briefcase, BookOpen, Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { NotificationDropdown } from "./NotificationDropdown";
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] };
+type IconType = typeof LayoutDashboard;
+type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[] };
+type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[] };
+type NavEntry = LinkItem | GroupItem;
 
-const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pos", label: "POS Terminal", icon: Monitor },
-  { href: "/orders", label: "Orders", icon: ShoppingCart },
-  { href: "/kitchen", label: "Kitchen", icon: ChefHat },
-  { href: "/tables", label: "Tables", icon: Table2 },
-  { href: "/menu", label: "Menu", icon: UtensilsCrossed },
-  { href: "/inventory", label: "Inventory", icon: Package },
-  { href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
-  { href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
-  { href: "/staff", label: "Staff", icon: UserCheck },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
+const navConfig: NavEntry[] = [
+  { kind: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  {
+    kind: "group", key: "operations", label: "Operations", icon: Briefcase,
+    children: [
+      { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor },
+      { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
+      { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
+      { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
+    ],
+  },
+  {
+    kind: "group", key: "catalog", label: "Menu & Inventory", icon: BookOpen,
+    children: [
+      { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
+      { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
+    ],
+  },
+  {
+    kind: "group", key: "people", label: "People", icon: Users,
+    children: [
+      { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
+      { kind: "link", href: "/customers", label: "Customers", icon: Users },
+    ],
+  },
+  {
+    kind: "group", key: "finance", label: "Finance", icon: Coins,
+    children: [
+      { kind: "link", href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
+      { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
+      { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
+    ],
+  },
+  { kind: "link", href: "/reports", label: "Reports", icon: BarChart3 },
 ];
+
+const STORAGE_KEY = "tt_sidebar_groups_open_v1";
+
+function isActiveHref(location: string, href: string) {
+  return href === "/" ? location === "/" : location.startsWith(href);
+}
+
+function loadOpenState(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveOpenState(state: Record<string, boolean>) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+}
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -35,6 +81,55 @@ export function Sidebar() {
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
     : "?";
+
+  const canSee = (item: LinkItem) => {
+    if (!item.roles) return true;
+    if (user?.isSuperAdmin) return true;
+    return user?.role ? item.roles.includes(user.role) : false;
+  };
+
+  // Filter children inside groups by role; drop groups that have no visible children.
+  const visibleEntries: NavEntry[] = useMemo(() => {
+    const out: NavEntry[] = [];
+    for (const e of navConfig) {
+      if (e.kind === "link") {
+        if (canSee(e)) out.push(e);
+      } else {
+        const visibleChildren = e.children.filter(canSee);
+        if (visibleChildren.length > 0) out.push({ ...e, children: visibleChildren });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.isSuperAdmin]);
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
+
+  // Auto-open the group containing the active route on mount / when location changes.
+  useEffect(() => {
+    setOpenGroups(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const e of visibleEntries) {
+        if (e.kind === "group") {
+          const containsActive = e.children.some(c => isActiveHref(location, c.href));
+          if (containsActive && !next[e.key]) {
+            next[e.key] = true;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [location, visibleEntries]);
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      saveOpenState(next);
+      return next;
+    });
+  };
 
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
@@ -56,22 +151,74 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.filter(item => {
-          if (!item.roles) return true;
-          if (user?.isSuperAdmin) return true;
-          return user?.role ? item.roles.includes(user.role) : false;
-        }).map(({ href, label, icon: Icon }) => {
-          const active = href === "/" ? location === "/" : location.startsWith(href);
+        {visibleEntries.map(entry => {
+          if (entry.kind === "link") {
+            const active = isActiveHref(location, entry.href);
+            const Icon = entry.icon;
+            return (
+              <Link key={entry.href} href={entry.href} className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                active
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}>
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                {entry.label}
+              </Link>
+            );
+          }
+
+          const Icon = entry.icon;
+          const isOpen = !!openGroups[entry.key];
+          const childActive = entry.children.some(c => isActiveHref(location, c.href));
+          const panelId = `sidebar-group-${entry.key}`;
+
           return (
-            <Link key={href} href={href} className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-              active
-                ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}>
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              {label}
-            </Link>
+            <div key={entry.key}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(entry.key)}
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  childActive && !isOpen
+                    ? "text-sidebar-foreground bg-sidebar-accent/40"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 text-left">{entry.label}</span>
+                <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", isOpen ? "rotate-0" : "-rotate-90")} />
+              </button>
+              <div
+                id={panelId}
+                className={cn(
+                  "grid transition-all duration-200 ease-out",
+                  isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                )}
+              >
+                <div className="overflow-hidden">
+                  <div className="mt-0.5 ml-3 pl-3 border-l border-sidebar-border space-y-0.5 py-0.5">
+                    {entry.children.map(c => {
+                      const ChildIcon = c.icon;
+                      const active = isActiveHref(location, c.href);
+                      return (
+                        <Link key={c.href} href={c.href} className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                          active
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        )}>
+                          <ChildIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                          {c.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
           );
         })}
       </nav>
