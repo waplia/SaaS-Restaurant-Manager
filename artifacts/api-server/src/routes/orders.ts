@@ -414,8 +414,23 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
   }
 
   const loyaltyDiscount = pointsToRedeem;
-  const existingCouponDiscount = order.couponCode ? Number(order.discountAmount) : 0;
-  const totalDiscount = existingCouponDiscount + loyaltyDiscount;
+
+  // Recompute coupon discount from source — never read order.discountAmount
+  // (which may already include loyalty) to avoid stacking on repeated calls.
+  let couponDiscount = 0;
+  if (order.couponCode) {
+    const [coupon] = await db.select().from(couponsTable)
+      .where(and(eq(couponsTable.code, order.couponCode), eq(couponsTable.restaurantId, restaurantId)));
+    if (coupon) {
+      const subtotal = Number(order.subtotal);
+      let raw = coupon.discountType === "percentage"
+        ? (subtotal * Number(coupon.discountValue)) / 100
+        : Number(coupon.discountValue);
+      if (coupon.maxDiscountAmount) raw = Math.min(raw, Number(coupon.maxDiscountAmount));
+      couponDiscount = raw;
+    }
+  }
+  const totalDiscount = couponDiscount + loyaltyDiscount;
 
   await db.update(ordersTable).set({
     loyaltyPointsRedeemed: pointsToRedeem,
