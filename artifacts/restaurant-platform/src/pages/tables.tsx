@@ -246,7 +246,7 @@ function TableCard({
         "border-2 rounded-xl p-4 hover:shadow-md transition-all cursor-default",
         mergeMode && "cursor-pointer",
         isMergeSelected && "ring-4 ring-primary ring-offset-2",
-        cfg.bg, cfg.border,
+        cfg.bg, cfg.border, cfg.text,
       )}
     >
       <div className="flex items-start justify-between mb-2">
@@ -370,7 +370,7 @@ function FloorPlanTable({
         isMergeSelected && "ring-4 ring-primary ring-offset-1 rounded-xl",
       )}
     >
-      <div className={cn("border-2 rounded-xl p-2 text-center shadow-sm hover:shadow-md transition-shadow", cfg.bg, cfg.border)}>
+      <div className={cn("border-2 rounded-xl p-2 text-center shadow-sm hover:shadow-md transition-shadow", cfg.bg, cfg.border, cfg.text)}>
         <div className="flex items-center justify-center gap-1 mb-1">
           <div className={cn("w-2 h-2 rounded-full", cfg.dot)} />
           {isMergeSelected && <div className="w-2 h-2 rounded-full bg-primary" />}
