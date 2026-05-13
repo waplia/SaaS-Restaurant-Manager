@@ -135,11 +135,11 @@ export function Sidebar() {
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/30 ring-1 ring-primary/20">
           <Flame className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sidebar-foreground leading-tight">TableTrack</p>
+          <p className="font-bold text-sidebar-foreground leading-tight tracking-tight">TableTrack</p>
           <p className="text-xs text-muted-foreground truncate">{user?.name ?? "Loading…"}</p>
         </div>
         <button
@@ -158,9 +158,9 @@ export function Sidebar() {
             const Icon = entry.icon;
             return (
               <Link key={entry.href} href={entry.href} className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
                 active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  ? "bg-gradient-to-r from-sidebar-primary to-sidebar-primary/90 text-sidebar-primary-foreground shadow-sm shadow-primary/20"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}>
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -190,13 +190,13 @@ export function Sidebar() {
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 <span className="flex-1 text-left">{entry.label}</span>
-                <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", isOpen ? "rotate-0" : "-rotate-90")} />
+                <ChevronDown className={cn("w-4 h-4 transition-transform duration-300 ease-out", isOpen ? "rotate-0" : "-rotate-90")} />
               </button>
               <div
                 id={panelId}
                 aria-hidden={!isOpen}
                 className={cn(
-                  "grid transition-all duration-200 ease-out",
+                  "grid transition-all duration-300 ease-out",
                   isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 pointer-events-none"
                 )}
               >
@@ -212,9 +212,9 @@ export function Sidebar() {
                           tabIndex={isOpen ? 0 : -1}
                           aria-hidden={!isOpen}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
                             active
-                              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                              ? "bg-gradient-to-r from-sidebar-primary to-sidebar-primary/90 text-sidebar-primary-foreground shadow-sm shadow-primary/20"
                               : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           )}
                         >

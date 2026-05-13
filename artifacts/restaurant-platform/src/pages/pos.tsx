@@ -513,10 +513,10 @@ function SplitBillModal({
                           if (activeCardIdx === idx && value !== "card") setActiveCardIdx(null);
                         }}
                         className={cn(
-                          "flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium transition-all",
+                          "flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium transition-all duration-150 active:scale-[0.98]",
                           methods[idx] === value
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/40"
+                            ? "border-primary bg-primary/10 text-orange-800 dark:text-orange-200 shadow-sm shadow-primary/20"
+                            : "border-border text-muted-foreground hover:border-primary/40 hover:bg-accent/40"
                         )}
                       >
                         <Icon className="w-4 h-4" />{label}
@@ -806,10 +806,10 @@ function PaymentModal({
                       key={value}
                       onClick={() => setMethod(value as "cash" | "card" | "upi")}
                       className={cn(
-                        "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all",
+                        "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
                         method === value
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:border-primary/50"
+                          ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 text-orange-800 dark:text-orange-200 shadow-sm shadow-primary/20"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:bg-accent/40"
                       )}
                     >
                       <Icon className="w-5 h-5" />{label}

@@ -15,24 +15,37 @@ function StatCard({ title, value, subtitle, icon: Icon, trend, trendValue, color
   trend?: "up" | "down"; trendValue?: string; color?: string;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5">
+    <div className="group relative bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+      <div className={cn(
+        "absolute inset-x-0 top-0 h-1 opacity-80",
+        color === "orange" ? "bg-gradient-to-r from-orange-400 to-orange-600" :
+        color === "green" ? "bg-gradient-to-r from-emerald-400 to-emerald-600" :
+        color === "blue" ? "bg-gradient-to-r from-sky-400 to-sky-600" :
+        "bg-gradient-to-r from-violet-400 to-violet-600"
+      )} />
       <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground font-medium">{title}</p>
+          <p className="text-2xl font-bold text-foreground mt-1 tracking-tight">{value}</p>
           {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
         </div>
-        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center",
-          color === "orange" ? "bg-orange-100 text-orange-600" :
-          color === "green" ? "bg-green-100 text-green-600" :
-          color === "blue" ? "bg-blue-100 text-blue-600" :
-          "bg-purple-100 text-purple-600"
+        <div className={cn(
+          "w-11 h-11 rounded-xl flex items-center justify-center ring-1 transition-transform duration-200 group-hover:scale-105",
+          color === "orange" ? "bg-orange-100 text-orange-600 ring-orange-200/60 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-400/20" :
+          color === "green" ? "bg-emerald-100 text-emerald-600 ring-emerald-200/60 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20" :
+          color === "blue" ? "bg-sky-100 text-sky-600 ring-sky-200/60 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-400/20" :
+          "bg-violet-100 text-violet-600 ring-violet-200/60 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/20"
         )}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
       {trend && trendValue && (
-        <div className={cn("flex items-center gap-1 mt-3 text-xs font-medium", trend === "up" ? "text-green-600" : "text-red-500")}>
+        <div className={cn(
+          "inline-flex items-center gap-1 mt-3 text-xs font-semibold px-2 py-0.5 rounded-full",
+          trend === "up"
+            ? "text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-500/15"
+            : "text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-500/15"
+        )}>
           {trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           {trendValue}% vs yesterday
         </div>
