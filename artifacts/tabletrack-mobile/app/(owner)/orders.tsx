@@ -8,6 +8,7 @@ import { listOrders, getListOrdersQueryKey } from "@workspace/api-client-react";
 import type { Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { OrderCard } from "@/components/OrderCard";
+import { OrderDetailDrawer } from "@/components/OrderDetailDrawer";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 
@@ -19,6 +20,7 @@ export default function OrdersScreen() {
   const isWeb = Platform.OS === "web";
   const { restaurantId } = useAuth();
   const [activeStatus, setActiveStatus] = useState("all");
+  const [openOrderId, setOpenOrderId] = useState<number | null>(null);
 
   const params = activeStatus !== "all" ? { status: activeStatus, limit: 50 } : { limit: 50 };
 
@@ -66,18 +68,21 @@ export default function OrdersScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: isWeb ? 34 + 90 : insets.bottom + 90 }]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
           renderItem={({ item: o }) => (
-            <OrderCard
-              orderNumber={o.orderNumber ?? String(o.id)}
-              tableLabel={(o as unknown as { tableLabel?: string | null }).tableLabel}
-              itemCount={(o as { items?: unknown[] }).items?.length ?? 0}
-              total={o.totalAmount ?? 0}
-              status={o.status ?? "pending"}
-              orderType={o.orderType ?? "dine_in"}
-              createdAt={o.createdAt ?? new Date().toISOString()}
-            />
+            <Pressable onPress={() => setOpenOrderId(o.id)}>
+              <OrderCard
+                orderNumber={o.orderNumber ?? String(o.id)}
+                tableLabel={(o as unknown as { tableLabel?: string | null }).tableLabel}
+                itemCount={(o as { items?: unknown[] }).items?.length ?? 0}
+                total={o.totalAmount ?? 0}
+                status={o.status ?? "pending"}
+                orderType={o.orderType ?? "dine_in"}
+                createdAt={o.createdAt ?? new Date().toISOString()}
+              />
+            </Pressable>
           )}
         />
       )}
+      <OrderDetailDrawer orderId={openOrderId} onClose={() => setOpenOrderId(null)} />
     </View>
   );
 }

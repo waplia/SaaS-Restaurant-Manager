@@ -198,6 +198,7 @@ export interface UpdateOrderInput {
   paymentStatus?: string;
   discountAmount?: string;
   notes?: string;
+  isPriority?: boolean;
 }
 
 export interface PayOrderInput {

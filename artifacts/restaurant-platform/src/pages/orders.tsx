@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, usePayOrder, useUpdateOrder } from "@/lib/hooks";
+import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, CreditCard, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle } from "lucide-react";
+import { OrderDetailDrawer } from "@/components/OrderDetailDrawer";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -28,15 +29,13 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   cancelled: XCircle,
 };
 
-function nextStatus(status: string): string {
-  const flow: Record<string, string> = { pending: "confirmed", confirmed: "preparing", preparing: "ready", ready: "served" };
-  return flow[status] ?? status;
-}
-
-function OrderCard({ order, onPay, onUpdateStatus }: { order: Order; onPay: (id: number) => void; onUpdateStatus: (id: number, status: string) => void }) {
-  const Icon = STATUS_ICONS[order.status] ?? Clock;
+function OrderCard({ order, onOpen }: { order: Order; onOpen: (id: number) => void }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+    <button
+      type="button"
+      onClick={() => onOpen(order.id)}
+      className="w-full text-left bg-card border border-border rounded-xl p-4 space-y-3 hover:border-primary hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+    >
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -47,27 +46,18 @@ function OrderCard({ order, onPay, onUpdateStatus }: { order: Order; onPay: (id:
             {order.tableId ? `Table ${order.tableId}` : order.orderType} · {format(new Date(order.createdAt), "h:mm a")}
           </p>
         </div>
-        <span className={cn("text-xs font-medium px-2 py-1 rounded-full", STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600")}>
+        <span className={cn("text-xs font-medium px-2 py-1 rounded-full capitalize", STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600")}>
           {order.status}
         </span>
       </div>
       {order.customerName && <p className="text-xs text-muted-foreground">Customer: {order.customerName}</p>}
       <div className="flex items-center justify-between pt-2 border-t border-border">
         <p className="font-bold text-foreground">₹{Number(order.totalAmount).toLocaleString()}</p>
-        <div className="flex gap-2">
-          {order.status !== "completed" && order.status !== "cancelled" && (
-            <Button size="sm" variant="outline" onClick={() => onUpdateStatus(order.id, nextStatus(order.status))}>
-              Next
-            </Button>
-          )}
-          {order.paymentStatus === "unpaid" && order.status !== "cancelled" && (
-            <Button size="sm" onClick={() => onPay(order.id)}>
-              <CreditCard className="w-3.5 h-3.5 mr-1" /> Pay
-            </Button>
-          )}
-        </div>
+        <span className={cn("text-xs font-medium capitalize", order.paymentStatus === "paid" ? "text-green-600" : "text-orange-600")}>
+          {order.paymentStatus ?? "unpaid"}
+        </span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -174,29 +164,10 @@ function NewOrderModal({ onClose }: { onClose: () => void }) {
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const { data: ordersData } = useOrders(statusFilter !== "all" ? { status: statusFilter } : undefined);
-  const payOrder = usePayOrder();
-  const updateOrder = useUpdateOrder();
-  const { toast } = useToast();
 
   const orders: Order[] = ordersData?.data ?? [];
-
-  const handlePay = async (id: number) => {
-    try {
-      await payOrder.mutateAsync({ id, paymentMethod: "cash" });
-      toast({ title: "Payment recorded!" });
-    } catch {
-      toast({ title: "Payment failed", variant: "destructive" });
-    }
-  };
-
-  const handleUpdateStatus = async (id: number, status: string) => {
-    try {
-      await updateOrder.mutateAsync({ id, status });
-    } catch {
-      toast({ title: "Update failed", variant: "destructive" });
-    }
-  };
 
   const statuses = ["all", "pending", "confirmed", "preparing", "ready", "completed", "cancelled"];
 
@@ -221,7 +192,7 @@ export default function OrdersPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {orders.map((order: Order) => (
-            <OrderCard key={order.id} order={order} onPay={handlePay} onUpdateStatus={handleUpdateStatus} />
+            <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} />
           ))}
           {orders.length === 0 && (
             <div className="col-span-full text-center py-16 text-muted-foreground">
@@ -232,6 +203,7 @@ export default function OrdersPage() {
         </div>
       </div>
       {showNewOrder && <NewOrderModal onClose={() => setShowNewOrder(false)} />}
+      <OrderDetailDrawer orderId={openOrderId} onClose={() => setOpenOrderId(null)} />
     </Layout>
   );
 }
