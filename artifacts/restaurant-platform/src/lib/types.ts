@@ -366,6 +366,101 @@ export interface CreatePurchaseOrderInput {
   notes?: string;
 }
 
+export interface Payment {
+  id: number;
+  restaurantId: number;
+  direction: "in" | "out";
+  method: string;
+  amount: string;
+  paymentDate: string;
+  partyType: string;
+  partyId: number | null;
+  partyName: string | null;
+  reference: string | null;
+  referenceType: string;
+  referenceId: number | null;
+  notes: string | null;
+  recordedBy: number | null;
+  recordedByName: string | null;
+  createdAt: string;
+}
+
+export interface PaymentsResponse {
+  data: Payment[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface PaymentSummary {
+  in: Record<string, { total: string; count: number }>;
+  out: Record<string, { total: string; count: number }>;
+  totalIn: string;
+  totalOut: string;
+  net: string;
+}
+
+export interface CreatePaymentInput {
+  direction: "in" | "out";
+  method: string;
+  amount: string | number;
+  partyType?: "customer" | "supplier" | "other";
+  partyId?: number | null;
+  partyName?: string | null;
+  referenceType?: "order" | "purchase_order" | "manual";
+  referenceId?: number | null;
+  notes?: string;
+  paymentDate?: string;
+}
+
+export interface SettlePaymentInput {
+  referenceType: "order" | "purchase_order";
+  referenceId: number;
+  amount: string | number;
+  method: string;
+  notes?: string;
+}
+
+export interface DueCustomerOrder {
+  id: number;
+  orderNumber: string;
+  customerId: number | null;
+  customerName: string;
+  totalAmount: string;
+  paidAmount: string;
+  dueAmount: string;
+  paymentStatus: string;
+  createdAt: string;
+}
+
+export interface DueSupplierPO {
+  id: number;
+  supplierId: number | null;
+  supplierName: string;
+  status: string;
+  totalAmount: string;
+  paidAmount: string;
+  dueAmount: string;
+  orderedAt: string | null;
+  createdAt: string;
+  notes: string | null;
+}
+
+export interface CustomerCreditBalance {
+  customerId: number;
+  customerName: string;
+  openOrders: number;
+  totalDue: string;
+}
+
+export interface DuePaymentsData {
+  customerOrders: DueCustomerOrder[];
+  customerCredits: CustomerCreditBalance[];
+  supplierPOs: DueSupplierPO[];
+  totalCustomerDue: string;
+  totalSupplierDue: string;
+}
+
 export interface UpdateInventoryItemInput {
   id: number;
   name?: string;
@@ -625,6 +720,13 @@ export interface TaxByDayItem {
   effectiveRate: string;
 }
 
+export interface PaymentsByMethodItem {
+  direction: string;
+  method: string;
+  total: string;
+  count: number;
+}
+
 export interface ReportsData {
   totalRevenue: string;
   totalOrders: number;
@@ -638,6 +740,7 @@ export interface ReportsData {
   totalExpenses?: string;
   netProfit?: string;
   expensesByCategory?: { categoryId: number; categoryName: string; color: string; total: string }[];
+  paymentsByMethod?: PaymentsByMethodItem[];
 }
 
 export interface Supplier {

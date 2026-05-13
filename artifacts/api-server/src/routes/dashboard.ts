@@ -306,7 +306,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   if (fromStr && toStr) expenseConditions.push(lte(expensesTable.expenseDate, to.toISOString().slice(0, 10)));
   const expenseWhere = and(...expenseConditions);
 
-  const [expenseTotalRow, expenseByCat] = await Promise.all([
+  const [expenseTotalRow, expenseByCat, paymentsByMethodRows] = await Promise.all([
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(expenseWhere),
     db.select({
       categoryId: expensesTable.categoryId,
@@ -315,12 +315,31 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
       total: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text`,
     }).from(expensesTable).innerJoin(expenseCategoriesTable, eq(expensesTable.categoryId, expenseCategoriesTable.id))
       .where(expenseWhere).groupBy(expensesTable.categoryId, expenseCategoriesTable.name, expenseCategoriesTable.color),
+    db.execute<{ direction: string; method: string; total: string; count: string }>(sql`
+      SELECT direction, method,
+        COALESCE(SUM(amount), 0)::text AS total,
+        COUNT(*)::text AS count
+      FROM payments
+      WHERE restaurant_id = ${restaurantId}
+        AND payment_date >= ${from}
+        ${fromStr && toStr ? sql`AND payment_date <= ${to}` : sql``}
+      GROUP BY direction, method
+      ORDER BY direction, method
+    `),
   ]);
 
   const totalExpenses = Number(expenseTotalRow[0]?.sum ?? "0");
   const netProfit = totalRevenue - totalExpenses;
 
+  const paymentsByMethod = paymentsByMethodRows.rows.map(r => ({
+    direction: r.direction,
+    method: r.method,
+    total: r.total,
+    count: Number(r.count),
+  }));
+
   res.json({
+    paymentsByMethod,
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,
     totalTax: totalTax.toFixed(2),

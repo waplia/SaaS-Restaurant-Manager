@@ -49,6 +49,7 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   status: text("status").notNull().default("pending"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  paidAmount: decimal("paid_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
   notes: text("notes"),
   orderedAt: timestamp("ordered_at"),
   receivedAt: timestamp("received_at"),

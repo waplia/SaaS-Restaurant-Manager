@@ -9,7 +9,7 @@ import {
 import { format } from "date-fns";
 import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem } from "@/lib/types";
+import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem } from "@/lib/types";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -43,7 +43,7 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff";
+type Tab = "sales" | "tax" | "staff" | "payments";
 type ViewMode = "daily" | "monthly" | "yearly";
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
@@ -357,6 +357,7 @@ export default function ReportsPage() {
             { label: "Sales", val: "sales" as Tab },
             { label: "Tax", val: "tax" as Tab },
             { label: "Staff Performance", val: "staff" as Tab },
+            { label: "Payments", val: "payments" as Tab },
           ]).map(({ label, val }) => (
             <button
               key={val}
@@ -603,6 +604,59 @@ export default function ReportsPage() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === "payments" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {(["in", "out"] as const).map(dir => {
+                const items = (reports?.paymentsByMethod ?? []).filter((p: PaymentsByMethodItem) => p.direction === dir);
+                const grandTotal = items.reduce((s, p) => s + Number(p.total), 0);
+                return (
+                  <div key={dir} className="bg-card border border-border rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                      <h3 className="font-semibold text-foreground">
+                        {dir === "in" ? "Money In — by Method" : "Money Out — by Method"}
+                      </h3>
+                      <span className={`text-sm font-semibold ${dir === "in" ? "text-green-600" : "text-orange-600"}`}>
+                        ₹{grandTotal.toLocaleString()}
+                      </span>
+                    </div>
+                    {items.length === 0 ? (
+                      <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+                        No {dir === "in" ? "incoming" : "outgoing"} payments in this period
+                      </div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/40">
+                          <tr>
+                            <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Method</th>
+                            <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Count</th>
+                            <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Total</th>
+                            <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Share</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map(p => {
+                            const total = Number(p.total);
+                            const share = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
+                            return (
+                              <tr key={`${p.direction}-${p.method}`} className="border-t border-border hover:bg-muted/20">
+                                <td className="px-5 py-2.5 capitalize text-foreground font-medium">{p.method}</td>
+                                <td className="px-5 py-2.5 text-right text-muted-foreground">{p.count}</td>
+                                <td className="px-5 py-2.5 text-right font-medium text-foreground">₹{total.toLocaleString()}</td>
+                                <td className="px-5 py-2.5 text-right text-muted-foreground">{share.toFixed(1)}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

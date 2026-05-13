@@ -27,6 +27,8 @@ import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
 import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
+import PaymentsPage from "@/pages/payments";
+import DuePaymentsPage from "@/pages/due-payments";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +96,8 @@ function Router() {
       <Route path="/menu" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/menu-management" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
+      <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
+      <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />

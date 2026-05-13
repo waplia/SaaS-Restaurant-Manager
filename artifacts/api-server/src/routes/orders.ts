@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
@@ -707,16 +707,48 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   }
 
   const splitMethods = splits.map(s => s.paymentMethod).join(",");
-  const [updated] = await db.update(ordersTable).set({
-    paymentMethod: `split:${splitMethods}`,
-    paymentStatus: "paid",
-    status: "completed",
-    updatedAt: new Date(),
-  }).where(eq(ordersTable.id, orderId)).returning();
-
-  if (order.tableId) {
-    await db.update(floorTablesTable).set({ status: "free" })
-      .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  let updated: typeof ordersTable.$inferSelect | undefined;
+  try {
+    updated = await db.transaction(async tx => {
+      const [u] = await tx.update(ordersTable).set({
+        paymentMethod: `split:${splitMethods}`,
+        paymentStatus: "paid",
+        status: "completed",
+        updatedAt: new Date(),
+      }).where(eq(ordersTable.id, orderId)).returning();
+      if (!u) throw new Error("ORDER_NOT_FOUND");
+      if (order.tableId) {
+        await tx.update(floorTablesTable).set({ status: "free" })
+          .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+      }
+      await tx.insert(paymentsTable).values(
+        splits.map(s => ({
+          restaurantId,
+          direction: "in" as const,
+          // Map gateway-backed legs to their gateway method in the ledger so
+          // online totals reflect Stripe/Razorpay volume accurately.
+          method: s.stripePaymentIntentId
+            ? "stripe"
+            : s.razorpayPaymentId
+              ? "razorpay"
+              : s.paymentMethod,
+          amount: Number(s.amount).toFixed(2),
+          paymentDate: new Date(),
+          partyType: (order.customerId ? "customer" : "other") as "customer" | "other",
+          partyId: order.customerId ?? null,
+          partyName: order.customerName ?? null,
+          referenceType: "order" as const,
+          referenceId: order.id,
+          notes: `Split payment leg`,
+          recordedBy: req.user?.sub ?? null,
+        })),
+      );
+      return u;
+    });
+  } catch (err) {
+    if ((err as Error).message === "ORDER_NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    console.error("[Split] Transaction failed:", err);
+    return void res.status(500).json({ error: "Failed to complete split payment" });
   }
 
   handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);
@@ -954,16 +986,48 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   }
 
   const storedPaymentId = stripePaymentIntentId ?? razorpayPaymentId ?? null;
-  const [updated] = await db.update(ordersTable).set({
-    paymentMethod,
-    paymentStatus: "paid",
-    status: "completed",
-    stripePaymentId: storedPaymentId,
-    updatedAt: new Date(),
-  }).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId))).returning();
-  if (!updated) return void res.status(404).json({ error: "Not found" });
-  if (updated.tableId) {
-    await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  // Map gateway-backed payments to their gateway method in the ledger so the
+  // "Online (Stripe/Razorpay)" reporting bucket reflects actual gateway volume.
+  const ledgerMethod: string = stripePaymentIntentId
+    ? "stripe"
+    : razorpayPaymentId
+      ? "razorpay"
+      : paymentMethod;
+  let updated: typeof ordersTable.$inferSelect | undefined;
+  try {
+    updated = await db.transaction(async tx => {
+      const [u] = await tx.update(ordersTable).set({
+        paymentMethod,
+        paymentStatus: "paid",
+        status: "completed",
+        stripePaymentId: storedPaymentId,
+        updatedAt: new Date(),
+      }).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId))).returning();
+      if (!u) throw new Error("ORDER_NOT_FOUND");
+      if (u.tableId) {
+        await tx.update(floorTablesTable).set({ status: "free" })
+          .where(and(eq(floorTablesTable.id, u.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+      }
+      await tx.insert(paymentsTable).values({
+        restaurantId,
+        direction: "in",
+        method: ledgerMethod,
+        amount: Number(u.totalAmount).toFixed(2),
+        paymentDate: new Date(),
+        partyType: u.customerId ? "customer" : "other",
+        partyId: u.customerId ?? null,
+        partyName: u.customerName ?? null,
+        referenceType: "order",
+        referenceId: u.id,
+        notes: null,
+        recordedBy: req.user?.sub ?? null,
+      });
+      return u;
+    });
+  } catch (err) {
+    if ((err as Error).message === "ORDER_NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    console.error("[Pay] Transaction failed:", err);
+    return void res.status(500).json({ error: "Failed to complete payment" });
   }
 
   handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);

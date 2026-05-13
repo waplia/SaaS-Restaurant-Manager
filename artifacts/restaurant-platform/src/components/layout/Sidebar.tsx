@@ -2,14 +2,16 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
-  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt
+  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { NotificationDropdown } from "./NotificationDropdown";
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] };
+
+const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "POS Terminal", icon: Monitor },
   { href: "/orders", label: "Orders", icon: ShoppingCart },
@@ -17,6 +19,8 @@ const navItems = [
   { href: "/tables", label: "Tables", icon: Table2 },
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/inventory", label: "Inventory", icon: Package },
+  { href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
+  { href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
   { href: "/staff", label: "Staff", icon: UserCheck },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
@@ -52,8 +56,11 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon, roles }) => {
-          if (roles && user?.role && !user.isSuperAdmin && !roles.includes(user.role)) return null;
+        {navItems.filter(item => {
+          if (!item.roles) return true;
+          if (user?.isSuperAdmin) return true;
+          return user?.role ? item.roles.includes(user.role) : false;
+        }).map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? location === "/" : location.startsWith(href);
           return (
             <Link key={href} href={href} className={cn(

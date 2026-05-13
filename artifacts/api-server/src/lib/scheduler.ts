@@ -1,11 +1,93 @@
 import cron from "node-cron";
 import { db } from "./db";
-import { eq, and, gte, lte, lt, sum, count, desc } from "drizzle-orm";
-import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable } from "../lib/db";
+import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzle-orm";
+import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable } from "../lib/db";
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { logger } from "./logger";
 
+async function backfillPaymentsLedger(): Promise<void> {
+  // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
+  // Arbitrary stable lock key for "payments-ledger-backfill".
+  const LOCK_KEY = 73610136;
+  try {
+    const lockRes = await db.execute(sql`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS got`);
+    const got = (lockRes as unknown as { rows: { got: boolean }[] }).rows?.[0]?.got;
+    if (!got) {
+      logger.info("[Backfill] Another instance holds the backfill lock; skipping.");
+      return;
+    }
+
+    try {
+      const existingOrderIds = await db
+        .selectDistinct({ id: paymentsTable.referenceId })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.referenceType, "order"));
+      const skipIds = new Set(
+        existingOrderIds.map(r => r.id).filter((x): x is number => x !== null),
+      );
+
+      // Iterate in batches by ascending id until exhaustion (no hard cap).
+      // Historical split orders cannot be split-reconstructed from the orders
+      // table alone (no per-leg amounts persisted), so they are recorded as a
+      // single ledger row using the order's recorded paymentMethod (or "cash"
+      // if not in the supported enum). New split payments are written
+      // accurately as one ledger row per leg from the /split endpoint.
+      const BATCH = 500;
+      let lastId = 0;
+      let totalInserted = 0;
+      // Hard upper bound on iterations to prevent runaway loops in pathological data.
+      for (let iter = 0; iter < 10_000; iter++) {
+        const batch = await db.select().from(ordersTable)
+          .where(and(eq(ordersTable.paymentStatus, "paid"), sql`${ordersTable.id} > ${lastId}`))
+          .orderBy(ordersTable.id)
+          .limit(BATCH);
+        if (batch.length === 0) break;
+        lastId = batch[batch.length - 1]!.id;
+
+        const rows = batch
+          .filter(o => !skipIds.has(o.id))
+          .map(o => ({
+            restaurantId: o.restaurantId,
+            direction: "in" as const,
+            method: o.paymentMethod && ["cash", "card", "upi", "stripe", "razorpay", "bank", "other"].includes(o.paymentMethod)
+              ? o.paymentMethod
+              : "cash",
+            amount: Number(o.totalAmount).toFixed(2),
+            paymentDate: o.updatedAt ?? o.createdAt,
+            partyType: (o.customerId ? "customer" : "other") as "customer" | "other",
+            partyId: o.customerId ?? null,
+            partyName: o.customerName ?? null,
+            referenceType: "order" as const,
+            referenceId: o.id,
+            notes: o.paymentMethod?.startsWith("split:")
+              ? "Backfilled from historical paid order (approximate — split legs not reconstructed)"
+              : "Backfilled from historical paid order",
+            recordedBy: o.waiterId ?? null,
+          }));
+
+        if (rows.length > 0) {
+          await db.insert(paymentsTable).values(rows);
+          totalInserted += rows.length;
+        }
+        if (batch.length < BATCH) break;
+      }
+
+      if (totalInserted === 0) {
+        logger.info("[Backfill] Payments ledger is up-to-date.");
+      } else {
+        logger.info({ count: totalInserted }, "[Backfill] Inserted historical payment ledger rows.");
+      }
+    } finally {
+      await db.execute(sql`SELECT pg_advisory_unlock(${LOCK_KEY})`);
+    }
+  } catch (err) {
+    logger.error({ err }, "[Backfill] Failed to backfill payments ledger");
+  }
+}
+
 export function startScheduler(): void {
+  backfillPaymentsLedger().catch(err => logger.error({ err }, "Backfill startup error"));
+
   cron.schedule("0 23 * * *", async () => {
     logger.info("Running daily sales summary job");
     try {

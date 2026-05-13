@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, recipeMappingsTable, notificationsTable } from "../lib/db";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, recipeMappingsTable, notificationsTable, paymentsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -138,15 +138,64 @@ router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "
 });
 
 router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { status, notes, totalAmount } = req.body;
+  const { status, notes, totalAmount, paymentMethod } = req.body as {
+    status?: string; notes?: string; totalAmount?: string; paymentMethod?: string;
+  };
+  const restaurantId = Number(req.params.restaurantId);
+  const poId = Number(req.params.id);
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (status) updates.status = status;
   if (notes !== undefined) updates.notes = notes;
   if (totalAmount !== undefined) updates.totalAmount = totalAmount;
   if (status === "received") updates.receivedAt = new Date();
-  const [updated] = await db.update(purchaseOrdersTable).set(updates)
-    .where(and(eq(purchaseOrdersTable.id, Number(req.params.id)), eq(purchaseOrdersTable.restaurantId, Number(req.params.restaurantId)))).returning();
-  if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  let updated: typeof purchaseOrdersTable.$inferSelect | undefined;
+  try {
+    updated = await db.transaction(async tx => {
+      const [existing] = await tx.select().from(purchaseOrdersTable)
+        .where(and(eq(purchaseOrdersTable.id, poId), eq(purchaseOrdersTable.restaurantId, restaurantId)));
+      if (!existing) throw new Error("NOT_FOUND");
+
+      const [u] = await tx.update(purchaseOrdersTable).set(updates)
+        .where(and(eq(purchaseOrdersTable.id, poId), eq(purchaseOrdersTable.restaurantId, restaurantId))).returning();
+      if (!u) throw new Error("NOT_FOUND");
+
+      if (status === "received" && existing.status !== "received") {
+        const total = Number(u.totalAmount);
+        const alreadyPaid = Number(u.paidAmount);
+        const due = Math.max(0, total - alreadyPaid);
+        if (due > 0.01) {
+          const method = ["cash", "card", "upi", "stripe", "razorpay", "bank", "other"].includes(String(paymentMethod))
+            ? String(paymentMethod) : "cash";
+          await tx.insert(paymentsTable).values({
+            restaurantId,
+            direction: "out",
+            method,
+            amount: due.toFixed(2),
+            paymentDate: new Date(),
+            partyType: u.supplierId ? "supplier" : "other",
+            partyId: u.supplierId ?? null,
+            partyName: null,
+            referenceType: "purchase_order",
+            referenceId: u.id,
+            notes: "Auto-recorded on PO received",
+            recordedBy: req.user?.sub ?? null,
+          });
+          const [reUpdated] = await tx.update(purchaseOrdersTable)
+            .set({ paidAmount: total.toFixed(2) })
+            .where(eq(purchaseOrdersTable.id, poId))
+            .returning();
+          return reUpdated ?? u;
+        }
+      }
+      return u;
+    });
+  } catch (err) {
+    if ((err as Error).message === "NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    console.error("[PO] Transaction failed:", err);
+    return void res.status(500).json({ error: "Failed to update purchase order" });
+  }
+
   res.json(updated);
 });
 

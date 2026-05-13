@@ -20,6 +20,8 @@ import type {
   ReportsData,
   Supplier, CreateSupplierInput, UpdateSupplierInput,
   Role, Permission,
+  Payment, PaymentsResponse, PaymentSummary, CreatePaymentInput, SettlePaymentInput,
+  DuePaymentsData,
 } from "./types";
 
 export const RESTAURANT_ID = 1;
@@ -1082,6 +1084,7 @@ export function useDeleteExpense() {
   });
 }
 
+
 export function useExpenseSummary(params?: { from?: string; to?: string }) {
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
@@ -1125,5 +1128,66 @@ export function useDeleteRecurringExpense() {
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recurring-expenses/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring-expenses"] }),
+  });
+}
+
+export function usePayments(params?: {
+  from?: string; to?: string; method?: string; direction?: string;
+  partyType?: string; page?: number; pageSize?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.method) q.set("method", params.method);
+  if (params?.direction) q.set("direction", params.direction);
+  if (params?.partyType) q.set("partyType", params.partyType);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+  return useQuery({
+    queryKey: ["payments", RESTAURANT_ID, params],
+    queryFn: () => apiGet<PaymentsResponse>(`/restaurants/${RESTAURANT_ID}/payments?${q}`),
+  });
+}
+
+export function usePaymentSummary(params?: { from?: string; to?: string }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["payments", "summary", RESTAURANT_ID, params],
+    queryFn: () => apiGet<PaymentSummary>(`/restaurants/${RESTAURANT_ID}/payments/summary?${q}`),
+  });
+}
+
+export function useCreatePayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreatePaymentInput) => apiPost<Payment>(`/restaurants/${RESTAURANT_ID}/payments`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payments", "summary", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["due-payments", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useSettlePayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: SettlePaymentInput) => apiPost<Payment>(`/restaurants/${RESTAURANT_ID}/payments/settle`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payments", "summary", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["due-payments", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useDuePayments() {
+  return useQuery({
+    queryKey: ["due-payments", RESTAURANT_ID],
+    queryFn: () => apiGet<DuePaymentsData>(`/restaurants/${RESTAURANT_ID}/due-payments`),
+    refetchInterval: 30000,
   });
 }
