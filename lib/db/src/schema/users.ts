@@ -17,6 +17,7 @@ export const usersTable = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
+  pushToken: text("push_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

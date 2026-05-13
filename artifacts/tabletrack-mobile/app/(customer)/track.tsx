@@ -180,7 +180,7 @@ export default function TrackOrderScreen() {
             styles.newOrderBtn,
             { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
           ]}
-          onPress={() => router.replace("/(customer)" as any)}
+          onPress={() => router.replace({ pathname: "/(customer)" })}
         >
           <Text style={[styles.newOrderBtnText, { color: colors.mutedForeground }]}>Order More Items</Text>
         </Pressable>

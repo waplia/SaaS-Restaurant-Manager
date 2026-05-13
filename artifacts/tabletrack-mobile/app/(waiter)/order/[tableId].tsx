@@ -179,12 +179,12 @@ export default function WaiterOrderScreen() {
     });
   };
 
-  const submitOrderItems = async (cartItems: CartItem[]): Promise<void> => {
-    let orderId = activeOrder?.id;
+  const submitOrderItems = async (cartItems: CartItem[], targetTableId: number, existingOrderId?: number): Promise<void> => {
+    let orderId = existingOrderId;
     if (!orderId) {
       const newOrder = await createOrder.mutateAsync({
         restaurantId,
-        data: { tableId: numTableId, orderType: "dine_in", items: [] },
+        data: { tableId: targetTableId, orderType: "dine_in", items: [] },
       });
       orderId = newOrder.id;
     }
@@ -205,7 +205,7 @@ export default function WaiterOrderScreen() {
     const failed: QueuedOrder[] = [];
     for (const entry of queue) {
       try {
-        await submitOrderItems(entry.items);
+        await submitOrderItems(entry.items, entry.tableId);
         successCount++;
       } catch {
         failed.push(entry);
@@ -237,7 +237,7 @@ export default function WaiterOrderScreen() {
         Alert.alert("Saved Offline", "You're offline. The order will be sent to the kitchen automatically when you reconnect.");
         return;
       }
-      await submitOrderItems(cart);
+      await submitOrderItems(cart, numTableId, activeOrder?.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCart([]);
       Alert.alert("Sent!", "Items sent to kitchen.");
@@ -263,7 +263,7 @@ export default function WaiterOrderScreen() {
       {activeOrder ? (
         <Pressable
           style={[styles.activeOrderBanner, { backgroundColor: colors.accent, borderColor: colors.primary + "40" }]}
-          onPress={() => router.push(`/(waiter)/bill/${activeOrder.id}` as any)}
+          onPress={() => router.push({ pathname: "/(waiter)/bill/[orderId]", params: { orderId: String(activeOrder.id) } })}
         >
           <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
           <Text style={[styles.activeOrderText, { color: colors.primary }]}>

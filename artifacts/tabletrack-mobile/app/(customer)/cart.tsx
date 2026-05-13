@@ -44,7 +44,7 @@ export default function CartScreen() {
           title="No table selected"
           message="Please scan a table QR code before ordering."
           actionLabel="Scan QR Code"
-          onAction={() => router.replace("/(customer)" as any)}
+          onAction={() => router.replace({ pathname: "/(customer)" })}
         />
       </View>
     );
@@ -90,9 +90,10 @@ export default function CartScreen() {
       if (data.mode === "live" && data.checkoutUrl) {
         clearCart();
         await Linking.openURL(data.checkoutUrl);
-        router.replace(
-          `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
-        );
+        router.replace({
+          pathname: "/(customer)/track",
+          params: { orderId: String(orderResult.orderId), orderNumber: orderResult.orderNumber, guestToken: orderResult.guestToken, restaurantId: String(restaurantId), tableId: String(tableId) },
+        });
       } else {
         const demoResp = await fetch(
           `${baseUrl}/api/public/orders/${orderResult.orderId}/pay?token=${orderResult.guestToken}`,
@@ -104,9 +105,10 @@ export default function CartScreen() {
         );
         if (demoResp.ok) {
           clearCart();
-          router.replace(
-            `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
-          );
+          router.replace({
+            pathname: "/(customer)/track",
+            params: { orderId: String(orderResult.orderId), orderNumber: orderResult.orderNumber, guestToken: orderResult.guestToken, restaurantId: String(restaurantId), tableId: String(tableId) },
+          });
         } else {
           Alert.alert("Payment Failed", "Could not process payment. Please try again.");
         }
@@ -121,9 +123,10 @@ export default function CartScreen() {
   const handleCashPayment = () => {
     if (!orderResult) return;
     clearCart();
-    router.replace(
-      `/(customer)/track?orderId=${orderResult.orderId}&orderNumber=${orderResult.orderNumber}&guestToken=${orderResult.guestToken}&restaurantId=${restaurantId}&tableId=${tableId}` as any
-    );
+    router.replace({
+      pathname: "/(customer)/track",
+      params: { orderId: String(orderResult.orderId), orderNumber: orderResult.orderNumber, guestToken: orderResult.guestToken, restaurantId: String(restaurantId), tableId: String(tableId) },
+    });
   };
 
   if (cart.items.length === 0 && paymentStep === "cart") {

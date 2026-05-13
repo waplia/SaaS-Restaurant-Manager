@@ -98,6 +98,17 @@ router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), async
   res.json(updated);
 });
 
+router.post("/users/:id/push-token", async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
+  const { token } = req.body as { token: string; platform?: string };
+  if (!token) return void res.status(400).json({ error: "token required" });
+  await db.update(usersTable).set({ pushToken: token, updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  res.json({ ok: true });
+});
+
 router.delete("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const [existing] = await db.select({ id: usersTable.id, tenantId: usersTable.tenantId }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
   if (!existing) return void res.status(404).json({ error: "Not found" });

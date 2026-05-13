@@ -53,7 +53,7 @@ export default function TablesScreen() {
               label={t.tableNumber ?? `T${t.id}`}
               capacity={t.capacity ?? 4}
               status={t.status ?? "available"}
-              onPress={() => router.push(`/(waiter)/order/${t.id}` as any)}
+              onPress={() => router.push({ pathname: "/(waiter)/order/[tableId]", params: { tableId: String(t.id) } })}
             />
           )}
         />
