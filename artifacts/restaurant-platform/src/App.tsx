@@ -101,7 +101,8 @@ function Router() {
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
-      <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
+      <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
+      <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />

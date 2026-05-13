@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useReports } from "@/lib/hooks";
@@ -46,6 +47,8 @@ function fmtTableDate(d: string, viewMode: string): string {
 type Tab = "sales" | "tax" | "staff" | "payments";
 type ViewMode = "daily" | "monthly" | "yearly";
 
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments"] as const;
+
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -58,12 +61,18 @@ function exportCSV(filename: string, rows: string[][], headers: string[]) {
 }
 
 export default function ReportsPage() {
+  const params = useParams<{ section?: string }>();
+  const sectionParam = params?.section;
+  const tab: Tab = (VALID_TABS as readonly string[]).includes(sectionParam ?? "")
+    ? (sectionParam as Tab)
+    : "sales";
   const [period, setPeriod] = useState("30d");
-  const [tab, setTab] = useState<Tab>("sales");
   const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [useCustom, setUseCustom] = useState(false);
+
+  const sectionInvalid = !!sectionParam && !(VALID_TABS as readonly string[]).includes(sectionParam);
 
   const { data: reports, isLoading } = useReports(
     useCustom && customFrom && customTo ? `custom|${customFrom}|${customTo}` : period,
@@ -220,6 +229,10 @@ export default function ReportsPage() {
     ] : []),
   ];
 
+  if (sectionInvalid) {
+    return <Redirect to="/reports/sales" />;
+  }
+
   return (
     <Layout>
       <PageHeader
@@ -359,15 +372,15 @@ export default function ReportsPage() {
             { label: "Staff Performance", val: "staff" as Tab },
             { label: "Payments", val: "payments" as Tab },
           ]).map(({ label, val }) => (
-            <button
+            <Link
               key={val}
-              onClick={() => setTab(val)}
+              href={`/reports/${val}`}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 tab === val ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               {label}
-            </button>
+            </Link>
           ))}
         </div>
 

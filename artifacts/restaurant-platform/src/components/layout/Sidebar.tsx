@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
-  ChevronDown, Coins,
+  ChevronDown, Coins, TrendingUp, Percent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -34,7 +34,15 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
     ],
   },
-  { kind: "link", href: "/reports", label: "Reports", icon: BarChart3 },
+  {
+    kind: "group", key: "reports", label: "Reports", icon: BarChart3,
+    children: [
+      { kind: "link", href: "/reports/sales", label: "Sales", icon: TrendingUp },
+      { kind: "link", href: "/reports/tax", label: "Tax", icon: Percent },
+      { kind: "link", href: "/reports/staff", label: "Staff Performance", icon: Users },
+      { kind: "link", href: "/reports/payments", label: "Payments", icon: Wallet },
+    ],
+  },
 ];
 
 const STORAGE_KEY = "tt_sidebar_groups_open_v1";
