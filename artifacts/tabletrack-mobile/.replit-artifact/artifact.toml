@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "TableTrack Mobile"
+version = "1.0.0"
+id = "artifacts/tabletrack-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 21674
+
+[services.development]
+run = "pnpm --filter @workspace/tabletrack-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tabletrack-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/tabletrack-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "21674"
+BASE_PATH = "/mobile/"
