@@ -260,6 +260,14 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
   }
 
+  await db.insert(notificationsTable).values({
+    restaurantId,
+    type: "new_order",
+    title: "New Order",
+    message: `Order #${order.orderNumber} placed${order.customerName ? ` by ${order.customerName}` : ""}`,
+    entityId: order.id,
+    entityType: "order",
+  }).catch(() => {});
   broadcastEvent(restaurantId, "order:new", order);
   broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
 
@@ -998,9 +1006,17 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
 
   if (status === "ready") {
-    broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
     const [order] = await db.select({ customerId: ordersTable.customerId, orderNumber: ordersTable.orderNumber })
       .from(ordersTable).where(eq(ordersTable.id, updated.orderId));
+    await db.insert(notificationsTable).values({
+      restaurantId,
+      type: "order_status",
+      title: "Order Ready",
+      message: `Order #${order?.orderNumber ?? updated.orderId} is ready for pickup`,
+      entityId: updated.orderId,
+      entityType: "order",
+    }).catch(() => {});
+    broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
     if (order?.customerId) {
       const [customer] = await db.select({ phone: customersTable.phone, name: customersTable.name })
         .from(customersTable).where(eq(customersTable.id, order.customerId));
