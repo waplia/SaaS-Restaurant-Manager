@@ -117,114 +117,146 @@ export default function ReportsPage() {
   function handleExportExcel() {
     if (!reports) return;
     const wb = XLSX.utils.book_new();
+    const dateStamp = new Date().toISOString().slice(0, 10);
 
-    const salesRows = (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => ({
-      Date: r.date,
-      Revenue: Number(r.revenue),
-      Orders: r.orders,
-      "Avg Order": r.orders > 0 ? Number((Number(r.revenue) / r.orders).toFixed(2)) : 0,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(salesRows), "Sales");
-
-    const taxRows = (reports.taxByDay ?? []).map((r: TaxByDayItem) => ({
-      Date: r.date,
-      "Tax Collected": Number(r.tax),
-      Revenue: Number(r.revenue),
-      Orders: r.orders,
-      "Effective Rate (%)": Number(r.effectiveRate),
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taxRows), "Tax");
-
-    const staffRows = (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => ({
-      "Staff Member": s.name,
-      "Orders Handled": s.orderCount,
-      "Revenue Generated": Number(s.totalRevenue),
-      "Hours Worked": Number(s.totalHours),
-      "Revenue / Order": s.orderCount > 0 ? Number((Number(s.totalRevenue) / s.orderCount).toFixed(2)) : 0,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
-
-    const summaryRows = [
-      { Metric: "Total Revenue", Value: Number(reports.totalRevenue) },
-      { Metric: "Total Orders", Value: reports.totalOrders },
-      { Metric: "Avg Order Value", Value: Number(reports.avgOrderValue) },
-      { Metric: "Tax Collected", Value: Number(reports.totalTax) },
-      { Metric: "Effective Tax Rate (%)", Value: Number(reports.effectiveTaxRate ?? 0) },
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
-
-    XLSX.writeFile(wb, `tabletrack-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    if (tab === "sales") {
+      const salesRows = (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => ({
+        Date: r.date,
+        Revenue: Number(r.revenue),
+        Orders: r.orders,
+        "Avg Order": r.orders > 0 ? Number((Number(r.revenue) / r.orders).toFixed(2)) : 0,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(salesRows), "Sales");
+      XLSX.writeFile(wb, `sales-report-${dateStamp}.xlsx`);
+    } else if (tab === "tax") {
+      const taxRows = (reports.taxByDay ?? []).map((r: TaxByDayItem) => ({
+        Date: r.date,
+        "Tax Collected": Number(r.tax),
+        Revenue: Number(r.revenue),
+        Orders: r.orders,
+        "Effective Rate (%)": Number(r.effectiveRate),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taxRows), "Tax");
+      XLSX.writeFile(wb, `tax-report-${dateStamp}.xlsx`);
+    } else if (tab === "staff") {
+      const staffRows = (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => ({
+        "Staff Member": s.name,
+        "Orders Handled": s.orderCount,
+        "Revenue Generated": Number(s.totalRevenue),
+        "Hours Worked": Number(s.totalHours),
+        "Revenue / Order": s.orderCount > 0 ? Number((Number(s.totalRevenue) / s.orderCount).toFixed(2)) : 0,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
+      XLSX.writeFile(wb, `staff-report-${dateStamp}.xlsx`);
+    } else {
+      const paymentRows = (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => ({
+        Direction: p.direction === "in" ? "Money In" : "Money Out",
+        Method: p.method,
+        Count: p.count,
+        Total: Number(p.total),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows), "Payments");
+      XLSX.writeFile(wb, `payments-report-${dateStamp}.xlsx`);
+    }
   }
 
   function handleExportPDF() {
     if (!reports) return;
     const doc = new jsPDF();
     const dateStr = new Date().toLocaleDateString();
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    const sectionTitle =
+      tab === "sales" ? "Sales Report"
+      : tab === "tax" ? "Tax Report"
+      : tab === "staff" ? "Staff Performance Report"
+      : "Payments Report";
 
     doc.setFontSize(18);
-    doc.text("TableTrack — Analytics Report", 14, 18);
+    doc.text(`TableTrack — ${sectionTitle}`, 14, 18);
     doc.setFontSize(10);
     doc.text(`Generated: ${dateStr}`, 14, 26);
 
-    doc.setFontSize(13);
-    doc.text("Summary", 14, 36);
-    autoTable(doc, {
-      startY: 40,
-      head: [["Metric", "Value"]],
-      body: [
-        ["Total Revenue", `₹${Number(reports.totalRevenue).toLocaleString()}`],
-        ["Total Orders", String(reports.totalOrders)],
-        ["Avg Order Value", `₹${Number(reports.avgOrderValue).toFixed(2)}`],
-        ["Tax Collected", `₹${Number(reports.totalTax).toLocaleString()}`],
-        ["Effective Tax Rate", `${reports.effectiveTaxRate ?? "0.00"}%`],
-      ],
-    });
+    if (tab === "sales") {
+      doc.setFontSize(13);
+      doc.text("Summary", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Total Revenue", `₹${Number(reports.totalRevenue).toLocaleString()}`],
+          ["Total Orders", String(reports.totalOrders)],
+          ["Avg Order Value", `₹${Number(reports.avgOrderValue).toFixed(2)}`],
+        ],
+      });
+      const afterSummary = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
+      doc.setFontSize(13);
+      doc.text("Daily Revenue", 14, afterSummary + 10);
+      autoTable(doc, {
+        startY: afterSummary + 14,
+        head: [["Date", "Revenue", "Orders", "Avg Order"]],
+        body: (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => [
+          r.date,
+          `₹${Number(r.revenue).toLocaleString()}`,
+          String(r.orders),
+          r.orders > 0 ? `₹${(Number(r.revenue) / r.orders).toFixed(0)}` : "–",
+        ]),
+      });
+    } else if (tab === "tax") {
+      doc.setFontSize(13);
+      doc.text("Summary", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Tax Collected", `₹${Number(reports.totalTax).toLocaleString()}`],
+          ["Effective Tax Rate", `${reports.effectiveTaxRate ?? "0.00"}%`],
+        ],
+      });
+      const afterSummary = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
+      doc.setFontSize(13);
+      doc.text("Tax Breakdown", 14, afterSummary + 10);
+      autoTable(doc, {
+        startY: afterSummary + 14,
+        head: [["Date", "Tax Collected", "Revenue", "Orders", "Rate"]],
+        body: (reports.taxByDay ?? []).map((r: TaxByDayItem) => [
+          r.date,
+          `₹${Number(r.tax).toLocaleString()}`,
+          `₹${Number(r.revenue).toLocaleString()}`,
+          String(r.orders),
+          `${r.effectiveRate}%`,
+        ]),
+      });
+    } else if (tab === "staff") {
+      doc.setFontSize(13);
+      doc.text("Staff Performance", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Staff Member", "Orders", "Revenue", "Hours", "Rev/Order"]],
+        body: (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => [
+          s.name,
+          String(s.orderCount),
+          `₹${Number(s.totalRevenue).toLocaleString()}`,
+          `${s.totalHours}h`,
+          s.orderCount > 0 ? `₹${(Number(s.totalRevenue) / s.orderCount).toFixed(0)}` : "–",
+        ]),
+      });
+    } else {
+      doc.setFontSize(13);
+      doc.text("Payments by Method", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Direction", "Method", "Count", "Total"]],
+        body: (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => [
+          p.direction === "in" ? "Money In" : "Money Out",
+          p.method,
+          String(p.count),
+          `₹${Number(p.total).toLocaleString()}`,
+        ]),
+      });
+    }
 
-    const afterSummary = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
-    doc.setFontSize(13);
-    doc.text("Daily Revenue", 14, afterSummary + 10);
-    autoTable(doc, {
-      startY: afterSummary + 14,
-      head: [["Date", "Revenue", "Orders", "Avg Order"]],
-      body: (reports.revenueByDay ?? []).map((r: RevenueByDayItem) => [
-        r.date,
-        `₹${Number(r.revenue).toLocaleString()}`,
-        String(r.orders),
-        r.orders > 0 ? `₹${(Number(r.revenue) / r.orders).toFixed(0)}` : "–",
-      ]),
-    });
-
-    doc.addPage();
-    doc.setFontSize(13);
-    doc.text("Tax Breakdown", 14, 18);
-    autoTable(doc, {
-      startY: 22,
-      head: [["Date", "Tax Collected", "Revenue", "Orders", "Rate"]],
-      body: (reports.taxByDay ?? []).map((r: TaxByDayItem) => [
-        r.date,
-        `₹${Number(r.tax).toLocaleString()}`,
-        `₹${Number(r.revenue).toLocaleString()}`,
-        String(r.orders),
-        `${r.effectiveRate}%`,
-      ]),
-    });
-
-    const afterTax = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
-    doc.setFontSize(13);
-    doc.text("Staff Performance", 14, afterTax + 10);
-    autoTable(doc, {
-      startY: afterTax + 14,
-      head: [["Staff Member", "Orders", "Revenue", "Hours", "Rev/Order"]],
-      body: (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => [
-        s.name,
-        String(s.orderCount),
-        `₹${Number(s.totalRevenue).toLocaleString()}`,
-        `${s.totalHours}h`,
-        s.orderCount > 0 ? `₹${(Number(s.totalRevenue) / s.orderCount).toFixed(0)}` : "–",
-      ]),
-    });
-
-    doc.save(`tabletrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`${tab}-report-${dateStamp}.pdf`);
   }
 
   const hasExpenseAccess = reports?.totalExpenses != null;
