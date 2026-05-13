@@ -1545,9 +1545,9 @@ export default function PosPage() {
             ))}
           </div>
 
-          {/* Totals + actions */}
+          {/* Totals + actions — sticky footer summary */}
           {(cart.length > 0 || placedOrder) && (
-            <div className="border-t border-border px-4 py-4 space-y-3 flex-shrink-0">
+            <div className="border-t border-border px-4 py-4 space-y-3 flex-shrink-0 bg-card/60 backdrop-blur-sm shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.06)]">
               <div className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <Input

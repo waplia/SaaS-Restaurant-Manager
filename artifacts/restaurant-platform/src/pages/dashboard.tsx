@@ -172,20 +172,21 @@ export default function DashboardPage() {
               <AreaChart data={trendData as RevenueTrendItem[]} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(24 95% 53%)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="hsl(24 95% 53%)" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(20 92% 46%)" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="hsl(20 92% 46%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => {
+                <CartesianGrid strokeDasharray="3 6" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(d: string) => {
                   try {
                     if (trendGroupBy === "monthly") return format(new Date(d + "-01T12:00:00"), "MMM yyyy");
                     if (trendGroupBy === "weekly") return `Wk ${format(new Date(d + "T12:00:00"), "MMM d")}`;
                     return format(new Date(d + "T12:00:00"), "EEE MMM d");
                   } catch { return d; }
                 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
                 <Tooltip
+                  contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
                   formatter={(v: number) => [`₹${Number(v).toLocaleString()}`, "Revenue"]}
                   labelFormatter={(d: string) => {
                     try {
@@ -195,7 +196,7 @@ export default function DashboardPage() {
                     } catch { return d; }
                   }}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="hsl(24 95% 53%)" fill="url(#revGrad)" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="revenue" stroke="hsl(20 92% 46%)" fill="url(#revGrad)" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
