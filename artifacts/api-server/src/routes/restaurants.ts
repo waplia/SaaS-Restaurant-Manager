@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, restaurantsTable, branchesTable, subscriptionPlansTable, tenantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { seedDefaultExpenseCategories } from "./expenses";
 
 const router = Router();
 
@@ -45,6 +46,8 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
   }
 
   const [restaurant] = await db.insert(restaurantsTable).values({ tenantId, name, slug, description, phone, email, address, city, country, taxRate, openingTime, closingTime }).returning();
+  // Seed default expense categories for the new restaurant so owners can record expenses immediately.
+  await seedDefaultExpenseCategories(restaurant.id);
   res.status(201).json(restaurant);
 });
 

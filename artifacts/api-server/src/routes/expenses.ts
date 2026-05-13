@@ -27,6 +27,12 @@ async function ensureDefaultCategories(restaurantId: number) {
   return inserted;
 }
 
+export async function seedDefaultExpenseCategories(restaurantId: number): Promise<void> {
+  await db.insert(expenseCategoriesTable).values(
+    DEFAULT_CATEGORIES.map(c => ({ ...c, restaurantId })),
+  ).onConflictDoNothing();
+}
+
 function advanceDate(d: Date, frequency: string, dayOfMonth?: number | null): Date {
   const next = new Date(d);
   if (frequency === "weekly") {
