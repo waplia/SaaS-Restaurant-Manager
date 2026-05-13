@@ -13,7 +13,7 @@ import {
 } from "@/lib/hooks";
 import { apiPost, getApiUrl } from "@/lib/api";
 import { RESTAURANT_ID } from "@/lib/hooks";
-import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage, ShoppingBag, Utensils, Zap, Wifi, Wrench, Truck, Building2, Sparkles, FileText, CreditCard, Package, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, RecurringExpense } from "@/lib/types";
 
@@ -21,7 +21,26 @@ const TABS = ["Expenses", "Recurring", "Categories"] as const;
 type Tab = typeof TABS[number];
 
 const PALETTE = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#a855f7", "#ec4899", "#64748b"];
-const FREQUENCIES = ["weekly", "monthly", "yearly"];
+const ICON_OPTIONS: Array<{ key: string; Icon: React.ComponentType<{ className?: string }> }> = [
+  { key: "tag", Icon: Tag },
+  { key: "shopping-bag", Icon: ShoppingBag },
+  { key: "utensils", Icon: Utensils },
+  { key: "zap", Icon: Zap },
+  { key: "wifi", Icon: Wifi },
+  { key: "wrench", Icon: Wrench },
+  { key: "truck", Icon: Truck },
+  { key: "building", Icon: Building2 },
+  { key: "sparkles", Icon: Sparkles },
+  { key: "file-text", Icon: FileText },
+  { key: "credit-card", Icon: CreditCard },
+  { key: "package", Icon: Package },
+  { key: "users", Icon: Users },
+  { key: "receipt", Icon: Receipt },
+];
+function iconFor(key?: string | null): React.ComponentType<{ className?: string }> {
+  return ICON_OPTIONS.find(o => o.key === key)?.Icon ?? Tag;
+}
+const FREQUENCIES = ["daily", "weekly", "monthly", "yearly"];
 const PAYMENT_METHODS = ["cash", "card", "upi", "bank transfer", "cheque", "other"];
 
 function fmtMoney(v: string | number) {
@@ -547,19 +566,19 @@ function CategoriesTab() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
-  const [form, setForm] = useState({ name: "", color: PALETTE[0] });
+  const [form, setForm] = useState<{ name: string; color: string; icon: string }>({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key });
 
   const handleSubmit = async () => {
     if (!form.name) { toast({ title: "Name required", variant: "destructive" }); return; }
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, name: form.name, color: form.color });
+        await update.mutateAsync({ id: editing.id, name: form.name, color: form.color, icon: form.icon });
         toast({ title: "Category updated" });
       } else {
-        await create.mutateAsync({ name: form.name, color: form.color });
+        await create.mutateAsync({ name: form.name, color: form.color, icon: form.icon });
         toast({ title: "Category created" });
       }
-      setShowAdd(false); setEditing(null); setForm({ name: "", color: PALETTE[0] });
+      setShowAdd(false); setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key });
     } catch { toast({ title: "Failed to save", variant: "destructive" }); }
   };
 
@@ -573,21 +592,23 @@ function CategoriesTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-sm text-muted-foreground">Group your expenses for clearer reporting.</p>
-        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", color: PALETTE[0] }); setShowAdd(true); }}>
+        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key }); setShowAdd(true); }}>
           <Plus className="w-4 h-4 mr-1.5" /> New Category
         </Button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {cats.filter(c => c.isActive).map(c => (
+        {cats.filter(c => c.isActive).map(c => {
+          const CatIcon = iconFor(c.icon);
+          return (
           <div key={c.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
-              <Tag className="w-5 h-5" style={{ color: c.color }} />
+              <CatIcon className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground truncate">{c.name}</p>
             </div>
             <div className="flex flex-col gap-1">
-              <button onClick={() => { setEditing(c); setForm({ name: c.name, color: c.color }); setShowAdd(true); }} className="p-1 text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setEditing(c); setForm({ name: c.name, color: c.color, icon: c.icon ?? ICON_OPTIONS[0].key }); setShowAdd(true); }} className="p-1 text-muted-foreground hover:text-foreground">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => handleDelete(c)} className="p-1 text-muted-foreground hover:text-destructive">
@@ -595,7 +616,8 @@ function CategoriesTab() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {showAdd && (
@@ -612,11 +634,28 @@ function CategoriesTab() {
               </div>
               <div>
                 <Label>Color</Label>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 flex-wrap">
                   {PALETTE.map(c => (
                     <button key={c} onClick={() => setForm({ ...form, color: c })}
                       className={cn("w-7 h-7 rounded-full border-2 transition-all", form.color === c ? "border-foreground scale-110" : "border-transparent")}
                       style={{ background: c }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label>Icon</Label>
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {ICON_OPTIONS.map(({ key, Icon }) => (
+                    <button key={key} onClick={() => setForm({ ...form, icon: key })}
+                      className={cn(
+                        "w-9 h-9 rounded-lg border-2 transition-all flex items-center justify-center",
+                        form.icon === key ? "border-foreground" : "border-border hover:border-foreground/40"
+                      )}
+                      style={{ background: form.icon === key ? `${form.color}20` : "transparent", color: form.color }}
+                      title={key}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
                   ))}
                 </div>
               </div>

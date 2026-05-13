@@ -64,7 +64,9 @@ export async function seedDefaultExpenseCategories(restaurantId: number): Promis
 
 function advanceDate(d: Date, frequency: string, dayOfMonth?: number | null): Date {
   const next = new Date(d);
-  if (frequency === "weekly") {
+  if (frequency === "daily") {
+    next.setDate(next.getDate() + 1);
+  } else if (frequency === "weekly") {
     next.setDate(next.getDate() + 7);
   } else if (frequency === "yearly") {
     next.setFullYear(next.getFullYear() + 1);
