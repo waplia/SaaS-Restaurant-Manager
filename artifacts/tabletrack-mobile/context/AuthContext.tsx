@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStorage from "@/lib/secureStorage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
@@ -71,8 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function loadToken() {
       try {
-        const token = await SecureStore.getItemAsync("accessToken");
-        const userJson = await SecureStore.getItemAsync("authUser");
+        const token = await SecureStorage.getItem("accessToken");
+        const userJson = await SecureStorage.getItem("authUser");
         if (token && userJson) {
           setAccessToken(token);
           setUser(JSON.parse(userJson) as AuthUser);
@@ -92,9 +92,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   const login = useCallback(async (token: string, refreshTok: string, userData: AuthUser) => {
-    await SecureStore.setItemAsync("accessToken", token);
-    await SecureStore.setItemAsync("refreshToken", refreshTok);
-    await SecureStore.setItemAsync("authUser", JSON.stringify(userData));
+    await SecureStorage.setItem("accessToken", token);
+    await SecureStorage.setItem("refreshToken", refreshTok);
+    await SecureStorage.setItem("authUser", JSON.stringify(userData));
     setAccessToken(token);
     setUser(userData);
 
@@ -102,9 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await SecureStore.deleteItemAsync("accessToken");
-    await SecureStore.deleteItemAsync("refreshToken");
-    await SecureStore.deleteItemAsync("authUser");
+    await SecureStorage.deleteItem("accessToken");
+    await SecureStorage.deleteItem("refreshToken");
+    await SecureStorage.deleteItem("authUser");
     setAccessToken(null);
     setUser(null);
   }, []);

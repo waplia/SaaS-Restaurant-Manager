@@ -16,7 +16,7 @@ import {
   useCreateOrder,
 } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/lib/secureStorage";
 import type { MenuCategory, MenuItem, Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
@@ -133,7 +133,7 @@ export default function WaiterOrderScreen() {
   const addItemMutation = useMutation({
     mutationFn: async ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number } }) => {
       const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-      const token = await SecureStore.getItemAsync("accessToken");
+      const token = await SecureStore.getItem("accessToken");
       const resp = await fetch(`${baseUrl}/api/restaurants/${rid}/orders/${id}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
