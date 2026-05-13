@@ -95,6 +95,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
     printOrder({
       size: "a5",
       documentTitle: order.paymentStatus === "paid" ? "Tax Invoice" : "Receipt",
+
       orderNumber: order.orderNumber,
       createdAt: order.createdAt,
       tableLabel: order.tableId ? `Table ${order.tableId}` : undefined,
@@ -113,10 +114,18 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
       serviceCharge: Number(order.serviceCharge ?? 0),
       discountAmount: Number(order.discountAmount ?? 0),
       totalAmount: Number(order.totalAmount ?? 0),
+      payment: order.paymentStatus === "paid" && order.paymentMethod
+        ? {
+            method: order.paymentMethod,
+            tendered: order.paymentAmount ? Number(order.paymentAmount) : undefined,
+          }
+        : undefined,
       footer: order.paymentStatus === "paid" ? "Paid · Thank you for dining with us!" : "Thank you for dining with us!",
       restaurant: {
         name: restaurant?.name,
         logoUrl: restaurant?.logoUrl,
+        address: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || null,
+        phone: restaurant?.phone,
       },
     });
   };

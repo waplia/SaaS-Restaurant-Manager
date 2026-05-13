@@ -80,14 +80,16 @@ function printReceipt(args: {
   customerName?: string;
   restaurantName?: string;
   logoUrl?: string;
+  restaurantAddress?: string | null;
+  restaurantPhone?: string | null;
   splitIndex?: number;
   splitTotal?: number;
   createdAt?: string;
 }) {
-  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, splitIndex, splitTotal, createdAt } = args;
+  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, restaurantAddress, restaurantPhone, splitIndex, splitTotal, createdAt } = args;
   printOrder({
     size: "thermal-80mm",
-    documentTitle: paymentMethod === "pending" ? "Order Receipt" : "Receipt",
+    documentTitle: paymentMethod === "pending" ? "Order Receipt" : "Tax Invoice",
     orderNumber,
     createdAt,
     tableLabel,
@@ -108,7 +110,12 @@ function printReceipt(args: {
     payment: paymentMethod === "pending" ? undefined : { method: paymentMethod, tendered: amountTendered },
     splitIndex,
     splitTotal,
-    restaurant: { name: restaurantName, logoUrl },
+    restaurant: {
+      name: restaurantName,
+      logoUrl,
+      address: restaurantAddress,
+      phone: restaurantPhone,
+    },
   });
 }
 
@@ -243,7 +250,7 @@ interface SplitProof {
 }
 
 function SplitBillModal({
-  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, orderNumber, tableLabel, orderType, customerName, orderCreatedAt,
+  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, restaurantAddress, restaurantPhone, orderNumber, tableLabel, orderType, customerName, orderCreatedAt,
   onClose, onComplete,
 }: {
   totalAmount: number;
@@ -252,6 +259,8 @@ function SplitBillModal({
   placedOrderId: number;
   restaurantName?: string;
   logoUrl?: string;
+  restaurantAddress?: string | null;
+  restaurantPhone?: string | null;
   orderNumber: string;
   tableLabel: string;
   orderType: string;
@@ -335,6 +344,7 @@ function SplitBillModal({
       paymentMethod: methods[idx],
       amountTendered: methods[idx] === "cash" && tenderAmounts[idx] ? Number(tenderAmounts[idx]) : undefined,
       customerName, restaurantName, logoUrl,
+      restaurantAddress, restaurantPhone,
       splitIndex: idx, splitTotal: perPerson,
       createdAt: orderCreatedAt,
     });
@@ -1239,6 +1249,8 @@ export default function PosPage() {
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
       amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
+      restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
+      restaurantPhone: restaurant?.phone ?? undefined,
       createdAt: placedOrder?.createdAt,
     });
     handleNewOrder();
@@ -1650,6 +1662,8 @@ export default function PosPage() {
                       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
                       orderType, items: receiptDisplayItems, totals: displayTotals,
                       paymentMethod: "pending", customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
+                      restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
+                      restaurantPhone: restaurant?.phone ?? undefined,
                       createdAt: placedOrder.createdAt,
                     });
                   }}>
@@ -1693,6 +1707,8 @@ export default function PosPage() {
           placedOrderId={placedOrder.id}
           restaurantName={restaurant?.name}
           logoUrl={restaurant?.logoUrl ?? undefined}
+          restaurantAddress={[restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined}
+          restaurantPhone={restaurant?.phone ?? undefined}
           orderNumber={placedOrder.orderNumber}
           tableLabel={selectedTable ? `Table ${selectedTable.tableNumber}` : ""}
           orderType={orderType}

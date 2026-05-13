@@ -280,7 +280,23 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
-  res.json({ ...order, items });
+  const [latestPayment] = await db
+    .select({ method: paymentsTable.method, amount: paymentsTable.amount })
+    .from(paymentsTable)
+    .where(and(
+      eq(paymentsTable.restaurantId, restaurantId),
+      eq(paymentsTable.referenceType, "order"),
+      eq(paymentsTable.referenceId, order.id),
+      eq(paymentsTable.direction, "in"),
+    ))
+    .orderBy(desc(paymentsTable.paymentDate))
+    .limit(1);
+  res.json({
+    ...order,
+    items,
+    paymentMethod: latestPayment?.method ?? null,
+    paymentAmount: latestPayment?.amount ?? null,
+  });
 });
 
 router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {

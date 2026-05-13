@@ -178,6 +178,8 @@ export interface OrderDetail extends Order {
   notes: string | null;
   customerPhone: string | null;
   items: OrderItem[];
+  paymentMethod?: string | null;
+  paymentAmount?: string | null;
 }
 
 export interface CreateOrderInput {
@@ -781,6 +783,10 @@ export interface RestaurantInfo {
   taxRate: string;
   serviceCharge: string;
   logoUrl: string | null;
+  address?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface PosModifier {
