@@ -51,6 +51,10 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["dashboard", "summary", restaurantId] });
     });
 
+    socket.on("notification:new", () => {
+      void qc.invalidateQueries({ queryKey: ["notifications", restaurantId] });
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

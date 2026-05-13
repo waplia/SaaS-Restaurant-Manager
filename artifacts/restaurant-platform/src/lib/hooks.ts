@@ -955,5 +955,42 @@ export function useCustomerByPhone(phone: string | null) {
   });
 }
 
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/notifications/mark-read`, { all: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useSubscription(restaurantId: number) {
+  return useQuery({
+    queryKey: ["subscription", restaurantId],
+    queryFn: () => apiGet<import("./types").SubscriptionInfo>(`/restaurants/${restaurantId}/subscription`),
+    staleTime: 60000,
+  });
+}
+
+export function useCreateCheckout() {
+  return useMutation({
+    mutationFn: ({ restaurantId, planId, successUrl, cancelUrl }: { restaurantId: number; planId: number; successUrl: string; cancelUrl: string }) =>
+      apiPost<{ url: string | null; sessionId?: string; mock?: boolean }>(`/restaurants/${restaurantId}/subscription/create-checkout`, { planId, successUrl, cancelUrl }),
+  });
+}
+
+export function useMockActivate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ restaurantId, planId }: { restaurantId: number; planId: number }) =>
+      apiPost(`/restaurants/${restaurantId}/subscription/mock-activate`, { planId }),
+    onSuccess: (_data, { restaurantId }) => {
+      qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
+    },
+  });
+}
+
 export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction };
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };

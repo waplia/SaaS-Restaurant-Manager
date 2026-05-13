@@ -739,3 +739,45 @@ export interface CreateModifierInput {
   price: string;
   isDefault?: boolean;
 }
+
+export interface SubscriptionPlan {
+  id: number;
+  name: string;
+  slug: string;
+  price: string;
+  billingPeriod: string;
+  maxRestaurants: number;
+  maxBranches: number;
+  maxStaff: number;
+  maxTables: number;
+  maxMenuItems: number;
+  features: string[] | null;
+  isActive: boolean;
+  stripePriceId: string | null;
+}
+
+export interface TenantSubscription {
+  id: number;
+  name: string;
+  planStatus: string;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  isTrialExpired: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStartedAt: string | null;
+  subscriptionEndsAt: string | null;
+}
+
+export interface SubscriptionUsage {
+  staffCount: number;
+  tableCount: number;
+  menuItemCount: number;
+}
+
+export interface SubscriptionInfo {
+  tenant: TenantSubscription;
+  plan: SubscriptionPlan | null;
+  plans: SubscriptionPlan[];
+  usage: SubscriptionUsage;
+}

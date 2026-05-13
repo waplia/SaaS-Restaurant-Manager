@@ -1,6 +1,7 @@
 import http from "http";
 import app from "./app";
 import { initSocketIO } from "./lib/socketio";
+import { startScheduler } from "./lib/scheduler";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
@@ -19,6 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 const httpServer = http.createServer(app);
 initSocketIO(httpServer);
+startScheduler();
 
 httpServer.listen(port, (err?: Error) => {
   if (err) {

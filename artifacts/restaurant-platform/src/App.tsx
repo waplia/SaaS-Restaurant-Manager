@@ -18,6 +18,7 @@ import CustomersPage from "@/pages/customers";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
+import SubscriptionPage from "@/pages/subscription";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
+      <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route component={NotFound} />

@@ -1,14 +1,13 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
-  Package, Users, UserCheck, BarChart3, Table2, Bell, Settings,
+  Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotifications } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
-import type { AppNotification } from "@/lib/types";
+import { NotificationDropdown } from "./NotificationDropdown";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,13 +24,8 @@ const navItems = [
 
 export function Sidebar() {
   const [location] = useLocation();
-  const { data: notifications } = useNotifications();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-
-  const unread = Array.isArray(notifications)
-    ? notifications.filter((n: AppNotification) => !n.isRead).length
-    : 0;
 
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
@@ -74,15 +68,7 @@ export function Sidebar() {
       </nav>
 
       <div className="px-3 py-4 border-t border-sidebar-border space-y-0.5">
-        <Link href="/notifications" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-          <Bell className="w-4 h-4" />
-          Notifications
-          {unread > 0 && (
-            <span className="ml-auto bg-primary text-primary-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-              {unread}
-            </span>
-          )}
-        </Link>
+        <NotificationDropdown />
         <Link href="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
           <Settings className="w-4 h-4" />
           Settings

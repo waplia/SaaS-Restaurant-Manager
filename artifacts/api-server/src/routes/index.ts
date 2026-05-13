@@ -15,6 +15,7 @@ import shiftsRouter from "./shifts";
 import customersRouter from "./customers";
 import dashboardRouter from "./dashboard";
 import realtimeRouter from "./realtime";
+import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
 
 const router: IRouter = Router();
 
@@ -22,6 +23,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(publicRouter);
 router.use(realtimeRouter);
+router.use(createStripeWebhookRouter());
 
 router.use(authenticate);
 
@@ -36,5 +38,6 @@ router.use(inventoryRouter);
 router.use(shiftsRouter);
 router.use(customersRouter);
 router.use(dashboardRouter);
+router.use(subscriptionsRouter);
 
 export default router;

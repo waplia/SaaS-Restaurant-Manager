@@ -52,6 +52,8 @@ async function triggerLowStockNotification(item: { id: number; name: string; cur
       entityId: item.id,
       entityType: "inventory_item",
     });
+    const { broadcastEvent } = await import("../lib/socketio");
+    broadcastEvent(restaurantId, "notification:new", { type: "low_stock" });
   }
 }
 
