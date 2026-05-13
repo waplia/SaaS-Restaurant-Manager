@@ -16,7 +16,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const COLORS = [
-  "hsl(24 95% 53%)", "hsl(142 72% 45%)", "hsl(217 91% 60%)",
+  "hsl(20 92% 46%)", "hsl(142 72% 45%)", "hsl(217 91% 60%)",
   "hsl(280 65% 60%)", "hsl(348 83% 55%)",
 ];
 
