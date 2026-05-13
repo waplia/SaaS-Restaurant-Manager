@@ -3,6 +3,35 @@ import { eq, and, gte, lte, desc, count, sql, ilike, or } from "drizzle-orm";
 import { db, expenseCategoriesTable, expensesTable, recurringExpensesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { getObjectAclPolicy } from "../lib/objectAcl";
+
+const _objectStorage = new ObjectStorageService();
+
+/**
+ * Validates that a client-supplied receiptUrl, if non-empty, points to an
+ * object owned by this restaurant per its ACL metadata. Empty/null is allowed.
+ * Throws on mismatch.
+ */
+async function assertReceiptUrlOwnership(
+  restaurantId: number,
+  receiptUrl: unknown,
+): Promise<void> {
+  if (receiptUrl == null || receiptUrl === "") return;
+  if (typeof receiptUrl !== "string" || !receiptUrl.startsWith("/objects/")) {
+    throw new Error("invalid_receipt_url");
+  }
+  try {
+    const file = await _objectStorage.getObjectEntityFile(receiptUrl);
+    const acl = await getObjectAclPolicy(file);
+    if (!acl || acl.restaurantId !== String(restaurantId)) {
+      throw new Error("invalid_receipt_url");
+    }
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) throw new Error("invalid_receipt_url");
+    throw err;
+  }
+}
 
 const router = Router();
 
@@ -167,6 +196,11 @@ router.post("/restaurants/:restaurantId/expenses", async (req, res) => {
   if (!(await assertCategoryBelongsToRestaurant(restaurantId, Number(categoryId)))) {
     return void res.status(400).json({ error: "Invalid categoryId" });
   }
+  try {
+    await assertReceiptUrlOwnership(restaurantId, receiptUrl);
+  } catch {
+    return void res.status(400).json({ error: "Invalid receiptUrl: must be a finalized object owned by this restaurant" });
+  }
   const [exp] = await db.insert(expensesTable).values({
     restaurantId,
     categoryId: Number(categoryId),
@@ -193,7 +227,14 @@ router.patch("/restaurants/:restaurantId/expenses/:id", async (req, res) => {
   if (payee !== undefined) updates.payee = payee;
   if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
   if (notes !== undefined) updates.notes = notes;
-  if (receiptUrl !== undefined) updates.receiptUrl = receiptUrl;
+  if (receiptUrl !== undefined) {
+    try {
+      await assertReceiptUrlOwnership(restaurantId, receiptUrl);
+    } catch {
+      return void res.status(400).json({ error: "Invalid receiptUrl: must be a finalized object owned by this restaurant" });
+    }
+    updates.receiptUrl = receiptUrl;
+  }
   const [updated] = await db.update(expensesTable).set(updates)
     .where(and(eq(expensesTable.id, Number(req.params.id)), eq(expensesTable.restaurantId, Number(req.params.restaurantId))))
     .returning();
