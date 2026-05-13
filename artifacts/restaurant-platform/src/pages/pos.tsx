@@ -82,12 +82,14 @@ function printReceipt(args: {
   logoUrl?: string;
   splitIndex?: number;
   splitTotal?: number;
+  createdAt?: string;
 }) {
-  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, splitIndex, splitTotal } = args;
+  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, splitIndex, splitTotal, createdAt } = args;
   printOrder({
     size: "thermal-80mm",
     documentTitle: paymentMethod === "pending" ? "Order Receipt" : "Receipt",
     orderNumber,
+    createdAt,
     tableLabel,
     orderType,
     customerName,
@@ -241,7 +243,7 @@ interface SplitProof {
 }
 
 function SplitBillModal({
-  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, orderNumber, tableLabel, orderType, customerName,
+  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, orderNumber, tableLabel, orderType, customerName, orderCreatedAt,
   onClose, onComplete,
 }: {
   totalAmount: number;
@@ -254,6 +256,7 @@ function SplitBillModal({
   tableLabel: string;
   orderType: string;
   customerName?: string;
+  orderCreatedAt?: string;
   onClose: () => void;
   onComplete: () => void;
 }) {
@@ -333,6 +336,7 @@ function SplitBillModal({
       amountTendered: methods[idx] === "cash" && tenderAmounts[idx] ? Number(tenderAmounts[idx]) : undefined,
       customerName, restaurantName, logoUrl,
       splitIndex: idx, splitTotal: perPerson,
+      createdAt: orderCreatedAt,
     });
   };
 
@@ -1235,6 +1239,7 @@ export default function PosPage() {
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
       amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
+      createdAt: placedOrder?.createdAt,
     });
     handleNewOrder();
   };
@@ -1645,6 +1650,7 @@ export default function PosPage() {
                       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
                       orderType, items: receiptDisplayItems, totals: displayTotals,
                       paymentMethod: "pending", customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
+                      createdAt: placedOrder.createdAt,
                     });
                   }}>
                     <Printer className="w-3 h-3 mr-1" />Print KOT
@@ -1691,6 +1697,7 @@ export default function PosPage() {
           tableLabel={selectedTable ? `Table ${selectedTable.tableNumber}` : ""}
           orderType={orderType}
           customerName={customerName}
+          orderCreatedAt={placedOrder.createdAt}
           onClose={() => setShowSplitModal(false)}
           onComplete={handleNewOrder}
         />
