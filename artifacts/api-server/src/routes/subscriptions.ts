@@ -212,6 +212,7 @@ export function createStripeWebhookRouter(): Router {
       }
     } catch (err) {
       console.error("Webhook processing error:", err);
+      return void res.status(500).json({ error: "Webhook handler failed — will retry" });
     }
 
     res.json({ received: true });

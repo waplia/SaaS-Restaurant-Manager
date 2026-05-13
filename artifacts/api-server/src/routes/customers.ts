@@ -183,7 +183,7 @@ router.get("/restaurants/:restaurantId/notifications", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { type, title, message, entityId, entityType, emailRecipients, whatsappRecipients } = req.body as {
     type: string;
