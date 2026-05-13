@@ -3,6 +3,7 @@ import { eq, and, or, inArray } from "drizzle-orm";
 import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
 
 const router = Router();
 
@@ -191,8 +192,29 @@ router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
   const { guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, notes } = req.body;
-  const [reservation] = await db.insert(reservationsTable).values({ restaurantId: Number(req.params.restaurantId), guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt: new Date(scheduledAt), notes }).returning();
+  const restaurantId = Number(req.params.restaurantId);
+  const [reservation] = await db.insert(reservationsTable).values({ restaurantId, guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt: new Date(scheduledAt), notes }).returning();
   res.status(201).json(reservation);
+
+  if (guestEmail && guestName && scheduledAt) {
+    try {
+      const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const dt = new Date(scheduledAt);
+      const tpl = reservationEmail({
+        customerName: guestName,
+        restaurantName: restaurant?.name ?? "Restaurant",
+        date: dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        time: dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        guests: Number(partySize),
+      });
+      sendEmail({ to: guestEmail, subject: tpl.subject, html: tpl.html, text: tpl.text }).catch(console.error);
+      if (guestPhone) {
+        sendWhatsApp({ to: guestPhone, body: tpl.text }).catch(console.error);
+      }
+    } catch (err) {
+      console.error("[Reservation] Notification send failed:", err);
+    }
+  }
 });
 
 router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {

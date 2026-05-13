@@ -54,6 +54,18 @@ async function triggerLowStockNotification(item: { id: number; name: string; cur
     });
     const { broadcastEvent } = await import("../lib/socketio");
     broadcastEvent(restaurantId, "notification:new", { type: "low_stock" });
+    const { sendEmail, lowStockEmail } = await import("../lib/notifications");
+    const { restaurantsTable, usersTable } = await import("../lib/db");
+    const { eq, and } = await import("drizzle-orm");
+    const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    const owners = await db.select({ email: usersTable.email }).from(usersTable).where(and(eq(usersTable.restaurantId, restaurantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+    const tpl = lowStockEmail({
+      restaurantName: restaurant?.name ?? "Restaurant",
+      items: [{ name: item.name, quantity: Number(item.currentStock), unit: item.unit, threshold: Number(item.minStockLevel) }],
+    });
+    for (const owner of owners) {
+      if (owner.email) sendEmail({ to: owner.email, subject: tpl.subject, html: tpl.html, text: tpl.text }).catch(console.error);
+    }
   }
 }
 

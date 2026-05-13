@@ -5,6 +5,7 @@ import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicke
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
@@ -86,6 +87,29 @@ async function updateCouponUsage(couponCode: string | null, restaurantId: number
   }
 }
 
+async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect, restaurantId: number): Promise<void> {
+  if (!paidOrder.customerId) return;
+  const [customer] = await db.select({ name: customersTable.name, email: customersTable.email, phone: customersTable.phone }).from(customersTable).where(eq(customersTable.id, paidOrder.customerId));
+  if (!customer) return;
+  const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const orderItems = await db.select({ name: orderItemsTable.menuItemName, qty: orderItemsTable.quantity }).from(orderItemsTable).where(eq(orderItemsTable.orderId, paidOrder.id));
+  const itemStrings = orderItems.map(i => `${i.name} x${i.qty}`);
+  if (customer.email) {
+    const tpl = orderConfirmationEmail({
+      customerName: customer.name,
+      orderNumber: paidOrder.orderNumber,
+      restaurantName: restaurant?.name ?? "Restaurant",
+      items: itemStrings,
+      total: Number(paidOrder.totalAmount).toFixed(2),
+    });
+    sendEmail({ to: customer.email, subject: tpl.subject, html: tpl.html, text: tpl.text }).catch(console.error);
+  }
+  if (customer.phone) {
+    const msg = `Hi ${customer.name}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
+    sendWhatsApp({ to: customer.phone, body: msg }).catch(console.error);
+  }
+}
+
 async function handleOrderCompletion(orderId: number, restaurantId: number, paidOrder: typeof ordersTable.$inferSelect): Promise<void> {
   await Promise.allSettled([
     deductInventoryForOrder(orderId, restaurantId).catch(async (err) => {
@@ -104,6 +128,9 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
     }),
     updateCouponUsage(paidOrder.couponCode, restaurantId).catch((err) => {
       console.error(`[OrderCompletion] Coupon usage update failed for order ${orderId}:`, err);
+    }),
+    sendOrderConfirmation(paidOrder, restaurantId).catch((err) => {
+      console.error(`[OrderCompletion] Order confirmation notification failed for order ${orderId}:`, err);
     }),
   ]);
 }

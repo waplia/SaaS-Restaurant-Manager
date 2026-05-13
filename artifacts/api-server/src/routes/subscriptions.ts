@@ -189,28 +189,26 @@ export function createStripeWebhookRouter(): Router {
           }).where(eq(tenantsTable.id, tenantId));
         }
       } else if (event.type === "invoice.paid") {
-        const invoice = event.data.object as unknown as { subscription?: string | null };
-        if (invoice.subscription) {
-          const sub = await stripe.subscriptions.retrieve(String(invoice.subscription)) as unknown as { current_period_end?: number; metadata?: Record<string, string> };
-          const tenantId = Number(sub.metadata?.tenantId);
-          if (tenantId) {
-            const endsAt = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
-            await db.update(tenantsTable).set({
-              planStatus: "active",
-              subscriptionEndsAt: endsAt,
-              updatedAt: new Date(),
-            }).where(eq(tenantsTable.id, tenantId));
-          }
+        const invoice = event.data.object as unknown as { subscription?: string | null; customer?: string | null };
+        if (invoice.customer) {
+          const sub = invoice.subscription
+            ? await stripe.subscriptions.retrieve(String(invoice.subscription)) as unknown as { current_period_end?: number }
+            : null;
+          const endsAt = sub?.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+          await db.update(tenantsTable).set({
+            planStatus: "active",
+            subscriptionEndsAt: endsAt,
+            updatedAt: new Date(),
+          }).where(eq(tenantsTable.stripeCustomerId, String(invoice.customer)));
         }
       } else if (event.type === "customer.subscription.deleted") {
-        const sub = event.data.object as Stripe.Subscription;
-        const tenantId = Number(sub.metadata?.tenantId);
-        if (tenantId) {
+        const sub = event.data.object as unknown as { customer?: string | null };
+        if (sub.customer) {
           await db.update(tenantsTable).set({
             planStatus: "cancelled",
             stripeSubscriptionId: null,
             updatedAt: new Date(),
-          }).where(eq(tenantsTable.id, tenantId));
+          }).where(eq(tenantsTable.stripeCustomerId, String(sub.customer)));
         }
       }
     } catch (err) {
