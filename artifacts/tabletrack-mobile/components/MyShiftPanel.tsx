@@ -1,9 +1,12 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+
+const ACTIVE_SESSION_STORAGE_KEY = "tabletrack.activeSession.v1";
 
 type Shift = { id: number; name: string; startTime: string; endTime: string };
 type AttendanceRecord = {
@@ -56,12 +59,59 @@ export function MyShiftPanel() {
   const { restaurantId, accessToken } = useAuth();
   const qc = useQueryClient();
 
+  // Local cache of the last-known active session — surfaces the "On the clock"
+  // banner immediately on app restart/offline before the network query resolves.
+  const [cachedActive, setCachedActive] = useState<AttendanceRecord | null>(null);
+  const [cacheReady, setCacheReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { restaurantId: number; record: AttendanceRecord };
+          if (parsed?.restaurantId === restaurantId && parsed.record && !parsed.record.clockOut) {
+            setCachedActive(parsed.record);
+          }
+        }
+      } catch {
+        // ignore corrupted cache
+      } finally {
+        setCacheReady(true);
+      }
+    })();
+  }, [restaurantId]);
+
+  const persistActive = useCallback(async (record: AttendanceRecord | null) => {
+    try {
+      if (record && !record.clockOut) {
+        await AsyncStorage.setItem(
+          ACTIVE_SESSION_STORAGE_KEY,
+          JSON.stringify({ restaurantId, record }),
+        );
+        setCachedActive(record);
+      } else {
+        await AsyncStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+        setCachedActive(null);
+      }
+    } catch {
+      // best-effort
+    }
+  }, [restaurantId]);
+
   const { data, isLoading } = useQuery<MyActive>({
     queryKey: ["attendance-my-active", restaurantId],
     queryFn: () => authFetch(accessToken, `/restaurants/${restaurantId}/attendance/my-active`) as Promise<MyActive>,
     refetchInterval: 60_000,
-    enabled: !!accessToken,
+    enabled: !!accessToken && cacheReady,
   });
+
+  // Keep local cache in sync with server truth.
+  useEffect(() => {
+    if (data !== undefined) {
+      void persistActive(data?.open ?? null);
+    }
+  }, [data, persistActive]);
 
   const punchIn = useMutation({
     mutationFn: () =>
@@ -69,7 +119,10 @@ export function MyShiftPanel() {
         method: "POST",
         body: JSON.stringify({ source: "mobile" }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance-my-active"] }),
+    onSuccess: (record) => {
+      void persistActive(record as AttendanceRecord);
+      qc.invalidateQueries({ queryKey: ["attendance-my-active"] });
+    },
   });
 
   const punchOut = useMutation({
@@ -78,24 +131,29 @@ export function MyShiftPanel() {
         method: "POST",
         body: JSON.stringify({}),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance-my-active"] }),
+    onSuccess: () => {
+      void persistActive(null);
+      qc.invalidateQueries({ queryKey: ["attendance-my-active"] });
+    },
   });
 
-  const onPress = useCallback(() => {
-    if (data?.open) punchOut.mutate();
-    else punchIn.mutate();
-  }, [data?.open, punchIn, punchOut]);
+  // While the network query loads, fall back to the locally persisted session
+  // so the clocked-in banner shows immediately on app restart.
+  const open = data?.open ?? cachedActive ?? null;
+  const shift = data?.todayShift ?? null;
 
-  if (isLoading) {
+  const onPress = useCallback(() => {
+    if (open) punchOut.mutate();
+    else punchIn.mutate();
+  }, [open, punchIn, punchOut]);
+
+  if (isLoading && !cachedActive) {
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
-
-  const open = data?.open ?? null;
-  const shift = data?.todayShift ?? null;
   const elapsed = open ? Date.now() - new Date(open.clockIn).getTime() : 0;
   const isActive = !!open;
   const isPending = punchIn.isPending || punchOut.isPending;

@@ -977,6 +977,15 @@ export function usePatchAttendance() {
   });
 }
 
+export function useBulkWeeklyOff() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userIds: number[]; date: string }) => apiPost<AttendanceRecord[]>(`/restaurants/${RESTAURANT_ID}/attendance/weekly-off`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
 export function useDeleteAttendance() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();

@@ -473,17 +473,23 @@ router.post(
       lte(attendanceTable.clockIn, dayEnd),
     )).limit(1);
 
-    const w = typeof workedMinutes === "number" && workedMinutes >= 0 ? Math.round(workedMinutes) : 0;
-    const overtimeMinutes = scheduledMinutes > 0 && w > scheduledMinutes ? w - scheduledMinutes : 0;
+    // Non-working statuses zero out worked/overtime so payroll never carries stale hours.
+    const isNonWorking = status === "absent" || status === "weekly_off" || status === "leave";
+    const w = isNonWorking
+      ? 0
+      : (typeof workedMinutes === "number" && workedMinutes >= 0 ? Math.round(workedMinutes) : 0);
+    const overtimeMinutes = !isNonWorking && scheduledMinutes > 0 && w > scheduledMinutes ? w - scheduledMinutes : 0;
 
     if (existing) {
       const [updated] = await db.update(attendanceTable).set({
         status,
         scheduledShiftId: scheduledShiftId ?? existing.scheduledShiftId,
-        scheduledMinutes: scheduledMinutes || existing.scheduledMinutes,
-        workedMinutes: w || existing.workedMinutes,
-        overtimeMinutes: w ? overtimeMinutes : existing.overtimeMinutes,
-        totalHours: w ? (w / 60).toFixed(2) : existing.totalHours,
+        scheduledMinutes: isNonWorking ? 0 : (scheduledMinutes || existing.scheduledMinutes),
+        workedMinutes: isNonWorking ? 0 : (w || existing.workedMinutes),
+        overtimeMinutes: isNonWorking ? 0 : (w ? overtimeMinutes : existing.overtimeMinutes),
+        lateMinutes: isNonWorking ? 0 : existing.lateMinutes,
+        totalHours: isNonWorking ? "0" : (w ? (w / 60).toFixed(2) : existing.totalHours),
+        clockOut: isNonWorking ? null : existing.clockOut,
         notes: notes ?? existing.notes,
         markedByUserId: callerId,
         source: "manual",
@@ -500,8 +506,8 @@ router.post(
       date: day,
       clockIn: day,
       status,
-      scheduledShiftId,
-      scheduledMinutes,
+      scheduledShiftId: isNonWorking ? null : scheduledShiftId,
+      scheduledMinutes: isNonWorking ? 0 : scheduledMinutes,
       workedMinutes: w,
       overtimeMinutes,
       totalHours: (w / 60).toFixed(2),
@@ -553,6 +559,13 @@ router.post(
       if (existing) {
         const [updated] = await db.update(attendanceTable).set({
           status: "weekly_off",
+          workedMinutes: 0,
+          overtimeMinutes: 0,
+          lateMinutes: 0,
+          scheduledMinutes: 0,
+          scheduledShiftId: null,
+          clockOut: null,
+          totalHours: "0",
           source: "manual",
           markedByUserId: callerId,
           updatedAt: new Date(),

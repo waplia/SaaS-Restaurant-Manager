@@ -7,7 +7,7 @@ import {
   useShifts, useCreateShift, useDeleteShift,
   useStaffShifts, useCreateStaffShift, useDeleteStaffShift,
   useAttendance, useClockIn, useClockOut, usePunchOut,
-  useMarkAttendance, usePatchAttendance, useDeleteAttendance,
+  useMarkAttendance, usePatchAttendance, useDeleteAttendance, useBulkWeeklyOff,
   useAuditLogs,
   useRoles, usePermissions, useRoleWithPermissions, useCreateRole, useDeleteRole,
   useAddRolePermission, useRemoveRolePermission,
@@ -1060,6 +1060,7 @@ function AttendanceTab({ staff }: { staff: StaffMember[] }) {
   const [month, setMonth] = useState(today.getMonth()); // 0-indexed
   const [filterUserId, setFilterUserId] = useState<number | undefined>();
   const [markDrawer, setMarkDrawer] = useState<{ userId: number; date: string } | null>(null);
+  const [weeklyOffOpen, setWeeklyOffOpen] = useState(false);
 
   const firstOfMonth = new Date(year, month, 1);
   const firstOfNext = new Date(year, month + 1, 1);
@@ -1143,6 +1144,9 @@ function AttendanceTab({ staff }: { staff: StaffMember[] }) {
             <option value="">All Staff</option>
             {staff.map((s: StaffMember) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          <Button size="sm" variant="outline" onClick={() => setWeeklyOffOpen(true)}>
+            Bulk Weekly Off
+          </Button>
           <Button size="sm" onClick={() => setMarkDrawer({ userId: staff[0]?.id ?? 0, date: todayKey })}>
             <Plus className="w-3.5 h-3.5 mr-1" /> Mark Attendance
           </Button>
@@ -1268,6 +1272,94 @@ function AttendanceTab({ staff }: { staff: StaffMember[] }) {
           onDelete={handleDelete}
         />
       )}
+      {weeklyOffOpen && (
+        <BulkWeeklyOffDialog
+          staff={staff}
+          defaultDate={todayKey}
+          onClose={() => setWeeklyOffOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function BulkWeeklyOffDialog({ staff, defaultDate, onClose }: {
+  staff: StaffMember[];
+  defaultDate: string;
+  onClose: () => void;
+}) {
+  const [date, setDate] = useState(defaultDate);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const bulk = useBulkWeeklyOff();
+  const { toast } = useToast();
+
+  const toggle = (id: number) => {
+    setSelected(s => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const allSelected = staff.length > 0 && selected.size === staff.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(staff.map(s => s.id)));
+
+  const submit = async () => {
+    if (selected.size === 0) {
+      toast({ title: "Pick at least one staff member", variant: "destructive" });
+      return;
+    }
+    try {
+      await bulk.mutateAsync({ userIds: Array.from(selected), date });
+      toast({ title: `Marked weekly off for ${selected.size} staff` });
+      onClose();
+    } catch {
+      toast({ title: "Bulk weekly off failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">Bulk Weekly Off</h3>
+          <button className="text-muted-foreground hover:text-foreground text-sm" onClick={onClose}>✕</button>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Date</label>
+          <input
+            type="date"
+            className="w-full border border-input rounded-md px-3 py-1.5 text-sm bg-background"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted-foreground">Staff ({selected.size}/{staff.length})</label>
+            <button className="text-xs text-primary hover:underline" onClick={toggleAll}>
+              {allSelected ? "Clear all" : "Select all"}
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto border border-border rounded-md divide-y divide-border">
+            {staff.map(s => (
+              <label key={s.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/30">
+                <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+                <span>{s.name}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{s.role}</span>
+              </label>
+            ))}
+            {staff.length === 0 && (
+              <div className="text-xs text-muted-foreground p-3 text-center">No staff available</div>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={submit} disabled={bulk.isPending || selected.size === 0}>
+            {bulk.isPending ? "Saving…" : `Mark ${selected.size || ""} Weekly Off`}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
