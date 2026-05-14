@@ -150,7 +150,15 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
       set: { data, updatedBy: req.user!.sub, updatedAt: new Date() },
     })
     .returning();
-  res.json({ section, data: row.data, updatedAt: row.updatedAt });
+  // Sanitise the response the same way the GET handler does so the bcrypt
+  // managerPinHash never leaves the server (low-entropy 4–8 digit PIN).
+  let respData: unknown = row.data;
+  if (section === "discounts") {
+    const src = (row.data ?? {}) as Record<string, unknown>;
+    const { managerPinHash, ...rest } = src;
+    respData = { ...rest, hasManagerPin: typeof managerPinHash === "string" && managerPinHash.length > 0 };
+  }
+  res.json({ section, data: respData, updatedAt: row.updatedAt });
 });
 
 export default router;
