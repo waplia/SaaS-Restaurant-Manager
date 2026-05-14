@@ -16,6 +16,10 @@ import {
   useAddRolePermission, useRemoveRolePermission,
   useUpdateStaffProfile, useStaffDocuments, useAddStaffDocument, useDeleteStaffDocument,
   useStaffBankAccount, useSaveStaffBankAccount,
+  useSalaryStructure, useSaveSalaryStructure,
+  useStaffAdvances, useCreateStaffAdvance, useUpdateStaffAdvance, useDeleteStaffAdvance,
+  useStaffAdjustments, useCreateStaffAdjustment, useDeleteStaffAdjustment,
+  usePerformanceNotes, useCreatePerformanceNote, useDeletePerformanceNote,
   RESTAURANT_ID,
 } from "@/lib/hooks";
 import { apiPost } from "@/lib/api";
@@ -27,7 +31,7 @@ import {
   Plus, User, Phone, Mail, Calendar, Clock, Activity,
   Users, LogIn, LogOut, Search, Trash2, X, ChevronDown, ChevronUp,
   Shield, CheckCircle2, XCircle, FileText, CreditCard, UserCog, Upload, Eye, EyeOff, Download, Loader2,
-  CalendarOff, Check, Ban, Clock3,
+  CalendarOff, Check, Ban, Clock3, Banknote, Wallet, Star, MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -510,8 +514,455 @@ function DrawerLeaveRequestForm({ userId, onClose }: { userId: number; onClose: 
   );
 }
 
+function CompensationTab({ member }: { member: StaffMember }) {
+  const { data: structure, isLoading } = useSalaryStructure(member.id);
+  const save = useSaveSalaryStructure();
+  const { data: adjustments = [] } = useStaffAdjustments(member.id);
+  const createAdj = useCreateStaffAdjustment();
+  const deleteAdj = useDeleteStaffAdjustment();
+  const { toast } = useToast();
+
+  type StructForm = {
+    type: "fixed_monthly" | "daily_wage" | "hourly_wage" | "commission" | "custom";
+    baseAmount: string; hourlyRate: string; dailyRate: string; commissionRate: string; commissionBase: string; currency: string;
+    components: Array<{ name: string; amount: string; isRecurring: boolean; isTaxable: boolean }>;
+  };
+  const [form, setForm] = useState<StructForm>({
+    type: "fixed_monthly", baseAmount: "", hourlyRate: "", dailyRate: "", commissionRate: "", commissionBase: "orders", currency: "INR",
+    components: [],
+  });
+  const [adjForm, setAdjForm] = useState<{ kind: "bonus" | "deduction"; amount: string; label: string; appliesToMonth: string; isRecurring: boolean }>({
+    kind: "bonus", amount: "", label: "", appliesToMonth: "", isRecurring: false,
+  });
+
+  useEffect(() => {
+    if (!structure) return;
+    setForm({
+      type: structure.type,
+      baseAmount: structure.baseAmount ?? "",
+      hourlyRate: structure.hourlyRate ?? "",
+      dailyRate: structure.dailyRate ?? "",
+      commissionRate: structure.commissionRate ?? "",
+      commissionBase: structure.commissionBase ?? "orders",
+      currency: structure.currency ?? "INR",
+      components: structure.components.map(c => ({ name: c.name, amount: c.amount, isRecurring: c.isRecurring, isTaxable: c.isTaxable })),
+    });
+  }, [structure]);
+
+  async function onSave() {
+    try {
+      await save.mutateAsync({
+        userId: member.id,
+        type: form.type,
+        baseAmount: form.baseAmount || null,
+        hourlyRate: form.hourlyRate || null,
+        dailyRate: form.dailyRate || null,
+        commissionRate: form.commissionRate || null,
+        commissionBase: form.type === "commission" ? form.commissionBase : null,
+        currency: form.currency,
+        components: form.components.filter(c => c.name.trim()).map(c => ({
+          name: c.name.trim(),
+          amount: c.amount || "0",
+          isRecurring: c.isRecurring,
+          isTaxable: c.isTaxable,
+        })),
+      });
+      toast({ title: "Salary structure saved" });
+    } catch (e) {
+      toast({ title: "Could not save", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function onAddAdjustment() {
+    if (!adjForm.label.trim() || !adjForm.amount) {
+      toast({ title: "Label and amount are required", variant: "destructive" });
+      return;
+    }
+    try {
+      await createAdj.mutateAsync({
+        userId: member.id,
+        kind: adjForm.kind,
+        amount: adjForm.amount,
+        label: adjForm.label.trim(),
+        appliesToMonth: adjForm.appliesToMonth || null,
+        isRecurring: adjForm.isRecurring,
+      });
+      setAdjForm({ kind: "bonus", amount: "", label: "", appliesToMonth: "", isRecurring: false });
+      toast({ title: "Adjustment added" });
+    } catch (e) {
+      toast({ title: "Could not add", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Salary structure</h3>
+          <Button size="sm" onClick={onSave} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Type</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background"
+              value={form.type}
+              onChange={e => setForm(p => ({ ...p, type: e.target.value as StructForm["type"] }))}>
+              <option value="fixed_monthly">Fixed monthly</option>
+              <option value="daily_wage">Daily wage</option>
+              <option value="hourly_wage">Hourly wage</option>
+              <option value="commission">Commission</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div>
+            <Label>Currency</Label>
+            <Input value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value.toUpperCase() }))} />
+          </div>
+          {form.type === "fixed_monthly" && (
+            <div className="col-span-2">
+              <Label>Monthly base amount</Label>
+              <Input type="number" inputMode="decimal" value={form.baseAmount} onChange={e => setForm(p => ({ ...p, baseAmount: e.target.value }))} />
+            </div>
+          )}
+          {form.type === "daily_wage" && (
+            <div className="col-span-2">
+              <Label>Daily rate</Label>
+              <Input type="number" inputMode="decimal" value={form.dailyRate} onChange={e => setForm(p => ({ ...p, dailyRate: e.target.value }))} />
+            </div>
+          )}
+          {form.type === "hourly_wage" && (
+            <div className="col-span-2">
+              <Label>Hourly rate</Label>
+              <Input type="number" inputMode="decimal" value={form.hourlyRate} onChange={e => setForm(p => ({ ...p, hourlyRate: e.target.value }))} />
+            </div>
+          )}
+          {form.type === "commission" && (
+            <>
+              <div>
+                <Label>Commission % </Label>
+                <Input type="number" inputMode="decimal" step="0.001" value={form.commissionRate} onChange={e => setForm(p => ({ ...p, commissionRate: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Base</Label>
+                <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  value={form.commissionBase}
+                  onChange={e => setForm(p => ({ ...p, commissionBase: e.target.value }))}>
+                  <option value="orders">Orders</option>
+                  <option value="sales">Sales</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <Label>Optional retainer (base amount)</Label>
+                <Input type="number" inputMode="decimal" value={form.baseAmount} onChange={e => setForm(p => ({ ...p, baseAmount: e.target.value }))} />
+              </div>
+            </>
+          )}
+          {form.type === "custom" && (
+            <div className="col-span-2">
+              <Label>Notional base</Label>
+              <Input type="number" inputMode="decimal" value={form.baseAmount} onChange={e => setForm(p => ({ ...p, baseAmount: e.target.value }))} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Components (allowances / fixed deductions)</h3>
+          <Button size="sm" variant="outline" onClick={() => setForm(p => ({ ...p, components: [...p.components, { name: "", amount: "", isRecurring: true, isTaxable: false }] }))}>
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add
+          </Button>
+        </div>
+        {form.components.length === 0 && <p className="text-xs text-muted-foreground">No components yet.</p>}
+        <div className="space-y-2">
+          {form.components.map((c, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-muted/30 p-2 rounded-md">
+              <div className="col-span-5">
+                <Label className="text-xs">Name</Label>
+                <Input value={c.name} onChange={e => setForm(p => ({ ...p, components: p.components.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))} placeholder="HRA, Travel, PF…" />
+              </div>
+              <div className="col-span-3">
+                <Label className="text-xs">Amount</Label>
+                <Input type="number" inputMode="decimal" value={c.amount} onChange={e => setForm(p => ({ ...p, components: p.components.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x) }))} />
+              </div>
+              <div className="col-span-3 flex flex-col gap-1 pt-1">
+                <label className="text-xs flex items-center gap-1">
+                  <input type="checkbox" checked={c.isRecurring} onChange={e => setForm(p => ({ ...p, components: p.components.map((x, i) => i === idx ? { ...x, isRecurring: e.target.checked } : x) }))} />
+                  Recurring
+                </label>
+                <label className="text-xs flex items-center gap-1">
+                  <input type="checkbox" checked={c.isTaxable} onChange={e => setForm(p => ({ ...p, components: p.components.map((x, i) => i === idx ? { ...x, isTaxable: e.target.checked } : x) }))} />
+                  Taxable
+                </label>
+              </div>
+              <div className="col-span-1 flex justify-end">
+                <button onClick={() => setForm(p => ({ ...p, components: p.components.filter((_, i) => i !== idx) }))} className="text-destructive p-1">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold">Bonuses & deductions</h3>
+        <div className="grid grid-cols-12 gap-2 items-end bg-muted/30 p-2 rounded-md">
+          <div className="col-span-3">
+            <Label className="text-xs">Kind</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-2 py-1.5 text-sm bg-background"
+              value={adjForm.kind}
+              onChange={e => setAdjForm(p => ({ ...p, kind: e.target.value as "bonus" | "deduction" }))}>
+              <option value="bonus">Bonus</option>
+              <option value="deduction">Deduction</option>
+            </select>
+          </div>
+          <div className="col-span-3">
+            <Label className="text-xs">Amount</Label>
+            <Input type="number" inputMode="decimal" value={adjForm.amount} onChange={e => setAdjForm(p => ({ ...p, amount: e.target.value }))} />
+          </div>
+          <div className="col-span-4">
+            <Label className="text-xs">Label</Label>
+            <Input value={adjForm.label} onChange={e => setAdjForm(p => ({ ...p, label: e.target.value }))} placeholder="Diwali bonus / late penalty" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Month</Label>
+            <Input placeholder="YYYY-MM" value={adjForm.appliesToMonth} onChange={e => setAdjForm(p => ({ ...p, appliesToMonth: e.target.value }))} />
+          </div>
+          <div className="col-span-8 flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={adjForm.isRecurring} onChange={e => setAdjForm(p => ({ ...p, isRecurring: e.target.checked }))} />
+              Recurring monthly
+            </label>
+          </div>
+          <div className="col-span-4 flex justify-end">
+            <Button size="sm" onClick={onAddAdjustment} disabled={createAdj.isPending}><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          {adjustments.length === 0 && <p className="text-xs text-muted-foreground">None yet.</p>}
+          {adjustments.map(a => (
+            <div key={a.id} className="flex items-center justify-between text-sm bg-muted/20 px-3 py-2 rounded-md">
+              <div className="flex items-center gap-2">
+                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded",
+                  a.kind === "bonus" ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700")}>
+                  {a.kind === "bonus" ? "+" : "−"} {a.amount}
+                </span>
+                <span>{a.label}</span>
+                {a.appliesToMonth && <span className="text-xs text-muted-foreground">{a.appliesToMonth}</span>}
+                {a.isRecurring && <span className="text-xs text-muted-foreground italic">recurring</span>}
+              </div>
+              <button onClick={() => deleteAdj.mutate({ userId: member.id, adjId: a.id })} className="text-destructive p-1">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdvancesTab({ member }: { member: StaffMember }) {
+  const { data, isLoading } = useStaffAdvances(member.id);
+  const create = useCreateStaffAdvance();
+  const update = useUpdateStaffAdvance();
+  const remove = useDeleteStaffAdvance();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ amount: "", paidOn: new Date().toISOString().slice(0, 10), notes: "" });
+  const [settleFor, setSettleFor] = useState<number | null>(null);
+  const [settleAmt, setSettleAmt] = useState("");
+
+  async function onAdd() {
+    if (!form.amount) { toast({ title: "Amount required", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync({ userId: member.id, amount: form.amount, paidOn: new Date(form.paidOn).toISOString(), notes: form.notes || null });
+      setForm({ amount: "", paidOn: new Date().toISOString().slice(0, 10), notes: "" });
+      toast({ title: "Advance recorded" });
+    } catch (e) {
+      toast({ title: "Could not record", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function onSettle(id: number, current: string, total: string) {
+    const next = Number(settleAmt);
+    if (!Number.isFinite(next) || next <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    const remaining = Number(total) - Number(current);
+    if (next > remaining + 1e-6) {
+      toast({ title: `Cannot exceed remaining ${remaining.toFixed(2)}`, variant: "destructive" });
+      return;
+    }
+    try {
+      await update.mutateAsync({ userId: member.id, advanceId: id, settledAmount: (Number(current) + next).toFixed(2) });
+      setSettleFor(null); setSettleAmt("");
+      toast({ title: "Settlement applied" });
+    } catch (e) {
+      toast({ title: "Could not update", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  const rows = data?.rows ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-muted/30 rounded-md p-3">
+          <p className="text-xs text-muted-foreground">Outstanding</p>
+          <p className="text-lg font-semibold text-orange-600">{data?.outstanding ?? "0.00"}</p>
+        </div>
+        <div className="bg-muted/30 rounded-md p-3">
+          <p className="text-xs text-muted-foreground">Total advanced</p>
+          <p className="text-lg font-semibold">{data?.advanced ?? "0.00"}</p>
+        </div>
+        <div className="bg-muted/30 rounded-md p-3">
+          <p className="text-xs text-muted-foreground">Total settled</p>
+          <p className="text-lg font-semibold text-green-700">{data?.settled ?? "0.00"}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-2 items-end bg-muted/30 p-3 rounded-md">
+        <div className="col-span-4">
+          <Label className="text-xs">Amount</Label>
+          <Input type="number" inputMode="decimal" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+        </div>
+        <div className="col-span-4">
+          <Label className="text-xs">Paid on</Label>
+          <Input type="date" value={form.paidOn} onChange={e => setForm(p => ({ ...p, paidOn: e.target.value }))} />
+        </div>
+        <div className="col-span-4 flex justify-end">
+          <Button size="sm" onClick={onAdd} disabled={create.isPending}><Plus className="w-3.5 h-3.5 mr-1" /> Record advance</Button>
+        </div>
+        <div className="col-span-12">
+          <Label className="text-xs">Notes</Label>
+          <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Reason / reference" />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {rows.length === 0 && <p className="text-xs text-muted-foreground">No advances recorded yet.</p>}
+        {rows.map(r => {
+          const outstanding = (Number(r.amount) - Number(r.settledAmount)).toFixed(2);
+          return (
+            <div key={r.id} className="border border-border rounded-md p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold">{r.amount}</span>
+                  <span className="text-xs text-muted-foreground ml-2">{formatDate(r.paidOn)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded",
+                    Number(outstanding) > 0 ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700")}>
+                    {Number(outstanding) > 0 ? `${outstanding} outstanding` : "Settled"}
+                  </span>
+                  <button onClick={() => remove.mutate({ userId: member.id, advanceId: r.id })} className="text-destructive p-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
+              <div className="text-xs text-muted-foreground mt-1">Settled so far: {r.settledAmount}</div>
+              {settleFor === r.id ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <Input className="h-8 text-xs" type="number" inputMode="decimal" placeholder={`Up to ${outstanding}`} max={outstanding} value={settleAmt} onChange={e => setSettleAmt(e.target.value)} />
+                  <Button size="sm" onClick={() => onSettle(r.id, r.settledAmount, r.amount)} disabled={update.isPending}>Apply</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setSettleFor(null); setSettleAmt(""); }}>Cancel</Button>
+                </div>
+              ) : Number(outstanding) > 0 ? (
+                <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => { setSettleFor(r.id); setSettleAmt(""); }}>
+                  Record settlement
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PerformanceNotesTab({ member }: { member: StaffMember }) {
+  const { data: notes = [], isLoading } = usePerformanceNotes(member.id);
+  const create = useCreatePerformanceNote();
+  const remove = useDeletePerformanceNote();
+  const { toast } = useToast();
+  const [form, setForm] = useState<{ body: string; rating: string }>({ body: "", rating: "" });
+
+  async function onAdd() {
+    if (!form.body.trim()) { toast({ title: "Note body required", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync({
+        userId: member.id,
+        body: form.body.trim(),
+        rating: form.rating ? Number(form.rating) : null,
+      });
+      setForm({ body: "", rating: "" });
+      toast({ title: "Note added" });
+    } catch (e) {
+      toast({ title: "Could not add", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 rounded-md p-3 space-y-2">
+        <div>
+          <Label className="text-xs">Note</Label>
+          <textarea className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background min-h-[72px]"
+            value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} placeholder="Observed behavior, achievement, area to improve…" />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">Rating</Label>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setForm(p => ({ ...p, rating: String(n) }))} className="p-0.5">
+                  <Star className={cn("w-4 h-4", Number(form.rating) >= n ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground")} />
+                </button>
+              ))}
+              {form.rating && <button type="button" onClick={() => setForm(p => ({ ...p, rating: "" }))} className="text-xs text-muted-foreground ml-1">clear</button>}
+            </div>
+          </div>
+          <Button size="sm" onClick={onAdd} disabled={create.isPending}><Plus className="w-3.5 h-3.5 mr-1" /> Add note</Button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+        {notes.map(n => (
+          <div key={n.id} className="border border-border rounded-md p-3">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <MessageSquare className="w-3 h-3" />
+                <span>{n.authorName ?? "Manager"}</span>
+                <span>·</span>
+                <span>{formatDateTime(n.createdAt)}</span>
+                {n.rating != null && (
+                  <span className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={cn("w-3 h-3", i < (n.rating ?? 0) ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground/40")} />
+                    ))}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => remove.mutate({ userId: member.id, noteId: n.id })} className="text-destructive p-1">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-sm whitespace-pre-wrap">{n.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => void }) {
-  const [tab, setTab] = useState<"profile" | "documents" | "bank">("profile");
+  const [tab, setTab] = useState<"profile" | "documents" | "bank" | "compensation" | "advances" | "notes">("profile");
   const [showRequestLeave, setShowRequestLeave] = useState(false);
   const { user } = useAuth();
   const canRequestForOthers = user?.isSuperAdmin || user?.role === "owner" || user?.role === "manager";
@@ -555,6 +1006,9 @@ function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => 
             { id: "profile", label: "Profile", Icon: UserCog },
             { id: "documents", label: "Documents", Icon: FileText },
             { id: "bank", label: "Bank", Icon: CreditCard },
+            { id: "compensation", label: "Compensation", Icon: Banknote },
+            { id: "advances", label: "Advances", Icon: Wallet },
+            { id: "notes", label: "Performance", Icon: Star },
           ] as const).map(t => (
             <button
               key={t.id}
@@ -573,6 +1027,9 @@ function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => 
           {tab === "profile" && <ProfileTab member={member} />}
           {tab === "documents" && <DocumentsTab member={member} />}
           {tab === "bank" && <BankTab member={member} />}
+          {tab === "compensation" && <CompensationTab member={member} />}
+          {tab === "advances" && <AdvancesTab member={member} />}
+          {tab === "notes" && <PerformanceNotesTab member={member} />}
         </div>
       </div>
     </div>
@@ -723,7 +1180,14 @@ function TeamTab({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", roleConfig.color)}>{roleConfig.label}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", roleConfig.color)}>{roleConfig.label}</span>
+                        {member.outstandingAdvance && Number(member.outstandingAdvance) > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Outstanding salary advance">
+                            <Wallet className="w-2.5 h-2.5 inline mr-0.5" />{Number(member.outstandingAdvance).toFixed(0)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <span className="text-xs text-muted-foreground">

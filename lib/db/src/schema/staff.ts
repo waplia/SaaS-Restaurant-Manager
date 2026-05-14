@@ -192,3 +192,86 @@ export type LeaveBalance = typeof leaveBalancesTable.$inferSelect;
 export const insertLeaveRequestSchema = createInsertSchema(leaveRequestsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type LeaveRequest = typeof leaveRequestsTable.$inferSelect;
+
+export const salaryStructuresTable = pgTable("salary_structures", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  type: text("type").notNull().default("fixed_monthly"),
+  baseAmount: decimal("base_amount", { precision: 12, scale: 2 }),
+  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
+  dailyRate: decimal("daily_rate", { precision: 10, scale: 2 }),
+  commissionRate: decimal("commission_rate", { precision: 6, scale: 3 }),
+  commissionBase: text("commission_base"),
+  currency: text("currency").notNull().default("INR"),
+  effectiveFrom: timestamp("effective_from"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.restaurantId, t.userId)]);
+
+export const salaryComponentsTable = pgTable("salary_components", {
+  id: serial("id").primaryKey(),
+  structureId: integer("structure_id").notNull().references(() => salaryStructuresTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  name: text("name").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  isRecurring: boolean("is_recurring").notNull().default(true),
+  isTaxable: boolean("is_taxable").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffAdvancesTable = pgTable("staff_advances", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  paidOn: timestamp("paid_on").notNull(),
+  notes: text("notes"),
+  recordedByUserId: integer("recorded_by_user_id").references(() => usersTable.id),
+  settledAmount: decimal("settled_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const staffAdjustmentsTable = pgTable("staff_adjustments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  kind: text("kind").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  label: text("label").notNull(),
+  appliesToMonth: text("applies_to_month"),
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  recordedByUserId: integer("recorded_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const performanceNotesTable = pgTable("performance_notes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  authorUserId: integer("author_user_id").references(() => usersTable.id),
+  rating: integer("rating"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSalaryStructureSchema = createInsertSchema(salaryStructuresTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSalaryStructure = z.infer<typeof insertSalaryStructureSchema>;
+export type SalaryStructure = typeof salaryStructuresTable.$inferSelect;
+
+export const insertSalaryComponentSchema = createInsertSchema(salaryComponentsTable).omit({ id: true, createdAt: true });
+export type InsertSalaryComponent = z.infer<typeof insertSalaryComponentSchema>;
+export type SalaryComponent = typeof salaryComponentsTable.$inferSelect;
+
+export const insertStaffAdvanceSchema = createInsertSchema(staffAdvancesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStaffAdvance = z.infer<typeof insertStaffAdvanceSchema>;
+export type StaffAdvance = typeof staffAdvancesTable.$inferSelect;
+
+export const insertStaffAdjustmentSchema = createInsertSchema(staffAdjustmentsTable).omit({ id: true, createdAt: true });
+export type InsertStaffAdjustment = z.infer<typeof insertStaffAdjustmentSchema>;
+export type StaffAdjustment = typeof staffAdjustmentsTable.$inferSelect;
+
+export const insertPerformanceNoteSchema = createInsertSchema(performanceNotesTable).omit({ id: true, createdAt: true });
+export type InsertPerformanceNote = z.infer<typeof insertPerformanceNoteSchema>;
+export type PerformanceNote = typeof performanceNotesTable.$inferSelect;

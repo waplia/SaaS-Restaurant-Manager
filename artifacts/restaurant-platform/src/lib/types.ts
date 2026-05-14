@@ -675,6 +675,91 @@ export interface StaffMember {
   emergencyContactName: string | null;
   emergencyContactRelation: string | null;
   notes: string | null;
+  outstandingAdvance?: string | null;
+}
+
+export interface SalaryComponent {
+  id: number;
+  structureId: number;
+  restaurantId: number;
+  name: string;
+  amount: string;
+  isRecurring: boolean;
+  isTaxable: boolean;
+  createdAt: string;
+}
+
+export interface SalaryStructure {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  type: "fixed_monthly" | "daily_wage" | "hourly_wage" | "commission" | "custom";
+  baseAmount: string | null;
+  hourlyRate: string | null;
+  dailyRate: string | null;
+  commissionRate: string | null;
+  commissionBase: string | null;
+  currency: string;
+  effectiveFrom: string | null;
+  createdAt: string;
+  updatedAt: string;
+  components: SalaryComponent[];
+}
+
+export interface SaveSalaryStructureInput {
+  type: SalaryStructure["type"];
+  baseAmount?: string | null;
+  hourlyRate?: string | null;
+  dailyRate?: string | null;
+  commissionRate?: string | null;
+  commissionBase?: string | null;
+  currency?: string;
+  effectiveFrom?: string | null;
+  components: Array<{ name: string; amount: string; isRecurring?: boolean; isTaxable?: boolean }>;
+}
+
+export interface StaffAdvance {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  amount: string;
+  paidOn: string;
+  notes: string | null;
+  recordedByUserId: number | null;
+  settledAmount: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffAdvancesResponse {
+  rows: StaffAdvance[];
+  outstanding: string;
+  advanced: string;
+  settled: string;
+}
+
+export interface StaffAdjustment {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  kind: "bonus" | "deduction";
+  amount: string;
+  label: string;
+  appliesToMonth: string | null;
+  isRecurring: boolean;
+  recordedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface PerformanceNote {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  authorUserId: number | null;
+  authorName: string | null;
+  rating: number | null;
+  body: string;
+  createdAt: string;
 }
 
 export interface StaffProfilePatch {

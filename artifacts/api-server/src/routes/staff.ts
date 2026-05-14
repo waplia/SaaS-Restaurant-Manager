@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   db,
   usersTable,
   staffTable,
   staffDocumentsTable,
   staffBankAccountsTable,
+  staffAdvancesTable,
   auditLogsTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
@@ -81,6 +82,12 @@ async function loadStaffWithUser(restaurantId: number) {
       userAvatarUrl: usersTable.avatarUrl,
       userIsActive: usersTable.isActive,
       lastLoginAt: usersTable.lastLoginAt,
+      outstandingAdvance: sql<string>`COALESCE((
+        SELECT SUM(${staffAdvancesTable.amount} - ${staffAdvancesTable.settledAmount})
+        FROM ${staffAdvancesTable}
+        WHERE ${staffAdvancesTable.userId} = ${usersTable.id}
+          AND ${staffAdvancesTable.restaurantId} = ${restaurantId}
+      ), 0)`.as("outstanding_advance"),
     })
     .from(usersTable)
     .leftJoin(staffTable, and(eq(staffTable.userId, usersTable.id), eq(staffTable.restaurantId, restaurantId)))
@@ -115,6 +122,7 @@ function flattenStaffRow(row: Awaited<ReturnType<typeof loadStaffWithUser>>[numb
     emergencyContactName: row.emergencyContactName,
     emergencyContactRelation: row.emergencyContactRelation,
     notes: row.notes,
+    outstandingAdvance: row.outstandingAdvance,
   };
 }
 

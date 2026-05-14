@@ -627,6 +627,134 @@ export function useSaveStaffBankAccount() {
   });
 }
 
+export function useSalaryStructure(userId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["staff", "salary-structure", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<import("./types").SalaryStructure | null>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/salary-structure`),
+    enabled: userId !== null,
+  });
+}
+
+export function useSaveSalaryStructure() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number } & import("./types").SaveSalaryStructureInput) =>
+      apiPut<import("./types").SalaryStructure>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/salary-structure`, body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["staff", "salary-structure", RESTAURANT_ID, vars.userId] });
+      qc.invalidateQueries({ queryKey: ["staff", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useStaffAdvances(userId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["staff", "advances", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<import("./types").StaffAdvancesResponse>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/advances`),
+    enabled: userId !== null,
+  });
+}
+
+export function useCreateStaffAdvance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number; amount: string | number; paidOn?: string; notes?: string | null }) =>
+      apiPost<import("./types").StaffAdvance>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/advances`, body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["staff", "advances", RESTAURANT_ID, vars.userId] });
+      qc.invalidateQueries({ queryKey: ["staff", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useUpdateStaffAdvance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, advanceId, ...body }: { userId: number; advanceId: number; notes?: string | null; settledAmount?: string | number }) =>
+      apiPatch<import("./types").StaffAdvance>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/advances/${advanceId}`, body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["staff", "advances", RESTAURANT_ID, vars.userId] });
+      qc.invalidateQueries({ queryKey: ["staff", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useDeleteStaffAdvance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, advanceId }: { userId: number; advanceId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/staff/${userId}/advances/${advanceId}`),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["staff", "advances", RESTAURANT_ID, vars.userId] });
+      qc.invalidateQueries({ queryKey: ["staff", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useStaffAdjustments(userId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["staff", "adjustments", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<import("./types").StaffAdjustment[]>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/adjustments`),
+    enabled: userId !== null,
+  });
+}
+
+export function useCreateStaffAdjustment() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number; kind: "bonus" | "deduction"; amount: string | number; label: string; appliesToMonth?: string | null; isRecurring?: boolean }) =>
+      apiPost<import("./types").StaffAdjustment>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/adjustments`, body),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "adjustments", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
+export function useDeleteStaffAdjustment() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, adjId }: { userId: number; adjId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/staff/${userId}/adjustments/${adjId}`),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "adjustments", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
+export function usePerformanceNotes(userId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["staff", "performance-notes", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<import("./types").PerformanceNote[]>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/performance-notes`),
+    enabled: userId !== null,
+  });
+}
+
+export function useCreatePerformanceNote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number; body: string; rating?: number | null }) =>
+      apiPost<import("./types").PerformanceNote>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/performance-notes`, body),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "performance-notes", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
+export function useDeletePerformanceNote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, noteId }: { userId: number; noteId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/staff/${userId}/performance-notes/${noteId}`),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "performance-notes", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
