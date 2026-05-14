@@ -178,29 +178,4 @@ router.delete("/users/:id", requireRole("owner", "manager", "super_admin"), asyn
   res.status(204).send();
 });
 
-router.get("/restaurants/:restaurantId/staff", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const restaurantId = Number(req.params.restaurantId);
-  const { role } = req.query;
-  const conditions: ReturnType<typeof eq>[] = [eq(usersTable.restaurantId, restaurantId)];
-
-  if (!req.user!.isSuperAdmin) {
-    const tenantId = req.user!.tenantId;
-    if (tenantId) conditions.push(eq(usersTable.tenantId, tenantId));
-  }
-
-  if (role) conditions.push(eq(usersTable.role, String(role)));
-  const rows = await db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    avatarUrl: usersTable.avatarUrl,
-    isActive: usersTable.isActive,
-    lastLoginAt: usersTable.lastLoginAt,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(and(...conditions));
-  res.json(rows);
-});
-
 export default router;

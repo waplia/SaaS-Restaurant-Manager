@@ -1,0 +1,321 @@
+import { Router } from "express";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  db,
+  usersTable,
+  staffTable,
+  staffDocumentsTable,
+  staffBankAccountsTable,
+  auditLogsTable,
+} from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { getObjectAclPolicy } from "../lib/objectAcl";
+
+const objectStorageService = new ObjectStorageService();
+
+const router = Router();
+
+// Privileged-only router scope: all HR/payroll data (PII, salary, documents,
+// bank info) is restricted to owner/manager/super_admin. Non-privileged roles
+// hitting any of these routes get 403.
+router.use(
+  "/restaurants/:restaurantId",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+);
+
+function maskAccountNumber(n: string | null | undefined): string | null {
+  if (!n) return null;
+  const s = String(n).replace(/\s+/g, "");
+  if (s.length <= 4) return s;
+  return `${"•".repeat(Math.max(0, s.length - 4))}${s.slice(-4)}`;
+}
+
+async function audit(restaurantId: number, userId: number | null, action: string, entity: string, entityId: number | null, details?: unknown, ip?: string) {
+  try {
+    await db.insert(auditLogsTable).values({
+      restaurantId,
+      userId,
+      action,
+      entity,
+      entityId: entityId ?? undefined,
+      details: details ? JSON.stringify(details) : undefined,
+      ipAddress: ip,
+    });
+  } catch {
+    // Audit failure should never break the request.
+  }
+}
+
+async function loadStaffWithUser(restaurantId: number) {
+  return db
+    .select({
+      id: staffTable.id,
+      userId: usersTable.id,
+      restaurantId: usersTable.restaurantId,
+      employeeCode: staffTable.employeeCode,
+      jobTitle: staffTable.jobTitle,
+      department: staffTable.department,
+      salary: staffTable.salary,
+      salaryType: staffTable.salaryType,
+      hiredAt: staffTable.hiredAt,
+      dateOfBirth: staffTable.dateOfBirth,
+      gender: staffTable.gender,
+      address: staffTable.address,
+      city: staffTable.city,
+      state: staffTable.state,
+      pincode: staffTable.pincode,
+      emergencyContact: staffTable.emergencyContact,
+      emergencyContactName: staffTable.emergencyContactName,
+      emergencyContactRelation: staffTable.emergencyContactRelation,
+      notes: staffTable.notes,
+      isActive: staffTable.isActive,
+      createdAt: staffTable.createdAt,
+      updatedAt: staffTable.updatedAt,
+      userName: usersTable.name,
+      userEmail: usersTable.email,
+      userPhone: usersTable.phone,
+      userRole: usersTable.role,
+      userAvatarUrl: usersTable.avatarUrl,
+      userIsActive: usersTable.isActive,
+      lastLoginAt: usersTable.lastLoginAt,
+    })
+    .from(usersTable)
+    .leftJoin(staffTable, and(eq(staffTable.userId, usersTable.id), eq(staffTable.restaurantId, restaurantId)))
+    .where(eq(usersTable.restaurantId, restaurantId));
+}
+
+function flattenStaffRow(row: Awaited<ReturnType<typeof loadStaffWithUser>>[number]) {
+  return {
+    id: row.userId,
+    staffId: row.id,
+    name: row.userName,
+    email: row.userEmail,
+    phone: row.userPhone,
+    role: row.userRole,
+    avatarUrl: row.userAvatarUrl,
+    isActive: row.userIsActive,
+    lastLoginAt: row.lastLoginAt,
+    createdAt: row.createdAt,
+    employeeCode: row.employeeCode,
+    jobTitle: row.jobTitle,
+    department: row.department,
+    salary: row.salary,
+    salaryType: row.salaryType,
+    hiredAt: row.hiredAt,
+    dateOfBirth: row.dateOfBirth,
+    gender: row.gender,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    pincode: row.pincode,
+    emergencyContact: row.emergencyContact,
+    emergencyContactName: row.emergencyContactName,
+    emergencyContactRelation: row.emergencyContactRelation,
+    notes: row.notes,
+  };
+}
+
+router.get("/restaurants/:restaurantId/staff", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const { role } = req.query;
+  const rows = await loadStaffWithUser(restaurantId);
+  let items = rows.map(flattenStaffRow);
+  if (role) items = items.filter((r) => r.role === String(role));
+  res.json(items);
+});
+
+router.get("/restaurants/:restaurantId/staff/:userId", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const rows = await loadStaffWithUser(restaurantId);
+  const row = rows.find((r) => r.userId === userId);
+  if (!row) return void res.status(404).json({ error: "Not found" });
+  res.json(flattenStaffRow(row));
+});
+
+const STAFF_FIELDS = [
+  "employeeCode", "jobTitle", "department", "salary", "salaryType", "hiredAt",
+  "dateOfBirth", "gender", "address", "city", "state", "pincode",
+  "emergencyContact", "emergencyContactName", "emergencyContactRelation", "notes",
+] as const;
+
+type StaffPatch = Record<string, string | Date | null>;
+
+function buildStaffPatch(body: Record<string, unknown>): StaffPatch {
+  const out: StaffPatch = {};
+  for (const f of STAFF_FIELDS) {
+    if (f in body) {
+      const v = body[f];
+      if (f === "hiredAt" || f === "dateOfBirth") {
+        out[f] = v ? new Date(String(v)) : null;
+      } else {
+        out[f] = (v === "" || v === undefined || v === null) ? null : String(v);
+      }
+    }
+  }
+  return out;
+}
+
+router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user || user.restaurantId !== restaurantId) {
+    return void res.status(404).json({ error: "Not found" });
+  }
+
+  const patch = buildStaffPatch(req.body ?? {});
+  const [existing] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (existing) {
+    if (Object.keys(patch).length > 0) {
+      await db.update(staffTable).set({ ...patch, updatedAt: new Date() }).where(eq(staffTable.id, existing.id));
+    }
+  } else {
+    await db.insert(staffTable).values({ userId, restaurantId, ...patch });
+  }
+
+  await audit(restaurantId, req.user?.sub ?? null, "update", "staff", userId, patch, req.ip);
+
+  const rows = await loadStaffWithUser(restaurantId);
+  const row = rows.find((r) => r.userId === userId);
+  res.json(row ? flattenStaffRow(row) : null);
+});
+
+router.get("/restaurants/:restaurantId/staff/:userId/documents", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) return void res.json([]);
+  const docs = await db.select().from(staffDocumentsTable).where(eq(staffDocumentsTable.staffId, staff.id)).orderBy(desc(staffDocumentsTable.createdAt));
+  res.json(docs);
+});
+
+router.post("/restaurants/:restaurantId/staff/:userId/documents", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const { label, fileUrl, mimeType, sizeBytes } = req.body ?? {};
+  if (!label || !fileUrl) return void res.status(400).json({ error: "label and fileUrl required" });
+  if (typeof fileUrl !== "string" || !fileUrl.startsWith("/objects/")) {
+    return void res.status(400).json({ error: "fileUrl must be a finalized /objects/ path" });
+  }
+  // Verify the uploaded object exists and is ACL-owned by this restaurant
+  // (i.e. the client actually called /storage/uploads/finalize for it).
+  try {
+    const objectFile = await objectStorageService.getObjectEntityFile(fileUrl);
+    const acl = await getObjectAclPolicy(objectFile);
+    if (!acl || acl.restaurantId !== String(restaurantId)) {
+      return void res.status(403).json({ error: "Object not owned by this restaurant" });
+    }
+  } catch {
+    return void res.status(400).json({ error: "Object not found — finalize upload first" });
+  }
+
+  let [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user || user.restaurantId !== restaurantId) return void res.status(404).json({ error: "Staff not found" });
+    [staff] = await db.insert(staffTable).values({ userId, restaurantId }).returning();
+  }
+
+  const [doc] = await db.insert(staffDocumentsTable).values({
+    staffId: staff.id,
+    restaurantId,
+    label: String(label),
+    fileUrl: String(fileUrl),
+    mimeType: mimeType ? String(mimeType) : undefined,
+    sizeBytes: sizeBytes ? Number(sizeBytes) : undefined,
+    uploadedByUserId: req.user?.sub ?? undefined,
+  }).returning();
+
+  await audit(restaurantId, req.user?.sub ?? null, "create", "staff_document", doc.id, { staffId: staff.id, label }, req.ip);
+  res.status(201).json(doc);
+});
+
+router.delete("/restaurants/:restaurantId/staff/:userId/documents/:docId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const docId = Number(req.params.docId);
+  const [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) return void res.status(404).json({ error: "Not found" });
+  const [doc] = await db.select().from(staffDocumentsTable).where(and(eq(staffDocumentsTable.id, docId), eq(staffDocumentsTable.restaurantId, restaurantId), eq(staffDocumentsTable.staffId, staff.id)));
+  if (!doc) return void res.status(404).json({ error: "Not found" });
+  await db.delete(staffDocumentsTable).where(eq(staffDocumentsTable.id, docId));
+  await audit(restaurantId, req.user?.sub ?? null, "delete", "staff_document", docId, { label: doc.label }, req.ip);
+  res.status(204).send();
+});
+
+router.get("/restaurants/:restaurantId/staff/:userId/bank", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) return void res.json(null);
+  const [bank] = await db.select().from(staffBankAccountsTable).where(eq(staffBankAccountsTable.staffId, staff.id));
+  if (!bank) return void res.json(null);
+  const reveal = req.query.reveal === "1";
+  res.json({
+    ...bank,
+    accountNumber: reveal ? bank.accountNumber : maskAccountNumber(bank.accountNumber),
+    accountNumberMasked: maskAccountNumber(bank.accountNumber),
+  });
+});
+
+router.put("/restaurants/:restaurantId/staff/:userId/bank", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { accountName, ifsc, bankName, upiId } = body;
+  const accountNumberRaw = body.accountNumber;
+
+  let [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user || user.restaurantId !== restaurantId) return void res.status(404).json({ error: "Staff not found" });
+    [staff] = await db.insert(staffTable).values({ userId, restaurantId }).returning();
+  }
+
+  const [existing] = await db.select().from(staffBankAccountsTable).where(eq(staffBankAccountsTable.staffId, staff.id));
+
+  // Preserve existing account number unless the client explicitly sent a
+  // non-empty new value. Reject masked placeholders so we never persist
+  // bullets back into the column. Empty/omitted -> keep existing.
+  let nextAccountNumber: string | null;
+  if (accountNumberRaw === undefined || accountNumberRaw === null || accountNumberRaw === "") {
+    nextAccountNumber = existing?.accountNumber ?? null;
+  } else {
+    const s = String(accountNumberRaw);
+    if (/[•*]/.test(s)) {
+      nextAccountNumber = existing?.accountNumber ?? null;
+    } else {
+      nextAccountNumber = s;
+    }
+  }
+
+  const payload = {
+    accountName: (accountName as string | null | undefined) ?? null,
+    accountNumber: nextAccountNumber,
+    ifsc: (ifsc as string | null | undefined) ?? null,
+    bankName: (bankName as string | null | undefined) ?? null,
+    upiId: (upiId as string | null | undefined) ?? null,
+    updatedAt: new Date(),
+  };
+
+  let saved;
+  if (existing) {
+    [saved] = await db.update(staffBankAccountsTable).set(payload).where(eq(staffBankAccountsTable.id, existing.id)).returning();
+  } else {
+    [saved] = await db.insert(staffBankAccountsTable).values({ staffId: staff.id, restaurantId, ...payload }).returning();
+  }
+
+  await audit(restaurantId, req.user?.sub ?? null, existing ? "update" : "create", "staff_bank_account", saved.id, { staffId: staff.id }, req.ip);
+  res.json({
+    ...saved,
+    accountNumber: maskAccountNumber(saved.accountNumber),
+    accountNumberMasked: maskAccountNumber(saved.accountNumber),
+  });
+});
+
+export default router;

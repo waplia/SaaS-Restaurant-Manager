@@ -492,6 +492,58 @@ export function useStaff(role?: string) {
   });
 }
 
+export function useUpdateStaffProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...patch }: { userId: number } & import("./types").StaffProfilePatch) =>
+      apiPatch<StaffMember>(`/restaurants/${RESTAURANT_ID}/staff/${userId}`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useStaffDocuments(userId: number | null) {
+  return useQuery({
+    queryKey: ["staff", "documents", RESTAURANT_ID, userId],
+    queryFn: () => apiGet<import("./types").StaffDocument[]>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/documents`),
+    enabled: userId !== null,
+  });
+}
+
+export function useAddStaffDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number; label: string; fileUrl: string; mimeType?: string; sizeBytes?: number }) =>
+      apiPost<import("./types").StaffDocument>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/documents`, body),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "documents", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
+export function useDeleteStaffDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, docId }: { userId: number; docId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/staff/${userId}/documents/${docId}`),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "documents", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
+export function useStaffBankAccount(userId: number | null, reveal = false) {
+  return useQuery({
+    queryKey: ["staff", "bank", RESTAURANT_ID, userId, reveal],
+    queryFn: () => apiGet<import("./types").StaffBankAccount | null>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/bank${reveal ? "?reveal=1" : ""}`),
+    enabled: userId !== null,
+  });
+}
+
+export function useSaveStaffBankAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: number; accountName?: string | null; accountNumber?: string | null; ifsc?: string | null; bankName?: string | null; upiId?: string | null }) =>
+      apiPut<import("./types").StaffBankAccount>(`/restaurants/${RESTAURANT_ID}/staff/${userId}/bank`, body),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["staff", "bank", RESTAURANT_ID, vars.userId] }),
+  });
+}
+
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({

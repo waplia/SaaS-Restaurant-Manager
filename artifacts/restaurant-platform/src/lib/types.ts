@@ -647,12 +647,75 @@ export interface AdjustInventoryInput {
 
 export interface StaffMember {
   id: number;
+  staffId: number | null;
   name: string;
   email: string;
   phone: string | null;
   role: string;
+  avatarUrl: string | null;
   isActive: boolean;
   lastLoginAt: string | null;
+  createdAt: string;
+  employeeCode: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  salary: string | null;
+  salaryType: string | null;
+  hiredAt: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  emergencyContact: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelation: string | null;
+  notes: string | null;
+}
+
+export interface StaffProfilePatch {
+  employeeCode?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  salary?: string | null;
+  salaryType?: string | null;
+  hiredAt?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  emergencyContact?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelation?: string | null;
+  notes?: string | null;
+}
+
+export interface StaffDocument {
+  id: number;
+  staffId: number;
+  restaurantId: number;
+  label: string;
+  fileUrl: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface StaffBankAccount {
+  id: number;
+  staffId: number;
+  restaurantId: number;
+  accountName: string | null;
+  accountNumber: string | null;
+  accountNumberMasked: string | null;
+  ifsc: string | null;
+  bankName: string | null;
+  upiId: string | null;
+  updatedAt: string;
   createdAt: string;
 }
 

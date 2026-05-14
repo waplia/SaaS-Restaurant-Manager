@@ -10,18 +10,23 @@ import {
   useAuditLogs,
   useRoles, usePermissions, useRoleWithPermissions, useCreateRole, useDeleteRole,
   useAddRolePermission, useRemoveRolePermission,
+  useUpdateStaffProfile, useStaffDocuments, useAddStaffDocument, useDeleteStaffDocument,
+  useStaffBankAccount, useSaveStaffBankAccount,
+  RESTAURANT_ID,
 } from "@/lib/hooks";
+import { apiPost } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 import {
   Plus, User, Phone, Mail, Calendar, Clock, Activity,
   Users, LogIn, LogOut, Search, Trash2, X, ChevronDown, ChevronUp,
-  Shield, CheckCircle2, XCircle,
+  Shield, CheckCircle2, XCircle, FileText, CreditCard, UserCog, Upload, Eye, EyeOff, Download, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog, Role, Permission } from "@/lib/types";
+import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog, Role, Permission, StaffDocument } from "@/lib/types";
 
 function generateTempPassword(): string {
   const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -70,6 +75,377 @@ function formatDate(iso: string) {
   }
 }
 
+const SALARY_TYPES: Array<{ value: string; label: string }> = [
+  { value: "fixed_monthly", label: "Fixed monthly" },
+  { value: "daily_wage", label: "Daily wage" },
+  { value: "hourly_wage", label: "Hourly wage" },
+  { value: "commission", label: "Commission" },
+  { value: "custom", label: "Custom" },
+];
+
+function toDateInput(v: string | null | undefined): string {
+  if (!v) return "";
+  try {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return "";
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
+function formatBytes(n: number | null | undefined): string {
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function ProfileTab({ member }: { member: StaffMember }) {
+  const update = useUpdateStaffProfile();
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    employeeCode: member.employeeCode ?? "",
+    jobTitle: member.jobTitle ?? "",
+    department: member.department ?? "",
+    salary: member.salary ?? "",
+    salaryType: member.salaryType ?? "fixed_monthly",
+    hiredAt: toDateInput(member.hiredAt),
+    dateOfBirth: toDateInput(member.dateOfBirth),
+    gender: member.gender ?? "",
+    address: member.address ?? "",
+    city: member.city ?? "",
+    state: member.state ?? "",
+    pincode: member.pincode ?? "",
+    emergencyContactName: member.emergencyContactName ?? "",
+    emergencyContact: member.emergencyContact ?? "",
+    emergencyContactRelation: member.emergencyContactRelation ?? "",
+    notes: member.notes ?? "",
+  });
+
+  const save = async () => {
+    try {
+      await update.mutateAsync({
+        userId: member.id,
+        ...form,
+        salary: form.salary === "" ? null : form.salary,
+        hiredAt: form.hiredAt || null,
+        dateOfBirth: form.dateOfBirth || null,
+      });
+      toast({ title: "Profile saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Role & Employment</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Employee Code</Label><Input value={form.employeeCode} onChange={e => setForm(p => ({ ...p, employeeCode: e.target.value }))} placeholder="EMP-001" /></div>
+          <div><Label>Job Title</Label><Input value={form.jobTitle} onChange={e => setForm(p => ({ ...p, jobTitle: e.target.value }))} placeholder="Senior Waiter" /></div>
+          <div><Label>Department</Label><Input value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))} placeholder="Floor" /></div>
+          <div><Label>Joining Date</Label><Input type="date" value={form.hiredAt} onChange={e => setForm(p => ({ ...p, hiredAt: e.target.value }))} /></div>
+          <div>
+            <Label>Salary Type</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.salaryType} onChange={e => setForm(p => ({ ...p, salaryType: e.target.value }))}>
+              {SALARY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div><Label>Salary Amount</Label><Input type="number" step="0.01" value={form.salary} onChange={e => setForm(p => ({ ...p, salary: e.target.value }))} placeholder="0.00" /></div>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Personal</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Date of Birth</Label><Input type="date" value={form.dateOfBirth} onChange={e => setForm(p => ({ ...p, dateOfBirth: e.target.value }))} /></div>
+          <div>
+            <Label>Gender</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}>
+              <option value="">—</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="col-span-2"><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="Street, area" /></div>
+          <div><Label>City</Label><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} /></div>
+          <div><Label>State</Label><Input value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} /></div>
+          <div><Label>Pincode</Label><Input value={form.pincode} onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))} /></div>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Emergency Contact</h4>
+        <div className="grid grid-cols-3 gap-3">
+          <div><Label>Name</Label><Input value={form.emergencyContactName} onChange={e => setForm(p => ({ ...p, emergencyContactName: e.target.value }))} /></div>
+          <div><Label>Phone</Label><Input value={form.emergencyContact} onChange={e => setForm(p => ({ ...p, emergencyContact: e.target.value }))} /></div>
+          <div><Label>Relation</Label><Input value={form.emergencyContactRelation} onChange={e => setForm(p => ({ ...p, emergencyContactRelation: e.target.value }))} placeholder="Spouse" /></div>
+        </div>
+      </div>
+
+      <div>
+        <Label>Notes</Label>
+        <textarea
+          className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background min-h-[70px]"
+          value={form.notes}
+          onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Saving…" : "Save Profile"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function DocumentsTab({ member }: { member: StaffMember }) {
+  const { data: docs = [] } = useStaffDocuments(member.id);
+  const addDoc = useAddStaffDocument();
+  const delDoc = useDeleteStaffDocument();
+  const { toast } = useToast();
+  const [label, setLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File) => {
+    const docLabel = label.trim() || file.name;
+    setUploading(true);
+    try {
+      const presign = await apiPost<{ uploadURL: string; objectPath: string }>(
+        `/restaurants/${RESTAURANT_ID}/storage/uploads/request-url`,
+        { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
+      );
+      const put = await fetch(presign.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+      if (!put.ok) throw new Error("Upload failed");
+      await apiPost(`/restaurants/${RESTAURANT_ID}/storage/uploads/finalize`, { objectPath: presign.objectPath });
+      await addDoc.mutateAsync({
+        userId: member.id,
+        label: docLabel,
+        fileUrl: presign.objectPath,
+        mimeType: file.type || undefined,
+        sizeBytes: file.size,
+      });
+      toast({ title: "Document uploaded" });
+      setLabel("");
+    } catch (e) {
+      const msg = (e as { message?: string })?.message ?? "Upload failed";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const docUrl = (fileUrl: string) => {
+    if (fileUrl.startsWith("/objects/")) {
+      const base = (import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "");
+      return `${base}/api/restaurants/${RESTAURANT_ID}/storage${fileUrl}`;
+    }
+    return fileUrl;
+  };
+
+  const handleDelete = async (doc: StaffDocument) => {
+    if (!confirm(`Remove "${doc.label}"?`)) return;
+    try {
+      await delDoc.mutateAsync({ userId: member.id, docId: doc.id });
+      toast({ title: "Document removed" });
+    } catch {
+      toast({ title: "Delete failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+        <div>
+          <Label>Document Label</Label>
+          <Input
+            placeholder="Aadhaar / PAN / Contract…"
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+          />
+        </div>
+        <div>
+          <input
+            id={`doc-file-${member.id}`}
+            type="file"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }}
+          />
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={uploading}
+            onClick={() => document.getElementById(`doc-file-${member.id}`)?.click()}
+          >
+            {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            {uploading ? "Uploading…" : "Upload Document"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">Stored privately. Only the owner/manager can view or download these files.</p>
+      </div>
+
+      <div className="space-y-2">
+        {docs.length === 0 && (
+          <div className="text-center py-10 text-muted-foreground">
+            <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No documents uploaded yet</p>
+          </div>
+        )}
+        {docs.map(doc => (
+          <div key={doc.id} className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground truncate">{doc.label}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {doc.mimeType ?? "file"} · {formatBytes(doc.sizeBytes)} · {formatDate(doc.createdAt)}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <a href={docUrl(doc.fileUrl)} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground" title="Download">
+                <Download className="w-4 h-4" />
+              </a>
+              <button onClick={() => handleDelete(doc)} className="p-1.5 text-muted-foreground hover:text-destructive" title="Delete">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BankTab({ member }: { member: StaffMember }) {
+  const [reveal, setReveal] = useState(false);
+  const { data: bank } = useStaffBankAccount(member.id, reveal);
+  const save = useSaveStaffBankAccount();
+  const { toast } = useToast();
+
+  const [form, setForm] = useState({
+    accountName: "",
+    accountNumber: "",
+    ifsc: "",
+    bankName: "",
+    upiId: "",
+  });
+  const [loaded, setLoaded] = useState(false);
+
+  if (bank && !loaded) {
+    setLoaded(true);
+    setForm({
+      accountName: bank.accountName ?? "",
+      accountNumber: reveal ? (bank.accountNumber ?? "") : "",
+      ifsc: bank.ifsc ?? "",
+      bankName: bank.bankName ?? "",
+      upiId: bank.upiId ?? "",
+    });
+  }
+
+  const handleSave = async () => {
+    try {
+      await save.mutateAsync({
+        userId: member.id,
+        accountName: form.accountName || null,
+        accountNumber: form.accountNumber || null,
+        ifsc: form.ifsc || null,
+        bankName: form.bankName || null,
+        upiId: form.upiId || null,
+      });
+      toast({ title: "Bank details saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+
+  const accountDisplay = reveal
+    ? form.accountNumber
+    : (form.accountNumber || (bank?.accountNumberMasked ?? ""));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/20 border border-border rounded-xl p-3 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">Account numbers are masked by default. Reveal to view or edit the full number.</p>
+        <Button size="sm" variant="outline" onClick={() => { setReveal(r => !r); setLoaded(false); }}>
+          {reveal ? <><EyeOff className="w-3.5 h-3.5 mr-1.5" /> Hide</> : <><Eye className="w-3.5 h-3.5 mr-1.5" /> Reveal</>}
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2"><Label>Account Holder Name</Label><Input value={form.accountName} onChange={e => setForm(p => ({ ...p, accountName: e.target.value }))} /></div>
+        <div className="col-span-2">
+          <Label>Account Number</Label>
+          <Input
+            type={reveal ? "text" : "password"}
+            value={accountDisplay}
+            onChange={e => setForm(p => ({ ...p, accountNumber: e.target.value }))}
+            placeholder={reveal ? "Account number" : "••••"}
+          />
+        </div>
+        <div><Label>IFSC Code</Label><Input value={form.ifsc} onChange={e => setForm(p => ({ ...p, ifsc: e.target.value.toUpperCase() }))} placeholder="HDFC0001234" /></div>
+        <div><Label>Bank Name</Label><Input value={form.bankName} onChange={e => setForm(p => ({ ...p, bankName: e.target.value }))} /></div>
+        <div className="col-span-2"><Label>UPI ID</Label><Input value={form.upiId} onChange={e => setForm(p => ({ ...p, upiId: e.target.value }))} placeholder="name@upi" /></div>
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save Bank Details"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => void }) {
+  const [tab, setTab] = useState<"profile" | "documents" | "bank">("profile");
+  const initials = member.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  const roleConfig = ROLE_CONFIG[member.role] ?? { label: member.role, color: "bg-gray-100 text-gray-600" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+      <div className="bg-card border-l border-border w-full max-w-xl h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-sm overflow-hidden">
+              {member.avatarUrl ? <img src={resolveImageUrl(member.avatarUrl)} alt="" className="w-full h-full object-cover" /> : initials}
+            </div>
+            <div>
+              <p className="text-sm font-semibold">{member.name}</p>
+              <p className="text-xs text-muted-foreground">
+                <span className={cn("font-medium px-1.5 py-0.5 rounded", roleConfig.color)}>{roleConfig.label}</span>
+                {member.employeeCode && <span className="ml-2">#{member.employeeCode}</span>}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
+
+        <div className="px-5 pt-3 border-b border-border flex gap-1">
+          {([
+            { id: "profile", label: "Profile", Icon: UserCog },
+            { id: "documents", label: "Documents", Icon: FileText },
+            { id: "bank", label: "Bank", Icon: CreditCard },
+          ] as const).map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-t-md border-b-2 transition-colors",
+                tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <t.Icon className="w-3.5 h-3.5" /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-5 py-5">
+          {tab === "profile" && <ProfileTab member={member} />}
+          {tab === "documents" && <DocumentsTab member={member} />}
+          {tab === "bank" && <BankTab member={member} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamTab({
   roleFilter, setRoleFilter, staff, showAdd, setShowAdd,
 }: {
@@ -86,6 +462,7 @@ function TeamTab({
 
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter" });
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [drawerMember, setDrawerMember] = useState<StaffMember | null>(null);
   const [generatedCreds, setGeneratedCreds] = useState<{ name: string; password: string } | null>(null);
 
   const { user } = useAuth();
@@ -204,6 +581,9 @@ function TeamTab({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDrawerMember(member)}>
+                          <UserCog className="w-3 h-3 mr-1" /> Manage
+                        </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleToggleActive(member)}>
                           {member.isActive ? "Deactivate" : "Activate"}
                         </Button>
@@ -259,6 +639,10 @@ function TeamTab({
             <Button className="w-full mt-4" onClick={() => { navigator.clipboard?.writeText(generatedCreds.password); setGeneratedCreds(null); }}>Copy & Close</Button>
           </div>
         </div>
+      )}
+
+      {drawerMember && (
+        <StaffDrawer member={staff.find(s => s.id === drawerMember.id) ?? drawerMember} onClose={() => setDrawerMember(null)} />
       )}
 
       {showAdd && (

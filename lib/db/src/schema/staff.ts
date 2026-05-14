@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -12,13 +12,47 @@ export const staffTable = pgTable("staff", {
   jobTitle: text("job_title"),
   department: text("department"),
   salary: decimal("salary", { precision: 10, scale: 2 }),
+  salaryType: text("salary_type").notNull().default("fixed_monthly"),
   hiredAt: timestamp("hired_at"),
+  dateOfBirth: timestamp("date_of_birth"),
+  gender: text("gender"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  pincode: text("pincode"),
   emergencyContact: text("emergency_contact"),
+  emergencyContactName: text("emergency_contact_name"),
+  emergencyContactRelation: text("emergency_contact_relation"),
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const staffDocumentsTable = pgTable("staff_documents", {
+  id: serial("id").primaryKey(),
+  staffId: integer("staff_id").notNull().references(() => staffTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  label: text("label").notNull(),
+  fileUrl: text("file_url").notNull(),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  uploadedByUserId: integer("uploaded_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffBankAccountsTable = pgTable("staff_bank_accounts", {
+  id: serial("id").primaryKey(),
+  staffId: integer("staff_id").notNull().references(() => staffTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  accountName: text("account_name"),
+  accountNumber: text("account_number"),
+  ifsc: text("ifsc"),
+  bankName: text("bank_name"),
+  upiId: text("upi_id"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.staffId)]);
 
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
@@ -68,6 +102,14 @@ export const auditLogsTable = pgTable("audit_logs", {
 export const insertStaffSchema = createInsertSchema(staffTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertStaff = z.infer<typeof insertStaffSchema>;
 export type Staff = typeof staffTable.$inferSelect;
+
+export const insertStaffDocumentSchema = createInsertSchema(staffDocumentsTable).omit({ id: true, createdAt: true });
+export type InsertStaffDocument = z.infer<typeof insertStaffDocumentSchema>;
+export type StaffDocument = typeof staffDocumentsTable.$inferSelect;
+
+export const insertStaffBankAccountSchema = createInsertSchema(staffBankAccountsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStaffBankAccount = z.infer<typeof insertStaffBankAccountSchema>;
+export type StaffBankAccount = typeof staffBankAccountsTable.$inferSelect;
 
 export const insertShiftSchema = createInsertSchema(shiftsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertShift = z.infer<typeof insertShiftSchema>;
