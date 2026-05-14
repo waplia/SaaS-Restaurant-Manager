@@ -221,8 +221,9 @@ export function useRemoveOrderItem() {
   return useMutation({
     mutationFn: ({ orderId, itemId }: { orderId: number; itemId: number }) =>
       apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items/${itemId}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["orders"] });
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
     },
   });
 }

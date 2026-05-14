@@ -23,15 +23,34 @@ const httpServer = http.createServer(app);
 initSocketIO(httpServer);
 startScheduler();
 
-httpServer.listen(port, (err?: Error) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+httpServer.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    logger.error({ port }, "Port already in use — likely an orphan from a previous run. Exiting so the workflow can restart cleanly.");
+  } else {
+    logger.error({ err }, "HTTP server error");
   }
+  process.exit(1);
+});
 
+httpServer.listen(port, () => {
   logger.info({ port }, "Server listening");
 
   backfillDefaultKitchens()
     .then(() => logger.info("Default kitchens backfill complete"))
     .catch((e) => logger.error({ err: e }, "Default kitchens backfill failed"));
 });
+
+function shutdown(signal: string) {
+  logger.info({ signal }, "Received shutdown signal — closing HTTP server");
+  const force = setTimeout(() => {
+    logger.warn("Force-exiting after 5s graceful-shutdown timeout");
+    process.exit(0);
+  }, 5000);
+  force.unref();
+  httpServer.close(() => {
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

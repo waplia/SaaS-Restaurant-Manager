@@ -18,7 +18,7 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"),
+  requireRole("owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"),
   validateRestaurantAccess,
 );
 
