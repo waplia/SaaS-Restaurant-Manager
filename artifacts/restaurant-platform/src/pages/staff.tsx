@@ -2075,6 +2075,11 @@ function CreateLeaveRequestForm({
     halfDay: false,
     reason: "",
   });
+  useEffect(() => {
+    if (!form.leaveType && activePolicies.length > 0) {
+      setForm(p => ({ ...p, leaveType: activePolicies[0].leaveType }));
+    }
+  }, [activePolicies, form.leaveType]);
 
   const submit = async () => {
     if (!form.leaveType) { toast({ title: "Pick a leave type", variant: "destructive" }); return; }

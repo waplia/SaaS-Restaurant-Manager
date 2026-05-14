@@ -652,6 +652,9 @@ router.post(
         .where(and(eq(leaveRequestsTable.id, id), eq(leaveRequestsTable.restaurantId, restaurantId)))
         .limit(1);
       if (!reqRow) return { error: "not_found" as const };
+      if (reqRow.status === "rejected" || reqRow.status === "cancelled") {
+        return { error: "not_pending" as const };
+      }
       if (reqRow.status === "approved") {
         await reverseApprovedAttendance(tx, restaurantId, reqRow.userId, id);
         const year = reqRow.fromDate.getFullYear();
@@ -687,6 +690,10 @@ router.post(
     });
 
     if ("error" in result) {
+      if (result.error === "not_pending") {
+        res.status(400).json({ error: "Only pending or approved requests can be rejected" });
+        return;
+      }
       res.status(404).json({ error: "Not found" });
       return;
     }
