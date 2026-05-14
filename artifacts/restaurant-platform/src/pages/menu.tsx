@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -23,6 +24,98 @@ import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/li
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
 
 const RESTAURANT_ID = 1;
+
+type ParsedRow = {
+  sku: string | null;
+  name: string;
+  categoryName: string;
+  description: string;
+  price: string;
+  taxRate: string | null;
+  isVeg: boolean;
+  isAvailable: boolean;
+  preparationTime: number;
+  calories: number | null;
+  tags: string[];
+  allergens: string[];
+  imageUrl: string | null;
+};
+
+type ImportResultRow = {
+  row: number;
+  status: "create" | "update" | "error";
+  errors: string[];
+  name: string;
+  sku: string | null;
+  category: string | null;
+  matchedItemId: number | null;
+};
+
+type ImportResponse = {
+  dryRun: boolean;
+  committed: boolean;
+  summary: { total: number; create: number; update: number; error: number };
+  results: ImportResultRow[];
+};
+
+type ImportPreview = { rows: ParsedRow[]; response: ImportResponse };
+
+function parseCSVLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function parseMenuCSV(text: string): ParsedRow[] {
+  const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const header = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+  const idx = (name: string) => header.indexOf(name.toLowerCase());
+  const i = {
+    sku: idx("SKU"), name: idx("Name"), category: idx("Category"),
+    description: idx("Description"), price: idx("Price"), taxRate: idx("Tax Rate"),
+    veg: idx("Veg"), available: idx("Available"), prep: idx("Prep Time"),
+    calories: idx("Calories"), tags: idx("Tags"), allergens: idx("Allergens"),
+    imageUrl: idx("Image URL"),
+  };
+  const get = (cols: string[], k: number) => (k >= 0 ? (cols[k] ?? "").trim() : "");
+  return lines.slice(1).map((line) => {
+    const cols = parseCSVLine(line);
+    const tags = get(cols, i.tags);
+    const allergens = get(cols, i.allergens);
+    const calStr = get(cols, i.calories);
+    const taxStr = get(cols, i.taxRate);
+    return {
+      sku: get(cols, i.sku) || null,
+      name: get(cols, i.name),
+      categoryName: get(cols, i.category),
+      description: get(cols, i.description),
+      price: get(cols, i.price),
+      taxRate: taxStr || null,
+      isVeg: get(cols, i.veg).toLowerCase() === "yes",
+      isAvailable: get(cols, i.available).toLowerCase() !== "no",
+      preparationTime: Number(get(cols, i.prep)) || 15,
+      calories: calStr ? Number(calStr) : null,
+      tags: tags ? tags.split(";").map(t => t.trim()).filter(Boolean) : [],
+      allergens: allergens ? allergens.split(";").map(t => t.trim()).filter(Boolean) : [],
+      imageUrl: get(cols, i.imageUrl) || null,
+    };
+  });
+}
 
 function VegBadge({ isVeg }: { isVeg: boolean }) {
   return (
@@ -211,6 +304,7 @@ export default function MenuPage() {
   const [activeTab, setActiveTab] = useState<"details" | "modifiers">("details");
 
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const filteredItems = items.filter((item: MenuItem) => {
     if (activeMenuId) {
@@ -372,50 +466,53 @@ export default function MenuPage() {
     }
   };
 
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+
+  const runImport = async (rows: ParsedRow[], dryRun: boolean) => {
+    const { apiPost } = await import("@/lib/api");
+    return apiPost<ImportResponse>(`/restaurants/${RESTAURANT_ID}/items/import`, { items: rows, dryRun });
+  };
+
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const text = ev.target?.result as string;
-      const lines = text.split("\n").slice(1).filter(l => l.trim());
-      const parsedItems = lines.flatMap(line => {
-        const cols = line.match(/("(?:[^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, "").replace(/""/g, '"')) ?? [];
-        const [name, price, categoryName, vegStr, , prep, calories, tags] = cols;
-        if (!name?.trim() || !price?.trim()) return [];
-        return [{
-          name: name.trim(),
-          price: price.trim(),
-          categoryName: categoryName?.trim() || undefined,
-          isVeg: vegStr?.toLowerCase() === "yes",
-          preparationTime: Number(prep) || 15,
-          calories: calories ? Number(calories) : undefined,
-          tags: tags ? tags.split(";").map((t: string) => t.trim()).filter(Boolean) : undefined,
-        }];
-      });
-
-      if (parsedItems.length === 0) {
-        toast({ title: "No valid rows found in CSV", variant: "destructive" });
+      const parsed = parseMenuCSV(text);
+      if (parsed.length === 0) {
+        toast({ title: "No data rows found in CSV", variant: "destructive" });
         return;
       }
-
+      setImportBusy(true);
       try {
-        const { apiPost } = await import("@/lib/api");
-        const result = await apiPost<{ imported: number; skipped: number; errors: string[] }>(
-          `/restaurants/${RESTAURANT_ID}/items/import`,
-          { items: parsedItems }
-        );
-        const msg = result.errors.length > 0
-          ? `Imported ${result.imported}, skipped ${result.skipped + result.errors.length}`
-          : `Imported ${result.imported} items`;
-        toast({ title: msg });
-        if (result.errors.length > 0) console.warn("Import errors:", result.errors);
-      } catch {
-        toast({ title: "Import failed", variant: "destructive" });
+        const res = await runImport(parsed, true);
+        setImportPreview({ rows: parsed, response: res });
+      } catch (err: unknown) {
+        toast({ title: (err as { message?: string })?.message ?? "Failed to read CSV", variant: "destructive" });
+      } finally {
+        setImportBusy(false);
       }
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    setImportBusy(true);
+    try {
+      const res = await runImport(importPreview.rows, false);
+      toast({ title: `Imported ${res.summary.create} new + ${res.summary.update} updated` });
+      setImportPreview(null);
+      await queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      await queryClient.invalidateQueries({ queryKey: ["menu-categories"] });
+    } catch (err: unknown) {
+      toast({ title: (err as { message?: string })?.message ?? "Import failed", variant: "destructive" });
+    } finally {
+      setImportBusy(false);
+    }
   };
 
   const activeMenu = menus.find((m: Menu) => m.id === activeMenuId);
@@ -430,7 +527,7 @@ export default function MenuPage() {
             <Button size="sm" variant="outline" onClick={handleExportCSV}>
               <Download className="w-3.5 h-3.5 mr-1.5" /> Export CSV
             </Button>
-            <Button size="sm" variant="outline" onClick={() => csvInputRef.current?.click()}>
+            <Button size="sm" variant="outline" onClick={() => csvInputRef.current?.click()} disabled={importBusy}>
               <Upload className="w-3.5 h-3.5 mr-1.5" /> Import CSV
             </Button>
             <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
@@ -707,6 +804,77 @@ export default function MenuPage() {
                 <Button variant="outline" className="flex-1" onClick={() => { setShowCatModal(false); setEditCat(null); }}>Cancel</Button>
                 <Button className="flex-1" onClick={handleSaveCat} disabled={createCategory.isPending || updateCategory.isPending}>Save</Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {importPreview && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+            <div className="px-6 pt-5 pb-3 border-b border-border flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Review CSV import</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {importPreview.response.summary.total} rows ·
+                  <span className="text-green-600 font-medium"> {importPreview.response.summary.create} new</span> ·
+                  <span className="text-blue-600 font-medium"> {importPreview.response.summary.update} updates</span>
+                  {importPreview.response.summary.error > 0 && (
+                    <span className="text-destructive font-medium"> · {importPreview.response.summary.error} errors</span>
+                  )}
+                </p>
+              </div>
+              <button onClick={() => setImportPreview(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto px-6 py-3">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 pr-2 w-10">#</th>
+                    <th className="py-2 pr-2">Status</th>
+                    <th className="py-2 pr-2">Name</th>
+                    <th className="py-2 pr-2">SKU</th>
+                    <th className="py-2 pr-2">Category</th>
+                    <th className="py-2">Errors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.response.results.map((r) => (
+                    <tr key={r.row} className={cn("border-b border-border last:border-0", r.status === "error" && "bg-red-50 dark:bg-red-950/30")}>
+                      <td className="py-1.5 pr-2 text-muted-foreground">{r.row}</td>
+                      <td className="py-1.5 pr-2">
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                          r.status === "create" && "bg-green-100 text-green-700",
+                          r.status === "update" && "bg-blue-100 text-blue-700",
+                          r.status === "error" && "bg-red-100 text-red-700",
+                        )}>{r.status}</span>
+                      </td>
+                      <td className="py-1.5 pr-2">{r.name || <span className="text-muted-foreground italic">(missing)</span>}</td>
+                      <td className="py-1.5 pr-2 font-mono text-[10px]">{r.sku ?? "—"}</td>
+                      <td className="py-1.5 pr-2">{r.category ?? "—"}</td>
+                      <td className="py-1.5 text-destructive">{r.errors.join("; ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex items-center gap-3">
+              {importPreview.response.summary.error > 0 && (
+                <p className="text-xs text-destructive flex-1">Fix the errors in your CSV and re-upload to commit.</p>
+              )}
+              {importPreview.response.summary.error === 0 && (
+                <p className="text-xs text-muted-foreground flex-1">All rows look good. Click Confirm to commit in a single transaction.</p>
+              )}
+              <Button variant="outline" onClick={() => setImportPreview(null)}>Cancel</Button>
+              <Button
+                onClick={handleConfirmImport}
+                disabled={importBusy || importPreview.response.summary.error > 0 || (importPreview.response.summary.create + importPreview.response.summary.update === 0)}
+              >
+                Confirm import
+              </Button>
             </div>
           </div>
         </div>

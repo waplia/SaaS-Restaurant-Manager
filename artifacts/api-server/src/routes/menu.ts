@@ -153,6 +153,11 @@ router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "mana
   res.status(204).send();
 });
 
+const EXPORT_HEADERS = [
+  "SKU", "Name", "Category", "Description", "Price", "Tax Rate",
+  "Veg", "Available", "Prep Time", "Calories", "Tags", "Allergens", "Image URL",
+] as const;
+
 router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const items = await db.select().from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
@@ -160,86 +165,207 @@ router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "
   const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
 
   const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const headers = ["Name", "Price", "Category", "Veg", "Available", "Prep Time", "Calories", "Tags"];
   const rows = items.map(item => [
+    item.sku ?? "",
     item.name,
-    item.price,
     catMap[item.categoryId] ?? "",
+    item.description ?? "",
+    item.price,
+    item.taxRate ?? "",
     item.isVeg ? "Yes" : "No",
     item.isAvailable ? "Yes" : "No",
     item.preparationTime ?? "",
     item.calories ?? "",
     Array.isArray(item.tags) ? (item.tags as string[]).join(";") : "",
+    Array.isArray(item.allergens) ? (item.allergens as string[]).join(";") : "",
+    item.imageUrl ?? "",
   ].map(escape).join(","));
 
-  const csv = [headers.map(escape).join(","), ...rows].join("\n");
+  const csv = [EXPORT_HEADERS.map(escape).join(","), ...rows].join("\n");
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="menu-items-${restaurantId}.csv"`);
   res.send(csv);
 });
 
+type ImportRowInput = {
+  sku?: string | null;
+  name?: string;
+  categoryName?: string;
+  description?: string | null;
+  price?: string | number;
+  taxRate?: string | number | null;
+  isVeg?: boolean;
+  isAvailable?: boolean;
+  preparationTime?: number | string;
+  calories?: number | string | null;
+  tags?: string[] | null;
+  allergens?: string[] | null;
+  imageUrl?: string | null;
+};
+
+type ImportRowResult = {
+  row: number;
+  status: "create" | "update" | "error";
+  errors: string[];
+  name: string;
+  sku: string | null;
+  category: string | null;
+  matchedItemId: number | null;
+};
+
 router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-
-  const { items } = req.body as {
-    items: Array<{
-      name: string;
-      price: string;
-      categoryName?: string;
-      isVeg?: boolean;
-      preparationTime?: number;
-      calories?: number;
-      tags?: string[];
-    }>;
-  };
+  const { items, dryRun } = req.body as { items: ImportRowInput[]; dryRun?: boolean };
 
   if (!Array.isArray(items) || items.length === 0) {
     return void res.status(400).json({ error: "items array is required" });
   }
+  if (items.length > 5000) {
+    return void res.status(413).json({ error: "Maximum 5000 rows per import" });
+  }
 
-  const categories = await db.select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name }).from(menuCategoriesTable).where(eq(menuCategoriesTable.restaurantId, restaurantId));
-  const catByName = Object.fromEntries(categories.map(c => [c.name.toLowerCase(), c.id]));
-  const defaultCatId = categories[0]?.id;
-
-  if (!defaultCatId) {
+  const categories = await db
+    .select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name })
+    .from(menuCategoriesTable)
+    .where(eq(menuCategoriesTable.restaurantId, restaurantId));
+  const catByName = new Map(categories.map(c => [c.name.toLowerCase(), c.id]));
+  if (categories.length === 0) {
     return void res.status(422).json({ error: "No categories exist for this restaurant. Create at least one category before importing." });
   }
 
-  const errors: string[] = [];
-  const toInsert: typeof menuItemsTable.$inferInsert[] = [];
+  const existing = await db
+    .select({
+      id: menuItemsTable.id,
+      sku: menuItemsTable.sku,
+      name: menuItemsTable.name,
+      categoryId: menuItemsTable.categoryId,
+    })
+    .from(menuItemsTable)
+    .where(eq(menuItemsTable.restaurantId, restaurantId));
+  const bySku = new Map<string, number>();
+  const byCatName = new Map<string, number>();
+  for (const it of existing) {
+    if (it.sku) bySku.set(it.sku.toLowerCase(), it.id);
+    byCatName.set(`${it.categoryId}::${it.name.toLowerCase()}`, it.id);
+  }
+
+  const results: ImportRowResult[] = [];
+  const toCreate: Array<{ idx: number; values: typeof menuItemsTable.$inferInsert }> = [];
+  const toUpdate: Array<{ idx: number; id: number; values: Partial<typeof menuItemsTable.$inferInsert> }> = [];
+  const seenSku = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
-    const row = items[i];
-    if (!row.name?.trim() || !row.price) {
-      errors.push(`Row ${i + 1}: name and price are required`);
-      continue;
+    const r = items[i] ?? {};
+    const errors: string[] = [];
+
+    const name = String(r.name ?? "").trim();
+    if (!name) errors.push("Name is required");
+
+    const priceNum = parseFloat(String(r.price ?? ""));
+    if (!Number.isFinite(priceNum) || priceNum < 0) errors.push(`Invalid price "${r.price ?? ""}"`);
+
+    const catName = String(r.categoryName ?? "").trim();
+    let categoryId: number | undefined;
+    if (!catName) {
+      errors.push("Category is required");
+    } else {
+      categoryId = catByName.get(catName.toLowerCase());
+      if (!categoryId) errors.push(`Unknown category "${catName}"`);
     }
-    const price = parseFloat(String(row.price));
-    if (isNaN(price) || price < 0) {
-      errors.push(`Row ${i + 1}: invalid price "${row.price}"`);
-      continue;
+
+    let taxRate: string | null = null;
+    if (r.taxRate !== undefined && r.taxRate !== null && String(r.taxRate).trim() !== "") {
+      const t = parseFloat(String(r.taxRate));
+      if (!Number.isFinite(t) || t < 0 || t > 100) errors.push(`Invalid tax rate "${r.taxRate}"`);
+      else taxRate = t.toFixed(2);
     }
-    const catId = (row.categoryName ? catByName[row.categoryName.toLowerCase()] : undefined) ?? defaultCatId;
-    toInsert.push({
+
+    let calories: number | null = null;
+    if (r.calories !== undefined && r.calories !== null && String(r.calories).trim() !== "") {
+      const c = parseInt(String(r.calories), 10);
+      if (!Number.isFinite(c) || c < 0) errors.push(`Invalid calories "${r.calories}"`);
+      else calories = c;
+    }
+
+    let prep = 15;
+    if (r.preparationTime !== undefined && String(r.preparationTime).trim() !== "") {
+      const p = parseInt(String(r.preparationTime), 10);
+      if (!Number.isFinite(p) || p < 0) errors.push(`Invalid prep time "${r.preparationTime}"`);
+      else prep = p;
+    }
+
+    const sku = r.sku ? String(r.sku).trim() : "";
+    if (sku) {
+      const skuKey = sku.toLowerCase();
+      if (seenSku.has(skuKey)) errors.push(`Duplicate SKU "${sku}" in this file`);
+      else seenSku.add(skuKey);
+    }
+
+    let matchedId: number | null = null;
+    if (sku && bySku.has(sku.toLowerCase())) {
+      matchedId = bySku.get(sku.toLowerCase())!;
+    } else if (categoryId && name) {
+      matchedId = byCatName.get(`${categoryId}::${name.toLowerCase()}`) ?? null;
+    }
+
+    const result: ImportRowResult = {
+      row: i + 1,
+      status: errors.length ? "error" : matchedId ? "update" : "create",
+      errors,
+      name,
+      sku: sku || null,
+      category: catName || null,
+      matchedItemId: matchedId,
+    };
+    results.push(result);
+
+    if (errors.length || !categoryId) continue;
+
+    const values: typeof menuItemsTable.$inferInsert = {
       restaurantId,
-      categoryId: catId,
-      name: row.name.trim(),
-      price: String(price.toFixed(2)),
-      description: "",
-      isVeg: row.isVeg ?? false,
-      preparationTime: row.preparationTime ?? 15,
-      calories: row.calories ?? null,
-      tags: row.tags ?? null,
-    });
+      categoryId,
+      sku: sku || null,
+      name,
+      description: r.description != null ? String(r.description) : "",
+      price: priceNum.toFixed(2),
+      taxRate,
+      isVeg: r.isVeg ?? true,
+      isAvailable: r.isAvailable ?? true,
+      preparationTime: prep,
+      calories,
+      tags: Array.isArray(r.tags) ? r.tags.filter(Boolean) : [],
+      allergens: Array.isArray(r.allergens) ? r.allergens.filter(Boolean) : [],
+      imageUrl: r.imageUrl ? String(r.imageUrl) : null,
+    };
+
+    if (matchedId) toUpdate.push({ idx: i, id: matchedId, values });
+    else toCreate.push({ idx: i, values });
   }
 
-  let imported = 0;
-  if (toInsert.length > 0) {
-    const inserted = await db.insert(menuItemsTable).values(toInsert).returning({ id: menuItemsTable.id });
-    imported = inserted.length;
+  const summary = {
+    total: results.length,
+    create: results.filter(r => r.status === "create").length,
+    update: results.filter(r => r.status === "update").length,
+    error: results.filter(r => r.status === "error").length,
+  };
+
+  if (dryRun || summary.error > 0) {
+    return void res.json({ dryRun: !!dryRun, committed: false, summary, results });
   }
 
-  res.json({ imported, skipped: items.length - imported - errors.length, errors });
+  await db.transaction(async tx => {
+    if (toCreate.length) {
+      await tx.insert(menuItemsTable).values(toCreate.map(c => c.values));
+    }
+    for (const u of toUpdate) {
+      await tx
+        .update(menuItemsTable)
+        .set({ ...u.values, updatedAt: new Date() })
+        .where(and(eq(menuItemsTable.id, u.id), eq(menuItemsTable.restaurantId, restaurantId)));
+    }
+  });
+
+  res.json({ dryRun: false, committed: true, summary, results });
 });
 
 router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
