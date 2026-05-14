@@ -1064,33 +1064,6 @@ paths:
         "404":
           description: Order or item not found
 
-  /restaurants/{restaurantId}/orders/{id}/discount:
-    post:
-      operationId: applyOrderDiscount
-      tags: [orders]
-      summary: Apply or update a discount on an order
-      parameters:
-        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
-        - { name: id, in: path, required: true, schema: { type: integer } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [discountAmount]
-              properties:
-                discountAmount: { type: number, description: "Flat discount in currency units" }
-      responses:
-        "200":
-          description: Updated order with recalculated totals
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OrderDetail"
-        "404":
-          description: Order not found
-
   /restaurants/{restaurantId}/orders/{id}/void:
     post:
       operationId: voidOrder
@@ -2817,7 +2790,6 @@ components:
         notes: { type: string }
         isPriority: { type: boolean }
         customerName: { type: string }
-        discountAmount: { type: string }
 
     PaymentInput:
       type: object

@@ -229,18 +229,6 @@ export function useRemoveOrderItem() {
   });
 }
 
-export function useApplyDiscount() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, discountAmount }: import("./types").ApplyDiscountInput) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discount`, { discountAmount }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
-      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
-    },
-  });
-}
-
 // Multi-line discount endpoints (T2). The backend returns 402 with
 // `{ requiresPin: true }` when the discount exceeds the configured threshold;
 // callers are expected to surface a manager-PIN modal and retry with `managerPin`.

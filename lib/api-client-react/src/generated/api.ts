@@ -19,7 +19,6 @@ import type {
 import type {
   AddOrderItemInput,
   AdminStats,
-  ApplyOrderDiscountBody,
   AssignPermissionToRoleBody,
   AssignStaffShiftInput,
   AttendanceRecord,
@@ -5147,102 +5146,6 @@ export const useRemoveOrderItem = <
   TContext
 > => {
   return useMutation(getRemoveOrderItemMutationOptions(options));
-};
-
-/**
- * @summary Apply or update a discount on an order
- */
-export const getApplyOrderDiscountUrl = (restaurantId: number, id: number) => {
-  return `/api/restaurants/${restaurantId}/orders/${id}/discount`;
-};
-
-export const applyOrderDiscount = async (
-  restaurantId: number,
-  id: number,
-  applyOrderDiscountBody: ApplyOrderDiscountBody,
-  options?: RequestInit,
-): Promise<OrderDetail> => {
-  return customFetch<OrderDetail>(getApplyOrderDiscountUrl(restaurantId, id), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(applyOrderDiscountBody),
-  });
-};
-
-export const getApplyOrderDiscountMutationOptions = <
-  TError = ErrorType<void>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof applyOrderDiscount>>,
-    TError,
-    {
-      restaurantId: number;
-      id: number;
-      data: BodyType<ApplyOrderDiscountBody>;
-    },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof applyOrderDiscount>>,
-  TError,
-  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
-  TContext
-> => {
-  const mutationKey = ["applyOrderDiscount"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof applyOrderDiscount>>,
-    { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> }
-  > = (props) => {
-    const { restaurantId, id, data } = props ?? {};
-
-    return applyOrderDiscount(restaurantId, id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type ApplyOrderDiscountMutationResult = NonNullable<
-  Awaited<ReturnType<typeof applyOrderDiscount>>
->;
-export type ApplyOrderDiscountMutationBody = BodyType<ApplyOrderDiscountBody>;
-export type ApplyOrderDiscountMutationError = ErrorType<void>;
-
-/**
- * @summary Apply or update a discount on an order
- */
-export const useApplyOrderDiscount = <
-  TError = ErrorType<void>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof applyOrderDiscount>>,
-    TError,
-    {
-      restaurantId: number;
-      id: number;
-      data: BodyType<ApplyOrderDiscountBody>;
-    },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof applyOrderDiscount>>,
-  TError,
-  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
-  TContext
-> => {
-  return useMutation(getApplyOrderDiscountMutationOptions(options));
 };
 
 /**

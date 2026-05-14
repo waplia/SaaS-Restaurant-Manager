@@ -4,7 +4,7 @@ import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
-  useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
+  useOrderDetail, useAddOrderItem, useRemoveOrderItem,
   useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig,
   useCreatePaymentIntent, useCreateRazorpayOrder,
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
@@ -1020,7 +1020,6 @@ export default function PosPage() {
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [discount, setDiscount] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
@@ -1037,7 +1036,6 @@ export default function PosPage() {
   const voidOrder = useVoidOrder();
   const addOrderItem = useAddOrderItem();
   const removeOrderItem = useRemoveOrderItem();
-  const applyDiscount = useApplyDiscount();
   const applyDiscountLine = useApplyDiscountLine();
   const removeDiscountLine = useRemoveDiscountLine();
   const { data: discountsCfg } = useDiscountsConfig();
@@ -1080,7 +1078,6 @@ export default function PosPage() {
         quantity: oi.quantity,
       }));
       setCart(resumedCart);
-      setDiscount(tableOrderDetail.discountAmount ?? "0");
       setPlacedOrder(tableOrderDetail);
     }
   }, [tableOrderDetail?.id]);
@@ -1100,12 +1097,13 @@ export default function PosPage() {
     return liveDetail?.items ?? placedOrder.items;
   }, [placedOrder, liveDetail]);
 
-  // Totals: server-accurate after placement, local estimate before
-  const discountAmount = Number(discount) || 0;
+  // Totals: server-accurate after placement, local estimate before. Discounts
+  // are applied only after the order is placed (via the Apply-Discount drawer
+  // → ledger), so the pre-placement estimate has no discount component.
   const localSubtotal = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
   const localTaxAmount = localSubtotal * taxRate;
   const localServiceCharge = localSubtotal * serviceRate;
-  const localTotal = Math.max(0, localSubtotal + localTaxAmount + localServiceCharge - discountAmount);
+  const localTotal = Math.max(0, localSubtotal + localTaxAmount + localServiceCharge);
 
   const serverTotals: Totals | null = liveDetail ? {
     subtotal: Number(liveDetail.subtotal),
@@ -1125,7 +1123,7 @@ export default function PosPage() {
     subtotal: localSubtotal,
     taxAmount: localTaxAmount,
     serviceCharge: localServiceCharge,
-    discountAmount,
+    discountAmount: 0,
     totalAmount: localTotal,
   };
 
@@ -1186,13 +1184,6 @@ export default function PosPage() {
       onSuccess: () => toast({ title: "Item removed" }),
     });
   }, [placedOrder, removeOrderItem, toast]);
-
-  const handleDiscountBlur = () => {
-    if (!placedOrder) return;
-    applyDiscount.mutate({ orderId: placedOrder.id, discountAmount }, {
-      onSuccess: () => toast({ title: "Discount updated" }),
-    });
-  };
 
   const handleLinkCustomer = () => {
     if (!foundCustomer) {
@@ -1257,7 +1248,6 @@ export default function PosPage() {
         orderType,
         customerName: customerName || undefined,
         customerId: linkedCustomerId ?? undefined,
-        discountAmount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         items: cart.map(c => ({
           menuItemId: c.menuItemId,
           quantity: c.quantity,
@@ -1329,7 +1319,7 @@ export default function PosPage() {
   };
 
   const handleNewOrder = () => {
-    setCart([]); setDiscount(""); setCustomerName("");
+    setCart([]); setCustomerName("");
     setCustomerPhone(""); setPhoneQuery(""); setLinkedCustomerId(null); setLoyaltyRedeem(""); setCouponInput("");
     setSelectedTableId(null); setPlacedOrder(null);
     setShowPayModal(false); setShowSplitModal(false);

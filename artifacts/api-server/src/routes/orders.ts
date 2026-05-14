@@ -151,7 +151,7 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
   return `ORD-${Date.now().toString(36).toUpperCase()}`;
@@ -211,7 +211,11 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, discountAmount } = req.body;
+  // NOTE: any `discountAmount` in the request body is intentionally ignored.
+  // All discounts must flow through POST /orders/:id/discounts (preset reason +
+  // manager-PIN above threshold). New orders start at zero discount and the
+  // ledger is the source of truth via recalculateOrderTotals().
+  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items } = req.body;
 
   let subtotal = 0;
   const enrichedItems: Array<{ menuItem: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }> = [];
@@ -227,8 +231,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
   const taxAmount = subtotal * taxRate;
   const serviceCharge = subtotal * serviceRate;
-  const discountAmt = Number(discountAmount ?? 0);
-  const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge - discountAmt);
+  const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge);
 
   // Validate customerId belongs to this restaurant (tenant isolation)
   let resolvedCustomerId: number | undefined;
@@ -251,7 +254,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     subtotal: subtotal.toFixed(2),
     taxAmount: taxAmount.toFixed(2),
     serviceCharge: serviceCharge.toFixed(2),
-    discountAmount: discountAmt.toFixed(2),
+    discountAmount: "0.00",
     totalAmount: totalAmount.toFixed(2),
   }).returning();
 
@@ -332,8 +335,11 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { status, notes, isPriority, customerName, discountAmount } = req.body;
-  const updates: Record<string, unknown> = { notes, isPriority, customerName, discountAmount, updatedAt: new Date() };
+  // `discountAmount` is intentionally not patchable here — discount writes go
+  // through POST/DELETE /orders/:id/discounts which enforce reason presets and
+  // manager-PIN approval, then recalculate via recalculateOrderTotals().
+  const { status, notes, isPriority, customerName } = req.body;
+  const updates: Record<string, unknown> = { notes, isPriority, customerName, updatedAt: new Date() };
   if (status) updates.status = status;
   const [updated] = await db.update(ordersTable).set(updates).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
@@ -627,41 +633,17 @@ router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", asy
   res.json({ ...updatedOrder, items, discounts });
 });
 
-// Legacy single-discount endpoint — kept for backwards compatibility.
-// Treats the body as a manual flat discount with reason "Manual discount".
-// Removes any prior manual line so behaviour matches the old single-field UX.
-router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) => {
-  const restaurantId = Number(req.params.restaurantId);
-  const orderId = Number(req.params.id);
-  const { discountAmount } = req.body;
-
-  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
-  if (!order) return void res.status(404).json({ error: "Order not found" });
-
-  await deleteOrderDiscountsByType(orderId, "flat");
-  const discount = Math.max(0, Number(discountAmount ?? 0));
-  if (discount > 0) {
-    const subtotal = Number(order.subtotal);
-    const existingTotal = await sumOrderDiscounts(orderId);
-    const capped = Math.min(discount, Math.max(0, subtotal - existingTotal));
-    if (capped > 0) {
-      await db.insert(orderDiscountsTable).values({
-        orderId, restaurantId,
-        type: "flat",
-        scope: "order",
-        value: capped.toFixed(2),
-        amount: capped.toFixed(2),
-        reason: "Manual discount",
-        recordedByUserId: req.user?.sub ?? null,
-      });
-    }
-  }
-
-  await recalculateOrderTotals(orderId, restaurantId);
-  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
-  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-  const discounts = await listOrderDiscounts(orderId);
-  res.json({ ...updatedOrder, items, discounts });
+// Legacy single-discount endpoint — REMOVED. The previous implementation
+// inserted a flat ledger row with a hardcoded "Manual discount" reason and
+// bypassed the preset-reason policy and threshold/PIN approval checks. All
+// discount writes now go through POST /orders/:id/discounts which enforces
+// both. The 410 response makes any stale callers fail loudly instead of
+// silently bypassing approval controls.
+router.post("/restaurants/:restaurantId/orders/:id/discount", (_req, res) => {
+  res.status(410).json({
+    error: "This endpoint has been removed. Use POST /orders/:id/discounts with type, value, reason, and (when over threshold) managerPin.",
+    code: "ENDPOINT_REMOVED",
+  });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, res) => {

@@ -1027,7 +1027,6 @@ export const UpdateOrderBody = zod.object({
   notes: zod.string().optional(),
   isPriority: zod.boolean().optional(),
   customerName: zod.string().optional(),
-  discountAmount: zod.string().optional(),
 });
 
 export const UpdateOrderResponse = zod.object({
@@ -1164,47 +1163,6 @@ export const RemoveOrderItemParams = zod.object({
 });
 
 export const RemoveOrderItemResponse = zod.object({
-  id: zod.number(),
-  restaurantId: zod.number().optional(),
-  tableId: zod.number().nullish(),
-  orderNumber: zod.string(),
-  orderType: zod.string().optional(),
-  status: zod.string(),
-  paymentStatus: zod.string().optional(),
-  subtotal: zod.string().optional(),
-  taxAmount: zod.string().optional(),
-  totalAmount: zod.string(),
-  notes: zod.string().nullish(),
-  customerName: zod.string().nullish(),
-  isPriority: zod.boolean().optional(),
-  createdAt: zod.string().optional(),
-  items: zod.array(
-    zod.object({
-      id: zod.number(),
-      menuItemId: zod.number().optional(),
-      menuItemName: zod.string(),
-      quantity: zod.number(),
-      unitPrice: zod.string(),
-      totalPrice: zod.string(),
-      notes: zod.string().nullish(),
-      status: zod.string().optional(),
-    }),
-  ),
-});
-
-/**
- * @summary Apply or update a discount on an order
- */
-export const ApplyOrderDiscountParams = zod.object({
-  restaurantId: zod.coerce.number(),
-  id: zod.coerce.number(),
-});
-
-export const ApplyOrderDiscountBody = zod.object({
-  discountAmount: zod.number().describe("Flat discount in currency units"),
-});
-
-export const ApplyOrderDiscountResponse = zod.object({
   id: zod.number(),
   restaurantId: zod.number().optional(),
   tableId: zod.number().nullish(),

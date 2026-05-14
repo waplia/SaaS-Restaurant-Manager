@@ -548,7 +548,6 @@ export interface OrderUpdate {
   notes?: string;
   isPriority?: boolean;
   customerName?: string;
-  discountAmount?: string;
 }
 
 export type PaymentInputPaymentMethod =
@@ -1314,11 +1313,6 @@ export type ListOrdersParams = {
   date?: string;
   page?: number;
   limit?: number;
-};
-
-export type ApplyOrderDiscountBody = {
-  /** Flat discount in currency units */
-  discountAmount: number;
 };
 
 export type SplitOrderBodySplitsItemPaymentMethod =

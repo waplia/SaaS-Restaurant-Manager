@@ -265,7 +265,6 @@ export interface CreateOrderInput {
   customerPhone?: string;
   customerId?: number;
   notes?: string;
-  discountAmount?: string;
   isPriority?: boolean;
   items: { menuItemId: number; quantity: number; notes?: string }[];
 }
@@ -274,7 +273,6 @@ export interface UpdateOrderInput {
   id: number;
   status?: string;
   paymentStatus?: string;
-  discountAmount?: string;
   notes?: string;
   isPriority?: boolean;
 }
@@ -309,11 +307,6 @@ export interface AddOrderItemInput {
   quantity: number;
   modifiers?: { name: string; price: string }[];
   notes?: string;
-}
-
-export interface ApplyDiscountInput {
-  orderId: number;
-  discountAmount: number;
 }
 
 export interface FloorTable {
