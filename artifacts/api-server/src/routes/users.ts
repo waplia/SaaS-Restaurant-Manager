@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable } from "../lib/db";
+import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable, userDevicesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { hashPassword } from "../lib/auth";
 
@@ -103,10 +103,69 @@ router.post("/users/:id/push-token", async (req, res) => {
   if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
     return void res.status(403).json({ error: "Access denied" });
   }
-  const { token } = req.body as { token: string; platform?: string };
+  const { token, platform } = req.body as { token: string; platform?: string };
   if (!token) return void res.status(400).json({ error: "token required" });
+
+  // Upsert into per-device table.
+  const [existing] = await db.select().from(userDevicesTable).where(eq(userDevicesTable.token, token));
+  if (existing) {
+    await db.update(userDevicesTable)
+      .set({ userId, platform: platform ?? existing.platform, lastSeenAt: new Date() })
+      .where(eq(userDevicesTable.id, existing.id));
+  } else {
+    await db.insert(userDevicesTable).values({ userId, token, platform }).onConflictDoNothing();
+  }
+
+  // Keep legacy single-token field in sync for backwards compatibility (delivery push).
   await db.update(usersTable).set({ pushToken: token, updatedAt: new Date() }).where(eq(usersTable.id, userId));
   res.json({ ok: true });
+});
+
+router.delete("/users/:id/push-token", async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
+  const { token } = req.body as { token?: string };
+  if (token) {
+    await db.delete(userDevicesTable).where(and(eq(userDevicesTable.userId, userId), eq(userDevicesTable.token, token)));
+  } else {
+    await db.delete(userDevicesTable).where(eq(userDevicesTable.userId, userId));
+  }
+  res.json({ ok: true });
+});
+
+router.get("/users/:id/notification-prefs", async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
+  const [u] = await db.select({ prefs: usersTable.notificationPrefs }).from(usersTable).where(eq(usersTable.id, userId));
+  const prefs = (u?.prefs ?? {}) as Record<string, boolean>;
+  res.json({
+    waiter_call: prefs.waiter_call !== false,
+    new_order: prefs.new_order !== false,
+    reservation: prefs.reservation !== false,
+  });
+});
+
+router.patch("/users/:id/notification-prefs", async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
+    return void res.status(403).json({ error: "Access denied" });
+  }
+  const body = req.body as Partial<Record<"waiter_call" | "new_order" | "reservation", boolean>>;
+  const [current] = await db.select({ prefs: usersTable.notificationPrefs }).from(usersTable).where(eq(usersTable.id, userId));
+  const merged = { ...((current?.prefs ?? {}) as Record<string, boolean>) };
+  for (const key of ["waiter_call", "new_order", "reservation"] as const) {
+    if (typeof body[key] === "boolean") merged[key] = body[key]!;
+  }
+  await db.update(usersTable).set({ notificationPrefs: merged, updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  res.json({
+    waiter_call: merged.waiter_call !== false,
+    new_order: merged.new_order !== false,
+    reservation: merged.reservation !== false,
+  });
 });
 
 router.delete("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {

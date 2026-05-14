@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, unique, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
@@ -18,6 +18,8 @@ export const usersTable = pgTable("users", {
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
   pushToken: text("push_token"),
+  kitchenId: integer("kitchen_id"),
+  notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

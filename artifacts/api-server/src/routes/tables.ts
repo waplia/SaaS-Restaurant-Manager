@@ -4,6 +4,7 @@ import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenant
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
+import { pushToStaff } from "../lib/pushNotify";
 
 const router = Router();
 
@@ -249,6 +250,17 @@ router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "man
     status: status ?? "confirmed",
   }).returning();
   res.status(201).json(reservation);
+
+  if ((reservation.status ?? "confirmed") === "confirmed") {
+    pushToStaff(
+      { restaurantId, roles: ["owner", "manager", "waiter"], type: "reservation" },
+      {
+        title: "Reservation confirmed",
+        body: `${guestName.trim()} • ${partySizeNum} guests • ${dt.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`,
+        data: { screen: "reservations", reservationId: reservation.id, tableId: reservation.tableId ?? null },
+      },
+    ).catch(() => {});
+  }
 
   if (guestEmail && guestName && scheduledAt) {
     try {

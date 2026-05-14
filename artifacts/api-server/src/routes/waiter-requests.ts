@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent } from "../lib/socketio";
 import { broadcastEvent as sseBroadcast } from "./realtime";
+import { pushToStaff } from "../lib/pushNotify";
 
 const router = Router();
 
@@ -132,6 +133,15 @@ export async function createWaiterRequestPublic(args: {
   broadcastEvent(args.restaurantId, "waiter_request:new", payload);
   sseBroadcast(args.restaurantId, "waiter_request:new", payload);
   broadcastEvent(args.restaurantId, "notification:new", { type: "waiter_request" });
+
+  pushToStaff(
+    { restaurantId: args.restaurantId, roles: ["waiter", "manager", "owner"], type: "waiter_call" },
+    {
+      title: type === "request_bill" ? "Bill requested" : "Table needs attention",
+      body: `Table ${args.tableNumber}${args.note ? ` — ${args.note}` : ""}`,
+      data: { screen: "waiter_requests", requestId: row.id, tableId: args.tableId },
+    },
+  ).catch(() => {});
 
   return row;
 }

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import * as SecureStorage from "@/lib/secureStorage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { router } from "expo-router";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 Notifications.setNotificationHandler({
@@ -35,8 +36,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-async function registerPushToken(userId: number, accessToken: string) {
-  if (Platform.OS === "web") return;
+const PUSH_TOKEN_STORAGE_KEY = "expoPushToken";
+
+async function registerPushToken(userId: number, accessToken: string): Promise<string | null> {
+  if (Platform.OS === "web") return null;
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -44,7 +47,7 @@ async function registerPushToken(userId: number, accessToken: string) {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== "granted") return;
+    if (finalStatus !== "granted") return null;
 
     const tokenData = await Notifications.getExpoPushTokenAsync();
     const pushToken = tokenData.data;
@@ -58,8 +61,47 @@ async function registerPushToken(userId: number, accessToken: string) {
       },
       body: JSON.stringify({ token: pushToken, platform: Platform.OS }),
     }).catch(() => {});
+
+    await SecureStorage.setItem(PUSH_TOKEN_STORAGE_KEY, pushToken);
+    return pushToken;
   } catch {
-    // non-critical — silently fail if notifications not available
+    return null;
+  }
+}
+
+async function deregisterPushToken(userId: number, accessToken: string) {
+  if (Platform.OS === "web") return;
+  try {
+    const token = await SecureStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+    if (!token) return;
+    const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+    await fetch(`${baseUrl}/api/users/${userId}/push-token`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ token }),
+    }).catch(() => {});
+    await SecureStorage.deleteItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** Map a notification's `data.screen` field to an in-app route. */
+function routeForNotification(data: Record<string, unknown> | undefined, role: string | undefined): string | null {
+  if (!data) return null;
+  const screen = typeof data.screen === "string" ? data.screen : null;
+  switch (screen) {
+    case "waiter_requests":
+      return "/(waiter)/(tabs)/notifications";
+    case "kitchen":
+      return role === "kitchen" ? "/(owner)/kitchen" : "/(owner)/kitchen";
+    case "reservations":
+      return role === "waiter" ? "/(waiter)/(tabs)" : "/(owner)";
+    default:
+      return null;
   }
 }
 
@@ -67,6 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const userRef = useRef<AuthUser | null>(null);
+
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     async function loadToken() {
@@ -91,6 +136,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthTokenGetter(() => token);
   }, [accessToken]);
 
+  // Deep-link on notification tap (foreground or cold-start).
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      const target = routeForNotification(data, userRef.current?.role);
+      if (target) {
+        try { router.push(target as never); } catch { /* navigation may not be ready yet */ }
+      }
+    });
+    // Handle cold-start: if the app was launched by tapping a notification.
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (!response) return;
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      const target = routeForNotification(data, userRef.current?.role);
+      if (target) {
+        setTimeout(() => {
+          try { router.push(target as never); } catch { /* ignore */ }
+        }, 600);
+      }
+    }).catch(() => {});
+    return () => sub.remove();
+  }, []);
+
   const login = useCallback(async (token: string, refreshTok: string, userData: AuthUser) => {
     await SecureStorage.setItem("accessToken", token);
     await SecureStorage.setItem("refreshToken", refreshTok);
@@ -102,12 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const currentUser = userRef.current;
+    const currentToken = accessToken;
+    if (currentUser && currentToken) {
+      await deregisterPushToken(currentUser.id, currentToken);
+    }
     await SecureStorage.deleteItem("accessToken");
     await SecureStorage.deleteItem("refreshToken");
     await SecureStorage.deleteItem("authUser");
     setAccessToken(null);
     setUser(null);
-  }, []);
+  }, [accessToken]);
 
   const restaurantId = user?.restaurantId ?? 1;
 

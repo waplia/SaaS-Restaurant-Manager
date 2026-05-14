@@ -5,6 +5,7 @@ import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicke
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+import { pushToStaff } from "../lib/pushNotify";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
@@ -289,6 +290,14 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   }).catch(() => {});
   for (const t of createdTickets) {
     broadcastEvent(restaurantId, "order:new", { ...order, ticketId: t.ticketId, kitchenId: t.kitchenId });
+    pushToStaff(
+      { restaurantId, roles: ["kitchen"], type: "new_order", kitchenId: t.kitchenId },
+      {
+        title: "New kitchen order",
+        body: `Order #${order.orderNumber}${order.tableId ? ` • Table ${order.tableId}` : ""}`,
+        data: { screen: "kitchen", orderId: order.id, ticketId: t.ticketId, kitchenId: t.kitchenId },
+      },
+    ).catch(() => {});
   }
   broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
 

@@ -54,6 +54,17 @@ export default function OwnerProfileScreen() {
       </View>
 
       <Pressable
+        style={({ pressed }) => [
+          { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 12, borderWidth: 1, backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+        ]}
+        onPress={() => router.push("/notification-settings" as never)}
+      >
+        <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+        <Text style={{ flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: colors.foreground }}>Notifications</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
+
+      <Pressable
         style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.7 : 1 }]}
         onPress={handleLogout}
       >

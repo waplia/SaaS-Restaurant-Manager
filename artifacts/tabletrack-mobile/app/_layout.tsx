@@ -38,6 +38,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(waiter)" options={{ headerShown: false }} />
       <Stack.Screen name="(customer)" options={{ headerShown: false }} />
       <Stack.Screen name="(delivery)" options={{ headerShown: false }} />
+      <Stack.Screen name="notification-settings" options={{ headerShown: false, presentation: "card" }} />
     </Stack>
   );
 }

@@ -46,6 +46,15 @@ export default function WaiterProfileScreen() {
       </View>
 
       <Pressable
+        style={({ pressed }) => [styles.menuRow, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+        onPress={() => router.push("/notification-settings" as never)}
+      >
+        <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+        <Text style={[styles.menuRowLabel, { color: colors.foreground }]}>Notifications</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
+
+      <Pressable
         style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.7 : 1 }]}
         onPress={handleLogout}
       >
@@ -76,4 +85,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   logoutText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  menuRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 14, borderRadius: 12, borderWidth: 1,
+  },
+  menuRowLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
 });
