@@ -1550,17 +1550,25 @@ function DiscountsSection() {
             </Field>
           </Row>
           <Field label={s.hasManagerPin ? "Change manager PIN" : "Set manager PIN"}
-            hint="4–8 digits. Stored hashed. Leave blank to keep the existing PIN; type and save an empty PIN to clear it.">
-            <Input type="password" inputMode="numeric" autoComplete="new-password"
-              placeholder={s.hasManagerPin ? "•••• (set — type to change)" : "Enter new PIN"}
-              value={s.managerPin ?? ""}
-              onChange={e => set(p => {
-                const v = e.target.value;
-                const next = { ...p };
-                if (v.length === 0) delete next.managerPin;
-                else next.managerPin = v;
-                return next;
-              })} />
+            hint="4–8 digits. Stored hashed. Leave blank to keep the existing PIN.">
+            <div className="flex items-center gap-2">
+              <Input type="password" inputMode="numeric" autoComplete="new-password" className="flex-1"
+                placeholder={s.hasManagerPin ? "•••• (set — type to change)" : "Enter new PIN"}
+                value={s.managerPin ?? ""}
+                onChange={e => set(p => {
+                  const v = e.target.value;
+                  const next = { ...p };
+                  if (v.length === 0) delete next.managerPin;
+                  else next.managerPin = v;
+                  return next;
+                })} />
+              {s.hasManagerPin && (
+                <Button type="button" variant="outline" size="sm"
+                  onClick={() => set(p => ({ ...p, managerPin: "" }))}>
+                  Clear PIN
+                </Button>
+              )}
+            </div>
           </Field>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Preset reasons</p>
           <ListEditor
