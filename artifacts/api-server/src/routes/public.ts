@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
-import { customersTable } from "../lib/db";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
 
 const router = Router();

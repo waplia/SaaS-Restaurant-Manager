@@ -1184,7 +1184,10 @@ export default function PosPage() {
     const pts = Math.floor(Number(loyaltyRedeem) || 0);
     if (pts <= 0) return;
     applyLoyalty.mutate({ orderId: placedOrder.id, points: pts }, {
-      onSuccess: () => toast({ title: `${pts} pts redeemed`, description: `₹${pts} off applied` }),
+      onSuccess: (data: { loyaltyApplied?: { discountValue?: number } }) => {
+        const discount = Number(data?.loyaltyApplied?.discountValue ?? 0);
+        toast({ title: `${pts} pts redeemed`, description: `₹${discount.toFixed(2)} off applied` });
+      },
       onError: (err: Error) => toast({ title: "Failed to apply loyalty", description: err.message, variant: "destructive" }),
     });
   };
