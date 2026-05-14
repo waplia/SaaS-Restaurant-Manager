@@ -56,7 +56,14 @@ router.get("/restaurants/:restaurantId/settings", requireSettingsWriter, async (
     .where(eq(restaurantSettingsTable.restaurantId, restaurantId));
   const out: Record<string, unknown> = {};
   for (const r of rows) {
-    if (canAccessSection(req, r.section)) out[r.section] = r.data;
+    if (!canAccessSection(req, r.section)) continue;
+    if (r.section === "discounts") {
+      const src = (r.data ?? {}) as Record<string, unknown>;
+      const { managerPinHash, ...rest } = src;
+      out[r.section] = { ...rest, hasManagerPin: typeof managerPinHash === "string" && managerPinHash.length > 0 };
+    } else {
+      out[r.section] = r.data;
+    }
   }
   res.json(out);
 });
@@ -112,6 +119,7 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
 
   if (section === "discounts") {
     const d = data as Record<string, unknown>;
+    delete d.managerPinHash;
     if (typeof d.managerPin === "string") {
       const raw = d.managerPin.trim();
       if (raw.length === 0) {
