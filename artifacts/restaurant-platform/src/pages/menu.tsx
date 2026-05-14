@@ -512,6 +512,7 @@ export default function MenuPage() {
       setImportPreview(null);
       await queryClient.invalidateQueries({ queryKey: ["items"] });
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["menus"] });
     } catch (err: unknown) {
       toast({ title: (err as { message?: string })?.message ?? "Import failed", variant: "destructive" });
     } finally {

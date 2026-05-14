@@ -321,14 +321,19 @@ router.post(
     .where(eq(menuItemsTable.restaurantId, restaurantId));
   const bySku = new Map<string, number>();
   const byCatName = new Map<string, number>();
+  const nameOccurrences = new Map<string, number[]>();
   for (const it of existing) {
     if (it.sku) bySku.set(it.sku.toLowerCase(), it.id);
     byCatName.set(`${it.categoryId}::${it.name.toLowerCase()}`, it.id);
+    const k = it.name.toLowerCase();
+    const arr = nameOccurrences.get(k) ?? [];
+    arr.push(it.id);
+    nameOccurrences.set(k, arr);
   }
 
   const results: ImportRowResult[] = [];
   const toCreate: Array<{ idx: number; menuName: string; categoryName: string; values: Omit<typeof menuItemsTable.$inferInsert, "categoryId"> }> = [];
-  const toUpdate: Array<{ idx: number; id: number; values: Partial<typeof menuItemsTable.$inferInsert> }> = [];
+  const toUpdate: Array<{ idx: number; id: number; menuName: string; categoryName: string; values: Omit<typeof menuItemsTable.$inferInsert, "categoryId"> }> = [];
   const seenSku = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
@@ -384,6 +389,9 @@ router.post(
       matchedId = bySku.get(sku.toLowerCase())!;
     } else if (categoryId && name) {
       matchedId = byCatName.get(`${categoryId}::${name.toLowerCase()}`) ?? null;
+    } else if (!sku && name) {
+      const hits = nameOccurrences.get(name.toLowerCase()) ?? [];
+      if (hits.length === 1) matchedId = hits[0];
     }
 
     const result: ImportRowResult = {
@@ -415,8 +423,8 @@ router.post(
       imageUrl: r.imageUrl ? String(r.imageUrl) : null,
     };
 
-    if (matchedId && categoryId) {
-      toUpdate.push({ idx: i, id: matchedId, values: { ...baseValues, categoryId } });
+    if (matchedId) {
+      toUpdate.push({ idx: i, id: matchedId, menuName, categoryName: catName, values: baseValues });
     } else {
       toCreate.push({ idx: i, menuName, categoryName: catName, values: baseValues });
     }
@@ -459,8 +467,10 @@ router.post(
     const menuIdByName = new Map(menuByName);
     const catIdByMenuCat = new Map(catByMenuName);
 
+    const allRefs = [...toCreate, ...toUpdate];
+
     const distinctNewMenus = new Set<string>();
-    for (const c of toCreate) {
+    for (const c of allRefs) {
       if (!menuIdByName.has(c.menuName.toLowerCase())) distinctNewMenus.add(c.menuName);
     }
     for (const original of distinctNewMenus) {
@@ -469,7 +479,7 @@ router.post(
     }
 
     const seenNewCats = new Set<string>();
-    for (const c of toCreate) {
+    for (const c of allRefs) {
       const menuId = menuIdByName.get(c.menuName.toLowerCase())!;
       const key = `${menuId}::${c.categoryName.toLowerCase()}`;
       if (catIdByMenuCat.has(key) || seenNewCats.has(key)) continue;
@@ -478,18 +488,20 @@ router.post(
       catIdByMenuCat.set(key, created.id);
     }
 
+    const resolveCategoryId = (menuName: string, categoryName: string): number => {
+      const menuId = menuIdByName.get(menuName.toLowerCase())!;
+      return catIdByMenuCat.get(`${menuId}::${categoryName.toLowerCase()}`)!;
+    };
+
     if (toCreate.length) {
-      const insertValues = toCreate.map(c => {
-        const menuId = menuIdByName.get(c.menuName.toLowerCase())!;
-        const categoryId = catIdByMenuCat.get(`${menuId}::${c.categoryName.toLowerCase()}`)!;
-        return { ...c.values, categoryId };
-      });
-      await tx.insert(menuItemsTable).values(insertValues);
+      await tx.insert(menuItemsTable).values(
+        toCreate.map(c => ({ ...c.values, categoryId: resolveCategoryId(c.menuName, c.categoryName) }))
+      );
     }
     for (const u of toUpdate) {
       await tx
         .update(menuItemsTable)
-        .set({ ...u.values, updatedAt: new Date() })
+        .set({ ...u.values, categoryId: resolveCategoryId(u.menuName, u.categoryName), updatedAt: new Date() })
         .where(and(eq(menuItemsTable.id, u.id), eq(menuItemsTable.restaurantId, restaurantId)));
     }
   });
