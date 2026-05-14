@@ -7,7 +7,9 @@ import {
   useCreateCategory, useUpdateCategory, useDeleteCategory,
   useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
   useModifierGroups, useModifiers, useCreateModifierGroup, useCreateModifier,
+  useKitchens, useBulkAssignKitchen,
 } from "@/lib/hooks";
+import type { Kitchen } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -161,11 +163,12 @@ type ItemForm = {
   imageUrl: string;
   calories: string;
   tags: string;
+  kitchenId: string;
 };
 
 const EMPTY_ITEM_FORM: ItemForm = {
   name: "", price: "", description: "", categoryId: "", isVeg: true,
-  preparationTime: "15", imageUrl: "", calories: "", tags: "",
+  preparationTime: "15", imageUrl: "", calories: "", tags: "", kitchenId: "",
 };
 
 export default function MenuPage() {
@@ -188,6 +191,10 @@ export default function MenuPage() {
   const createItem = useCreateMenuItem();
   const updateItem = useUpdateMenuItem();
   const deleteItem = useDeleteMenuItem();
+  const { data: kitchens = [] } = useKitchens();
+  const bulkAssignKitchen = useBulkAssignKitchen();
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+  const [bulkKitchenId, setBulkKitchenId] = useState<string>("");
 
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [editMenu, setEditMenu] = useState<Menu | null>(null);
@@ -224,6 +231,7 @@ export default function MenuPage() {
       imageUrl: item.imageUrl ?? "",
       calories: item.calories ? String(item.calories) : "",
       tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
+      kitchenId: item.kitchenId != null ? String(item.kitchenId) : "",
     });
     setActiveTab("details");
     setShowItemModal(true);
@@ -244,6 +252,7 @@ export default function MenuPage() {
       imageUrl: itemForm.imageUrl || undefined,
       calories: itemForm.calories ? Number(itemForm.calories) : undefined,
       tags: itemForm.tags ? itemForm.tags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
+      kitchenId: itemForm.kitchenId ? Number(itemForm.kitchenId) : null,
     };
     try {
       if (editItem) {
@@ -497,10 +506,52 @@ export default function MenuPage() {
             </div>
           </div>
 
+          {selectedItemIds.size > 0 && (
+            <div className="mb-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 flex items-center gap-3">
+              <span className="text-sm font-medium">{selectedItemIds.size} selected</span>
+              <select
+                className="border border-input rounded-md px-2 py-1 text-xs bg-background"
+                value={bulkKitchenId}
+                onChange={e => setBulkKitchenId(e.target.value)}
+              >
+                <option value="">Choose kitchen…</option>
+                {kitchens.filter((k: Kitchen) => k.isActive).map((k: Kitchen) => (
+                  <option key={k.id} value={k.id}>{k.name}{k.isDefault ? " (default)" : ""}</option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                disabled={!bulkKitchenId || bulkAssignKitchen.isPending}
+                onClick={async () => {
+                  try {
+                    await bulkAssignKitchen.mutateAsync({ itemIds: Array.from(selectedItemIds), kitchenId: Number(bulkKitchenId) });
+                    toast({ title: `Assigned ${selectedItemIds.size} items to kitchen` });
+                    setSelectedItemIds(new Set());
+                    setBulkKitchenId("");
+                  } catch {
+                    toast({ title: "Bulk assign failed", variant: "destructive" });
+                  }
+                }}
+              >
+                Apply
+              </Button>
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelectedItemIds(new Set())}>Clear</Button>
+            </div>
+          )}
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left text-xs font-medium text-muted-foreground px-3 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={filteredItems.length > 0 && filteredItems.every((i: MenuItem) => selectedItemIds.has(i.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedItemIds(new Set(filteredItems.map((i: MenuItem) => i.id)));
+                        else setSelectedItemIds(new Set());
+                      }}
+                    />
+                  </th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Item</th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">Category</th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Price</th>
@@ -513,6 +564,19 @@ export default function MenuPage() {
               <tbody>
                 {filteredItems.map((item: MenuItem) => (
                   <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/10 transition-colors">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedItemIds.has(item.id)}
+                        onChange={(e) => {
+                          setSelectedItemIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(item.id); else next.delete(item.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         {item.imageUrl ? (
@@ -581,7 +645,7 @@ export default function MenuPage() {
                 ))}
                 {filteredItems.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-16 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-16 text-muted-foreground">
                       <UtensilsCrossed className="w-10 h-10 mx-auto mb-3 opacity-20" />
                       <p className="text-sm">No items found</p>
                       <p className="text-xs mt-1">Add items using the button above or import a CSV</p>
@@ -700,6 +764,16 @@ export default function MenuPage() {
                     <div>
                       <Label>Tags</Label>
                       <Input placeholder="spicy, popular (comma-sep)" value={itemForm.tags} onChange={e => setItemForm(p => ({ ...p, tags: e.target.value }))} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Kitchen / Station</Label>
+                      <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={itemForm.kitchenId} onChange={e => setItemForm(p => ({ ...p, kitchenId: e.target.value }))}>
+                        <option value="">Default kitchen</option>
+                        {kitchens.filter((k: Kitchen) => k.isActive).map((k: Kitchen) => (
+                          <option key={k.id} value={k.id}>{k.name}{k.isDefault ? " (default)" : ""}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground mt-1">Tickets for this item route to the selected kitchen station.</p>
                     </div>
                     <div className="col-span-2 flex items-center gap-3 pt-1">
                       <Label>Type:</Label>

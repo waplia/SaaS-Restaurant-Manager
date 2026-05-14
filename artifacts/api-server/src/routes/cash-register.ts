@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   db, cashRegisterSessionsTable, cashMovementsTable, cashDenominationCountsTable,
   paymentsTable, ordersTable, usersTable, shiftsTable,

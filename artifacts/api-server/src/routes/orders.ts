@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { eq, and, desc, count, ne, notInArray } from "drizzle-orm";
+import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 
@@ -255,7 +256,11 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     }
   }
 
-  await db.insert(kitchenTicketsTable).values({ orderId: order.id, restaurantId, isPriority: isPriority ?? false });
+  const createdTickets = await createKitchenTicketsForOrder({
+    orderId: order.id,
+    restaurantId,
+    isPriority: isPriority ?? false,
+  });
 
   if (tableId) {
     await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -269,7 +274,9 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     entityId: order.id,
     entityType: "order",
   }).catch(() => {});
-  broadcastEvent(restaurantId, "order:new", order);
+  for (const t of createdTickets) {
+    broadcastEvent(restaurantId, "order:new", { ...order, ticketId: t.ticketId, kitchenId: t.kitchenId });
+  }
   broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
 
   const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
@@ -391,11 +398,21 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     }
   }
 
+  const newTicket = await ensureTicketForAddedItem({ orderId, restaurantId, menuItemId: mi.id });
+
   const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
   broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals });
+  if (newTicket) {
+    broadcastEvent(restaurantId, "order:new", {
+      id: orderId,
+      orderNumber: updatedOrder.orderNumber,
+      ticketId: newTicket.ticketId,
+      kitchenId: newTicket.kitchenId,
+    });
+  }
 
   res.json({ ...updatedOrder, items });
 });
@@ -1145,22 +1162,54 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
 });
 
 router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
-  const { status } = req.query;
+  const { status, kitchenId } = req.query;
   const restaurantId = Number(req.params.restaurantId);
   const conditions: ReturnType<typeof eq>[] = [eq(kitchenTicketsTable.restaurantId, restaurantId)];
   if (status) conditions.push(eq(kitchenTicketsTable.status, String(status)));
+  if (kitchenId) conditions.push(eq(kitchenTicketsTable.kitchenId, Number(kitchenId)));
 
   const tickets = await db.select().from(kitchenTicketsTable).where(and(...conditions)).orderBy(desc(kitchenTicketsTable.isPriority), kitchenTicketsTable.createdAt);
 
+  const kitchens = await db.select().from(kitchensTable).where(eq(kitchensTable.restaurantId, restaurantId));
+  const kitchenMap = new Map(kitchens.map(k => [k.id, k] as const));
+  const defaultKitchenId = kitchens.find(k => k.isDefault)?.id ?? null;
+
   const enriched = await Promise.all(tickets.map(async (t) => {
     const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, t.orderId), eq(ordersTable.restaurantId, restaurantId)));
-    const items = order ? await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id)) : [];
+    const allItems = order ? await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id)) : [];
+
+    // Filter to items whose menu item belongs to this ticket's kitchen
+    let items = allItems;
+    if (t.kitchenId != null && allItems.length > 0) {
+      const menuItemIds = Array.from(new Set(allItems.map(i => i.menuItemId).filter((x): x is number => x != null)));
+      const menuRows = menuItemIds.length > 0
+        ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
+            .from(menuItemsTable)
+            .where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, menuItemIds)))
+        : [];
+      const itemKitchenById = new Map(menuRows.map(m => [m.id, m.kitchenId ?? defaultKitchenId] as const));
+      items = allItems.filter(i => {
+        const k = i.menuItemId != null ? itemKitchenById.get(i.menuItemId) ?? defaultKitchenId : defaultKitchenId;
+        return k === t.kitchenId;
+      });
+    }
+
     let tableNumber: string | null = null;
     if (order?.tableId) {
       const [tbl] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
       tableNumber = tbl?.tableNumber ?? null;
     }
-    return { ...t, orderNumber: order?.orderNumber ?? "", tableNumber, orderType: order?.orderType ?? "dine_in", items };
+
+    const kitchen = t.kitchenId != null ? kitchenMap.get(t.kitchenId) ?? null : null;
+
+    return {
+      ...t,
+      orderNumber: order?.orderNumber ?? "",
+      tableNumber,
+      orderType: order?.orderType ?? "dine_in",
+      items,
+      kitchen: kitchen ? { id: kitchen.id, name: kitchen.name, autoPrint: kitchen.autoPrint, printerName: kitchen.printerName, paperSize: kitchen.paperSize } : null,
+    };
   }));
 
   res.json(enriched);

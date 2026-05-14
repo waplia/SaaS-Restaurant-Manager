@@ -5,6 +5,7 @@ import { restaurantsTable } from "./restaurants";
 import { floorTablesTable } from "./tables";
 import { menuItemsTable } from "./menu";
 import { usersTable } from "./users";
+import { kitchensTable } from "./kitchens";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -58,6 +59,7 @@ export const kitchenTicketsTable = pgTable("kitchen_tickets", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => ordersTable.id),
   restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  kitchenId: integer("kitchen_id").references(() => kitchensTable.id),
   status: text("status").notNull().default("new"),
   isPriority: boolean("is_priority").notNull().default(false),
   startedAt: timestamp("started_at"),

@@ -2,6 +2,7 @@ export * from "./tenants";
 export * from "./restaurants";
 export * from "./users";
 export * from "./tables";
+export * from "./kitchens";
 export * from "./menu";
 export * from "./orders";
 export * from "./inventory";

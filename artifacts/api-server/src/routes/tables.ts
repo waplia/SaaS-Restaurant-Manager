@@ -152,7 +152,7 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
   const [existingTgtOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.tableId, Number(targetTableId)), eq(ordersTable.restaurantId, restaurantId), or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "preparing"))));
 
   let targetOrderId: number;
-  let newTicketId: number | null = null;
+  let createdNewOrder = false;
 
   await db.transaction(async (tx) => {
     if (existingTgtOrder) {
@@ -170,10 +170,8 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
         totalAmount: movedTotal.toFixed(2),
       }).returning();
       targetOrderId = newOrder.id;
+      createdNewOrder = true;
       await tx.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eq(floorTablesTable.id, Number(targetTableId)));
-      // Create kitchen ticket for the new split order
-      const [newTicket] = await tx.insert(kitchenTicketsTable).values({ orderId: targetOrderId, restaurantId, isPriority: false }).returning();
-      newTicketId = newTicket.id;
     }
     await tx.update(orderItemsTable).set({ orderId: targetOrderId! }).where(inArray(orderItemsTable.id, toMove.map(i => i.id)));
     await tx.update(ordersTable).set({ totalAmount: newSrcTotal, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
@@ -181,8 +179,12 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
 
   const { broadcastEvent } = await import("../lib/socketio");
   broadcastEvent(restaurantId, "order:split", { sourceOrderId: orderId, targetOrderId: targetOrderId!, targetTableId, itemCount: toMove.length });
-  if (newTicketId !== null) {
-    broadcastEvent(restaurantId, "order:new", { id: targetOrderId!, restaurantId, tableId: Number(targetTableId), orderNumber: `SPL-ticket` });
+  if (createdNewOrder) {
+    const { createKitchenTicketsForOrder } = await import("../lib/kitchenRouting");
+    const tickets = await createKitchenTicketsForOrder({ orderId: targetOrderId!, restaurantId, isPriority: false });
+    for (const t of tickets) {
+      broadcastEvent(restaurantId, "order:new", { id: targetOrderId!, restaurantId, tableId: Number(targetTableId), orderNumber: "SPL-ticket", ticketId: t.ticketId, kitchenId: t.kitchenId });
+    }
   }
 
   res.json({ success: true, sourceOrderId: orderId, targetOrderId: targetOrderId!, itemsMoved: toMove.length });

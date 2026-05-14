@@ -1,11 +1,12 @@
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Link } from "wouter";
-import { Settings, Store, Bell, Shield, Palette, CreditCard, ChevronRight } from "lucide-react";
+import { Settings, Store, Bell, Shield, Palette, CreditCard, ChevronRight, ChefHat } from "lucide-react";
 
 export default function SettingsPage() {
   const items = [
     { icon: Store, title: "Restaurant Profile", desc: "Name, address, contact, hours", href: null },
+    { icon: ChefHat, title: "Kitchens & Stations", desc: "Define kitchens, route items, printer & auto-print", href: "/settings/kitchens" },
     { icon: CreditCard, title: "Subscription & Billing", desc: "Manage your plan, upgrade, view usage", href: "/settings/subscription" },
     { icon: Palette, title: "Branding", desc: "Logo, colors, theme", href: null },
     { icon: Bell, title: "Notifications", desc: "Alert preferences and channels", href: "/notifications" },

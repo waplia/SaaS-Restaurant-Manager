@@ -2,6 +2,7 @@ import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
+import { kitchensTable } from "./kitchens";
 
 export const menusTable = pgTable("menus", {
   id: serial("id").primaryKey(),
@@ -43,6 +44,7 @@ export const menuItemsTable = pgTable("menu_items", {
   calories: integer("calories"),
   sortOrder: integer("sort_order").notNull().default(0),
   tags: text("tags").array().default([]),
+  kitchenId: integer("kitchen_id").references(() => kitchensTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

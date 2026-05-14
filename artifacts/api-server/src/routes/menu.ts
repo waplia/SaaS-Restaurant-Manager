@@ -123,8 +123,8 @@ router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", 
     }
   }
 
-  const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags } = req.body;
-  const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags }).returning();
+  const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, kitchenId } = req.body;
+  const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, kitchenId: kitchenId ?? null }).returning();
   res.status(201).json(item);
 });
 
@@ -135,8 +135,10 @@ router.get("/restaurants/:restaurantId/items/:id", async (req, res) => {
 });
 
 router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId } = req.body;
-  const [updated] = await db.update(menuItemsTable).set({ name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() }).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
+  const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, kitchenId } = req.body;
+  const updates: Record<string, unknown> = { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() };
+  if (kitchenId !== undefined) updates.kitchenId = kitchenId;
+  const [updated] = await db.update(menuItemsTable).set(updates).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
 });

@@ -3,6 +3,7 @@ import { eq, and, inArray, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
 
@@ -99,7 +100,7 @@ router.post("/public/orders", async (req, res) => {
     }
   }
 
-  await db.insert(kitchenTicketsTable).values({ orderId: order.id, restaurantId, isPriority: false });
+  const createdTickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId, isPriority: false });
 
   if (tableId) {
     const [validTable] = await db.select({ id: floorTablesTable.id }).from(floorTablesTable).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -110,7 +111,9 @@ router.post("/public/orders", async (req, res) => {
     broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
   }
 
-  broadcastEvent(restaurantId, "order:new", { id: order.id, orderNumber: order.orderNumber, status: order.status, tableId });
+  for (const t of createdTickets) {
+    broadcastEvent(restaurantId, "order:new", { id: order.id, orderNumber: order.orderNumber, status: order.status, tableId, ticketId: t.ticketId, kitchenId: t.kitchenId });
+  }
 
   const guestToken = generateGuestToken(order.id);
   res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount, guestToken });

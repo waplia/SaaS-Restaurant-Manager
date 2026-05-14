@@ -112,13 +112,46 @@ export interface KitchenTicketItem {
 
 export interface KitchenTicket {
   id: number;
+  orderId: number;
   orderNumber: string;
   tableNumber: string | null;
   orderType: string;
   status: string;
   isPriority: boolean;
+  kitchenId: number | null;
+  kitchen: { id: number; name: string; autoPrint: boolean; printerName: string | null; paperSize: string } | null;
   createdAt: string;
   items: KitchenTicketItem[];
+}
+
+export interface Kitchen {
+  id: number;
+  restaurantId: number;
+  name: string;
+  sortOrder: number;
+  isDefault: boolean;
+  printerName: string | null;
+  paperSize: string;
+  autoPrint: boolean;
+  printerTarget: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateKitchenInput {
+  name: string;
+  sortOrder?: number;
+  printerName?: string | null;
+  paperSize?: string;
+  autoPrint?: boolean;
+  printerTarget?: string;
+  isDefault?: boolean;
+}
+
+export interface UpdateKitchenInput extends Partial<CreateKitchenInput> {
+  id: number;
+  isActive?: boolean;
 }
 
 export interface LiveKitchenData {
@@ -293,6 +326,7 @@ export interface MenuItem {
   calories: number | null;
   tags: string[] | null;
   sortOrder: number;
+  kitchenId: number | null;
 }
 
 export interface CreateMenuItemInput {
@@ -305,6 +339,7 @@ export interface CreateMenuItemInput {
   imageUrl?: string;
   calories?: number;
   tags?: string[];
+  kitchenId?: number | null;
 }
 
 export interface UpdateMenuItemInput {
@@ -320,6 +355,7 @@ export interface UpdateMenuItemInput {
   calories?: number;
   tags?: string[];
   sortOrder?: number;
+  kitchenId?: number | null;
 }
 
 export interface InventoryItem {

@@ -228,12 +228,70 @@ export function useVoidOrder() {
   });
 }
 
-export function useKitchenTickets(status?: string) {
-  const q = status ? `?status=${status}` : "";
+export function useKitchenTickets(statusOrParams?: string | { status?: string; kitchenId?: number | null }) {
+  const params = typeof statusOrParams === "string" ? { status: statusOrParams } : (statusOrParams ?? {});
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.kitchenId != null) qs.set("kitchenId", String(params.kitchenId));
+  const q = qs.toString() ? `?${qs.toString()}` : "";
   return useQuery({
-    queryKey: ["kitchen", "tickets", RESTAURANT_ID, status],
+    queryKey: ["kitchen", "tickets", RESTAURANT_ID, params.status ?? null, params.kitchenId ?? null],
     queryFn: () => apiGet<import("./types").KitchenTicket[]>(`/restaurants/${RESTAURANT_ID}/kitchen/tickets${q}`),
     refetchInterval: 8000,
+  });
+}
+
+export function useKitchens() {
+  return useQuery({
+    queryKey: ["kitchens", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").Kitchen[]>(`/restaurants/${RESTAURANT_ID}/kitchens`),
+    staleTime: 30000,
+  });
+}
+
+export function useCreateKitchen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateKitchenInput) =>
+      apiPost<import("./types").Kitchen>(`/restaurants/${RESTAURANT_ID}/kitchens`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kitchens", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateKitchen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: import("./types").UpdateKitchenInput) =>
+      apiPatch<import("./types").Kitchen>(`/restaurants/${RESTAURANT_ID}/kitchens/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kitchens", RESTAURANT_ID] }),
+  });
+}
+
+export function useDeleteKitchen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/kitchens/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kitchens", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["menu", "items"] });
+    },
+  });
+}
+
+export function useReorderKitchens() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (order: number[]) => apiPost(`/restaurants/${RESTAURANT_ID}/kitchens/reorder`, { order }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kitchens", RESTAURANT_ID] }),
+  });
+}
+
+export function useBulkAssignKitchen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemIds, kitchenId }: { itemIds: number[]; kitchenId: number | null }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/items/bulk-kitchen`, { itemIds, kitchenId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["menu", "items"] }),
   });
 }
 

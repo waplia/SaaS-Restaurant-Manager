@@ -3,6 +3,7 @@ import app from "./app";
 import { initSocketIO } from "./lib/socketio";
 import { startScheduler } from "./lib/scheduler";
 import { logger } from "./lib/logger";
+import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 
 const rawPort = process.env["PORT"];
 
@@ -29,4 +30,8 @@ httpServer.listen(port, (err?: Error) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  backfillDefaultKitchens()
+    .then(() => logger.info("Default kitchens backfill complete"))
+    .catch((e) => logger.error({ err: e }, "Default kitchens backfill failed"));
 });

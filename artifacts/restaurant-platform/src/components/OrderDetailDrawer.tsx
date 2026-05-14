@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo } from "@/lib/hooks";
+import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo, useKitchenTickets } from "@/lib/hooks";
 import { useDeliveryExecutives, useAssignRider } from "@/lib/delivery";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck } from "lucide-react";
+import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { printOrder } from "@/lib/printOrder";
+import { printOrder, type PrintSize } from "@/lib/printOrder";
+import type { KitchenTicket } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -41,6 +42,8 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
   const updateOrder = useUpdateOrder();
   const assignRider = useAssignRider();
   const { data: riders = [] } = useDeliveryExecutives();
+  const { data: allTickets = [] } = useKitchenTickets();
+  const orderTickets = allTickets.filter((t: KitchenTicket) => t.orderId === orderId);
   const [showAssign, setShowAssign] = useState(false);
   const [selectedRider, setSelectedRider] = useState<number | "">("");
   const { toast } = useToast();
@@ -137,6 +140,38 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
     });
   };
 
+  const handleReprintTicket = (ticket: KitchenTicket) => {
+    const size: PrintSize = ticket.kitchen?.paperSize === "a5" ? "a5" : "thermal-80mm";
+    const items = (ticket.items ?? []).map((it) => ({
+      name: it.menuItemName,
+      quantity: it.quantity,
+      unitPrice: 0,
+      lineTotal: 0,
+      notes: it.notes,
+    }));
+    const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+    printOrder({
+      size,
+      documentTitle: ticket.kitchen?.printerName
+        ? `KOT — ${ticket.kitchen.name} (${ticket.kitchen.printerName})`
+        : `KOT — ${ticket.kitchen?.name ?? "Kitchen"}`,
+      orderNumber: ticket.orderNumber,
+      createdAt: ticket.createdAt,
+      tableLabel: ticket.tableNumber ? `Table ${ticket.tableNumber}` : undefined,
+      orderType: ticket.orderType,
+      items,
+      subtotal: 0,
+      taxAmount: 0,
+      serviceCharge: 0,
+      discountAmount: 0,
+      totalAmount: totalQty,
+      splitTotal: totalQty,
+      footer: `${ticket.kitchen?.name ?? "Kitchen"} · ${totalQty} item${totalQty !== 1 ? "s" : ""}`,
+      restaurant: { name: restaurant?.name ?? "TableTrack" },
+    });
+    toast({ title: "Reprinting KOT", description: ticket.kitchen?.name ?? undefined });
+  };
+
   const handleAssignRider = async () => {
     if (!order || !selectedRider) return;
     try {
@@ -210,6 +245,44 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
                   )}
                 </div>
               </div>
+
+              {orderTickets.length > 0 && (
+                <div className="border-t border-border pt-4">
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <ChefHat className="w-3.5 h-3.5" /> Kitchen Breakdown
+                  </h4>
+                  <div className="space-y-2">
+                    {orderTickets.map((t: KitchenTicket) => (
+                      <div key={t.id} className="border border-border rounded-lg p-3 bg-muted/20">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-sm truncate">{t.kitchen?.name ?? "Kitchen"}</span>
+                            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full capitalize", STATUS_COLORS[t.status] ?? "bg-gray-100 text-gray-600")}>
+                              {t.status}
+                            </span>
+                            {t.isPriority && <AlertTriangle className="w-3 h-3 text-orange-500" />}
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" title="Reprint KOT" onClick={() => handleReprintTicket(t)}>
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                        <div className="space-y-0.5">
+                          {(t.items ?? []).map((it) => (
+                            <div key={it.id} className="flex items-baseline gap-2 text-xs">
+                              <span className="font-semibold w-5 shrink-0">{it.quantity}×</span>
+                              <span className="truncate">{it.menuItemName}</span>
+                              {it.notes && <span className="text-[10px] text-muted-foreground italic ml-auto">({it.notes})</span>}
+                            </div>
+                          ))}
+                          {(!t.items || t.items.length === 0) && (
+                            <p className="text-[10px] text-muted-foreground italic">No items</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-border pt-4 space-y-1.5 text-sm">
                 {order.subtotal !== undefined && (
