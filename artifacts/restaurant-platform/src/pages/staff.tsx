@@ -453,8 +453,68 @@ function BankTab({ member }: { member: StaffMember }) {
   );
 }
 
+function DrawerLeaveRequestForm({ userId, onClose }: { userId: number; onClose: () => void }) {
+  const { data: policies = [] } = useLeavePolicies();
+  const create = useCreateLeaveRequest();
+  const { toast } = useToast();
+  const active = policies.filter(p => p.isActive);
+  const [form, setForm] = useState({
+    leaveType: active[0]?.leaveType ?? "",
+    fromDate: new Date().toISOString().slice(0, 10),
+    toDate: new Date().toISOString().slice(0, 10),
+    halfDay: false,
+    reason: "",
+  });
+  useEffect(() => {
+    if (!form.leaveType && active.length > 0) setForm(p => ({ ...p, leaveType: active[0].leaveType }));
+  }, [active, form.leaveType]);
+
+  const submit = async () => {
+    if (!form.leaveType) { toast({ title: "Pick a leave type", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync({
+        userId,
+        leaveType: form.leaveType,
+        fromDate: form.fromDate,
+        toDate: form.halfDay ? form.fromDate : form.toDate,
+        halfDay: form.halfDay,
+        reason: form.reason || undefined,
+      });
+      toast({ title: "Leave request submitted" });
+      onClose();
+    } catch (e) {
+      toast({ title: (e as { message?: string }).message ?? "Submit failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="bg-muted/30 border border-border rounded-xl p-3 grid grid-cols-2 gap-2 mb-2">
+      <div className="col-span-2">
+        <Label className="text-[10px]">Leave type</Label>
+        <select className="w-full mt-1 border border-input rounded-md px-2 py-1.5 text-xs bg-background" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))}>
+          {active.length === 0 && <option value="">No active types</option>}
+          {active.map(p => <option key={p.leaveType} value={p.leaveType}>{p.label}</option>)}
+        </select>
+      </div>
+      <div><Label className="text-[10px]">From</Label><Input type="date" className="h-8 text-xs" value={form.fromDate} onChange={e => setForm(p => ({ ...p, fromDate: e.target.value }))} /></div>
+      <div><Label className="text-[10px]">To</Label><Input type="date" className="h-8 text-xs" value={form.toDate} onChange={e => setForm(p => ({ ...p, toDate: e.target.value }))} disabled={form.halfDay} /></div>
+      <label className="flex items-center gap-1.5 text-xs col-span-2">
+        <input type="checkbox" checked={form.halfDay} onChange={e => setForm(p => ({ ...p, halfDay: e.target.checked }))} /> Half day
+      </label>
+      <div className="col-span-2"><Label className="text-[10px]">Reason</Label><Input className="h-8 text-xs" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} placeholder="Optional" /></div>
+      <div className="col-span-2 flex justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button size="sm" onClick={submit} disabled={create.isPending}>Submit</Button>
+      </div>
+    </div>
+  );
+}
+
 function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => void }) {
   const [tab, setTab] = useState<"profile" | "documents" | "bank">("profile");
+  const [showRequestLeave, setShowRequestLeave] = useState(false);
+  const { user } = useAuth();
+  const canRequestForOthers = user?.isSuperAdmin || user?.role === "owner" || user?.role === "manager";
   const initials = member.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
   const roleConfig = ROLE_CONFIG[member.role] ?? { label: member.role, color: "bg-gray-100 text-gray-600" };
 
@@ -474,8 +534,21 @@ function StaffDrawer({ member, onClose }: { member: StaffMember; onClose: () => 
               </p>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+          <div className="flex items-center gap-2">
+            {canRequestForOthers && (
+              <Button size="sm" variant="outline" onClick={() => setShowRequestLeave(true)}>
+                <CalendarOff className="w-3.5 h-3.5 mr-1" /> Request leave
+              </Button>
+            )}
+            <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+          </div>
         </div>
+
+        {showRequestLeave && (
+          <div className="px-5 pt-4">
+            <DrawerLeaveRequestForm userId={member.id} onClose={() => setShowRequestLeave(false)} />
+          </div>
+        )}
 
         <div className="px-5 pt-3 border-b border-border flex gap-1">
           {([

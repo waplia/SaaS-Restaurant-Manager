@@ -353,6 +353,26 @@ router.post("/restaurants/:restaurantId/leave-requests", async (req, res) => {
     return;
   }
   const totalDays = daysBetween(from, to, isHalf);
+
+  // Reject if there's an overlapping pending/approved request for this user.
+  const [overlap] = await db
+    .select({ id: leaveRequestsTable.id })
+    .from(leaveRequestsTable)
+    .where(
+      and(
+        eq(leaveRequestsTable.restaurantId, restaurantId),
+        eq(leaveRequestsTable.userId, targetUserId),
+        inArray(leaveRequestsTable.status, ["pending", "approved"]),
+        lte(leaveRequestsTable.fromDate, endOfDay(to)),
+        gte(leaveRequestsTable.toDate, startOfDay(from)),
+      ),
+    )
+    .limit(1);
+  if (overlap) {
+    res.status(409).json({ error: "Overlaps an existing pending/approved leave request" });
+    return;
+  }
+
   const [row] = await db
     .insert(leaveRequestsTable)
     .values({
@@ -413,6 +433,25 @@ router.post(
 
       const totalDays = Number(reqRow.totalDays);
       const leavePaid = !!policy?.isPaid;
+
+      // Reject if any *other* approved leave request already covers any of
+      // these days (one authoritative leave source per user/day).
+      const [otherApproved] = await tx
+        .select({ id: leaveRequestsTable.id })
+        .from(leaveRequestsTable)
+        .where(
+          and(
+            eq(leaveRequestsTable.restaurantId, restaurantId),
+            eq(leaveRequestsTable.userId, reqRow.userId),
+            eq(leaveRequestsTable.status, "approved"),
+            lte(leaveRequestsTable.fromDate, reqRow.toDate),
+            gte(leaveRequestsTable.toDate, reqRow.fromDate),
+          ),
+        )
+        .limit(1);
+      if (otherApproved) {
+        return { error: "overlap" as const };
+      }
 
       // First, check every covered day for a conflicting worked attendance row.
       // We refuse to approve if any day already has present/late/half_day so we
@@ -549,6 +588,10 @@ router.post(
           error: "Cannot approve: user already has worked attendance on these days",
           conflicts: result.conflicts,
         });
+        return;
+      }
+      if (result.error === "overlap") {
+        res.status(409).json({ error: "Another approved leave already covers these days" });
         return;
       }
       res.status(400).json({ error: "Only pending requests can be approved" });
