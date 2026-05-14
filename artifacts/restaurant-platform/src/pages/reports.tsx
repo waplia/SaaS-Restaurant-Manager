@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useReports, useFoodCostReport } from "@/lib/hooks";
+import { useReports, useFoodCostReport, useCashVarianceHistory } from "@/lib/hooks";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -45,10 +45,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -531,6 +531,7 @@ export default function ReportsPage() {
             { label: "Payments", val: "payments" as Tab },
             { label: "Discounts", val: "discounts" as Tab },
             { label: "Food Cost", val: "food-cost" as Tab },
+            { label: "Cash Variance", val: "cash-variance" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -1009,7 +1010,165 @@ export default function ReportsPage() {
             </p>
           </div>
         )}
+
+        {tab === "cash-variance" && <CashVarianceTab from={useCustom ? customFrom : undefined} to={useCustom ? customTo : undefined} />}
       </div>
     </Layout>
+  );
+}
+
+function CashVarianceTab({ from, to }: { from?: string; to?: string }) {
+  const { data, isLoading } = useCashVarianceHistory(from && to ? { from, to } : undefined);
+  const sessions = data?.sessions ?? [];
+  const cashiers = data?.cashiers ?? [];
+
+  const totalAbsVariance = cashiers.reduce((s, c) => s + c.totalAbsVariance, 0);
+  const totalSessions = cashiers.reduce((s, c) => s + c.sessionCount, 0);
+  const totalShort = cashiers.reduce((s, c) => s + c.shortCount, 0);
+  const totalOver = cashiers.reduce((s, c) => s + c.overCount, 0);
+
+  const handleExport = () => {
+    const rows = sessions.map(s => [
+      String(s.id),
+      s.openedAt ? format(new Date(s.openedAt), "yyyy-MM-dd HH:mm") : "",
+      s.closedAt ? format(new Date(s.closedAt), "yyyy-MM-dd HH:mm") : "",
+      s.closedByName ?? s.openedByName ?? "",
+      s.expectedCash ?? "",
+      s.actualCash ?? "",
+      s.overShort ?? "",
+      s.varianceReason ?? "",
+      s.isBlindClose ? "yes" : "no",
+    ]);
+    exportCSV("cash-variance.csv", rows, ["Session", "Opened", "Closed", "Cashier", "Expected", "Counted", "Over/Short", "Variance reason", "Blind close"]);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Closed cash register sessions and the variance between expected and counted cash.
+        </p>
+        <Button size="sm" variant="outline" onClick={handleExport} disabled={sessions.length === 0}>
+          <Download className="w-4 h-4 mr-1.5" /> Export CSV
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-sm text-muted-foreground">Sessions</p>
+          <p className="text-2xl font-bold text-foreground">{totalSessions}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-sm text-muted-foreground">Total |variance|</p>
+          <p className="text-2xl font-bold text-foreground">₹{totalAbsVariance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-sm text-muted-foreground">Short closes</p>
+          <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">{totalShort}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-sm text-muted-foreground">Over closes</p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalOver}</p>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <h3 className="font-semibold text-foreground">By Cashier</h3>
+        </div>
+        {isLoading ? (
+          <div className="p-6 text-sm text-muted-foreground text-center">Loading…</div>
+        ) : cashiers.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground text-center">No closed sessions in this period.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Cashier</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Sessions</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Balanced</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Over</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Short</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Net variance</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Total |variance|</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Last close</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashiers.map(c => (
+                <tr key={c.userId} className="border-t border-border hover:bg-muted/20">
+                  <td className="px-5 py-2.5 font-medium text-foreground">{c.name ?? `User #${c.userId}`}</td>
+                  <td className="px-5 py-2.5 text-right text-muted-foreground">{c.sessionCount}</td>
+                  <td className="px-5 py-2.5 text-right text-green-600 dark:text-green-400">{c.balancedCount}</td>
+                  <td className="px-5 py-2.5 text-right text-blue-600 dark:text-blue-400">{c.overCount}</td>
+                  <td className="px-5 py-2.5 text-right text-rose-600 dark:text-rose-400">{c.shortCount}</td>
+                  <td className={`px-5 py-2.5 text-right font-medium tabular-nums ${c.totalVariance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-rose-600 dark:text-rose-400"}`}>
+                    {c.totalVariance >= 0 ? "+" : "-"}₹{Math.abs(c.totalVariance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-5 py-2.5 text-right font-semibold text-foreground tabular-nums">
+                    ₹{c.totalAbsVariance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">
+                    {c.lastSessionAt ? format(new Date(c.lastSessionAt), "MMM d, HH:mm") : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <h3 className="font-semibold text-foreground">Closed Sessions</h3>
+        </div>
+        {sessions.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground text-center">No closed sessions in this period.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Session</th>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Closed</th>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Cashier</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Expected</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Counted</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Over/Short</th>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map(s => {
+                  const os = s.overShort !== null ? Number(s.overShort) : 0;
+                  const balanced = Math.abs(os) < 0.01;
+                  return (
+                    <tr key={s.id} className="border-t border-border hover:bg-muted/20">
+                      <td className="px-5 py-2.5 font-medium text-foreground">#{s.id}</td>
+                      <td className="px-5 py-2.5 text-muted-foreground text-xs">
+                        {s.closedAt ? format(new Date(s.closedAt), "MMM d, HH:mm") : "—"}
+                      </td>
+                      <td className="px-5 py-2.5 text-foreground">{s.closedByName ?? s.openedByName ?? "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-foreground">
+                        {s.expectedCash !== null ? `₹${Number(s.expectedCash).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-foreground">
+                        {s.actualCash !== null ? `₹${Number(s.actualCash).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
+                      </td>
+                      <td className={`px-5 py-2.5 text-right font-medium tabular-nums ${balanced ? "text-green-600 dark:text-green-400" : os > 0 ? "text-blue-600 dark:text-blue-400" : "text-rose-600 dark:text-rose-400"}`}>
+                        {balanced ? "₹0.00" : `${os > 0 ? "+" : "-"}₹${Math.abs(os).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+                      </td>
+                      <td className="px-5 py-2.5 text-xs text-muted-foreground max-w-md truncate" title={s.varianceReason ?? ""}>
+                        {s.varianceReason ?? (balanced ? "—" : <span className="text-amber-600 dark:text-amber-400 italic">(no reason recorded)</span>)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

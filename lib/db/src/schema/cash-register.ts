@@ -22,6 +22,7 @@ export const cashRegisterSessionsTable = pgTable("cash_register_sessions", {
   status: text("status").notNull().default("open"),
   notes: text("notes"),
   closeNotes: text("close_notes"),
+  varianceReason: text("variance_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   // Hard-enforce: at most one open session per restaurant at any time.

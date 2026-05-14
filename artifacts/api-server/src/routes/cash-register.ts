@@ -273,16 +273,34 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
     const userId = req.user?.sub;
     if (!userId) return void res.status(401).json({ error: "Authentication required" });
 
-    const { denominations, isBlindClose, closeNotes } = req.body as {
-      denominations: unknown;
+    const { denominations, countedAmount, isBlindClose, closeNotes, varianceReason } = req.body as {
+      denominations?: unknown;
+      countedAmount?: number | string;
       isBlindClose?: boolean;
       closeNotes?: string;
+      varianceReason?: string;
     };
 
-    const validated = validateDenominations(denominations);
-    if (!validated.ok) return void res.status(400).json({ error: validated.error });
+    // Either supply denominations (full breakdown) or countedAmount (quick count).
+    // Denominations remain the preferred path; countedAmount is the optional shortcut.
+    let validatedRows: DenomInput[] = [];
+    let actualCash: number;
+    if (denominations !== undefined && Array.isArray(denominations) && (denominations as unknown[]).length > 0) {
+      const validated = validateDenominations(denominations);
+      if (!validated.ok) return void res.status(400).json({ error: validated.error });
+      validatedRows = validated.rows;
+      actualCash = denomTotal(validatedRows);
+    } else if (countedAmount !== undefined && countedAmount !== null && countedAmount !== "") {
+      const n = Number(countedAmount);
+      if (!isFinite(n) || n < 0) {
+        return void res.status(400).json({ error: "countedAmount must be a non-negative number" });
+      }
+      actualCash = n;
+    } else {
+      return void res.status(400).json({ error: "Provide either a denomination breakdown or a countedAmount." });
+    }
 
-    const actualCash = denomTotal(validated.rows);
+    const trimmedReason = typeof varianceReason === "string" ? varianceReason.trim() : "";
 
     try {
       const result = await db.transaction(async tx => {
@@ -300,6 +318,14 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
         const totals = await computeSessionTotals(tx, sessionId, restaurantId, Number(session.openingFloat));
         const overShort = actualCash - totals.expectedCash;
 
+        // Force a variance reason whenever counted cash doesn't match expected,
+        // including for blind closes — clients submitting a blind close must
+        // collect a reason note up-front since the counter won't see the
+        // variance after submission.
+        if (Math.abs(overShort) >= 0.01 && !trimmedReason) {
+          throw new Error("VARIANCE_REASON_REQUIRED");
+        }
+
         const [updated] = await tx.update(cashRegisterSessionsTable).set({
           status: "closed",
           closedByUserId: userId,
@@ -309,6 +335,7 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
           overShort: overShort.toFixed(2),
           isBlindClose: !!isBlindClose,
           closeNotes: closeNotes ?? null,
+          varianceReason: trimmedReason || null,
         }).where(and(
           eq(cashRegisterSessionsTable.id, sessionId),
           eq(cashRegisterSessionsTable.status, "open"),
@@ -316,9 +343,9 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
 
         if (!updated) throw new Error("NOT_OPEN");
 
-        if (validated.rows.length > 0) {
+        if (validatedRows.length > 0) {
           await tx.insert(cashDenominationCountsTable).values(
-            validated.rows.map(d => ({ sessionId, phase: "closing", denomination: d.denomination, count: d.count }))
+            validatedRows.map(d => ({ sessionId, phase: "closing", denomination: d.denomination, count: d.count }))
           );
         }
         return { updated, totals, overShort };
@@ -343,6 +370,12 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
       const msg = (e as Error).message;
       if (msg === "NOT_FOUND") return void res.status(404).json({ error: "Session not found" });
       if (msg === "NOT_OPEN") return void res.status(409).json({ error: "Session is no longer open (it may have been closed by another user)" });
+      if (msg === "VARIANCE_REASON_REQUIRED") {
+        return void res.status(400).json({
+          error: "A reason note is required when counted cash does not match expected.",
+          code: "VARIANCE_REASON_REQUIRED",
+        });
+      }
       throw e;
     }
   },
@@ -479,6 +512,99 @@ async function buildReport(sessionId: number, restaurantId: number) {
     periodTo: endedAt,
   };
 }
+
+router.get("/restaurants/:restaurantId/cash-register/variance-history",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const { from, to } = req.query;
+
+    const conditions = [
+      eq(cashRegisterSessionsTable.restaurantId, restaurantId),
+      eq(cashRegisterSessionsTable.status, "closed"),
+    ];
+    if (from) conditions.push(gte(cashRegisterSessionsTable.closedAt, new Date(String(from))));
+    if (to) {
+      const toDate = new Date(String(to));
+      toDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(cashRegisterSessionsTable.closedAt, toDate));
+    }
+
+    const sessions = await db.select({
+      id: cashRegisterSessionsTable.id,
+      closedAt: cashRegisterSessionsTable.closedAt,
+      openedAt: cashRegisterSessionsTable.openedAt,
+      closedByUserId: cashRegisterSessionsTable.closedByUserId,
+      openedByUserId: cashRegisterSessionsTable.openedByUserId,
+      expectedCash: cashRegisterSessionsTable.expectedCash,
+      actualCash: cashRegisterSessionsTable.actualCash,
+      overShort: cashRegisterSessionsTable.overShort,
+      varianceReason: cashRegisterSessionsTable.varianceReason,
+      isBlindClose: cashRegisterSessionsTable.isBlindClose,
+    }).from(cashRegisterSessionsTable)
+      .where(and(...conditions))
+      .orderBy(desc(cashRegisterSessionsTable.closedAt));
+
+    const userIds = [...new Set(sessions.flatMap(s => [s.closedByUserId, s.openedByUserId]).filter((x): x is number => x !== null))];
+    const users = userIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, userIds))
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u.name]));
+
+    const sessionRows = sessions.map(s => ({
+      ...s,
+      closedByName: s.closedByUserId ? userMap.get(s.closedByUserId) ?? null : null,
+      openedByName: s.openedByUserId ? userMap.get(s.openedByUserId) ?? null : null,
+    }));
+
+    // Group by cashier (the user who closed the session — they are accountable
+    // for the count). Fallback to the opener when no closer was recorded.
+    const byCashier = new Map<number, {
+      userId: number;
+      name: string | null;
+      sessionCount: number;
+      totalVariance: number;
+      totalAbsVariance: number;
+      overCount: number;
+      shortCount: number;
+      balancedCount: number;
+      lastSessionAt: string | null;
+    }>();
+
+    for (const s of sessionRows) {
+      const uid = s.closedByUserId ?? s.openedByUserId;
+      if (!uid) continue;
+      const variance = s.overShort !== null ? Number(s.overShort) : 0;
+      const entry = byCashier.get(uid) ?? {
+        userId: uid,
+        name: userMap.get(uid) ?? null,
+        sessionCount: 0,
+        totalVariance: 0,
+        totalAbsVariance: 0,
+        overCount: 0,
+        shortCount: 0,
+        balancedCount: 0,
+        lastSessionAt: null,
+      };
+      entry.sessionCount += 1;
+      entry.totalVariance += variance;
+      entry.totalAbsVariance += Math.abs(variance);
+      if (Math.abs(variance) < 0.01) entry.balancedCount += 1;
+      else if (variance > 0) entry.overCount += 1;
+      else entry.shortCount += 1;
+      const closedIso = s.closedAt ? new Date(s.closedAt).toISOString() : null;
+      if (closedIso && (!entry.lastSessionAt || closedIso > entry.lastSessionAt)) {
+        entry.lastSessionAt = closedIso;
+      }
+      byCashier.set(uid, entry);
+    }
+
+    res.json({
+      sessions: sessionRows,
+      cashiers: Array.from(byCashier.values()).sort((a, b) => b.totalAbsVariance - a.totalAbsVariance),
+    });
+  },
+);
 
 router.get("/restaurants/:restaurantId/cash-register/sessions/:id/x-report",
   requireRole(...MANAGER_ROLES),

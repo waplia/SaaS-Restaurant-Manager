@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
-  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
+  Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
@@ -52,6 +52,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/reports/tax", label: "Tax", icon: Percent },
       { kind: "link", href: "/reports/staff", label: "Staff", icon: Users },
       { kind: "link", href: "/reports/payments", label: "Payments", icon: Wallet },
+      { kind: "link", href: "/reports/cash-variance", label: "Cash Variance", icon: AlertTriangle, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/food-cost", label: "Food Cost", icon: Flame, roles: ["owner", "manager", "super_admin"] },
     ],
   },

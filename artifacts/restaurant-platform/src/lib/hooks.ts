@@ -1313,6 +1313,16 @@ export function useRecordCashMovement() {
   });
 }
 
+export function useCashVarianceHistory(params?: { from?: string; to?: string }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["cash-register", "variance-history", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").CashVarianceHistory>(`/restaurants/${RESTAURANT_ID}/cash-register/variance-history?${q}`),
+  });
+}
+
 export function useCashRegisterReport(sessionId: number | null, kind: "x" | "z") {
   return useQuery({
     queryKey: ["cash-register", "report", RESTAURANT_ID, sessionId, kind],

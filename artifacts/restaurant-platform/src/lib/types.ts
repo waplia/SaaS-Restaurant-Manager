@@ -1122,9 +1122,42 @@ export interface CashRegisterSession {
   status: "open" | "closed";
   notes: string | null;
   closeNotes: string | null;
+  varianceReason: string | null;
   createdAt: string;
   openedByName?: string | null;
   closedByName?: string | null;
+}
+
+export interface CashVarianceSession {
+  id: number;
+  openedAt: string;
+  closedAt: string | null;
+  closedByUserId: number | null;
+  openedByUserId: number;
+  expectedCash: string | null;
+  actualCash: string | null;
+  overShort: string | null;
+  varianceReason: string | null;
+  isBlindClose: boolean;
+  closedByName: string | null;
+  openedByName: string | null;
+}
+
+export interface CashVarianceCashier {
+  userId: number;
+  name: string | null;
+  sessionCount: number;
+  totalVariance: number;
+  totalAbsVariance: number;
+  overCount: number;
+  shortCount: number;
+  balancedCount: number;
+  lastSessionAt: string | null;
+}
+
+export interface CashVarianceHistory {
+  sessions: CashVarianceSession[];
+  cashiers: CashVarianceCashier[];
 }
 
 export interface CashMovement {
@@ -1205,8 +1238,10 @@ export interface OpenRegisterInput {
 
 export interface CloseRegisterInput {
   denominations: { denomination: number; count: number }[];
+  countedAmount?: number;
   isBlindClose?: boolean;
   closeNotes?: string;
+  varianceReason?: string;
 }
 
 export interface CashMovementInput {

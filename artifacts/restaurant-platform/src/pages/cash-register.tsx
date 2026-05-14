@@ -14,6 +14,7 @@ import {
   useCurrentCashRegister, useCashRegisterSessions, useCashRegisterSession,
   useOpenCashRegister, useCloseCashRegister, useRecordCashMovement, useCashRegisterReport,
 } from "@/lib/hooks";
+import { Download } from "lucide-react";
 import { INR_DENOMINATIONS } from "@/lib/types";
 import type { CashMovement, CashRegisterReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,47 @@ const movementColors: Record<CashMovement["type"], string> = {
   drop: "text-purple-600 dark:text-purple-400",
   payout: "text-orange-600 dark:text-orange-400",
 };
+
+function downloadReportCSV(report: CashRegisterReport): void {
+  const s = report.session;
+  const t = report.totals;
+  const rows: string[][] = [];
+  rows.push(["Field", "Value"]);
+  rows.push([`${report.kind}-Report Session`, `#${s.id}`]);
+  rows.push(["Opened at", new Date(s.openedAt).toISOString()]);
+  rows.push(["Closed at", s.closedAt ? new Date(s.closedAt).toISOString() : ""]);
+  rows.push(["Opened by", s.openedByName ?? ""]);
+  rows.push(["Closed by", s.closedByName ?? ""]);
+  rows.push(["Opening float", String(t.openingFloat.toFixed(2))]);
+  rows.push(["Cash sales", String(t.cashSales.toFixed(2))]);
+  rows.push(["Other paid-in", String(t.cashIn.toFixed(2))]);
+  rows.push(["Refunds", String(t.refunds.toFixed(2))]);
+  rows.push(["Cash out", String(t.cashOut.toFixed(2))]);
+  rows.push(["Drops", String(t.drops.toFixed(2))]);
+  rows.push(["Payouts", String(t.payouts.toFixed(2))]);
+  rows.push(["Total cash in", String(t.totalCashIn.toFixed(2))]);
+  rows.push(["Total cash out", String(t.totalCashOut.toFixed(2))]);
+  rows.push(["Expected cash", String(t.expectedCash.toFixed(2))]);
+  if (t.actualCash !== undefined) rows.push(["Counted cash", String(t.actualCash.toFixed(2))]);
+  if (t.overShort !== undefined) rows.push(["Over/Short", String(t.overShort.toFixed(2))]);
+  if (s.varianceReason) rows.push(["Variance reason", s.varianceReason]);
+  if (s.closeNotes) rows.push(["Close notes", s.closeNotes]);
+  rows.push(["Order count", String(report.orderCount)]);
+  rows.push(["Gross revenue", String(report.grossRevenue)]);
+  rows.push([]);
+  rows.push(["Tender", "Count", "In", "Out"]);
+  for (const [method, v] of Object.entries(report.tenderSummary)) {
+    rows.push([method, String(v.count), v.in.toFixed(2), v.out.toFixed(2)]);
+  }
+  const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${report.kind.toLowerCase()}-report-session-${s.id}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function fmt(n: number | string): string {
   const v = Number(n);
@@ -157,19 +199,43 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
 }) {
   const { toast } = useToast();
   const closeMut = useCloseCashRegister();
+  const [useBreakdown, setUseBreakdown] = useState(true);
   const [counts, setCounts] = useState<Record<number, number>>({});
+  const [quickAmount, setQuickAmount] = useState("");
   const [isBlind, setIsBlind] = useState(false);
   const [closeNotes, setCloseNotes] = useState("");
+  const [varianceReason, setVarianceReason] = useState("");
 
-  const total = INR_DENOMINATIONS.reduce((s, d) => s + d * (counts[d] ?? 0), 0);
+  const breakdownTotal = INR_DENOMINATIONS.reduce((s, d) => s + d * (counts[d] ?? 0), 0);
+  const total = useBreakdown ? breakdownTotal : Number(quickAmount) || 0;
   const overShort = total - expectedCash;
+  const hasVisibleVariance = !isBlind && Math.abs(overShort) >= 0.01;
+  // Blind closes always need a reason note since the cashier can't see the
+  // variance — server enforces it for any non-zero variance regardless of mode.
+  const reasonRequired = hasVisibleVariance || isBlind;
+  const reasonMissing = reasonRequired && !varianceReason.trim();
 
   const handleSubmit = async () => {
-    const denoms = INR_DENOMINATIONS
-      .map(d => ({ denomination: d, count: counts[d] ?? 0 }))
-      .filter(d => d.count > 0);
+    if (hasVisibleVariance && !varianceReason.trim()) {
+      toast({ title: "Reason required", description: "Please explain why the drawer is over/short before closing.", variant: "destructive" });
+      return;
+    }
+    if (isBlind && !varianceReason.trim()) {
+      toast({ title: "Reason required", description: "Blind closes need a note up-front, since variance is hidden until after submission.", variant: "destructive" });
+      return;
+    }
+    const denoms = useBreakdown
+      ? INR_DENOMINATIONS.map(d => ({ denomination: d, count: counts[d] ?? 0 })).filter(d => d.count > 0)
+      : [];
     try {
-      const res = await closeMut.mutateAsync({ sessionId, denominations: denoms, isBlindClose: isBlind, closeNotes: closeNotes || undefined }) as { totals: { overShort: number } };
+      const res = await closeMut.mutateAsync({
+        sessionId,
+        denominations: denoms,
+        countedAmount: useBreakdown ? undefined : total,
+        isBlindClose: isBlind,
+        closeNotes: closeNotes || undefined,
+        varianceReason: varianceReason.trim() || undefined,
+      }) as { totals: { overShort: number } };
       const os = Number(res.totals?.overShort ?? 0);
       toast({
         title: "Cash register closed",
@@ -207,10 +273,39 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
               <span className="text-xs text-muted-foreground block">Hides expected cash and over/short until after submission, to prevent staff tampering.</span>
             </label>
           </div>
-          <div>
+          <div className="flex items-center justify-between">
             <Label className="text-sm">Closing count — count cash actually in the drawer</Label>
+            <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setUseBreakdown(true)}
+                className={cn("px-2.5 py-1 text-xs font-medium rounded-md transition-all", useBreakdown ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
+              >By denomination</button>
+              <button
+                type="button"
+                onClick={() => setUseBreakdown(false)}
+                className={cn("px-2.5 py-1 text-xs font-medium rounded-md transition-all", !useBreakdown ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
+              >Quick total</button>
+            </div>
           </div>
-          <DenomGrid counts={counts} onChange={(d, v) => setCounts(c => ({ ...c, [d]: v }))} />
+          {useBreakdown ? (
+            <DenomGrid counts={counts} onChange={(d, v) => setCounts(c => ({ ...c, [d]: v }))} />
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-amount" className="text-xs text-muted-foreground">Total counted cash (₹)</Label>
+              <Input
+                id="quick-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={quickAmount}
+                onChange={e => setQuickAmount(e.target.value)}
+                placeholder="0.00"
+                className="text-lg font-semibold"
+              />
+              <p className="text-xs text-muted-foreground">Enter the total without the denomination breakdown.</p>
+            </div>
+          )}
           {!isBlind && (
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="p-3 bg-secondary/40 rounded-lg">
@@ -233,9 +328,28 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
               </div>
             </div>
           )}
+          {reasonRequired && (
+            <div className="space-y-1.5">
+              <Label htmlFor="variance-reason" className="text-sm flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                <AlertTriangle className="w-3.5 h-3.5" /> Variance reason <span className="text-rose-600">*</span>
+              </Label>
+              <Input
+                id="variance-reason"
+                value={varianceReason}
+                onChange={e => setVarianceReason(e.target.value)}
+                placeholder={isBlind ? "Required for blind close — variance is hidden until after submission" : overShort > 0 ? "e.g. extra change left over from earlier shift" : "e.g. miscounted change, missed receipt, til skim"}
+                className={cn(reasonMissing && "border-rose-500 focus-visible:ring-rose-500")}
+              />
+              <p className="text-xs text-muted-foreground">
+                {isBlind
+                  ? "A note is required up-front for blind closes since the variance is hidden until after submission."
+                  : "A reason is required because counted cash doesn't match expected."}
+              </p>
+            </div>
+          )}
           <div>
             <Label className="text-sm">Close notes (optional)</Label>
-            <Input value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Explain any discrepancy" />
+            <Input value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Additional context for management" />
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
@@ -330,7 +444,17 @@ function ReportView({ report }: { report: CashRegisterReport }) {
   const totals = report.totals;
   const overShort = totals.overShort ?? 0;
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print-report">
+      <div className="hidden print:block mb-4 pb-3 border-b border-border">
+        <h1 className="text-xl font-bold text-foreground">{report.kind === "Z" ? "Z-Report (End of Day)" : "X-Report (Mid-shift)"} — Session #{report.session.id}</h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          {format(new Date(report.periodFrom), "MMM d, yyyy HH:mm")}
+          {" → "}
+          {format(new Date(report.periodTo), "HH:mm")}
+          {report.session.openedByName && ` · Opened by ${report.session.openedByName}`}
+          {report.session.closedByName && ` · Closed by ${report.session.closedByName}`}
+        </p>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="p-3 bg-card border border-border rounded-lg">
           <div className="text-xs text-muted-foreground">Opening Float</div>
@@ -351,29 +475,43 @@ function ReportView({ report }: { report: CashRegisterReport }) {
       </div>
 
       {report.kind === "Z" && totals.actualCash !== undefined && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="p-3 bg-card border border-border rounded-lg">
-            <div className="text-xs text-muted-foreground">Counted Cash</div>
-            <div className="text-lg font-bold text-foreground">{fmt(totals.actualCash)}</div>
-          </div>
-          <div className={cn(
-            "p-3 border rounded-lg col-span-2",
-            Math.abs(overShort) < 0.01 ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" :
-            overShort > 0 ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800" :
-            "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800"
-          )}>
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-              {Math.abs(overShort) < 0.01 ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-              {Math.abs(overShort) < 0.01 ? "Drawer balanced" : overShort > 0 ? "Over (more in drawer than expected)" : "Short (less in drawer than expected)"}
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 bg-card border border-border rounded-lg">
+              <div className="text-xs text-muted-foreground">Counted Cash</div>
+              <div className="text-lg font-bold text-foreground">{fmt(totals.actualCash)}</div>
             </div>
             <div className={cn(
-              "text-lg font-bold",
-              Math.abs(overShort) < 0.01 ? "text-green-700 dark:text-green-400" :
-              overShort > 0 ? "text-blue-700 dark:text-blue-400" :
-              "text-rose-700 dark:text-rose-400"
-            )}>{overShort >= 0 ? "+" : "-"}{fmt(Math.abs(overShort))}</div>
+              "p-3 border rounded-lg col-span-2",
+              Math.abs(overShort) < 0.01 ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" :
+              overShort > 0 ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800" :
+              "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800"
+            )}>
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                {Math.abs(overShort) < 0.01 ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                {Math.abs(overShort) < 0.01 ? "Drawer balanced" : overShort > 0 ? "Over (more in drawer than expected)" : "Short (less in drawer than expected)"}
+              </div>
+              <div className={cn(
+                "text-lg font-bold",
+                Math.abs(overShort) < 0.01 ? "text-green-700 dark:text-green-400" :
+                overShort > 0 ? "text-blue-700 dark:text-blue-400" :
+                "text-rose-700 dark:text-rose-400"
+              )}>{overShort >= 0 ? "+" : "-"}{fmt(Math.abs(overShort))}</div>
+            </div>
           </div>
-        </div>
+          {report.session.varianceReason && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+              <div className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-0.5">Variance reason</div>
+              <div className="text-foreground">{report.session.varianceReason}</div>
+            </div>
+          )}
+          {report.session.closeNotes && (
+            <div className="p-3 bg-secondary/40 border border-border rounded-lg text-sm">
+              <div className="text-xs font-medium text-muted-foreground mb-0.5">Close notes</div>
+              <div className="text-foreground">{report.session.closeNotes}</div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="bg-card border border-border rounded-lg p-4">
@@ -526,7 +664,12 @@ export default function CashRegisterPage() {
                   )}
                 </div>
                 {report ? <ReportView report={report} /> : <p className="text-sm text-muted-foreground">Loading report…</p>}
-                <div className="mt-4 pt-4 border-t border-border flex justify-end">
+                <div className="mt-4 pt-4 border-t border-border flex justify-end gap-2 print:hidden">
+                  {report && (
+                    <Button size="sm" variant="outline" onClick={() => downloadReportCSV(report)}>
+                      <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" onClick={() => window.print()}>
                     <Printer className="w-3.5 h-3.5 mr-1.5" /> Print
                   </Button>
