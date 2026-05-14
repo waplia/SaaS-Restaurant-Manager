@@ -409,9 +409,13 @@ router.post("/public/loyalty/lookup", async (req, res) => {
   if (!loyaltyLookupAllowed(ip)) {
     return void res.status(429).json({ error: "Too many lookups. Please try again in a minute." });
   }
-  const { slug, phone } = req.body as { slug?: string; phone?: string };
-  if (!slug || !phone || phone.trim().length < 6) {
-    return void res.status(400).json({ error: "slug and phone (6+ digits) required" });
+  const { slug, phone, email } = req.body as { slug?: string; phone?: string; email?: string };
+  const phoneTrim = phone?.trim() ?? "";
+  const emailTrim = email?.trim().toLowerCase() ?? "";
+  const hasPhone = phoneTrim.length >= 6;
+  const hasEmail = emailTrim.length >= 5 && emailTrim.includes("@");
+  if (!slug || (!hasPhone && !hasEmail)) {
+    return void res.status(400).json({ error: "slug and either phone (6+ digits) or email required" });
   }
   const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, currency: restaurantsTable.currency })
     .from(restaurantsTable).where(eq(restaurantsTable.slug, slug));
@@ -420,8 +424,11 @@ router.post("/public/loyalty/lookup", async (req, res) => {
   const cfg = await loadLoyaltyConfig(restaurant.id);
   if (!cfg.enabled) return void res.status(404).json({ error: "Loyalty program not active" });
 
+  const identityFilter = hasPhone
+    ? eq(customersTable.phone, phoneTrim)
+    : eq(customersTable.email, emailTrim);
   const [customer] = await db.select().from(customersTable)
-    .where(and(eq(customersTable.restaurantId, restaurant.id), eq(customersTable.phone, phone.trim())));
+    .where(and(eq(customersTable.restaurantId, restaurant.id), identityFilter));
   if (!customer) {
     return void res.json({
       found: false,

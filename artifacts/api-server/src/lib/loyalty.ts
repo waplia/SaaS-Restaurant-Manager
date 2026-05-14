@@ -1,4 +1,4 @@
-import { eq, and, sql, lt, isNull, isNotNull, desc, asc, inArray, ne } from "drizzle-orm";
+import { eq, and, sql, lt, isNull, isNotNull, desc, asc, inArray } from "drizzle-orm";
 import { db, restaurantSettingsTable, customersTable, loyaltyTransactionsTable } from "./db";
 import { logger } from "./logger";
 
@@ -207,10 +207,6 @@ export async function expireDueLoyaltyPoints(): Promise<number> {
     await db.execute(sql`SELECT pg_advisory_unlock(4242, 1)`);
   }
 }
-
-// Suppress unused-import warning — `ne` reserved for potential future filtering.
-void ne;
-
 /** Recent transactions for a customer, capped. */
 export async function getRecentLoyaltyHistory(customerId: number, restaurantId: number, limit = 10) {
   return db.select().from(loyaltyTransactionsTable).where(and(

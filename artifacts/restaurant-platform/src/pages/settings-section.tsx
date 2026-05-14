@@ -1529,7 +1529,7 @@ function LoyaltySection() {
       { id: "silver", name: "Silver", threshold: 1000, multiplier: 1.25 },
       { id: "gold", name: "Gold", threshold: 5000, multiplier: 1.5 },
     ],
-    expiryMonths: 12,
+    expiryMonths: 0,
   };
   return (
     <SettingForm section="loyalty" defaults={defaults}>

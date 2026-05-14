@@ -211,7 +211,9 @@ export default function CustomerMenuPage() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const [rewardsOpen, setRewardsOpen] = useState(false);
+  const [rewardsMode, setRewardsMode] = useState<"phone" | "email">("phone");
   const [rewardsPhone, setRewardsPhone] = useState("");
+  const [rewardsEmail, setRewardsEmail] = useState("");
   const [rewardsLoading, setRewardsLoading] = useState(false);
   const [rewardsError, setRewardsError] = useState<string | null>(null);
   const [rewardsData, setRewardsData] = useState<RewardsLookup | null>(null);
@@ -436,14 +438,22 @@ export default function CustomerMenuPage() {
 
   async function fetchRewards() {
     if (!slug) return;
-    const phone = rewardsPhone.trim();
-    if (phone.length < 6) { setRewardsError("Please enter a valid phone number."); return; }
+    const payload: { slug: string; phone?: string; email?: string } = { slug };
+    if (rewardsMode === "phone") {
+      const phone = rewardsPhone.trim();
+      if (phone.length < 6) { setRewardsError("Please enter a valid phone number."); return; }
+      payload.phone = phone;
+    } else {
+      const email = rewardsEmail.trim();
+      if (email.length < 5 || !email.includes("@")) { setRewardsError("Please enter a valid email address."); return; }
+      payload.email = email;
+    }
     setRewardsLoading(true);
     setRewardsError(null);
     try {
       const res = await fetch(`${API_BASE}/public/loyalty/lookup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, phone }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1101,19 +1111,35 @@ export default function CustomerMenuPage() {
             </div>
             <div className="px-5 pb-5 space-y-4 overflow-y-auto">
               <div>
-                <label className="text-xs font-semibold text-gray-700 mb-1 block">Phone number</label>
+                <div className="flex gap-1 mb-2 bg-gray-100 rounded-lg p-1">
+                  <button onClick={() => { setRewardsMode("phone"); setRewardsError(null); }} className={cn("flex-1 text-xs font-semibold py-1.5 rounded-md transition", rewardsMode === "phone" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500")}>Phone</button>
+                  <button onClick={() => { setRewardsMode("email"); setRewardsError(null); }} className={cn("flex-1 text-xs font-semibold py-1.5 rounded-md transition", rewardsMode === "email" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500")}>Email</button>
+                </div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">{rewardsMode === "phone" ? "Phone number" : "Email address"}</label>
                 <div className="flex gap-2">
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    value={rewardsPhone}
-                    onChange={e => setRewardsPhone(e.target.value)}
-                    placeholder="Enter the phone you used to order"
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                  />
+                  {rewardsMode === "phone" ? (
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={rewardsPhone}
+                      onChange={e => setRewardsPhone(e.target.value)}
+                      placeholder="Enter the phone you used to order"
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  ) : (
+                    <input
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={rewardsEmail}
+                      onChange={e => setRewardsEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  )}
                   <button
                     onClick={fetchRewards}
-                    disabled={rewardsLoading || rewardsPhone.trim().length < 6}
+                    disabled={rewardsLoading || (rewardsMode === "phone" ? rewardsPhone.trim().length < 6 : (rewardsEmail.trim().length < 5 || !rewardsEmail.includes("@")))}
                     className="px-4 bg-orange-500 text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-orange-600 transition flex items-center gap-1"
                   >
                     {rewardsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check"}
