@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -105,6 +105,10 @@ function ProfileTab({ member }: { member: StaffMember }) {
   const update = useUpdateStaffProfile();
   const { toast } = useToast();
   const [form, setForm] = useState({
+    name: member.name ?? "",
+    email: member.email ?? "",
+    phone: member.phone ?? "",
+    role: member.role ?? "waiter",
     employeeCode: member.employeeCode ?? "",
     jobTitle: member.jobTitle ?? "",
     department: member.department ?? "",
@@ -124,24 +128,62 @@ function ProfileTab({ member }: { member: StaffMember }) {
   });
 
   const save = async () => {
+    if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    if (!form.email.trim()) { toast({ title: "Email is required", variant: "destructive" }); return; }
     try {
       await update.mutateAsync({
         userId: member.id,
-        ...form,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        role: form.role,
+        employeeCode: form.employeeCode || null,
+        jobTitle: form.jobTitle || null,
+        department: form.department || null,
+        salaryType: form.salaryType,
         salary: form.salary === "" ? null : form.salary,
         hiredAt: form.hiredAt || null,
         dateOfBirth: form.dateOfBirth || null,
+        gender: form.gender || null,
+        address: form.address || null,
+        city: form.city || null,
+        state: form.state || null,
+        pincode: form.pincode || null,
+        emergencyContactName: form.emergencyContactName || null,
+        emergencyContact: form.emergencyContact || null,
+        emergencyContactRelation: form.emergencyContactRelation || null,
+        notes: form.notes || null,
       });
       toast({ title: "Profile saved" });
-    } catch {
-      toast({ title: "Save failed", variant: "destructive" });
+    } catch (e) {
+      const msg = (e as { message?: string })?.message ?? "Save failed";
+      toast({ title: msg, variant: "destructive" });
     }
   };
 
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Role & Employment</h4>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Account</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Full Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+          <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
+          <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+          <div>
+            <Label>Role</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
+              <option value="owner">Owner</option>
+              <option value="manager">Manager</option>
+              <option value="waiter">Waiter</option>
+              <option value="kitchen">Kitchen</option>
+              <option value="cashier">Cashier</option>
+              <option value="delivery_executive">Delivery Executive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Employment</h4>
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Employee Code</Label><Input value={form.employeeCode} onChange={e => setForm(p => ({ ...p, employeeCode: e.target.value }))} placeholder="EMP-001" /></div>
           <div><Label>Job Title</Label><Input value={form.jobTitle} onChange={e => setForm(p => ({ ...p, jobTitle: e.target.value }))} placeholder="Senior Waiter" /></div>
@@ -238,12 +280,26 @@ function DocumentsTab({ member }: { member: StaffMember }) {
     }
   };
 
-  const docUrl = (fileUrl: string) => {
-    if (fileUrl.startsWith("/objects/")) {
+  const handleDownload = async (doc: StaffDocument) => {
+    try {
+      const token = localStorage.getItem("tt_access_token");
       const base = (import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "");
-      return `${base}/api/restaurants/${RESTAURANT_ID}/storage${fileUrl}`;
+      const url = `${base}/api/restaurants/${RESTAURANT_ID}/staff/${member.id}/documents/${doc.id}/download`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = doc.label;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+    } catch (e) {
+      const msg = (e as { message?: string })?.message ?? "Download failed";
+      toast({ title: msg, variant: "destructive" });
     }
-    return fileUrl;
   };
 
   const handleDelete = async (doc: StaffDocument) => {
@@ -303,9 +359,9 @@ function DocumentsTab({ member }: { member: StaffMember }) {
               </p>
             </div>
             <div className="flex items-center gap-1">
-              <a href={docUrl(doc.fileUrl)} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground" title="Download">
+              <button onClick={() => handleDownload(doc)} className="p-1.5 text-muted-foreground hover:text-foreground" title="Download">
                 <Download className="w-4 h-4" />
-              </a>
+              </button>
               <button onClick={() => handleDelete(doc)} className="p-1.5 text-muted-foreground hover:text-destructive" title="Delete">
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -330,10 +386,9 @@ function BankTab({ member }: { member: StaffMember }) {
     bankName: "",
     upiId: "",
   });
-  const [loaded, setLoaded] = useState(false);
 
-  if (bank && !loaded) {
-    setLoaded(true);
+  useEffect(() => {
+    if (!bank) return;
     setForm({
       accountName: bank.accountName ?? "",
       accountNumber: reveal ? (bank.accountNumber ?? "") : "",
@@ -341,7 +396,7 @@ function BankTab({ member }: { member: StaffMember }) {
       bankName: bank.bankName ?? "",
       upiId: bank.upiId ?? "",
     });
-  }
+  }, [bank, reveal]);
 
   const handleSave = async () => {
     try {
@@ -367,7 +422,7 @@ function BankTab({ member }: { member: StaffMember }) {
     <div className="space-y-4">
       <div className="bg-muted/20 border border-border rounded-xl p-3 flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Account numbers are masked by default. Reveal to view or edit the full number.</p>
-        <Button size="sm" variant="outline" onClick={() => { setReveal(r => !r); setLoaded(false); }}>
+        <Button size="sm" variant="outline" onClick={() => setReveal(r => !r)}>
           {reveal ? <><EyeOff className="w-3.5 h-3.5 mr-1.5" /> Hide</> : <><Eye className="w-3.5 h-3.5 mr-1.5" /> Reveal</>}
         </Button>
       </div>

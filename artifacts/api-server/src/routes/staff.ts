@@ -159,6 +159,8 @@ function buildStaffPatch(body: Record<string, unknown>): StaffPatch {
   return out;
 }
 
+const ALLOWED_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"];
+
 router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const userId = Number(req.params.userId);
@@ -168,7 +170,30 @@ router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "m
     return void res.status(404).json({ error: "Not found" });
   }
 
-  const patch = buildStaffPatch(req.body ?? {});
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // User-table fields (name/email/phone/role). Validate role against allow-list.
+  const userPatch: Record<string, string> = {};
+  if (typeof body.name === "string" && body.name.trim()) userPatch.name = body.name.trim();
+  if (typeof body.email === "string" && body.email.trim()) userPatch.email = body.email.trim().toLowerCase();
+  if ("phone" in body) userPatch.phone = body.phone == null || body.phone === "" ? null as unknown as string : String(body.phone).trim();
+  if (typeof body.role === "string" && body.role) {
+    if (!ALLOWED_ROLES.includes(body.role)) return void res.status(400).json({ error: "Invalid role" });
+    // Prevent privilege escalation by non-super admins promoting to owner.
+    if (body.role === "owner" && !req.user?.isSuperAdmin) return void res.status(403).json({ error: "Cannot assign owner role" });
+    userPatch.role = body.role;
+  }
+
+  if (userPatch.email && userPatch.email !== user.email) {
+    const [dup] = await db.select().from(usersTable).where(eq(usersTable.email, userPatch.email));
+    if (dup && dup.id !== userId) return void res.status(409).json({ error: "Email already in use" });
+  }
+
+  if (Object.keys(userPatch).length > 0) {
+    await db.update(usersTable).set({ ...userPatch, updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  }
+
+  const patch = buildStaffPatch(body);
   const [existing] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
   if (existing) {
     if (Object.keys(patch).length > 0) {
@@ -178,7 +203,7 @@ router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "m
     await db.insert(staffTable).values({ userId, restaurantId, ...patch });
   }
 
-  await audit(restaurantId, req.user?.sub ?? null, "update", "staff", userId, patch, req.ip);
+  await audit(restaurantId, req.user?.sub ?? null, "update", "staff", userId, { user: userPatch, staff: patch }, req.ip);
 
   const rows = await loadStaffWithUser(restaurantId);
   const row = rows.find((r) => r.userId === userId);
@@ -233,6 +258,37 @@ router.post("/restaurants/:restaurantId/staff/:userId/documents", requireRole("o
 
   await audit(restaurantId, req.user?.sub ?? null, "create", "staff_document", doc.id, { staffId: staff.id, label }, req.ip);
   res.status(201).json(doc);
+});
+
+// Privileged role-gated download endpoint for HR documents. Streams the
+// object only if the doc row + ACL both belong to this restaurant. This is
+// stricter than the generic /storage/objects/* read which is restaurant-
+// scoped but not role-scoped.
+router.get("/restaurants/:restaurantId/staff/:userId/documents/:docId/download", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const docId = Number(req.params.docId);
+  const [staff] = await db.select().from(staffTable).where(and(eq(staffTable.userId, userId), eq(staffTable.restaurantId, restaurantId)));
+  if (!staff) return void res.status(404).json({ error: "Not found" });
+  const [doc] = await db.select().from(staffDocumentsTable).where(and(eq(staffDocumentsTable.id, docId), eq(staffDocumentsTable.restaurantId, restaurantId), eq(staffDocumentsTable.staffId, staff.id)));
+  if (!doc) return void res.status(404).json({ error: "Not found" });
+  try {
+    const objectFile = await objectStorageService.getObjectEntityFile(doc.fileUrl);
+    const acl = await getObjectAclPolicy(objectFile);
+    if (!acl || acl.restaurantId !== String(restaurantId)) return void res.status(403).json({ error: "Forbidden" });
+    const response = await objectStorageService.downloadObject(objectFile);
+    res.status(response.status);
+    response.headers.forEach((v, k) => res.setHeader(k, v));
+    if (response.body) {
+      const { Readable } = await import("node:stream");
+      const nodeStream = Readable.fromWeb(response.body as never);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch {
+    res.status(404).json({ error: "Object not found" });
+  }
 });
 
 router.delete("/restaurants/:restaurantId/staff/:userId/documents/:docId", requireRole("owner", "manager", "super_admin"), async (req, res) => {

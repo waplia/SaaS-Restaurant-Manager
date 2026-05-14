@@ -675,6 +675,10 @@ export interface StaffMember {
 }
 
 export interface StaffProfilePatch {
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  role?: string;
   employeeCode?: string | null;
   jobTitle?: string | null;
   department?: string | null;
