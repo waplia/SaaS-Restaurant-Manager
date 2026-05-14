@@ -29,6 +29,7 @@ import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
 import DuePaymentsPage from "@/pages/due-payments";
+import CashRegisterPage from "@/pages/cash-register";
 import DeliveryExecutivesPage from "@/pages/delivery-executives";
 import CodMonitoringPage from "@/pages/cod-monitoring";
 
@@ -100,6 +101,7 @@ function Router() {
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />
+      <Route path="/cash-register" component={() => <RoleProtectedRoute component={CashRegisterPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />

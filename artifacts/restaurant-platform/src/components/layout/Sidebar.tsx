@@ -36,6 +36,7 @@ const navConfig: NavEntry[] = [
   {
     kind: "group", key: "finance", label: "Finance", icon: Coins,
     children: [
+      { kind: "link", href: "/cash-register", label: "Cash Register", icon: Banknote, roles: ["owner", "manager", "waiter"] },
       { kind: "link", href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },

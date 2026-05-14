@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { eq, and, desc, count } from "drizzle-orm";
+import { eq, and, desc, count, ne, notInArray } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
+import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
@@ -562,6 +563,24 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
     return void res.status(400).json({ error: "Split requires at least 2 payment legs" });
   }
 
+  // Per-leg amount sanity: must be finite and strictly positive. Prevents
+  // negative/zero cash legs from creating bogus drawer movements even when
+  // other legs balance the order total.
+  for (const s of splits) {
+    const amt = Number(s.amount);
+    if (!isFinite(amt) || amt <= 0) {
+      return void res.status(400).json({ error: "Each split leg amount must be a positive number" });
+    }
+  }
+
+  // If any leg pays in cash, an open cash register session is required.
+  // Pre-flight check; the authoritative lock is acquired inside the transaction.
+  const hasCashLeg = splits.some(s => s.paymentMethod === "cash");
+  if (hasCashLeg) {
+    const reg = await requireOpenCashRegister(restaurantId);
+    if (!reg.ok) return void res.status(409).json({ error: reg.error, code: "REGISTER_CLOSED" });
+  }
+
   // Validate cumulative amount covers the order total
   const cumulativeAmount = splits.reduce((sum, s) => sum + Number(s.amount), 0);
   const orderTotal = Number(order.totalAmount);
@@ -726,13 +745,27 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   let updated: typeof ordersTable.$inferSelect | undefined;
   try {
     updated = await db.transaction(async tx => {
+      // Lock the open cash register session if any leg is cash.
+      let cashSessionId: number | null = null;
+      if (hasCashLeg) {
+        cashSessionId = await lockOpenCashRegister(tx, restaurantId);
+        if (!cashSessionId) throw new Error("REGISTER_CLOSED");
+      }
+
+      // Conditional update: only succeeds if the order is still payable.
+      // Two concurrent split/pay requests cannot both insert ledger rows.
       const [u] = await tx.update(ordersTable).set({
         paymentMethod: `split:${splitMethods}`,
         paymentStatus: "paid",
         status: "completed",
         updatedAt: new Date(),
-      }).where(eq(ordersTable.id, orderId)).returning();
-      if (!u) throw new Error("ORDER_NOT_FOUND");
+      }).where(and(
+        eq(ordersTable.id, orderId),
+        eq(ordersTable.restaurantId, restaurantId),
+        notInArray(ordersTable.status, ["completed", "cancelled"]),
+        ne(ordersTable.paymentStatus, "paid"),
+      )).returning();
+      if (!u) throw new Error("ORDER_ALREADY_PAID");
       if (order.tableId) {
         await tx.update(floorTablesTable).set({ status: "free" })
           .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -759,10 +792,29 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
           recordedBy: req.user?.sub ?? null,
         })),
       );
+
+      // Record one cash drawer movement per cash leg, in the same transaction
+      // so the order, ledger, and drawer commit/rollback atomically.
+      if (cashSessionId) {
+        for (const s of splits) {
+          if (s.paymentMethod !== "cash") continue;
+          await recordCashSaleMovement(tx, {
+            restaurantId,
+            sessionId: cashSessionId,
+            amount: Number(s.amount),
+            orderId: order.id,
+            userId: req.user?.sub ?? null,
+          });
+        }
+      }
       return u;
     });
   } catch (err) {
-    if ((err as Error).message === "ORDER_NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    const msg = (err as Error).message;
+    if (msg === "ORDER_ALREADY_PAID") return void res.status(409).json({ error: "Order is already paid or no longer payable", code: "ORDER_ALREADY_PAID" });
+    if (msg === "REGISTER_CLOSED") {
+      return void res.status(409).json({ error: "Cash register was closed before split payment could be recorded. Open a register and try again.", code: "REGISTER_CLOSED" });
+    }
     console.error("[Split] Transaction failed:", err);
     return void res.status(500).json({ error: "Failed to complete split payment" });
   }
@@ -903,6 +955,13 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
     return void res.status(400).json({ error: "Order is already completed or cancelled" });
   }
 
+  // Cash payments require an open cash register session — pre-flight check.
+  // The authoritative lock happens inside the payment transaction below.
+  if (paymentMethod === "cash") {
+    const reg = await requireOpenCashRegister(restaurantId);
+    if (!reg.ok) return void res.status(409).json({ error: reg.error, code: "REGISTER_CLOSED" });
+  }
+
   // Card payment verification
   if (paymentMethod === "card") {
     if (!stripePaymentIntentId) {
@@ -1012,14 +1071,30 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   let updated: typeof ordersTable.$inferSelect | undefined;
   try {
     updated = await db.transaction(async tx => {
+      // For cash payments: lock the open session FOR UPDATE and verify it's
+      // still open. This prevents a race where the register is closed between
+      // pre-flight and now, which would leave a paid cash sale without a drawer
+      // entry.
+      let cashSessionId: number | null = null;
+      if (paymentMethod === "cash") {
+        cashSessionId = await lockOpenCashRegister(tx, restaurantId);
+        if (!cashSessionId) throw new Error("REGISTER_CLOSED");
+      }
+
+      // Conditional update guards against double-payment under concurrency.
       const [u] = await tx.update(ordersTable).set({
         paymentMethod,
         paymentStatus: "paid",
         status: "completed",
         stripePaymentId: storedPaymentId,
         updatedAt: new Date(),
-      }).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId))).returning();
-      if (!u) throw new Error("ORDER_NOT_FOUND");
+      }).where(and(
+        eq(ordersTable.id, orderId),
+        eq(ordersTable.restaurantId, restaurantId),
+        notInArray(ordersTable.status, ["completed", "cancelled"]),
+        ne(ordersTable.paymentStatus, "paid"),
+      )).returning();
+      if (!u) throw new Error("ORDER_ALREADY_PAID");
       if (u.tableId) {
         await tx.update(floorTablesTable).set({ status: "free" })
           .where(and(eq(floorTablesTable.id, u.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -1038,10 +1113,26 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         notes: null,
         recordedBy: req.user?.sub ?? null,
       });
+
+      // Cash drawer movement is part of the same transaction so the order,
+      // payment ledger, and cash drawer all commit together (or all roll back).
+      if (cashSessionId) {
+        await recordCashSaleMovement(tx, {
+          restaurantId,
+          sessionId: cashSessionId,
+          amount: Number(u.totalAmount),
+          orderId,
+          userId: req.user?.sub ?? null,
+        });
+      }
       return u;
     });
   } catch (err) {
-    if ((err as Error).message === "ORDER_NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    const msg = (err as Error).message;
+    if (msg === "ORDER_ALREADY_PAID") return void res.status(409).json({ error: "Order is already paid or no longer payable", code: "ORDER_ALREADY_PAID" });
+    if (msg === "REGISTER_CLOSED") {
+      return void res.status(409).json({ error: "Cash register was closed before payment could be recorded. Open a register and try again.", code: "REGISTER_CLOSED" });
+    }
     console.error("[Pay] Transaction failed:", err);
     return void res.status(500).json({ error: "Failed to complete payment" });
   }

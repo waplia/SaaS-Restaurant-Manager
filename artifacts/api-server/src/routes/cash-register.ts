@@ -1,0 +1,562 @@
+import { Router, type Request, type Response, type NextFunction } from "express";
+import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import {
+  db, cashRegisterSessionsTable, cashMovementsTable, cashDenominationCountsTable,
+  paymentsTable, ordersTable, usersTable, shiftsTable,
+} from "../lib/db";
+import { requireRole } from "../middleware/authorize";
+import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+
+const router = Router();
+
+router.use(
+  "/restaurants/:restaurantId/cash-register",
+  requireRole("owner", "manager", "waiter", "super_admin"),
+  validateRestaurantAccess,
+);
+
+// Roles allowed to perform sensitive register operations (close, movements, reports, history)
+const MANAGER_ROLES = ["owner", "manager", "super_admin"] as const;
+
+const INR_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
+
+type DenomInput = { denomination: number; count: number };
+// Accept either the global db handle or a transaction handle.
+// Using `any` here intentionally — drizzle's PgTransaction generic doesn't
+// structurally match NodePgDatabase, but they share the same insert/select API.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DbOrTx = any;
+
+function denomTotal(rows: DenomInput[]): number {
+  return rows.reduce((s, r) => s + Number(r.denomination) * Number(r.count), 0);
+}
+
+function validateDenominations(rows: unknown): { ok: true; rows: DenomInput[] } | { ok: false; error: string } {
+  if (!Array.isArray(rows)) return { ok: false, error: "denominations must be an array" };
+  const out: DenomInput[] = [];
+  for (const r of rows) {
+    if (!r || typeof r !== "object") return { ok: false, error: "Invalid denomination row" };
+    const denomination = Number((r as { denomination?: unknown }).denomination);
+    const count = Number((r as { count?: unknown }).count);
+    if (!INR_DENOMINATIONS.includes(denomination)) {
+      return { ok: false, error: `Unsupported INR denomination: ${denomination}` };
+    }
+    if (!Number.isInteger(count) || count < 0) {
+      return { ok: false, error: "denomination count must be a non-negative integer" };
+    }
+    out.push({ denomination, count });
+  }
+  return { ok: true, rows: out };
+}
+
+async function findOpenSession(executor: DbOrTx, restaurantId: number, lockForUpdate = false) {
+  // Use raw FOR UPDATE when called inside a transaction to serialize concurrent open/close.
+  if (lockForUpdate) {
+    const rows = await executor.execute(sql`
+      SELECT * FROM ${cashRegisterSessionsTable}
+      WHERE ${cashRegisterSessionsTable.restaurantId} = ${restaurantId}
+        AND ${cashRegisterSessionsTable.status} = 'open'
+      ORDER BY ${cashRegisterSessionsTable.openedAt} DESC
+      LIMIT 1
+      FOR UPDATE
+    `);
+    const r = (rows as unknown as { rows: Array<typeof cashRegisterSessionsTable.$inferSelect> }).rows;
+    return r[0] ?? null;
+  }
+  const [row] = await executor.select().from(cashRegisterSessionsTable)
+    .where(and(
+      eq(cashRegisterSessionsTable.restaurantId, restaurantId),
+      eq(cashRegisterSessionsTable.status, "open"),
+    ))
+    .orderBy(desc(cashRegisterSessionsTable.openedAt))
+    .limit(1);
+  return row ?? null;
+}
+
+async function computeSessionTotals(executor: DbOrTx, sessionId: number, restaurantId: number, openingFloat: number) {
+  const movementRows = await executor.select({
+    type: cashMovementsTable.type,
+    total: sql<string>`cast(coalesce(sum(${cashMovementsTable.amount}), 0) as text)`,
+  }).from(cashMovementsTable)
+    .where(and(
+      eq(cashMovementsTable.sessionId, sessionId),
+      eq(cashMovementsTable.restaurantId, restaurantId),
+    ))
+    .groupBy(cashMovementsTable.type);
+
+  const totalsByType: Record<string, number> = { sale: 0, refund: 0, cash_in: 0, cash_out: 0, drop: 0, payout: 0 };
+  for (const r of movementRows) totalsByType[r.type] = Number(r.total);
+
+  const cashIn = totalsByType.sale + totalsByType.cash_in;
+  const cashOut = totalsByType.refund + totalsByType.cash_out + totalsByType.drop + totalsByType.payout;
+  const expectedCash = openingFloat + cashIn - cashOut;
+
+  return {
+    openingFloat,
+    cashSales: totalsByType.sale,
+    refunds: totalsByType.refund,
+    cashIn: totalsByType.cash_in,
+    cashOut: totalsByType.cash_out,
+    drops: totalsByType.drop,
+    payouts: totalsByType.payout,
+    totalCashIn: cashIn,
+    totalCashOut: cashOut,
+    expectedCash,
+  };
+}
+
+router.get("/restaurants/:restaurantId/cash-register/current", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const session = await findOpenSession(db, restaurantId);
+  if (!session) return void res.json({ session: null, totals: null });
+  const totals = await computeSessionTotals(db, session.id, restaurantId, Number(session.openingFloat));
+  const [openedBy] = session.openedByUserId
+    ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, session.openedByUserId))
+    : [null];
+  res.json({ session: { ...session, openedByName: openedBy?.name ?? null }, totals });
+});
+
+router.get("/restaurants/:restaurantId/cash-register/sessions",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const { from, to, status, page = "1", pageSize = "25" } = req.query;
+
+    const conditions = [eq(cashRegisterSessionsTable.restaurantId, restaurantId)];
+    if (from) conditions.push(gte(cashRegisterSessionsTable.openedAt, new Date(String(from))));
+    if (to) {
+      const toDate = new Date(String(to));
+      toDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(cashRegisterSessionsTable.openedAt, toDate));
+    }
+    if (status) conditions.push(eq(cashRegisterSessionsTable.status, String(status)));
+
+    const limit = Math.min(100, Math.max(1, Number(pageSize)));
+    const offset = (Math.max(1, Number(page)) - 1) * limit;
+
+    const [rows, totalRows] = await Promise.all([
+      db.select().from(cashRegisterSessionsTable).where(and(...conditions))
+        .orderBy(desc(cashRegisterSessionsTable.openedAt))
+        .limit(limit).offset(offset),
+      db.select({ c: sql<number>`cast(count(*) as int)` })
+        .from(cashRegisterSessionsTable).where(and(...conditions)),
+    ]);
+
+    const userIds = [...new Set(rows.flatMap(r => [r.openedByUserId, r.closedByUserId]).filter((x): x is number => x !== null))];
+    const users = userIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, userIds))
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u.name]));
+
+    const enriched = rows.map(r => ({
+      ...r,
+      openedByName: userMap.get(r.openedByUserId) ?? null,
+      closedByName: r.closedByUserId ? userMap.get(r.closedByUserId) ?? null : null,
+    }));
+
+    res.json({ data: enriched, total: totalRows[0]?.c ?? 0, page: Number(page), pageSize: limit });
+  },
+);
+
+router.get("/restaurants/:restaurantId/cash-register/sessions/:id",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const sessionId = Number(req.params.id);
+
+    const [session] = await db.select().from(cashRegisterSessionsTable)
+      .where(and(eq(cashRegisterSessionsTable.id, sessionId), eq(cashRegisterSessionsTable.restaurantId, restaurantId)));
+    if (!session) return void res.status(404).json({ error: "Session not found" });
+
+    const [movements, denoms, openedBy, closedBy] = await Promise.all([
+      db.select().from(cashMovementsTable)
+        .where(and(eq(cashMovementsTable.sessionId, sessionId), eq(cashMovementsTable.restaurantId, restaurantId)))
+        .orderBy(desc(cashMovementsTable.createdAt)),
+      db.select().from(cashDenominationCountsTable).where(eq(cashDenominationCountsTable.sessionId, sessionId)),
+      db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, session.openedByUserId)),
+      session.closedByUserId
+        ? db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, session.closedByUserId))
+        : Promise.resolve([] as Array<{ id: number; name: string }>),
+    ]);
+
+    const movementUserIds = [...new Set(movements.map(m => m.createdByUserId).filter((x): x is number => x !== null))];
+    const movementUsers = movementUserIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, movementUserIds))
+      : [];
+    const movementUserMap = new Map(movementUsers.map(u => [u.id, u.name]));
+
+    const totals = await computeSessionTotals(db, sessionId, restaurantId, Number(session.openingFloat));
+
+    res.json({
+      session: {
+        ...session,
+        openedByName: openedBy[0]?.name ?? null,
+        closedByName: closedBy[0]?.name ?? null,
+      },
+      movements: movements.map(m => ({ ...m, createdByName: m.createdByUserId ? movementUserMap.get(m.createdByUserId) ?? null : null })),
+      openingDenominations: denoms.filter(d => d.phase === "opening").sort((a, b) => b.denomination - a.denomination),
+      closingDenominations: denoms.filter(d => d.phase === "closing").sort((a, b) => b.denomination - a.denomination),
+      totals,
+    });
+  },
+);
+
+router.post("/restaurants/:restaurantId/cash-register/sessions/open", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = req.user?.sub;
+  if (!userId) return void res.status(401).json({ error: "Authentication required" });
+
+  const { denominations, notes, shiftId } = req.body as {
+    denominations: unknown;
+    notes?: string;
+    shiftId?: number;
+  };
+
+  const validated = validateDenominations(denominations);
+  if (!validated.ok) return void res.status(400).json({ error: validated.error });
+
+  const openingFloat = denomTotal(validated.rows);
+
+  if (shiftId) {
+    const [shift] = await db.select({ id: shiftsTable.id }).from(shiftsTable)
+      .where(and(eq(shiftsTable.id, shiftId), eq(shiftsTable.restaurantId, restaurantId)));
+    if (!shift) return void res.status(400).json({ error: "Shift does not belong to this restaurant" });
+  }
+
+  try {
+    const session = await db.transaction(async tx => {
+      // Lock the row so concurrent opens serialize and only one wins.
+      const existing = await findOpenSession(tx, restaurantId, true);
+      if (existing) {
+        const err = new Error("ALREADY_OPEN") as Error & { sessionId: number };
+        err.sessionId = existing.id;
+        throw err;
+      }
+      const [row] = await tx.insert(cashRegisterSessionsTable).values({
+        restaurantId,
+        openedByUserId: userId,
+        openingFloat: openingFloat.toFixed(2),
+        status: "open",
+        notes: notes ?? null,
+        shiftId: shiftId ?? null,
+      }).returning();
+
+      if (validated.rows.length > 0) {
+        await tx.insert(cashDenominationCountsTable).values(
+          validated.rows.map(d => ({ sessionId: row.id, phase: "opening", denomination: d.denomination, count: d.count }))
+        );
+      }
+      return row;
+    });
+    res.status(201).json(session);
+  } catch (e) {
+    if ((e as Error).message === "ALREADY_OPEN") {
+      return void res.status(409).json({
+        error: "A cash register is already open for this restaurant",
+        sessionId: (e as Error & { sessionId: number }).sessionId,
+      });
+    }
+    // Postgres unique-violation on the partial unique index — surfaced as a
+    // clean 409 rather than 500 if the FOR UPDATE check is bypassed.
+    if ((e as { code?: string }).code === "23505") {
+      return void res.status(409).json({ error: "A cash register is already open for this restaurant" });
+    }
+    throw e;
+  }
+});
+
+router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const sessionId = Number(req.params.id);
+    const userId = req.user?.sub;
+    if (!userId) return void res.status(401).json({ error: "Authentication required" });
+
+    const { denominations, isBlindClose, closeNotes } = req.body as {
+      denominations: unknown;
+      isBlindClose?: boolean;
+      closeNotes?: string;
+    };
+
+    const validated = validateDenominations(denominations);
+    if (!validated.ok) return void res.status(400).json({ error: validated.error });
+
+    const actualCash = denomTotal(validated.rows);
+
+    try {
+      const result = await db.transaction(async tx => {
+        // Lock the session row; abort if it isn't ours / isn't open.
+        const lockRows = await tx.execute(sql`
+          SELECT * FROM ${cashRegisterSessionsTable}
+          WHERE ${cashRegisterSessionsTable.id} = ${sessionId}
+            AND ${cashRegisterSessionsTable.restaurantId} = ${restaurantId}
+          FOR UPDATE
+        `);
+        const session = (lockRows as unknown as { rows: Array<typeof cashRegisterSessionsTable.$inferSelect> }).rows[0];
+        if (!session) throw new Error("NOT_FOUND");
+        if (session.status !== "open") throw new Error("NOT_OPEN");
+
+        const totals = await computeSessionTotals(tx, sessionId, restaurantId, Number(session.openingFloat));
+        const overShort = actualCash - totals.expectedCash;
+
+        const [updated] = await tx.update(cashRegisterSessionsTable).set({
+          status: "closed",
+          closedByUserId: userId,
+          closedAt: new Date(),
+          expectedCash: totals.expectedCash.toFixed(2),
+          actualCash: actualCash.toFixed(2),
+          overShort: overShort.toFixed(2),
+          isBlindClose: !!isBlindClose,
+          closeNotes: closeNotes ?? null,
+        }).where(and(
+          eq(cashRegisterSessionsTable.id, sessionId),
+          eq(cashRegisterSessionsTable.status, "open"),
+        )).returning();
+
+        if (!updated) throw new Error("NOT_OPEN");
+
+        if (validated.rows.length > 0) {
+          await tx.insert(cashDenominationCountsTable).values(
+            validated.rows.map(d => ({ sessionId, phase: "closing", denomination: d.denomination, count: d.count }))
+          );
+        }
+        return { updated, totals, overShort };
+      });
+
+      // Blind close: hide variance details from immediate response so the
+      // counter cannot tell over/short until management reviews. Stored values
+      // remain in DB for management review.
+      if (isBlindClose) {
+        return void res.json({
+          session: { ...result.updated, expectedCash: null, actualCash: null, overShort: null },
+          totals: { openingFloat: result.totals.openingFloat, totalCashIn: null, totalCashOut: null, expectedCash: null, actualCash: null, overShort: null },
+          blindClose: true,
+        });
+      }
+
+      res.json({
+        session: result.updated,
+        totals: { ...result.totals, actualCash, overShort: result.overShort },
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg === "NOT_FOUND") return void res.status(404).json({ error: "Session not found" });
+      if (msg === "NOT_OPEN") return void res.status(409).json({ error: "Session is no longer open (it may have been closed by another user)" });
+      throw e;
+    }
+  },
+);
+
+router.post("/restaurants/:restaurantId/cash-register/sessions/:id/movements",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const sessionId = Number(req.params.id);
+    const userId = req.user?.sub;
+    if (!userId) return void res.status(401).json({ error: "Authentication required" });
+
+    const { type, amount, reason, referenceType, referenceId } = req.body as {
+      type: string;
+      amount: number | string;
+      reason?: string;
+      referenceType?: string;
+      referenceId?: number;
+    };
+
+    const allowedTypes = ["cash_in", "cash_out", "drop", "payout", "refund"];
+    if (!allowedTypes.includes(String(type))) {
+      return void res.status(400).json({ error: `type must be one of ${allowedTypes.join(", ")}` });
+    }
+    const amountNum = Number(amount);
+    if (!isFinite(amountNum) || amountNum <= 0) {
+      return void res.status(400).json({ error: "amount must be a positive number" });
+    }
+
+    try {
+      const row = await db.transaction(async tx => {
+        const lockRows = await tx.execute(sql`
+          SELECT status FROM ${cashRegisterSessionsTable}
+          WHERE ${cashRegisterSessionsTable.id} = ${sessionId}
+            AND ${cashRegisterSessionsTable.restaurantId} = ${restaurantId}
+          FOR UPDATE
+        `);
+        const s = (lockRows as unknown as { rows: Array<{ status: string }> }).rows[0];
+        if (!s) throw new Error("NOT_FOUND");
+        if (s.status !== "open") throw new Error("NOT_OPEN");
+
+        const [r] = await tx.insert(cashMovementsTable).values({
+          sessionId,
+          restaurantId,
+          type,
+          amount: amountNum.toFixed(2),
+          reason: reason ?? null,
+          referenceType: referenceType ?? null,
+          referenceId: referenceId ?? null,
+          createdByUserId: userId,
+        }).returning();
+        return r;
+      });
+      res.status(201).json(row);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg === "NOT_FOUND") return void res.status(404).json({ error: "Session not found" });
+      if (msg === "NOT_OPEN") return void res.status(400).json({ error: "Cannot record movements on a closed session" });
+      throw e;
+    }
+  },
+);
+
+async function buildReport(sessionId: number, restaurantId: number) {
+  const [session] = await db.select().from(cashRegisterSessionsTable)
+    .where(and(eq(cashRegisterSessionsTable.id, sessionId), eq(cashRegisterSessionsTable.restaurantId, restaurantId)));
+  if (!session) return null;
+
+  const totals = await computeSessionTotals(db, sessionId, restaurantId, Number(session.openingFloat));
+
+  const startedAt = session.openedAt;
+  const endedAt = session.closedAt ?? new Date();
+
+  // Tender summary: only count payments tied to ORDERS in this session window.
+  // This excludes manual ledger entries (refunds/expenses) that happen to fall
+  // in the window but aren't part of POS sales.
+  const tenderRows = await db.select({
+    method: paymentsTable.method,
+    direction: paymentsTable.direction,
+    total: sql<string>`cast(coalesce(sum(${paymentsTable.amount}), 0) as text)`,
+    count: sql<number>`cast(count(distinct ${paymentsTable.referenceId}) as int)`,
+  }).from(paymentsTable)
+    .where(and(
+      eq(paymentsTable.restaurantId, restaurantId),
+      eq(paymentsTable.referenceType, "order"),
+      gte(paymentsTable.paymentDate, startedAt),
+      lte(paymentsTable.paymentDate, endedAt),
+    ))
+    .groupBy(paymentsTable.method, paymentsTable.direction);
+
+  // Order totals: count distinct orders that received any payment in the window
+  // (more accurate than orders.createdAt, which would miss orders opened before
+  // shift but paid during it).
+  const orderStats = await db.select({
+    orderCount: sql<number>`cast(count(distinct ${paymentsTable.referenceId}) as int)`,
+    revenue: sql<string>`cast(coalesce(sum(${paymentsTable.amount}), 0) as text)`,
+  }).from(paymentsTable)
+    .where(and(
+      eq(paymentsTable.restaurantId, restaurantId),
+      eq(paymentsTable.referenceType, "order"),
+      eq(paymentsTable.direction, "in"),
+      gte(paymentsTable.paymentDate, startedAt),
+      lte(paymentsTable.paymentDate, endedAt),
+    ));
+
+  const movements = await db.select().from(cashMovementsTable)
+    .where(and(eq(cashMovementsTable.sessionId, sessionId), eq(cashMovementsTable.restaurantId, restaurantId)))
+    .orderBy(desc(cashMovementsTable.createdAt));
+
+  const tenderSummary: Record<string, { in: number; out: number; count: number }> = {};
+  for (const r of tenderRows) {
+    if (!tenderSummary[r.method]) tenderSummary[r.method] = { in: 0, out: 0, count: 0 };
+    if (r.direction === "in") tenderSummary[r.method].in += Number(r.total);
+    else tenderSummary[r.method].out += Number(r.total);
+    tenderSummary[r.method].count += r.count;
+  }
+
+  // Merge stored close values into totals so Z-reports reflect counted/over-short.
+  const mergedTotals = {
+    ...totals,
+    actualCash: session.actualCash !== null ? Number(session.actualCash) : undefined,
+    overShort: session.overShort !== null ? Number(session.overShort) : undefined,
+  };
+
+  return {
+    session,
+    totals: mergedTotals,
+    tenderSummary,
+    orderCount: orderStats[0]?.orderCount ?? 0,
+    grossRevenue: orderStats[0]?.revenue ?? "0",
+    movements,
+    periodFrom: startedAt,
+    periodTo: endedAt,
+  };
+}
+
+router.get("/restaurants/:restaurantId/cash-register/sessions/:id/x-report",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const sessionId = Number(req.params.id);
+    const report = await buildReport(sessionId, restaurantId);
+    if (!report) return void res.status(404).json({ error: "Session not found" });
+    res.json({ ...report, kind: "X" });
+  },
+);
+
+router.get("/restaurants/:restaurantId/cash-register/sessions/:id/z-report",
+  requireRole(...MANAGER_ROLES),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const sessionId = Number(req.params.id);
+    const report = await buildReport(sessionId, restaurantId);
+    if (!report) return void res.status(404).json({ error: "Session not found" });
+    if (report.session.status !== "closed") {
+      return void res.status(400).json({ error: "Z-report is only available for closed sessions" });
+    }
+    res.json({ ...report, kind: "Z" });
+  },
+);
+
+// ===== Helpers used by orders/payments to enforce open-register on cash =====
+
+// Acquire a lock on the open register session (call inside a transaction).
+// Returns the session id, or null if no register is open. Use this from the
+// pay/split endpoints so the session can't be closed mid-transaction.
+export async function lockOpenCashRegister(tx: DbOrTx, restaurantId: number): Promise<number | null> {
+  const session = await findOpenSession(tx, restaurantId, true);
+  return session ? session.id : null;
+}
+
+// Lightweight check (no lock) for use as a pre-flight before starting a transaction.
+export async function requireOpenCashRegister(restaurantId: number): Promise<{ ok: true; sessionId: number } | { ok: false; error: string }> {
+  const session = await findOpenSession(db, restaurantId);
+  if (!session) return { ok: false, error: "No cash register is open. Please open a register before accepting cash payments." };
+  return { ok: true, sessionId: session.id };
+}
+
+// Insert a sale movement using either the global db or a provided transaction.
+export async function recordCashSaleMovement(executor: DbOrTx, params: {
+  restaurantId: number;
+  sessionId: number;
+  amount: number;
+  orderId?: number;
+  userId?: number | null;
+}): Promise<void> {
+  await executor.insert(cashMovementsTable).values({
+    sessionId: params.sessionId,
+    restaurantId: params.restaurantId,
+    type: "sale",
+    amount: params.amount.toFixed(2),
+    reason: null,
+    referenceType: params.orderId ? "order" : null,
+    referenceId: params.orderId ?? null,
+    createdByUserId: params.userId ?? null,
+  });
+}
+
+// Express middleware variant retained for any future endpoints.
+export function blockCashWhenNoRegister(req: Request, res: Response, next: NextFunction): void {
+  const method = (req.body && (req.body.method || req.body.paymentMethod)) as string | undefined;
+  if (method !== "cash") return next();
+  const restaurantId = Number(req.params.restaurantId);
+  if (!restaurantId) return next();
+  void (async () => {
+    const session = await findOpenSession(db, restaurantId);
+    if (!session) {
+      res.status(409).json({ error: "No cash register is open. Please open a register before accepting cash payments.", code: "REGISTER_CLOSED" });
+      return;
+    }
+    (req as Request & { cashRegisterSessionId?: number }).cashRegisterSessionId = session.id;
+    next();
+  })();
+}
+
+export default router;

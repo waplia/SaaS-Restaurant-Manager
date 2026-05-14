@@ -974,3 +974,114 @@ export interface SubscriptionInfo {
   plans: SubscriptionPlan[];
   usage: SubscriptionUsage;
 }
+
+export const INR_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
+
+export interface CashRegisterSession {
+  id: number;
+  restaurantId: number;
+  openedByUserId: number;
+  openedAt: string;
+  closedByUserId: number | null;
+  closedAt: string | null;
+  shiftId: number | null;
+  openingFloat: string;
+  expectedCash: string | null;
+  actualCash: string | null;
+  overShort: string | null;
+  isBlindClose: boolean;
+  status: "open" | "closed";
+  notes: string | null;
+  closeNotes: string | null;
+  createdAt: string;
+  openedByName?: string | null;
+  closedByName?: string | null;
+}
+
+export interface CashMovement {
+  id: number;
+  sessionId: number;
+  restaurantId: number;
+  type: "sale" | "refund" | "cash_in" | "cash_out" | "drop" | "payout";
+  amount: string;
+  reason: string | null;
+  referenceType: string | null;
+  referenceId: number | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  createdByName?: string | null;
+}
+
+export interface CashDenominationCount {
+  id: number;
+  sessionId: number;
+  phase: "opening" | "closing";
+  denomination: number;
+  count: number;
+  createdAt: string;
+}
+
+export interface CashRegisterTotals {
+  openingFloat: number;
+  cashSales: number;
+  refunds: number;
+  cashIn: number;
+  cashOut: number;
+  drops: number;
+  payouts: number;
+  totalCashIn: number;
+  totalCashOut: number;
+  expectedCash: number;
+  actualCash?: number;
+  overShort?: number;
+}
+
+export interface CashRegisterCurrent {
+  session: CashRegisterSession | null;
+  totals: CashRegisterTotals | null;
+}
+
+export interface CashRegisterSessionDetail {
+  session: CashRegisterSession;
+  movements: CashMovement[];
+  openingDenominations: CashDenominationCount[];
+  closingDenominations: CashDenominationCount[];
+  totals: CashRegisterTotals;
+}
+
+export interface CashRegisterSessionsResponse {
+  data: CashRegisterSession[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CashRegisterReport {
+  kind: "X" | "Z";
+  session: CashRegisterSession;
+  totals: CashRegisterTotals;
+  tenderSummary: Record<string, { in: number; out: number; count: number }>;
+  orderCount: number;
+  grossRevenue: string;
+  movements: CashMovement[];
+  periodFrom: string;
+  periodTo: string;
+}
+
+export interface OpenRegisterInput {
+  denominations: { denomination: number; count: number }[];
+  notes?: string;
+  shiftId?: number;
+}
+
+export interface CloseRegisterInput {
+  denominations: { denomination: number; count: number }[];
+  isBlindClose?: boolean;
+  closeNotes?: string;
+}
+
+export interface CashMovementInput {
+  type: "cash_in" | "cash_out" | "drop" | "payout" | "refund";
+  amount: number;
+  reason?: string;
+}

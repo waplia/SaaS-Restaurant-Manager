@@ -7,6 +7,7 @@ import {
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
   useCreatePaymentIntent, useCreateRazorpayOrder,
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
+  useCurrentCashRegister,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check, Lock, Star, UserCheck,
+  Loader2, Check, Lock, Star, UserCheck, AlertCircle,
 } from "lucide-react";
 
 interface CartModifier {
@@ -641,6 +642,12 @@ function PaymentModal({
   const createPaymentIntent = useCreatePaymentIntent();
   const createRazorpayOrder = useCreateRazorpayOrder();
   const { toast } = useToast();
+  const { data: cashRegister } = useCurrentCashRegister();
+  const isRegisterOpen = !!cashRegister?.session;
+  // Auto-switch off cash if register closes
+  useEffect(() => {
+    if (!isRegisterOpen && method === "cash") setMethod("card");
+  }, [isRegisterOpen, method]);
 
   const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
   const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined;
@@ -801,23 +808,40 @@ function PaymentModal({
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
-                    <button
-                      key={value}
-                      onClick={() => setMethod(value as "cash" | "card" | "upi")}
-                      className={cn(
-                        "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
-                        method === value
-                          ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 text-primary shadow-sm shadow-primary/20"
-                          : "border-border text-muted-foreground hover:border-primary/50 hover:bg-accent/40"
-                      )}
-                    >
-                      <Icon className="w-5 h-5" />{label}
-                    </button>
-                  ))}
+                  {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => {
+                    const disabled = value === "cash" && !isRegisterOpen;
+                    return (
+                      <button
+                        key={value}
+                        disabled={disabled}
+                        title={disabled ? "Open the cash register before accepting cash" : ""}
+                        onClick={() => setMethod(value as "cash" | "card" | "upi")}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
+                          disabled
+                            ? "border-border text-muted-foreground/40 cursor-not-allowed bg-muted/30"
+                            : method === value
+                              ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 text-primary shadow-sm shadow-primary/20"
+                              : "border-border text-muted-foreground hover:border-primary/50 hover:bg-accent/40"
+                        )}
+                      >
+                        <Icon className="w-5 h-5" />{label}
+                      </button>
+                    );
+                  })}
                 </div>
+                {!isRegisterOpen && (
+                  <div className="mt-2 flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-medium text-amber-800 dark:text-amber-200">Cash register is closed</div>
+                      <div className="text-amber-700 dark:text-amber-300/80">Open the register before accepting cash payments.</div>
+                    </div>
+                    <a href="/cash-register" className="text-xs font-semibold text-primary hover:underline whitespace-nowrap">Open Register →</a>
+                  </div>
+                )}
               </div>
-              <Button className="w-full h-11" onClick={handleProceed}>
+              <Button className="w-full h-11" onClick={handleProceed} disabled={method === "cash" && !isRegisterOpen}>
                 Continue with {method === "cash" ? "Cash" : method === "card" ? "Card" : "UPI"}
               </Button>
             </>

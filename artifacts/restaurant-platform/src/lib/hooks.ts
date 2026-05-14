@@ -1085,6 +1085,78 @@ export function useDeleteExpense() {
 }
 
 
+// ===================== Cash Register =====================
+
+export function useCurrentCashRegister() {
+  return useQuery({
+    queryKey: ["cash-register", "current", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").CashRegisterCurrent>(`/restaurants/${RESTAURANT_ID}/cash-register/current`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useCashRegisterSessions(params?: { from?: string; to?: string; status?: string; page?: number; pageSize?: number }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.status) q.set("status", params.status);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+  return useQuery({
+    queryKey: ["cash-register", "sessions", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").CashRegisterSessionsResponse>(`/restaurants/${RESTAURANT_ID}/cash-register/sessions?${q}`),
+  });
+}
+
+export function useCashRegisterSession(sessionId: number | null) {
+  return useQuery({
+    queryKey: ["cash-register", "session", RESTAURANT_ID, sessionId],
+    queryFn: () => apiGet<import("./types").CashRegisterSessionDetail>(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}`),
+    enabled: sessionId !== null,
+  });
+}
+
+export function useOpenCashRegister() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").OpenRegisterInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/open`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-register"] });
+    },
+  });
+}
+
+export function useCloseCashRegister() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, ...data }: import("./types").CloseRegisterInput & { sessionId: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}/close`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-register"] });
+    },
+  });
+}
+
+export function useRecordCashMovement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, ...data }: import("./types").CashMovementInput & { sessionId: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}/movements`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-register"] });
+    },
+  });
+}
+
+export function useCashRegisterReport(sessionId: number | null, kind: "x" | "z") {
+  return useQuery({
+    queryKey: ["cash-register", "report", RESTAURANT_ID, sessionId, kind],
+    queryFn: () => apiGet<import("./types").CashRegisterReport>(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}/${kind}-report`),
+    enabled: sessionId !== null,
+  });
+}
+
 export function useExpenseSummary(params?: { from?: string; to?: string }) {
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
