@@ -113,7 +113,7 @@ export async function createWaiterRequestPublic(args: {
 
   await db.insert(notificationsTable).values({
     restaurantId: args.restaurantId,
-    type: "waiter_call",
+    type: "waiter_request",
     title: `Table ${args.tableNumber}`,
     message: `Table ${args.tableNumber} is ${reasonLabel}`,
     entityId: row.id,
@@ -131,7 +131,7 @@ export async function createWaiterRequestPublic(args: {
   };
   broadcastEvent(args.restaurantId, "waiter_request:new", payload);
   sseBroadcast(args.restaurantId, "waiter_request:new", payload);
-  broadcastEvent(args.restaurantId, "notification:new", { type: "waiter_call" });
+  broadcastEvent(args.restaurantId, "notification:new", { type: "waiter_request" });
 
   return row;
 }

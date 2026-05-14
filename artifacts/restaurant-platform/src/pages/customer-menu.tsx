@@ -422,7 +422,7 @@ export default function CustomerMenuPage() {
       if (waiterNote.trim()) body.note = waiterNote.trim();
       if (orderResult?.guestToken) body.token = orderResult.guestToken;
       await apiPublicPost("/public/call-waiter", body);
-      const until = Date.now() + 60_000;
+      const until = Date.now() + 30_000;
       setWaiterCooldownUntil(until);
       try { localStorage.setItem(cooldownKey, String(until)); } catch { /* ignore */ }
       setWaiterStatus("sent");

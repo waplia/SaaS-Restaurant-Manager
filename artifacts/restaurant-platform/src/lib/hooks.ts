@@ -456,11 +456,12 @@ export function useSuppliers() {
   });
 }
 
-export function useWaiterRequests() {
+export function useWaiterRequests(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["waiter-requests", RESTAURANT_ID],
     queryFn: () => apiGet<WaiterRequest[]>(`/restaurants/${RESTAURANT_ID}/waiter-requests`),
     refetchInterval: 15000,
+    enabled: opts?.enabled ?? true,
   });
 }
 

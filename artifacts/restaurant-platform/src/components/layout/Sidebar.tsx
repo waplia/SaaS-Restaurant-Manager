@@ -81,7 +81,8 @@ export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
 
-  const { data: waiterReqs = [] } = useWaiterRequests();
+  const canSeeWaiterRequests = user?.isSuperAdmin || (user?.role ? ["owner", "manager", "waiter"].includes(user.role) : false);
+  const { data: waiterReqs = [] } = useWaiterRequests({ enabled: canSeeWaiterRequests });
   const activeWaiterCount = waiterReqs.filter(r => r.status === "pending" || r.status === "acknowledged").length;
 
   const initials = user?.name

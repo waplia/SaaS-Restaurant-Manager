@@ -9,7 +9,6 @@ import type { AppNotification } from "@/lib/types";
 const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
   new_order: { icon: ChefHat, color: "bg-blue-100 text-blue-600" },
   low_stock: { icon: AlertTriangle, color: "bg-red-100 text-red-600" },
-  waiter_call: { icon: Phone, color: "bg-orange-100 text-orange-600" },
   waiter_request: { icon: Phone, color: "bg-orange-100 text-orange-600" },
   reservation: { icon: Calendar, color: "bg-purple-100 text-purple-600" },
   payment: { icon: Info, color: "bg-green-100 text-green-600" },
