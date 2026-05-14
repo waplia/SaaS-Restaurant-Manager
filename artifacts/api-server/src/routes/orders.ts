@@ -496,7 +496,6 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
 
   const cfg = await loadLoyaltyConfig(restaurantId);
   if (!cfg.enabled) return void res.status(400).json({ error: "Loyalty program is not enabled" });
-  const loyaltyDiscount = computeRedemptionDiscount(pointsToRedeem, cfg);
 
   // Recompute coupon discount from source — never read order.discountAmount
   // (which may already include loyalty) to avoid stacking on repeated calls.
@@ -513,10 +512,21 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
       couponDiscount = raw;
     }
   }
+
+  // Cap redemption to remaining payable so customers never burn more points than
+  // the order can actually absorb. Without this, loyaltyPointsRedeemed could
+  // exceed what the discount actually covers, causing irreversible point loss
+  // when earnLoyaltyForOrder deducts the recorded value at payment time.
+  const subtotal = Number(order.subtotal);
+  const remainingPayable = Math.max(0, subtotal - couponDiscount);
+  const rate = Number(cfg.redemptionRate) || 0;
+  const maxRedeemableByPayable = rate > 0 ? Math.floor(remainingPayable / rate) : 0;
+  const cappedPoints = Math.min(pointsToRedeem, maxRedeemableByPayable);
+  const loyaltyDiscount = computeRedemptionDiscount(cappedPoints, cfg);
   const totalDiscount = couponDiscount + loyaltyDiscount;
 
   await db.update(ordersTable).set({
-    loyaltyPointsRedeemed: pointsToRedeem,
+    loyaltyPointsRedeemed: cappedPoints,
     discountAmount: totalDiscount.toFixed(2),
     updatedAt: new Date(),
   }).where(eq(ordersTable.id, orderId));
@@ -525,7 +535,7 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
-  res.json({ ...updatedOrder, items, loyaltyApplied: { pointsRedeemed: pointsToRedeem, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - pointsToRedeem } });
+  res.json({ ...updatedOrder, items, loyaltyApplied: { pointsRequested: pointsToRedeem, pointsRedeemed: cappedPoints, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - cappedPoints } });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, res) => {
