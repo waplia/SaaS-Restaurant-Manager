@@ -3,7 +3,7 @@ import { db, usersTable, userDevicesTable } from "./db";
 import { sendPush } from "./notifications";
 import { logger } from "./logger";
 
-export type PushType = "waiter_call" | "new_order" | "reservation";
+export type PushType = "waiter_call" | "new_order" | "reservation" | "leave_decision" | "leave_request";
 
 interface PushTargetFilter {
   restaurantId: number;
@@ -70,5 +70,34 @@ export async function pushToStaff(filter: PushTargetFilter, payload: PushPayload
     });
   } catch (err) {
     logger.error({ err, type, restaurantId }, "pushToStaff failed");
+  }
+}
+
+/**
+ * Send a push notification to specific users (e.g. notify the requester of a
+ * leave decision). Respects per-user mute preferences for the given type.
+ */
+export async function pushToUserIds(userIds: number[], type: PushType, payload: PushPayload): Promise<void> {
+  if (userIds.length === 0) return;
+  const users = await db
+    .select({ id: usersTable.id, notificationPrefs: usersTable.notificationPrefs })
+    .from(usersTable)
+    .where(and(inArray(usersTable.id, userIds), eq(usersTable.isActive, true)));
+  const targets = users
+    .filter(u => ((u.notificationPrefs ?? {}) as Record<string, boolean>)[type] !== false)
+    .map(u => u.id);
+  if (targets.length === 0) return;
+
+  const devices = await db
+    .select({ token: userDevicesTable.token })
+    .from(userDevicesTable)
+    .where(inArray(userDevicesTable.userId, targets));
+  const tokens = devices.map(d => d.token).filter(t => typeof t === "string" && t.length > 0);
+  if (tokens.length === 0) return;
+
+  try {
+    await sendPush({ to: tokens, title: payload.title, body: payload.body, data: { ...payload.data, type } });
+  } catch (err) {
+    logger.error({ err, type, userIds: targets }, "pushToUserIds failed");
   }
 }

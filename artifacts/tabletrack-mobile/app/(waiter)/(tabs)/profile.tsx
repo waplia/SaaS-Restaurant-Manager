@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { LeaveSection } from "@/components/LeaveSection";
 
 export default function WaiterProfileScreen() {
   const colors = useColors();
@@ -53,6 +54,8 @@ export default function WaiterProfileScreen() {
         <Text style={[styles.menuRowLabel, { color: colors.foreground }]}>Notifications</Text>
         <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
       </Pressable>
+
+      <LeaveSection />
 
       <Pressable
         style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.7 : 1 }]}

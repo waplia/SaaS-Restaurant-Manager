@@ -133,3 +133,58 @@ export type Attendance = typeof attendanceTable.$inferSelect;
 export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, createdAt: true });
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogsTable.$inferSelect;
+
+export const leavePoliciesTable = pgTable("leave_policies", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  leaveType: text("leave_type").notNull(),
+  label: text("label").notNull(),
+  isPaid: boolean("is_paid").notNull().default(false),
+  entitlementDays: integer("entitlement_days").notNull().default(0),
+  carryForwardMax: integer("carry_forward_max").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.restaurantId, t.leaveType)]);
+
+export const leaveBalancesTable = pgTable("leave_balances", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  year: integer("year").notNull(),
+  leaveType: text("leave_type").notNull(),
+  opening: decimal("opening", { precision: 6, scale: 2 }).notNull().default("0"),
+  used: decimal("used", { precision: 6, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.userId, t.year, t.leaveType)]);
+
+export const leaveRequestsTable = pgTable("leave_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  leaveType: text("leave_type").notNull(),
+  fromDate: timestamp("from_date").notNull(),
+  toDate: timestamp("to_date").notNull(),
+  halfDay: boolean("half_day").notNull().default(false),
+  totalDays: decimal("total_days", { precision: 6, scale: 2 }).notNull().default("0"),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"),
+  decidedByUserId: integer("decided_by_user_id").references(() => usersTable.id),
+  decidedAt: timestamp("decided_at"),
+  decisionNote: text("decision_note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertLeavePolicySchema = createInsertSchema(leavePoliciesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLeavePolicy = z.infer<typeof insertLeavePolicySchema>;
+export type LeavePolicy = typeof leavePoliciesTable.$inferSelect;
+
+export const insertLeaveBalanceSchema = createInsertSchema(leaveBalancesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
+export type LeaveBalance = typeof leaveBalancesTable.$inferSelect;
+
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequestsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type LeaveRequest = typeof leaveRequestsTable.$inferSelect;

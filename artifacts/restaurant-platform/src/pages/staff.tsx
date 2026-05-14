@@ -8,6 +8,9 @@ import {
   useStaffShifts, useCreateStaffShift, useDeleteStaffShift,
   useAttendance, useClockIn, useClockOut, usePunchOut,
   useMarkAttendance, usePatchAttendance, useDeleteAttendance, useBulkWeeklyOff,
+  useLeavePolicies, useCreateLeavePolicy, useUpdateLeavePolicy, useDeleteLeavePolicy,
+  useLeaveBalances, useSetLeaveBalance,
+  useLeaveRequests, useCreateLeaveRequest, useApproveLeaveRequest, useRejectLeaveRequest, useCancelLeaveRequest,
   useAuditLogs,
   useRoles, usePermissions, useRoleWithPermissions, useCreateRole, useDeleteRole,
   useAddRolePermission, useRemoveRolePermission,
@@ -24,10 +27,11 @@ import {
   Plus, User, Phone, Mail, Calendar, Clock, Activity,
   Users, LogIn, LogOut, Search, Trash2, X, ChevronDown, ChevronUp,
   Shield, CheckCircle2, XCircle, FileText, CreditCard, UserCog, Upload, Eye, EyeOff, Download, Loader2,
+  CalendarOff, Check, Ban, Clock3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffMember, Shift, StaffShift, AttendanceRecord, AttendanceStatus, AuditLog, Role, Permission, StaffDocument } from "@/lib/types";
+import type { StaffMember, Shift, StaffShift, AttendanceRecord, AttendanceStatus, AuditLog, Role, Permission, StaffDocument, LeavePolicy, LeaveBalance, LeaveRequest } from "@/lib/types";
 
 function generateTempPassword(): string {
   const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -56,7 +60,7 @@ const ALL_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS: Record<string, string> = { mon: "M", tue: "T", wed: "W", thu: "T", fri: "F", sat: "S", sun: "S" };
 const DAY_FULL: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 
-type TabType = "team" | "shifts" | "attendance" | "activity" | "roles";
+type TabType = "team" | "shifts" | "attendance" | "leaves" | "activity" | "roles";
 
 function formatDateTime(iso: string) {
   try {
@@ -1693,6 +1697,360 @@ function RolesTab() {
   );
 }
 
+function LeavesTab({ staff }: { staff: StaffMember[] }) {
+  const { user } = useAuth();
+  const isPrivileged = user?.isSuperAdmin || user?.role === "owner" || user?.role === "manager";
+  const [section, setSection] = useState<"requests" | "balances" | "policies">("requests");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 border-b border-border">
+        {([
+          { id: "requests" as const, label: "Requests", Icon: Clock3 },
+          { id: "balances" as const, label: "Balances", Icon: Activity },
+          ...(isPrivileged ? [{ id: "policies" as const, label: "Policies", Icon: Shield }] : []),
+        ]).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSection(t.id)}
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-medium px-3 py-2 border-b-2 transition-colors",
+              section === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <t.Icon className="w-3.5 h-3.5" /> {t.label}
+          </button>
+        ))}
+      </div>
+      {section === "requests" && <LeaveRequestsSection staff={staff} isPrivileged={!!isPrivileged} />}
+      {section === "balances" && <LeaveBalancesSection staff={staff} isPrivileged={!!isPrivileged} />}
+      {section === "policies" && isPrivileged && <LeavePoliciesSection />}
+    </div>
+  );
+}
+
+function LeavePoliciesSection() {
+  const { data: policies = [] } = useLeavePolicies();
+  const create = useCreateLeavePolicy();
+  const update = useUpdateLeavePolicy();
+  const del = useDeleteLeavePolicy();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ leaveType: "", label: "", isPaid: true, entitlementDays: 12, carryForwardMax: 0 });
+
+  const handleCreate = async () => {
+    if (!form.leaveType.trim() || !form.label.trim()) {
+      toast({ title: "leaveType and label required", variant: "destructive" });
+      return;
+    }
+    try {
+      await create.mutateAsync({
+        leaveType: form.leaveType.trim().toLowerCase(),
+        label: form.label.trim(),
+        isPaid: form.isPaid,
+        entitlementDays: Number(form.entitlementDays) || 0,
+        carryForwardMax: Number(form.carryForwardMax) || 0,
+      });
+      toast({ title: "Policy created" });
+      setForm({ leaveType: "", label: "", isPaid: true, entitlementDays: 12, carryForwardMax: 0 });
+    } catch (e) {
+      toast({ title: (e as { message?: string }).message ?? "Failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 border border-border rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <div><Label>Type key</Label><Input placeholder="paid / sick / unpaid" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))} /></div>
+        <div><Label>Display label</Label><Input placeholder="Paid Leave" value={form.label} onChange={e => setForm(p => ({ ...p, label: e.target.value }))} /></div>
+        <div><Label>Entitlement (days)</Label><Input type="number" min={0} value={form.entitlementDays} onChange={e => setForm(p => ({ ...p, entitlementDays: Number(e.target.value) }))} /></div>
+        <div><Label>Carry forward max</Label><Input type="number" min={0} value={form.carryForwardMax} onChange={e => setForm(p => ({ ...p, carryForwardMax: Number(e.target.value) }))} /></div>
+        <div className="flex items-center gap-2 pb-2">
+          <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.isPaid} onChange={e => setForm(p => ({ ...p, isPaid: e.target.checked }))} /> Paid</label>
+          <Button size="sm" onClick={handleCreate} disabled={create.isPending}>Add</Button>
+        </div>
+      </div>
+
+      <div className="border border-border rounded-xl divide-y divide-border">
+        {policies.length === 0 && <p className="text-sm text-muted-foreground p-6 text-center">No leave policies yet</p>}
+        {policies.map(p => (
+          <div key={p.id} className={cn("flex items-center justify-between gap-3 px-4 py-3", !p.isActive && "opacity-60")}>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{p.label} <span className="text-xs text-muted-foreground">({p.leaveType})</span></p>
+              <p className="text-xs text-muted-foreground">{p.entitlementDays} days/yr · carry-fwd {p.carryForwardMax} · {p.isPaid ? "Paid" : "Unpaid"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => update.mutate({ id: p.id, isActive: !p.isActive })}>
+                {p.isActive ? "Deactivate" : "Activate"}
+              </Button>
+              <button onClick={() => del.mutate(p.id)} className="text-muted-foreground hover:text-destructive p-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LeaveBalancesSection({ staff, isPrivileged }: { staff: StaffMember[]; isPrivileged: boolean }) {
+  const { user } = useAuth();
+  const { data: policies = [] } = useLeavePolicies();
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(isPrivileged ? (staff[0]?.id ?? null) : (user?.id ?? null));
+  const [year, setYear] = useState(new Date().getFullYear());
+  const { data: balances = [] } = useLeaveBalances(selectedUserId, year);
+  const setBal = useSetLeaveBalance();
+  const { toast } = useToast();
+
+  const balByType = new Map(balances.map(b => [b.leaveType, b]));
+
+  const handleSet = async (leaveType: string, opening: number) => {
+    if (!selectedUserId) return;
+    try {
+      await setBal.mutateAsync({ userId: selectedUserId, year, leaveType, opening });
+      toast({ title: "Opening balance saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        {isPrivileged && (
+          <div>
+            <Label>Staff member</Label>
+            <select
+              className="mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background min-w-[200px]"
+              value={selectedUserId ?? ""}
+              onChange={e => setSelectedUserId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— pick —</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <Label>Year</Label>
+          <Input type="number" className="w-28" value={year} onChange={e => setYear(Number(e.target.value) || year)} />
+        </div>
+      </div>
+
+      {selectedUserId && policies.filter(p => p.isActive).length === 0 && (
+        <p className="text-sm text-muted-foreground py-6 text-center">No active leave policies. Create policies first.</p>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {policies.filter(p => p.isActive).map(p => {
+          const bal = balByType.get(p.leaveType);
+          const opening = Number(bal?.opening ?? p.entitlementDays);
+          const used = Number(bal?.used ?? 0);
+          const remaining = Math.max(0, opening - used);
+          return (
+            <div key={p.id} className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold">{p.label}</p>
+                <span className={cn("text-[10px] px-2 py-0.5 rounded uppercase tracking-wide", p.isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700")}>
+                  {p.isPaid ? "Paid" : "Unpaid"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                <div><p className="text-xs text-muted-foreground">Opening</p><p className="text-lg font-bold">{opening}</p></div>
+                <div><p className="text-xs text-muted-foreground">Used</p><p className="text-lg font-bold">{used}</p></div>
+                <div><p className="text-xs text-muted-foreground">Remaining</p><p className="text-lg font-bold text-primary">{remaining}</p></div>
+              </div>
+              {isPrivileged && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    min={0}
+                    defaultValue={opening}
+                    onBlur={e => {
+                      const v = Number(e.target.value);
+                      if (!Number.isNaN(v) && v !== opening) void handleSet(p.leaveType, v);
+                    }}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">Edit opening (saves on blur)</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeaveRequestsSection({ staff, isPrivileged }: { staff: StaffMember[]; isPrivileged: boolean }) {
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [showCreate, setShowCreate] = useState(false);
+  const { data: requests = [] } = useLeaveRequests(statusFilter ? { status: statusFilter } : undefined);
+  const approve = useApproveLeaveRequest();
+  const reject = useRejectLeaveRequest();
+  const cancel = useCancelLeaveRequest();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const staffById = new Map(staff.map(s => [s.id, s]));
+
+  const handleApprove = async (id: number) => {
+    const note = prompt("Optional note") ?? undefined;
+    try {
+      await approve.mutateAsync({ id, decisionNote: note });
+      toast({ title: "Leave approved" });
+    } catch (e) {
+      toast({ title: (e as { message?: string }).message ?? "Approve failed", variant: "destructive" });
+    }
+  };
+  const handleReject = async (id: number) => {
+    const note = prompt("Reason for rejection") ?? "";
+    try {
+      await reject.mutateAsync({ id, decisionNote: note || undefined });
+      toast({ title: "Leave rejected" });
+    } catch {
+      toast({ title: "Reject failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-2">
+          {["", "pending", "approved", "rejected", "cancelled"].map(s => (
+            <button
+              key={s || "all"}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                "px-3 py-1.5 text-xs rounded-md border",
+                statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {s || "All"}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Request Leave</Button>
+      </div>
+
+      {showCreate && <CreateLeaveRequestForm staff={staff} isPrivileged={isPrivileged} currentUserId={user?.id ?? 0} onClose={() => setShowCreate(false)} />}
+
+      <div className="border border-border rounded-xl divide-y divide-border">
+        {requests.length === 0 && <p className="text-sm text-muted-foreground p-6 text-center">No leave requests</p>}
+        {requests.map(r => {
+          const name = staffById.get(r.userId)?.name ?? `User #${r.userId}`;
+          const canDecide = isPrivileged && r.status === "pending";
+          const canCancel = (isPrivileged || r.userId === (user?.id ?? -1)) && (r.status === "pending" || r.status === "approved");
+          return (
+            <div key={r.id} className="px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium">{name}</p>
+                  <span className="text-[10px] px-2 py-0.5 rounded uppercase bg-muted text-muted-foreground">{r.leaveType}</span>
+                  <StatusPill status={r.status} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatDate(r.fromDate)} → {formatDate(r.toDate)}
+                  {r.halfDay && " · half-day"}
+                  {" · "}{r.totalDays} day{Number(r.totalDays) === 1 ? "" : "s"}
+                </p>
+                {r.reason && <p className="text-xs text-muted-foreground mt-1 italic">"{r.reason}"</p>}
+                {r.decisionNote && <p className="text-xs text-muted-foreground mt-1">Note: {r.decisionNote}</p>}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {canDecide && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => handleApprove(r.id)}><Check className="w-3.5 h-3.5 mr-1" />Approve</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleReject(r.id)} className="text-destructive border-destructive/40"><Ban className="w-3.5 h-3.5 mr-1" />Reject</Button>
+                  </>
+                )}
+                {canCancel && r.status !== "rejected" && (
+                  <button
+                    onClick={() => { if (confirm("Cancel this request?")) cancel.mutate(r.id); }}
+                    className="text-muted-foreground hover:text-destructive p-1.5"
+                    title="Cancel"
+                  ><X className="w-4 h-4" /></button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const cfg: Record<string, string> = {
+    pending: "bg-amber-100 text-amber-800",
+    approved: "bg-green-100 text-green-800",
+    rejected: "bg-red-100 text-red-800",
+    cancelled: "bg-gray-100 text-gray-600",
+  };
+  return <span className={cn("text-[10px] px-2 py-0.5 rounded uppercase tracking-wide font-medium", cfg[status] ?? "bg-muted text-muted-foreground")}>{status}</span>;
+}
+
+function CreateLeaveRequestForm({
+  staff, isPrivileged, currentUserId, onClose,
+}: { staff: StaffMember[]; isPrivileged: boolean; currentUserId: number; onClose: () => void }) {
+  const { data: policies = [] } = useLeavePolicies();
+  const create = useCreateLeaveRequest();
+  const { toast } = useToast();
+  const activePolicies = policies.filter(p => p.isActive);
+  const [form, setForm] = useState({
+    userId: currentUserId,
+    leaveType: activePolicies[0]?.leaveType ?? "",
+    fromDate: new Date().toISOString().slice(0, 10),
+    toDate: new Date().toISOString().slice(0, 10),
+    halfDay: false,
+    reason: "",
+  });
+
+  const submit = async () => {
+    if (!form.leaveType) { toast({ title: "Pick a leave type", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync({
+        userId: isPrivileged ? form.userId : undefined,
+        leaveType: form.leaveType,
+        fromDate: form.fromDate,
+        toDate: form.toDate,
+        halfDay: form.halfDay,
+        reason: form.reason || undefined,
+      });
+      toast({ title: "Leave request submitted" });
+      onClose();
+    } catch (e) {
+      toast({ title: (e as { message?: string }).message ?? "Submit failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+      {isPrivileged && (
+        <div className="md:col-span-2">
+          <Label>For staff</Label>
+          <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.userId} onChange={e => setForm(p => ({ ...p, userId: Number(e.target.value) }))}>
+            {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
+      <div className={isPrivileged ? "md:col-span-1" : "md:col-span-2"}>
+        <Label>Type</Label>
+        <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))}>
+          {activePolicies.map(p => <option key={p.leaveType} value={p.leaveType}>{p.label}</option>)}
+        </select>
+      </div>
+      <div><Label>From</Label><Input type="date" value={form.fromDate} onChange={e => setForm(p => ({ ...p, fromDate: e.target.value, toDate: form.toDate < e.target.value ? e.target.value : form.toDate }))} /></div>
+      <div><Label>To</Label><Input type="date" value={form.toDate} onChange={e => setForm(p => ({ ...p, toDate: e.target.value }))} disabled={form.halfDay} /></div>
+      <div className="flex items-center gap-2 pb-2 text-xs">
+        <label className="flex items-center gap-1.5"><input type="checkbox" checked={form.halfDay} onChange={e => setForm(p => ({ ...p, halfDay: e.target.checked, toDate: e.target.checked ? p.fromDate : p.toDate }))} /> Half day</label>
+      </div>
+      <div className="md:col-span-6"><Label>Reason</Label><Input placeholder="Optional" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} /></div>
+      <div className="md:col-span-6 flex justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button size="sm" onClick={submit} disabled={create.isPending}>{create.isPending ? "Submitting…" : "Submit"}</Button>
+      </div>
+    </div>
+  );
+}
+
 export default function StaffPage() {
   const [tab, setTab] = useState<TabType>("team");
   const [roleFilter, setRoleFilter] = useState<string | undefined>();
@@ -1704,6 +2062,7 @@ export default function StaffPage() {
     { id: "team", label: "Team", icon: Users },
     { id: "shifts", label: "Shifts", icon: Calendar },
     { id: "attendance", label: "Attendance", icon: Clock },
+    { id: "leaves", label: "Leaves", icon: CalendarOff },
     { id: "activity", label: "Activity Log", icon: Activity },
     { id: "roles", label: "Roles & Permissions", icon: Shield },
   ];
@@ -1753,6 +2112,7 @@ export default function StaffPage() {
         )}
         {tab === "shifts" && <ShiftsTab staff={allStaff} />}
         {tab === "attendance" && <AttendanceTab staff={allStaff} />}
+        {tab === "leaves" && <LeavesTab staff={allStaff} />}
         {tab === "activity" && <ActivityTab />}
         {tab === "roles" && <RolesTab />}
       </div>

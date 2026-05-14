@@ -24,6 +24,7 @@ import type {
   ReportsData,
   Supplier, CreateSupplierInput, UpdateSupplierInput,
   Role, Permission,
+  LeavePolicy, LeaveBalance, LeaveRequest, CreateLeavePolicyInput, CreateLeaveRequestInput,
   Payment, PaymentsResponse, PaymentSummary, CreatePaymentInput, SettlePaymentInput,
   DuePaymentsData,
 } from "./types";
@@ -1001,6 +1002,128 @@ export function useDeleteStaffShift() {
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/staff-shifts/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}
+
+// ---------- Leave management ----------
+
+export function useLeavePolicies() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["leave-policies", RESTAURANT_ID],
+    queryFn: () => apiGet<LeavePolicy[]>(`/restaurants/${RESTAURANT_ID}/leave-policies`),
+  });
+}
+
+export function useCreateLeavePolicy() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateLeavePolicyInput) => apiPost<LeavePolicy>(`/restaurants/${RESTAURANT_ID}/leave-policies`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leave-policies", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateLeavePolicy() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<CreateLeavePolicyInput> & { isActive?: boolean }) =>
+      apiPatch<LeavePolicy>(`/restaurants/${RESTAURANT_ID}/leave-policies/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leave-policies", RESTAURANT_ID] }),
+  });
+}
+
+export function useDeleteLeavePolicy() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/leave-policies/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leave-policies", RESTAURANT_ID] }),
+  });
+}
+
+export function useLeaveBalances(userId: number | null, year?: number) {
+  const RESTAURANT_ID = useRestaurantId();
+  const y = year ?? new Date().getFullYear();
+  return useQuery({
+    queryKey: ["leave-balances", RESTAURANT_ID, userId, y],
+    queryFn: () => apiGet<LeaveBalance[]>(`/restaurants/${RESTAURANT_ID}/leave-balances?userId=${userId}&year=${y}`),
+    enabled: userId !== null,
+  });
+}
+
+export function useSetLeaveBalance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userId: number; year: number; leaveType: string; opening: number }) =>
+      apiPost<LeaveBalance>(`/restaurants/${RESTAURANT_ID}/leave-balances`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leave-balances", RESTAURANT_ID] }),
+  });
+}
+
+export function useLeaveRequests(params?: { status?: string; userId?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.userId) q.set("userId", String(params.userId));
+  return useQuery({
+    queryKey: ["leave-requests", RESTAURANT_ID, params],
+    queryFn: () => apiGet<LeaveRequest[]>(`/restaurants/${RESTAURANT_ID}/leave-requests?${q}`),
+  });
+}
+
+export function useCreateLeaveRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateLeaveRequestInput) => apiPost<LeaveRequest>(`/restaurants/${RESTAURANT_ID}/leave-requests`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leave-requests", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["leave-balances", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useApproveLeaveRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decisionNote }: { id: number; decisionNote?: string }) =>
+      apiPost<LeaveRequest>(`/restaurants/${RESTAURANT_ID}/leave-requests/${id}/approve`, { decisionNote }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leave-requests", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["leave-balances", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useRejectLeaveRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decisionNote }: { id: number; decisionNote?: string }) =>
+      apiPost<LeaveRequest>(`/restaurants/${RESTAURANT_ID}/leave-requests/${id}/reject`, { decisionNote }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leave-requests", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["leave-balances", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useCancelLeaveRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<LeaveRequest>(`/restaurants/${RESTAURANT_ID}/leave-requests/${id}/cancel`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leave-requests", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["leave-balances", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
   });
 }
 

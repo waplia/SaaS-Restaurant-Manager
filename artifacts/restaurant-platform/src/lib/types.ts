@@ -1112,6 +1112,68 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export interface LeavePolicy {
+  id: number;
+  restaurantId: number;
+  leaveType: string;
+  label: string;
+  isPaid: boolean;
+  entitlementDays: number;
+  carryForwardMax: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveBalance {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  year: number;
+  leaveType: string;
+  opening: string;
+  used: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface LeaveRequest {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  leaveType: string;
+  fromDate: string;
+  toDate: string;
+  halfDay: boolean;
+  totalDays: string;
+  reason: string | null;
+  status: LeaveStatus;
+  decidedByUserId: number | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateLeavePolicyInput {
+  leaveType: string;
+  label: string;
+  isPaid: boolean;
+  entitlementDays: number;
+  carryForwardMax: number;
+}
+
+export interface CreateLeaveRequestInput {
+  userId?: number;
+  leaveType: string;
+  fromDate: string;
+  toDate: string;
+  halfDay?: boolean;
+  reason?: string;
+}
+
 
 export interface CreateShiftInput {
   name: string;
