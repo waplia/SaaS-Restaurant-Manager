@@ -94,6 +94,8 @@ export const attendanceTable = pgTable("attendance", {
   source: text("source").notNull().default("manual"),
   markedByUserId: integer("marked_by_user_id").references(() => usersTable.id),
   notes: text("notes"),
+  leaveRequestId: integer("leave_request_id"),
+  leavePaid: boolean("leave_paid"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

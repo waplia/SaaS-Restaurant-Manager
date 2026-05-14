@@ -371,10 +371,14 @@ router.post(
         .limit(1);
 
       const totalDays = Number(reqRow.totalDays);
+      const leavePaid = !!policy?.isPaid;
 
-      // Write `leave` rows into attendance for each covered date.
-      // Upsert by (user, day) so we don't duplicate existing attendance rows.
+      // First, check every covered day for a conflicting worked attendance row.
+      // We refuse to approve if any day already has present/late/half_day so we
+      // never silently drop balance days without converting attendance.
       const days = enumerateDays(reqRow.fromDate, reqRow.toDate);
+      const conflicts: string[] = [];
+      const existingByDay = new Map<number, typeof attendanceTable.$inferSelect>();
       for (const day of days) {
         const dayStart = startOfDay(day);
         const dayEnd = endOfDay(day);
@@ -391,28 +395,39 @@ router.post(
           )
           .limit(1);
         if (existing) {
-          // Don't overwrite real worked attendance — preserve the existing
-          // record. Only convert rows that represent an absence or weekly-off.
-          if (existing.status === "absent" || existing.status === "weekly_off" || existing.status === "leave") {
-            await tx
-              .update(attendanceTable)
-              .set({
-                status: "leave",
-                workedMinutes: 0,
-                overtimeMinutes: 0,
-                lateMinutes: 0,
-                scheduledMinutes: 0,
-                scheduledShiftId: null,
-                clockOut: existing.clockIn,
-                totalHours: "0",
-                source: "manual",
-                markedByUserId: callerId,
-                notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
-                updatedAt: new Date(),
-              })
-              .where(eq(attendanceTable.id, existing.id));
+          existingByDay.set(day.getTime(), existing);
+          if (existing.status === "present" || existing.status === "late" || existing.status === "half_day") {
+            conflicts.push(dayStart.toISOString().slice(0, 10));
           }
-          // else: user already has present/late/half_day for this day — keep it.
+        }
+      }
+      if (conflicts.length > 0) {
+        return { error: "conflict" as const, conflicts };
+      }
+
+      // Now write `leave` rows for each day, linking back to this request.
+      for (const day of days) {
+        const existing = existingByDay.get(day.getTime());
+        if (existing) {
+          await tx
+            .update(attendanceTable)
+            .set({
+              status: "leave",
+              workedMinutes: 0,
+              overtimeMinutes: 0,
+              lateMinutes: 0,
+              scheduledMinutes: 0,
+              scheduledShiftId: null,
+              clockOut: existing.clockIn,
+              totalHours: "0",
+              source: "manual",
+              markedByUserId: callerId,
+              leaveRequestId: id,
+              leavePaid,
+              notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(attendanceTable.id, existing.id));
         } else {
           await tx.insert(attendanceTable).values({
             userId: reqRow.userId,
@@ -423,6 +438,8 @@ router.post(
             status: "leave",
             source: "manual",
             markedByUserId: callerId,
+            leaveRequestId: id,
+            leavePaid,
             notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
           });
         }
@@ -482,6 +499,13 @@ router.post(
         res.status(404).json({ error: "Not found" });
         return;
       }
+      if (result.error === "conflict") {
+        res.status(409).json({
+          error: "Cannot approve: user already has worked attendance on these days",
+          conflicts: result.conflicts,
+        });
+        return;
+      }
       res.status(400).json({ error: "Only pending requests can be approved" });
       return;
     }
@@ -515,23 +539,17 @@ router.post(
         .limit(1);
       if (!reqRow) return { error: "not_found" as const };
       if (reqRow.status === "approved") {
-        // Reverse: delete the leave attendance rows + reinstate balance.
-        const days = enumerateDays(reqRow.fromDate, reqRow.toDate);
-        for (const day of days) {
-          const dayStart = startOfDay(day);
-          const dayEnd = endOfDay(day);
-          await tx
-            .delete(attendanceTable)
-            .where(
-              and(
-                eq(attendanceTable.restaurantId, restaurantId),
-                eq(attendanceTable.userId, reqRow.userId),
-                eq(attendanceTable.status, "leave"),
-                gte(attendanceTable.clockIn, dayStart),
-                lte(attendanceTable.clockIn, dayEnd),
-              ),
-            );
-        }
+        // Delete only attendance rows that were created/converted by THIS
+        // request. The `leave_request_id` linkage is set at approval time.
+        await tx
+          .delete(attendanceTable)
+          .where(
+            and(
+              eq(attendanceTable.restaurantId, restaurantId),
+              eq(attendanceTable.userId, reqRow.userId),
+              eq(attendanceTable.leaveRequestId, id),
+            ),
+          );
         const year = reqRow.fromDate.getFullYear();
         const totalDays = Number(reqRow.totalDays);
         await tx
@@ -596,22 +614,15 @@ router.post("/restaurants/:restaurantId/leave-requests/:id/cancel", async (req, 
     if (reqRow.status === "cancelled" || reqRow.status === "rejected") return { row: reqRow };
 
     if (reqRow.status === "approved") {
-      const days = enumerateDays(reqRow.fromDate, reqRow.toDate);
-      for (const day of days) {
-        const dayStart = startOfDay(day);
-        const dayEnd = endOfDay(day);
-        await tx
-          .delete(attendanceTable)
-          .where(
-            and(
-              eq(attendanceTable.restaurantId, restaurantId),
-              eq(attendanceTable.userId, reqRow.userId),
-              eq(attendanceTable.status, "leave"),
-              gte(attendanceTable.clockIn, dayStart),
-              lte(attendanceTable.clockIn, dayEnd),
-            ),
-          );
-      }
+      await tx
+        .delete(attendanceTable)
+        .where(
+          and(
+            eq(attendanceTable.restaurantId, restaurantId),
+            eq(attendanceTable.userId, reqRow.userId),
+            eq(attendanceTable.leaveRequestId, id),
+          ),
+        );
       const year = reqRow.fromDate.getFullYear();
       const totalDays = Number(reqRow.totalDays);
       await tx
