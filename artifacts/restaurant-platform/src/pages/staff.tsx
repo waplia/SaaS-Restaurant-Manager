@@ -1191,7 +1191,7 @@ function TeamTab({
                         <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", roleConfig.color)}>{roleConfig.label}</span>
                         {member.outstandingAdvance && Number(member.outstandingAdvance) > 0 && (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-orange-700" title="Outstanding salary advance">
-                            <Wallet className="w-2.5 h-2.5 inline mr-0.5" />{Number(member.outstandingAdvance).toFixed(0)}
+                            <Wallet className="w-2.5 h-2.5 inline mr-0.5" />₹ {Number(member.outstandingAdvance).toFixed(0)}
                           </span>
                         )}
                       </div>

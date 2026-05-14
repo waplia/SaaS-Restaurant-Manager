@@ -86,7 +86,8 @@ function validateSalaryShape(body: Record<string, unknown>): string | null {
   if (t === "hourly_wage" && !has("hourlyRate")) return "hourly_wage requires hourlyRate";
   if (t === "commission") {
     if (!has("commissionRate")) return "commission requires commissionRate";
-    if (body.commissionBase && !COMMISSION_BASES.has(String(body.commissionBase))) {
+    if (!has("commissionBase")) return "commission requires commissionBase";
+    if (!COMMISSION_BASES.has(String(body.commissionBase))) {
       return "commissionBase must be 'orders' or 'sales'";
     }
   }
