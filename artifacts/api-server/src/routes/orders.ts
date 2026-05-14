@@ -168,10 +168,7 @@ async function getRestaurantRates(restaurantId: number) {
   };
 }
 
-async function recalculateOrderTotals(orderId: number, restaurantId: number, _discountAmount?: number) {
-  // Discount is sourced from the orderDiscountsTable ledger. The legacy
-  // _discountAmount parameter is ignored — the ledger is now the source of truth.
-  void _discountAmount;
+async function recalculateOrderTotals(orderId: number, restaurantId: number) {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
   const subtotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
@@ -316,10 +313,6 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
     ))
     .orderBy(desc(paymentsTable.paymentDate))
     .limit(1);
-  // Discount ledger (T2/T6) — source of truth for per-discount receipt rows
-  // and for the POS sidebar "active discounts" list. The cached
-  // `order.discountAmount` is the rolled-up sum and stays in sync via
-  // `recalculateOrderTotals`, but UI rendering needs each ledger row.
   const discounts = await listOrderDiscounts(order.id);
   res.json({
     ...order,
@@ -424,7 +417,7 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
 
   const newTicket = await ensureTicketForAddedItem({ orderId, restaurantId, menuItemId: mi.id });
 
-  const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
+  const totals = await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
@@ -460,7 +453,7 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
   await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
 
-  const totals = await recalculateOrderTotals(orderId, restaurantId, Number(order.discountAmount ?? 0));
+  const totals = await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
@@ -469,18 +462,17 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   res.json({ ...updatedOrder, items });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { type, scope, orderItemId, value, reason, managerPin } = req.body as {
-    type?: string; scope?: string; orderItemId?: number; value?: number; reason?: string; managerPin?: string;
+  const { type, orderItemId, value, reason, managerPin } = req.body as {
+    type?: string; orderItemId?: number; value?: number; reason?: string; managerPin?: string;
   };
 
   const typeStr = String(type ?? "");
   if (!(typeStr === "percentage" || typeStr === "flat" || typeStr === "item")) {
     return void res.status(400).json({ error: "type must be percentage, flat, or item" });
   }
-  void scope;
   const reasonTrim = String(reason ?? "").trim();
   if (!reasonTrim) return void res.status(400).json({ error: "reason is required" });
   const valueNum = Math.max(0, Number(value ?? 0));
@@ -561,7 +553,12 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
         thresholdAmount: cfg.thresholdAmount,
       });
     }
-    approvedByUserId = req.user?.sub ?? null;
+    // Attribute approval only to a manager-tier requester; otherwise the PIN
+    // itself is the approval token (recordedByUserId still captures the cashier).
+    const role = req.user?.role;
+    approvedByUserId = (role === "owner" || role === "manager" || req.user?.isSuperAdmin)
+      ? (req.user?.sub ?? null)
+      : null;
   }
 
   await db.insert(orderDiscountsTable).values({
@@ -584,7 +581,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
   res.json({ ...updatedOrder, items, discounts });
 });
 
-router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", async (req, res) => {
+router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const discountId = Number(req.params.discountId);

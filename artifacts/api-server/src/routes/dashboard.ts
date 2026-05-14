@@ -306,10 +306,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   if (fromStr && toStr) expenseConditions.push(lte(expensesTable.expenseDate, to.toISOString().slice(0, 10)));
   const expenseWhere = and(...expenseConditions);
 
-  // Discount aggregation (T6) — joins ledger rows recorded inside the analytics
-  // window to the recording cashier; rows with no cashier (legacy) collapse to
-  // a "System" bucket. Grouped by cashier + reason + type so the report can
-  // surface comp/manager-override patterns by staff member.
+  // Discount aggregation: ledger rows in window grouped by cashier+reason+type.
   const discountsByCashierRows = await db.execute<{
     user_id: number | null;
     name: string;
