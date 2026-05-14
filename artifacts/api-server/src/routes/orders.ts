@@ -451,6 +451,9 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   if (!targetItem) return void res.status(404).json({ error: "Item not found in this order" });
 
   await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
+  // Drop any item-scoped discount lines pinned to this item so they don't
+  // continue reducing the order total after the item is gone.
+  await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.orderItemId, itemId));
   await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
 
   const totals = await recalculateOrderTotals(orderId, restaurantId);
