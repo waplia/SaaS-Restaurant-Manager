@@ -239,7 +239,7 @@ function csvToImportRows(text: string): ImportRowInput[] {
     taxRate: get(cols, i.taxRate) || null,
     isVeg: get(cols, i.veg).toLowerCase() === "yes",
     isAvailable: get(cols, i.available).toLowerCase() !== "no",
-    preparationTime: Number(get(cols, i.prep)) || 15,
+    preparationTime: get(cols, i.prep) === "" ? 15 : Number(get(cols, i.prep)),
     calories: get(cols, i.calories) ? Number(get(cols, i.calories)) : null,
     tags: get(cols, i.tags) ? get(cols, i.tags).split(";").map(s => s.trim()).filter(Boolean) : [],
     allergens: get(cols, i.allergens) ? get(cols, i.allergens).split(";").map(s => s.trim()).filter(Boolean) : [],

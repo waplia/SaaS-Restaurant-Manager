@@ -112,7 +112,7 @@ function parseMenuCSV(text: string): ParsedRow[] {
       taxRate: taxStr || null,
       isVeg: get(cols, i.veg).toLowerCase() === "yes",
       isAvailable: get(cols, i.available).toLowerCase() !== "no",
-      preparationTime: Number(get(cols, i.prep)) || 15,
+      preparationTime: get(cols, i.prep) === "" ? 15 : Number(get(cols, i.prep)),
       calories: calStr ? Number(calStr) : null,
       tags: tags ? tags.split(";").map(t => t.trim()).filter(Boolean) : [],
       allergens: allergens ? allergens.split(";").map(t => t.trim()).filter(Boolean) : [],
