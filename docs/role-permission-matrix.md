@@ -38,8 +38,8 @@ Checkout / portal / mock-activate: **O only**.
 Open / close session, list sessions: **O, M, W**.
 Z-report and admin operations: **MANAGER_ROLES (O, M)**.
 
-### `delivery.ts` — parent gate: O, M, W, K, D
-Per-route narrowing (cashier intentionally NOT in parent gate; granted only on COD endpoints below):
+### `delivery.ts` — parent gate: O, M, Ca, W, K, D
+Cashier is included in the parent gate (Express middleware is additive — a parent deny cannot be relaxed by a per-route allow). Non-COD routes explicitly narrow via `DELIVERY_OPS_ROLES` to exclude cashier, so cashier only reaches the COD endpoints below:
 | Route | O | M | Ca | W | K | D |
 |---|---|---|---|---|---|---|
 | `GET  /delivery/executives` | ✓ | ✓ | – | ✓ | ✓ | ✓ |
