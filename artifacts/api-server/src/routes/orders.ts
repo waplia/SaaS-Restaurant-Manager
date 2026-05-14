@@ -540,7 +540,10 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
   }
 
   const cfg = cfgEarly;
-  const needsApproval = exceedsThreshold(amount, subtotal, cfg);
+  // Evaluate against the cumulative discount total after this line so that
+  // multiple sub-threshold lines cannot be used to bypass approval.
+  const cumulativeAfter = existingTotal + amount;
+  const needsApproval = exceedsThreshold(cumulativeAfter, subtotal, cfg);
   let approvedByUserId: number | null = null;
   if (needsApproval) {
     if (!cfg.hasManagerPin) {
