@@ -525,10 +525,12 @@ function CompensationTab({ member }: { member: StaffMember }) {
   type StructForm = {
     type: "fixed_monthly" | "daily_wage" | "hourly_wage" | "commission" | "custom";
     baseAmount: string; hourlyRate: string; dailyRate: string; commissionRate: string; commissionBase: string; currency: string;
+    effectiveFrom: string;
     components: Array<{ name: string; amount: string; isRecurring: boolean; isTaxable: boolean }>;
   };
   const [form, setForm] = useState<StructForm>({
     type: "fixed_monthly", baseAmount: "", hourlyRate: "", dailyRate: "", commissionRate: "", commissionBase: "orders", currency: "INR",
+    effectiveFrom: "",
     components: [],
   });
   const [adjForm, setAdjForm] = useState<{ kind: "bonus" | "deduction"; amount: string; label: string; appliesToMonth: string; isRecurring: boolean }>({
@@ -545,6 +547,7 @@ function CompensationTab({ member }: { member: StaffMember }) {
       commissionRate: structure.commissionRate ?? "",
       commissionBase: structure.commissionBase ?? "orders",
       currency: structure.currency ?? "INR",
+      effectiveFrom: structure.effectiveFrom ? structure.effectiveFrom.slice(0, 10) : "",
       components: structure.components.map(c => ({ name: c.name, amount: c.amount, isRecurring: c.isRecurring, isTaxable: c.isTaxable })),
     });
   }, [structure]);
@@ -560,6 +563,7 @@ function CompensationTab({ member }: { member: StaffMember }) {
         commissionRate: form.commissionRate || null,
         commissionBase: form.type === "commission" ? form.commissionBase : null,
         currency: form.currency,
+        effectiveFrom: form.effectiveFrom ? new Date(form.effectiveFrom).toISOString() : null,
         components: form.components.filter(c => c.name.trim()).map(c => ({
           name: c.name.trim(),
           amount: c.amount || "0",
@@ -619,6 +623,11 @@ function CompensationTab({ member }: { member: StaffMember }) {
           <div>
             <Label>Currency</Label>
             <Input value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value.toUpperCase() }))} />
+          </div>
+          <div className="col-span-2">
+            <Label>Effective from</Label>
+            <Input type="date" value={form.effectiveFrom} onChange={e => setForm(p => ({ ...p, effectiveFrom: e.target.value }))} />
+            <p className="text-[11px] text-muted-foreground mt-1">Used by payroll runs to determine which structure applies.</p>
           </div>
           {form.type === "fixed_monthly" && (
             <div className="col-span-2">
