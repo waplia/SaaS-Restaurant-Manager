@@ -711,18 +711,19 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, re
   const headroom = Math.max(0, subtotal - otherDiscountTotal);
   const couponAmount = Math.min(couponDiscount, headroom);
 
-  if (couponAmount > 0) {
-    await db.insert(orderDiscountsTable).values({
-      orderId, restaurantId,
-      type: "coupon",
-      scope: "order",
-      value: Number(coupon.discountValue).toFixed(2),
-      amount: couponAmount.toFixed(2),
-      reason: `Coupon: ${coupon.code}`,
-      couponCode: coupon.code,
-      recordedByUserId: req.user?.sub ?? null,
-    });
+  if (couponAmount <= 0) {
+    return void res.status(409).json({ error: "Order is already fully discounted; coupon would have no effect" });
   }
+  await db.insert(orderDiscountsTable).values({
+    orderId, restaurantId,
+    type: "coupon",
+    scope: "order",
+    value: Number(coupon.discountValue).toFixed(2),
+    amount: couponAmount.toFixed(2),
+    reason: `Coupon: ${coupon.code}`,
+    couponCode: coupon.code,
+    recordedByUserId: req.user?.sub ?? null,
+  });
   await db.update(ordersTable).set({ couponCode: coupon.code, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
 
   await recalculateOrderTotals(orderId, restaurantId);
