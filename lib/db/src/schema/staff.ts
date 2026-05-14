@@ -96,6 +96,7 @@ export const attendanceTable = pgTable("attendance", {
   notes: text("notes"),
   leaveRequestId: integer("leave_request_id"),
   leavePaid: boolean("leave_paid"),
+  prevStatus: text("prev_status"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -159,7 +160,7 @@ export const leaveBalancesTable = pgTable("leave_balances", {
   used: decimal("used", { precision: 6, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [unique().on(t.userId, t.year, t.leaveType)]);
+}, (t) => [unique().on(t.restaurantId, t.userId, t.year, t.leaveType)]);
 
 export const leaveRequestsTable = pgTable("leave_requests", {
   id: serial("id").primaryKey(),

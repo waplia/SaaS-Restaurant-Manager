@@ -77,6 +77,47 @@ function enumerateDays(from: Date, to: Date): Date[] {
   return out;
 }
 
+/**
+ * Reverse all attendance rows that an approval created or converted for a
+ * specific leave request. Rows that were freshly inserted (no `prevStatus`)
+ * are deleted; rows that were converted are restored to their prior status
+ * so the user's earlier attendance history is preserved losslessly.
+ */
+async function reverseApprovedAttendance(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  restaurantId: number,
+  userId: number,
+  leaveRequestId: number,
+) {
+  const rows = await tx
+    .select()
+    .from(attendanceTable)
+    .where(
+      and(
+        eq(attendanceTable.restaurantId, restaurantId),
+        eq(attendanceTable.userId, userId),
+        eq(attendanceTable.leaveRequestId, leaveRequestId),
+      ),
+    );
+  for (const r of rows) {
+    if (r.prevStatus) {
+      await tx
+        .update(attendanceTable)
+        .set({
+          status: r.prevStatus,
+          leaveRequestId: null,
+          leavePaid: null,
+          prevStatus: null,
+          notes: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(attendanceTable.id, r.id));
+    } else {
+      await tx.delete(attendanceTable).where(eq(attendanceTable.id, r.id));
+    }
+  }
+}
+
 function daysBetween(from: Date, to: Date, halfDay: boolean): number {
   const a = startOfDay(from).getTime();
   const b = startOfDay(to).getTime();
@@ -406,6 +447,9 @@ router.post(
       }
 
       // Now write `leave` rows for each day, linking back to this request.
+      // When we convert a pre-existing row we snapshot its prior status into
+      // `prevStatus` so we can restore it on reject/cancel — never destroying
+      // history.
       for (const day of days) {
         const existing = existingByDay.get(day.getTime());
         if (existing) {
@@ -424,6 +468,7 @@ router.post(
               markedByUserId: callerId,
               leaveRequestId: id,
               leavePaid,
+              prevStatus: existing.status,
               notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
               updatedAt: new Date(),
             })
@@ -539,17 +584,7 @@ router.post(
         .limit(1);
       if (!reqRow) return { error: "not_found" as const };
       if (reqRow.status === "approved") {
-        // Delete only attendance rows that were created/converted by THIS
-        // request. The `leave_request_id` linkage is set at approval time.
-        await tx
-          .delete(attendanceTable)
-          .where(
-            and(
-              eq(attendanceTable.restaurantId, restaurantId),
-              eq(attendanceTable.userId, reqRow.userId),
-              eq(attendanceTable.leaveRequestId, id),
-            ),
-          );
+        await reverseApprovedAttendance(tx, restaurantId, reqRow.userId, id);
         const year = reqRow.fromDate.getFullYear();
         const totalDays = Number(reqRow.totalDays);
         await tx
@@ -614,15 +649,7 @@ router.post("/restaurants/:restaurantId/leave-requests/:id/cancel", async (req, 
     if (reqRow.status === "cancelled" || reqRow.status === "rejected") return { row: reqRow };
 
     if (reqRow.status === "approved") {
-      await tx
-        .delete(attendanceTable)
-        .where(
-          and(
-            eq(attendanceTable.restaurantId, restaurantId),
-            eq(attendanceTable.userId, reqRow.userId),
-            eq(attendanceTable.leaveRequestId, id),
-          ),
-        );
+      await reverseApprovedAttendance(tx, restaurantId, reqRow.userId, id);
       const year = reqRow.fromDate.getFullYear();
       const totalDays = Number(reqRow.totalDays);
       await tx
