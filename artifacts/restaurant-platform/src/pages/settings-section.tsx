@@ -1078,42 +1078,68 @@ function PrinterSection() {
 }
 
 /* ---------------- 18. Downloads ---------------- */
+interface DownloadsCfg {
+  delimiter: "," | ";" | "\t";
+  includeHeaders: boolean;
+  dateFormat: "ISO" | "DMY" | "MDY";
+}
 function DownloadsSection() {
-  const items = [
-    { label: "Sample menu CSV template", file: "menu-template.csv", body: "name,price,category,description,is_veg\nMargherita,320,Pizza,Classic margherita,true\n" },
-    { label: "Sample inventory CSV template", file: "inventory-template.csv", body: "name,unit,current_stock,min_stock,cost_per_unit\nFlour,kg,50,10,40\n" },
-    { label: "Sample customers CSV template", file: "customers-template.csv", body: "name,phone,email,birthday\nJane Doe,9990001234,jane@example.com,1990-01-15\n" },
-  ];
-  const download = (file: string, body: string) => {
-    const blob = new Blob([body], { type: "text/csv" });
+  const defaults: DownloadsCfg = { delimiter: ",", includeHeaders: true, dateFormat: "ISO" };
+  const sep = (d: DownloadsCfg["delimiter"]) => d === "\t" ? "\t" : d;
+  const items = (d: DownloadsCfg["delimiter"]) => {
+    const s = sep(d);
+    return [
+      { label: "Sample menu CSV template", file: "menu-template.csv", body: `name${s}price${s}category${s}description${s}is_veg\nMargherita${s}320${s}Pizza${s}Classic margherita${s}true\n` },
+      { label: "Sample inventory CSV template", file: "inventory-template.csv", body: `name${s}unit${s}current_stock${s}min_stock${s}cost_per_unit\nFlour${s}kg${s}50${s}10${s}40\n` },
+      { label: "Sample customers CSV template", file: "customers-template.csv", body: `name${s}phone${s}email${s}birthday\nJane Doe${s}9990001234${s}jane@example.com${s}1990-01-15\n` },
+    ];
+  };
+  const download = (file: string, body: string, includeHeaders: boolean) => {
+    const out = includeHeaders ? body : body.split("\n").slice(1).join("\n");
+    const blob = new Blob([out], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = file; a.click();
     URL.revokeObjectURL(url);
   };
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Templates and resources for bulk imports and data exports.</p>
-      <div className="space-y-2">
-        {items.map(it => (
-          <div key={it.file} className="flex items-center justify-between border border-border rounded-lg p-3">
-            <div>
-              <p className="font-medium text-sm">{it.label}</p>
-              <p className="text-xs text-muted-foreground">{it.file}</p>
+    <SettingForm section="downloads" defaults={defaults}>
+      {(s, set) => (
+        <>
+          <p className="text-sm text-muted-foreground">Templates and resources for bulk imports and data exports.</p>
+          <Row>
+            <Field label="CSV delimiter">
+              <Select value={s.delimiter} onChange={(v) => set(p => ({ ...p, delimiter: v }))}
+                options={[{value:",",label:"Comma (,)"},{value:";",label:"Semicolon (;)"},{value:"\t",label:"Tab"}]} />
+            </Field>
+            <Field label="Date format">
+              <Select value={s.dateFormat} onChange={(v) => set(p => ({ ...p, dateFormat: v }))}
+                options={[{value:"ISO",label:"YYYY-MM-DD"},{value:"DMY",label:"DD/MM/YYYY"},{value:"MDY",label:"MM/DD/YYYY"}]} />
+            </Field>
+          </Row>
+          <Toggle label="Include header row in exports" checked={s.includeHeaders} onChange={(v) => set(p => ({ ...p, includeHeaders: v }))} />
+          <div className="space-y-2 pt-2">
+            {items(s.delimiter).map(it => (
+              <div key={it.file} className="flex items-center justify-between border border-border rounded-lg p-3">
+                <div>
+                  <p className="font-medium text-sm">{it.label}</p>
+                  <p className="text-xs text-muted-foreground">{it.file}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => download(it.file, it.body, s.includeHeaders)}>
+                  <FileDown className="w-3.5 h-3.5 mr-1.5" /> Download
+                </Button>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border border-border rounded-lg p-3">
+              <div>
+                <p className="font-medium text-sm">Per-table QR codes</p>
+                <p className="text-xs text-muted-foreground">Generate from the Tables page (each table has its own QR).</p>
+              </div>
+              <Link href="/tables"><Button variant="outline" size="sm">Open Tables</Button></Link>
             </div>
-            <Button variant="outline" size="sm" onClick={() => download(it.file, it.body)}>
-              <FileDown className="w-3.5 h-3.5 mr-1.5" /> Download
-            </Button>
           </div>
-        ))}
-        <div className="flex items-center justify-between border border-border rounded-lg p-3">
-          <div>
-            <p className="font-medium text-sm">Per-table QR codes</p>
-            <p className="text-xs text-muted-foreground">Generate from the Tables page (each table has its own QR).</p>
-          </div>
-          <Link href="/tables"><Button variant="outline" size="sm">Open Tables</Button></Link>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </SettingForm>
   );
 }
 

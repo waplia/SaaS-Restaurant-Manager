@@ -114,7 +114,7 @@ function Router() {
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
-      <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />
+      <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
