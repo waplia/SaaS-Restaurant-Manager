@@ -522,7 +522,7 @@ function TeamTab({
   const { data: todayAttendance = [] } = useAttendance({ from: todayStart.toISOString(), to: todayEnd.toISOString() });
   const openSessionByUser: Record<number, AttendanceRecord> = {};
   for (const r of todayAttendance) {
-    if (!r.clockOut) openSessionByUser[r.userId] = r;
+    if (!r.clockOut && (r.status === "present" || r.status === "late" || r.status === "half_day")) openSessionByUser[r.userId] = r;
   }
   const { toast } = useToast();
 

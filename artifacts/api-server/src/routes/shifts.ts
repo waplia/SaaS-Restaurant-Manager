@@ -11,6 +11,8 @@ const ALLOWED_STATUSES = new Set([
 ]);
 const ALLOWED_SOURCES = new Set(["web", "mobile", "manual"]);
 const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const WORKING_STATUSES = ["present", "late", "half_day"] as const;
+const NON_WORKING_STATUSES = new Set(["absent", "weekly_off", "leave"]);
 
 async function audit(
   restaurantId: number,
@@ -259,13 +261,15 @@ router.get("/restaurants/:restaurantId/attendance", async (req, res) => {
 });
 
 async function performPunchIn(restaurantId: number, targetUserId: number, callerId: number, source: string, notes: string | null, ip?: string) {
-  // Block double punch-in: ANY open session (handles overnight shifts).
+  // Block double punch-in: ANY truly open punch session (handles overnight shifts).
+  // Non-working manual rows (absent/weekly_off/leave) are NEVER considered open.
   const [open] = await db.select().from(attendanceTable).where(and(
     eq(attendanceTable.restaurantId, restaurantId),
     eq(attendanceTable.userId, targetUserId),
     isNull(attendanceTable.clockOut),
+    inArray(attendanceTable.status, [...WORKING_STATUSES]),
   )).orderBy(desc(attendanceTable.clockIn)).limit(1);
-  if (open && open.status !== "absent" && open.status !== "weekly_off" && open.status !== "leave") {
+  if (open) {
     return { existing: true, record: open };
   }
 
@@ -398,11 +402,12 @@ router.post(
       res.status(403).json({ error: "Target user not in this restaurant" });
       return;
     }
-    // Find ANY open session (supports overnight shifts).
+    // Find ANY truly open punch session (working-status only; supports overnight shifts).
     const [open] = await db.select().from(attendanceTable).where(and(
       eq(attendanceTable.restaurantId, restaurantId),
       eq(attendanceTable.userId, targetUserId),
       isNull(attendanceTable.clockOut),
+      inArray(attendanceTable.status, [...WORKING_STATUSES]),
     )).orderBy(desc(attendanceTable.clockIn)).limit(1);
     if (!open) {
       res.status(404).json({ error: "No open session to punch out" });
@@ -474,7 +479,7 @@ router.post(
     )).limit(1);
 
     // Non-working statuses zero out worked/overtime so payroll never carries stale hours.
-    const isNonWorking = status === "absent" || status === "weekly_off" || status === "leave";
+    const isNonWorking = NON_WORKING_STATUSES.has(status);
     const w = isNonWorking
       ? 0
       : (typeof workedMinutes === "number" && workedMinutes >= 0 ? Math.round(workedMinutes) : 0);
@@ -489,7 +494,9 @@ router.post(
         overtimeMinutes: isNonWorking ? 0 : (w ? overtimeMinutes : existing.overtimeMinutes),
         lateMinutes: isNonWorking ? 0 : existing.lateMinutes,
         totalHours: isNonWorking ? "0" : (w ? (w / 60).toFixed(2) : existing.totalHours),
-        clockOut: isNonWorking ? null : existing.clockOut,
+        // For non-working statuses, force clockOut=clockIn so the row is never
+        // mistaken for an open punch session.
+        clockOut: isNonWorking ? existing.clockIn : existing.clockOut,
         notes: notes ?? existing.notes,
         markedByUserId: callerId,
         source: "manual",
@@ -505,6 +512,9 @@ router.post(
       restaurantId,
       date: day,
       clockIn: day,
+      // Non-working manual rows are closed (clockOut=clockIn) so they never
+      // surface as open punch sessions.
+      clockOut: isNonWorking ? day : null,
       status,
       scheduledShiftId: isNonWorking ? null : scheduledShiftId,
       scheduledMinutes: isNonWorking ? 0 : scheduledMinutes,
@@ -564,7 +574,8 @@ router.post(
           lateMinutes: 0,
           scheduledMinutes: 0,
           scheduledShiftId: null,
-          clockOut: null,
+          // Close the row so it never appears as an open punch session.
+          clockOut: existing.clockIn,
           totalHours: "0",
           source: "manual",
           markedByUserId: callerId,
@@ -577,6 +588,7 @@ router.post(
           restaurantId,
           date: day,
           clockIn: day,
+          clockOut: day,
           status: "weekly_off",
           source: "manual",
           markedByUserId: callerId,
@@ -613,9 +625,15 @@ router.patch(
     if (notes !== undefined) patch.notes = notes;
 
     const newClockIn = clockIn ? new Date(clockIn) : existing.clockIn;
-    const newClockOut = clockOut === null ? null : (clockOut ? new Date(clockOut) : existing.clockOut);
+    let newClockOut = clockOut === null ? null : (clockOut ? new Date(clockOut) : existing.clockOut);
+    // If transitioning to a non-working status, force the row closed so it never
+    // surfaces as an open punch session.
+    const newStatus = status ?? existing.status;
+    if (NON_WORKING_STATUSES.has(newStatus)) {
+      newClockOut = newClockOut ?? newClockIn;
+    }
     if (clockIn) patch.clockIn = newClockIn;
-    if (clockOut !== undefined) patch.clockOut = newClockOut;
+    if (clockOut !== undefined || NON_WORKING_STATUSES.has(newStatus)) patch.clockOut = newClockOut;
 
     // Recompute scheduled/late against assigned shift for the date of the record.
     const targetDate = existing.date ?? existing.clockIn;
@@ -669,11 +687,12 @@ router.delete(
 router.get("/restaurants/:restaurantId/attendance/my-active", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const callerId = req.user?.sub ?? 0;
-  // ANY open session for this user — supports overnight shifts (clock-in yesterday, still open).
+  // ANY truly open punch session (working-status only; supports overnight shifts).
   const [open] = await db.select().from(attendanceTable).where(and(
     eq(attendanceTable.restaurantId, restaurantId),
     eq(attendanceTable.userId, callerId),
     isNull(attendanceTable.clockOut),
+    inArray(attendanceTable.status, [...WORKING_STATUSES]),
   )).orderBy(desc(attendanceTable.clockIn)).limit(1);
 
   const now = new Date();
