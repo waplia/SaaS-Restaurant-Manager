@@ -18,12 +18,15 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"),
+  requireRole("owner", "manager", "cashier", "waiter", "kitchen", "delivery_executive", "super_admin"),
   validateRestaurantAccess,
 );
 
+// Roles allowed on non-COD delivery operations (excludes cashier).
+const DELIVERY_OPS_ROLES = ["owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"] as const;
+
 // List delivery executives for the restaurant.
-router.get("/restaurants/:restaurantId/delivery/executives", async (req, res) => {
+router.get("/restaurants/:restaurantId/delivery/executives", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db
     .select({
@@ -56,7 +59,7 @@ router.get("/restaurants/:restaurantId/delivery/executives", async (req, res) =>
 });
 
 // Assign a rider to an order.
-router.post("/restaurants/:restaurantId/delivery/assign", async (req, res) => {
+router.post("/restaurants/:restaurantId/delivery/assign", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { orderId, riderId, notes } = req.body as { orderId: number; riderId: number; notes?: string };
   if (!orderId || !riderId) return void res.status(400).json({ error: "orderId and riderId are required" });
@@ -119,7 +122,7 @@ router.post("/restaurants/:restaurantId/delivery/assign", async (req, res) => {
 });
 
 // Update assignment status: picked_up, delivered, cancelled
-router.patch("/restaurants/:restaurantId/delivery/assignments/:id/status", async (req, res) => {
+router.patch("/restaurants/:restaurantId/delivery/assignments/:id/status", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const { status, codCollected } = req.body as { status: string; codCollected?: boolean };
@@ -170,7 +173,7 @@ router.patch("/restaurants/:restaurantId/delivery/assignments/:id/status", async
 });
 
 // Mark COD collected on an assignment
-router.post("/restaurants/:restaurantId/delivery/assignments/:id/cod-collected", async (req, res) => {
+router.post("/restaurants/:restaurantId/delivery/assignments/:id/cod-collected", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const [assignment] = await db.select().from(deliveryAssignmentsTable).where(
@@ -189,7 +192,7 @@ router.post("/restaurants/:restaurantId/delivery/assignments/:id/cod-collected",
 });
 
 // My deliveries (for the logged-in rider)
-router.get("/restaurants/:restaurantId/delivery/my", async (req, res) => {
+router.get("/restaurants/:restaurantId/delivery/my", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const riderId = req.user!.sub;
   const rows = await db
@@ -209,7 +212,7 @@ router.get("/restaurants/:restaurantId/delivery/my", async (req, res) => {
 });
 
 // All assignments (manager view)
-router.get("/restaurants/:restaurantId/delivery/assignments", async (req, res) => {
+router.get("/restaurants/:restaurantId/delivery/assignments", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const status = req.query.status as string | undefined;
   const conditions = [eq(deliveryAssignmentsTable.restaurantId, restaurantId)];
