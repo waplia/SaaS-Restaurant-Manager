@@ -5,6 +5,7 @@ import {
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem, useApplyDiscount,
+  useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig,
   useCreatePaymentIntent, useCreateRazorpayOrder,
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
   useCurrentCashRegister,
@@ -87,8 +88,9 @@ function printReceipt(args: {
   splitIndex?: number;
   splitTotal?: number;
   createdAt?: string;
+  discounts?: { label: string; amount: number }[];
 }) {
-  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, restaurantAddress, restaurantPhone, splitIndex, splitTotal, createdAt } = args;
+  const { orderNumber, tableLabel, orderType, items, totals, paymentMethod, amountTendered, customerName, restaurantName, logoUrl, restaurantAddress, restaurantPhone, splitIndex, splitTotal, createdAt, discounts } = args;
   printOrder({
     size: "thermal-80mm",
     documentTitle: paymentMethod === "pending" ? "Order Receipt" : "Tax Invoice",
@@ -109,6 +111,7 @@ function printReceipt(args: {
     serviceCharge: totals.serviceCharge,
     discountAmount: totals.discountAmount,
     totalAmount: totals.totalAmount,
+    discounts,
     payment: paymentMethod === "pending" ? undefined : { method: paymentMethod, tendered: amountTendered },
     splitIndex,
     splitTotal,
@@ -252,7 +255,7 @@ interface SplitProof {
 }
 
 function SplitBillModal({
-  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, restaurantAddress, restaurantPhone, orderNumber, tableLabel, orderType, customerName, orderCreatedAt,
+  totalAmount, displayItems, totals, placedOrderId, restaurantName, logoUrl, restaurantAddress, restaurantPhone, orderNumber, tableLabel, orderType, customerName, orderCreatedAt, discounts,
   onClose, onComplete,
 }: {
   totalAmount: number;
@@ -268,6 +271,7 @@ function SplitBillModal({
   orderType: string;
   customerName?: string;
   orderCreatedAt?: string;
+  discounts?: { label: string; amount: number }[];
   onClose: () => void;
   onComplete: () => void;
 }) {
@@ -349,6 +353,7 @@ function SplitBillModal({
       restaurantAddress, restaurantPhone,
       splitIndex: idx, splitTotal: perPerson,
       createdAt: orderCreatedAt,
+      discounts: discounts && discounts.length > 0 ? discounts : undefined,
     });
   };
 
@@ -1033,9 +1038,22 @@ export default function PosPage() {
   const addOrderItem = useAddOrderItem();
   const removeOrderItem = useRemoveOrderItem();
   const applyDiscount = useApplyDiscount();
+  const applyDiscountLine = useApplyDiscountLine();
+  const removeDiscountLine = useRemoveDiscountLine();
+  const { data: discountsCfg } = useDiscountsConfig();
   const applyLoyalty = useApplyLoyalty();
   const applyCoupon = useApplyCoupon();
   const { toast } = useToast();
+
+  // Discount drawer state (T4). PIN field is conditionally surfaced after the
+  // backend returns 402 `{ requiresPin: true }` for over-threshold discounts.
+  const [showDiscountDrawer, setShowDiscountDrawer] = useState(false);
+  const [dType, setDType] = useState<"percentage" | "flat" | "item">("percentage");
+  const [dValue, setDValue] = useState("");
+  const [dReason, setDReason] = useState("");
+  const [dOrderItemId, setDOrderItemId] = useState<number | "">("");
+  const [dManagerPin, setDManagerPin] = useState("");
+  const [dPinRequired, setDPinRequired] = useState(false);
 
   // Phone-based customer lookup for loyalty linking
   const [phoneQuery, setPhoneQuery] = useState("");
@@ -1069,6 +1087,12 @@ export default function PosPage() {
 
   // Live order detail (refreshed after add/remove item, discount changes)
   const { data: liveDetail } = useOrderDetail(placedOrder?.id);
+
+  const liveDiscounts = liveDetail?.discounts ?? [];
+  const discountReceiptLines = liveDiscounts.map(d => ({
+    label: d.type === "coupon" && d.couponCode ? `Coupon ${d.couponCode}` : (d.reason || "Discount"),
+    amount: Number(d.amount),
+  }));
 
   // Items shown in the ticket: server state after placement, local cart before
   const liveItems: OrderItem[] = useMemo(() => {
@@ -1287,6 +1311,7 @@ export default function PosPage() {
       restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
       restaurantPhone: restaurant?.phone ?? undefined,
       createdAt: placedOrder?.createdAt,
+      discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
     });
     handleNewOrder();
   };
@@ -1595,18 +1620,53 @@ export default function PosPage() {
           {/* Totals + actions — sticky footer summary */}
           {(cart.length > 0 || placedOrder) && (
             <div className="sticky bottom-0 border-t border-border px-4 py-4 space-y-3 flex-shrink-0 bg-card/80 backdrop-blur-md shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.08)]">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <Input
-                  type="number"
-                  placeholder="Discount (₹)"
-                  value={discount}
-                  onChange={e => setDiscount(e.target.value)}
-                  onBlur={handleDiscountBlur}
-                  className="h-8 text-sm"
-                  min="0"
-                />
-              </div>
+              {/* Active discount lines (T4) — each ledger row shown with × remove */}
+              {placedOrder && liveDiscounts.length > 0 && (
+                <div className="space-y-1">
+                  {liveDiscounts.map(d => (
+                    <div key={d.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-muted/40 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Tag className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        <span className="truncate text-foreground">
+                          {d.type === "coupon" && d.couponCode ? `Coupon ${d.couponCode}` : (d.reason || "Discount")}
+                        </span>
+                        <span className="text-muted-foreground flex-shrink-0">
+                          {d.type === "percentage" ? `(${Number(d.value).toFixed(0)}%)` : null}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-green-600 font-medium">-₹{Number(d.amount).toFixed(2)}</span>
+                        <button
+                          onClick={() => removeDiscountLine.mutate({ orderId: placedOrder.id, discountId: d.id })}
+                          disabled={removeDiscountLine.isPending}
+                          className="text-muted-foreground hover:text-destructive p-0.5"
+                          title="Remove discount"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-8 text-xs"
+                disabled={!placedOrder}
+                onClick={() => {
+                  setDType("percentage");
+                  setDValue("");
+                  setDReason(discountsCfg?.presetReasons?.[0] ?? "");
+                  setDOrderItemId("");
+                  setDManagerPin("");
+                  setDPinRequired(false);
+                  setShowDiscountDrawer(true);
+                }}
+              >
+                <Tag className="w-3.5 h-3.5 mr-1.5" />
+                {placedOrder ? "Apply discount" : "Place order to discount"}
+              </Button>
 
               {/* Coupon code apply — only when order is placed */}
               {placedOrder && !liveDetail?.couponCode && (
@@ -1712,6 +1772,7 @@ export default function PosPage() {
                       restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
                       restaurantPhone: restaurant?.phone ?? undefined,
                       createdAt: placedOrder.createdAt,
+                      discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
                     });
                   }}>
                     <Printer className="w-3 h-3 mr-1" />Print KOT
@@ -1746,6 +1807,131 @@ export default function PosPage() {
         />
       )}
 
+      {showDiscountDrawer && placedOrder && (() => {
+        const subtotal = Number(liveDetail?.subtotal ?? placedOrder.subtotal ?? 0);
+        const lineTotal = dType === "item" && dOrderItemId !== ""
+          ? Number(liveItems.find(i => i.id === dOrderItemId)?.totalPrice ?? 0)
+          : 0;
+        const valNum = Number(dValue) || 0;
+        const previewAmount =
+          dType === "percentage" ? subtotal * (valNum / 100)
+          : dType === "flat" ? Math.min(valNum, subtotal)
+          : Math.min(valNum, lineTotal);
+        const submit = () => {
+          if (!dReason.trim()) {
+            toast({ title: "Reason required", variant: "destructive" });
+            return;
+          }
+          if (dType === "item" && !dOrderItemId) {
+            toast({ title: "Pick an item", variant: "destructive" });
+            return;
+          }
+          applyDiscountLine.mutate(
+            {
+              orderId: placedOrder.id,
+              type: dType,
+              value: valNum,
+              reason: dReason.trim(),
+              orderItemId: dType === "item" ? Number(dOrderItemId) : undefined,
+              managerPin: dPinRequired ? dManagerPin : undefined,
+            },
+            {
+              onSuccess: () => {
+                toast({ title: "Discount applied" });
+                setShowDiscountDrawer(false);
+              },
+              onError: (err: Error & { status?: number; data?: { requiresPin?: boolean; code?: string } | null }) => {
+                const reqPin = !!(err.data && (err.data.requiresPin || err.data.code === "MANAGER_PIN_REQUIRED"));
+                if (reqPin || err.status === 402) {
+                  setDPinRequired(true);
+                  toast({ title: "Manager PIN required", description: "This discount exceeds the threshold.", variant: "destructive" });
+                } else {
+                  toast({ title: "Could not apply discount", description: err.message, variant: "destructive" });
+                }
+              },
+            },
+          );
+        };
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowDiscountDrawer(false)}>
+            <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Apply discount</h3>
+                <button onClick={() => setShowDiscountDrawer(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-1 p-1 bg-muted/40 rounded-lg">
+                {(["percentage", "flat", "item"] as const).map(t => (
+                  <button key={t}
+                    onClick={() => { setDType(t); setDValue(""); }}
+                    className={cn(
+                      "py-1.5 text-xs font-medium rounded-md capitalize",
+                      dType === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+                    )}>
+                    {t === "percentage" ? "Percent" : t === "flat" ? "Flat ₹" : "Item"}
+                  </button>
+                ))}
+              </div>
+              {dType === "item" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Order item</label>
+                  <select value={dOrderItemId === "" ? "" : String(dOrderItemId)}
+                    onChange={e => setDOrderItemId(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="w-full h-9 px-2 rounded-md border border-border bg-background text-sm">
+                    <option value="">Select item…</option>
+                    {liveItems.map(i => (
+                      <option key={i.id} value={i.id}>
+                        {i.menuItemName} × {i.quantity} (₹{Number(i.totalPrice).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  {dType === "percentage" ? "Percent off" : dType === "flat" ? "Amount (₹)" : "Amount or % off line"}
+                </label>
+                <Input type="number" min="0" step={dType === "percentage" ? "1" : "0.01"} value={dValue}
+                  onChange={e => setDValue(e.target.value)}
+                  placeholder={dType === "percentage" ? "e.g. 10" : "e.g. 50.00"} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Reason</label>
+                {discountsCfg?.presetReasons && discountsCfg.presetReasons.length > 0 ? (
+                  <select value={dReason} onChange={e => setDReason(e.target.value)}
+                    className="w-full h-9 px-2 rounded-md border border-border bg-background text-sm">
+                    {discountsCfg.presetReasons.map(r => (<option key={r} value={r}>{r}</option>))}
+                    <option value="__custom__">Other (custom)…</option>
+                  </select>
+                ) : null}
+                {(dReason === "__custom__" || !discountsCfg?.presetReasons?.length) && (
+                  <Input placeholder="Reason for discount" value={dReason === "__custom__" ? "" : dReason}
+                    onChange={e => setDReason(e.target.value)} />
+                )}
+              </div>
+              {dPinRequired && (
+                <div className="space-y-1.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <Lock className="w-3.5 h-3.5" /> Manager PIN required
+                  </label>
+                  <Input type="password" inputMode="numeric" autoComplete="off" placeholder="••••"
+                    value={dManagerPin} onChange={e => setDManagerPin(e.target.value)} />
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Estimated discount</span>
+                <span className="font-semibold text-green-600">-₹{previewAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowDiscountDrawer(false)}>Cancel</Button>
+                <Button size="sm" className="flex-1" onClick={submit} disabled={applyDiscountLine.isPending}>
+                  {applyDiscountLine.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showSplitModal && placedOrder && (
         <SplitBillModal
           totalAmount={displayTotals.totalAmount}
@@ -1761,6 +1947,7 @@ export default function PosPage() {
           orderType={orderType}
           customerName={customerName}
           orderCreatedAt={placedOrder.createdAt}
+          discounts={discountReceiptLines.length > 0 ? discountReceiptLines : undefined}
           onClose={() => setShowSplitModal(false)}
           onComplete={handleNewOrder}
         />

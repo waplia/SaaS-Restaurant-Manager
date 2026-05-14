@@ -44,6 +44,12 @@ export interface PrintOrderArgs {
   discountAmount: number;
   totalAmount: number;
   taxBreakdown?: { rate: string; amount: number }[];
+  /**
+   * Optional per-line discount breakdown (T5). When provided, the receipt
+   * renders one row per discount labelled with its reason; otherwise it falls
+   * back to the legacy single "Discount" line driven by `discountAmount`.
+   */
+  discounts?: { label: string; amount: number }[];
   payment?: PrintPayment;
   splitIndex?: number;
   splitTotal?: number;
@@ -90,6 +96,7 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
     discountAmount,
     totalAmount,
     taxBreakdown,
+    discounts,
     payment,
     splitIndex,
     splitTotal,
@@ -169,10 +176,18 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
   const totalsRows: string[] = [
     `<div class="row"><span>Subtotal</span><span class="num">${money(subtotal)}</span></div>`,
   ];
-  if (discountAmount > 0)
+  if (discounts && discounts.length > 0) {
+    for (const d of discounts) {
+      if (!(d.amount > 0)) continue;
+      totalsRows.push(
+        `<div class="row"><span>${escapeHtml(d.label || "Discount")}</span><span class="num">-${money(d.amount)}</span></div>`
+      );
+    }
+  } else if (discountAmount > 0) {
     totalsRows.push(
       `<div class="row"><span>Discount</span><span class="num">-${money(discountAmount)}</span></div>`
     );
+  }
   if (serviceCharge > 0)
     totalsRows.push(
       `<div class="row"><span>Service Charge</span><span class="num">${money(serviceCharge)}</span></div>`

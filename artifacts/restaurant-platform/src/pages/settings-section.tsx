@@ -11,7 +11,7 @@ import { Link } from "wouter";
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
-  "currencies", "taxes", "loyalty",
+  "currencies", "taxes", "loyalty", "discounts",
 ]);
 
 const ALLOWED_KEYS = new Set<SectionKey>([
@@ -20,7 +20,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "reservation", "about-us", "customer-site", "receipt", "printer",
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
-  "ai", "kiosk", "loyalty",
+  "ai", "kiosk", "loyalty", "discounts",
 ]);
 
 function findMeta(key: SectionKey) {
@@ -84,6 +84,7 @@ function renderSection(key: SectionKey) {
     case "ai": return <AiSection />;
     case "kiosk": return <KioskSection />;
     case "loyalty": return <LoyaltySection />;
+    case "discounts": return <DiscountsSection />;
     default: return null;
   }
 }
@@ -1504,6 +1505,84 @@ function KioskSection() {
               { value: "default", label: "Default" }, { value: "large", label: "Large" }, { value: "xlarge", label: "Extra large" },
             ]} />
           </Field>
+        </>
+      )}
+    </SettingForm>
+  );
+}
+
+/* ---------------- 29. Discounts & Coupons ----------------
+ * Backend hashes `managerPin` server-side into `managerPinHash` and never
+ * returns the hash to the client. The GET response surfaces only
+ * `hasManagerPin` so the UI knows whether to show "Set" vs "Change".
+ * Submitting an empty PIN string clears the configured PIN.
+ */
+interface DiscountsSettingsCfg {
+  presetReasons: string[];
+  thresholdPercent: number;
+  thresholdAmount: number;
+  hasManagerPin?: boolean;
+  managerPin?: string;
+}
+function DiscountsSection() {
+  // managerPin is intentionally omitted from defaults so that an unedited form
+  // never POSTs `managerPin: ""` (the server treats empty string as "clear the
+  // hash"). The Input below initializes its value from `s.managerPin ?? ""`,
+  // and onChange normalizes empty back to undefined so the field is dropped
+  // from the saved JSON unless the operator explicitly typed something.
+  const defaults: DiscountsSettingsCfg = {
+    presetReasons: [
+      "Loyal customer", "Comp item", "Manager override",
+      "Damaged / quality issue", "Promo / marketing", "Staff meal",
+    ],
+    thresholdPercent: 15,
+    thresholdAmount: 500,
+    hasManagerPin: false,
+  };
+  return (
+    <SettingForm section="discounts" defaults={defaults}
+      description="Cashier-facing discount reasons and the threshold above which a manager PIN is required to approve a discount.">
+      {(s, set) => (
+        <>
+          <Row>
+            <Field label="Manager-PIN threshold (%)" hint="A single discount line at or above this percentage of subtotal needs PIN approval.">
+              <Input type="number" min="0" max="100" step="1" value={s.thresholdPercent}
+                onChange={e => set(p => ({ ...p, thresholdPercent: Number(e.target.value) }))} />
+            </Field>
+            <Field label="Manager-PIN threshold (₹)" hint="A single discount line at or above this rupee amount needs PIN approval.">
+              <Input type="number" min="0" step="1" value={s.thresholdAmount}
+                onChange={e => set(p => ({ ...p, thresholdAmount: Number(e.target.value) }))} />
+            </Field>
+          </Row>
+          <Field label={s.hasManagerPin ? "Change manager PIN" : "Set manager PIN"}
+            hint="4–8 digits. Stored hashed. Leave blank to keep the existing PIN; type and save an empty PIN to clear it.">
+            <Input type="password" inputMode="numeric" autoComplete="new-password"
+              placeholder={s.hasManagerPin ? "•••• (set — type to change)" : "Enter new PIN"}
+              value={s.managerPin ?? ""}
+              onChange={e => set(p => {
+                const v = e.target.value;
+                const next = { ...p };
+                if (v.length === 0) delete next.managerPin;
+                else next.managerPin = v;
+                return next;
+              })} />
+          </Field>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Preset reasons</p>
+          <ListEditor
+            items={s.presetReasons.map((label, i) => ({ id: `r-${i}`, label }))}
+            onChange={items => set(p => ({ ...p, presetReasons: items.map(i => i.label).filter(l => l.trim().length > 0) }))}
+            addLabel="Add reason"
+            makeNew={() => ({ id: `r-${Date.now()}`, label: "" })}
+            render={(item, _i, update, remove) => (
+              <div className="flex items-center gap-2">
+                <Input className="flex-1" placeholder="Reason label" value={item.label}
+                  onChange={e => update({ label: e.target.value })} />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+          />
         </>
       )}
     </SettingForm>

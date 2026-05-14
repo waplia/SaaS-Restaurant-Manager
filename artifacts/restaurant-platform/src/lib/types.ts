@@ -202,6 +202,21 @@ export interface OrderItem {
   status: string;
 }
 
+export interface OrderDiscount {
+  id: number;
+  orderId: number;
+  type: "percentage" | "flat" | "item" | "coupon" | "loyalty";
+  scope: "order" | "item";
+  orderItemId: number | null;
+  value: string;
+  amount: string;
+  reason: string;
+  couponCode: string | null;
+  recordedByUserId: number | null;
+  approvedByUserId: number | null;
+  createdAt: string;
+}
+
 export interface OrderDetail extends Order {
   subtotal: string;
   taxAmount: string;
@@ -213,8 +228,34 @@ export interface OrderDetail extends Order {
   notes: string | null;
   customerPhone: string | null;
   items: OrderItem[];
+  discounts?: OrderDiscount[];
   paymentMethod?: string | null;
   paymentAmount?: string | null;
+}
+
+export interface DiscountsConfig {
+  presetReasons: string[];
+  thresholdPercent: number;
+  thresholdAmount: number;
+  hasManagerPin: boolean;
+}
+
+export interface ApplyDiscountLineInput {
+  orderId: number;
+  type: "percentage" | "flat" | "item";
+  value: number;
+  reason: string;
+  orderItemId?: number;
+  managerPin?: string;
+}
+
+export interface DiscountsByCashierItem {
+  userId: number | null;
+  name: string;
+  type: string;
+  reason: string;
+  count: number;
+  total: string;
 }
 
 export interface CreateOrderInput {
@@ -806,6 +847,8 @@ export interface ReportsData {
   netProfit?: string;
   expensesByCategory?: { categoryId: number; categoryName: string; color: string; total: string }[];
   paymentsByMethod?: PaymentsByMethodItem[];
+  discountsByCashier?: DiscountsByCashierItem[];
+  totalDiscounts?: string;
 }
 
 export interface Supplier {

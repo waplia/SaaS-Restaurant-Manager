@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -79,3 +79,31 @@ export type OrderItem = typeof orderItemsTable.$inferSelect;
 export const insertKitchenTicketSchema = createInsertSchema(kitchenTicketsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertKitchenTicket = z.infer<typeof insertKitchenTicketSchema>;
 export type KitchenTicket = typeof kitchenTicketsTable.$inferSelect;
+
+// Per-discount ledger for an order. Source of truth for the order's total discount.
+// `type` distinguishes manual (percentage / flat / item) from system-applied (coupon / loyalty).
+// `scope` = 'order' applies against subtotal; 'item' applies to a single orderItemId.
+// `value` is the input the cashier entered (% or rupees); `amount` is the resolved rupee discount.
+// `recordedByUserId` is the cashier; `approvedByUserId` is set when manager-PIN approval was required.
+export const orderDiscountsTable = pgTable("order_discounts", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => ordersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  type: text("type").notNull(), // 'percentage' | 'flat' | 'item' | 'coupon' | 'loyalty'
+  scope: text("scope").notNull().default("order"), // 'order' | 'item'
+  orderItemId: integer("order_item_id").references(() => orderItemsTable.id),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  reason: text("reason").notNull(),
+  couponCode: text("coupon_code"),
+  recordedByUserId: integer("recorded_by_user_id").references(() => usersTable.id),
+  approvedByUserId: integer("approved_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("order_discounts_order_idx").on(t.orderId),
+  index("order_discounts_restaurant_created_idx").on(t.restaurantId, t.createdAt),
+]);
+
+export const insertOrderDiscountSchema = createInsertSchema(orderDiscountsTable).omit({ id: true, createdAt: true });
+export type InsertOrderDiscount = z.infer<typeof insertOrderDiscountSchema>;
+export type OrderDiscount = typeof orderDiscountsTable.$inferSelect;

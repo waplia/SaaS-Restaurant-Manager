@@ -18,7 +18,7 @@ export type SectionKey =
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "refund-reasons"
-  | "ai" | "kiosk" | "loyalty" | "kitchens" | "subscription";
+  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "subscription";
 
 type IconType = typeof Building2;
 
@@ -84,6 +84,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "ai", label: "AI", icon: Sparkles, ownerOnly: true },
       { key: "kiosk", label: "Kiosk", icon: Tablet },
       { key: "loyalty", label: "Loyalty Program", icon: Heart, ownerOnly: true },
+      { key: "discounts", label: "Discounts & Coupons", icon: BadgeDollarSign, ownerOnly: true },
     ],
   },
 ];

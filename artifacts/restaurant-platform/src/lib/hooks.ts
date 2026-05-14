@@ -241,6 +241,44 @@ export function useApplyDiscount() {
   });
 }
 
+// Multi-line discount endpoints (T2). The backend returns 402 with
+// `{ requiresPin: true }` when the discount exceeds the configured threshold;
+// callers are expected to surface a manager-PIN modal and retry with `managerPin`.
+export function useApplyDiscountLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, ...body }: import("./types").ApplyDiscountLineInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts`, body),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useRemoveDiscountLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, discountId }: { orderId: number; discountId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts/${discountId}`),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useDiscountsConfig() {
+  return useQuery({
+    queryKey: ["settings", "discounts", RESTAURANT_ID],
+    queryFn: async () => {
+      const res = await apiGet<{ section: string; data: import("./types").DiscountsConfig }>(`/restaurants/${RESTAURANT_ID}/settings/discounts`);
+      return res.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function useVoidOrder() {
   const qc = useQueryClient();
   return useMutation({

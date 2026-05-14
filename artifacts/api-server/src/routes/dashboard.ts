@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable } from "../lib/db";
+import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable } from "../lib/db";
 import { generateDueRecurringExpenses } from "./expenses";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -306,6 +306,44 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   if (fromStr && toStr) expenseConditions.push(lte(expensesTable.expenseDate, to.toISOString().slice(0, 10)));
   const expenseWhere = and(...expenseConditions);
 
+  // Discount aggregation (T6) — joins ledger rows recorded inside the analytics
+  // window to the recording cashier; rows with no cashier (legacy) collapse to
+  // a "System" bucket. Grouped by cashier + reason + type so the report can
+  // surface comp/manager-override patterns by staff member.
+  const discountsByCashierRows = await db.execute<{
+    user_id: number | null;
+    name: string;
+    type: string;
+    reason: string;
+    count: string;
+    total: string;
+  }>(sql`
+    SELECT
+      d.recorded_by_user_id AS user_id,
+      COALESCE(u.name, 'System') AS name,
+      d.type,
+      COALESCE(NULLIF(d.reason, ''), '(no reason)') AS reason,
+      COUNT(*)::text AS count,
+      COALESCE(SUM(d.amount), 0)::text AS total
+    FROM ${orderDiscountsTable} d
+    INNER JOIN ${ordersTable} o ON o.id = d.order_id
+    LEFT JOIN ${usersTable} u ON u.id = d.recorded_by_user_id
+    WHERE o.restaurant_id = ${restaurantId}
+      AND o.created_at >= ${from}
+      ${fromStr && toStr ? sql`AND o.created_at <= ${to}` : sql``}
+    GROUP BY d.recorded_by_user_id, u.name, d.type, d.reason
+    ORDER BY total DESC
+  `);
+  const discountsByCashier = discountsByCashierRows.rows.map(r => ({
+    userId: r.user_id,
+    name: r.name,
+    type: r.type,
+    reason: r.reason,
+    count: Number(r.count),
+    total: r.total,
+  }));
+  const totalDiscounts = discountsByCashier.reduce((s, r) => s + Number(r.total), 0).toFixed(2);
+
   const [expenseTotalRow, expenseByCat, paymentsByMethodRows] = await Promise.all([
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(expenseWhere),
     db.select({
@@ -340,6 +378,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
 
   res.json({
     paymentsByMethod,
+    discountsByCashier,
+    totalDiscounts,
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,
     totalTax: totalTax.toFixed(2),

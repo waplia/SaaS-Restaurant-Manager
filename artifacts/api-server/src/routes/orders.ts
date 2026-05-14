@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
@@ -9,6 +9,7 @@ import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/k
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
+import { loadDiscountsConfig, exceedsThreshold, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
@@ -167,21 +168,26 @@ async function getRestaurantRates(restaurantId: number) {
   };
 }
 
-async function recalculateOrderTotals(orderId: number, restaurantId: number, discountAmount: number) {
+async function recalculateOrderTotals(orderId: number, restaurantId: number, _discountAmount?: number) {
+  // Discount is sourced from the orderDiscountsTable ledger. The legacy
+  // _discountAmount parameter is ignored — the ledger is now the source of truth.
+  void _discountAmount;
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
   const subtotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
   const taxAmount = subtotal * taxRate;
   const serviceCharge = subtotal * serviceRate;
+  const discountAmount = await sumOrderDiscounts(orderId);
   const totalAmount = Math.max(0, subtotal + taxAmount + serviceCharge - discountAmount);
   await db.update(ordersTable).set({
     subtotal: subtotal.toFixed(2),
     taxAmount: taxAmount.toFixed(2),
     serviceCharge: serviceCharge.toFixed(2),
+    discountAmount: discountAmount.toFixed(2),
     totalAmount: totalAmount.toFixed(2),
     updatedAt: new Date(),
   }).where(eq(ordersTable.id, orderId));
-  return { subtotal, taxAmount, serviceCharge, totalAmount };
+  return { subtotal, taxAmount, serviceCharge, discountAmount, totalAmount };
 }
 
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
@@ -310,9 +316,15 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
     ))
     .orderBy(desc(paymentsTable.paymentDate))
     .limit(1);
+  // Discount ledger (T2/T6) — source of truth for per-discount receipt rows
+  // and for the POS sidebar "active discounts" list. The cached
+  // `order.discountAmount` is the rolled-up sum and stays in sync via
+  // `recalculateOrderTotals`, but UI rendering needs each ledger row.
+  const discounts = await listOrderDiscounts(order.id);
   res.json({
     ...order,
     items,
+    discounts,
     paymentMethod: latestPayment?.method ?? null,
     paymentAmount: latestPayment?.amount ?? null,
   });
@@ -456,6 +468,148 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   res.json({ ...updatedOrder, items });
 });
 
+// Apply a discount line (percentage / flat / item) to an order.
+// Each discount needs a `reason`. If the resulting amount exceeds the
+// configured percent or flat threshold, a manager PIN is required.
+router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const { type, scope, orderItemId, value, reason, managerPin } = req.body as {
+    type?: string; scope?: string; orderItemId?: number; value?: number; reason?: string; managerPin?: string;
+  };
+
+  const typeStr = String(type ?? "");
+  if (!(typeStr === "percentage" || typeStr === "flat" || typeStr === "item")) {
+    return void res.status(400).json({ error: "type must be percentage, flat, or item" });
+  }
+  void scope;
+  const reasonTrim = String(reason ?? "").trim();
+  if (!reasonTrim) return void res.status(400).json({ error: "reason is required" });
+  const valueNum = Math.max(0, Number(value ?? 0));
+  if (!isFinite(valueNum) || valueNum <= 0) {
+    return void res.status(400).json({ error: "value must be a positive number" });
+  }
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
+  }
+
+  // Resolve the rupee amount of the discount based on type/scope.
+  const subtotal = Number(order.subtotal);
+  let amount = 0;
+  let scopeOut: "order" | "item" = "order";
+  let resolvedItemId: number | null = null;
+
+  if (typeStr === "item") {
+    if (!orderItemId) return void res.status(400).json({ error: "orderItemId is required for item-level discount" });
+    const [oi] = await db.select().from(orderItemsTable)
+      .where(and(eq(orderItemsTable.id, Number(orderItemId)), eq(orderItemsTable.orderId, orderId)));
+    if (!oi) return void res.status(404).json({ error: "Order item not found" });
+    // For item scope, `value` is interpreted as rupees off that line, capped to line total.
+    const lineTotal = Number(oi.totalPrice);
+    amount = Math.min(valueNum, lineTotal);
+    scopeOut = "item";
+    resolvedItemId = oi.id;
+  } else if (typeStr === "percentage") {
+    if (valueNum > 100) return void res.status(400).json({ error: "percentage cannot exceed 100" });
+    amount = (subtotal * valueNum) / 100;
+  } else {
+    // flat
+    amount = valueNum;
+  }
+
+  // Cap so total order discount can never exceed subtotal.
+  const existingTotal = await sumOrderDiscounts(orderId);
+  const headroom = Math.max(0, subtotal - existingTotal);
+  amount = Math.min(amount, headroom);
+  if (amount <= 0) {
+    return void res.status(400).json({ error: "Order is already fully discounted" });
+  }
+
+  // Threshold check — manager PIN required when a single discount line exceeds
+  // the configured percent OR flat thresholds.
+  const cfg = await loadDiscountsConfig(restaurantId);
+  const needsApproval = exceedsThreshold(amount, subtotal, cfg);
+  let approvedByUserId: number | null = null;
+  if (needsApproval) {
+    if (!cfg.hasManagerPin) {
+      return void res.status(409).json({
+        error: "Manager PIN is required for this discount but no PIN is configured. Set one in Settings → Discounts.",
+        code: "MANAGER_PIN_NOT_CONFIGURED",
+      });
+    }
+    if (!managerPin || !(await verifyManagerPin(String(managerPin), cfg))) {
+      return void res.status(402).json({
+        error: "Manager PIN required to approve this discount",
+        code: "MANAGER_PIN_REQUIRED",
+        requiresPin: true,
+        thresholdPercent: cfg.thresholdPercent,
+        thresholdAmount: cfg.thresholdAmount,
+      });
+    }
+    // PIN verified — record approver if we know who it is. The PIN is shared
+    // per restaurant so we attribute approval to the cashier's manager record
+    // by reusing recordedBy when no separate approver id is available.
+    approvedByUserId = req.user?.sub ?? null;
+  }
+
+  await db.insert(orderDiscountsTable).values({
+    orderId,
+    restaurantId,
+    type: typeStr,
+    scope: scopeOut,
+    orderItemId: resolvedItemId,
+    value: valueNum.toFixed(2),
+    amount: amount.toFixed(2),
+    reason: reasonTrim,
+    recordedByUserId: req.user?.sub ?? null,
+    approvedByUserId,
+  });
+
+  await recalculateOrderTotals(orderId, restaurantId);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const discounts = await listOrderDiscounts(orderId);
+  res.json({ ...updatedOrder, items, discounts });
+});
+
+router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const discountId = Number(req.params.discountId);
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
+  }
+
+  const [existing] = await db.select().from(orderDiscountsTable)
+    .where(and(eq(orderDiscountsTable.id, discountId), eq(orderDiscountsTable.orderId, orderId)));
+  if (!existing) return void res.status(404).json({ error: "Discount line not found" });
+
+  // Removing a coupon line also clears the order's couponCode so the same
+  // coupon can be reapplied or replaced. Removing a loyalty line also clears
+  // any pending point-redemption so the customer is not charged points.
+  await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.id, discountId));
+  if (existing.type === "coupon") {
+    await db.update(ordersTable).set({ couponCode: null, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  } else if (existing.type === "loyalty") {
+    await db.update(ordersTable).set({ loyaltyPointsRedeemed: 0, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  }
+
+  await recalculateOrderTotals(orderId, restaurantId);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const discounts = await listOrderDiscounts(orderId);
+  res.json({ ...updatedOrder, items, discounts });
+});
+
+// Legacy single-discount endpoint — kept for backwards compatibility.
+// Treats the body as a manual flat discount with reason "Manual discount".
+// Removes any prior manual line so behaviour matches the old single-field UX.
 router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
@@ -464,14 +618,30 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", async (req, res) =
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
 
+  await deleteOrderDiscountsByType(orderId, "flat");
   const discount = Math.max(0, Number(discountAmount ?? 0));
-  await db.update(ordersTable).set({ discountAmount: discount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  if (discount > 0) {
+    const subtotal = Number(order.subtotal);
+    const existingTotal = await sumOrderDiscounts(orderId);
+    const capped = Math.min(discount, Math.max(0, subtotal - existingTotal));
+    if (capped > 0) {
+      await db.insert(orderDiscountsTable).values({
+        orderId, restaurantId,
+        type: "flat",
+        scope: "order",
+        value: capped.toFixed(2),
+        amount: capped.toFixed(2),
+        reason: "Manual discount",
+        recordedByUserId: req.user?.sub ?? null,
+      });
+    }
+  }
 
-  await recalculateOrderTotals(orderId, restaurantId, discount);
+  await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-
-  res.json({ ...updatedOrder, items });
+  const discounts = await listOrderDiscounts(orderId);
+  res.json({ ...updatedOrder, items, discounts });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, res) => {
@@ -497,48 +667,44 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
   const cfg = await loadLoyaltyConfig(restaurantId);
   if (!cfg.enabled) return void res.status(400).json({ error: "Loyalty program is not enabled" });
 
-  // Recompute coupon discount from source — never read order.discountAmount
-  // (which may already include loyalty) to avoid stacking on repeated calls.
-  let couponDiscount = 0;
-  if (order.couponCode) {
-    const [coupon] = await db.select().from(couponsTable)
-      .where(and(eq(couponsTable.code, order.couponCode), eq(couponsTable.restaurantId, restaurantId)));
-    if (coupon) {
-      const subtotal = Number(order.subtotal);
-      let raw = coupon.discountType === "percentage"
-        ? (subtotal * Number(coupon.discountValue)) / 100
-        : Number(coupon.discountValue);
-      if (coupon.maxDiscountAmount) raw = Math.min(raw, Number(coupon.maxDiscountAmount));
-      couponDiscount = raw;
-    }
-  }
+  // Drop any prior loyalty ledger row so re-applying replaces (not stacks) it.
+  await deleteOrderDiscountsByType(orderId, "loyalty");
 
-  // Cap redemption to remaining payable (subtotal + tax + service - coupon) so
-  // customers never burn more points than the final bill can absorb. Without
-  // this, loyaltyPointsRedeemed could exceed what the discount actually covers,
-  // causing irreversible point loss when earnLoyaltyForOrder deducts the
-  // recorded value at payment time.
+  // Cap redemption to remaining payable (subtotal + tax + service - existing
+  // discounts) so customers never burn more points than the final bill can
+  // absorb. The ledger sum already excludes any prior loyalty row removed above.
   const subtotal = Number(order.subtotal);
   const taxAmount = Number(order.taxAmount ?? 0);
   const serviceCharge = Number(order.serviceCharge ?? 0);
-  const remainingPayable = Math.max(0, subtotal + taxAmount + serviceCharge - couponDiscount);
+  const otherDiscountTotal = await sumOrderDiscounts(orderId);
+  const remainingPayable = Math.max(0, subtotal + taxAmount + serviceCharge - otherDiscountTotal);
   const rate = Number(cfg.redemptionRate) || 0;
   const maxRedeemableByPayable = rate > 0 ? Math.floor(remainingPayable / rate) : 0;
   const cappedPoints = Math.min(pointsToRedeem, maxRedeemableByPayable);
   const loyaltyDiscount = computeRedemptionDiscount(cappedPoints, cfg);
-  const totalDiscount = couponDiscount + loyaltyDiscount;
 
+  if (cappedPoints > 0 && loyaltyDiscount > 0) {
+    await db.insert(orderDiscountsTable).values({
+      orderId, restaurantId,
+      type: "loyalty",
+      scope: "order",
+      value: cappedPoints.toFixed(2),
+      amount: loyaltyDiscount.toFixed(2),
+      reason: `Loyalty redemption (${cappedPoints} pts)`,
+      recordedByUserId: req.user?.sub ?? null,
+    });
+  }
   await db.update(ordersTable).set({
     loyaltyPointsRedeemed: cappedPoints,
-    discountAmount: totalDiscount.toFixed(2),
     updatedAt: new Date(),
   }).where(eq(ordersTable.id, orderId));
 
-  await recalculateOrderTotals(orderId, restaurantId, totalDiscount);
+  await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const discounts = await listOrderDiscounts(orderId);
 
-  res.json({ ...updatedOrder, items, loyaltyApplied: { pointsRequested: pointsToRedeem, pointsRedeemed: cappedPoints, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - cappedPoints } });
+  res.json({ ...updatedOrder, items, discounts, loyaltyApplied: { pointsRequested: pointsToRedeem, pointsRedeemed: cappedPoints, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - cappedPoints } });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, res) => {
@@ -569,17 +735,35 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, re
     : Number(coupon.discountValue);
   if (coupon.maxDiscountAmount) couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscountAmount));
 
-  // Preserve any already-applied loyalty redemption discount (priced per current redemption rate)
-  const cfgForLoyalty = await loadLoyaltyConfig(restaurantId);
-  const loyaltyDiscount = computeRedemptionDiscount(order.loyaltyPointsRedeemed ?? 0, cfgForLoyalty);
-  const totalDiscount = couponDiscount + loyaltyDiscount;
+  // Replace any existing coupon row so a new code overrides the previous one.
+  await deleteOrderDiscountsByType(orderId, "coupon");
 
-  await db.update(ordersTable).set({ couponCode: coupon.code, discountAmount: totalDiscount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
-  await recalculateOrderTotals(orderId, restaurantId, totalDiscount);
+  // Cap so the coupon can't push the order discount above subtotal even if
+  // other discounts (manual, loyalty) are also applied.
+  const otherDiscountTotal = await sumOrderDiscounts(orderId);
+  const headroom = Math.max(0, subtotal - otherDiscountTotal);
+  const couponAmount = Math.min(couponDiscount, headroom);
+
+  if (couponAmount > 0) {
+    await db.insert(orderDiscountsTable).values({
+      orderId, restaurantId,
+      type: "coupon",
+      scope: "order",
+      value: Number(coupon.discountValue).toFixed(2),
+      amount: couponAmount.toFixed(2),
+      reason: `Coupon: ${coupon.code}`,
+      couponCode: coupon.code,
+      recordedByUserId: req.user?.sub ?? null,
+    });
+  }
+  await db.update(ordersTable).set({ couponCode: coupon.code, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+
+  await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const discounts = await listOrderDiscounts(orderId);
 
-  res.json({ ...updatedOrder, items, couponApplied: { code: coupon.code, discountAmount: couponDiscount.toFixed(2), discountType: coupon.discountType } });
+  res.json({ ...updatedOrder, items, discounts, couponApplied: { code: coupon.code, discountAmount: couponAmount.toFixed(2), discountType: coupon.discountType } });
 });
 
 router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {

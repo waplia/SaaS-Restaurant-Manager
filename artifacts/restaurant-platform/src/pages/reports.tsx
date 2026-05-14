@@ -10,7 +10,7 @@ import {
 import { format } from "date-fns";
 import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem } from "@/lib/types";
+import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem, DiscountsByCashierItem } from "@/lib/types";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -44,10 +44,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -100,6 +100,12 @@ export default function ReportsPage() {
         (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => [s.name, String(s.orderCount), s.totalRevenue, s.totalHours]),
         ["Staff Name", "Orders Handled", "Revenue Generated", "Hours Worked"],
       );
+    } else if (tab === "discounts") {
+      exportCSV(
+        `discounts-report-${new Date().toISOString().slice(0, 10)}.csv`,
+        (reports.discountsByCashier ?? []).map((d: DiscountsByCashierItem) => [d.name, d.type, d.reason, String(d.count), d.total]),
+        ["Cashier", "Type", "Reason", "Count", "Total Discount"],
+      );
     } else {
       exportCSV(
         `payments-report-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -138,6 +144,16 @@ export default function ReportsPage() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taxRows), "Tax");
       XLSX.writeFile(wb, `tax-report-${dateStamp}.xlsx`);
+    } else if (tab === "discounts") {
+      const rows = (reports.discountsByCashier ?? []).map((d: DiscountsByCashierItem) => ({
+        Cashier: d.name,
+        Type: d.type,
+        Reason: d.reason,
+        Count: d.count,
+        "Total Discount": Number(d.total),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Discounts");
+      XLSX.writeFile(wb, `discounts-report-${dateStamp}.xlsx`);
     } else if (tab === "staff") {
       const staffRows = (reports.staffPerformance ?? []).map((s: StaffPerformanceItem) => ({
         "Staff Member": s.name,
@@ -170,6 +186,7 @@ export default function ReportsPage() {
       tab === "sales" ? "Sales Report"
       : tab === "tax" ? "Tax Report"
       : tab === "staff" ? "Staff Performance Report"
+      : tab === "discounts" ? "Discounts Report"
       : "Payments Report";
 
     doc.setFontSize(18);
@@ -225,6 +242,24 @@ export default function ReportsPage() {
           `₹${Number(r.revenue).toLocaleString()}`,
           String(r.orders),
           `${r.effectiveRate}%`,
+        ]),
+      });
+    } else if (tab === "discounts") {
+      doc.setFontSize(13);
+      doc.text("Summary", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Metric", "Value"]],
+        body: [["Total Discounts", `₹${Number(reports.totalDiscounts ?? 0).toLocaleString()}`]],
+      });
+      const afterSummary = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 60;
+      doc.setFontSize(13);
+      doc.text("Discounts by Cashier", 14, afterSummary + 10);
+      autoTable(doc, {
+        startY: afterSummary + 14,
+        head: [["Cashier", "Type", "Reason", "Count", "Total"]],
+        body: (reports.discountsByCashier ?? []).map((d: DiscountsByCashierItem) => [
+          d.name, d.type, d.reason, String(d.count), `₹${Number(d.total).toLocaleString()}`,
         ]),
       });
     } else if (tab === "staff") {
@@ -414,6 +449,7 @@ export default function ReportsPage() {
             { label: "Tax", val: "tax" as Tab },
             { label: "Staff Performance", val: "staff" as Tab },
             { label: "Payments", val: "payments" as Tab },
+            { label: "Discounts", val: "discounts" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -661,6 +697,59 @@ export default function ReportsPage() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === "discounts" && (
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-xl p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-600 flex items-center justify-center">
+                  <Percent className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Discounts</div>
+                  <div className="text-xl font-semibold text-foreground">₹{Number(reports?.totalDiscounts ?? 0).toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {(reports?.discountsByCashier ?? []).reduce((s, r) => s + r.count, 0)} discount{(reports?.discountsByCashier ?? []).reduce((s, r) => s + r.count, 0) === 1 ? "" : "s"} applied
+              </div>
+            </div>
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+                <Percent className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground">Discounts by Cashier &amp; Reason</h3>
+              </div>
+              {(reports?.discountsByCashier?.length ?? 0) === 0 ? (
+                <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">No discounts in this period</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Cashier</th>
+                        <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Type</th>
+                        <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Reason</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Count</th>
+                        <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Total Discount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(reports?.discountsByCashier ?? []).map((d: DiscountsByCashierItem, i: number) => (
+                        <tr key={`${d.userId ?? "sys"}-${d.type}-${d.reason}-${i}`} className="border-t border-border hover:bg-muted/20">
+                          <td className="px-5 py-2.5 font-medium text-foreground">{d.name}</td>
+                          <td className="px-5 py-2.5 text-muted-foreground capitalize">{d.type}</td>
+                          <td className="px-5 py-2.5 text-foreground">{d.reason}</td>
+                          <td className="px-5 py-2.5 text-right text-muted-foreground">{d.count}</td>
+                          <td className="px-5 py-2.5 text-right font-medium text-green-600">₹{Number(d.total).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

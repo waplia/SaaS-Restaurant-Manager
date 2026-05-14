@@ -87,6 +87,31 @@ export async function apiFetch<T = unknown>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
+  constructor(message: string, status: number, data: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+async function readErrorPayload(res: Response): Promise<{ message: string; data: unknown }> {
+  const text = await res.text();
+  if (!text) return { message: res.statusText || `HTTP ${res.status}`, data: null };
+  try {
+    const parsed = JSON.parse(text);
+    const message = typeof parsed?.error === "string" ? parsed.error
+      : typeof parsed?.message === "string" ? parsed.message
+      : text;
+    return { message, data: parsed };
+  } catch {
+    return { message: text, data: null };
+  }
+}
+
 export async function apiAction<T = unknown>(
   path: string,
   method = "POST",
@@ -97,7 +122,10 @@ export async function apiAction<T = unknown>(
     headers: body !== undefined ? { "Content-Type": "application/json" } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const { message, data } = await readErrorPayload(res);
+    throw new ApiError(message, res.status, data);
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
