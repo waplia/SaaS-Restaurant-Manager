@@ -303,6 +303,105 @@ router.post("/public/call-waiter", async (req, res) => {
   return void res.json({ success: true, requestId: row.id, message: "Waiter has been notified" });
 });
 
+router.get("/public/site/:slug", async (req, res) => {
+  const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  const settingsRows = await db.select().from(restaurantSettingsTable)
+    .where(and(
+      eq(restaurantSettingsTable.restaurantId, restaurant.id),
+      inArray(restaurantSettingsTable.section, ["customer-site", "about-us", "reservation"]),
+    ));
+  const sections: Record<string, Record<string, unknown>> = {};
+  for (const r of settingsRows) sections[r.section] = (r.data as Record<string, unknown>) ?? {};
+
+  const site = sections["customer-site"] ?? {};
+  const about = sections["about-us"] ?? {};
+  const reservation = sections["reservation"] ?? {};
+
+  if (site.enabled !== true) {
+    return void res.status(404).json({ error: "Public site is not enabled for this restaurant" });
+  }
+
+  const safeUrl = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    if (!t) return null;
+    if (!/^https?:\/\//i.test(t)) return null;
+    return t;
+  };
+  const safeSocials = {
+    instagram: safeUrl((site.socials as Record<string, unknown> | undefined)?.instagram),
+    facebook: safeUrl((site.socials as Record<string, unknown> | undefined)?.facebook),
+    twitter: safeUrl((site.socials as Record<string, unknown> | undefined)?.twitter),
+  };
+  const safeMap = safeUrl(site.mapEmbedUrl);
+  const safeOg = safeUrl(site.ogImageUrl);
+  const safeAccent = typeof site.accentColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(site.accentColor) ? site.accentColor : "#c2410c";
+
+  const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
+  let categories: Array<{ id: number; name: string; items: Array<{ id: number; name: string; description: string | null; price: string; imageUrl: string | null }> }> = [];
+  let featured: Array<{ id: number; name: string; description: string | null; price: string; imageUrl: string | null }> = [];
+  if (menu) {
+    const cats = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
+    categories = await Promise.all(cats.map(async (c) => {
+      const items = await db.select({
+        id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
+        price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,
+      }).from(menuItemsTable).where(and(eq(menuItemsTable.categoryId, c.id), eq(menuItemsTable.isAvailable, true)));
+      return { id: c.id, name: c.name, items };
+    }));
+    const featuredIds = Array.isArray(site.featuredItemIds) ? (site.featuredItemIds as unknown[]).map(Number).filter(n => Number.isFinite(n)) : [];
+    if (featuredIds.length > 0) {
+      featured = await db.select({
+        id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
+        price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,
+      }).from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurant.id), inArray(menuItemsTable.id, featuredIds), eq(menuItemsTable.isAvailable, true)));
+    }
+  }
+
+  const aboutSafe = {
+    story: typeof about.story === "string" ? about.story : "",
+    mission: typeof about.mission === "string" ? about.mission : "",
+    heroImage: typeof about.heroImage === "string" ? about.heroImage : "",
+    awards: typeof about.awards === "string" ? about.awards : "",
+    gallery: Array.isArray(about.gallery) ? (about.gallery as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [],
+    team: Array.isArray(about.team)
+      ? (about.team as unknown[]).filter((m): m is { name: string; role: string; photoUrl: string } => {
+          if (!m || typeof m !== "object") return false;
+          const o = m as Record<string, unknown>;
+          return typeof o.name === "string" && typeof o.role === "string";
+        }).map(m => ({ name: m.name, role: m.role, photoUrl: typeof m.photoUrl === "string" ? m.photoUrl : "" }))
+      : [],
+  };
+
+  res.json({
+    restaurant: {
+      id: restaurant.id,
+      name: restaurant.name,
+      slug: restaurant.slug,
+      logoUrl: restaurant.logoUrl,
+      currency: restaurant.currency,
+      address: restaurant.address ?? null,
+      phone: restaurant.phone ?? null,
+      email: restaurant.email ?? null,
+    },
+    site: {
+      heroHeadline: typeof site.heroHeadline === "string" ? site.heroHeadline : "",
+      heroSubcopy: typeof site.heroSubcopy === "string" ? site.heroSubcopy : "",
+      socials: safeSocials,
+      mapEmbedUrl: safeMap,
+      seoTitle: typeof site.seoTitle === "string" ? site.seoTitle : "",
+      seoDescription: typeof site.seoDescription === "string" ? site.seoDescription : "",
+      ogImageUrl: safeOg,
+      accentColor: safeAccent,
+    },
+    about: aboutSafe,
+    hours: reservation.hours && typeof reservation.hours === "object" ? reservation.hours : null,
+    menu: { categories, featured },
+  });
+});
+
 router.get("/public/restaurants/:slug", async (req, res) => {
   const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug, logoUrl: restaurantsTable.logoUrl, currency: restaurantsTable.currency }).from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });

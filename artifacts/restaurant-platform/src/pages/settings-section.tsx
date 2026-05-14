@@ -939,6 +939,7 @@ interface CustomerSiteCfg {
   socials: { instagram: string; facebook: string; twitter: string };
   mapEmbedUrl: string;
   seoTitle: string; seoDescription: string; ogImageUrl: string;
+  accentColor: string;
 }
 function CustomerSiteSection() {
   const defaults: CustomerSiteCfg = {
@@ -947,13 +948,41 @@ function CustomerSiteSection() {
     featuredItemIds: [],
     socials: { instagram: "", facebook: "", twitter: "" },
     mapEmbedUrl: "", seoTitle: "", seoDescription: "", ogImageUrl: "",
+    accentColor: "#c2410c",
   };
   return (
     <SettingForm section="customer-site" defaults={defaults}>
       {(s, set) => (
-        <>
+        <CustomerSiteEditor s={s} set={set} />
+      )}
+    </SettingForm>
+  );
+}
+
+function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p: CustomerSiteCfg) => CustomerSiteCfg) => void }) {
+  const { data: restaurant } = useRestaurantInfo();
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [copied, setCopied] = useState(false);
+  const slug = restaurant?.slug ?? "";
+  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  const sitePath = slug ? `${base}/site/${encodeURIComponent(slug)}` : "";
+  const fullUrl = slug ? `${window.location.origin}${sitePath}` : "";
+
+  function copyUrl() {
+    if (!fullUrl) return;
+    navigator.clipboard.writeText(fullUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => undefined);
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
+      <div className="space-y-3">
           <Toggle label="Public customer site enabled" checked={s.enabled} onChange={v => set(p => ({ ...p, enabled: v }))} />
-          <Field label="Subdomain / slug" hint="The URL slug your site will be available at."><Input value={s.subdomain} onChange={e => set(p => ({ ...p, subdomain: e.target.value }))} /></Field>
+          <Field label="Public URL slug" hint="Your public site lives at /site/<restaurant slug>. Update the restaurant slug under Restaurant settings to change it.">
+            <Input value={slug} disabled />
+          </Field>
           <Field label="Hero headline"><Input value={s.heroHeadline} onChange={e => set(p => ({ ...p, heroHeadline: e.target.value }))} /></Field>
           <Field label="Hero sub-copy"><Textarea rows={2} value={s.heroSubcopy} onChange={e => set(p => ({ ...p, heroSubcopy: e.target.value }))} /></Field>
           <Field label="Featured item IDs (comma-separated)">
@@ -970,9 +999,58 @@ function CustomerSiteSection() {
           <Field label="SEO title"><Input value={s.seoTitle} onChange={e => set(p => ({ ...p, seoTitle: e.target.value }))} /></Field>
           <Field label="SEO description"><Textarea rows={2} value={s.seoDescription} onChange={e => set(p => ({ ...p, seoDescription: e.target.value }))} /></Field>
           <Field label="OG image URL"><Input value={s.ogImageUrl} onChange={e => set(p => ({ ...p, ogImageUrl: e.target.value }))} /></Field>
-        </>
-      )}
-    </SettingForm>
+          <Field label="Accent color (hex)" hint="Used for buttons, headings and highlights on the public site.">
+            <div className="flex items-center gap-2">
+              <input type="color" value={s.accentColor || "#c2410c"} onChange={e => set(p => ({ ...p, accentColor: e.target.value }))}
+                className="h-9 w-12 rounded border border-input bg-background cursor-pointer" />
+              <Input value={s.accentColor} onChange={e => set(p => ({ ...p, accentColor: e.target.value }))} className="flex-1" />
+            </div>
+          </Field>
+      </div>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</p>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setDevice("desktop")}
+              className={`h-7 px-2.5 text-xs rounded-md border ${device === "desktop" ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent"}`}>
+              Desktop
+            </button>
+            <button type="button" onClick={() => setDevice("mobile")}
+              className={`h-7 px-2.5 text-xs rounded-md border ${device === "mobile" ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent"}`}>
+              Mobile
+            </button>
+          </div>
+        </div>
+        {fullUrl ? (
+          <div className="flex items-center gap-2">
+            <a href={sitePath} target="_blank" rel="noreferrer"
+              className="flex-1 truncate text-xs font-mono px-3 h-9 rounded-md border border-input bg-muted/40 flex items-center hover:underline">
+              {fullUrl}
+            </a>
+            <Button type="button" variant="outline" size="sm" onClick={copyUrl} className="h-9">
+              {copied ? "Copied!" : "Copy URL"}
+            </Button>
+            <a href={sitePath} target="_blank" rel="noreferrer">
+              <Button type="button" variant="outline" size="sm" className="h-9 px-2"><ExternalLink className="w-3.5 h-3.5" /></Button>
+            </a>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Set a slug above to generate the public URL.</p>
+        )}
+        <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+          {sitePath ? (
+            <iframe key={sitePath} src={sitePath} title="Public site preview"
+              className={`block bg-white ${device === "mobile" ? "w-[390px] mx-auto" : "w-full"}`}
+              style={{ height: "640px" }} />
+          ) : (
+            <div className="h-[640px] flex items-center justify-center text-sm text-muted-foreground">
+              Save a slug to preview your site.
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">Save changes above, then refresh the preview to see them applied.</p>
+      </div>
+    </div>
   );
 }
 
