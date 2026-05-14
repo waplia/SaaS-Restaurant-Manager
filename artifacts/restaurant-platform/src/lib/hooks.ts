@@ -131,8 +131,27 @@ export function useSaveSetting<T = Record<string, unknown>>(section: string) {
 export function useRestaurantInfo() {
   return useQuery({
     queryKey: ["restaurant", RESTAURANT_ID],
-    queryFn: () => apiGet<import("./types").RestaurantInfo>(`/restaurants/${RESTAURANT_ID}`),
+    queryFn: () => apiGet<import("./types").RestaurantInfo & { autoReorderEnabled?: boolean; autoReorderCron?: string | null }>(`/restaurants/${RESTAURANT_ID}`),
     staleTime: 60000,
+  });
+}
+
+export function useUpdateRestaurant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurant", RESTAURANT_ID] }),
+  });
+}
+
+export function useRunAutoReorder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<import("./types").AutoReorderRunResult>(`/restaurants/${RESTAURANT_ID}/auto-reorder/run`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
   });
 }
 
@@ -918,6 +937,15 @@ export function useUpdatePurchaseOrder() {
   return useMutation({
     mutationFn: ({ id, ...data }: { id: number; status?: string; notes?: string; totalAmount?: string }) =>
       apiPatch(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
+  });
+}
+
+export function useUpdatePurchaseOrderItems() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, items }: { id: number; items: Array<{ inventoryItemId?: number | null; name: string; unit: string; quantity: string; costPerUnit: string }> }) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}/items`, { items }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
   });
 }

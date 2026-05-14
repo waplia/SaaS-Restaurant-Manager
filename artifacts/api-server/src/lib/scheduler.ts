@@ -5,6 +5,7 @@ import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTa
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { logger } from "./logger";
 import { expireDueLoyaltyPoints } from "./loyalty";
+import { runAutoReorderForRestaurant } from "./autoReorder";
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -205,5 +206,85 @@ export function startScheduler(): void {
     }
   }, { timezone: "Asia/Kolkata" });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST");
+  // Auto-reorder is per-restaurant: each tenant configures its own cron expression
+  // (restaurants.autoReorderCron). We tick every minute in IST and run any restaurant
+  // whose schedule matches the current minute.
+  cron.schedule("* * * * *", async () => {
+    try {
+      await runAutoReorderTick(new Date());
+    } catch (err) {
+      logger.error({ err }, "Auto-reorder tick failed");
+    }
+  }, { timezone: "Asia/Kolkata" });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST)");
+}
+
+async function runAutoReorderTick(now: Date) {
+  const fields = istCronFields(now);
+  const restaurants = await db.select({ id: restaurantsTable.id, cron: restaurantsTable.autoReorderCron, enabled: restaurantsTable.autoReorderEnabled })
+    .from(restaurantsTable);
+  for (const r of restaurants) {
+    if (!r.enabled) continue;
+    const expr = r.cron ?? "0 6 * * *";
+    if (!cronMatches(expr, fields)) continue;
+    logger.info({ restaurantId: r.id, cron: expr }, "Auto-reorder cron matched — running for restaurant");
+    try {
+      const result = await runAutoReorderForRestaurant(r.id);
+      logger.info({ restaurantId: r.id, drafts: result.draftsCreated }, "Auto-reorder run complete");
+    } catch (err) {
+      logger.error({ err, restaurantId: r.id }, "Auto-reorder run failed");
+    }
+  }
+}
+
+interface CronFields { minute: number; hour: number; dom: number; month: number; dow: number; }
+function istCronFields(now: Date): CronFields {
+  // Compute IST (UTC+5:30) calendar fields without depending on host TZ
+  const ist = new Date(now.getTime() + (5 * 60 + 30) * 60 * 1000);
+  return {
+    minute: ist.getUTCMinutes(),
+    hour: ist.getUTCHours(),
+    dom: ist.getUTCDate(),
+    month: ist.getUTCMonth() + 1,
+    dow: ist.getUTCDay(),
+  };
+}
+function cronMatches(expr: string, f: CronFields): boolean {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+  return (
+    cronFieldMatches(parts[0]!, f.minute, 0, 59) &&
+    cronFieldMatches(parts[1]!, f.hour, 0, 23) &&
+    cronFieldMatches(parts[2]!, f.dom, 1, 31) &&
+    cronFieldMatches(parts[3]!, f.month, 1, 12) &&
+    cronFieldMatches(parts[4]!, f.dow, 0, 6)
+  );
+}
+function cronFieldMatches(field: string, value: number, min: number, max: number): boolean {
+  for (const piece of field.split(",")) {
+    let step = 1;
+    let range = piece;
+    const slash = piece.indexOf("/");
+    if (slash >= 0) {
+      step = Number(piece.slice(slash + 1));
+      range = piece.slice(0, slash);
+      if (!Number.isFinite(step) || step <= 0) continue;
+    }
+    let lo: number, hi: number;
+    if (range === "*") { lo = min; hi = max; }
+    else if (range.includes("-")) {
+      const [a, b] = range.split("-").map(Number);
+      if (!Number.isFinite(a!) || !Number.isFinite(b!)) continue;
+      lo = a!; hi = b!;
+    } else {
+      const n = Number(range);
+      if (!Number.isFinite(n)) continue;
+      if (slash < 0) { if (n === value) return true; continue; }
+      lo = n; hi = max;
+    }
+    if (value < lo || value > hi) continue;
+    if ((value - lo) % step === 0) return true;
+  }
+  return false;
 }

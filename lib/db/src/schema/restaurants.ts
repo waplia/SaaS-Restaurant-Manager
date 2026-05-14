@@ -23,6 +23,8 @@ export const restaurantsTable = pgTable("restaurants", {
   isActive: boolean("is_active").notNull().default(true),
   openingTime: text("opening_time").default("09:00"),
   closingTime: text("closing_time").default("22:00"),
+  autoReorderEnabled: boolean("auto_reorder_enabled").notNull().default(true),
+  autoReorderCron: text("auto_reorder_cron").default("0 6 * * *"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -406,12 +406,26 @@ export interface InventoryItem {
   unit: string;
   currentStock: string;
   minStockLevel: string;
+  parLevel: string | null;
+  reorderQuantity: string | null;
+  autoReorderEnabled: boolean;
   costPerUnit: string;
   category: string;
   isActive: boolean;
   isLowStock: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PurchaseOrderLineItem {
+  id: number;
+  purchaseOrderId: number;
+  inventoryItemId: number | null;
+  name: string;
+  unit: string;
+  quantity: string;
+  costPerUnit: string;
+  createdAt: string;
 }
 
 export interface InventoryTransaction {
@@ -432,11 +446,15 @@ export interface PurchaseOrder {
   supplierId: number | null;
   status: string;
   totalAmount: string;
+  paidAmount?: string;
   notes: string | null;
+  isAutoDrafted?: boolean;
+  draftedAt?: string | null;
   orderedAt: string | null;
   receivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  items?: PurchaseOrderLineItem[];
 }
 
 export interface CreatePurchaseOrderInput {
@@ -549,6 +567,9 @@ export interface UpdateInventoryItemInput {
   category?: string;
   supplierId?: number | null;
   isActive?: boolean;
+  parLevel?: string | null;
+  reorderQuantity?: string | null;
+  autoReorderEnabled?: boolean;
 }
 
 export interface CreateInventoryItemInput {
@@ -559,6 +580,17 @@ export interface CreateInventoryItemInput {
   costPerUnit: string;
   category: string;
   supplierId?: number | null;
+  parLevel?: string | null;
+  reorderQuantity?: string | null;
+  autoReorderEnabled?: boolean;
+}
+
+export interface AutoReorderRunResult {
+  restaurantId: number;
+  draftsCreated: number;
+  itemsConsidered: number;
+  draftIds: number[];
+  skipped: { reason: string; itemIds: number[] }[];
 }
 
 export interface RecipeMapping {

@@ -63,9 +63,23 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (!assertRestaurantAccess(req, existing.tenantId)) return void res.status(403).json({ error: "Access denied" });
 
-  const { name, description, phone, email, address, city, taxRate, serviceCharge, logoUrl, openingTime, closingTime } = req.body;
+  const { name, description, phone, email, address, city, taxRate, serviceCharge, logoUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron } = req.body;
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates.name = name;
+  if (description !== undefined) updates.description = description;
+  if (phone !== undefined) updates.phone = phone;
+  if (email !== undefined) updates.email = email;
+  if (address !== undefined) updates.address = address;
+  if (city !== undefined) updates.city = city;
+  if (taxRate !== undefined) updates.taxRate = taxRate;
+  if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
+  if (logoUrl !== undefined) updates.logoUrl = logoUrl;
+  if (openingTime !== undefined) updates.openingTime = openingTime;
+  if (closingTime !== undefined) updates.closingTime = closingTime;
+  if (autoReorderEnabled !== undefined) updates.autoReorderEnabled = autoReorderEnabled;
+  if (autoReorderCron !== undefined) updates.autoReorderCron = autoReorderCron;
   const [updated] = await db.update(restaurantsTable)
-    .set({ name, description, phone, email, address, city, taxRate, serviceCharge, logoUrl, openingTime, closingTime, updatedAt: new Date() })
+    .set(updates)
     .where(eq(restaurantsTable.id, Number(req.params.id)))
     .returning();
   res.json(updated);

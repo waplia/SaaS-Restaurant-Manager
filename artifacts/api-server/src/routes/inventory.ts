@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable } from "../lib/db";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable } from "../lib/db";
+import { runAutoReorderForRestaurant } from "../lib/autoReorder";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -25,14 +26,32 @@ router.get("/restaurants/:restaurantId/inventory", async (req, res) => {
 });
 
 router.post("/restaurants/:restaurantId/inventory", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, unit, currentStock, minStockLevel, costPerUnit, category, supplierId } = req.body;
-  const [item] = await db.insert(inventoryItemsTable).values({ restaurantId: Number(req.params.restaurantId), name, unit, currentStock, minStockLevel, costPerUnit, category, supplierId: supplierId ?? null }).returning();
+  const { name, unit, currentStock, minStockLevel, costPerUnit, category, supplierId, parLevel, reorderQuantity, autoReorderEnabled } = req.body;
+  const [item] = await db.insert(inventoryItemsTable).values({
+    restaurantId: Number(req.params.restaurantId),
+    name, unit, currentStock, minStockLevel, costPerUnit, category,
+    supplierId: supplierId ?? null,
+    parLevel: parLevel ?? null,
+    reorderQuantity: reorderQuantity ?? null,
+    autoReorderEnabled: autoReorderEnabled ?? true,
+  }).returning();
   res.status(201).json({ ...item, isLowStock: Number(item.currentStock) <= Number(item.minStockLevel) });
 });
 
 router.patch("/restaurants/:restaurantId/inventory/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, unit, minStockLevel, costPerUnit, category, supplierId, isActive } = req.body;
-  const [updated] = await db.update(inventoryItemsTable).set({ name, unit, minStockLevel, costPerUnit, category, supplierId, isActive, updatedAt: new Date() }).where(and(eq(inventoryItemsTable.id, Number(req.params.id)), eq(inventoryItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
+  const { name, unit, minStockLevel, costPerUnit, category, supplierId, isActive, parLevel, reorderQuantity, autoReorderEnabled } = req.body;
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates.name = name;
+  if (unit !== undefined) updates.unit = unit;
+  if (minStockLevel !== undefined) updates.minStockLevel = minStockLevel;
+  if (costPerUnit !== undefined) updates.costPerUnit = costPerUnit;
+  if (category !== undefined) updates.category = category;
+  if (supplierId !== undefined) updates.supplierId = supplierId;
+  if (isActive !== undefined) updates.isActive = isActive;
+  if (parLevel !== undefined) updates.parLevel = parLevel;
+  if (reorderQuantity !== undefined) updates.reorderQuantity = reorderQuantity;
+  if (autoReorderEnabled !== undefined) updates.autoReorderEnabled = autoReorderEnabled;
+  const [updated] = await db.update(inventoryItemsTable).set(updates).where(and(eq(inventoryItemsTable.id, Number(req.params.id)), eq(inventoryItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json({ ...updated, isLowStock: Number(updated.currentStock) <= Number(updated.minStockLevel) });
 });
@@ -118,10 +137,85 @@ router.get("/restaurants/:restaurantId/inventory/waste-log", async (req, res) =>
 });
 
 router.get("/restaurants/:restaurantId/purchase-orders", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
   const rows = await db.select().from(purchaseOrdersTable)
-    .where(eq(purchaseOrdersTable.restaurantId, Number(req.params.restaurantId)))
+    .where(eq(purchaseOrdersTable.restaurantId, restaurantId))
     .orderBy(desc(purchaseOrdersTable.createdAt));
-  res.json(rows);
+
+  if (rows.length === 0) return void res.json([]);
+  const poIds = rows.map(r => r.id);
+  const items = await db.select().from(purchaseOrderItemsTable)
+    .where(inArray(purchaseOrderItemsTable.purchaseOrderId, poIds));
+  const byPo = new Map<number, typeof items>();
+  for (const it of items) {
+    const arr = byPo.get(it.purchaseOrderId) ?? [];
+    arr.push(it);
+    byPo.set(it.purchaseOrderId, arr);
+  }
+  res.json(rows.map(po => ({ ...po, items: byPo.get(po.id) ?? [] })));
+});
+
+router.post("/restaurants/:restaurantId/auto-reorder/run", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  try {
+    const result = await runAutoReorderForRestaurant(Number(req.params.restaurantId));
+    res.json(result);
+  } catch (err) {
+    console.error("[AutoReorder] manual run failed", err);
+    res.status(500).json({ error: "Failed to run auto-reorder" });
+  }
+});
+
+// Replace all line items on a pending PO and recompute its total. Owners use this to
+// edit auto-drafted POs before sending (adjust qty/price, remove or add items).
+router.put("/restaurants/:restaurantId/purchase-orders/:id/items", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const poId = Number(req.params.id);
+  const { items } = req.body as { items?: Array<{ inventoryItemId?: number | null; name: string; unit: string; quantity: string | number; costPerUnit: string | number }> };
+  if (!Array.isArray(items)) return void res.status(400).json({ error: "items array required" });
+
+  try {
+    const updated = await db.transaction(async tx => {
+      const [po] = await tx.select().from(purchaseOrdersTable)
+        .where(and(eq(purchaseOrdersTable.id, poId), eq(purchaseOrdersTable.restaurantId, restaurantId)));
+      if (!po) throw new Error("NOT_FOUND");
+      if (po.status !== "pending") throw new Error("NOT_EDITABLE");
+
+      await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.purchaseOrderId, poId));
+
+      let total = 0;
+      const inserts = items
+        .filter(it => Number(it.quantity) > 0 && it.name)
+        .map(it => {
+          const qty = Number(it.quantity);
+          const cost = Number(it.costPerUnit);
+          total += qty * cost;
+          return {
+            purchaseOrderId: poId,
+            inventoryItemId: it.inventoryItemId ?? null,
+            name: it.name,
+            unit: it.unit || "kg",
+            quantity: qty.toFixed(3),
+            costPerUnit: cost.toFixed(2),
+          };
+        });
+      if (inserts.length > 0) {
+        await tx.insert(purchaseOrderItemsTable).values(inserts);
+      }
+
+      const [u] = await tx.update(purchaseOrdersTable)
+        .set({ totalAmount: total.toFixed(2), updatedAt: new Date() })
+        .where(eq(purchaseOrdersTable.id, poId))
+        .returning();
+      return u;
+    });
+    res.json(updated);
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+    if (msg === "NOT_EDITABLE") return void res.status(409).json({ error: "Only pending purchase orders can be edited" });
+    console.error("[PO] Edit items failed:", err);
+    res.status(500).json({ error: "Failed to update line items" });
+  }
 });
 
 router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "manager", "super_admin"), async (req, res) => {
@@ -161,6 +255,34 @@ router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owne
       if (!u) throw new Error("NOT_FOUND");
 
       if (status === "received" && existing.status !== "received") {
+        // Increment inventory stock from PO line items (idempotent: only when transitioning into received)
+        const lineItems = await tx.select().from(purchaseOrderItemsTable)
+          .where(eq(purchaseOrderItemsTable.purchaseOrderId, poId));
+        for (const li of lineItems) {
+          if (li.inventoryItemId === null) continue;
+          const qty = Number(li.quantity);
+          if (!(qty > 0)) continue;
+          await tx.update(inventoryItemsTable)
+            .set({
+              currentStock: sql`${inventoryItemsTable.currentStock} + ${qty}`,
+              costPerUnit: li.costPerUnit,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(inventoryItemsTable.id, li.inventoryItemId),
+              eq(inventoryItemsTable.restaurantId, restaurantId),
+            ));
+          await tx.insert(inventoryTransactionsTable).values({
+            itemId: li.inventoryItemId,
+            restaurantId,
+            type: "receive",
+            quantity: qty.toFixed(3),
+            notes: `Received from PO-${String(poId).padStart(4, "0")}`,
+            referenceId: poId,
+            referenceType: "purchase_order",
+          });
+        }
+
         const total = Number(u.totalAmount);
         const alreadyPaid = Number(u.paidAmount);
         const due = Math.max(0, total - alreadyPaid);

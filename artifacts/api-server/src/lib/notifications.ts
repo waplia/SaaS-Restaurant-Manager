@@ -162,6 +162,29 @@ export function lowStockEmail(opts: {
   };
 }
 
+export function autoDraftPOEmail(opts: {
+  restaurantName: string;
+  suppliers: Array<{ supplierName: string; itemCount: number; items: string[] }>;
+}): { subject: string; html: string; text: string } {
+  const totalDrafts = opts.suppliers.length;
+  const blocks = opts.suppliers.map(s => `
+    <div style="margin:12px 0;padding:12px;border:1px solid #eee;border-radius:8px">
+      <strong>${s.supplierName}</strong> — ${s.itemCount} item${s.itemCount === 1 ? "" : "s"}
+      <ul style="margin:6px 0 0 18px;color:#555">${s.items.map(n => `<li>${n}</li>`).join("")}</ul>
+    </div>`).join("");
+  return {
+    subject: `📝 ${totalDrafts} auto-drafted purchase order${totalDrafts === 1 ? "" : "s"} — ${opts.restaurantName}`,
+    text: `${totalDrafts} draft purchase order${totalDrafts === 1 ? "" : "s"} were created from low-stock items at ${opts.restaurantName}. Review and send.`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#f97316">📝 Auto-drafted Purchase Orders</h2>
+        <p>${totalDrafts} draft purchase order${totalDrafts === 1 ? "" : "s"} ${totalDrafts === 1 ? "was" : "were"} created from low-stock items at <strong>${opts.restaurantName}</strong>. Review and click send when ready.</p>
+        ${blocks}
+        <p style="color:#888;font-size:0.85em">Manage them in Inventory → Purchase Orders.</p>
+      </div>`,
+  };
+}
+
 export function dailySummaryEmail(opts: {
   restaurantName: string;
   date: string;

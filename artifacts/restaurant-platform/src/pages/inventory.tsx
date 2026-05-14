@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem,
   useAdjustInventory, useInventoryTransactions, useWasteLog,
   useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
-  usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useDeletePurchaseOrder,
+  usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useUpdatePurchaseOrderItems, useDeletePurchaseOrder,
+  useRestaurantInfo, useUpdateRestaurant, useRunAutoReorder,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +14,13 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, AlertTriangle, Search, Pencil, Trash2, X,
   Package, Truck, ClipboardList, ArrowUpCircle, ArrowDownCircle,
-  Building2, Phone, Mail, MapPin, RefreshCw, Flame,
+  Building2, Phone, Mail, MapPin, RefreshCw, Flame, Sparkles, Settings, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryItem, Supplier, PurchaseOrder, InventoryTransaction } from "@/lib/types";
 
-const TABS = ["Stock", "Suppliers", "Purchase Orders", "Waste Log"] as const;
+const TABS = ["Stock", "Suppliers", "Purchase Orders", "Waste Log", "Settings"] as const;
 type Tab = typeof TABS[number];
 
 const CATEGORIES = ["general", "produce", "meat", "dairy", "dry goods", "beverages", "spices", "oils", "packaging"];
@@ -76,7 +77,7 @@ function StockTab() {
   const adjustInventory = useAdjustInventory();
   const { toast } = useToast();
 
-  const [form, setForm] = useState({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "" });
+  const [form, setForm] = useState({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "", parLevel: "", reorderQuantity: "", autoReorderEnabled: true });
   const [adjustForm, setAdjustForm] = useState({ type: "add", quantity: "", notes: "" });
 
   const { data: transactions = [] } = useInventoryTransactions(historyItem?.id ?? null);
@@ -86,10 +87,17 @@ function StockTab() {
   const handleAdd = async () => {
     if (!form.name) return;
     try {
-      await createItem.mutateAsync({ ...form, supplierId: form.supplierId ? Number(form.supplierId) : undefined });
+      await createItem.mutateAsync({
+        name: form.name, unit: form.unit, currentStock: form.currentStock,
+        minStockLevel: form.minStockLevel, costPerUnit: form.costPerUnit, category: form.category,
+        supplierId: form.supplierId ? Number(form.supplierId) : undefined,
+        parLevel: form.parLevel ? form.parLevel : null,
+        reorderQuantity: form.reorderQuantity ? form.reorderQuantity : null,
+        autoReorderEnabled: form.autoReorderEnabled,
+      });
       toast({ title: "Item added!" });
       setShowAdd(false);
-      setForm({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "" });
+      setForm({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "", parLevel: "", reorderQuantity: "", autoReorderEnabled: true });
     } catch {
       toast({ title: "Failed to add item", variant: "destructive" });
     }
@@ -98,9 +106,26 @@ function StockTab() {
   const handleEdit = async () => {
     if (!editItem) return;
     try {
-      await updateItem.mutateAsync({ id: editItem.id, name: editItem.name, unit: editItem.unit, minStockLevel: editItem.minStockLevel, costPerUnit: editItem.costPerUnit, category: editItem.category ?? "general" });
+      await updateItem.mutateAsync({
+        id: editItem.id, name: editItem.name, unit: editItem.unit,
+        minStockLevel: editItem.minStockLevel, costPerUnit: editItem.costPerUnit,
+        category: editItem.category ?? "general",
+        supplierId: editItem.supplierId,
+        parLevel: editItem.parLevel,
+        reorderQuantity: editItem.reorderQuantity,
+        autoReorderEnabled: editItem.autoReorderEnabled,
+      });
       toast({ title: "Item updated!" });
       setEditItem(null);
+    } catch {
+      toast({ title: "Failed to update", variant: "destructive" });
+    }
+  };
+
+  const handleToggleAutoReorder = async (item: InventoryItem) => {
+    try {
+      await updateItem.mutateAsync({ id: item.id, autoReorderEnabled: !item.autoReorderEnabled });
+      toast({ title: item.autoReorderEnabled ? "Auto-reorder paused" : "Auto-reorder enabled" });
     } catch {
       toast({ title: "Failed to update", variant: "destructive" });
     }
@@ -163,7 +188,14 @@ function StockTab() {
                   <div className="flex items-center gap-2">
                     {item.isLowStock && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                     <div>
-                      <p className="text-sm font-medium">{item.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">{item.name}</p>
+                        {item.autoReorderEnabled && item.supplierId && (
+                          <span title="Auto-reorder enabled" className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                            <Sparkles className="w-2.5 h-2.5" /> Auto
+                          </span>
+                        )}
+                      </div>
                       <div className="w-28 h-1.5 bg-muted rounded-full mt-1.5">
                         <div className={cn("h-full rounded-full transition-all", stockBarColor(item))} style={{ width: `${stockPercent(item)}%` }} />
                       </div>
@@ -186,6 +218,9 @@ function StockTab() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1 justify-end">
+                    <Button size="sm" variant="ghost" className={cn("h-7 px-2", item.autoReorderEnabled ? "text-emerald-600" : "text-muted-foreground")} onClick={() => handleToggleAutoReorder(item)} title={item.autoReorderEnabled ? "Disable auto-reorder" : "Enable auto-reorder"}>
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </Button>
                     <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setHistoryItem(item)} title="View history">
                       <ClipboardList className="w-3.5 h-3.5" />
                     </Button>
@@ -237,12 +272,20 @@ function StockTab() {
                 <div className="col-span-2"><Label>Cost per Unit (₹)</Label><Input type="number" min="0" step="0.01" value={form.costPerUnit} onChange={e => setForm(p => ({ ...p, costPerUnit: e.target.value }))} /></div>
               </div>
               <div>
-                <Label>Supplier (optional)</Label>
+                <Label>Preferred Supplier (for auto-reorder)</Label>
                 <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value }))}>
                   <option value="">None</option>
                   {(suppliers as Supplier[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Par Level (optional)</Label><Input type="number" min="0" step="0.001" value={form.parLevel} onChange={e => setForm(p => ({ ...p, parLevel: e.target.value }))} placeholder="e.g. 10" /></div>
+                <div><Label>Reorder Qty (optional)</Label><Input type="number" min="0" step="0.001" value={form.reorderQuantity} onChange={e => setForm(p => ({ ...p, reorderQuantity: e.target.value }))} placeholder="defaults to par − stock" /></div>
+              </div>
+              <label className="flex items-center gap-2 text-sm pt-1 cursor-pointer">
+                <input type="checkbox" checked={form.autoReorderEnabled} onChange={e => setForm(p => ({ ...p, autoReorderEnabled: e.target.checked }))} />
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Auto-draft a PO when this item drops below min
+              </label>
               <div className="flex gap-3 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setShowAdd(false)}>Cancel</Button>
                 <Button className="flex-1" onClick={handleAdd} disabled={createItem.isPending || !form.name}>Add Item</Button>
@@ -276,7 +319,20 @@ function StockTab() {
                 </div>
                 <div><Label>Min Level</Label><Input type="number" value={editItem.minStockLevel} onChange={e => setEditItem(p => p && ({ ...p, minStockLevel: e.target.value }))} /></div>
                 <div><Label>Cost/Unit (₹)</Label><Input type="number" value={editItem.costPerUnit} onChange={e => setEditItem(p => p && ({ ...p, costPerUnit: e.target.value }))} /></div>
+                <div><Label>Par Level</Label><Input type="number" step="0.001" value={editItem.parLevel ?? ""} onChange={e => setEditItem(p => p && ({ ...p, parLevel: e.target.value || null }))} placeholder="optional" /></div>
+                <div><Label>Reorder Qty</Label><Input type="number" step="0.001" value={editItem.reorderQuantity ?? ""} onChange={e => setEditItem(p => p && ({ ...p, reorderQuantity: e.target.value || null }))} placeholder="optional" /></div>
               </div>
+              <div>
+                <Label>Preferred Supplier</Label>
+                <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={editItem.supplierId ?? ""} onChange={e => setEditItem(p => p && ({ ...p, supplierId: e.target.value ? Number(e.target.value) : null }))}>
+                  <option value="">None</option>
+                  {(suppliers as Supplier[]).filter(s => s.isActive).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm pt-1 cursor-pointer">
+                <input type="checkbox" checked={editItem.autoReorderEnabled} onChange={e => setEditItem(p => p && ({ ...p, autoReorderEnabled: e.target.checked }))} />
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Auto-draft a PO when this item drops below min
+              </label>
               <div className="flex gap-3 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setEditItem(null)}>Cancel</Button>
                 <Button className="flex-1" onClick={handleEdit} disabled={updateItem.isPending}>Save Changes</Button>
@@ -513,11 +569,52 @@ function PurchaseOrdersTab() {
   const createPO = useCreatePurchaseOrder();
   const updatePO = useUpdatePurchaseOrder();
   const deletePO = useDeletePurchaseOrder();
+  const runAutoReorder = useRunAutoReorder();
+  const updateItems = useUpdatePurchaseOrderItems();
+  const { data: inventoryItems = [] } = useInventory();
   const { toast } = useToast();
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ supplierId: "", totalAmount: "", notes: "" });
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [editingPoId, setEditingPoId] = useState<number | null>(null);
+  const [editLines, setEditLines] = useState<Array<{ inventoryItemId: number | null; name: string; unit: string; quantity: string; costPerUnit: string }>>([]);
+
+  const beginEdit = (po: PurchaseOrder) => {
+    setEditingPoId(po.id);
+    setExpandedId(po.id);
+    setEditLines((po.items ?? []).map(li => ({
+      inventoryItemId: li.inventoryItemId,
+      name: li.name,
+      unit: li.unit,
+      quantity: String(li.quantity),
+      costPerUnit: String(li.costPerUnit),
+    })));
+  };
+
+  const saveEdit = async () => {
+    if (editingPoId === null) return;
+    try {
+      await updateItems.mutateAsync({ id: editingPoId, items: editLines.filter(l => l.name && Number(l.quantity) > 0) });
+      toast({ title: "Order updated" });
+      setEditingPoId(null);
+    } catch {
+      toast({ title: "Failed to save changes", variant: "destructive" });
+    }
+  };
+
+  const editTotal = editLines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.costPerUnit || 0), 0);
+
+  const handleRunAuto = async () => {
+    try {
+      const res = await runAutoReorder.mutateAsync();
+      if (res.draftsCreated > 0) toast({ title: `Created ${res.draftsCreated} auto-draft${res.draftsCreated === 1 ? "" : "s"}` });
+      else toast({ title: "No new drafts needed", description: `${res.itemsConsidered} item(s) below min` });
+    } catch {
+      toast({ title: "Failed to run auto-reorder", variant: "destructive" });
+    }
+  };
 
   const handleCreate = async () => {
     try {
@@ -566,9 +663,14 @@ function PurchaseOrdersTab() {
             </button>
           ))}
         </div>
-        <Button size="sm" onClick={() => setShowAdd(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> New Order
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleRunAuto} disabled={runAutoReorder.isPending} title="Scan inventory now and auto-draft POs for low-stock items">
+            <Zap className={cn("w-4 h-4 mr-1.5", runAutoReorder.isPending && "animate-pulse")} /> {runAutoReorder.isPending ? "Running…" : "Run auto-reorder"}
+          </Button>
+          <Button size="sm" onClick={() => setShowAdd(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> New Order
+          </Button>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -586,42 +688,127 @@ function PurchaseOrdersTab() {
           <tbody>
             {filtered.map((po: PurchaseOrder) => {
               const statusCfg = PO_STATUS[po.status] ?? { label: po.status, color: "bg-gray-100 text-gray-600 border-gray-200" };
+              const lineItems = po.items ?? [];
+              const isExpanded = expandedId === po.id;
               return (
-                <tr key={po.id} className="border-b border-border last:border-0 hover:bg-muted/10">
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-medium">PO-{String(po.id).padStart(4, "0")}</span>
-                    {po.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[150px]">{po.notes}</p>}
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Truck className="w-3.5 h-3.5 text-muted-foreground" />
-                      {supplierName(po.supplierId)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", statusCfg.color)}>{statusCfg.label}</span>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <span className="text-sm font-semibold">₹{Number(po.totalAmount).toLocaleString()}</span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell text-sm text-muted-foreground">{formatDate(po.orderedAt)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      {po.status === "pending" && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handleStatusChange(po, "ordered")}>Mark Ordered</Button>
+                <Fragment key={po.id}>
+                  <tr className={cn("border-b border-border last:border-0 hover:bg-muted/10", isExpanded && "bg-muted/10")}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium">PO-{String(po.id).padStart(4, "0")}</span>
+                        {po.isAutoDrafted && (
+                          <span title="Auto-drafted by the system" className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                            <Sparkles className="w-2.5 h-2.5" /> Auto-drafted
+                          </span>
+                        )}
+                      </div>
+                      {po.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[180px]">{po.notes}</p>}
+                      {lineItems.length > 0 && (
+                        <button onClick={() => setExpandedId(isExpanded ? null : po.id)} className="text-[11px] text-primary hover:underline mt-0.5">
+                          {isExpanded ? "Hide items" : `${lineItems.length} item${lineItems.length === 1 ? "" : "s"}`}
+                        </button>
                       )}
-                      {po.status === "ordered" && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleStatusChange(po, "received")}>Mark Received</Button>
-                      )}
-                      {(po.status === "pending" || po.status === "ordered") && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground" onClick={() => handleStatusChange(po, "cancelled")}>Cancel</Button>
-                      )}
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(po)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Truck className="w-3.5 h-3.5 text-muted-foreground" />
+                        {supplierName(po.supplierId)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", statusCfg.color)}>{statusCfg.label}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className="text-sm font-semibold">₹{Number(po.totalAmount).toLocaleString()}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-sm text-muted-foreground">{formatDate(po.orderedAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 justify-end">
+                        {po.status === "pending" && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => beginEdit(po)} title="Edit line items">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        {po.status === "pending" && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handleStatusChange(po, "ordered")}>{po.isAutoDrafted ? "Send" : "Mark Ordered"}</Button>
+                        )}
+                        {po.status === "ordered" && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleStatusChange(po, "received")}>Mark Received</Button>
+                        )}
+                        {(po.status === "pending" || po.status === "ordered") && (
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground" onClick={() => handleStatusChange(po, "cancelled")}>Cancel</Button>
+                        )}
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(po)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && editingPoId === po.id && (
+                    <tr className="bg-amber-50/40 border-b border-border">
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="pl-2 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Edit line items</p>
+                          <div className="space-y-1.5">
+                            {editLines.map((l, idx) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                                <select
+                                  className="col-span-5 border border-input rounded-md px-2 py-1 text-sm bg-background"
+                                  value={l.inventoryItemId ?? ""}
+                                  onChange={e => {
+                                    const v = e.target.value ? Number(e.target.value) : null;
+                                    const inv = (inventoryItems as InventoryItem[]).find(i => i.id === v);
+                                    setEditLines(p => p.map((x, i) => i === idx ? { ...x, inventoryItemId: v, name: inv?.name ?? x.name, unit: inv?.unit ?? x.unit, costPerUnit: inv ? String(inv.costPerUnit) : x.costPerUnit } : x));
+                                  }}
+                                >
+                                  <option value="">— custom —</option>
+                                  {(inventoryItems as InventoryItem[]).filter(i => i.isActive).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                </select>
+                                <Input className="col-span-2 h-8 text-sm" type="number" step="0.001" min="0" placeholder="Qty" value={l.quantity} onChange={e => setEditLines(p => p.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                                <span className="col-span-1 text-xs text-muted-foreground">{l.unit}</span>
+                                <Input className="col-span-2 h-8 text-sm" type="number" step="0.01" min="0" placeholder="Cost" value={l.costPerUnit} onChange={e => setEditLines(p => p.map((x, i) => i === idx ? { ...x, costPerUnit: e.target.value } : x))} />
+                                <span className="col-span-1 text-xs text-right">₹{(Number(l.quantity || 0) * Number(l.costPerUnit || 0)).toFixed(2)}</span>
+                                <Button size="sm" variant="ghost" className="col-span-1 h-7 px-2 text-red-500" onClick={() => setEditLines(p => p.filter((_, i) => i !== idx))}>
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t border-border">
+                            <Button size="sm" variant="outline" onClick={() => setEditLines(p => [...p, { inventoryItemId: null, name: "New item", unit: "kg", quantity: "1", costPerUnit: "0" }])}>
+                              <Plus className="w-3.5 h-3.5 mr-1" /> Add item
+                            </Button>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-semibold">Total ₹{editTotal.toFixed(2)}</span>
+                              <Button size="sm" variant="ghost" onClick={() => setEditingPoId(null)}>Cancel</Button>
+                              <Button size="sm" onClick={saveEdit} disabled={updateItems.isPending}>{updateItems.isPending ? "Saving…" : "Save"}</Button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {isExpanded && editingPoId !== po.id && lineItems.length > 0 && (
+                    <tr className="bg-muted/5 border-b border-border">
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="pl-2">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Line items</p>
+                          <div className="space-y-1">
+                            {lineItems.map(li => {
+                              const lineTotal = Number(li.quantity) * Number(li.costPerUnit);
+                              return (
+                                <div key={li.id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/20">
+                                  <span>{li.name}</span>
+                                  <span className="text-muted-foreground">{Number(li.quantity).toFixed(2)} {li.unit} × ₹{Number(li.costPerUnit).toFixed(2)} = <span className="font-medium text-foreground">₹{lineTotal.toFixed(2)}</span></span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
             {filtered.length === 0 && (
@@ -772,6 +959,127 @@ function WasteLogTab() {
   );
 }
 
+function SettingsTab() {
+  const { data: restaurant } = useRestaurantInfo();
+  const { data: items = [] } = useInventory();
+  const updateRestaurant = useUpdateRestaurant();
+  const runAutoReorder = useRunAutoReorder();
+  const { toast } = useToast();
+  const [cron, setCron] = useState("");
+
+  const enabled = restaurant?.autoReorderEnabled ?? true;
+  const currentCron = restaurant?.autoReorderCron ?? "0 6 * * *";
+  const effectiveCron = cron || currentCron;
+
+  const lowStockItems = (items as InventoryItem[]).filter(i => i.isLowStock);
+  const eligibleAutoItems = lowStockItems.filter(i => i.autoReorderEnabled && i.supplierId);
+  const skippedNoSupplier = lowStockItems.filter(i => i.autoReorderEnabled && !i.supplierId);
+  const pausedItems = (items as InventoryItem[]).filter(i => !i.autoReorderEnabled);
+
+  const handleToggle = async (next: boolean) => {
+    try {
+      await updateRestaurant.mutateAsync({ autoReorderEnabled: next });
+      toast({ title: next ? "Auto-reorder enabled" : "Auto-reorder paused" });
+    } catch {
+      toast({ title: "Failed to update", variant: "destructive" });
+    }
+  };
+
+  const handleSaveCron = async () => {
+    if (!cron || cron === currentCron) return;
+    try {
+      await updateRestaurant.mutateAsync({ autoReorderCron: cron });
+      toast({ title: "Schedule updated" });
+      setCron("");
+    } catch {
+      toast({ title: "Failed to update schedule", variant: "destructive" });
+    }
+  };
+
+  const handleRunNow = async () => {
+    try {
+      const res = await runAutoReorder.mutateAsync();
+      if (res.draftsCreated > 0) toast({ title: `Created ${res.draftsCreated} auto-draft${res.draftsCreated === 1 ? "" : "s"}` });
+      else toast({ title: "No new drafts needed", description: `${res.itemsConsidered} item(s) below min` });
+    } catch {
+      toast({ title: "Failed to run auto-reorder", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600" /> Auto-reorder
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              When an ingredient drops at or below its minimum, the system can automatically draft a Purchase Order grouped by your preferred supplier. You'll get a notification and email so you can review and send.
+            </p>
+          </div>
+          <button
+            onClick={() => handleToggle(!enabled)}
+            disabled={updateRestaurant.isPending}
+            className={cn("relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors", enabled ? "bg-emerald-500" : "bg-muted")}
+            aria-label="Toggle auto-reorder"
+          >
+            <span className={cn("inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform mt-0.5", enabled ? "translate-x-5" : "translate-x-0.5")} />
+          </button>
+        </div>
+
+        <div className="border-t border-border pt-4 space-y-4">
+          <div>
+            <Label>Daily run schedule (cron, IST)</Label>
+            <div className="flex gap-2 mt-1">
+              <Input value={effectiveCron} onChange={e => setCron(e.target.value)} placeholder="0 6 * * *" className="font-mono text-sm" />
+              <Button variant="outline" onClick={handleSaveCron} disabled={!cron || cron === currentCron || updateRestaurant.isPending}>Save</Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">Default <code className="bg-muted px-1 py-0.5 rounded">0 6 * * *</code> runs every morning at 6:00 AM IST.</p>
+          </div>
+
+          <div>
+            <Button onClick={handleRunNow} disabled={runAutoReorder.isPending || !enabled}>
+              <Zap className={cn("w-4 h-4 mr-1.5", runAutoReorder.isPending && "animate-pulse")} />
+              {runAutoReorder.isPending ? "Scanning…" : "Run auto-reorder now"}
+            </Button>
+            {!enabled && <p className="text-xs text-muted-foreground mt-1.5">Enable auto-reorder above to run a scan.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <h3 className="text-base font-semibold mb-4">Current state</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="border border-border rounded-xl p-3">
+            <p className="text-2xl font-semibold text-red-600">{lowStockItems.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Low stock items</p>
+          </div>
+          <div className="border border-border rounded-xl p-3">
+            <p className="text-2xl font-semibold text-emerald-600">{eligibleAutoItems.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Will auto-draft</p>
+          </div>
+          <div className="border border-border rounded-xl p-3">
+            <p className="text-2xl font-semibold text-amber-600">{skippedNoSupplier.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Missing supplier</p>
+          </div>
+          <div className="border border-border rounded-xl p-3">
+            <p className="text-2xl font-semibold text-muted-foreground">{pausedItems.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Paused items</p>
+          </div>
+        </div>
+
+        {skippedNoSupplier.length > 0 && (
+          <div className="mt-4 border border-amber-200 bg-amber-50 rounded-xl p-3">
+            <p className="text-xs font-medium text-amber-800 mb-1.5">These low-stock items can't be auto-ordered (no preferred supplier):</p>
+            <p className="text-xs text-amber-900">{skippedNoSupplier.map(i => i.name).join(", ")}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const [tab, setTab] = useState<Tab>("Stock");
   const { data: items = [] } = useInventory();
@@ -798,6 +1106,7 @@ export default function InventoryPage() {
               {t === "Suppliers" && <Truck className="w-3.5 h-3.5" />}
               {t === "Purchase Orders" && <ClipboardList className="w-3.5 h-3.5" />}
               {t === "Waste Log" && <Flame className="w-3.5 h-3.5" />}
+              {t === "Settings" && <Settings className="w-3.5 h-3.5" />}
               {t}
               {t === "Stock" && lowStockCount > 0 && (
                 <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{lowStockCount}</span>
@@ -810,6 +1119,7 @@ export default function InventoryPage() {
         {tab === "Suppliers" && <SuppliersTab />}
         {tab === "Purchase Orders" && <PurchaseOrdersTab />}
         {tab === "Waste Log" && <WasteLogTab />}
+        {tab === "Settings" && <SettingsTab />}
       </div>
     </Layout>
   );

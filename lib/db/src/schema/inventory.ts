@@ -24,6 +24,9 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   unit: text("unit").notNull().default("kg"),
   currentStock: decimal("current_stock", { precision: 10, scale: 3 }).notNull().default("0.000"),
   minStockLevel: decimal("min_stock_level", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  parLevel: decimal("par_level", { precision: 10, scale: 3 }),
+  reorderQuantity: decimal("reorder_quantity", { precision: 10, scale: 3 }),
+  autoReorderEnabled: boolean("auto_reorder_enabled").notNull().default(true),
   costPerUnit: decimal("cost_per_unit", { precision: 10, scale: 2 }).notNull().default("0.00"),
   category: text("category").default("general"),
   isActive: boolean("is_active").notNull().default(true),
@@ -51,10 +54,23 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
   paidAmount: decimal("paid_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
   notes: text("notes"),
+  isAutoDrafted: boolean("is_auto_drafted").notNull().default(false),
+  draftedAt: timestamp("drafted_at"),
   orderedAt: timestamp("ordered_at"),
   receivedAt: timestamp("received_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const purchaseOrderItemsTable = pgTable("purchase_order_items", {
+  id: serial("id").primaryKey(),
+  purchaseOrderId: integer("purchase_order_id").notNull().references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").references(() => inventoryItemsTable.id),
+  name: text("name").notNull(),
+  unit: text("unit").notNull().default("kg"),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  costPerUnit: decimal("cost_per_unit", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const inventoryStockTable = pgTable("inventory_stock", {
@@ -101,3 +117,7 @@ export type InventoryTransaction = typeof inventoryTransactionsTable.$inferSelec
 export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrdersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
 export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
+
+export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItemsTable).omit({ id: true, createdAt: true });
+export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
+export type PurchaseOrderItem = typeof purchaseOrderItemsTable.$inferSelect;
