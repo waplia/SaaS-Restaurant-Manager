@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { eq, and, ilike } from "drizzle-orm";
 import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
@@ -193,6 +193,60 @@ router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "
   res.send(csv);
 });
 
+function parseCSVText(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  const src = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"' && src[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { row.push(cur); cur = ""; }
+      else if (ch === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else cur += ch;
+    }
+  }
+  if (cur.length > 0 || row.length > 0) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim().length > 0));
+}
+
+function csvToImportRows(text: string): ImportRowInput[] {
+  const rows = parseCSVText(text);
+  if (rows.length < 2) return [];
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const idx = (n: string) => header.indexOf(n.toLowerCase());
+  const i = {
+    sku: idx("SKU"), menu: idx("Menu"), category: idx("Category"), name: idx("Name"),
+    description: idx("Description"), price: idx("Price"), taxRate: idx("Tax Rate"),
+    veg: idx("Veg"), available: idx("Available"), prep: idx("Prep Time"),
+    calories: idx("Calories"), tags: idx("Tags"), allergens: idx("Allergens"),
+    imageUrl: idx("Image URL"),
+  };
+  const get = (cols: string[], k: number) => (k >= 0 ? (cols[k] ?? "").trim() : "");
+  return rows.slice(1).map(cols => ({
+    sku: get(cols, i.sku) || null,
+    name: get(cols, i.name),
+    menuName: get(cols, i.menu),
+    categoryName: get(cols, i.category),
+    description: get(cols, i.description),
+    price: get(cols, i.price),
+    taxRate: get(cols, i.taxRate) || null,
+    isVeg: get(cols, i.veg).toLowerCase() === "yes",
+    isAvailable: get(cols, i.available).toLowerCase() !== "no",
+    preparationTime: Number(get(cols, i.prep)) || 15,
+    calories: get(cols, i.calories) ? Number(get(cols, i.calories)) : null,
+    tags: get(cols, i.tags) ? get(cols, i.tags).split(";").map(s => s.trim()).filter(Boolean) : [],
+    allergens: get(cols, i.allergens) ? get(cols, i.allergens).split(";").map(s => s.trim()).filter(Boolean) : [],
+    imageUrl: get(cols, i.imageUrl) || null,
+  }));
+}
+
 type ImportRowInput = {
   sku?: string | null;
   name?: string;
@@ -220,12 +274,25 @@ type ImportRowResult = {
   matchedItemId: number | null;
 };
 
-router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post(
+  "/restaurants/:restaurantId/items/import",
+  requireRole("owner", "manager", "super_admin"),
+  express.text({ type: ["text/csv", "text/plain"], limit: "5mb" }),
+  async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { items, dryRun } = req.body as { items: ImportRowInput[]; dryRun?: boolean };
+  const dryRun = req.query.dryRun === "1" || (typeof req.body === "object" && req.body && (req.body as { dryRun?: boolean }).dryRun === true);
+
+  let items: ImportRowInput[];
+  if (typeof req.body === "string") {
+    items = csvToImportRows(req.body);
+  } else if (req.body && Array.isArray((req.body as { items?: unknown }).items)) {
+    items = (req.body as { items: ImportRowInput[] }).items;
+  } else {
+    return void res.status(400).json({ error: "Provide CSV text body or { items: [...] }" });
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
-    return void res.status(400).json({ error: "items array is required" });
+    return void res.status(400).json({ error: "No data rows found" });
   }
   if (items.length > 5000) {
     return void res.status(413).json({ error: "Maximum 5000 rows per import" });
@@ -263,8 +330,6 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
   const toCreate: Array<{ idx: number; menuName: string; categoryName: string; values: Omit<typeof menuItemsTable.$inferInsert, "categoryId"> }> = [];
   const toUpdate: Array<{ idx: number; id: number; values: Partial<typeof menuItemsTable.$inferInsert> }> = [];
   const seenSku = new Set<string>();
-  const newMenuNames = new Set<string>();
-  const newCategoryPairs = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
     const r = items[i] ?? {};
@@ -279,26 +344,11 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     const catName = String(r.categoryName ?? "").trim();
     const menuName = String(r.menuName ?? "").trim();
     let categoryId: number | undefined;
-    let willCreateMenu = false;
-    let willCreateCategory = false;
-    if (!catName) {
-      errors.push("Category is required");
-    } else if (!menuName) {
-      errors.push("Menu is required");
-    } else {
+    if (!catName) errors.push("Category is required");
+    else if (!menuName) errors.push("Menu is required");
+    else {
       const existingMenuId = menuByName.get(menuName.toLowerCase());
-      if (existingMenuId) {
-        categoryId = catByMenuName.get(`${existingMenuId}::${catName.toLowerCase()}`);
-        if (!categoryId) {
-          willCreateCategory = true;
-          newCategoryPairs.add(`${menuName.toLowerCase()}::${catName.toLowerCase()}`);
-        }
-      } else {
-        willCreateMenu = true;
-        willCreateCategory = true;
-        newMenuNames.add(menuName.toLowerCase());
-        newCategoryPairs.add(`${menuName.toLowerCase()}::${catName.toLowerCase()}`);
-      }
+      if (existingMenuId) categoryId = catByMenuName.get(`${existingMenuId}::${catName.toLowerCase()}`);
     }
 
     let taxRate: string | null = null;
@@ -370,7 +420,6 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     } else {
       toCreate.push({ idx: i, menuName, categoryName: catName, values: baseValues });
     }
-    void willCreateMenu; void willCreateCategory;
   }
 
   const summary = {
