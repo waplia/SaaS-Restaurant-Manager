@@ -19,6 +19,7 @@ import type {
 import type {
   AddOrderItemInput,
   AdminStats,
+  ApplyOrderDiscountBody,
   AssignPermissionToRoleBody,
   AssignStaffShiftInput,
   AttendanceRecord,
@@ -5146,6 +5147,213 @@ export const useRemoveOrderItem = <
   TContext
 > => {
   return useMutation(getRemoveOrderItemMutationOptions(options));
+};
+
+/**
+ * Inserts a ledger row in `order_discounts` and recalculates totals.
+`reason` must match one of the preset reasons configured in
+Settings → Discounts. When the resulting amount exceeds the configured
+percent or flat threshold, a manager PIN is required and the server
+responds with 402 `{ requiresPin: true }`. Retry with `managerPin`.
+
+ * @summary Apply a discount line to an order
+ */
+export const getApplyOrderDiscountLineUrl = (
+  restaurantId: number,
+  id: number,
+) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/discounts`;
+};
+
+export const applyOrderDiscountLine = async (
+  restaurantId: number,
+  id: number,
+  applyOrderDiscountBody: ApplyOrderDiscountBody,
+  options?: RequestInit,
+): Promise<OrderDetail> => {
+  return customFetch<OrderDetail>(
+    getApplyOrderDiscountLineUrl(restaurantId, id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(applyOrderDiscountBody),
+    },
+  );
+};
+
+export const getApplyOrderDiscountLineMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOrderDiscountLine>>,
+    TError,
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<ApplyOrderDiscountBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyOrderDiscountLine>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
+  TContext
+> => {
+  const mutationKey = ["applyOrderDiscountLine"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyOrderDiscountLine>>,
+    { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> }
+  > = (props) => {
+    const { restaurantId, id, data } = props ?? {};
+
+    return applyOrderDiscountLine(restaurantId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyOrderDiscountLineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyOrderDiscountLine>>
+>;
+export type ApplyOrderDiscountLineMutationBody =
+  BodyType<ApplyOrderDiscountBody>;
+export type ApplyOrderDiscountLineMutationError = ErrorType<void>;
+
+/**
+ * @summary Apply a discount line to an order
+ */
+export const useApplyOrderDiscountLine = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOrderDiscountLine>>,
+    TError,
+    {
+      restaurantId: number;
+      id: number;
+      data: BodyType<ApplyOrderDiscountBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyOrderDiscountLine>>,
+  TError,
+  { restaurantId: number; id: number; data: BodyType<ApplyOrderDiscountBody> },
+  TContext
+> => {
+  return useMutation(getApplyOrderDiscountLineMutationOptions(options));
+};
+
+/**
+ * @summary Remove a discount ledger line and recalculate totals
+ */
+export const getRemoveOrderDiscountLineUrl = (
+  restaurantId: number,
+  id: number,
+  discountId: number,
+) => {
+  return `/api/restaurants/${restaurantId}/orders/${id}/discounts/${discountId}`;
+};
+
+export const removeOrderDiscountLine = async (
+  restaurantId: number,
+  id: number,
+  discountId: number,
+  options?: RequestInit,
+): Promise<OrderDetail> => {
+  return customFetch<OrderDetail>(
+    getRemoveOrderDiscountLineUrl(restaurantId, id, discountId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveOrderDiscountLineMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrderDiscountLine>>,
+    TError,
+    { restaurantId: number; id: number; discountId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeOrderDiscountLine>>,
+  TError,
+  { restaurantId: number; id: number; discountId: number },
+  TContext
+> => {
+  const mutationKey = ["removeOrderDiscountLine"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeOrderDiscountLine>>,
+    { restaurantId: number; id: number; discountId: number }
+  > = (props) => {
+    const { restaurantId, id, discountId } = props ?? {};
+
+    return removeOrderDiscountLine(
+      restaurantId,
+      id,
+      discountId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveOrderDiscountLineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeOrderDiscountLine>>
+>;
+
+export type RemoveOrderDiscountLineMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a discount ledger line and recalculate totals
+ */
+export const useRemoveOrderDiscountLine = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrderDiscountLine>>,
+    TError,
+    { restaurantId: number; id: number; discountId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeOrderDiscountLine>>,
+  TError,
+  { restaurantId: number; id: number; discountId: number },
+  TContext
+> => {
+  return useMutation(getRemoveOrderDiscountLineMutationOptions(options));
 };
 
 /**

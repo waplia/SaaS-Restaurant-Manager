@@ -1015,6 +1015,25 @@ export const GetOrderResponse = zod.object({
       status: zod.string().optional(),
     }),
   ),
+  discounts: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        orderId: zod.number(),
+        restaurantId: zod.number().optional(),
+        type: zod.enum(["percentage", "flat", "item", "coupon", "loyalty"]),
+        scope: zod.enum(["order", "item"]),
+        orderItemId: zod.number().nullish(),
+        value: zod.string(),
+        amount: zod.string(),
+        reason: zod.string(),
+        couponCode: zod.string().nullish(),
+        recordedByUserId: zod.number().nullish(),
+        approvedByUserId: zod.number().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateOrderParams = zod.object({
@@ -1151,6 +1170,25 @@ export const AddOrderItemResponse = zod.object({
       status: zod.string().optional(),
     }),
   ),
+  discounts: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        orderId: zod.number(),
+        restaurantId: zod.number().optional(),
+        type: zod.enum(["percentage", "flat", "item", "coupon", "loyalty"]),
+        scope: zod.enum(["order", "item"]),
+        orderItemId: zod.number().nullish(),
+        value: zod.string(),
+        amount: zod.string(),
+        reason: zod.string(),
+        couponCode: zod.string().nullish(),
+        recordedByUserId: zod.number().nullish(),
+        approvedByUserId: zod.number().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -1189,6 +1227,156 @@ export const RemoveOrderItemResponse = zod.object({
       status: zod.string().optional(),
     }),
   ),
+  discounts: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        orderId: zod.number(),
+        restaurantId: zod.number().optional(),
+        type: zod.enum(["percentage", "flat", "item", "coupon", "loyalty"]),
+        scope: zod.enum(["order", "item"]),
+        orderItemId: zod.number().nullish(),
+        value: zod.string(),
+        amount: zod.string(),
+        reason: zod.string(),
+        couponCode: zod.string().nullish(),
+        recordedByUserId: zod.number().nullish(),
+        approvedByUserId: zod.number().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * Inserts a ledger row in `order_discounts` and recalculates totals.
+`reason` must match one of the preset reasons configured in
+Settings → Discounts. When the resulting amount exceeds the configured
+percent or flat threshold, a manager PIN is required and the server
+responds with 402 `{ requiresPin: true }`. Retry with `managerPin`.
+
+ * @summary Apply a discount line to an order
+ */
+export const ApplyOrderDiscountLineParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const ApplyOrderDiscountLineBody = zod.object({
+  type: zod.enum(["percentage", "flat", "item"]),
+  scope: zod.enum(["order", "item"]).optional(),
+  orderItemId: zod.number().optional(),
+  value: zod.number(),
+  reason: zod.string().describe("Must match a configured preset reason"),
+  managerPin: zod
+    .string()
+    .optional()
+    .describe("Required when discount exceeds configured threshold"),
+});
+
+export const ApplyOrderDiscountLineResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number().optional(),
+  tableId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      menuItemId: zod.number().optional(),
+      menuItemName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.string(),
+      totalPrice: zod.string(),
+      notes: zod.string().nullish(),
+      status: zod.string().optional(),
+    }),
+  ),
+  discounts: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        orderId: zod.number(),
+        restaurantId: zod.number().optional(),
+        type: zod.enum(["percentage", "flat", "item", "coupon", "loyalty"]),
+        scope: zod.enum(["order", "item"]),
+        orderItemId: zod.number().nullish(),
+        value: zod.string(),
+        amount: zod.string(),
+        reason: zod.string(),
+        couponCode: zod.string().nullish(),
+        recordedByUserId: zod.number().nullish(),
+        approvedByUserId: zod.number().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Remove a discount ledger line and recalculate totals
+ */
+export const RemoveOrderDiscountLineParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+  discountId: zod.coerce.number(),
+});
+
+export const RemoveOrderDiscountLineResponse = zod.object({
+  id: zod.number(),
+  restaurantId: zod.number().optional(),
+  tableId: zod.number().nullish(),
+  orderNumber: zod.string(),
+  orderType: zod.string().optional(),
+  status: zod.string(),
+  paymentStatus: zod.string().optional(),
+  subtotal: zod.string().optional(),
+  taxAmount: zod.string().optional(),
+  totalAmount: zod.string(),
+  notes: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  isPriority: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      menuItemId: zod.number().optional(),
+      menuItemName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.string(),
+      totalPrice: zod.string(),
+      notes: zod.string().nullish(),
+      status: zod.string().optional(),
+    }),
+  ),
+  discounts: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        orderId: zod.number(),
+        restaurantId: zod.number().optional(),
+        type: zod.enum(["percentage", "flat", "item", "coupon", "loyalty"]),
+        scope: zod.enum(["order", "item"]),
+        orderItemId: zod.number().nullish(),
+        value: zod.string(),
+        amount: zod.string(),
+        reason: zod.string(),
+        couponCode: zod.string().nullish(),
+        recordedByUserId: zod.number().nullish(),
+        approvedByUserId: zod.number().nullish(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**

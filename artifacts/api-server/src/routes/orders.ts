@@ -211,10 +211,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  // NOTE: any `discountAmount` in the request body is intentionally ignored.
-  // All discounts must flow through POST /orders/:id/discounts (preset reason +
-  // manager-PIN above threshold). New orders start at zero discount and the
-  // ledger is the source of truth via recalculateOrderTotals().
+  // discountAmount is server-managed via /discounts ledger; ignore client value.
   const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items } = req.body;
 
   let subtotal = 0;
@@ -335,9 +332,7 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  // `discountAmount` is intentionally not patchable here — discount writes go
-  // through POST/DELETE /orders/:id/discounts which enforce reason presets and
-  // manager-PIN approval, then recalculate via recalculateOrderTotals().
+  // discountAmount is not patchable; use POST/DELETE /orders/:id/discounts.
   const { status, notes, isPriority, customerName } = req.body;
   const updates: Record<string, unknown> = { notes, isPriority, customerName, updatedAt: new Date() };
   if (status) updates.status = status;
@@ -474,9 +469,6 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   res.json({ ...updatedOrder, items });
 });
 
-// Apply a discount line (percentage / flat / item) to an order.
-// Each discount needs a `reason`. If the resulting amount exceeds the
-// configured percent or flat threshold, a manager PIN is required.
 router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
@@ -496,9 +488,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     return void res.status(400).json({ error: "value must be a positive number" });
   }
 
-  // Reason policy — must match a configured preset reason. Prevents cashiers
-  // from inventing ad-hoc justifications and keeps the Reports breakdown
-  // bucketed against a known taxonomy.
   const cfgEarly = await loadDiscountsConfig(restaurantId);
   const presets = (cfgEarly.presetReasons ?? []).map(r => r.trim()).filter(r => r.length > 0);
   if (presets.length === 0) {
@@ -521,7 +510,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
   }
 
-  // Resolve the rupee amount of the discount based on type/scope.
   const subtotal = Number(order.subtotal);
   let amount = 0;
   let scopeOut: "order" | "item" = "order";
@@ -532,7 +520,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     const [oi] = await db.select().from(orderItemsTable)
       .where(and(eq(orderItemsTable.id, Number(orderItemId)), eq(orderItemsTable.orderId, orderId)));
     if (!oi) return void res.status(404).json({ error: "Order item not found" });
-    // For item scope, `value` is interpreted as rupees off that line, capped to line total.
     const lineTotal = Number(oi.totalPrice);
     amount = Math.min(valueNum, lineTotal);
     scopeOut = "item";
@@ -545,7 +532,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     amount = valueNum;
   }
 
-  // Cap so total order discount can never exceed subtotal.
   const existingTotal = await sumOrderDiscounts(orderId);
   const headroom = Math.max(0, subtotal - existingTotal);
   amount = Math.min(amount, headroom);
@@ -553,9 +539,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     return void res.status(400).json({ error: "Order is already fully discounted" });
   }
 
-  // Threshold check — manager PIN required when a single discount line exceeds
-  // the configured percent OR flat thresholds. Reuse the config we already
-  // loaded above for reason validation.
   const cfg = cfgEarly;
   const needsApproval = exceedsThreshold(amount, subtotal, cfg);
   let approvedByUserId: number | null = null;
@@ -575,9 +558,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
         thresholdAmount: cfg.thresholdAmount,
       });
     }
-    // PIN verified — record approver if we know who it is. The PIN is shared
-    // per restaurant so we attribute approval to the cashier's manager record
-    // by reusing recordedBy when no separate approver id is available.
     approvedByUserId = req.user?.sub ?? null;
   }
 
@@ -616,9 +596,6 @@ router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", asy
     .where(and(eq(orderDiscountsTable.id, discountId), eq(orderDiscountsTable.orderId, orderId)));
   if (!existing) return void res.status(404).json({ error: "Discount line not found" });
 
-  // Removing a coupon line also clears the order's couponCode so the same
-  // coupon can be reapplied or replaced. Removing a loyalty line also clears
-  // any pending point-redemption so the customer is not charged points.
   await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.id, discountId));
   if (existing.type === "coupon") {
     await db.update(ordersTable).set({ couponCode: null, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
@@ -633,15 +610,10 @@ router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", asy
   res.json({ ...updatedOrder, items, discounts });
 });
 
-// Legacy single-discount endpoint — REMOVED. The previous implementation
-// inserted a flat ledger row with a hardcoded "Manual discount" reason and
-// bypassed the preset-reason policy and threshold/PIN approval checks. All
-// discount writes now go through POST /orders/:id/discounts which enforces
-// both. The 410 response makes any stale callers fail loudly instead of
-// silently bypassing approval controls.
+// Removed — use POST /orders/:id/discounts.
 router.post("/restaurants/:restaurantId/orders/:id/discount", (_req, res) => {
   res.status(410).json({
-    error: "This endpoint has been removed. Use POST /orders/:id/discounts with type, value, reason, and (when over threshold) managerPin.",
+    error: "Endpoint removed. Use POST /orders/:id/discounts.",
     code: "ENDPOINT_REMOVED",
   });
 });

@@ -1043,8 +1043,6 @@ export default function PosPage() {
   const applyCoupon = useApplyCoupon();
   const { toast } = useToast();
 
-  // Discount drawer state (T4). PIN field is conditionally surfaced after the
-  // backend returns 402 `{ requiresPin: true }` for over-threshold discounts.
   const [showDiscountDrawer, setShowDiscountDrawer] = useState(false);
   const [dType, setDType] = useState<"percentage" | "flat" | "item">("percentage");
   const [dValue, setDValue] = useState("");
@@ -1097,9 +1095,7 @@ export default function PosPage() {
     return liveDetail?.items ?? placedOrder.items;
   }, [placedOrder, liveDetail]);
 
-  // Totals: server-accurate after placement, local estimate before. Discounts
-  // are applied only after the order is placed (via the Apply-Discount drawer
-  // → ledger), so the pre-placement estimate has no discount component.
+  // Totals: server-accurate after placement, local estimate before.
   const localSubtotal = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
   const localTaxAmount = localSubtotal * taxRate;
   const localServiceCharge = localSubtotal * serviceRate;

@@ -1064,6 +1064,63 @@ paths:
         "404":
           description: Order or item not found
 
+  /restaurants/{restaurantId}/orders/{id}/discounts:
+    post:
+      operationId: applyOrderDiscountLine
+      tags: [orders]
+      summary: Apply a discount line to an order
+      description: |
+        Inserts a ledger row in `order_discounts` and recalculates totals.
+        `reason` must match one of the preset reasons configured in
+        Settings → Discounts. When the resulting amount exceeds the configured
+        percent or flat threshold, a manager PIN is required and the server
+        responds with 402 `{ requiresPin: true }`. Retry with `managerPin`.
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyOrderDiscountBody"
+      responses:
+        "200":
+          description: Updated order with recalculated totals and discount ledger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "400":
+          description: Invalid type, value, reason, or order state
+        "402":
+          description: Manager PIN required (threshold exceeded)
+        "404":
+          description: Order or order item not found
+        "409":
+          description: No preset reasons configured or manager PIN not set
+
+  /restaurants/{restaurantId}/orders/{id}/discounts/{discountId}:
+    delete:
+      operationId: removeOrderDiscountLine
+      tags: [orders]
+      summary: Remove a discount ledger line and recalculate totals
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: discountId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Updated order with recalculated totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "400":
+          description: Order is completed or cancelled
+        "404":
+          description: Order or discount line not found
+
   /restaurants/{restaurantId}/orders/{id}/void:
     post:
       operationId: voidOrder
@@ -2725,6 +2782,39 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrderItemDetail"
+        discounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderDiscount"
+
+    OrderDiscount:
+      type: object
+      required: [id, orderId, type, scope, value, amount, reason]
+      properties:
+        id: { type: integer }
+        orderId: { type: integer }
+        restaurantId: { type: integer }
+        type: { type: string, enum: [percentage, flat, item, coupon, loyalty] }
+        scope: { type: string, enum: [order, item] }
+        orderItemId: { type: ["integer", "null"] }
+        value: { type: string }
+        amount: { type: string }
+        reason: { type: string }
+        couponCode: { type: ["string", "null"] }
+        recordedByUserId: { type: ["integer", "null"] }
+        approvedByUserId: { type: ["integer", "null"] }
+        createdAt: { type: string }
+
+    ApplyOrderDiscountBody:
+      type: object
+      required: [type, value, reason]
+      properties:
+        type: { type: string, enum: [percentage, flat, item] }
+        scope: { type: string, enum: [order, item] }
+        orderItemId: { type: integer }
+        value: { type: number }
+        reason: { type: string, description: "Must match a configured preset reason" }
+        managerPin: { type: string, description: "Required when discount exceeds configured threshold" }
 
     OrderItemDetail:
       type: object

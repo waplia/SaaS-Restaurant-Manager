@@ -495,6 +495,45 @@ export interface OrderItemDetail {
   status?: string;
 }
 
+export type OrderDiscountType =
+  (typeof OrderDiscountType)[keyof typeof OrderDiscountType];
+
+export const OrderDiscountType = {
+  percentage: "percentage",
+  flat: "flat",
+  item: "item",
+  coupon: "coupon",
+  loyalty: "loyalty",
+} as const;
+
+export type OrderDiscountScope =
+  (typeof OrderDiscountScope)[keyof typeof OrderDiscountScope];
+
+export const OrderDiscountScope = {
+  order: "order",
+  item: "item",
+} as const;
+
+export interface OrderDiscount {
+  id: number;
+  orderId: number;
+  restaurantId?: number;
+  type: OrderDiscountType;
+  scope: OrderDiscountScope;
+  /** @nullable */
+  orderItemId?: number | null;
+  value: string;
+  amount: string;
+  reason: string;
+  /** @nullable */
+  couponCode?: string | null;
+  /** @nullable */
+  recordedByUserId?: number | null;
+  /** @nullable */
+  approvedByUserId?: number | null;
+  createdAt?: string;
+}
+
 export interface OrderDetail {
   id: number;
   restaurantId?: number;
@@ -514,6 +553,35 @@ export interface OrderDetail {
   isPriority?: boolean;
   createdAt?: string;
   items: OrderItemDetail[];
+  discounts?: OrderDiscount[];
+}
+
+export type ApplyOrderDiscountBodyType =
+  (typeof ApplyOrderDiscountBodyType)[keyof typeof ApplyOrderDiscountBodyType];
+
+export const ApplyOrderDiscountBodyType = {
+  percentage: "percentage",
+  flat: "flat",
+  item: "item",
+} as const;
+
+export type ApplyOrderDiscountBodyScope =
+  (typeof ApplyOrderDiscountBodyScope)[keyof typeof ApplyOrderDiscountBodyScope];
+
+export const ApplyOrderDiscountBodyScope = {
+  order: "order",
+  item: "item",
+} as const;
+
+export interface ApplyOrderDiscountBody {
+  type: ApplyOrderDiscountBodyType;
+  scope?: ApplyOrderDiscountBodyScope;
+  orderItemId?: number;
+  value: number;
+  /** Must match a configured preset reason */
+  reason: string;
+  /** Required when discount exceeds configured threshold */
+  managerPin?: string;
 }
 
 export interface OrderList {

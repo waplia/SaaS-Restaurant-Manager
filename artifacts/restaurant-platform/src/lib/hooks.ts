@@ -229,9 +229,6 @@ export function useRemoveOrderItem() {
   });
 }
 
-// Multi-line discount endpoints (T2). The backend returns 402 with
-// `{ requiresPin: true }` when the discount exceeds the configured threshold;
-// callers are expected to surface a manager-PIN modal and retry with `managerPin`.
 export function useApplyDiscountLine() {
   const qc = useQueryClient();
   return useMutation({
