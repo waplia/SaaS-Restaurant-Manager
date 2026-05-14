@@ -96,6 +96,85 @@ router.post(
 );
 
 /**
+ * Finalize an upload as PUBLIC. Used for assets that need to be served on the
+ * customer-facing menu (menu banners, category thumbnails, item photos).
+ */
+router.post(
+  "/restaurants/:restaurantId/storage/uploads/finalize-public",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req: Request, res: Response) => {
+    const parsed = FinalizeUploadBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "objectPath required" });
+      return;
+    }
+    const { objectPath } = parsed.data;
+    if (!objectPath.startsWith("/objects/")) {
+      res.status(400).json({ error: "Invalid objectPath" });
+      return;
+    }
+    try {
+      const restaurantId = Number(req.params.restaurantId);
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const existing = await getObjectAclPolicy(objectFile);
+      if (existing && existing.restaurantId !== String(restaurantId)) {
+        res.status(403).json({ error: "Object already owned by another tenant" });
+        return;
+      }
+      await setObjectAclPolicy(objectFile, {
+        restaurantId: String(restaurantId),
+        uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
+        visibility: "public",
+      });
+      res.json({ ok: true, objectPath });
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        res.status(404).json({ error: "Object not found — upload may not have completed" });
+        return;
+      }
+      req.log.error({ err: error }, "Error finalizing public upload");
+      res.status(500).json({ error: "Failed to finalize upload" });
+    }
+  },
+);
+
+/**
+ * Public read endpoint for objects whose ACL marks them visibility=public.
+ * Mounted under /api (no auth) so customer-facing pages can render menu images.
+ */
+export const publicStorageRouter: IRouter = Router();
+publicStorageRouter.get("/public/storage/objects/*path", async (req: Request, res: Response) => {
+  try {
+    const raw = (req.params as Record<string, string | string[]>).path;
+    const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
+    const objectPath = `/objects/${wildcardPath}`;
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const aclPolicy = await getObjectAclPolicy(objectFile);
+    if (!aclPolicy || aclPolicy.visibility !== "public") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const response = await objectStorageService.downloadObject(objectFile);
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Object not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error serving public object");
+    res.status(500).json({ error: "Failed to serve object" });
+  }
+});
+
+/**
  * Serve a stored object only if the requesting user belongs to the same restaurant
  * recorded in the object's ACL policy.
  */

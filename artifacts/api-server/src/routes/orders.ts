@@ -1207,19 +1207,24 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
 
     // Filter to items whose menu item belongs to this ticket's kitchen
     let items = allItems;
+    const allMenuItemIds = Array.from(new Set(allItems.map(i => i.menuItemId).filter((x): x is number => x != null)));
+    const menuRowsAll = allMenuItemIds.length > 0
+      ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId, imageUrl: menuItemsTable.imageUrl })
+          .from(menuItemsTable)
+          .where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, allMenuItemIds)))
+      : [];
+    const imageById = new Map(menuRowsAll.map(m => [m.id, m.imageUrl ?? null] as const));
     if (t.kitchenId != null && allItems.length > 0) {
-      const menuItemIds = Array.from(new Set(allItems.map(i => i.menuItemId).filter((x): x is number => x != null)));
-      const menuRows = menuItemIds.length > 0
-        ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
-            .from(menuItemsTable)
-            .where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, menuItemIds)))
-        : [];
-      const itemKitchenById = new Map(menuRows.map(m => [m.id, m.kitchenId ?? defaultKitchenId] as const));
+      const itemKitchenById = new Map(menuRowsAll.map(m => [m.id, m.kitchenId ?? defaultKitchenId] as const));
       items = allItems.filter(i => {
         const k = i.menuItemId != null ? itemKitchenById.get(i.menuItemId) ?? defaultKitchenId : defaultKitchenId;
         return k === t.kitchenId;
       });
     }
+    const enrichedItems = items.map(i => ({
+      ...i,
+      menuItemImageUrl: i.menuItemId != null ? imageById.get(i.menuItemId) ?? null : null,
+    }));
 
     let tableNumber: string | null = null;
     if (order?.tableId) {
@@ -1234,7 +1239,7 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
       orderNumber: order?.orderNumber ?? "",
       tableNumber,
       orderType: order?.orderType ?? "dine_in",
-      items,
+      items: enrichedItems,
       kitchen: kitchen ? { id: kitchen.id, name: kitchen.name, autoPrint: kitchen.autoPrint, printerName: kitchen.printerName, paperSize: kitchen.paperSize } : null,
     };
   }));

@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
+import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
 
 const RESTAURANT_ID = 1;
 
@@ -198,11 +199,11 @@ export default function MenuPage() {
 
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [editMenu, setEditMenu] = useState<Menu | null>(null);
-  const [menuForm, setMenuForm] = useState({ name: "", description: "", availableFrom: "", availableTo: "" });
+  const [menuForm, setMenuForm] = useState({ name: "", description: "", imageUrl: "", availableFrom: "", availableTo: "" });
 
   const [showCatModal, setShowCatModal] = useState(false);
   const [editCat, setEditCat] = useState<MenuCategory | null>(null);
-  const [catForm, setCatForm] = useState({ name: "", description: "" });
+  const [catForm, setCatForm] = useState({ name: "", description: "", imageUrl: "" });
 
   const [showItemModal, setShowItemModal] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
@@ -249,7 +250,7 @@ export default function MenuPage() {
       categoryId: Number(itemForm.categoryId),
       isVeg: itemForm.isVeg,
       preparationTime: Number(itemForm.preparationTime),
-      imageUrl: itemForm.imageUrl || undefined,
+      imageUrl: itemForm.imageUrl ? itemForm.imageUrl : null,
       calories: itemForm.calories ? Number(itemForm.calories) : undefined,
       tags: itemForm.tags ? itemForm.tags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
       kitchenId: itemForm.kitchenId ? Number(itemForm.kitchenId) : null,
@@ -292,17 +293,18 @@ export default function MenuPage() {
   const handleSaveMenu = async () => {
     if (!menuForm.name) return;
     try {
+      const menuPayload = { ...menuForm, imageUrl: menuForm.imageUrl ? menuForm.imageUrl : null };
       if (editMenu) {
-        await updateMenu.mutateAsync({ id: editMenu.id, ...menuForm });
+        await updateMenu.mutateAsync({ id: editMenu.id, ...menuPayload });
         toast({ title: "Menu updated" });
       } else {
-        const m = await createMenu.mutateAsync(menuForm);
+        const m = await createMenu.mutateAsync(menuPayload);
         setSelectedMenuId(m.id);
         toast({ title: "Menu created" });
       }
       setShowMenuModal(false);
       setEditMenu(null);
-      setMenuForm({ name: "", description: "", availableFrom: "", availableTo: "" });
+      setMenuForm({ name: "", description: "", imageUrl: "", availableFrom: "", availableTo: "" });
     } catch {
       toast({ title: "Failed to save menu", variant: "destructive" });
     }
@@ -322,16 +324,17 @@ export default function MenuPage() {
   const handleSaveCat = async () => {
     if (!catForm.name || !activeMenuId) return;
     try {
+      const catPayload = { ...catForm, imageUrl: catForm.imageUrl ? catForm.imageUrl : null };
       if (editCat) {
-        await updateCategory.mutateAsync({ id: editCat.id, ...catForm });
+        await updateCategory.mutateAsync({ id: editCat.id, ...catPayload });
         toast({ title: "Category updated" });
       } else {
-        await createCategory.mutateAsync({ menuId: activeMenuId, ...catForm });
+        await createCategory.mutateAsync({ menuId: activeMenuId, ...catPayload });
         toast({ title: "Category created" });
       }
       setShowCatModal(false);
       setEditCat(null);
-      setCatForm({ name: "", description: "" });
+      setCatForm({ name: "", description: "", imageUrl: "" });
     } catch {
       toast({ title: "Failed to save category", variant: "destructive" });
     }
@@ -443,18 +446,22 @@ export default function MenuPage() {
           <div className="p-3 border-b border-border">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Menus</p>
-              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditMenu(null); setMenuForm({ name: "", description: "", availableFrom: "", availableTo: "" }); setShowMenuModal(true); }}>
+              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditMenu(null); setMenuForm({ name: "", description: "", imageUrl: "", availableFrom: "", availableTo: "" }); setShowMenuModal(true); }}>
                 <Plus className="w-3 h-3" />
               </Button>
             </div>
             <div className="space-y-0.5">
               {menus.map((m: Menu) => (
                 <div key={m.id} className={cn("flex items-center rounded-md px-2 py-1.5 cursor-pointer group transition-colors", activeMenuId === m.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground")} onClick={() => { setSelectedMenuId(m.id); setSelectedCatId(undefined); }}>
-                  <UtensilsCrossed className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
+                  {m.imageUrl ? (
+                    <img src={resolveImageUrl(m.imageUrl)} alt="" className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  ) : (
+                    <UtensilsCrossed className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
+                  )}
                   <span className="text-xs font-medium flex-1 truncate">{m.name}</span>
                   {!m.isActive && <span className="text-[9px] text-muted-foreground mr-1">off</span>}
                   <div className="hidden group-hover:flex items-center gap-0.5">
-                    <button className="p-0.5 hover:text-primary" onClick={e => { e.stopPropagation(); setEditMenu(m); setMenuForm({ name: m.name, description: m.description ?? "", availableFrom: m.availableFrom ?? "", availableTo: m.availableTo ?? "" }); setShowMenuModal(true); }}><Pencil className="w-2.5 h-2.5" /></button>
+                    <button className="p-0.5 hover:text-primary" onClick={e => { e.stopPropagation(); setEditMenu(m); setMenuForm({ name: m.name, description: m.description ?? "", imageUrl: m.imageUrl ?? "", availableFrom: m.availableFrom ?? "", availableTo: m.availableTo ?? "" }); setShowMenuModal(true); }}><Pencil className="w-2.5 h-2.5" /></button>
                     <button className="p-0.5 hover:text-destructive" onClick={e => { e.stopPropagation(); handleDeleteMenu(m.id); }}><Trash2 className="w-2.5 h-2.5" /></button>
                   </div>
                 </div>
@@ -467,7 +474,7 @@ export default function MenuPage() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categories</p>
               {activeMenuId && (
-                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditCat(null); setCatForm({ name: "", description: "" }); setShowCatModal(true); }}>
+                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditCat(null); setCatForm({ name: "", description: "", imageUrl: "" }); setShowCatModal(true); }}>
                   <Plus className="w-3 h-3" />
                 </Button>
               )}
@@ -479,9 +486,12 @@ export default function MenuPage() {
 
             {categories.map((cat: MenuCategory) => (
               <div key={cat.id} className={cn("group flex items-center px-2 py-1.5 rounded-md cursor-pointer text-xs transition-colors mb-0.5", selectedCatId === cat.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground")} onClick={() => setSelectedCatId(cat.id)}>
+                {cat.imageUrl && (
+                  <img src={resolveImageUrl(cat.imageUrl)} alt="" className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
                 <span className="flex-1 truncate">{cat.name}</span>
                 <div className="hidden group-hover:flex items-center gap-0.5">
-                  <button className="p-0.5 hover:text-primary" onClick={e => { e.stopPropagation(); setEditCat(cat); setCatForm({ name: cat.name, description: cat.description ?? "" }); setShowCatModal(true); }}><Pencil className="w-2.5 h-2.5" /></button>
+                  <button className="p-0.5 hover:text-primary" onClick={e => { e.stopPropagation(); setEditCat(cat); setCatForm({ name: cat.name, description: cat.description ?? "", imageUrl: cat.imageUrl ?? "" }); setShowCatModal(true); }}><Pencil className="w-2.5 h-2.5" /></button>
                   <button className="p-0.5 hover:text-destructive" onClick={e => { e.stopPropagation(); handleDeleteCat(cat.id); }}><Trash2 className="w-2.5 h-2.5" /></button>
                 </div>
               </div>
@@ -580,7 +590,7 @@ export default function MenuPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded-md object-cover flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          <img src={resolveImageUrl(item.imageUrl)} alt={item.name} className="w-8 h-8 rounded-md object-cover flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         ) : (
                           <div className="w-8 h-8 rounded-md bg-muted/60 flex items-center justify-center flex-shrink-0">
                             <UtensilsCrossed className="w-3.5 h-3.5 text-muted-foreground" />
@@ -665,6 +675,7 @@ export default function MenuPage() {
             <div className="space-y-3">
               <div><Label>Menu Name</Label><Input placeholder="e.g. Breakfast Menu" value={menuForm.name} onChange={e => setMenuForm(p => ({ ...p, name: e.target.value }))} /></div>
               <div><Label>Description</Label><Input placeholder="Optional description" value={menuForm.description} onChange={e => setMenuForm(p => ({ ...p, description: e.target.value }))} /></div>
+              <ImageUploadField label="Banner image" value={menuForm.imageUrl} onChange={url => setMenuForm(p => ({ ...p, imageUrl: url }))} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Available From</Label>
@@ -691,6 +702,7 @@ export default function MenuPage() {
             <div className="space-y-3">
               <div><Label>Category Name</Label><Input placeholder="e.g. Starters" value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} /></div>
               <div><Label>Description</Label><Input placeholder="Optional" value={catForm.description} onChange={e => setCatForm(p => ({ ...p, description: e.target.value }))} /></div>
+              <ImageUploadField label="Thumbnail" value={catForm.imageUrl} onChange={url => setCatForm(p => ({ ...p, imageUrl: url }))} />
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => { setShowCatModal(false); setEditCat(null); }}>Cancel</Button>
                 <Button className="flex-1" onClick={handleSaveCat} disabled={createCategory.isPending || updateCategory.isPending}>Save</Button>
@@ -751,11 +763,7 @@ export default function MenuPage() {
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <Label>Image URL</Label>
-                      <Input placeholder="https://example.com/image.jpg" value={itemForm.imageUrl} onChange={e => setItemForm(p => ({ ...p, imageUrl: e.target.value }))} />
-                      {itemForm.imageUrl && (
-                        <img src={itemForm.imageUrl} alt="preview" className="mt-2 h-20 w-full object-cover rounded-md border border-border" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      )}
+                      <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url }))} />
                     </div>
                     <div>
                       <Label>Calories (kcal)</Label>

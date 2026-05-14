@@ -9,6 +9,7 @@ export const menusTable = pgTable("menus", {
   restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
   name: text("name").notNull(),
   description: text("description"),
+  imageUrl: text("image_url"),
   availableFrom: text("available_from").default("00:00"),
   availableTo: text("available_to").default("23:59"),
   isActive: boolean("is_active").notNull().default(true),

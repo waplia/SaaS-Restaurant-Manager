@@ -61,13 +61,35 @@ interface PublicMenuCategory {
   items: PublicMenuItem[];
 }
 
+interface MenuImageConfig {
+  aspectRatio: string;
+  fallbackPlaceholder: string;
+  showInCustomerMenu: boolean;
+}
+
 interface PublicMenu {
   restaurantId: number;
   restaurantName: string;
   restaurantSlug: string;
   logoUrl: string | null;
   currency: string;
+  menuBannerUrl?: string | null;
+  menuImageConfig?: MenuImageConfig;
   categories: PublicMenuCategory[];
+}
+
+function resolveImg(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("/objects/")) {
+    return `${API_BASE}/public/storage${url}`;
+  }
+  return url;
+}
+
+function arNum(ratio: string | undefined): number {
+  if (!ratio) return 1;
+  const [w, h] = ratio.split(":").map(Number);
+  return w && h ? w / h : 1;
 }
 
 interface SelectedModifier {
@@ -286,6 +308,10 @@ export default function CustomerMenuPage() {
   const cartTotal = cart.reduce((s, i) => s + itemUnitPrice(i.basePrice, i.modifiers) * i.quantity, 0);
   const currency = menu?.currency ?? "INR";
   const currSymbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "₹";
+  const imgCfg = menu?.menuImageConfig;
+  const showImages = imgCfg?.showInCustomerMenu !== false;
+  const fallbackPlaceholder = resolveImg(imgCfg?.fallbackPlaceholder ?? "");
+  const itemAR = arNum(imgCfg?.aspectRatio ?? "1:1");
 
   function openItemDetail(item: PublicMenuItem) {
     setSelectedItem(item);
@@ -806,10 +832,13 @@ export default function CustomerMenuPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
+      {showImages && menu.menuBannerUrl && (
+        <img src={resolveImg(menu.menuBannerUrl)} alt="" className="w-full h-40 object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      )}
       <div className="bg-orange-500 text-white px-4 pt-6 pb-16">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
-            {menu.logoUrl && <img src={menu.logoUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white/30" />}
+            {menu.logoUrl && <img src={resolveImg(menu.logoUrl)} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white/30" />}
             <div>
               <p className="font-bold text-xl leading-tight">{menu.restaurantName}</p>
               <p className="text-orange-100 text-xs">Table {tableId} · Scan & Order</p>
@@ -833,8 +862,11 @@ export default function CustomerMenuPage() {
               <button
                 key={cat.id}
                 onClick={() => scrollToCategory(cat.id)}
-                className={cn("px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition", activeCategory === cat.id ? "border-orange-500 text-orange-500" : "border-transparent text-gray-500 hover:text-gray-800")}
+                className={cn("px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition flex items-center gap-2", activeCategory === cat.id ? "border-orange-500 text-orange-500" : "border-transparent text-gray-500 hover:text-gray-800")}
               >
+                {showImages && cat.imageUrl && (
+                  <img src={resolveImg(cat.imageUrl)} alt="" className="w-6 h-6 rounded-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
                 {cat.name}
               </button>
             ))}
@@ -856,8 +888,16 @@ export default function CustomerMenuPage() {
                     className="bg-white rounded-2xl shadow-sm overflow-hidden flex cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => openItemDetail(item)}
                   >
-                    {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-24 h-24 object-cover flex-shrink-0" />}
-                    <div className={cn("flex-1 p-3 flex flex-col justify-between", !item.imageUrl && "pl-4")}>
+                    {showImages && (item.imageUrl || fallbackPlaceholder) && (
+                      <img
+                        src={resolveImg(item.imageUrl) || fallbackPlaceholder}
+                        alt={item.name}
+                        className="object-cover flex-shrink-0"
+                        style={{ width: 96, aspectRatio: itemAR }}
+                        onError={e => { const t = e.target as HTMLImageElement; if (fallbackPlaceholder && t.src !== fallbackPlaceholder) t.src = fallbackPlaceholder; else t.style.display = "none"; }}
+                      />
+                    )}
+                    <div className={cn("flex-1 p-3 flex flex-col justify-between", !(showImages && (item.imageUrl || fallbackPlaceholder)) && "pl-4")}>
                       <div>
                         <p className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</p>
                         {item.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>}
@@ -917,7 +957,7 @@ export default function CustomerMenuPage() {
             <div className="overflow-y-auto flex-1 px-5 py-3 space-y-3">
               {cart.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-3">
-                  {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />}
+                  {item.imageUrl && <img src={resolveImg(item.imageUrl)} alt={item.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
                     {item.modifiers.length > 0 && <p className="text-xs text-gray-400 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>}
@@ -952,8 +992,14 @@ export default function CustomerMenuPage() {
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedItem(null)} />
           <div className="relative bg-white rounded-t-3xl max-h-[90vh] flex flex-col">
-            {selectedItem.imageUrl && (
-              <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-48 object-cover rounded-t-3xl flex-shrink-0" />
+            {showImages && (selectedItem.imageUrl || fallbackPlaceholder) && (
+              <img
+                src={resolveImg(selectedItem.imageUrl) || fallbackPlaceholder}
+                alt={selectedItem.name}
+                className="w-full object-cover rounded-t-3xl flex-shrink-0"
+                style={{ aspectRatio: itemAR }}
+                onError={e => { const t = e.target as HTMLImageElement; if (fallbackPlaceholder && t.src !== fallbackPlaceholder) t.src = fallbackPlaceholder; else t.style.display = "none"; }}
+              />
             )}
             <button onClick={() => setSelectedItem(null)} className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-sm">
               <X className="w-4 h-4" />

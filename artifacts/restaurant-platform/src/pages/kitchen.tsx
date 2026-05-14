@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { KitchenTicket, KitchenTicketItem, Kitchen } from "@/lib/types";
 import { io } from "socket.io-client";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 
 const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; badge: string; next?: string; nextLabel?: string; nextClass?: string }> = {
   new: {
@@ -180,8 +181,18 @@ function TicketCard({
 
       <div className="space-y-1 border-t border-border/40 pt-2">
         {(ticket.items ?? []).map((item: KitchenTicketItem) => (
-          <div key={item.id} className="flex items-baseline gap-2 text-sm">
+          <div key={item.id} className="flex items-center gap-2 text-sm">
             <span className="font-bold w-6 shrink-0">{item.quantity}×</span>
+            {item.menuItemImageUrl ? (
+              <img
+                src={resolveImageUrl(item.menuItemImageUrl)}
+                alt=""
+                className="w-8 h-8 rounded object-cover flex-shrink-0 bg-muted"
+                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div className="w-8 h-8 rounded bg-muted/40 flex-shrink-0" />
+            )}
             <span className="font-medium">{item.menuItemName}</span>
             {item.notes && <span className="text-xs opacity-70 italic ml-auto">({item.notes})</span>}
           </div>

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
@@ -19,7 +19,16 @@ router.get("/public/menu/:slug", async (req, res) => {
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
   const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
-  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, categories: [] });
+
+  const [imageSettingRow] = await db.select().from(restaurantSettingsTable).where(and(eq(restaurantSettingsTable.restaurantId, restaurant.id), eq(restaurantSettingsTable.section, "menu-image")));
+  const imageSettings = (imageSettingRow?.data as Record<string, unknown> | undefined) ?? {};
+  const menuImageConfig = {
+    aspectRatio: typeof imageSettings.aspectRatio === "string" ? imageSettings.aspectRatio : "1:1",
+    fallbackPlaceholder: typeof imageSettings.fallbackPlaceholder === "string" ? imageSettings.fallbackPlaceholder : "",
+    showInCustomerMenu: imageSettings.showInCustomerMenu !== false,
+  };
+
+  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, categories: [] });
 
   const categories = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
   const enriched = await Promise.all(categories.map(async (cat) => {
@@ -35,7 +44,16 @@ router.get("/public/menu/:slug", async (req, res) => {
     return { ...cat, items: itemsWithMods };
   }));
 
-  res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, categories: enriched });
+  res.json({
+    restaurantId: restaurant.id,
+    restaurantName: restaurant.name,
+    restaurantSlug: restaurant.slug,
+    logoUrl: restaurant.logoUrl,
+    currency: restaurant.currency,
+    menuImageConfig,
+    menuBannerUrl: menu.imageUrl ?? null,
+    categories: enriched,
+  });
 });
 
 router.post("/public/orders", async (req, res) => {

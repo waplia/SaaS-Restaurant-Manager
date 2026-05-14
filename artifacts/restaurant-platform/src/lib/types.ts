@@ -105,7 +105,9 @@ export interface PopularItem {
 
 export interface KitchenTicketItem {
   id: number;
+  menuItemId: number | null;
   menuItemName: string;
+  menuItemImageUrl?: string | null;
   quantity: number;
   notes: string | null;
 }
@@ -297,6 +299,7 @@ export interface Menu {
   id: number;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   availableFrom: string | null;
   availableTo: string | null;
   isActive: boolean;
@@ -336,7 +339,7 @@ export interface CreateMenuItemInput {
   categoryId: number;
   isVeg: boolean;
   preparationTime: number;
-  imageUrl?: string;
+  imageUrl?: string | null;
   calories?: number;
   tags?: string[];
   kitchenId?: number | null;
@@ -351,7 +354,7 @@ export interface UpdateMenuItemInput {
   isVeg?: boolean;
   isAvailable?: boolean;
   preparationTime?: number;
-  imageUrl?: string;
+  imageUrl?: string | null;
   calories?: number;
   tags?: string[];
   sortOrder?: number;
@@ -949,6 +952,7 @@ export interface ClockInInput {
 export interface CreateMenuInput {
   name: string;
   description?: string;
+  imageUrl?: string | null;
   availableFrom?: string;
   availableTo?: string;
 }
@@ -957,6 +961,7 @@ export interface UpdateMenuInput {
   id: number;
   name?: string;
   description?: string;
+  imageUrl?: string | null;
   availableFrom?: string | null;
   availableTo?: string | null;
   isActive?: boolean;
@@ -967,7 +972,7 @@ export interface CreateCategoryInput {
   menuId: number;
   name: string;
   description?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
 }
 
@@ -975,7 +980,7 @@ export interface UpdateCategoryInput {
   id: number;
   name?: string;
   description?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }

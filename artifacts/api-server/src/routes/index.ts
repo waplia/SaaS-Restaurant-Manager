@@ -16,7 +16,7 @@ import shiftsRouter from "./shifts";
 import customersRouter from "./customers";
 import dashboardRouter from "./dashboard";
 import expensesRouter from "./expenses";
-import storageRouter from "./storage";
+import storageRouter, { publicStorageRouter } from "./storage";
 import paymentsRouter from "./payments";
 import cashRegisterRouter from "./cash-register";
 import deliveryRouter from "./delivery";
@@ -30,6 +30,7 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(publicRouter);
+router.use(publicStorageRouter);
 router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
 

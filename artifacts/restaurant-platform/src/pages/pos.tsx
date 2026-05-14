@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 import { printOrder } from "@/lib/printOrder";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
@@ -1464,6 +1465,18 @@ export default function PosPage() {
                         : "border-border hover:border-primary/50 hover:bg-accent/40"
                     )}
                   >
+                    {item.imageUrl ? (
+                      <img
+                        src={resolveImageUrl(item.imageUrl)}
+                        alt=""
+                        className="w-full aspect-square object-cover rounded-lg mb-2 bg-muted"
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg bg-muted/40 flex items-center justify-center mb-2">
+                        <ShoppingBag className="w-6 h-6 text-muted-foreground/40" />
+                      </div>
+                    )}
                     <div className="flex items-start justify-between gap-1 mb-1">
                       <p className="text-sm font-medium leading-tight line-clamp-2 flex-1">{item.name}</p>
                       <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
