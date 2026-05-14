@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from "./api";
 import type {
   DashboardSummary, RevenueTrendItem, PopularItem, LiveKitchenData, AuditLogEntry,
   OrdersResponse, CreateOrderInput, UpdateOrderInput, PayOrderInput,
@@ -116,20 +116,10 @@ export function useSaveSetting<T = Record<string, unknown>>(section: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: T) =>
-      fetch(
-        `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/restaurants/${RESTAURANT_ID}/settings/${section}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("tt_access_token") ?? ""}`,
-          },
-          body: JSON.stringify({ data }),
-        },
-      ).then(async r => {
-        if (!r.ok) throw new Error(await r.text());
-        return r.json() as Promise<{ section: string; data: T; updatedAt: string }>;
-      }),
+      apiPut<{ section: string; data: T; updatedAt: string }>(
+        `/restaurants/${RESTAURANT_ID}/settings/${section}`,
+        { data },
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings", section, RESTAURANT_ID] });
       qc.invalidateQueries({ queryKey: ["settings", section] });
