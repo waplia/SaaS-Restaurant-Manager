@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
-  useStaff, useCreateUser, useUpdateUser, useDeleteUser,
+  useStaff, useCreateUser, useUpdateUser, useDeleteUser, usePayrollSummary,
   useShifts, useCreateShift, useDeleteShift,
   useStaffShifts, useCreateStaffShift, useDeleteStaffShift,
   useAttendance, useClockIn, useClockOut, usePunchOut,
@@ -1066,6 +1066,14 @@ function TeamTab({
   const deleteUser = useDeleteUser();
   const clockIn = useClockIn();
   const punchOut = usePunchOut();
+  const { user: authUser } = useAuth();
+  const isOwner = authUser?.role === "owner";
+  const nowDate = new Date();
+  const { data: payrollSummary = [] } = usePayrollSummary(
+    isOwner ? nowDate.getFullYear() : 0,
+    isOwner ? nowDate.getMonth() + 1 : 0,
+  );
+  const payrollByUser = new Map(payrollSummary.map(p => [p.userId, p]));
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
@@ -1203,6 +1211,26 @@ function TeamTab({
                             <Wallet className="w-2.5 h-2.5 inline mr-0.5" />₹ {Number(member.outstandingAdvance).toFixed(0)}
                           </span>
                         )}
+                        {isOwner && (() => {
+                          const p = payrollByUser.get(member.id);
+                          if (!p) return null;
+                          const cfg = p.runStatus === "draft"
+                            ? { label: "Payroll draft", cls: "bg-slate-100 text-slate-700" }
+                            : p.paymentStatus === "paid"
+                              ? { label: "Salary paid", cls: "bg-emerald-100 text-emerald-700" }
+                              : p.paymentStatus === "partially_paid"
+                                ? { label: "Partial", cls: "bg-blue-100 text-blue-700" }
+                                : { label: "Unpaid", cls: "bg-amber-100 text-amber-700" };
+                          return (
+                            <span
+                              className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded inline-flex items-center", cfg.cls)}
+                              title={`Net ₹${Number(p.netPay).toFixed(0)} · Paid ₹${Number(p.paidAmount).toFixed(0)}`}
+                              data-testid={`pill-payroll-${member.id}`}
+                            >
+                              {cfg.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">

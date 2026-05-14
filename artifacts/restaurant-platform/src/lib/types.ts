@@ -1537,3 +1537,89 @@ export interface CashMovementInput {
   amount: number;
   reason?: string;
 }
+
+// ===================== Payroll =====================
+
+export interface PayrollRun {
+  id: number;
+  restaurantId: number;
+  periodYear: number;
+  periodMonth: number;
+  status: "draft" | "finalized";
+  totalGross: string;
+  totalDeductions: string;
+  totalNet: string;
+  totalAdvancesSettled: string;
+  notes: string | null;
+  createdByUserId: number | null;
+  finalizedByUserId: number | null;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollItemRow {
+  id: number;
+  runId: number;
+  userId: number;
+  userName: string;
+  baseAmount: string;
+  grossPay: string;
+  advanceSettled: string;
+  netPay: string;
+  paymentStatus: "pending" | "partially_paid" | "paid";
+  paidAmount: string;
+  overridden: boolean;
+  notes: string | null;
+  daysWorked: string;
+  daysAbsent: string;
+  daysPaidLeave: string;
+  daysUnpaidLeave: string;
+  overtimeMinutes: number;
+  earningsBreakdown: Array<{ label: string; amount: string }>;
+  deductionsBreakdown: Array<{ label: string; amount: string }>;
+}
+
+export interface PayrollRunResponse {
+  run: PayrollRun;
+  items: PayrollItemRow[];
+}
+
+export interface PayrollItemOverrideInput {
+  bonus?: string;
+  otherDeductions?: string;
+  advanceSettled?: string;
+  overtimeAmount?: string;
+  notes?: string;
+}
+
+export interface PayrollPaymentInput {
+  amount: string;
+  paidOn?: string;
+  mode?: "cash" | "upi" | "bank_transfer" | "other";
+  reference?: string;
+  notes?: string;
+}
+
+export interface PayrollPayment {
+  id: number;
+  itemId: number;
+  runId: number;
+  amount: string;
+  paidOn: string;
+  mode: string;
+  reference: string | null;
+  notes: string | null;
+  recordedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface PayrollSummaryRow {
+  userId: number;
+  itemId: number;
+  runId: number;
+  runStatus: "draft" | "finalized";
+  paymentStatus: "pending" | "partially_paid" | "paid";
+  netPay: string;
+  paidAmount: string;
+}

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from "./api";
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl } from "./api";
 import { useBranchContext } from "./branch";
 import { useAuth } from "./auth";
 import { toast as notify } from "@/hooks/use-toast";
@@ -2115,4 +2115,104 @@ export function useAggregateInventory() {
     queryFn: () => apiGet<AggregateInventoryItem[]>(`/tenants/${tenantId}/inventory/aggregate`),
     enabled: tenantId != null && canConsolidate && hasMultipleBranches,
   });
+}
+
+// ===================== Payroll =====================
+
+export function usePayrollRuns() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["payroll-runs", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").PayrollRun[]>(`/restaurants/${RESTAURANT_ID}/payroll-runs`),
+  });
+}
+
+export function usePayrollRun(runId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["payroll-run", RESTAURANT_ID, runId],
+    queryFn: () => apiGet<import("./types").PayrollRunResponse>(`/restaurants/${RESTAURANT_ID}/payroll-runs/${runId}`),
+    enabled: runId !== null,
+  });
+}
+
+export function useCreatePayrollRun() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ year, month }: { year: number; month: number }) =>
+      apiPost<import("./types").PayrollRunResponse>(`/restaurants/${RESTAURANT_ID}/payroll-runs`, {
+        periodYear: year,
+        periodMonth: month,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payroll-runs", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payroll-summary", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function usePatchPayrollItem() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: import("./types").PayrollItemOverrideInput }) =>
+      apiPatch<import("./types").PayrollRunResponse>(`/restaurants/${RESTAURANT_ID}/payroll-items/${itemId}`, patch),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["payroll-run", RESTAURANT_ID, data.run.id] });
+      qc.invalidateQueries({ queryKey: ["payroll-runs", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useFinalizePayrollRun() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: number) =>
+      apiPost<import("./types").PayrollRunResponse>(`/restaurants/${RESTAURANT_ID}/payroll-runs/${runId}/finalize`, {}),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["payroll-run", RESTAURANT_ID, data.run.id] });
+      qc.invalidateQueries({ queryKey: ["payroll-runs", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payroll-summary", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["staff", "advances"] });
+    },
+  });
+}
+
+export function useRecordPayrollPayment() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, payment }: { itemId: number; payment: import("./types").PayrollPaymentInput }) =>
+      apiPost<import("./types").PayrollRunResponse>(`/restaurants/${RESTAURANT_ID}/payroll-items/${itemId}/payments`, payment),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["payroll-run", RESTAURANT_ID, data.run.id] });
+      qc.invalidateQueries({ queryKey: ["payroll-summary", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payroll-payments"] });
+    },
+  });
+}
+
+export function usePayrollPayments(itemId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["payroll-payments", RESTAURANT_ID, itemId],
+    queryFn: () => apiGet<import("./types").PayrollPayment[]>(`/restaurants/${RESTAURANT_ID}/payroll-items/${itemId}/payments`),
+    enabled: itemId !== null,
+  });
+}
+
+export function usePayrollSummary(year: number, month: number) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["payroll-summary", RESTAURANT_ID, year, month],
+    queryFn: () => apiGet<import("./types").PayrollSummaryRow[]>(`/restaurants/${RESTAURANT_ID}/payroll-summary?year=${year}&month=${month}`),
+    enabled: year > 0 && month > 0,
+  });
+}
+
+export function payrollSlipUrl(restaurantId: number, itemId: number, print = false): string {
+  const base = getApiUrl(`/restaurants/${restaurantId}/payroll-items/${itemId}/slip`);
+  return print ? `${base}?print=1` : base;
 }

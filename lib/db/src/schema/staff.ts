@@ -275,3 +275,95 @@ export type StaffAdjustment = typeof staffAdjustmentsTable.$inferSelect;
 export const insertPerformanceNoteSchema = createInsertSchema(performanceNotesTable).omit({ id: true, createdAt: true });
 export type InsertPerformanceNote = z.infer<typeof insertPerformanceNoteSchema>;
 export type PerformanceNote = typeof performanceNotesTable.$inferSelect;
+
+/**
+ * A payroll run is a single owner-initiated computation of pay for a given
+ * outlet for one calendar month. It is created in `draft` status (numbers
+ * may be tweaked), then `finalized` (locks numbers, allocates advance
+ * settlements, mints slips).
+ */
+export const payrollRunsTable = pgTable("payroll_runs", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  periodYear: integer("period_year").notNull(),
+  periodMonth: integer("period_month").notNull(), // 1-12
+  status: text("status").notNull().default("draft"), // draft | finalized
+  totalGross: decimal("total_gross", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalDeductions: decimal("total_deductions", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalNet: decimal("total_net", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalAdvancesSettled: decimal("total_advances_settled", { precision: 14, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdByUserId: integer("created_by_user_id").references(() => usersTable.id),
+  finalizedByUserId: integer("finalized_by_user_id").references(() => usersTable.id),
+  finalizedAt: timestamp("finalized_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.restaurantId, t.periodYear, t.periodMonth)]);
+
+/**
+ * A payroll item is one staff member's computed pay slip within a run. The
+ * salary structure is snapshotted into `structureSnapshot` JSON so that
+ * future edits to the structure don't change historical slips.
+ */
+export const payrollItemsTable = pgTable("payroll_items", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").notNull().references(() => payrollRunsTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  structureSnapshot: text("structure_snapshot"), // JSON of salary structure + components used
+  earningsBreakdown: text("earnings_breakdown"), // JSON: [{label, amount}]
+  deductionsBreakdown: text("deductions_breakdown"), // JSON: [{label, amount}]
+  baseAmount: decimal("base_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  overtimeMinutes: integer("overtime_minutes").notNull().default(0),
+  overtimeAmount: decimal("overtime_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  attendanceDeduction: decimal("attendance_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  lateDeduction: decimal("late_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  leaveDeduction: decimal("leave_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  bonus: decimal("bonus", { precision: 12, scale: 2 }).notNull().default("0"),
+  otherDeductions: decimal("other_deductions", { precision: 12, scale: 2 }).notNull().default("0"),
+  grossPay: decimal("gross_pay", { precision: 12, scale: 2 }).notNull().default("0"),
+  advanceSettled: decimal("advance_settled", { precision: 12, scale: 2 }).notNull().default("0"),
+  netPay: decimal("net_pay", { precision: 12, scale: 2 }).notNull().default("0"),
+  paymentStatus: text("payment_status").notNull().default("pending"), // pending | partially_paid | paid
+  paidAmount: decimal("paid_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  overridden: boolean("overridden").notNull().default(false),
+  daysWorked: decimal("days_worked", { precision: 5, scale: 2 }).notNull().default("0"),
+  daysAbsent: decimal("days_absent", { precision: 5, scale: 2 }).notNull().default("0"),
+  daysPaidLeave: decimal("days_paid_leave", { precision: 5, scale: 2 }).notNull().default("0"),
+  daysUnpaidLeave: decimal("days_unpaid_leave", { precision: 5, scale: 2 }).notNull().default("0"),
+  workedMinutes: integer("worked_minutes").notNull().default(0),
+  lateMinutes: integer("late_minutes").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique().on(t.runId, t.userId)]);
+
+/**
+ * Each payment recorded against a payroll item. A single item may be paid in
+ * multiple installments (cash partial + UPI later, etc.).
+ */
+export const payrollPaymentsTable = pgTable("payroll_payments", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id").notNull().references(() => payrollItemsTable.id, { onDelete: "cascade" }),
+  runId: integer("run_id").notNull().references(() => payrollRunsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  paidOn: timestamp("paid_on").notNull(),
+  mode: text("mode").notNull().default("cash"), // cash | upi | bank_transfer | other
+  reference: text("reference"),
+  notes: text("notes"),
+  recordedByUserId: integer("recorded_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPayrollRunSchema = createInsertSchema(payrollRunsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPayrollRun = z.infer<typeof insertPayrollRunSchema>;
+export type PayrollRun = typeof payrollRunsTable.$inferSelect;
+
+export const insertPayrollItemSchema = createInsertSchema(payrollItemsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPayrollItem = z.infer<typeof insertPayrollItemSchema>;
+export type PayrollItem = typeof payrollItemsTable.$inferSelect;
+
+export const insertPayrollPaymentSchema = createInsertSchema(payrollPaymentsTable).omit({ id: true, createdAt: true });
+export type InsertPayrollPayment = z.infer<typeof insertPayrollPaymentSchema>;
+export type PayrollPayment = typeof payrollPaymentsTable.$inferSelect;

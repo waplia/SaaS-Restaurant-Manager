@@ -17,6 +17,7 @@ import InventoryPage from "@/pages/inventory";
 import StaffPage from "@/pages/staff";
 import CustomersPage from "@/pages/customers";
 import ExpensesPage from "@/pages/expenses";
+import PayrollPage from "@/pages/payroll";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
@@ -112,6 +113,7 @@ function Router() {
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
+      <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
