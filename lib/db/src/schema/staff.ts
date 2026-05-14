@@ -96,6 +96,7 @@ export const attendanceTable = pgTable("attendance", {
   notes: text("notes"),
   leaveRequestId: integer("leave_request_id"),
   leavePaid: boolean("leave_paid"),
+  leavePortion: decimal("leave_portion", { precision: 3, scale: 2 }),
   prevStatus: text("prev_status"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

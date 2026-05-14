@@ -107,6 +107,7 @@ async function reverseApprovedAttendance(
           status: r.prevStatus,
           leaveRequestId: null,
           leavePaid: null,
+          leavePortion: null,
           prevStatus: null,
           notes: null,
           updatedAt: new Date(),
@@ -354,6 +355,24 @@ router.post("/restaurants/:restaurantId/leave-requests", async (req, res) => {
   }
   const totalDays = daysBetween(from, to, isHalf);
 
+  // Validate leaveType against an active policy for this restaurant so we
+  // don't accept ad-hoc types outside the configured policy set.
+  const [policy] = await db
+    .select()
+    .from(leavePoliciesTable)
+    .where(
+      and(
+        eq(leavePoliciesTable.restaurantId, restaurantId),
+        eq(leavePoliciesTable.leaveType, String(leaveType)),
+        eq(leavePoliciesTable.isActive, true),
+      ),
+    )
+    .limit(1);
+  if (!policy) {
+    res.status(400).json({ error: "leaveType is not an active policy for this restaurant" });
+    return;
+  }
+
   // Reject if there's an overlapping pending/approved request for this user.
   const [overlap] = await db
     .select({ id: leaveRequestsTable.id })
@@ -433,6 +452,8 @@ router.post(
 
       const totalDays = Number(reqRow.totalDays);
       const leavePaid = !!policy?.isPaid;
+      const isHalfDay = !!reqRow.halfDay;
+      const portion = isHalfDay ? "0.50" : "1.00";
 
       // Reject if any *other* approved leave request already covers any of
       // these days (one authoritative leave source per user/day).
@@ -491,11 +512,15 @@ router.post(
       // history.
       for (const day of days) {
         const existing = existingByDay.get(day.getTime());
+        // half-day leave produces a `half_day` attendance row (with a 0.50
+        // leavePortion) so payroll/grid know it's a partial day; full-day
+        // leave uses `leave` with portion 1.00.
+        const statusToUse = isHalfDay ? "half_day" : "leave";
         if (existing) {
           await tx
             .update(attendanceTable)
             .set({
-              status: "leave",
+              status: statusToUse,
               workedMinutes: 0,
               overtimeMinutes: 0,
               lateMinutes: 0,
@@ -507,6 +532,7 @@ router.post(
               markedByUserId: callerId,
               leaveRequestId: id,
               leavePaid,
+              leavePortion: portion,
               prevStatus: existing.status,
               notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
               updatedAt: new Date(),
@@ -519,11 +545,12 @@ router.post(
             date: day,
             clockIn: day,
             clockOut: day,
-            status: "leave",
+            status: statusToUse,
             source: "manual",
             markedByUserId: callerId,
             leaveRequestId: id,
             leavePaid,
+            leavePortion: portion,
             notes: `Approved leave #${id}${reqRow.reason ? `: ${reqRow.reason}` : ""}`,
           });
         }
