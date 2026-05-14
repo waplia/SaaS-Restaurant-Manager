@@ -1874,7 +1874,7 @@ export default function PosPage() {
               )}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  {dType === "percentage" ? "Percent off" : dType === "flat" ? "Amount (₹)" : "Amount or % off line"}
+                  {dType === "percentage" ? "Percent off" : dType === "flat" ? "Amount (₹)" : "Amount off line (₹)"}
                 </label>
                 <Input type="number" min="0" step={dType === "percentage" ? "1" : "0.01"} value={dValue}
                   onChange={e => setDValue(e.target.value)}

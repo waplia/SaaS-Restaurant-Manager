@@ -328,7 +328,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
       AND o.created_at >= ${from}
       ${fromStr && toStr ? sql`AND o.created_at <= ${to}` : sql``}
     GROUP BY d.recorded_by_user_id, u.name, d.type, d.reason
-    ORDER BY total DESC
+    ORDER BY SUM(d.amount) DESC
   `);
   const discountsByCashier = discountsByCashierRows.rows.map(r => ({
     userId: r.user_id,

@@ -1540,11 +1540,11 @@ function DiscountsSection() {
       {(s, set) => (
         <>
           <Row>
-            <Field label="Manager-PIN threshold (%)" hint="A single discount line at or above this percentage of subtotal needs PIN approval.">
+            <Field label="Manager-PIN threshold (%)" hint="When the order's cumulative discount reaches this percentage of subtotal, manager PIN is required.">
               <Input type="number" min="0" max="100" step="1" value={s.thresholdPercent}
                 onChange={e => set(p => ({ ...p, thresholdPercent: Number(e.target.value) }))} />
             </Field>
-            <Field label="Manager-PIN threshold (₹)" hint="A single discount line at or above this rupee amount needs PIN approval.">
+            <Field label="Manager-PIN threshold (₹)" hint="When the order's cumulative discount reaches this rupee amount, manager PIN is required.">
               <Input type="number" min="0" step="1" value={s.thresholdAmount}
                 onChange={e => set(p => ({ ...p, thresholdAmount: Number(e.target.value) }))} />
             </Field>
