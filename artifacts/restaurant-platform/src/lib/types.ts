@@ -362,6 +362,7 @@ export interface MenuItem {
   imageUrl: string | null;
   calories: number | null;
   tags: string[] | null;
+  allergens: string[] | null;
   sortOrder: number;
   kitchenId: number | null;
 }
@@ -376,6 +377,7 @@ export interface CreateMenuItemInput {
   imageUrl?: string | null;
   calories?: number;
   tags?: string[];
+  allergens?: string[];
   kitchenId?: number | null;
 }
 
@@ -391,6 +393,7 @@ export interface UpdateMenuItemInput {
   imageUrl?: string | null;
   calories?: number;
   tags?: string[];
+  allergens?: string[];
   sortOrder?: number;
   kitchenId?: number | null;
 }

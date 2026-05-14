@@ -18,11 +18,13 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Pencil, Trash2, ChevronRight, Download, Upload,
   UtensilsCrossed, Settings2, X, Check, Tag, Clock, Flame, Leaf, ChefHat,
+  Sparkles, ImagePlus, Loader2, History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
+import { apiPost, apiGet } from "@/lib/api";
 
 const RESTAURANT_ID = 1;
 
@@ -403,12 +405,21 @@ type ItemForm = {
   imageUrl: string;
   calories: string;
   tags: string;
+  allergens: string;
   kitchenId: string;
 };
 
 const EMPTY_ITEM_FORM: ItemForm = {
   name: "", price: "", description: "", categoryId: "", isVeg: true,
-  preparationTime: "15", imageUrl: "", calories: "", tags: "", kitchenId: "",
+  preparationTime: "15", imageUrl: "", calories: "", tags: "", allergens: "", kitchenId: "",
+};
+
+type DescriptionDraftPayload = { description: string; allergens: string[]; tags: string[] };
+type PhotoDraftPayload = { imageUrl: string };
+type AiDraft<T> = { id: number; kind: string; payload: T; createdAt: string };
+type AiDraftsResponse = {
+  description: AiDraft<DescriptionDraftPayload>[];
+  photo: AiDraft<PhotoDraftPayload>[];
 };
 
 export default function MenuPage() {
@@ -448,6 +459,9 @@ export default function MenuPage() {
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
   const [activeTab, setActiveTab] = useState<"details" | "modifiers" | "recipe">("details");
+  const [aiBusy, setAiBusy] = useState<null | "description" | "photo">(null);
+  const [aiDrafts, setAiDrafts] = useState<AiDraftsResponse>({ description: [], photo: [] });
+  const [showHistory, setShowHistory] = useState(false);
 
   const csvInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -472,10 +486,69 @@ export default function MenuPage() {
       imageUrl: item.imageUrl ?? "",
       calories: item.calories ? String(item.calories) : "",
       tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
+      allergens: Array.isArray(item.allergens) ? item.allergens.join(", ") : "",
       kitchenId: item.kitchenId != null ? String(item.kitchenId) : "",
     });
     setActiveTab("details");
     setShowItemModal(true);
+    setShowHistory(false);
+    setAiDrafts({ description: [], photo: [] });
+    apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${item.id}/ai-drafts`)
+      .then(setAiDrafts)
+      .catch(() => { /* silent */ });
+  };
+
+  const applyDescriptionDraft = (p: DescriptionDraftPayload) => {
+    setItemForm(prev => ({
+      ...prev,
+      description: p.description,
+      allergens: p.allergens.join(", "),
+      tags: p.tags.join(", "),
+    }));
+  };
+
+  const handleGenerateDescription = async () => {
+    if (!editItem) {
+      toast({ title: "Save the item first, then use AI to draft copy", variant: "destructive" });
+      return;
+    }
+    setAiBusy("description");
+    try {
+      const res = await apiPost<{ payload: DescriptionDraftPayload }>(
+        `/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-description`,
+        {},
+      );
+      applyDescriptionDraft(res.payload);
+      const drafts = await apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-drafts`);
+      setAiDrafts(drafts);
+      toast({ title: "Draft generated — review and save when happy" });
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "AI draft failed", variant: "destructive" });
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const handleGeneratePhoto = async () => {
+    if (!editItem) {
+      toast({ title: "Save the item first, then generate a photo", variant: "destructive" });
+      return;
+    }
+    setAiBusy("photo");
+    try {
+      const res = await apiPost<{ payload: PhotoDraftPayload }>(
+        `/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-photo`,
+        {},
+      );
+      setItemForm(prev => ({ ...prev, imageUrl: res.payload.imageUrl }));
+      const drafts = await apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-drafts`);
+      setAiDrafts(drafts);
+      toast({ title: "Photo suggested — accept or regenerate" });
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "Photo generation failed", variant: "destructive" });
+    } finally {
+      setAiBusy(null);
+    }
   };
 
   const handleSaveItem = async () => {
@@ -492,7 +565,8 @@ export default function MenuPage() {
       preparationTime: Number(itemForm.preparationTime),
       imageUrl: itemForm.imageUrl ? itemForm.imageUrl : null,
       calories: itemForm.calories ? Number(itemForm.calories) : undefined,
-      tags: itemForm.tags ? itemForm.tags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
+      tags: itemForm.tags.split(",").map(t => t.trim()).filter(Boolean),
+      allergens: itemForm.allergens.split(",").map(t => t.trim()).filter(Boolean),
       kitchenId: itemForm.kitchenId ? Number(itemForm.kitchenId) : null,
     };
     try {
@@ -1074,7 +1148,21 @@ export default function MenuPage() {
                       <Input type="number" value={itemForm.preparationTime} onChange={e => setItemForm(p => ({ ...p, preparationTime: e.target.value }))} />
                     </div>
                     <div className="col-span-2">
-                      <Label>Description</Label>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label>Description</Label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-xs"
+                          onClick={handleGenerateDescription}
+                          disabled={!editItem || aiBusy !== null}
+                          title={!editItem ? "Save the item first" : "Draft description, allergens & tags from name + category"}
+                        >
+                          {aiBusy === "description" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                          Generate with AI
+                        </Button>
+                      </div>
                       <Input placeholder="Brief description" value={itemForm.description} onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))} />
                     </div>
                     <div className="col-span-2">
@@ -1086,6 +1174,21 @@ export default function MenuPage() {
                     </div>
                     <div className="col-span-2">
                       <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url }))} />
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={handleGeneratePhoto}
+                          disabled={!editItem || aiBusy !== null}
+                          title={!editItem ? "Save the item first" : itemForm.imageUrl ? "Regenerate AI food photo" : "Generate an AI food photo"}
+                        >
+                          {aiBusy === "photo" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ImagePlus className="w-3 h-3 mr-1" />}
+                          {itemForm.imageUrl ? "Regenerate AI photo" : "Suggest AI photo"}
+                        </Button>
+                        <p className="text-[10px] text-muted-foreground">AI photos are suggestions — review before saving.</p>
+                      </div>
                     </div>
                     <div>
                       <Label>Calories (kcal)</Label>
@@ -1094,6 +1197,10 @@ export default function MenuPage() {
                     <div>
                       <Label>Tags</Label>
                       <Input placeholder="spicy, popular (comma-sep)" value={itemForm.tags} onChange={e => setItemForm(p => ({ ...p, tags: e.target.value }))} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Allergens</Label>
+                      <Input placeholder="dairy, gluten, nuts (comma-sep)" value={itemForm.allergens} onChange={e => setItemForm(p => ({ ...p, allergens: e.target.value }))} />
                     </div>
                     <div className="col-span-2">
                       <Label>Kitchen / Station</Label>
@@ -1105,6 +1212,77 @@ export default function MenuPage() {
                       </select>
                       <p className="text-[10px] text-muted-foreground mt-1">Tickets for this item route to the selected kitchen station.</p>
                     </div>
+                    {editItem && (aiDrafts.description.length > 0 || aiDrafts.photo.length > 0) && (
+                      <div className="col-span-2 border border-dashed border-border rounded-lg bg-muted/20">
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowHistory(s => !s)}
+                        >
+                          <History className="w-3 h-3" />
+                          AI draft history
+                          <span className="text-[10px] text-muted-foreground/80">
+                            ({aiDrafts.description.length} text · {aiDrafts.photo.length} photo · last 3 kept)
+                          </span>
+                          <ChevronRight className={cn("w-3 h-3 ml-auto transition-transform", showHistory && "rotate-90")} />
+                        </button>
+                        {showHistory && (
+                          <div className="px-3 pb-3 space-y-3">
+                            {aiDrafts.description.length > 0 && (
+                              <div>
+                                <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1.5">Description drafts</p>
+                                <div className="space-y-1.5">
+                                  {aiDrafts.description.map(d => (
+                                    <div key={d.id} className="text-xs bg-card border border-border rounded-md p-2">
+                                      <p className="text-foreground">{d.payload.description}</p>
+                                      {(d.payload.tags?.length > 0 || d.payload.allergens?.length > 0) && (
+                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                          {d.payload.tags?.length > 0 && <>tags: {d.payload.tags.join(", ")}</>}
+                                          {d.payload.tags?.length > 0 && d.payload.allergens?.length > 0 && " · "}
+                                          {d.payload.allergens?.length > 0 && <>allergens: {d.payload.allergens.join(", ")}</>}
+                                        </p>
+                                      )}
+                                      <div className="flex items-center justify-between mt-1.5">
+                                        <span className="text-[9px] text-muted-foreground">{new Date(d.createdAt).toLocaleString()}</span>
+                                        <Button type="button" size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => applyDescriptionDraft(d.payload)}>
+                                          Use this
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {aiDrafts.photo.length > 0 && (
+                              <div>
+                                <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1.5">Photo drafts</p>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {aiDrafts.photo.map(d => (
+                                    <button
+                                      key={d.id}
+                                      type="button"
+                                      onClick={() => setItemForm(prev => ({ ...prev, imageUrl: d.payload.imageUrl }))}
+                                      className={cn(
+                                        "relative aspect-square rounded-md overflow-hidden border-2 transition-colors",
+                                        itemForm.imageUrl === d.payload.imageUrl ? "border-primary" : "border-border hover:border-primary/50",
+                                      )}
+                                      title={`Generated ${new Date(d.createdAt).toLocaleString()}`}
+                                    >
+                                      <img src={resolveImageUrl(d.payload.imageUrl)} alt="" className="w-full h-full object-cover" />
+                                      {itemForm.imageUrl === d.payload.imageUrl && (
+                                        <span className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center">
+                                          <Check className="w-2.5 h-2.5" />
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="col-span-2 flex items-center gap-3 pt-1">
                       <Label>Type:</Label>
                       <button onClick={() => setItemForm(p => ({ ...p, isVeg: true }))} className={cn("flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors", itemForm.isVeg ? "bg-green-100 border-green-400 text-green-700" : "border-border text-muted-foreground")}>

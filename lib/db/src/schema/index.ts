@@ -4,6 +4,7 @@ export * from "./users";
 export * from "./tables";
 export * from "./kitchens";
 export * from "./menu";
+export * from "./menu-ai-drafts";
 export * from "./orders";
 export * from "./inventory";
 export * from "./staff";

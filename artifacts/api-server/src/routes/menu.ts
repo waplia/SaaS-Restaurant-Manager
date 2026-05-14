@@ -127,8 +127,8 @@ router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", 
     }
   }
 
-  const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, kitchenId } = req.body;
-  const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, kitchenId: kitchenId ?? null }).returning();
+  const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId } = req.body;
+  const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId: kitchenId ?? null }).returning();
   res.status(201).json(item);
 });
 
@@ -139,8 +139,10 @@ router.get("/restaurants/:restaurantId/items/:id", async (req, res) => {
 });
 
 router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, kitchenId } = req.body;
+  const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, kitchenId, tags, allergens } = req.body;
   const updates: Record<string, unknown> = { name, description, price, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() };
+  if (tags !== undefined) updates.tags = tags;
+  if (allergens !== undefined) updates.allergens = allergens;
   if (imageUrl !== undefined) updates.imageUrl = imageUrl === "" ? null : imageUrl;
   if (kitchenId !== undefined) updates.kitchenId = kitchenId === "" ? null : kitchenId;
   const [updated] = await db.update(menuItemsTable).set(updates).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
