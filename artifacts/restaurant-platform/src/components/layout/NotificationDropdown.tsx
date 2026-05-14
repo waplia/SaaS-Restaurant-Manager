@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { Bell, CheckCheck, ExternalLink, Info, AlertTriangle, ShoppingCart, Package, Users, ChefHat } from "lucide-react";
+import { Bell, CheckCheck, ExternalLink, Info, AlertTriangle, ShoppingCart, Package, Users, ChefHat, Phone } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useNotifications, useMarkAllNotificationsRead } from "@/lib/hooks";
@@ -10,6 +10,8 @@ const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
   new_order: ShoppingCart,
   order_status: ChefHat,
   reservation: Users,
+  waiter_request: Phone,
+  waiter_call: Phone,
   info: Info,
   alert: AlertTriangle,
 };
@@ -21,6 +23,8 @@ function NotifIcon({ type }: { type: string }) {
     new_order: "text-blue-500 bg-blue-50 dark:bg-blue-950/40",
     order_status: "text-green-500 bg-green-50 dark:bg-green-950/40",
     reservation: "text-purple-500 bg-purple-50 dark:bg-purple-950/40",
+    waiter_request: "text-orange-600 bg-orange-50 dark:bg-orange-950/40",
+    waiter_call: "text-orange-600 bg-orange-50 dark:bg-orange-950/40",
     alert: "text-red-500 bg-red-50 dark:bg-red-950/40",
   };
   const cls = colors[type] ?? "text-muted-foreground bg-accent";
