@@ -27,6 +27,7 @@ export const reservationsTable = pgTable("reservations", {
   guestEmail: text("guest_email"),
   partySize: integer("party_size").notNull().default(2),
   scheduledAt: timestamp("scheduled_at").notNull(),
+  durationMinutes: integer("duration_minutes").notNull().default(90),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

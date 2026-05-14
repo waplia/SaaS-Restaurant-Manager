@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
@@ -282,6 +282,105 @@ router.post("/public/call-waiter", async (req, res) => {
     note: trimmedNote || null,
   });
   return void res.json({ success: true, requestId: row.id, message: "Waiter has been notified" });
+});
+
+router.get("/public/restaurants/:slug", async (req, res) => {
+  const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug, logoUrl: restaurantsTable.logoUrl, currency: restaurantsTable.currency }).from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+  res.json(restaurant);
+});
+
+router.post("/public/restaurants/:slug/reservations", async (req, res) => {
+  const { guestName, guestPhone, guestEmail, partySize, scheduledAt, notes } = req.body;
+  if (!guestName || typeof guestName !== "string" || !guestName.trim()) return void res.status(400).json({ error: "Name is required" });
+  if (!guestPhone || typeof guestPhone !== "string" || !guestPhone.trim()) return void res.status(400).json({ error: "Phone is required" });
+  const ps = Number(partySize);
+  if (!ps || ps < 1) return void res.status(400).json({ error: "Party size must be at least 1" });
+  if (ps > 50) return void res.status(400).json({ error: "Party size too large — please call us directly" });
+  if (!scheduledAt) return void res.status(400).json({ error: "Date and time required" });
+  const dt = new Date(scheduledAt);
+  if (Number.isNaN(dt.getTime())) return void res.status(400).json({ error: "Invalid date/time" });
+  if (dt.getTime() < Date.now() - 60_000) return void res.status(400).json({ error: "Reservation must be in the future" });
+
+  const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  const [reservation] = await db.insert(reservationsTable).values({
+    restaurantId: restaurant.id,
+    guestName: guestName.trim(),
+    guestPhone: guestPhone.trim(),
+    guestEmail: guestEmail?.trim() ?? null,
+    partySize: ps,
+    scheduledAt: dt,
+    durationMinutes: 90,
+    notes: notes?.trim() ?? null,
+    status: "pending",
+  }).returning();
+
+  await db.insert(notificationsTable).values({
+    restaurantId: restaurant.id,
+    type: "reservation_request",
+    title: "New reservation request",
+    message: `${guestName.trim()} for ${ps} on ${dt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`,
+    entityId: reservation.id,
+    entityType: "reservation",
+  });
+  broadcastEvent(restaurant.id, "notification:new", { type: "reservation_request", id: reservation.id });
+  broadcastEvent(restaurant.id, "reservation:new", { id: reservation.id });
+
+  res.status(201).json({
+    id: reservation.id,
+    status: reservation.status,
+    guestName: reservation.guestName,
+    partySize: reservation.partySize,
+    scheduledAt: reservation.scheduledAt,
+    restaurantName: restaurant.name,
+  });
+});
+
+function maskName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts.map(p => p.length <= 1 ? p : `${p[0]}${"*".repeat(Math.max(1, p.length - 1))}`).join(" ");
+}
+
+router.get("/public/restaurants/:slug/reservations/lookup", async (req, res) => {
+  const { phone, date } = req.query as { phone?: string; date?: string };
+  if (!phone || !phone.trim()) return void res.status(400).json({ error: "Phone is required" });
+  if (!date) return void res.status(400).json({ error: "Date is required" });
+  const normalizedPhone = phone.trim().replace(/[\s\-()]/g, "");
+  if (normalizedPhone.length < 6) return void res.status(400).json({ error: "Phone number too short" });
+
+  const [restaurant] = await db.select({ id: restaurantsTable.id }).from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  const start = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return void res.status(400).json({ error: "Invalid date" });
+  const end = new Date(start.getTime() + 24 * 60 * 60_000);
+
+  const rows = await db.select({
+    id: reservationsTable.id,
+    guestName: reservationsTable.guestName,
+    partySize: reservationsTable.partySize,
+    scheduledAt: reservationsTable.scheduledAt,
+    status: reservationsTable.status,
+    storedPhone: reservationsTable.guestPhone,
+  }).from(reservationsTable).where(and(
+    eq(reservationsTable.restaurantId, restaurant.id),
+    gte(reservationsTable.scheduledAt, start),
+    sql`${reservationsTable.scheduledAt} < ${end}`,
+  )).orderBy(desc(reservationsTable.scheduledAt)).limit(50);
+
+  const matches = rows.filter(r => (r.storedPhone ?? "").replace(/[\s\-()]/g, "") === normalizedPhone)
+    .slice(0, 10)
+    .map(r => ({
+      id: r.id,
+      guestName: maskName(r.guestName),
+      partySize: r.partySize,
+      scheduledAt: r.scheduledAt,
+      status: r.status,
+      notes: null as string | null,
+    }));
+  res.json(matches);
 });
 
 router.post("/public/feedback", async (req, res) => {

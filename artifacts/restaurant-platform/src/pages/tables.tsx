@@ -264,7 +264,7 @@ function TableCard({
       {table.status === "reserved" && reservation ? (
         <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-2">
           <p className="text-xs font-semibold text-blue-800 truncate">{reservation.guestName}</p>
-          <p className="text-xs text-blue-600">{format(parseISO(reservation.scheduledAt), "h:mm a")}</p>
+          <p className="text-xs text-blue-600">Reserved at {format(parseISO(reservation.scheduledAt), "h:mm a")}</p>
           <p className="text-xs text-blue-500">{reservation.partySize} guests</p>
         </div>
       ) : (
@@ -273,6 +273,17 @@ function TableCard({
           <span>{table.capacity} seats</span>
         </div>
       )}
+      {table.status !== "reserved" && reservation && ["pending", "confirmed"].includes(reservation.status) && (() => {
+        const start = parseISO(reservation.scheduledAt);
+        const minsAway = Math.round((start.getTime() - Date.now()) / 60_000);
+        if (minsAway < -10 || minsAway > 180) return null;
+        return (
+          <div className="mb-2 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 text-[11px] text-amber-800">
+            <span className="font-semibold">⏰ Reserved at {format(start, "h:mm a")}</span>
+            <span className="ml-1 text-amber-700">· {reservation.guestName} · {reservation.partySize}p</span>
+          </div>
+        );
+      })()}
 
       {!mergeMode && (
         <>
@@ -609,6 +620,23 @@ export default function TablesPage() {
   const totalCovers = tables.filter((t: FloorTable) => t.status === "occupied").reduce((s: number, t: FloorTable) => s + t.capacity, 0);
 
   const handleStatusChange = async (id: number, status: string) => {
+    if (status === "occupied") {
+      const now = new Date();
+      const conflict = (reservations as Reservation[]).find(r => {
+        if (r.tableId !== id) return false;
+        if (!["pending", "confirmed"].includes(r.status)) return false;
+        const start = parseISO(r.scheduledAt);
+        const end = addMinutes(start, r.durationMinutes ?? 90);
+        return start.getTime() <= now.getTime() + 2 * 60 * 60_000 && end.getTime() > now.getTime();
+      });
+      if (conflict) {
+        const when = format(parseISO(conflict.scheduledAt), "h:mm a");
+        const ok = window.confirm(
+          `⚠ This table has a ${conflict.status} reservation for ${conflict.guestName} (party of ${conflict.partySize}) at ${when}.\n\nSeat anyway?`,
+        );
+        if (!ok) return;
+      }
+    }
     try {
       await updateTable.mutateAsync({ id, status });
     } catch {

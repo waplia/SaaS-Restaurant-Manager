@@ -35,6 +35,8 @@ import CashRegisterPage from "@/pages/cash-register";
 import DeliveryExecutivesPage from "@/pages/delivery-executives";
 import CodMonitoringPage from "@/pages/cod-monitoring";
 import WaiterRequestsPage from "@/pages/waiter-requests";
+import ReservationsPage from "@/pages/reservations";
+import PublicBookingPage from "@/pages/public-booking";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -118,6 +120,8 @@ function Router() {
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
+      <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />
+      <Route path="/book/:slug" component={PublicBookingPage} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route component={NotFound} />
     </Switch>

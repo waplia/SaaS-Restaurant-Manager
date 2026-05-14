@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
-  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing,
+  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
   { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
+  { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
   { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },

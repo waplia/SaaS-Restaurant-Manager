@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, gte, lte, ne, sql } from "drizzle-orm";
 import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -190,35 +190,78 @@ router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", require
   res.json({ success: true, sourceOrderId: orderId, targetOrderId: targetOrderId!, itemsMoved: toMove.length });
 });
 
+async function findReservationConflict(restaurantId: number, tableId: number, scheduledAt: Date, durationMinutes: number, excludeId?: number) {
+  const startA = scheduledAt;
+  const endA = new Date(scheduledAt.getTime() + durationMinutes * 60_000);
+  const conditions = [
+    eq(reservationsTable.restaurantId, restaurantId),
+    eq(reservationsTable.tableId, tableId),
+    inArray(reservationsTable.status, ["pending", "confirmed", "seated"]),
+    sql`${reservationsTable.scheduledAt} < ${endA}`,
+    sql`(${reservationsTable.scheduledAt} + (${reservationsTable.durationMinutes} || ' minutes')::interval) > ${startA}`,
+  ];
+  if (excludeId) conditions.push(ne(reservationsTable.id, excludeId));
+  const rows = await db.select().from(reservationsTable).where(and(...conditions)).limit(1);
+  return rows[0] ?? null;
+}
+
 router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
-  const { status } = req.query;
-  const conditions: ReturnType<typeof eq>[] = [eq(reservationsTable.restaurantId, Number(req.params.restaurantId))];
+  const { status, date } = req.query;
+  const conditions: Parameters<typeof and>[number][] = [eq(reservationsTable.restaurantId, Number(req.params.restaurantId))];
   if (status) conditions.push(eq(reservationsTable.status, String(status)));
-  const rows = await db.select().from(reservationsTable).where(and(...conditions));
+  if (date) {
+    const start = new Date(`${String(date)}T00:00:00`);
+    const end = new Date(start.getTime() + 24 * 60 * 60_000);
+    conditions.push(gte(reservationsTable.scheduledAt, start));
+    conditions.push(sql`${reservationsTable.scheduledAt} < ${end}`);
+  }
+  const rows = await db.select().from(reservationsTable).where(and(...conditions)).orderBy(reservationsTable.scheduledAt);
   res.json(rows);
 });
 
 router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
-  const { guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, notes } = req.body;
+  const { guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, durationMinutes, notes, status } = req.body;
   const restaurantId = Number(req.params.restaurantId);
-  const [reservation] = await db.insert(reservationsTable).values({ restaurantId, guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt: new Date(scheduledAt), notes }).returning();
+
+  if (!guestName || typeof guestName !== "string" || !guestName.trim()) return void res.status(400).json({ error: "Guest name is required" });
+  const partySizeNum = Number(partySize);
+  if (!partySizeNum || partySizeNum < 1) return void res.status(400).json({ error: "Party size must be at least 1" });
+  if (!scheduledAt) return void res.status(400).json({ error: "Date and time are required" });
+  const dt = new Date(scheduledAt);
+  if (Number.isNaN(dt.getTime())) return void res.status(400).json({ error: "Invalid scheduled time" });
+  if (dt.getTime() < Date.now() - 5 * 60_000) return void res.status(400).json({ error: "Reservation time must be in the future" });
+  const dur = Number(durationMinutes) || 90;
+
+  if (tableId) {
+    const [tbl] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(tableId)), eq(floorTablesTable.restaurantId, restaurantId)));
+    if (!tbl) return void res.status(400).json({ error: "Selected table not found" });
+    if (tbl.capacity < partySizeNum) return void res.status(400).json({ error: `Table ${tbl.tableNumber} only seats ${tbl.capacity}, party of ${partySizeNum} won't fit` });
+    const conflict = await findReservationConflict(restaurantId, Number(tableId), dt, dur);
+    if (conflict) {
+      return void res.status(409).json({ error: `Table is already reserved at ${new Date(conflict.scheduledAt).toLocaleString()} for ${conflict.guestName}`, conflict });
+    }
+  }
+
+  const [reservation] = await db.insert(reservationsTable).values({
+    restaurantId, guestName: guestName.trim(), guestPhone, guestEmail,
+    tableId: tableId ?? null, partySize: partySizeNum,
+    scheduledAt: dt, durationMinutes: dur, notes,
+    status: status ?? "confirmed",
+  }).returning();
   res.status(201).json(reservation);
 
   if (guestEmail && guestName && scheduledAt) {
     try {
       const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
-      const dt = new Date(scheduledAt);
       const tpl = reservationEmail({
         customerName: guestName,
         restaurantName: restaurant?.name ?? "Restaurant",
         date: dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
         time: dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-        guests: Number(partySize),
+        guests: partySizeNum,
       });
       sendEmail({ to: guestEmail, subject: tpl.subject, html: tpl.html, text: tpl.text }).catch(console.error);
-      if (guestPhone) {
-        sendWhatsApp({ to: guestPhone, body: tpl.text }).catch(console.error);
-      }
+      if (guestPhone) sendWhatsApp({ to: guestPhone, body: tpl.text }).catch(console.error);
     } catch (err) {
       console.error("[Reservation] Notification send failed:", err);
     }
@@ -226,11 +269,62 @@ router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "man
 });
 
 router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
-  const { guestName, guestPhone, tableId, partySize, scheduledAt, status, notes } = req.body;
-  const updates: Record<string, unknown> = { guestName, guestPhone, tableId, partySize, status, notes, updatedAt: new Date() };
-  if (scheduledAt) updates.scheduledAt = new Date(scheduledAt);
-  const [updated] = await db.update(reservationsTable).set(updates).where(and(eq(reservationsTable.id, Number(req.params.id)), eq(reservationsTable.restaurantId, Number(req.params.restaurantId)))).returning();
+  const { guestName, guestPhone, tableId, partySize, scheduledAt, durationMinutes, status, notes } = req.body;
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+
+  const [existing] = await db.select().from(reservationsTable).where(and(eq(reservationsTable.id, id), eq(reservationsTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (guestName !== undefined) updates.guestName = guestName;
+  if (guestPhone !== undefined) updates.guestPhone = guestPhone;
+  if (notes !== undefined) updates.notes = notes;
+  if (status !== undefined) updates.status = status;
+  if (partySize !== undefined) {
+    const ps = Number(partySize);
+    if (!ps || ps < 1) return void res.status(400).json({ error: "Party size must be at least 1" });
+    updates.partySize = ps;
+  }
+  if (tableId !== undefined) updates.tableId = tableId;
+  if (scheduledAt !== undefined) {
+    const dt = new Date(scheduledAt);
+    if (Number.isNaN(dt.getTime())) return void res.status(400).json({ error: "Invalid scheduled time" });
+    // Only enforce future-time when rescheduling an active booking
+    const nextStatus = (status as string | undefined) ?? existing.status;
+    if (["pending", "confirmed"].includes(nextStatus) && dt.getTime() < Date.now() - 5 * 60_000) {
+      return void res.status(400).json({ error: "Reservation time must be in the future" });
+    }
+    updates.scheduledAt = dt;
+  }
+  if (durationMinutes !== undefined) updates.durationMinutes = Number(durationMinutes) || 90;
+
+  const finalTableId = tableId !== undefined ? tableId : existing.tableId;
+  const finalScheduledAt = updates.scheduledAt as Date | undefined ?? existing.scheduledAt;
+  const finalDuration = (updates.durationMinutes as number | undefined) ?? existing.durationMinutes;
+  const finalStatus = (updates.status as string | undefined) ?? existing.status;
+  const finalParty = (updates.partySize as number | undefined) ?? existing.partySize;
+
+  if (finalTableId && ["pending", "confirmed", "seated"].includes(finalStatus)) {
+    const [tbl] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(finalTableId)), eq(floorTablesTable.restaurantId, restaurantId)));
+    if (!tbl) return void res.status(400).json({ error: "Selected table not found" });
+    if (tbl.capacity < finalParty) return void res.status(400).json({ error: `Table ${tbl.tableNumber} only seats ${tbl.capacity}` });
+    const conflict = await findReservationConflict(restaurantId, Number(finalTableId), finalScheduledAt, finalDuration, id);
+    if (conflict) return void res.status(409).json({ error: `Conflicts with ${conflict.guestName} at ${new Date(conflict.scheduledAt).toLocaleString()}`, conflict });
+  }
+
+  const [updated] = await db.update(reservationsTable).set(updates).where(and(eq(reservationsTable.id, id), eq(reservationsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // Sync floor table status with reservation lifecycle.
+  if (status === "seated" && updated.tableId) {
+    await db.update(floorTablesTable).set({ status: "occupied", updatedAt: new Date() }).where(eq(floorTablesTable.id, updated.tableId));
+  } else if (status && ["completed", "cancelled", "no_show"].includes(status) && updated.tableId) {
+    const [tbl] = await db.select().from(floorTablesTable).where(eq(floorTablesTable.id, updated.tableId));
+    if (tbl && (tbl.status === "reserved" || tbl.status === "occupied")) {
+      await db.update(floorTablesTable).set({ status: "free", updatedAt: new Date() }).where(eq(floorTablesTable.id, updated.tableId));
+    }
+  }
   res.json(updated);
 });
 

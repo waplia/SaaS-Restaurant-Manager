@@ -474,7 +474,8 @@ export function useReservations(params?: { date?: string; status?: string }) {
   if (params?.status) q.set("status", params.status);
   return useQuery({
     queryKey: ["reservations", RESTAURANT_ID, params],
-    queryFn: () => apiGet<import("./types").Reservation[]>(`/restaurants/${RESTAURANT_ID}/reservations?${q}`),
+    queryFn: () => apiGet<import("./types").Reservation[]>(`/restaurants/${RESTAURANT_ID}/reservations?${q.toString()}`),
+    refetchInterval: 30000,
   });
 }
 

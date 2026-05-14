@@ -688,6 +688,8 @@ export interface CreateCustomerInput {
   notes: string;
 }
 
+export type ReservationStatus = "pending" | "confirmed" | "seated" | "completed" | "cancelled" | "no_show";
+
 export interface Reservation {
   id: number;
   restaurantId: number;
@@ -697,7 +699,8 @@ export interface Reservation {
   guestEmail: string | null;
   partySize: number;
   scheduledAt: string;
-  status: string;
+  durationMinutes: number;
+  status: ReservationStatus;
   notes: string | null;
   createdAt: string;
 }
@@ -709,7 +712,9 @@ export interface CreateReservationInput {
   tableId?: number;
   partySize: number;
   scheduledAt: string;
+  durationMinutes?: number;
   notes?: string;
+  status?: ReservationStatus;
 }
 
 export interface UpdateReservationInput {
@@ -718,7 +723,8 @@ export interface UpdateReservationInput {
   guestPhone?: string;
   partySize?: number;
   scheduledAt?: string;
-  status?: string;
+  durationMinutes?: number;
+  status?: ReservationStatus;
   notes?: string;
   tableId?: number | null;
 }
@@ -833,6 +839,7 @@ export interface UpdateSupplierInput {
 export interface RestaurantInfo {
   id: number;
   name: string;
+  slug?: string;
   taxRate: string;
   serviceCharge: string;
   logoUrl: string | null;
