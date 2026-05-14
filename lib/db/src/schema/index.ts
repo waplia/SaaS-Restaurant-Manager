@@ -13,3 +13,4 @@ export * from "./payments";
 export * from "./delivery";
 export * from "./cash-register";
 export * from "./waiter-requests";
+export * from "./settings";

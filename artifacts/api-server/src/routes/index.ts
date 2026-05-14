@@ -23,6 +23,7 @@ import deliveryRouter from "./delivery";
 import waiterRequestsRouter from "./waiter-requests";
 import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -53,5 +54,6 @@ router.use(cashRegisterRouter);
 router.use(deliveryRouter);
 router.use(waiterRequestsRouter);
 router.use(subscriptionsRouter);
+router.use(settingsRouter);
 
 export default router;

@@ -19,6 +19,7 @@ import ExpensesPage from "@/pages/expenses";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
+import SettingsSectionPage from "@/pages/settings-section";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SubscriptionPage from "@/pages/subscription";
 import LoginPage from "@/pages/login";
@@ -115,6 +116,7 @@ function Router() {
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route component={NotFound} />

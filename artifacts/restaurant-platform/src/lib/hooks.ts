@@ -104,6 +104,39 @@ export function usePayOrder() {
   });
 }
 
+export function useSetting<T = Record<string, unknown>>(section: string) {
+  return useQuery({
+    queryKey: ["settings", section, RESTAURANT_ID],
+    queryFn: () => apiGet<{ section: string; data: T; updatedAt: string | null }>(`/restaurants/${RESTAURANT_ID}/settings/${section}`),
+    staleTime: 30000,
+  });
+}
+
+export function useSaveSetting<T = Record<string, unknown>>(section: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: T) =>
+      fetch(
+        `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/restaurants/${RESTAURANT_ID}/settings/${section}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("tt_access_token") ?? ""}`,
+          },
+          body: JSON.stringify({ data }),
+        },
+      ).then(async r => {
+        if (!r.ok) throw new Error(await r.text());
+        return r.json() as Promise<{ section: string; data: T; updatedAt: string }>;
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings", section, RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["settings", section] });
+    },
+  });
+}
+
 export function useRestaurantInfo() {
   return useQuery({
     queryKey: ["restaurant", RESTAURANT_ID],
