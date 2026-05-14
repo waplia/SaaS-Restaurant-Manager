@@ -28,6 +28,7 @@ const RESTAURANT_ID = 1;
 type ParsedRow = {
   sku: string | null;
   name: string;
+  menuName: string;
   categoryName: string;
   description: string;
   price: string;
@@ -89,7 +90,7 @@ function parseMenuCSV(text: string): ParsedRow[] {
   const header = rows[0].map(h => h.trim().toLowerCase());
   const idx = (name: string) => header.indexOf(name.toLowerCase());
   const i = {
-    sku: idx("SKU"), name: idx("Name"), category: idx("Category"),
+    sku: idx("SKU"), menu: idx("Menu"), category: idx("Category"), name: idx("Name"),
     description: idx("Description"), price: idx("Price"), taxRate: idx("Tax Rate"),
     veg: idx("Veg"), available: idx("Available"), prep: idx("Prep Time"),
     calories: idx("Calories"), tags: idx("Tags"), allergens: idx("Allergens"),
@@ -104,6 +105,7 @@ function parseMenuCSV(text: string): ParsedRow[] {
     return {
       sku: get(cols, i.sku) || null,
       name: get(cols, i.name),
+      menuName: get(cols, i.menu),
       categoryName: get(cols, i.category),
       description: get(cols, i.description),
       price: get(cols, i.price),
@@ -838,7 +840,7 @@ export default function MenuPage() {
                     <th className="py-2 pr-2">Status</th>
                     <th className="py-2 pr-2">Name</th>
                     <th className="py-2 pr-2">SKU</th>
-                    <th className="py-2 pr-2">Category</th>
+                    <th className="py-2 pr-2">Menu / Category</th>
                     <th className="py-2">Errors</th>
                   </tr>
                 </thead>
@@ -856,7 +858,7 @@ export default function MenuPage() {
                       </td>
                       <td className="py-1.5 pr-2">{r.name || <span className="text-muted-foreground italic">(missing)</span>}</td>
                       <td className="py-1.5 pr-2 font-mono text-[10px]">{r.sku ?? "—"}</td>
-                      <td className="py-1.5 pr-2">{r.category ?? "—"}</td>
+                      <td className="py-1.5 pr-2">{importPreview.rows[r.row - 1]?.menuName || "—"} / {r.category ?? "—"}</td>
                       <td className="py-1.5 text-destructive">{r.errors.join("; ")}</td>
                     </tr>
                   ))}

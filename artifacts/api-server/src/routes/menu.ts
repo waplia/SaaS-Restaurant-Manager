@@ -154,32 +154,38 @@ router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "mana
 });
 
 const EXPORT_HEADERS = [
-  "SKU", "Name", "Category", "Description", "Price", "Tax Rate",
+  "SKU", "Menu", "Category", "Name", "Description", "Price", "Tax Rate",
   "Veg", "Available", "Prep Time", "Calories", "Tags", "Allergens", "Image URL",
 ] as const;
 
 router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const items = await db.select().from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
-  const categories = await db.select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name }).from(menuCategoriesTable).where(eq(menuCategoriesTable.restaurantId, restaurantId));
-  const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+  const categories = await db.select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name, menuId: menuCategoriesTable.menuId }).from(menuCategoriesTable).where(eq(menuCategoriesTable.restaurantId, restaurantId));
+  const menus = await db.select({ id: menusTable.id, name: menusTable.name }).from(menusTable).where(eq(menusTable.restaurantId, restaurantId));
+  const menuMap = Object.fromEntries(menus.map(m => [m.id, m.name]));
+  const catMap = Object.fromEntries(categories.map(c => [c.id, { name: c.name, menuId: c.menuId }]));
 
   const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const rows = items.map(item => [
-    item.sku ?? "",
-    item.name,
-    catMap[item.categoryId] ?? "",
-    item.description ?? "",
-    item.price,
-    item.taxRate ?? "",
-    item.isVeg ? "Yes" : "No",
-    item.isAvailable ? "Yes" : "No",
-    item.preparationTime ?? "",
-    item.calories ?? "",
-    Array.isArray(item.tags) ? (item.tags as string[]).join(";") : "",
-    Array.isArray(item.allergens) ? (item.allergens as string[]).join(";") : "",
-    item.imageUrl ?? "",
-  ].map(escape).join(","));
+  const rows = items.map(item => {
+    const cat = catMap[item.categoryId];
+    return [
+      item.sku ?? "",
+      cat ? (menuMap[cat.menuId] ?? "") : "",
+      cat?.name ?? "",
+      item.name,
+      item.description ?? "",
+      item.price,
+      item.taxRate ?? "",
+      item.isVeg ? "Yes" : "No",
+      item.isAvailable ? "Yes" : "No",
+      item.preparationTime ?? "",
+      item.calories ?? "",
+      Array.isArray(item.tags) ? (item.tags as string[]).join(";") : "",
+      Array.isArray(item.allergens) ? (item.allergens as string[]).join(";") : "",
+      item.imageUrl ?? "",
+    ].map(escape).join(",");
+  });
 
   const csv = [EXPORT_HEADERS.map(escape).join(","), ...rows].join("\n");
   res.setHeader("Content-Type", "text/csv");
@@ -190,6 +196,7 @@ router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "
 type ImportRowInput = {
   sku?: string | null;
   name?: string;
+  menuName?: string;
   categoryName?: string;
   description?: string | null;
   price?: string | number;
@@ -224,14 +231,17 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     return void res.status(413).json({ error: "Maximum 5000 rows per import" });
   }
 
+  const menusExisting = await db
+    .select({ id: menusTable.id, name: menusTable.name })
+    .from(menusTable)
+    .where(eq(menusTable.restaurantId, restaurantId));
+  const menuByName = new Map(menusExisting.map(m => [m.name.toLowerCase(), m.id]));
+
   const categories = await db
-    .select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name })
+    .select({ id: menuCategoriesTable.id, name: menuCategoriesTable.name, menuId: menuCategoriesTable.menuId })
     .from(menuCategoriesTable)
     .where(eq(menuCategoriesTable.restaurantId, restaurantId));
-  const catByName = new Map(categories.map(c => [c.name.toLowerCase(), c.id]));
-  if (categories.length === 0) {
-    return void res.status(422).json({ error: "No categories exist for this restaurant. Create at least one category before importing." });
-  }
+  const catByMenuName = new Map(categories.map(c => [`${c.menuId}::${c.name.toLowerCase()}`, c.id]));
 
   const existing = await db
     .select({
@@ -250,9 +260,11 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
   }
 
   const results: ImportRowResult[] = [];
-  const toCreate: Array<{ idx: number; values: typeof menuItemsTable.$inferInsert }> = [];
+  const toCreate: Array<{ idx: number; menuName: string; categoryName: string; values: Omit<typeof menuItemsTable.$inferInsert, "categoryId"> }> = [];
   const toUpdate: Array<{ idx: number; id: number; values: Partial<typeof menuItemsTable.$inferInsert> }> = [];
   const seenSku = new Set<string>();
+  const newMenuNames = new Set<string>();
+  const newCategoryPairs = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
     const r = items[i] ?? {};
@@ -265,12 +277,28 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     if (!Number.isFinite(priceNum) || priceNum < 0) errors.push(`Invalid price "${r.price ?? ""}"`);
 
     const catName = String(r.categoryName ?? "").trim();
+    const menuName = String(r.menuName ?? "").trim();
     let categoryId: number | undefined;
+    let willCreateMenu = false;
+    let willCreateCategory = false;
     if (!catName) {
       errors.push("Category is required");
+    } else if (!menuName) {
+      errors.push("Menu is required");
     } else {
-      categoryId = catByName.get(catName.toLowerCase());
-      if (!categoryId) errors.push(`Unknown category "${catName}"`);
+      const existingMenuId = menuByName.get(menuName.toLowerCase());
+      if (existingMenuId) {
+        categoryId = catByMenuName.get(`${existingMenuId}::${catName.toLowerCase()}`);
+        if (!categoryId) {
+          willCreateCategory = true;
+          newCategoryPairs.add(`${menuName.toLowerCase()}::${catName.toLowerCase()}`);
+        }
+      } else {
+        willCreateMenu = true;
+        willCreateCategory = true;
+        newMenuNames.add(menuName.toLowerCase());
+        newCategoryPairs.add(`${menuName.toLowerCase()}::${catName.toLowerCase()}`);
+      }
     }
 
     let taxRate: string | null = null;
@@ -319,11 +347,10 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     };
     results.push(result);
 
-    if (errors.length || !categoryId) continue;
+    if (errors.length) continue;
 
-    const values: typeof menuItemsTable.$inferInsert = {
+    const baseValues = {
       restaurantId,
-      categoryId,
       sku: sku || null,
       name,
       description: r.description != null ? String(r.description) : "",
@@ -338,8 +365,12 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
       imageUrl: r.imageUrl ? String(r.imageUrl) : null,
     };
 
-    if (matchedId) toUpdate.push({ idx: i, id: matchedId, values });
-    else toCreate.push({ idx: i, values });
+    if (matchedId && categoryId) {
+      toUpdate.push({ idx: i, id: matchedId, values: { ...baseValues, categoryId } });
+    } else {
+      toCreate.push({ idx: i, menuName, categoryName: catName, values: baseValues });
+    }
+    void willCreateMenu; void willCreateCategory;
   }
 
   const summary = {
@@ -376,8 +407,35 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
   }
 
   await db.transaction(async tx => {
+    const menuIdByName = new Map(menuByName);
+    const catIdByMenuCat = new Map(catByMenuName);
+
+    const distinctNewMenus = new Set<string>();
+    for (const c of toCreate) {
+      if (!menuIdByName.has(c.menuName.toLowerCase())) distinctNewMenus.add(c.menuName);
+    }
+    for (const original of distinctNewMenus) {
+      const [created] = await tx.insert(menusTable).values({ restaurantId, name: original }).returning({ id: menusTable.id });
+      menuIdByName.set(original.toLowerCase(), created.id);
+    }
+
+    const seenNewCats = new Set<string>();
+    for (const c of toCreate) {
+      const menuId = menuIdByName.get(c.menuName.toLowerCase())!;
+      const key = `${menuId}::${c.categoryName.toLowerCase()}`;
+      if (catIdByMenuCat.has(key) || seenNewCats.has(key)) continue;
+      seenNewCats.add(key);
+      const [created] = await tx.insert(menuCategoriesTable).values({ restaurantId, menuId, name: c.categoryName }).returning({ id: menuCategoriesTable.id });
+      catIdByMenuCat.set(key, created.id);
+    }
+
     if (toCreate.length) {
-      await tx.insert(menuItemsTable).values(toCreate.map(c => c.values));
+      const insertValues = toCreate.map(c => {
+        const menuId = menuIdByName.get(c.menuName.toLowerCase())!;
+        const categoryId = catIdByMenuCat.get(`${menuId}::${c.categoryName.toLowerCase()}`)!;
+        return { ...c.values, categoryId };
+      });
+      await tx.insert(menuItemsTable).values(insertValues);
     }
     for (const u of toUpdate) {
       await tx
