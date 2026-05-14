@@ -18,7 +18,7 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"),
+  requireRole("owner", "manager", "waiter", "kitchen", "delivery_executive", "super_admin"),
   validateRestaurantAccess,
 );
 
@@ -232,7 +232,7 @@ router.get("/restaurants/:restaurantId/delivery/assignments", async (req, res) =
 });
 
 // COD summary per rider (outstanding cash to be handed in)
-router.get("/restaurants/:restaurantId/delivery/cod-summary", async (req, res) => {
+router.get("/restaurants/:restaurantId/delivery/cod-summary", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
 
   const collected = await db
@@ -266,7 +266,7 @@ router.get("/restaurants/:restaurantId/delivery/cod-summary", async (req, res) =
 });
 
 // Recent COD handovers
-router.get("/restaurants/:restaurantId/delivery/handovers", async (req, res) => {
+router.get("/restaurants/:restaurantId/delivery/handovers", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db
     .select({

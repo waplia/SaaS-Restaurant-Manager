@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from "./api";
+import { toast as notify } from "@/hooks/use-toast";
 import type {
   DashboardSummary, RevenueTrendItem, PopularItem, LiveKitchenData, AuditLogEntry,
   OrdersResponse, CreateOrderInput, UpdateOrderInput, PayOrderInput,
@@ -323,7 +324,13 @@ export function useUpdateTicketStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, { status }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["kitchen"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["kitchen"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      const label = vars.status === "ready" ? "Marked ready" : vars.status === "served" ? "Marked served" : `Status: ${vars.status}`;
+      notify({ title: label });
+    },
+    onError: (e: Error) => notify({ title: "Could not update ticket", description: e.message, variant: "destructive" }),
   });
 }
 
