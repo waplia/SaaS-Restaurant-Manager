@@ -148,57 +148,67 @@ export async function expireDueLoyaltyPoints(): Promise<number> {
     let totalExpired = 0;
 
     for (const { customerId, restaurantId } of customers) {
-      const allTxns = await db.select().from(loyaltyTransactionsTable).where(and(
-        eq(loyaltyTransactionsTable.customerId, customerId),
-        eq(loyaltyTransactionsTable.restaurantId, restaurantId),
-      )).orderBy(asc(loyaltyTransactionsTable.createdAt), asc(loyaltyTransactionsTable.id));
+      // All balance/ledger/expiredAt writes for one customer happen atomically:
+      // a mid-sequence failure rolls back so the customer's balance and ledger
+      // never desync.
+      const expiredHere = await db.transaction(async (tx) => {
+        const allTxns = await tx.select().from(loyaltyTransactionsTable).where(and(
+          eq(loyaltyTransactionsTable.customerId, customerId),
+          eq(loyaltyTransactionsTable.restaurantId, restaurantId),
+        )).orderBy(asc(loyaltyTransactionsTable.createdAt), asc(loyaltyTransactionsTable.id));
 
-      // Total consumption so far (redemptions + prior expirations) — positive number.
-      let consumed = 0;
-      for (const t of allTxns) if (t.type !== "earn" && t.points < 0) consumed += -t.points;
+        // Total consumption so far (redemptions + prior expirations) — positive number.
+        let consumed = 0;
+        for (const t of allTxns) if (t.type !== "earn" && t.points < 0) consumed += -t.points;
 
-      // FIFO-allocate consumption against earn batches and find expired-and-unconsumed.
-      const earnBatches = allTxns.filter(t => t.type === "earn");
-      const idsToMarkExpired: number[] = [];
-      let deductFromBalance = 0;
+        // FIFO-allocate consumption against earn batches and find expired-and-unconsumed.
+        const earnBatches = allTxns.filter(t => t.type === "earn");
+        const idsToMarkExpired: number[] = [];
+        let deductFromBalance = 0;
 
-      for (const e of earnBatches) {
-        const consumeFromThis = Math.min(consumed, e.points);
-        const unconsumed = e.points - consumeFromThis;
-        consumed -= consumeFromThis;
+        for (const e of earnBatches) {
+          const consumeFromThis = Math.min(consumed, e.points);
+          const unconsumed = e.points - consumeFromThis;
+          consumed -= consumeFromThis;
 
-        const isPastDue = e.expiresAt && e.expiresAt < now && !e.expiredAt;
-        if (isPastDue) {
-          idsToMarkExpired.push(e.id);
-          if (unconsumed > 0) deductFromBalance += unconsumed;
-        }
-      }
-
-      if (idsToMarkExpired.length === 0) continue;
-
-      if (deductFromBalance > 0) {
-        const [cust] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints })
-          .from(customersTable).where(eq(customersTable.id, customerId));
-        if (cust) {
-          const actualDeduct = Math.min(cust.loyaltyPoints, deductFromBalance);
-          if (actualDeduct > 0) {
-            await db.update(customersTable).set({
-              loyaltyPoints: Math.max(0, cust.loyaltyPoints - actualDeduct),
-              updatedAt: now,
-            }).where(eq(customersTable.id, customerId));
-            await db.insert(loyaltyTransactionsTable).values({
-              customerId, restaurantId,
-              points: -actualDeduct,
-              type: "expire",
-              reason: `Expired ${actualDeduct} pts (${idsToMarkExpired.length} batch${idsToMarkExpired.length === 1 ? "" : "es"})`,
-            });
-            totalExpired += actualDeduct;
+          const isPastDue = e.expiresAt && e.expiresAt < now && !e.expiredAt;
+          if (isPastDue) {
+            idsToMarkExpired.push(e.id);
+            if (unconsumed > 0) deductFromBalance += unconsumed;
           }
         }
-      }
 
-      await db.update(loyaltyTransactionsTable).set({ expiredAt: now })
-        .where(inArray(loyaltyTransactionsTable.id, idsToMarkExpired));
+        if (idsToMarkExpired.length === 0) return 0;
+
+        let expiredAmount = 0;
+        if (deductFromBalance > 0) {
+          const [cust] = await tx.select({ loyaltyPoints: customersTable.loyaltyPoints })
+            .from(customersTable).where(eq(customersTable.id, customerId));
+          if (cust) {
+            const actualDeduct = Math.min(cust.loyaltyPoints, deductFromBalance);
+            if (actualDeduct > 0) {
+              await tx.update(customersTable).set({
+                loyaltyPoints: Math.max(0, cust.loyaltyPoints - actualDeduct),
+                updatedAt: now,
+              }).where(eq(customersTable.id, customerId));
+              await tx.insert(loyaltyTransactionsTable).values({
+                customerId, restaurantId,
+                points: -actualDeduct,
+                type: "expire",
+                reason: `Expired ${actualDeduct} pts (${idsToMarkExpired.length} batch${idsToMarkExpired.length === 1 ? "" : "es"})`,
+              });
+              expiredAmount = actualDeduct;
+            }
+          }
+        }
+
+        await tx.update(loyaltyTransactionsTable).set({ expiredAt: now })
+          .where(inArray(loyaltyTransactionsTable.id, idsToMarkExpired));
+
+        return expiredAmount;
+      });
+
+      totalExpired += expiredHere;
     }
 
     logger.info({ totalExpired, customers: customers.length }, "[Loyalty] Expired due points (FIFO)");
