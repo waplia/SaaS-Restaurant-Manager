@@ -349,6 +349,28 @@ router.post("/restaurants/:restaurantId/items/import", requireRole("owner", "man
     error: results.filter(r => r.status === "error").length,
   };
 
+  let planLimit: number | null = null;
+  if (!req.user!.isSuperAdmin) {
+    const [restaurant] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    if (restaurant?.tenantId) {
+      const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, restaurant.tenantId));
+      if (tenant?.planId) {
+        const [plan] = await db.select({ maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        if (plan && plan.maxMenuItems > 0) planLimit = plan.maxMenuItems;
+      }
+    }
+  }
+  if (planLimit !== null) {
+    const projected = existing.length + toCreate.length;
+    if (projected > planLimit) {
+      return void res.status(402).json({
+        error: `Your plan allows a maximum of ${planLimit} menu item(s). This import would result in ${projected}.`,
+        summary,
+        results,
+      });
+    }
+  }
+
   if (dryRun || summary.error > 0) {
     return void res.json({ dryRun: !!dryRun, committed: false, summary, results });
   }

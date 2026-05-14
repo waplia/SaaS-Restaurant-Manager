@@ -60,30 +60,33 @@ type ImportResponse = {
 
 type ImportPreview = { rows: ParsedRow[]; response: ImportResponse };
 
-function parseCSVLine(line: string): string[] {
-  const out: string[] = [];
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let cur = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  const src = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      if (ch === '"' && src[i + 1] === '"') { cur += '"'; i++; }
       else if (ch === '"') inQuotes = false;
       else cur += ch;
     } else {
       if (ch === '"') inQuotes = true;
-      else if (ch === ",") { out.push(cur); cur = ""; }
+      else if (ch === ",") { row.push(cur); cur = ""; }
+      else if (ch === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
       else cur += ch;
     }
   }
-  out.push(cur);
-  return out;
+  if (cur.length > 0 || row.length > 0) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim().length > 0));
 }
 
 function parseMenuCSV(text: string): ParsedRow[] {
-  const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim().length > 0);
-  if (lines.length < 2) return [];
-  const header = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+  const rows = parseCSV(text);
+  if (rows.length < 2) return [];
+  const header = rows[0].map(h => h.trim().toLowerCase());
   const idx = (name: string) => header.indexOf(name.toLowerCase());
   const i = {
     sku: idx("SKU"), name: idx("Name"), category: idx("Category"),
@@ -93,8 +96,7 @@ function parseMenuCSV(text: string): ParsedRow[] {
     imageUrl: idx("Image URL"),
   };
   const get = (cols: string[], k: number) => (k >= 0 ? (cols[k] ?? "").trim() : "");
-  return lines.slice(1).map((line) => {
-    const cols = parseCSVLine(line);
+  return rows.slice(1).map((cols) => {
     const tags = get(cols, i.tags);
     const allergens = get(cols, i.allergens);
     const calStr = get(cols, i.calories);
@@ -506,8 +508,8 @@ export default function MenuPage() {
       const res = await runImport(importPreview.rows, false);
       toast({ title: `Imported ${res.summary.create} new + ${res.summary.update} updated` });
       setImportPreview(null);
-      await queryClient.invalidateQueries({ queryKey: ["menu-items"] });
-      await queryClient.invalidateQueries({ queryKey: ["menu-categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["items"] });
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (err: unknown) {
       toast({ title: (err as { message?: string })?.message ?? "Import failed", variant: "destructive" });
     } finally {
