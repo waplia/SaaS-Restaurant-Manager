@@ -513,12 +513,15 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
     }
   }
 
-  // Cap redemption to remaining payable so customers never burn more points than
-  // the order can actually absorb. Without this, loyaltyPointsRedeemed could
-  // exceed what the discount actually covers, causing irreversible point loss
-  // when earnLoyaltyForOrder deducts the recorded value at payment time.
+  // Cap redemption to remaining payable (subtotal + tax + service - coupon) so
+  // customers never burn more points than the final bill can absorb. Without
+  // this, loyaltyPointsRedeemed could exceed what the discount actually covers,
+  // causing irreversible point loss when earnLoyaltyForOrder deducts the
+  // recorded value at payment time.
   const subtotal = Number(order.subtotal);
-  const remainingPayable = Math.max(0, subtotal - couponDiscount);
+  const taxAmount = Number(order.taxAmount ?? 0);
+  const serviceCharge = Number(order.serviceCharge ?? 0);
+  const remainingPayable = Math.max(0, subtotal + taxAmount + serviceCharge - couponDiscount);
   const rate = Number(cfg.redemptionRate) || 0;
   const maxRedeemableByPayable = rate > 0 ? Math.floor(remainingPayable / rate) : 0;
   const cappedPoints = Math.min(pointsToRedeem, maxRedeemableByPayable);
