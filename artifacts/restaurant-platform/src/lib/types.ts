@@ -1074,15 +1074,28 @@ export interface StaffShift {
   shiftId: number;
   restaurantId: number;
   date: string;
+  endDate: string | null;
+  recurringDays: string[];
 }
+
+export type AttendanceStatus = "present" | "late" | "half_day" | "absent" | "weekly_off" | "leave";
 
 export interface AttendanceRecord {
   id: number;
   userId: number;
   restaurantId: number;
+  date: string | null;
+  status: AttendanceStatus;
   clockIn: string;
   clockOut: string | null;
   totalHours: string | null;
+  scheduledShiftId: number | null;
+  scheduledMinutes: number | null;
+  workedMinutes: number | null;
+  lateMinutes: number | null;
+  overtimeMinutes: number | null;
+  source: string;
+  markedByUserId: number | null;
   notes: string | null;
   createdAt: string;
 }
@@ -1111,11 +1124,33 @@ export interface CreateStaffShiftInput {
   userId: number;
   shiftId: number;
   date: string;
+  endDate?: string | null;
+  recurringDays?: string[];
 }
 
 export interface ClockInInput {
   userId: number;
   notes?: string;
+  source?: "web" | "mobile" | "manual";
+}
+
+export interface MarkAttendanceInput {
+  userId: number;
+  date: string;
+  status: AttendanceStatus;
+  notes?: string;
+  workedMinutes?: number;
+}
+
+export interface PatchAttendanceInput {
+  id: number;
+  status?: AttendanceStatus;
+  notes?: string;
+  workedMinutes?: number;
+  overtimeMinutes?: number;
+  lateMinutes?: number;
+  clockIn?: string;
+  clockOut?: string;
 }
 
 export interface CreateMenuInput {

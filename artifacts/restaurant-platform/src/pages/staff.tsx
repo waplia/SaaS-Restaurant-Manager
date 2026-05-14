@@ -5,8 +5,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useStaff, useCreateUser, useUpdateUser, useDeleteUser,
   useShifts, useCreateShift, useDeleteShift,
-  useStaffShifts, useCreateStaffShift,
-  useAttendance, useClockIn, useClockOut,
+  useStaffShifts, useCreateStaffShift, useDeleteStaffShift,
+  useAttendance, useClockIn, useClockOut, usePunchOut,
+  useMarkAttendance, usePatchAttendance, useDeleteAttendance,
   useAuditLogs,
   useRoles, usePermissions, useRoleWithPermissions, useCreateRole, useDeleteRole,
   useAddRolePermission, useRemoveRolePermission,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffMember, Shift, StaffShift, AttendanceRecord, AuditLog, Role, Permission, StaffDocument } from "@/lib/types";
+import type { StaffMember, Shift, StaffShift, AttendanceRecord, AttendanceStatus, AuditLog, Role, Permission, StaffDocument } from "@/lib/types";
 
 function generateTempPassword(): string {
   const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -513,12 +514,36 @@ function TeamTab({
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+  const clockIn = useClockIn();
+  const punchOut = usePunchOut();
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
+  const { data: todayAttendance = [] } = useAttendance({ from: todayStart.toISOString(), to: todayEnd.toISOString() });
+  const openSessionByUser: Record<number, AttendanceRecord> = {};
+  for (const r of todayAttendance) {
+    if (!r.clockOut) openSessionByUser[r.userId] = r;
+  }
   const { toast } = useToast();
 
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "waiter" });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [drawerMember, setDrawerMember] = useState<StaffMember | null>(null);
   const [generatedCreds, setGeneratedCreds] = useState<{ name: string; password: string } | null>(null);
+
+  const handlePunch = async (member: StaffMember) => {
+    try {
+      if (openSessionByUser[member.id]) {
+        await punchOut.mutateAsync({ userId: member.id });
+        toast({ title: `${member.name} punched out` });
+      } else {
+        await clockIn.mutateAsync({ userId: member.id, source: "web" });
+        toast({ title: `${member.name} punched in` });
+      }
+    } catch {
+      toast({ title: "Punch failed", variant: "destructive" });
+    }
+  };
 
   const { user } = useAuth();
   const ALLOWED_ASSIGNABLE: Record<string, string[]> = {
@@ -636,6 +661,17 @@ function TeamTab({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {openSessionByUser[member.id] ? (
+                          <Button size="sm" variant="outline" className="h-7 text-xs text-orange-600 border-orange-300" onClick={() => handlePunch(member)} disabled={punchOut.isPending}>
+                            <LogOut className="w-3 h-3 mr-1" /> Punch out
+                          </Button>
+                        ) : (
+                          member.isActive && (
+                            <Button size="sm" variant="ghost" className="h-7 text-xs text-green-700" onClick={() => handlePunch(member)} disabled={clockIn.isPending}>
+                              <LogIn className="w-3 h-3 mr-1" /> Punch in
+                            </Button>
+                          )
+                        )}
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDrawerMember(member)}>
                           <UserCog className="w-3 h-3 mr-1" /> Manage
                         </Button>
@@ -738,10 +774,25 @@ function ShiftsTab({ staff }: { staff: StaffMember[] }) {
   const createStaffShift = useCreateStaffShift();
   const { toast } = useToast();
 
+  const deleteStaffShift = useDeleteStaffShift();
   const [showAdd, setShowAdd] = useState(false);
   const [shiftForm, setShiftForm] = useState({ name: "", startTime: "09:00", endTime: "17:00", days: [] as string[] });
-  const [assignForm, setAssignForm] = useState({ userId: "", shiftId: "", date: "" });
+  const [assignForm, setAssignForm] = useState({ userId: "", shiftId: "", date: "", endDate: "", recurringDays: [] as string[] });
   const [showAssign, setShowAssign] = useState(false);
+
+  const toggleAssignDay = (day: string) => {
+    setAssignForm(p => ({ ...p, recurringDays: p.recurringDays.includes(day) ? p.recurringDays.filter(d => d !== day) : [...p.recurringDays, day] }));
+  };
+
+  const handleDeleteAssignment = async (id: number) => {
+    if (!confirm("Remove this assignment?")) return;
+    try {
+      await deleteStaffShift.mutateAsync(id);
+      toast({ title: "Assignment removed" });
+    } catch {
+      toast({ title: "Failed to remove", variant: "destructive" });
+    }
+  };
 
   const toggleDay = (day: string) => {
     setShiftForm(p => ({ ...p, days: p.days.includes(day) ? p.days.filter(d => d !== day) : [...p.days, day] }));
@@ -775,10 +826,16 @@ function ShiftsTab({ staff }: { staff: StaffMember[] }) {
   const handleAssign = async () => {
     if (!assignForm.userId || !assignForm.shiftId || !assignForm.date) return;
     try {
-      await createStaffShift.mutateAsync({ userId: Number(assignForm.userId), shiftId: Number(assignForm.shiftId), date: assignForm.date });
-      toast({ title: "Staff assigned to shift" });
+      await createStaffShift.mutateAsync({
+        userId: Number(assignForm.userId),
+        shiftId: Number(assignForm.shiftId),
+        date: assignForm.date,
+        endDate: assignForm.endDate || null,
+        recurringDays: assignForm.recurringDays,
+      });
+      toast({ title: assignForm.recurringDays.length > 0 ? "Recurring assignment created" : "Staff assigned to shift" });
       setShowAssign(false);
-      setAssignForm({ userId: "", shiftId: "", date: "" });
+      setAssignForm({ userId: "", shiftId: "", date: "", endDate: "", recurringDays: [] });
     } catch {
       toast({ title: "Assignment failed", variant: "destructive" });
     }
@@ -946,9 +1003,31 @@ function ShiftsTab({ staff }: { staff: StaffMember[] }) {
                   {shifts.filter((s: Shift) => s.isActive).map((s: Shift) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</option>)}
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Start Date</Label>
+                  <Input type="date" value={assignForm.date} onChange={e => setAssignForm(p => ({ ...p, date: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>End Date (optional)</Label>
+                  <Input type="date" value={assignForm.endDate} onChange={e => setAssignForm(p => ({ ...p, endDate: e.target.value }))} />
+                </div>
+              </div>
               <div>
-                <Label>Date</Label>
-                <Input type="date" value={assignForm.date} onChange={e => setAssignForm(p => ({ ...p, date: e.target.value }))} />
+                <Label>Recurring Days (optional)</Label>
+                <div className="flex gap-1.5 mt-1 flex-wrap">
+                  {ALL_DAYS.map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleAssignDay(day)}
+                      className={cn("w-9 h-9 rounded-full text-xs font-medium border transition-colors", assignForm.recurringDays.includes(day) ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted")}
+                    >
+                      {DAY_LABELS[day]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">Leave empty for a single-day assignment. With days selected, the assignment recurs on each chosen weekday between the start and end dates.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => setShowAssign(false)}>Cancel</Button>
@@ -962,61 +1041,118 @@ function ShiftsTab({ staff }: { staff: StaffMember[] }) {
   );
 }
 
+const STATUS_CONFIG: Record<AttendanceStatus, { label: string; chip: string; cell: string; short: string }> = {
+  present:    { label: "Present",    chip: "bg-green-100 text-green-700",   cell: "bg-green-100 text-green-700",  short: "P" },
+  late:       { label: "Late",       chip: "bg-amber-100 text-amber-700",   cell: "bg-amber-100 text-amber-700",  short: "L" },
+  half_day:   { label: "Half day",   chip: "bg-orange-100 text-orange-700", cell: "bg-orange-100 text-orange-700",short: "½" },
+  absent:     { label: "Absent",     chip: "bg-red-100 text-red-700",       cell: "bg-red-100 text-red-700",      short: "A" },
+  weekly_off: { label: "Weekly off", chip: "bg-slate-100 text-slate-600",   cell: "bg-slate-100 text-slate-500",  short: "W" },
+  leave:      { label: "Leave",      chip: "bg-purple-100 text-purple-700", cell: "bg-purple-100 text-purple-700",short: "Lv" },
+};
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function AttendanceTab({ staff }: { staff: StaffMember[] }) {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth()); // 0-indexed
   const [filterUserId, setFilterUserId] = useState<number | undefined>();
-  const { data: attendance = [] } = useAttendance(filterUserId);
-  const clockIn = useClockIn();
-  const clockOut = useClockOut();
+  const [markDrawer, setMarkDrawer] = useState<{ userId: number; date: string } | null>(null);
+
+  const firstOfMonth = new Date(year, month, 1);
+  const firstOfNext = new Date(year, month + 1, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const { data: attendance = [] } = useAttendance({
+    userId: filterUserId,
+    from: firstOfMonth.toISOString(),
+    to: firstOfNext.toISOString(),
+  });
+
+  const punchOut = usePunchOut();
+  const deleteAttendance = useDeleteAttendance();
   const { toast } = useToast();
 
-  const [clockInUserId, setClockInUserId] = useState("");
+  // userId -> ymd -> record
+  const grid: Record<number, Record<string, AttendanceRecord>> = {};
+  for (const r of attendance) {
+    const key = ymd(new Date(r.date ?? r.clockIn));
+    grid[r.userId] = grid[r.userId] || {};
+    grid[r.userId][key] = r;
+  }
 
-  const handleClockIn = async () => {
-    if (!clockInUserId) return;
-    try {
-      await clockIn.mutateAsync({ userId: Number(clockInUserId) });
-      toast({ title: "Clock-in recorded" });
-      setClockInUserId("");
-    } catch {
-      toast({ title: "Clock-in failed", variant: "destructive" });
-    }
-  };
+  const openRecords = attendance.filter((r: AttendanceRecord) => !r.clockOut && r.status !== "weekly_off" && r.status !== "leave" && r.status !== "absent");
+  const visibleStaff = filterUserId ? staff.filter(s => s.id === filterUserId) : staff;
 
   const handleClockOut = async (record: AttendanceRecord) => {
     try {
-      await clockOut.mutateAsync({ id: record.id });
+      await punchOut.mutateAsync({ userId: record.userId });
       toast({ title: "Clock-out recorded" });
     } catch {
       toast({ title: "Clock-out failed", variant: "destructive" });
     }
   };
 
-  const openRecords = attendance.filter((r: AttendanceRecord) => !r.clockOut);
-  const closedRecords = attendance.filter((r: AttendanceRecord) => !!r.clockOut);
+  const handleDelete = async (id: number) => {
+    if (!confirm("Delete this attendance record?")) return;
+    try {
+      await deleteAttendance.mutateAsync(id);
+      toast({ title: "Record deleted" });
+    } catch {
+      toast({ title: "Delete failed", variant: "destructive" });
+    }
+  };
+
+  const monthName = firstOfMonth.toLocaleString("default", { month: "long", year: "numeric" });
+  const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  function totalsFor(userId: number) {
+    const days = grid[userId] ?? {};
+    let present = 0, late = 0, halfDay = 0, absent = 0, off = 0, leave = 0;
+    let worked = 0, overtime = 0;
+    for (const r of Object.values(days)) {
+      if (r.status === "present") present++;
+      else if (r.status === "late") { present++; late++; }
+      else if (r.status === "half_day") halfDay++;
+      else if (r.status === "absent") absent++;
+      else if (r.status === "weekly_off") off++;
+      else if (r.status === "leave") leave++;
+      worked += r.workedMinutes ?? 0;
+      overtime += r.overtimeMinutes ?? 0;
+    }
+    return { present, late, halfDay, absent, off, leave, worked, overtime };
+  }
+
+  const goPrevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const goNextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+  const todayKey = ymd(today);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <h4 className="text-sm font-semibold mb-3">Clock In</h4>
-          <div className="flex gap-2">
-            <select className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={clockInUserId} onChange={e => setClockInUserId(e.target.value)}>
-              <option value="">Select staff member</option>
-              {staff.filter((s: StaffMember) => s.isActive).map((s: StaffMember) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <Button onClick={handleClockIn} disabled={!clockInUserId || clockIn.isPending}>
-              <LogIn className="w-4 h-4 mr-1.5" /> Clock In
-            </Button>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={goPrevMonth}><ChevronUp className="w-4 h-4 -rotate-90" /></Button>
+          <div className="text-sm font-semibold min-w-40 text-center">{monthName}</div>
+          <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={goNextMonth}><ChevronDown className="w-4 h-4 -rotate-90" /></Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Today</Button>
         </div>
-
-        <div className="bg-card border border-border rounded-xl p-4">
-          <h4 className="text-sm font-semibold mb-3">Filter Records</h4>
-          <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={filterUserId ?? ""} onChange={e => setFilterUserId(e.target.value ? Number(e.target.value) : undefined)}>
+        <div className="flex items-center gap-2">
+          <select className="border border-input rounded-md px-3 py-1.5 text-sm bg-background" value={filterUserId ?? ""} onChange={e => setFilterUserId(e.target.value ? Number(e.target.value) : undefined)}>
             <option value="">All Staff</option>
             {staff.map((s: StaffMember) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          <Button size="sm" onClick={() => setMarkDrawer({ userId: staff[0]?.id ?? 0, date: todayKey })}>
+            <Plus className="w-3.5 h-3.5 mr-1" /> Mark Attendance
+          </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-xs">
+        {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map(k => (
+          <span key={k} className={cn("px-2 py-0.5 rounded-full font-medium", STATUS_CONFIG[k].chip)}>{STATUS_CONFIG[k].label}</span>
+        ))}
       </div>
 
       {openRecords.length > 0 && (
@@ -1044,7 +1180,7 @@ function AttendanceTab({ staff }: { staff: StaffMember[] }) {
                       <td className="px-4 py-3 text-sm text-muted-foreground">{formatDateTime(record.clockIn)}</td>
                       <td className="px-4 py-3 text-sm text-orange-600 font-medium">{hours}h {mins}m</td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleClockOut(record)} disabled={clockOut.isPending}>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleClockOut(record)} disabled={punchOut.isPending}>
                           <LogOut className="w-3 h-3 mr-1" /> Clock Out
                         </Button>
                       </td>
@@ -1058,36 +1194,173 @@ function AttendanceTab({ staff }: { staff: StaffMember[] }) {
       )}
 
       <div>
-        <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Attendance History</h4>
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <table className="w-full">
+        <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Monthly Attendance Grid</h4>
+        <div className="bg-card border border-border rounded-xl overflow-x-auto">
+          <table className="text-xs min-w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Staff</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Clock In</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Clock Out</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Hours</th>
+                <th className="text-left font-medium text-muted-foreground px-3 py-2 sticky left-0 bg-muted/30 z-10 min-w-32">Staff</th>
+                {dayHeaders.map(d => {
+                  const date = new Date(year, month, d);
+                  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  const isToday = ymd(date) === todayKey;
+                  return (
+                    <th key={d} className={cn("font-medium text-muted-foreground px-1 py-2 text-center min-w-7", isWeekend && "bg-slate-50/50", isToday && "bg-primary/10 text-primary")}>
+                      {d}
+                    </th>
+                  );
+                })}
+                <th className="font-medium text-muted-foreground px-3 py-2 text-right min-w-32">Totals</th>
               </tr>
             </thead>
             <tbody>
-              {closedRecords.map((record: AttendanceRecord) => {
-                const member = staff.find((s: StaffMember) => s.id === record.userId);
+              {visibleStaff.map(member => {
+                const days = grid[member.id] ?? {};
+                const t = totalsFor(member.id);
                 return (
-                  <tr key={record.id} className="border-b border-border last:border-0 hover:bg-muted/10">
-                    <td className="px-4 py-3 text-sm font-medium">{member?.name ?? `User #${record.userId}`}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{formatDateTime(record.clockIn)}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">{record.clockOut ? formatDateTime(record.clockOut) : "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-foreground">{record.totalHours ? `${parseFloat(record.totalHours).toFixed(1)}h` : "—"}</span>
+                  <tr key={member.id} className="border-b border-border last:border-0 hover:bg-muted/5">
+                    <td className="px-3 py-2 sticky left-0 bg-background z-10 font-medium">{member.name}</td>
+                    {dayHeaders.map(d => {
+                      const date = new Date(year, month, d);
+                      const key = ymd(date);
+                      const r = days[key];
+                      const cfg = r ? STATUS_CONFIG[r.status] : null;
+                      return (
+                        <td key={d} className="p-0.5 text-center">
+                          <button
+                            onClick={() => setMarkDrawer({ userId: member.id, date: key })}
+                            className={cn(
+                              "w-6 h-6 rounded font-medium text-[10px] inline-flex items-center justify-center hover:ring-2 hover:ring-primary/30",
+                              cfg ? cfg.cell : "bg-muted/20 text-muted-foreground/40",
+                            )}
+                            title={r ? `${cfg?.label}${r.workedMinutes ? ` · ${(r.workedMinutes/60).toFixed(1)}h` : ""}${r.overtimeMinutes ? ` · OT ${(r.overtimeMinutes/60).toFixed(1)}h` : ""}` : "Click to mark"}
+                          >
+                            {cfg ? cfg.short : "·"}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2 text-right whitespace-nowrap text-muted-foreground">
+                      <span className="font-medium text-foreground">{t.present}P</span>
+                      {t.late > 0 && <span className="text-amber-600 ml-1">{t.late}L</span>}
+                      {t.absent > 0 && <span className="text-red-600 ml-1">{t.absent}A</span>}
+                      {t.off > 0 && <span className="text-slate-500 ml-1">{t.off}W</span>}
+                      <span className="ml-2 text-[10px]">· {(t.worked/60).toFixed(1)}h</span>
+                      {t.overtime > 0 && <span className="ml-1 text-[10px] text-blue-600">OT {(t.overtime/60).toFixed(1)}h</span>}
                     </td>
                   </tr>
                 );
               })}
-              {closedRecords.length === 0 && (
-                <tr><td colSpan={4} className="text-center py-12 text-muted-foreground text-sm">No attendance records yet</td></tr>
+              {visibleStaff.length === 0 && (
+                <tr><td colSpan={daysInMonth + 2} className="text-center py-12 text-muted-foreground text-sm">No staff to display</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {markDrawer && (
+        <MarkAttendanceDrawer
+          staff={staff}
+          initial={markDrawer}
+          existing={grid[markDrawer.userId]?.[markDrawer.date] ?? null}
+          onClose={() => setMarkDrawer(null)}
+          onDelete={handleDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+function MarkAttendanceDrawer({ staff, initial, existing, onClose, onDelete }: {
+  staff: StaffMember[];
+  initial: { userId: number; date: string };
+  existing: AttendanceRecord | null;
+  onClose: () => void;
+  onDelete: (id: number) => void;
+}) {
+  const [userId, setUserId] = useState(initial.userId || staff[0]?.id || 0);
+  const [date, setDate] = useState(initial.date);
+  const [status, setStatus] = useState<AttendanceStatus>(existing?.status ?? "present");
+  const [hours, setHours] = useState<string>(existing?.workedMinutes ? (existing.workedMinutes / 60).toFixed(1) : "");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const markMutation = useMarkAttendance();
+  const patchMutation = usePatchAttendance();
+  const { toast } = useToast();
+
+  const isEdit = !!existing;
+
+  const handleSave = async () => {
+    if (!userId || !date) return;
+    try {
+      const workedMinutes = hours ? Math.round(parseFloat(hours) * 60) : undefined;
+      if (isEdit && existing) {
+        await patchMutation.mutateAsync({ id: existing.id, status, notes: notes || undefined, workedMinutes });
+      } else {
+        await markMutation.mutateAsync({ userId, date, status, notes: notes || undefined, workedMinutes });
+      }
+      toast({ title: isEdit ? "Attendance updated" : "Attendance recorded" });
+      onClose();
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">{isEdit ? "Edit Attendance" : "Mark Attendance"}</h2>
+          <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label>Staff Member</Label>
+            <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={userId} onChange={e => setUserId(Number(e.target.value))} disabled={isEdit}>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} disabled={isEdit} />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <div className="grid grid-cols-3 gap-1.5 mt-1">
+              {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map(k => (
+                <button
+                  key={k}
+                  onClick={() => setStatus(k)}
+                  className={cn(
+                    "text-xs px-2 py-1.5 rounded-md border font-medium transition-colors",
+                    status === k ? STATUS_CONFIG[k].chip + " border-current" : "border-border text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {STATUS_CONFIG[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(status === "present" || status === "late" || status === "half_day") && (
+            <div>
+              <Label>Hours worked (optional)</Label>
+              <Input type="number" step="0.25" min="0" placeholder="e.g. 8" value={hours} onChange={e => setHours(e.target.value)} />
+            </div>
+          )}
+          <div>
+            <Label>Notes (optional)</Label>
+            <Input placeholder="Reason / context" value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+          <div className="flex gap-2 pt-2">
+            {isEdit && existing && (
+              <Button variant="ghost" className="text-destructive" onClick={() => { onDelete(existing.id); onClose(); }}>
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+              </Button>
+            )}
+            <div className="flex-1" />
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleSave} disabled={markMutation.isPending || patchMutation.isPending}>Save</Button>
+          </div>
         </div>
       </div>
     </div>

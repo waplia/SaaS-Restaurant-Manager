@@ -14,7 +14,7 @@ import type {
   InventoryTransaction, PurchaseOrder, CreatePurchaseOrderInput,
   StaffMember, CreateUserInput,
   Shift, StaffShift, AttendanceRecord, AuditLog,
-  CreateShiftInput, CreateStaffShiftInput, ClockInInput,
+  CreateShiftInput, CreateStaffShiftInput, ClockInInput, MarkAttendanceInput, PatchAttendanceInput,
   Customer, CustomersResponse, CreateCustomerInput, UpdateCustomerInput,
   LoyaltyAccount, LoyaltyTransaction,
   Coupon, CreateCouponInput, UpdateCouponInput,
@@ -919,12 +919,16 @@ export function useCreateStaffShift() {
   });
 }
 
-export function useAttendance(userId?: number) {
+export function useAttendance(params?: { userId?: number; from?: string; to?: string }) {
   const RESTAURANT_ID = useRestaurantId();
-  const q = userId ? `?userId=${userId}` : "";
+  const q = new URLSearchParams();
+  if (params?.userId) q.set("userId", String(params.userId));
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  const qs = q.toString();
   return useQuery({
-    queryKey: ["attendance", RESTAURANT_ID, userId],
-    queryFn: () => apiGet<AttendanceRecord[]>(`/restaurants/${RESTAURANT_ID}/attendance${q}`),
+    queryKey: ["attendance", RESTAURANT_ID, params],
+    queryFn: () => apiGet<AttendanceRecord[]>(`/restaurants/${RESTAURANT_ID}/attendance${qs ? `?${qs}` : ""}`),
   });
 }
 
@@ -932,7 +936,7 @@ export function useClockIn() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: ClockInInput) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance`, data),
+    mutationFn: (data: ClockInInput) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/punch-in`, { ...data, source: data.source ?? "web" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
   });
 }
@@ -943,6 +947,51 @@ export function useClockOut() {
   return useMutation({
     mutationFn: ({ id, notes }: { id: number; notes?: string }) => apiPatch<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/${id}/clock-out`, { notes }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function usePunchOut() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userId?: number; notes?: string }) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/punch-out`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function useMarkAttendance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: MarkAttendanceInput) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/mark`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function usePatchAttendance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: PatchAttendanceInput) => apiPatch<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function useDeleteAttendance() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/attendance/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+}
+
+export function useDeleteStaffShift() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/staff-shifts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
   });
 }
 

@@ -10,6 +10,7 @@ import type { FloorTable } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { TableCard } from "@/components/TableCard";
 import { EmptyState } from "@/components/EmptyState";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 
 export default function TablesScreen() {
@@ -35,6 +36,8 @@ export default function TablesScreen() {
           {tableList.filter((t) => t.status === "available").length} available
         </Text>
       </View>
+
+      <MyShiftPanel />
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
