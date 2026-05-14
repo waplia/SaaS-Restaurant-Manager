@@ -160,6 +160,7 @@ function buildStaffPatch(body: Record<string, unknown>): StaffPatch {
 }
 
 const ALLOWED_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"];
+const ALLOWED_SALARY_TYPES = ["fixed_monthly", "daily_wage", "hourly_wage", "commission", "custom"];
 
 router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
@@ -173,10 +174,12 @@ router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "m
   const body = (req.body ?? {}) as Record<string, unknown>;
 
   // User-table fields (name/email/phone/role). Validate role against allow-list.
-  const userPatch: Record<string, string> = {};
+  const userPatch: Record<string, string | null> = {};
   if (typeof body.name === "string" && body.name.trim()) userPatch.name = body.name.trim();
   if (typeof body.email === "string" && body.email.trim()) userPatch.email = body.email.trim().toLowerCase();
-  if ("phone" in body) userPatch.phone = body.phone == null || body.phone === "" ? null as unknown as string : String(body.phone).trim();
+  if ("phone" in body) {
+    userPatch.phone = body.phone == null || body.phone === "" ? null : String(body.phone).trim();
+  }
   if (typeof body.role === "string" && body.role) {
     if (!ALLOWED_ROLES.includes(body.role)) return void res.status(400).json({ error: "Invalid role" });
     // Prevent privilege escalation by non-super admins promoting to owner.
@@ -191,6 +194,10 @@ router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "m
 
   if (Object.keys(userPatch).length > 0) {
     await db.update(usersTable).set({ ...userPatch, updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  }
+
+  if (typeof body.salaryType === "string" && body.salaryType && !ALLOWED_SALARY_TYPES.includes(body.salaryType)) {
+    return void res.status(400).json({ error: "Invalid salaryType" });
   }
 
   const patch = buildStaffPatch(body);
