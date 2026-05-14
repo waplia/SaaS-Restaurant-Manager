@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart } from "lucide-react";
+import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
@@ -170,6 +170,27 @@ export default function CustomerMenuPage() {
   const [placing, setPlacing] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
+
+  const [waiterModalOpen, setWaiterModalOpen] = useState(false);
+  const [waiterReason, setWaiterReason] = useState<"call_waiter" | "request_bill" | "water" | "custom">("call_waiter");
+  const [waiterNote, setWaiterNote] = useState("");
+  const [waiterSending, setWaiterSending] = useState(false);
+  const [waiterCooldownUntil, setWaiterCooldownUntil] = useState<number>(0);
+  const [waiterStatus, setWaiterStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [now, setNow] = useState<number>(Date.now());
+
+  const cooldownKey = `tt_waiter_cooldown_${menu?.restaurantId ?? 0}_${tableId}`;
+
+  useEffect(() => {
+    const stored = Number(localStorage.getItem(cooldownKey) ?? "0");
+    if (stored > Date.now()) setWaiterCooldownUntil(stored);
+  }, [cooldownKey]);
+
+  useEffect(() => {
+    if (!waiterModalOpen) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [waiterModalOpen]);
 
   const [rating, setRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState("");
@@ -381,13 +402,35 @@ export default function CustomerMenuPage() {
     }
   }
 
-  async function callWaiter() {
+  function openWaiterModal() {
+    setWaiterReason("call_waiter");
+    setWaiterNote("");
+    setWaiterStatus("idle");
+    setWaiterModalOpen(true);
+  }
+
+  async function sendWaiterRequest() {
     if (!menu) return;
+    if (waiterCooldownUntil > Date.now()) return;
+    setWaiterSending(true);
     try {
-      await apiPublicPost("/public/call-waiter", { restaurantId: menu.restaurantId, tableId });
-      alert("Waiter has been notified!");
+      const body: { restaurantId: number; tableId: number; type: string; note?: string; token?: string } = {
+        restaurantId: menu.restaurantId,
+        tableId,
+        type: waiterReason,
+      };
+      if (waiterNote.trim()) body.note = waiterNote.trim();
+      if (orderResult?.guestToken) body.token = orderResult.guestToken;
+      await apiPublicPost("/public/call-waiter", body);
+      const until = Date.now() + 60_000;
+      setWaiterCooldownUntil(until);
+      try { localStorage.setItem(cooldownKey, String(until)); } catch { /* ignore */ }
+      setWaiterStatus("sent");
+      setTimeout(() => setWaiterModalOpen(false), 1200);
     } catch {
-      alert("Could not reach the waiter system. Please try again.");
+      setWaiterStatus("error");
+    } finally {
+      setWaiterSending(false);
     }
   }
 
@@ -568,7 +611,7 @@ export default function CustomerMenuPage() {
           </div>
 
           <button
-            onClick={callWaiter}
+            onClick={openWaiterModal}
             className="w-full flex items-center justify-center gap-2 bg-white border-2 border-orange-400 text-orange-600 font-semibold rounded-xl py-3 mb-4 hover:bg-orange-50 transition"
           >
             <Bell className="w-4 h-4" /> Call Waiter
@@ -712,7 +755,7 @@ export default function CustomerMenuPage() {
               <p className="text-orange-100 text-xs">Table {tableId} · Scan & Order</p>
             </div>
           </div>
-          <button onClick={callWaiter} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-2 rounded-full transition">
+          <button onClick={openWaiterModal} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-2 rounded-full transition">
             <Bell className="w-3.5 h-3.5" /> Waiter
           </button>
         </div>
@@ -916,6 +959,78 @@ export default function CustomerMenuPage() {
               >
                 Add to Cart · {currSymbol}{(itemUnitPrice(Number(selectedItem.price), selectedModifiers) * itemQty).toFixed(2)}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {waiterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !waiterSending && setWaiterModalOpen(false)} />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <p className="font-bold text-lg text-gray-900">Need help at your table?</p>
+              <button onClick={() => !waiterSending && setWaiterModalOpen(false)} className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-5 pb-5 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { v: "call_waiter", label: "Call Waiter", icon: Bell },
+                  { v: "request_bill", label: "Request Bill", icon: Receipt },
+                  { v: "water", label: "Water", icon: GlassWater },
+                  { v: "custom", label: "Other", icon: MessageSquare },
+                ] as const).map(opt => {
+                  const OptIcon = opt.icon;
+                  const active = waiterReason === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      onClick={() => setWaiterReason(opt.v)}
+                      className={cn("flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition", active ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-700 hover:border-gray-300")}
+                    >
+                      <OptIcon className="w-5 h-5" />
+                      <span className="text-xs font-semibold">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Note {waiterReason === "custom" ? "(required)" : "(optional)"}
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={200}
+                  value={waiterNote}
+                  onChange={e => setWaiterNote(e.target.value)}
+                  placeholder={waiterReason === "request_bill" ? "e.g. split between 2 cards" : waiterReason === "custom" ? "Tell us what you need" : "Anything else? (optional)"}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+              </div>
+
+              {waiterStatus === "sent" && (
+                <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-3 py-2 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" /> A waiter has been notified.
+                </div>
+              )}
+              {waiterStatus === "error" && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-3 py-2">
+                  Could not send the request. Please try again.
+                </div>
+              )}
+
+              <button
+                disabled={waiterSending || waiterCooldownUntil > now || (waiterReason === "custom" && !waiterNote.trim())}
+                onClick={sendWaiterRequest}
+                className="w-full bg-orange-500 text-white font-bold rounded-xl py-3.5 disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
+              >
+                {waiterSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                {waiterCooldownUntil > now
+                  ? `Wait ${Math.ceil((waiterCooldownUntil - now) / 1000)}s before next request`
+                  : waiterSending ? "Sending…" : "Send request"}
+              </button>
+              <p className="text-xs text-gray-400 text-center">A staff member will be with you shortly.</p>
             </div>
           </div>
         </div>

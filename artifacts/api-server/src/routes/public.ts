@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable } from "../lib/db";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
+import { createWaiterRequestPublic } from "./waiter-requests";
 
 const router = Router();
 
@@ -235,8 +236,11 @@ router.post("/public/orders/:id/pay", async (req, res) => {
   res.json({ success: true, totalAmount: updated.totalAmount });
 });
 
+const waiterCallCooldown = new Map<string, number>();
+const ALLOWED_WAITER_TYPES = new Set(["call_waiter", "request_bill", "water", "custom"]);
+
 router.post("/public/call-waiter", async (req, res) => {
-  const { restaurantId, tableId, token } = req.body;
+  const { restaurantId, tableId, token, type, note } = req.body;
   if (!restaurantId) return void res.status(400).json({ error: "restaurantId required" });
   if (!tableId) return void res.status(400).json({ error: "tableId required" });
   const [table] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -249,11 +253,32 @@ router.post("/public/call-waiter", async (req, res) => {
       return void res.status(403).json({ error: "Invalid order token" });
     }
   }
-  const notifMessage = `Table ${table.tableNumber} is requesting assistance`;
-  await db.insert(notificationsTable).values({ restaurantId, type: "waiter_call", title: "Waiter Called", message: notifMessage });
-  broadcastEvent(restaurantId, "notification:new", { type: "waiter_call" });
-  broadcastEvent(restaurantId, "waiter:call", { tableId, tableNumber: table.tableNumber, message: notifMessage });
-  return void res.json({ success: true, message: "Waiter has been notified" });
+  const reqType = typeof type === "string" && ALLOWED_WAITER_TYPES.has(type) ? type : "call_waiter";
+  const trimmedNote = typeof note === "string" ? note.trim().slice(0, 200) : "";
+  if (reqType === "custom" && !trimmedNote) {
+    return void res.status(400).json({ error: "Note is required for custom requests" });
+  }
+
+  const cooldownKey = `${restaurantId}:${tableId}`;
+  const now = Date.now();
+  const last = waiterCallCooldown.get(cooldownKey) ?? 0;
+  if (now - last < 30_000) {
+    const wait = Math.ceil((30_000 - (now - last)) / 1000);
+    return void res.status(429).json({ error: `Please wait ${wait}s before sending another request` });
+  }
+  waiterCallCooldown.set(cooldownKey, now);
+  if (waiterCallCooldown.size > 5000) {
+    for (const [k, t] of waiterCallCooldown) if (now - t > 60_000) waiterCallCooldown.delete(k);
+  }
+
+  const row = await createWaiterRequestPublic({
+    restaurantId,
+    tableId,
+    tableNumber: table.tableNumber,
+    type: reqType,
+    note: trimmedNote || null,
+  });
+  return void res.json({ success: true, requestId: row.id, message: "Waiter has been notified" });
 });
 
 router.post("/public/feedback", async (req, res) => {

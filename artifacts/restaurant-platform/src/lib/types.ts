@@ -687,6 +687,23 @@ export interface UpdateReservationInput {
   tableId?: number | null;
 }
 
+export interface WaiterRequest {
+  id: number;
+  restaurantId: number;
+  tableId: number;
+  tableNumber: string | null;
+  type: "call_waiter" | "request_bill" | "water" | "custom";
+  note: string | null;
+  status: "pending" | "acknowledged" | "resolved";
+  acknowledgedByUserId: number | null;
+  acknowledgedByName: string | null;
+  acknowledgedAt: string | null;
+  resolvedByUserId: number | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppNotification {
   id: number;
   type: string;

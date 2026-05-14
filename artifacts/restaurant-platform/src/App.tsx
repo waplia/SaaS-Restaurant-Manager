@@ -32,6 +32,7 @@ import DuePaymentsPage from "@/pages/due-payments";
 import CashRegisterPage from "@/pages/cash-register";
 import DeliveryExecutivesPage from "@/pages/delivery-executives";
 import CodMonitoringPage from "@/pages/cod-monitoring";
+import WaiterRequestsPage from "@/pages/waiter-requests";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,6 +111,7 @@ function Router() {
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
+      <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/settings/subscription" component={() => <ProtectedRoute component={SubscriptionPage} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />

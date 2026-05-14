@@ -19,6 +19,7 @@ import storageRouter from "./storage";
 import paymentsRouter from "./payments";
 import cashRegisterRouter from "./cash-register";
 import deliveryRouter from "./delivery";
+import waiterRequestsRouter from "./waiter-requests";
 import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
 
@@ -48,6 +49,7 @@ router.use(storageRouter);
 router.use(paymentsRouter);
 router.use(cashRegisterRouter);
 router.use(deliveryRouter);
+router.use(waiterRequestsRouter);
 router.use(subscriptionsRouter);
 
 export default router;

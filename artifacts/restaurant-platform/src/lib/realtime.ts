@@ -55,6 +55,14 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["notifications", restaurantId] });
     });
 
+    socket.on("waiter_request:new", () => {
+      void qc.invalidateQueries({ queryKey: ["waiter-requests", restaurantId] });
+    });
+
+    socket.on("waiter_request:update", () => {
+      void qc.invalidateQueries({ queryKey: ["waiter-requests", restaurantId] });
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

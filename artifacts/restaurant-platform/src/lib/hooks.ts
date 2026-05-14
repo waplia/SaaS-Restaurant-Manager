@@ -17,6 +17,7 @@ import type {
   Coupon, CreateCouponInput, UpdateCouponInput,
   CreateReservationInput, UpdateReservationInput, Reservation,
   AppNotification,
+  WaiterRequest,
   ReportsData,
   Supplier, CreateSupplierInput, UpdateSupplierInput,
   Role, Permission,
@@ -452,6 +453,30 @@ export function useSuppliers() {
   return useQuery({
     queryKey: ["suppliers", RESTAURANT_ID],
     queryFn: () => apiGet<Supplier[]>(`/restaurants/${RESTAURANT_ID}/suppliers`),
+  });
+}
+
+export function useWaiterRequests() {
+  return useQuery({
+    queryKey: ["waiter-requests", RESTAURANT_ID],
+    queryFn: () => apiGet<WaiterRequest[]>(`/restaurants/${RESTAURANT_ID}/waiter-requests`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useAcknowledgeWaiterRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/waiter-requests/${id}/acknowledge`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waiter-requests", RESTAURANT_ID] }),
+  });
+}
+
+export function useResolveWaiterRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/waiter-requests/${id}/resolve`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waiter-requests", RESTAURANT_ID] }),
   });
 }
 

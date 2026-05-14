@@ -4,8 +4,9 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle,
-  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote,
+  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing,
 } from "lucide-react";
+import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
@@ -22,6 +23,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
   { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
+  { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
@@ -78,6 +80,9 @@ export function Sidebar() {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+
+  const { data: waiterReqs = [] } = useWaiterRequests();
+  const activeWaiterCount = waiterReqs.filter(r => r.status === "pending" || r.status === "acknowledged").length;
 
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
@@ -165,7 +170,13 @@ export function Sidebar() {
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}>
                 <Icon className="w-4 h-4 flex-shrink-0" />
-                {entry.label}
+                <span className="flex-1">{entry.label}</span>
+                {entry.href === "/waiter-requests" && activeWaiterCount > 0 && (
+                  <span className={cn(
+                    "text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center",
+                    active ? "bg-white/25 text-white" : "bg-orange-500 text-white",
+                  )}>{activeWaiterCount}</span>
+                )}
               </Link>
             );
           }
