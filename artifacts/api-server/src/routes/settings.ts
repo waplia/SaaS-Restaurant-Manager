@@ -110,11 +110,6 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
     return void res.status(400).json({ error: "data must be an object" });
   }
 
-  // Per-section sanitisation:
-  //  - "discounts.managerPin": never stored as plaintext. Server hashes it
-  //    into managerPinHash and strips the raw field. Empty string clears.
-  //  - Reading the existing managerPinHash is preserved if the client omits
-  //    both fields (avoids accidental clearing on partial saves from the UI).
   if (section === "discounts") {
     const d = data as Record<string, unknown>;
     if (typeof d.managerPin === "string") {
@@ -128,7 +123,6 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
       }
       delete d.managerPin;
     } else if (!("managerPinHash" in d)) {
-      // Preserve any previously stored hash if client omitted the field.
       const [existing] = await db.select().from(restaurantSettingsTable).where(and(
         eq(restaurantSettingsTable.restaurantId, restaurantId),
         eq(restaurantSettingsTable.section, "discounts"),
@@ -140,8 +134,6 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
     }
   }
 
-  // Atomic upsert — full-document replacement is the documented contract;
-  // clients must always send the merged section payload.
   const [row] = await db
     .insert(restaurantSettingsTable)
     .values({ restaurantId, section, data, updatedBy: req.user!.sub })
@@ -150,8 +142,6 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
       set: { data, updatedBy: req.user!.sub, updatedAt: new Date() },
     })
     .returning();
-  // Sanitise the response the same way the GET handler does so the bcrypt
-  // managerPinHash never leaves the server (low-entropy 4–8 digit PIN).
   let respData: unknown = row.data;
   if (section === "discounts") {
     const src = (row.data ?? {}) as Record<string, unknown>;

@@ -208,7 +208,6 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  // discountAmount is server-managed via /discounts ledger; ignore client value.
   const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items } = req.body;
 
   let subtotal = 0;
@@ -325,7 +324,6 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 
 router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  // discountAmount is not patchable; use POST/DELETE /orders/:id/discounts.
   const { status, notes, isPriority, customerName } = req.body;
   const updates: Record<string, unknown> = { notes, isPriority, customerName, updatedAt: new Date() };
   if (status) updates.status = status;
@@ -451,8 +449,6 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   if (!targetItem) return void res.status(404).json({ error: "Item not found in this order" });
 
   await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
-  // Drop any item-scoped discount lines pinned to this item so they don't
-  // continue reducing the order total after the item is gone.
   await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.orderItemId, itemId));
   await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
 
@@ -535,10 +531,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
   }
 
   const cfg = cfgEarly;
-  // Evaluate against the cumulative discount total after this line so that
-  // multiple sub-threshold lines cannot be used to bypass approval.
-  const cumulativeAfter = existingTotal + amount;
-  const needsApproval = exceedsThreshold(cumulativeAfter, subtotal, cfg);
+  const needsApproval = exceedsThreshold(existingTotal + amount, subtotal, cfg);
   let approvedByUserId: number | null = null;
   if (needsApproval) {
     if (!cfg.hasManagerPin) {
@@ -556,8 +549,6 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
         thresholdAmount: cfg.thresholdAmount,
       });
     }
-    // Attribute approval only to a manager-tier requester; otherwise the PIN
-    // itself is the approval token (recordedByUserId still captures the cashier).
     const role = req.user?.role;
     approvedByUserId = (role === "owner" || role === "manager" || req.user?.isSuperAdmin)
       ? (req.user?.sub ?? null)
@@ -613,7 +604,6 @@ router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", req
   res.json({ ...updatedOrder, items, discounts });
 });
 
-// Removed — use POST /orders/:id/discounts.
 router.post("/restaurants/:restaurantId/orders/:id/discount", (_req, res) => {
   res.status(410).json({
     error: "Endpoint removed. Use POST /orders/:id/discounts.",

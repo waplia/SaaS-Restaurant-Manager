@@ -306,7 +306,6 @@ router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
   if (fromStr && toStr) expenseConditions.push(lte(expensesTable.expenseDate, to.toISOString().slice(0, 10)));
   const expenseWhere = and(...expenseConditions);
 
-  // Discount aggregation: ledger rows in window grouped by cashier+reason+type.
   const discountsByCashierRows = await db.execute<{
     user_id: number | null;
     name: string;

@@ -1525,11 +1525,6 @@ interface DiscountsSettingsCfg {
   managerPin?: string;
 }
 function DiscountsSection() {
-  // managerPin is intentionally omitted from defaults so that an unedited form
-  // never POSTs `managerPin: ""` (the server treats empty string as "clear the
-  // hash"). The Input below initializes its value from `s.managerPin ?? ""`,
-  // and onChange normalizes empty back to undefined so the field is dropped
-  // from the saved JSON unless the operator explicitly typed something.
   const defaults: DiscountsSettingsCfg = {
     presetReasons: [
       "Loyal customer", "Comp item", "Manager override",
