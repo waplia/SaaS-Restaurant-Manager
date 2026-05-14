@@ -512,15 +512,14 @@ router.post(
       // history.
       for (const day of days) {
         const existing = existingByDay.get(day.getTime());
-        // half-day leave produces a `half_day` attendance row (with a 0.50
-        // leavePortion) so payroll/grid know it's a partial day; full-day
-        // leave uses `leave` with portion 1.00.
-        const statusToUse = isHalfDay ? "half_day" : "leave";
+        // Approved leave days always use status `leave` so downstream
+        // attendance/payroll filters that key on status see a uniform
+        // signal. Half-day leave is expressed via leavePortion = 0.50.
         if (existing) {
           await tx
             .update(attendanceTable)
             .set({
-              status: statusToUse,
+              status: "leave",
               workedMinutes: 0,
               overtimeMinutes: 0,
               lateMinutes: 0,
@@ -545,7 +544,7 @@ router.post(
             date: day,
             clockIn: day,
             clockOut: day,
-            status: statusToUse,
+            status: "leave",
             source: "manual",
             markedByUserId: callerId,
             leaveRequestId: id,
