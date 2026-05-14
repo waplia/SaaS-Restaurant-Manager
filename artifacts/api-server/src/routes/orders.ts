@@ -8,6 +8,7 @@ import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
+import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
@@ -49,19 +50,29 @@ async function deductInventoryForOrder(orderId: number, restaurantId: number): P
 async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, restaurantId: number): Promise<void> {
   if (!paidOrder.customerId) return;
   const customerId = paidOrder.customerId;
-  const pointsEarned = Math.floor(Number(paidOrder.totalAmount) / 100);
   const pointsRedeemed = paidOrder.loyaltyPointsRedeemed ?? 0;
 
   const [customer] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, totalOrders: customersTable.totalOrders, totalSpent: customersTable.totalSpent }).from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
   if (!customer) return;
 
+  const cfg = await loadLoyaltyConfig(restaurantId);
+
   const txns: Array<typeof loyaltyTransactionsTable.$inferInsert> = [];
   let balanceDelta = 0;
 
-  if (pointsEarned > 0) {
-    txns.push({ customerId, restaurantId, points: pointsEarned, type: "earn", reason: `Order #${paidOrder.orderNumber}`, orderId: paidOrder.id });
-    balanceDelta += pointsEarned;
+  if (cfg.enabled) {
+    const lifetime = await getLifetimeEarned(customerId, restaurantId);
+    const tier = pickTier(lifetime, cfg.tiers);
+    // Earn on the pre-discount subtotal so discounts/redemptions don't reduce earning.
+    const earnableAmount = Number(paidOrder.subtotal);
+    const pointsEarned = computeEarnedPoints(earnableAmount, cfg, tier);
+    if (pointsEarned > 0) {
+      const expiresAt = computeExpiryDate(cfg);
+      txns.push({ customerId, restaurantId, points: pointsEarned, type: "earn", reason: `Order #${paidOrder.orderNumber}${tier.multiplier && tier.multiplier !== 1 ? ` (${tier.name} ×${tier.multiplier})` : ""}`, orderId: paidOrder.id, expiresAt });
+      balanceDelta += pointsEarned;
+    }
   }
+
   if (pointsRedeemed > 0) {
     const deduct = Math.min(pointsRedeemed, customer.loyaltyPoints + balanceDelta);
     if (deduct > 0) {
@@ -483,7 +494,9 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
     return void res.status(400).json({ error: `Insufficient loyalty points. Available: ${customer.loyaltyPoints}` });
   }
 
-  const loyaltyDiscount = pointsToRedeem;
+  const cfg = await loadLoyaltyConfig(restaurantId);
+  if (!cfg.enabled) return void res.status(400).json({ error: "Loyalty program is not enabled" });
+  const loyaltyDiscount = computeRedemptionDiscount(pointsToRedeem, cfg);
 
   // Recompute coupon discount from source — never read order.discountAmount
   // (which may already include loyalty) to avoid stacking on repeated calls.
@@ -543,8 +556,9 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, re
     : Number(coupon.discountValue);
   if (coupon.maxDiscountAmount) couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscountAmount));
 
-  // Preserve any already-applied loyalty redemption discount
-  const loyaltyDiscount = order.loyaltyPointsRedeemed ?? 0;
+  // Preserve any already-applied loyalty redemption discount (priced per current redemption rate)
+  const cfgForLoyalty = await loadLoyaltyConfig(restaurantId);
+  const loyaltyDiscount = computeRedemptionDiscount(order.loyaltyPointsRedeemed ?? 0, cfgForLoyalty);
   const totalDiscount = couponDiscount + loyaltyDiscount;
 
   await db.update(ordersTable).set({ couponCode: coupon.code, discountAmount: totalDiscount.toFixed(2), updatedAt: new Date() }).where(eq(ordersTable.id, orderId));

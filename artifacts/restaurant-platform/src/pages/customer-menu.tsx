@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare } from "lucide-react";
+import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
@@ -106,6 +106,20 @@ interface OrderStatus {
   createdAt: string;
 }
 
+interface RewardsLookup {
+  found: boolean;
+  restaurantName: string;
+  currency: string;
+  redemptionRate: number;
+  pointsPerCurrencyUnit: number;
+  expiryMonths?: number;
+  customer?: { firstName: string };
+  balance?: number;
+  tier?: { id: string; name: string; multiplier: number };
+  nextTier?: { id: string; name: string; threshold: number; pointsToGo: number } | null;
+  history?: Array<{ points: number; type: string; reason: string | null; createdAt: string; expiresAt: string | null }>;
+}
+
 interface PaymentIntentResponse {
   mode: "live" | "demo";
   clientSecret?: string | null;
@@ -195,6 +209,12 @@ export default function CustomerMenuPage() {
   const [rating, setRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+
+  const [rewardsOpen, setRewardsOpen] = useState(false);
+  const [rewardsPhone, setRewardsPhone] = useState("");
+  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [rewardsError, setRewardsError] = useState<string | null>(null);
+  const [rewardsData, setRewardsData] = useState<RewardsLookup | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const categoryRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -407,6 +427,36 @@ export default function CustomerMenuPage() {
     setWaiterNote("");
     setWaiterStatus("idle");
     setWaiterModalOpen(true);
+  }
+
+  function openRewards() {
+    setRewardsError(null);
+    setRewardsOpen(true);
+  }
+
+  async function fetchRewards() {
+    if (!slug) return;
+    const phone = rewardsPhone.trim();
+    if (phone.length < 6) { setRewardsError("Please enter a valid phone number."); return; }
+    setRewardsLoading(true);
+    setRewardsError(null);
+    try {
+      const res = await fetch(`${API_BASE}/public/loyalty/lookup`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRewardsError(data?.error ?? "Could not look up rewards.");
+        setRewardsData(null);
+      } else {
+        setRewardsData(data as RewardsLookup);
+      }
+    } catch {
+      setRewardsError("Network error. Please try again.");
+    } finally {
+      setRewardsLoading(false);
+    }
   }
 
   async function sendWaiterRequest() {
@@ -755,9 +805,14 @@ export default function CustomerMenuPage() {
               <p className="text-orange-100 text-xs">Table {tableId} · Scan & Order</p>
             </div>
           </div>
-          <button onClick={openWaiterModal} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-2 rounded-full transition">
-            <Bell className="w-3.5 h-3.5" /> Waiter
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={openRewards} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-2 rounded-full transition">
+              <Gift className="w-3.5 h-3.5" /> Rewards
+            </button>
+            <button onClick={openWaiterModal} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-2 rounded-full transition">
+              <Bell className="w-3.5 h-3.5" /> Waiter
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1031,6 +1086,90 @@ export default function CustomerMenuPage() {
                   : waiterSending ? "Sending…" : "Send request"}
               </button>
               <p className="text-xs text-gray-400 text-center">A staff member will be with you shortly.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rewardsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !rewardsLoading && setRewardsOpen(false)} />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <p className="font-bold text-lg text-gray-900 flex items-center gap-2"><Gift className="w-5 h-5 text-orange-500" /> Your Rewards</p>
+              <button onClick={() => !rewardsLoading && setRewardsOpen(false)} className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-5 pb-5 space-y-4 overflow-y-auto">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Phone number</label>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={rewardsPhone}
+                    onChange={e => setRewardsPhone(e.target.value)}
+                    placeholder="Enter the phone you used to order"
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  <button
+                    onClick={fetchRewards}
+                    disabled={rewardsLoading || rewardsPhone.trim().length < 6}
+                    className="px-4 bg-orange-500 text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-orange-600 transition flex items-center gap-1"
+                  >
+                    {rewardsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check"}
+                  </button>
+                </div>
+              </div>
+
+              {rewardsError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-3 py-2">{rewardsError}</div>
+              )}
+
+              {rewardsData && !rewardsData.found && (
+                <div className="bg-orange-50 border border-orange-200 text-orange-800 text-sm rounded-xl px-3 py-3 space-y-1">
+                  <p className="font-semibold">No rewards account yet</p>
+                  <p className="text-xs">Order with this phone number to start earning {rewardsData.pointsPerCurrencyUnit} pt for every {rewardsData.currency || "₹"}1 spent. Each point is worth {rewardsData.currency || "₹"}{Number(rewardsData.redemptionRate).toFixed(2)}.</p>
+                </div>
+              )}
+
+              {rewardsData?.found && (
+                <>
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl p-4">
+                    <p className="text-xs uppercase tracking-wider opacity-80">Available balance</p>
+                    <p className="text-3xl font-bold mt-1">{rewardsData.balance ?? 0} pts</p>
+                    <p className="text-xs mt-1 opacity-90">≈ {rewardsData.currency || "₹"}{((rewardsData.balance ?? 0) * Number(rewardsData.redemptionRate)).toFixed(2)} to redeem at the counter</p>
+                    {rewardsData.tier && (
+                      <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between text-xs">
+                        <span>Tier: <span className="font-bold">{rewardsData.tier.name}</span>{rewardsData.tier.multiplier !== 1 && ` · ${rewardsData.tier.multiplier}× earn`}</span>
+                        {rewardsData.nextTier && (
+                          <span className="opacity-90">{rewardsData.nextTier.pointsToGo} pts to {rewardsData.nextTier.name}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {rewardsData.history && rewardsData.history.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700 mb-2">Recent activity</p>
+                      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                        {rewardsData.history.map((h, idx) => (
+                          <div key={`${h.createdAt}-${idx}`} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-800 truncate">{h.reason ?? h.type}</p>
+                              <p className="text-gray-400">{new Date(h.createdAt).toLocaleDateString()}{h.expiresAt ? ` · expires ${new Date(h.expiresAt).toLocaleDateString()}` : ""}</p>
+                            </div>
+                            <span className={cn("font-bold tabular-nums", h.points >= 0 ? "text-green-600" : "text-orange-600")}>
+                              {h.points >= 0 ? "+" : ""}{h.points}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-gray-400 text-center">Show your phone number at the counter to redeem.</p>
+                </>
+              )}
             </div>
           </div>
         </div>

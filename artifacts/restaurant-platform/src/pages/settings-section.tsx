@@ -1511,7 +1511,7 @@ function KioskSection() {
 }
 
 /* ---------------- 28. Loyalty Program ---------------- */
-interface LoyaltyTier { id: string; name: string; threshold: number; }
+interface LoyaltyTier { id: string; name: string; threshold: number; multiplier: number; }
 interface LoyaltyCfg {
   enabled: boolean;
   pointsPerCurrencyUnit: number; redemptionRate: number;
@@ -1525,9 +1525,9 @@ function LoyaltySection() {
     pointsPerCurrencyUnit: 1, redemptionRate: 0.05,
     signupBonus: 100, birthdayBonus: 50, referralBonus: 200,
     tiers: [
-      { id: "bronze", name: "Bronze", threshold: 0 },
-      { id: "silver", name: "Silver", threshold: 1000 },
-      { id: "gold", name: "Gold", threshold: 5000 },
+      { id: "bronze", name: "Bronze", threshold: 0, multiplier: 1 },
+      { id: "silver", name: "Silver", threshold: 1000, multiplier: 1.25 },
+      { id: "gold", name: "Gold", threshold: 5000, multiplier: 1.5 },
     ],
     expiryMonths: 12,
   };
@@ -1557,13 +1557,15 @@ function LoyaltySection() {
             items={s.tiers}
             onChange={items => set(p => ({ ...p, tiers: items }))}
             addLabel="Add tier"
-            makeNew={() => ({ id: `tier-${Date.now()}`, name: "", threshold: 0 })}
+            makeNew={() => ({ id: `tier-${Date.now()}`, name: "", threshold: 0, multiplier: 1 })}
             render={(item, _i, update, remove) => (
               <div className="flex items-center gap-2">
                 <Input className="flex-1" placeholder="Tier name" value={item.name} onChange={e => update({ name: e.target.value })} />
                 <span className="text-xs text-muted-foreground">at</span>
-                <Input className="w-32" type="number" placeholder="Points threshold" value={item.threshold} onChange={e => update({ threshold: Number(e.target.value) })} />
-                <span className="text-xs text-muted-foreground">points</span>
+                <Input className="w-28" type="number" placeholder="Threshold" value={item.threshold} onChange={e => update({ threshold: Number(e.target.value) })} />
+                <span className="text-xs text-muted-foreground">pts ·</span>
+                <Input className="w-24" type="number" step="0.05" placeholder="Multiplier" value={item.multiplier ?? 1} onChange={e => update({ multiplier: Number(e.target.value) })} title="Earn-rate multiplier (e.g. 1.5× for Gold)" />
+                <span className="text-xs text-muted-foreground">×</span>
                 <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             )}

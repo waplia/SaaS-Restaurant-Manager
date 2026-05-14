@@ -37,6 +37,8 @@ export const loyaltyTransactionsTable = pgTable("loyalty_transactions", {
   type: text("type").notNull().default("earn"),
   reason: text("reason"),
   orderId: integer("order_id"),
+  expiresAt: timestamp("expires_at"),
+  expiredAt: timestamp("expired_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -6,6 +6,8 @@ import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
+import { customersTable } from "../lib/db";
+import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
 
 const router = Router();
 
@@ -381,6 +383,86 @@ router.get("/public/restaurants/:slug/reservations/lookup", async (req, res) => 
       notes: null as string | null,
     }));
   res.json(matches);
+});
+
+// In-memory IP rate limiter for the public loyalty lookup — guards against
+// phone-number enumeration. Window: 60s, max 10 requests per IP.
+const loyaltyLookupBuckets = new Map<string, number[]>();
+function loyaltyLookupAllowed(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - 60_000;
+  const arr = (loyaltyLookupBuckets.get(ip) ?? []).filter(t => t > cutoff);
+  if (arr.length >= 10) { loyaltyLookupBuckets.set(ip, arr); return false; }
+  arr.push(now);
+  loyaltyLookupBuckets.set(ip, arr);
+  if (loyaltyLookupBuckets.size > 5000) {
+    // Cheap eviction to prevent unbounded growth.
+    for (const [k, v] of loyaltyLookupBuckets) {
+      if (!v.some(t => t > cutoff)) loyaltyLookupBuckets.delete(k);
+    }
+  }
+  return true;
+}
+
+router.post("/public/loyalty/lookup", async (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  if (!loyaltyLookupAllowed(ip)) {
+    return void res.status(429).json({ error: "Too many lookups. Please try again in a minute." });
+  }
+  const { slug, phone } = req.body as { slug?: string; phone?: string };
+  if (!slug || !phone || phone.trim().length < 6) {
+    return void res.status(400).json({ error: "slug and phone (6+ digits) required" });
+  }
+  const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, currency: restaurantsTable.currency })
+    .from(restaurantsTable).where(eq(restaurantsTable.slug, slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  const cfg = await loadLoyaltyConfig(restaurant.id);
+  if (!cfg.enabled) return void res.status(404).json({ error: "Loyalty program not active" });
+
+  const [customer] = await db.select().from(customersTable)
+    .where(and(eq(customersTable.restaurantId, restaurant.id), eq(customersTable.phone, phone.trim())));
+  if (!customer) {
+    return void res.json({
+      found: false,
+      restaurantName: restaurant.name,
+      currency: restaurant.currency,
+      redemptionRate: cfg.redemptionRate,
+      pointsPerCurrencyUnit: cfg.pointsPerCurrencyUnit,
+      tiers: cfg.tiers,
+    });
+  }
+
+  const lifetime = await getLifetimeEarned(customer.id, restaurant.id);
+  const tier = pickTier(lifetime, cfg.tiers);
+  const history = await getRecentLoyaltyHistory(customer.id, restaurant.id, 10);
+
+  // Determine next tier (if any) and the points needed to reach it.
+  const sortedTiers = [...cfg.tiers].sort((a, b) => Number(a.threshold) - Number(b.threshold));
+  const nextTier = sortedTiers.find(t => Number(t.threshold) > lifetime) ?? null;
+
+  // Minimize PII: do not expose internal customer.id or full name; greet by first name only.
+  const firstName = (customer.name ?? "").trim().split(/\s+/)[0] ?? "";
+
+  res.json({
+    found: true,
+    restaurantName: restaurant.name,
+    currency: restaurant.currency,
+    customer: { firstName },
+    balance: customer.loyaltyPoints,
+    tier: { id: tier.id, name: tier.name, multiplier: Number(tier.multiplier ?? 1) },
+    nextTier: nextTier ? { id: nextTier.id, name: nextTier.name, threshold: Number(nextTier.threshold), pointsToGo: Math.max(0, Number(nextTier.threshold) - lifetime) } : null,
+    redemptionRate: cfg.redemptionRate,
+    pointsPerCurrencyUnit: cfg.pointsPerCurrencyUnit,
+    expiryMonths: cfg.expiryMonths,
+    history: history.map(h => ({
+      points: h.points,
+      type: h.type,
+      reason: h.reason,
+      createdAt: h.createdAt,
+      expiresAt: h.expiresAt,
+    })),
+  });
 });
 
 router.post("/public/feedback", async (req, res) => {

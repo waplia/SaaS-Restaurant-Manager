@@ -4,6 +4,7 @@ import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzl
 import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable } from "../lib/db";
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { logger } from "./logger";
+import { expireDueLoyaltyPoints } from "./loyalty";
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -194,5 +195,15 @@ export function startScheduler(): void {
     }
   }, { timezone: "Asia/Kolkata" });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry check at 00:00 IST");
+  cron.schedule("30 0 * * *", async () => {
+    logger.info("Running loyalty-points expiry job");
+    try {
+      const expired = await expireDueLoyaltyPoints();
+      logger.info({ expired }, "Loyalty-expiry job complete");
+    } catch (err) {
+      logger.error({ err }, "Loyalty-expiry job failed");
+    }
+  }, { timezone: "Asia/Kolkata" });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST");
 }
