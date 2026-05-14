@@ -9,14 +9,15 @@ import {
   useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
   useModifierGroups, useModifiers, useCreateModifierGroup, useCreateModifier,
   useKitchens, useBulkAssignKitchen,
+  useInventory, useRecipeMappings, useCreateRecipeMapping, useUpdateRecipeMapping, useDeleteRecipeMapping,
 } from "@/lib/hooks";
-import type { Kitchen } from "@/lib/types";
+import type { Kitchen, InventoryItem, RecipeMapping } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Pencil, Trash2, ChevronRight, Download, Upload,
-  UtensilsCrossed, Settings2, X, Check, Tag, Clock, Flame, Leaf,
+  UtensilsCrossed, Settings2, X, Check, Tag, Clock, Flame, Leaf, ChefHat,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -251,6 +252,147 @@ function ModifierGroupRow({ group, isExpanded, onToggle }: { group: ModifierGrou
   );
 }
 
+function RecipePanel({ itemId, itemPrice }: { itemId: number; itemPrice: string }) {
+  const { data: recipe = [] } = useRecipeMappings({ menuItemId: itemId });
+  const { data: inventory = [] } = useInventory();
+  const createMapping = useCreateRecipeMapping();
+  const updateMapping = useUpdateRecipeMapping();
+  const deleteMapping = useDeleteRecipeMapping();
+  const { toast } = useToast();
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ inventoryItemId: "", quantity: "", unit: "" });
+
+  const totalCogs = recipe.reduce((s: number, r: RecipeMapping) => s + Number(r.quantity) * Number(r.costPerUnit ?? 0), 0);
+  const price = Number(itemPrice);
+  const margin = price > 0 ? ((price - totalCogs) / price) * 100 : 0;
+  const foodCostPct = price > 0 ? (totalCogs / price) * 100 : 0;
+  const isLowMargin = recipe.length > 0 && foodCostPct >= 65;
+
+  const inv: InventoryItem[] = inventory as InventoryItem[];
+  const availableInv = inv.filter(i => !recipe.some((r: RecipeMapping) => r.inventoryItemId === i.id));
+
+  const handleAdd = async () => {
+    if (!form.inventoryItemId || !form.quantity) {
+      toast({ title: "Pick an ingredient and enter a quantity", variant: "destructive" });
+      return;
+    }
+    const invItem = inv.find(i => i.id === Number(form.inventoryItemId));
+    try {
+      await createMapping.mutateAsync({
+        menuItemId: itemId,
+        inventoryItemId: Number(form.inventoryItemId),
+        quantity: form.quantity,
+        unit: form.unit || invItem?.unit || "kg",
+      });
+      setForm({ inventoryItemId: "", quantity: "", unit: "" });
+      setShowAdd(false);
+    } catch {
+      toast({ title: "Failed to add ingredient", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-muted/30 border border-border rounded-lg p-3">
+          <p className="text-[10px] uppercase text-muted-foreground font-medium">Price</p>
+          <p className="text-base font-bold">₹{price.toFixed(2)}</p>
+        </div>
+        <div className="bg-muted/30 border border-border rounded-lg p-3">
+          <p className="text-[10px] uppercase text-muted-foreground font-medium">Live COGS</p>
+          <p className="text-base font-bold">₹{totalCogs.toFixed(2)}</p>
+        </div>
+        <div className={cn("border rounded-lg p-3", isLowMargin ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200")}>
+          <p className="text-[10px] uppercase text-muted-foreground font-medium">Margin</p>
+          <p className={cn("text-base font-bold", isLowMargin ? "text-red-700" : "text-green-700")}>
+            {recipe.length === 0 ? "–" : `${margin.toFixed(1)}%`}
+          </p>
+        </div>
+      </div>
+
+      {isLowMargin && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-md">
+          Low margin: food cost is {foodCostPct.toFixed(1)}% of price (≥ 65% threshold).
+        </div>
+      )}
+
+      <div className="border border-border rounded-lg overflow-hidden">
+        <div className="px-3 py-2 bg-muted/40 border-b border-border flex items-center justify-between">
+          <p className="text-xs font-semibold">Ingredients</p>
+          {!showAdd && (
+            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowAdd(true)}>
+              <Plus className="w-3 h-3 mr-1" /> Add
+            </Button>
+          )}
+        </div>
+
+        {recipe.length === 0 && !showAdd && (
+          <p className="text-xs text-muted-foreground text-center py-6">No ingredients yet. Add one to start tracking food cost.</p>
+        )}
+
+        {recipe.map((r: RecipeMapping) => {
+          const lineCost = Number(r.quantity) * Number(r.costPerUnit ?? 0);
+          return (
+            <div key={r.id} className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0 text-xs">
+              <span className="flex-1 font-medium truncate">{r.inventoryItemName ?? "Unknown"}</span>
+              <Input
+                type="number"
+                step="0.001"
+                value={r.quantity}
+                onChange={async e => {
+                  try {
+                    await updateMapping.mutateAsync({ id: r.id, quantity: e.target.value });
+                  } catch {
+                    toast({ title: "Update failed", variant: "destructive" });
+                  }
+                }}
+                className="h-7 w-20 text-xs"
+              />
+              <span className="text-muted-foreground w-12">{r.unit}</span>
+              <span className="text-muted-foreground w-20 text-right">@ ₹{Number(r.costPerUnit ?? 0).toFixed(2)}/{r.inventoryUnit}</span>
+              <span className="font-semibold w-16 text-right">₹{lineCost.toFixed(2)}</span>
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteMapping.mutate(r.id)}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          );
+        })}
+
+        {showAdd && (
+          <div className="p-2 border-t border-border bg-muted/20 space-y-2">
+            <select
+              className="w-full border border-input rounded-md px-2 py-1.5 text-xs bg-background"
+              value={form.inventoryItemId}
+              onChange={e => {
+                const inv2 = inv.find(i => i.id === Number(e.target.value));
+                setForm(p => ({ ...p, inventoryItemId: e.target.value, unit: inv2?.unit ?? p.unit }));
+              }}
+            >
+              <option value="">Select ingredient…</option>
+              {availableInv.map(i => (
+                <option key={i.id} value={i.id}>{i.name} (₹{Number(i.costPerUnit).toFixed(2)}/{i.unit})</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <Input type="number" step="0.001" placeholder="Qty" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="h-7 text-xs flex-1" />
+              <Input placeholder="Unit" value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))} className="h-7 text-xs w-20" />
+              <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={createMapping.isPending}>Add</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setForm({ inventoryItemId: "", quantity: "", unit: "" }); }}>Cancel</Button>
+            </div>
+            {availableInv.length === 0 && (
+              <p className="text-[10px] text-muted-foreground">All inventory items are already in this recipe.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        COGS auto-recalculates when an inventory item's purchase price changes.
+      </p>
+    </div>
+  );
+}
+
 type ItemForm = {
   name: string;
   price: string;
@@ -305,7 +447,7 @@ export default function MenuPage() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
-  const [activeTab, setActiveTab] = useState<"details" | "modifiers">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "modifiers" | "recipe">("details");
 
   const csvInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -906,6 +1048,13 @@ export default function MenuPage() {
                 <Tag className="w-3.5 h-3.5 inline mr-1.5" />Modifiers
                 {!editItem && <span className="text-[9px] ml-1">(save first)</span>}
               </button>
+              <button
+                className={cn("flex-1 text-sm py-2.5 font-medium border-b-2 transition-colors", activeTab === "recipe" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground", !editItem && "opacity-40 cursor-not-allowed")}
+                onClick={() => editItem && setActiveTab("recipe")}
+              >
+                <ChefHat className="w-3.5 h-3.5 inline mr-1.5" />Recipe
+                {!editItem && <span className="text-[9px] ml-1">(save first)</span>}
+              </button>
             </div>
 
             <div className="p-6 max-h-[60vh] overflow-y-auto">
@@ -967,8 +1116,10 @@ export default function MenuPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : activeTab === "modifiers" ? (
                 editItem && <ModifierGroupPanel itemId={editItem.id} />
+              ) : (
+                editItem && <RecipePanel itemId={editItem.id} itemPrice={editItem.price} />
               )}
             </div>
 

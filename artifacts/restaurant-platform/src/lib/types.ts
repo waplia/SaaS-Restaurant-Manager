@@ -566,6 +566,9 @@ export interface RecipeMapping {
   quantity: string;
   unit: string;
   createdAt: string;
+  inventoryItemName?: string | null;
+  inventoryUnit?: string | null;
+  costPerUnit?: string | null;
 }
 
 export interface CreateRecipeMappingInput {
@@ -573,6 +576,31 @@ export interface CreateRecipeMappingInput {
   inventoryItemId: number;
   quantity: string;
   unit: string;
+}
+
+export interface UpdateRecipeMappingInput {
+  id: number;
+  quantity?: string;
+  unit?: string;
+}
+
+export interface FoodCostItem {
+  id: number;
+  name: string;
+  categoryId: number;
+  categoryName: string | null;
+  price: string;
+  cogs: string;
+  margin: number;
+  foodCostPct: number;
+  hasRecipe: boolean;
+  ingredientCount: number;
+  isLowMargin: boolean;
+}
+
+export interface FoodCostReport {
+  threshold: number;
+  items: FoodCostItem[];
 }
 
 export interface AdjustInventoryInput {

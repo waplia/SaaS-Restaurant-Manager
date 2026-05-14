@@ -1026,7 +1026,10 @@ export function useCreateRecipeMapping() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").CreateRecipeMappingInput) => apiPost(`/restaurants/${RESTAURANT_ID}/recipe-mappings`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipe-mappings"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["recipe-mappings"] });
+      qc.invalidateQueries({ queryKey: ["food-cost"] });
+    },
   });
 }
 
@@ -1034,7 +1037,29 @@ export function useDeleteRecipeMapping() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recipe-mappings/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipe-mappings"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["recipe-mappings"] });
+      qc.invalidateQueries({ queryKey: ["food-cost"] });
+    },
+  });
+}
+
+export function useUpdateRecipeMapping() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: import("./types").UpdateRecipeMappingInput) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/recipe-mappings/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["recipe-mappings"] });
+      qc.invalidateQueries({ queryKey: ["food-cost"] });
+    },
+  });
+}
+
+export function useFoodCostReport(threshold: number = 65) {
+  return useQuery({
+    queryKey: ["food-cost", RESTAURANT_ID, threshold],
+    queryFn: () => apiGet<import("./types").FoodCostReport>(`/restaurants/${RESTAURANT_ID}/food-cost?threshold=${threshold}`),
   });
 }
 

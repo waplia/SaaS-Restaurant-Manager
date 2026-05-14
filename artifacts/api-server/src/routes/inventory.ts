@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, recipeMappingsTable, notificationsTable, paymentsTable } from "../lib/db";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -227,14 +227,96 @@ router.delete("/restaurants/:restaurantId/suppliers/:id", requireRole("owner", "
   res.status(204).send();
 });
 
-router.get("/restaurants/:restaurantId/recipe-mappings", async (req, res) => {
+router.get("/restaurants/:restaurantId/recipe-mappings", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { menuItemId, inventoryItemId } = req.query;
   const conditions = [eq(recipeMappingsTable.restaurantId, restaurantId)];
   if (menuItemId) conditions.push(eq(recipeMappingsTable.menuItemId, Number(menuItemId)));
   if (inventoryItemId) conditions.push(eq(recipeMappingsTable.inventoryItemId, Number(inventoryItemId)));
-  const rows = await db.select().from(recipeMappingsTable).where(and(...conditions));
+  const rows = await db.select({
+    id: recipeMappingsTable.id,
+    restaurantId: recipeMappingsTable.restaurantId,
+    menuItemId: recipeMappingsTable.menuItemId,
+    inventoryItemId: recipeMappingsTable.inventoryItemId,
+    quantity: recipeMappingsTable.quantity,
+    unit: recipeMappingsTable.unit,
+    createdAt: recipeMappingsTable.createdAt,
+    inventoryItemName: inventoryItemsTable.name,
+    inventoryUnit: inventoryItemsTable.unit,
+    costPerUnit: inventoryItemsTable.costPerUnit,
+  }).from(recipeMappingsTable)
+    .leftJoin(inventoryItemsTable, eq(recipeMappingsTable.inventoryItemId, inventoryItemsTable.id))
+    .where(and(...conditions));
   res.json(rows);
+});
+
+router.patch("/restaurants/:restaurantId/recipe-mappings/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const { quantity, unit } = req.body as { quantity?: string | number; unit?: string };
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (quantity !== undefined) updates.quantity = String(quantity);
+  if (unit !== undefined) updates.unit = unit;
+  const [updated] = await db.update(recipeMappingsTable).set(updates)
+    .where(and(eq(recipeMappingsTable.id, Number(req.params.id)), eq(recipeMappingsTable.restaurantId, Number(req.params.restaurantId))))
+    .returning();
+  if (!updated) return void res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+router.get("/restaurants/:restaurantId/food-cost", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const rawThreshold = Number(req.query.threshold ?? 65);
+  const threshold = Number.isFinite(rawThreshold) ? Math.max(1, Math.min(100, rawThreshold)) : 65;
+
+  const items = await db.select({
+    id: menuItemsTable.id,
+    name: menuItemsTable.name,
+    price: menuItemsTable.price,
+    categoryId: menuItemsTable.categoryId,
+    categoryName: menuCategoriesTable.name,
+  }).from(menuItemsTable)
+    .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
+    .where(eq(menuItemsTable.restaurantId, restaurantId));
+
+  const mappings = await db.select({
+    menuItemId: recipeMappingsTable.menuItemId,
+    quantity: recipeMappingsTable.quantity,
+    inventoryItemId: recipeMappingsTable.inventoryItemId,
+    inventoryName: inventoryItemsTable.name,
+    inventoryUnit: inventoryItemsTable.unit,
+    costPerUnit: inventoryItemsTable.costPerUnit,
+  }).from(recipeMappingsTable)
+    .leftJoin(inventoryItemsTable, eq(recipeMappingsTable.inventoryItemId, inventoryItemsTable.id))
+    .where(eq(recipeMappingsTable.restaurantId, restaurantId));
+
+  const byItem = new Map<number, typeof mappings>();
+  for (const m of mappings) {
+    const arr = byItem.get(m.menuItemId) ?? [];
+    arr.push(m);
+    byItem.set(m.menuItemId, arr);
+  }
+
+  const result = items.map(item => {
+    const recipe = byItem.get(item.id) ?? [];
+    const cogs = recipe.reduce((s, r) => s + Number(r.quantity) * Number(r.costPerUnit ?? 0), 0);
+    const price = Number(item.price);
+    const margin = price > 0 ? ((price - cogs) / price) * 100 : 0;
+    const foodCostPct = price > 0 ? (cogs / price) * 100 : 0;
+    return {
+      id: item.id,
+      name: item.name,
+      categoryId: item.categoryId,
+      categoryName: item.categoryName,
+      price: price.toFixed(2),
+      cogs: cogs.toFixed(2),
+      margin: Number(margin.toFixed(2)),
+      foodCostPct: Number(foodCostPct.toFixed(2)),
+      hasRecipe: recipe.length > 0,
+      ingredientCount: recipe.length,
+      isLowMargin: recipe.length > 0 && foodCostPct >= threshold,
+    };
+  });
+
+  res.json({ threshold, items: result });
 });
 
 router.post("/restaurants/:restaurantId/recipe-mappings", requireRole("owner", "manager", "super_admin"), async (req, res) => {

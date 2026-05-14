@@ -2,15 +2,16 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useReports } from "@/lib/hooks";
+import { useReports, useFoodCostReport } from "@/lib/hooks";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from "recharts";
 import { format } from "date-fns";
-import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent } from "lucide-react";
+import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent, Flame, ArrowUpDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem, DiscountsByCashierItem } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem, DiscountsByCashierItem, FoodCostItem } from "@/lib/types";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -44,10 +45,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -71,8 +72,42 @@ export default function ReportsPage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [useCustom, setUseCustom] = useState(false);
+  const [foodCostThreshold, setFoodCostThreshold] = useState(65);
+  const [foodCostSort, setFoodCostSort] = useState<{ key: keyof FoodCostItem; dir: "asc" | "desc" }>({ key: "margin", dir: "asc" });
+  const [foodCostFilter, setFoodCostFilter] = useState<"all" | "withRecipe" | "lowMargin">("all");
 
   const sectionInvalid = !!sectionParam && !(VALID_TABS as readonly string[]).includes(sectionParam);
+
+  const { data: foodCost } = useFoodCostReport(foodCostThreshold);
+
+  const filteredFoodCost = (foodCost?.items ?? []).filter(i => {
+    if (foodCostFilter === "withRecipe") return i.hasRecipe;
+    if (foodCostFilter === "lowMargin") return i.isLowMargin;
+    return true;
+  });
+  const sortedFoodCost = [...filteredFoodCost].sort((a, b) => {
+    const ka = a[foodCostSort.key];
+    const kb = b[foodCostSort.key];
+    const na = typeof ka === "number" ? ka : Number(ka);
+    const nb = typeof kb === "number" ? kb : Number(kb);
+    if (Number.isFinite(na) && Number.isFinite(nb) && (typeof ka !== "string" || !isNaN(Number(ka)))) {
+      return foodCostSort.dir === "asc" ? na - nb : nb - na;
+    }
+    const sa = String(ka ?? "");
+    const sb = String(kb ?? "");
+    return foodCostSort.dir === "asc" ? sa.localeCompare(sb) : sb.localeCompare(sa);
+  });
+  const lowMarginCount = (foodCost?.items ?? []).filter(i => i.isLowMargin).length;
+  const recipeCoverage = (foodCost?.items ?? []).filter(i => i.hasRecipe).length;
+  const avgMargin = (() => {
+    const withRecipe = (foodCost?.items ?? []).filter(i => i.hasRecipe);
+    if (withRecipe.length === 0) return null;
+    return withRecipe.reduce((s, i) => s + i.margin, 0) / withRecipe.length;
+  })();
+
+  function toggleSort(key: keyof FoodCostItem) {
+    setFoodCostSort(p => p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+  }
 
   const { data: reports, isLoading } = useReports(
     useCustom && customFrom && customTo ? `custom|${customFrom}|${customTo}` : period,
@@ -106,7 +141,7 @@ export default function ReportsPage() {
         (reports.discountsByCashier ?? []).map((d: DiscountsByCashierItem) => [d.name, d.type, d.reason, String(d.count), d.total]),
         ["Cashier", "Type", "Reason", "Count", "Total Discount"],
       );
-    } else {
+    } else if (tab === "payments") {
       exportCSV(
         `payments-report-${new Date().toISOString().slice(0, 10)}.csv`,
         (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => [
@@ -116,6 +151,21 @@ export default function ReportsPage() {
           String(p.total),
         ]),
         ["Direction", "Method", "Count", "Total"],
+      );
+    } else if (tab === "food-cost") {
+      exportCSV(
+        `food-cost-${new Date().toISOString().slice(0, 10)}.csv`,
+        sortedFoodCost.map(i => [
+          i.name,
+          i.categoryName ?? "",
+          i.price,
+          i.cogs,
+          i.hasRecipe ? `${i.margin.toFixed(2)}%` : "no recipe",
+          i.hasRecipe ? `${i.foodCostPct.toFixed(2)}%` : "",
+          String(i.ingredientCount),
+          i.isLowMargin ? "yes" : "no",
+        ]),
+        ["Item", "Category", "Price", "COGS", "Margin %", "Food Cost %", "Ingredients", "Low Margin"],
       );
     }
   }
@@ -164,7 +214,7 @@ export default function ReportsPage() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
       XLSX.writeFile(wb, `staff-report-${dateStamp}.xlsx`);
-    } else {
+    } else if (tab === "payments") {
       const paymentRows = (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => ({
         Direction: p.direction === "in" ? "Money In" : "Money Out",
         Method: p.method,
@@ -173,6 +223,19 @@ export default function ReportsPage() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows), "Payments");
       XLSX.writeFile(wb, `payments-report-${dateStamp}.xlsx`);
+    } else if (tab === "food-cost") {
+      const rows = sortedFoodCost.map(i => ({
+        Item: i.name,
+        Category: i.categoryName ?? "",
+        Price: Number(i.price),
+        COGS: Number(i.cogs),
+        "Margin %": i.hasRecipe ? i.margin : null,
+        "Food Cost %": i.hasRecipe ? i.foodCostPct : null,
+        Ingredients: i.ingredientCount,
+        "Low Margin": i.isLowMargin ? "yes" : "no",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Food Cost");
+      XLSX.writeFile(wb, `food-cost-${dateStamp}.xlsx`);
     }
   }
 
@@ -187,6 +250,7 @@ export default function ReportsPage() {
       : tab === "tax" ? "Tax Report"
       : tab === "staff" ? "Staff Performance Report"
       : tab === "discounts" ? "Discounts Report"
+      : tab === "food-cost" ? "Food Cost Report"
       : "Payments Report";
 
     doc.setFontSize(18);
@@ -274,6 +338,22 @@ export default function ReportsPage() {
           `₹${Number(s.totalRevenue).toLocaleString()}`,
           `${s.totalHours}h`,
           s.orderCount > 0 ? `₹${(Number(s.totalRevenue) / s.orderCount).toFixed(0)}` : "–",
+        ]),
+      });
+    } else if (tab === "food-cost") {
+      doc.setFontSize(13);
+      doc.text(`Food Cost (Threshold: ${foodCostThreshold}% food cost)`, 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Item", "Category", "Price", "COGS", "Margin %", "Food %", "Status"]],
+        body: sortedFoodCost.map(i => [
+          i.name,
+          i.categoryName ?? "–",
+          `₹${Number(i.price).toFixed(2)}`,
+          i.hasRecipe ? `₹${Number(i.cogs).toFixed(2)}` : "–",
+          i.hasRecipe ? `${i.margin.toFixed(1)}%` : "–",
+          i.hasRecipe ? `${i.foodCostPct.toFixed(1)}%` : "–",
+          !i.hasRecipe ? "No recipe" : i.isLowMargin ? "LOW MARGIN" : "Healthy",
         ]),
       });
     } else {
@@ -450,6 +530,7 @@ export default function ReportsPage() {
             { label: "Staff Performance", val: "staff" as Tab },
             { label: "Payments", val: "payments" as Tab },
             { label: "Discounts", val: "discounts" as Tab },
+            { label: "Food Cost", val: "food-cost" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -803,6 +884,129 @@ export default function ReportsPage() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {tab === "food-cost" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm text-muted-foreground">Items with Recipe</p>
+                  <Flame className="w-4 h-4 text-orange-500" />
+                </div>
+                <p className="text-2xl font-bold">{recipeCoverage} / {foodCost?.items.length ?? 0}</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-sm text-muted-foreground mb-1">Avg Margin</p>
+                <p className="text-2xl font-bold">{avgMargin == null ? "–" : `${avgMargin.toFixed(1)}%`}</p>
+              </div>
+              <div className={`bg-card border rounded-xl p-4 ${lowMarginCount > 0 ? "border-red-200" : "border-border"}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm text-muted-foreground">Low-Margin Items</p>
+                  {lowMarginCount > 0 && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                </div>
+                <p className={`text-2xl font-bold ${lowMarginCount > 0 ? "text-red-600" : "text-foreground"}`}>{lowMarginCount}</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <p className="text-sm text-muted-foreground mb-1">Low-Margin Threshold (food cost %)</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={foodCostThreshold}
+                    onChange={e => setFoodCostThreshold(Math.max(1, Math.min(100, Number(e.target.value) || 65)))}
+                    className="h-9 w-20"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" variant={foodCostFilter === "all" ? "default" : "outline"} onClick={() => setFoodCostFilter("all")}>All</Button>
+              <Button size="sm" variant={foodCostFilter === "withRecipe" ? "default" : "outline"} onClick={() => setFoodCostFilter("withRecipe")}>With Recipe</Button>
+              <Button size="sm" variant={foodCostFilter === "lowMargin" ? "default" : "outline"} onClick={() => setFoodCostFilter("lowMargin")}>
+                <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Low Margin
+              </Button>
+              <span className="text-xs text-muted-foreground ml-2">Showing {sortedFoodCost.length} items</span>
+            </div>
+
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      {([
+                        { key: "name", label: "Item", align: "left" },
+                        { key: "categoryName", label: "Category", align: "left" },
+                        { key: "price", label: "Price", align: "right" },
+                        { key: "cogs", label: "COGS", align: "right" },
+                        { key: "margin", label: "Margin %", align: "right" },
+                        { key: "foodCostPct", label: "Food Cost %", align: "right" },
+                        { key: "ingredientCount", label: "Ingredients", align: "right" },
+                      ] as { key: keyof FoodCostItem; label: string; align: "left" | "right" }[]).map(col => (
+                        <th
+                          key={col.key}
+                          className={`px-5 py-2.5 text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground ${col.align === "right" ? "text-right" : "text-left"}`}
+                          onClick={() => toggleSort(col.key)}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {col.label}
+                            <ArrowUpDown className={`w-3 h-3 ${foodCostSort.key === col.key ? "text-primary" : "opacity-40"}`} />
+                          </span>
+                        </th>
+                      ))}
+                      <th className="text-center px-5 py-2.5 text-muted-foreground font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedFoodCost.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                          <Flame className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No items match this filter</p>
+                          <p className="text-xs mt-1">Add ingredients to menu items to start tracking food cost</p>
+                        </td>
+                      </tr>
+                    ) : sortedFoodCost.map(item => (
+                      <tr key={item.id} className={`border-t border-border hover:bg-muted/20 ${item.isLowMargin ? "bg-red-50/40" : ""}`}>
+                        <td className="px-5 py-2.5 font-medium text-foreground">{item.name}</td>
+                        <td className="px-5 py-2.5 text-muted-foreground">{item.categoryName ?? "–"}</td>
+                        <td className="px-5 py-2.5 text-right text-foreground">₹{Number(item.price).toFixed(2)}</td>
+                        <td className="px-5 py-2.5 text-right text-foreground">
+                          {item.hasRecipe ? `₹${Number(item.cogs).toFixed(2)}` : "–"}
+                        </td>
+                        <td className={`px-5 py-2.5 text-right font-semibold ${item.hasRecipe ? (item.isLowMargin ? "text-red-600" : "text-green-600") : "text-muted-foreground"}`}>
+                          {item.hasRecipe ? `${item.margin.toFixed(1)}%` : "–"}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground">
+                          {item.hasRecipe ? `${item.foodCostPct.toFixed(1)}%` : "–"}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground">{item.ingredientCount}</td>
+                        <td className="px-5 py-2.5 text-center">
+                          {!item.hasRecipe ? (
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">No recipe</span>
+                          ) : item.isLowMargin ? (
+                            <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Low margin
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Healthy</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              COGS = sum of (recipe quantity × inventory cost per unit). Margin % = (price − COGS) ÷ price.
+              Editing an inventory item's purchase price recalculates all dependent items live.
+            </p>
           </div>
         )}
       </div>
