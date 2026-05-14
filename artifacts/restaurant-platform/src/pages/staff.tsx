@@ -863,7 +863,14 @@ function AdvancesTab({ member }: { member: StaffMember }) {
                 </div>
               </div>
               {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
-              <div className="text-xs text-muted-foreground mt-1">Settled so far: {r.settledAmount}</div>
+              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
+                <span>Settled so far: {r.settledAmount}</span>
+                {r.runningBalance !== undefined && (
+                  <span title="Cumulative outstanding balance up to and including this entry">
+                    Balance after this entry: <span className="font-medium text-foreground">{r.runningBalance}</span>
+                  </span>
+                )}
+              </div>
               {settleFor === r.id ? (
                 <div className="flex items-center gap-2 mt-2">
                   <Input className="h-8 text-xs" type="number" inputMode="decimal" placeholder={`Up to ${outstanding}`} max={outstanding} value={settleAmt} onChange={e => setSettleAmt(e.target.value)} />

@@ -727,6 +727,7 @@ export interface StaffAdvance {
   notes: string | null;
   recordedByUserId: number | null;
   settledAmount: string;
+  runningBalance?: string;
   createdAt: string;
   updatedAt: string;
 }

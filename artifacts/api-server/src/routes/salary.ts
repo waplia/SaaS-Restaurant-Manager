@@ -261,12 +261,20 @@ router.get("/restaurants/:restaurantId/staff/:userId/advances", async (req, res)
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const rows = await db
+  // Fetch oldest-first so we can compute a chronological running balance,
+  // then return newest-first for display.
+  const chronological = await db
     .select()
     .from(staffAdvancesTable)
     .where(and(eq(staffAdvancesTable.restaurantId, restaurantId), eq(staffAdvancesTable.userId, userId)))
-    .orderBy(desc(staffAdvancesTable.paidOn), desc(staffAdvancesTable.id));
-  const totals = rows.reduce(
+    .orderBy(staffAdvancesTable.paidOn, staffAdvancesTable.id);
+
+  let running = 0;
+  const withBalance = chronological.map((r) => {
+    running += Number(r.amount) - Number(r.settledAmount);
+    return { ...r, runningBalance: running.toFixed(2) };
+  });
+  const totals = chronological.reduce(
     (acc, r) => {
       acc.advanced += Number(r.amount);
       acc.settled += Number(r.settledAmount);
@@ -275,7 +283,7 @@ router.get("/restaurants/:restaurantId/staff/:userId/advances", async (req, res)
     { advanced: 0, settled: 0 },
   );
   res.json({
-    rows,
+    rows: withBalance.slice().reverse(),
     outstanding: (totals.advanced - totals.settled).toFixed(2),
     advanced: totals.advanced.toFixed(2),
     settled: totals.settled.toFixed(2),
