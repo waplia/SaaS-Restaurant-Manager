@@ -1900,12 +1900,11 @@ export default function PosPage() {
                   <select value={dReason} onChange={e => setDReason(e.target.value)}
                     className="w-full h-9 px-2 rounded-md border border-border bg-background text-sm">
                     {discountsCfg.presetReasons.map(r => (<option key={r} value={r}>{r}</option>))}
-                    <option value="__custom__">Other (custom)…</option>
                   </select>
-                ) : null}
-                {(dReason === "__custom__" || !discountsCfg?.presetReasons?.length) && (
-                  <Input placeholder="Reason for discount" value={dReason === "__custom__" ? "" : dReason}
-                    onChange={e => setDReason(e.target.value)} />
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    No discount reasons configured. Ask the owner to add presets in Settings → Discounts.
+                  </p>
                 )}
               </div>
               {dPinRequired && (

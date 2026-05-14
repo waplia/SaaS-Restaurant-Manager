@@ -35,14 +35,20 @@ function canAccessSection(req: { user?: { role?: string; isSuperAdmin?: boolean 
   return allowed.includes(req.user?.role as AppRole);
 }
 
+// Top-level gate is widened to include POS-floor roles so the per-section GET
+// can serve POS_READABLE sections. The per-route handlers (PUT, bulk GET,
+// non-POS GETs) re-check via canAccessSection / explicit owner checks below.
 router.use(
   "/restaurants/:restaurantId/settings",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "super_admin", "waiter", "cashier", "kitchen", "delivery_executive"),
   validateRestaurantAccess,
 );
 
+// Defense-in-depth gate for write/bulk routes that should remain manager+.
+const requireSettingsWriter = requireRole("owner", "manager", "super_admin");
+
 // Bulk fetch — managers only see sections they're allowed to read.
-router.get("/restaurants/:restaurantId/settings", async (req, res) => {
+router.get("/restaurants/:restaurantId/settings", requireSettingsWriter, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db
     .select()
@@ -55,11 +61,20 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
   res.json(out);
 });
 
+// POS-readable sections — read-only views needed by cashier/waiter UIs even
+// though edits are owner-only. The `discounts` payload here strips the PIN
+// hash before returning, so exposing presetReasons/thresholds/hasManagerPin
+// to floor staff is safe and required (POS reason picker, threshold preview).
+const POS_READABLE = new Set(["discounts"]);
+const POS_READ_ROLES: AppRole[] = ["owner", "manager", "super_admin", "waiter", "cashier", "kitchen", "delivery_executive"];
+
 router.get("/restaurants/:restaurantId/settings/:section", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const section = String(req.params.section);
   if (!ALL_SECTIONS.has(section)) return void res.status(404).json({ error: "Unknown section" });
-  if (!canAccessSection(req, section)) {
+  const canRead = canAccessSection(req, section)
+    || (POS_READABLE.has(section) && POS_READ_ROLES.includes(req.user?.role as AppRole));
+  if (!canRead) {
     return void res.status(403).json({ error: "Insufficient permissions for this section" });
   }
 
@@ -80,7 +95,7 @@ router.get("/restaurants/:restaurantId/settings/:section", async (req, res) => {
   res.json({ section, data: payload, updatedAt: row?.updatedAt ?? null });
 });
 
-router.put("/restaurants/:restaurantId/settings/:section", async (req, res) => {
+router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const section = String(req.params.section);
   if (!ALL_SECTIONS.has(section)) return void res.status(404).json({ error: "Unknown section" });

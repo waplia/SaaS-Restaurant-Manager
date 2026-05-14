@@ -490,6 +490,25 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
     return void res.status(400).json({ error: "value must be a positive number" });
   }
 
+  // Reason policy — must match a configured preset reason. Prevents cashiers
+  // from inventing ad-hoc justifications and keeps the Reports breakdown
+  // bucketed against a known taxonomy.
+  const cfgEarly = await loadDiscountsConfig(restaurantId);
+  const presets = (cfgEarly.presetReasons ?? []).map(r => r.trim()).filter(r => r.length > 0);
+  if (presets.length === 0) {
+    return void res.status(409).json({
+      error: "No discount reasons are configured. Ask the owner to add preset reasons in Settings → Discounts.",
+      code: "NO_DISCOUNT_REASONS_CONFIGURED",
+    });
+  }
+  if (!presets.some(r => r.toLowerCase() === reasonTrim.toLowerCase())) {
+    return void res.status(400).json({
+      error: "Reason must be one of the configured presets",
+      code: "INVALID_DISCOUNT_REASON",
+      allowedReasons: presets,
+    });
+  }
+
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.status === "completed" || order.status === "cancelled") {
@@ -529,8 +548,9 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", async (req, res) 
   }
 
   // Threshold check — manager PIN required when a single discount line exceeds
-  // the configured percent OR flat thresholds.
-  const cfg = await loadDiscountsConfig(restaurantId);
+  // the configured percent OR flat thresholds. Reuse the config we already
+  // loaded above for reason validation.
+  const cfg = cfgEarly;
   const needsApproval = exceedsThreshold(amount, subtotal, cfg);
   let approvedByUserId: number | null = null;
   if (needsApproval) {
