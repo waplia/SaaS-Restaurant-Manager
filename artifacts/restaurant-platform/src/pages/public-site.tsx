@@ -70,6 +70,22 @@ export default function PublicSitePage() {
   }, [slug]);
 
   useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const msg = e.data as { type?: string; site?: Partial<SiteCfg>; about?: Partial<AboutCfg> } | null;
+      if (!msg || msg.type !== "tabletrack:public-site:preview") return;
+      setData(prev => prev ? {
+        ...prev,
+        site: { ...prev.site, ...(msg.site ?? {}) },
+        about: { ...prev.about, ...(msg.about ?? {}) },
+      } : prev);
+    }
+    window.addEventListener("message", onMessage);
+    window.parent?.postMessage({ type: "tabletrack:public-site:ready" }, window.location.origin);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
     if (!data) return;
     const title = data.site.seoTitle?.trim() || `${data.restaurant.name} — Menu, Hours & Reservations`;
     document.title = title;

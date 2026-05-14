@@ -369,7 +369,7 @@ function BranchSection() {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface BranchRow { id: number; name: string; address: string | null; phone: string | null; isMain: boolean; isActive: boolean; }
 
@@ -963,10 +963,35 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
   const { data: restaurant } = useRestaurantInfo();
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [copied, setCopied] = useState(false);
+  const [iframeReady, setIframeReady] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const slug = restaurant?.slug ?? "";
   const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
   const sitePath = slug ? `${base}/site/${encodeURIComponent(slug)}` : "";
   const fullUrl = slug ? `${window.location.origin}${sitePath}` : "";
+
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const msg = e.data as { type?: string } | null;
+      if (msg?.type === "tabletrack:public-site:ready") setIframeReady(true);
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  useEffect(() => {
+    if (!iframeReady) return;
+    iframeRef.current?.contentWindow?.postMessage({
+      type: "tabletrack:public-site:preview",
+      site: {
+        heroHeadline: s.heroHeadline, heroSubcopy: s.heroSubcopy,
+        socials: s.socials, mapEmbedUrl: s.mapEmbedUrl,
+        seoTitle: s.seoTitle, seoDescription: s.seoDescription,
+        ogImageUrl: s.ogImageUrl, accentColor: s.accentColor,
+      },
+    }, window.location.origin);
+  }, [iframeReady, s.heroHeadline, s.heroSubcopy, s.socials, s.mapEmbedUrl, s.seoTitle, s.seoDescription, s.ogImageUrl, s.accentColor]);
 
   function copyUrl() {
     if (!fullUrl) return;
@@ -1039,7 +1064,7 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
         )}
         <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
           {sitePath ? (
-            <iframe key={sitePath} src={sitePath} title="Public site preview"
+            <iframe ref={iframeRef} key={sitePath} src={sitePath} title="Public site preview"
               className={`block bg-white ${device === "mobile" ? "w-[390px] mx-auto" : "w-full"}`}
               style={{ height: "640px" }} />
           ) : (
@@ -1048,7 +1073,7 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
             </div>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground">Save changes above, then refresh the preview to see them applied.</p>
+        <p className="text-[11px] text-muted-foreground">Edits update the preview live. Save to publish them to your public site.</p>
       </div>
     </div>
   );
