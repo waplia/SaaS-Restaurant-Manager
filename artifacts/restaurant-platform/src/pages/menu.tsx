@@ -10,6 +10,7 @@ import {
   useModifierGroups, useModifiers, useCreateModifierGroup, useCreateModifier,
   useKitchens, useBulkAssignKitchen,
   useInventory, useRecipeMappings, useCreateRecipeMapping, useUpdateRecipeMapping, useDeleteRecipeMapping,
+  useRestaurantId,
 } from "@/lib/hooks";
 import type { Kitchen, InventoryItem, RecipeMapping } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,6 @@ import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/li
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
 import { apiPost, apiGet } from "@/lib/api";
 
-const RESTAURANT_ID = 1;
 
 type ParsedRow = {
   sku: string | null;
@@ -423,6 +423,7 @@ type AiDraftsResponse = {
 };
 
 export default function MenuPage() {
+  const RESTAURANT_ID = useRestaurantId();
   const { toast } = useToast();
   const { data: menus = [] } = useMenus();
   const [selectedMenuId, setSelectedMenuId] = useState<number | undefined>();

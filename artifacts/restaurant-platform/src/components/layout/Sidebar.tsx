@@ -49,6 +49,7 @@ const navConfig: NavEntry[] = [
     kind: "group", key: "reports", label: "Reports", icon: BarChart3,
     children: [
       { kind: "link", href: "/reports/sales", label: "Sales", icon: TrendingUp },
+      { kind: "link", href: "/reports/compare", label: "Compare Branches", icon: BarChart3, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/tax", label: "Tax", icon: Percent },
       { kind: "link", href: "/reports/staff", label: "Staff", icon: Users },
       { kind: "link", href: "/reports/payments", label: "Payments", icon: Wallet },

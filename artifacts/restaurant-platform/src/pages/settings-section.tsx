@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { SettingsLayout, SETTINGS_GROUPS, type SectionKey } from "@/components/settings/SettingsLayout";
 import { SettingForm, Field, Row, Toggle, Select, ListEditor } from "@/components/settings/SettingForm";
-import { useRestaurantInfo, useSubscription, RESTAURANT_ID } from "@/lib/hooks";
+import { useRestaurantInfo, useSubscription, useRestaurantId } from "@/lib/hooks";
 import { Trash2, ExternalLink, Lock, FileDown } from "lucide-react";
 import { Link } from "wouter";
 
@@ -374,6 +374,7 @@ import { useState, useEffect, useRef } from "react";
 interface BranchRow { id: number; name: string; address: string | null; phone: string | null; isMain: boolean; isActive: boolean; }
 
 function BranchListInline() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: branches = [], isLoading } = useQuery({
@@ -791,6 +792,7 @@ function RolesSection() {
 
 /* ---------------- 12. Billing ---------------- */
 function BillingSection() {
+  const RESTAURANT_ID = useRestaurantId();
   const { data } = useSubscription(RESTAURANT_ID);
   const tenant = data?.tenant; const plan = data?.plan;
   return (

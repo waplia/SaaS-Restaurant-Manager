@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useReports, useFoodCostReport, useCashVarianceHistory } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, type CompareBranchRow } from "@/lib/hooks";
+import { useBranchContext } from "@/lib/branch";
+import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -45,10 +47,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -109,11 +111,40 @@ export default function ReportsPage() {
     setFoodCostSort(p => p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
   }
 
-  const { data: reports, isLoading } = useReports(
+  const { hasMultipleBranches, isAllBranches, branches, selectedBranchId } = useBranchContext();
+  const { data: reports, isLoading } = useBranchAwareReports(
     useCustom && customFrom && customTo ? `custom|${customFrom}|${customTo}` : period,
     useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : undefined,
     viewMode,
   );
+  const [compareSort, setCompareSort] = useState<{ key: keyof CompareBranchRow; dir: "asc" | "desc" }>({ key: "revenue", dir: "desc" });
+  const { data: compareData, isLoading: compareLoading } = useCompareBranches(
+    useCustom && customFrom && customTo ? `custom|${customFrom}|${customTo}` : period,
+    useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : undefined,
+  );
+  const compareRows = (compareData?.branches ?? []).slice().sort((a, b) => {
+    const ka = a[compareSort.key];
+    const kb = b[compareSort.key];
+    const na = ka == null ? -Infinity : typeof ka === "number" ? ka : Number(ka);
+    const nb = kb == null ? -Infinity : typeof kb === "number" ? kb : Number(kb);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return compareSort.dir === "asc" ? na - nb : nb - na;
+    return compareSort.dir === "asc"
+      ? String(ka ?? "").localeCompare(String(kb ?? ""))
+      : String(kb ?? "").localeCompare(String(ka ?? ""));
+  });
+  function toggleCompareSort(key: keyof CompareBranchRow) {
+    setCompareSort(p => p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "name" ? "asc" : "desc" });
+  }
+  function handleExportCompareCSV() {
+    exportCSV(
+      `branch-comparison-${new Date().toISOString().slice(0, 10)}.csv`,
+      compareRows.map(r => [
+        r.name, r.city ?? "", r.revenue, String(r.orders), r.avgOrderValue, r.tax,
+        r.expenses ?? "", r.netProfit ?? "",
+      ]),
+      ["Branch", "City", "Revenue", "Orders", "Avg Order Value", "Tax", "Expenses", "Net Profit"],
+    );
+  }
 
   function handleExportCSV() {
     if (!reports) return;
@@ -395,18 +426,31 @@ export default function ReportsPage() {
     <Layout>
       <PageHeader
         title="Reports & Analytics"
-        subtitle="Performance insights for your restaurant"
+        subtitle={hasMultipleBranches && tab !== "compare"
+          ? (isAllBranches
+              ? `All ${branches.length} branches consolidated`
+              : `${branches.find(b => b.id === selectedBranchId)?.name ?? ""}`)
+          : "Performance insights for your restaurant"}
         actions={
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!reports}>
-              <Download className="w-4 h-4 mr-1.5" /> CSV
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleExportExcel} disabled={!reports}>
-              <Download className="w-4 h-4 mr-1.5" /> Excel
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleExportPDF} disabled={!reports}>
-              <Download className="w-4 h-4 mr-1.5" /> PDF
-            </Button>
+          <div className="flex items-center gap-2">
+            {hasMultipleBranches && tab !== "compare" && <BranchSwitcher />}
+            {tab === "compare" ? (
+              <Button size="sm" variant="outline" onClick={handleExportCompareCSV} disabled={compareRows.length === 0}>
+                <Download className="w-4 h-4 mr-1.5" /> CSV
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!reports}>
+                  <Download className="w-4 h-4 mr-1.5" /> CSV
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleExportExcel} disabled={!reports}>
+                  <Download className="w-4 h-4 mr-1.5" /> Excel
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleExportPDF} disabled={!reports}>
+                  <Download className="w-4 h-4 mr-1.5" /> PDF
+                </Button>
+              </>
+            )}
           </div>
         }
       />
@@ -526,6 +570,7 @@ export default function ReportsPage() {
         <div className="flex gap-1 border-b border-border">
           {([
             { label: "Sales", val: "sales" as Tab },
+            ...(hasMultipleBranches ? [{ label: "Compare Branches", val: "compare" as Tab }] : []),
             { label: "Tax", val: "tax" as Tab },
             { label: "Staff Performance", val: "staff" as Tab },
             { label: "Payments", val: "payments" as Tab },
@@ -643,6 +688,130 @@ export default function ReportsPage() {
                   </table>
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {tab === "compare" && (
+          <div className="space-y-6">
+            {!hasMultipleBranches ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center">
+                <p className="text-muted-foreground">
+                  Branch comparison is available once your account has more than one branch.
+                </p>
+              </div>
+            ) : compareLoading ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+                Loading comparison…
+              </div>
+            ) : compareRows.length === 0 ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+                No data for the selected period.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  {(() => {
+                    const totalRevenue = compareRows.reduce((s, r) => s + Number(r.revenue), 0);
+                    const totalOrders = compareRows.reduce((s, r) => s + r.orders, 0);
+                    const totalProfit = compareRows.reduce((s, r) => s + Number(r.netProfit ?? 0), 0);
+                    const top = compareRows.slice().sort((a, b) => Number(b.revenue) - Number(a.revenue))[0];
+                    return (
+                      <>
+                        <div className="bg-card border border-border rounded-xl p-4">
+                          <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
+                          <p className="text-2xl font-bold text-foreground">₹{totalRevenue.toLocaleString("en-IN")}</p>
+                        </div>
+                        <div className="bg-card border border-border rounded-xl p-4">
+                          <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
+                          <p className="text-2xl font-bold text-foreground">{totalOrders.toLocaleString("en-IN")}</p>
+                        </div>
+                        <div className="bg-card border border-border rounded-xl p-4">
+                          <p className="text-sm text-muted-foreground mb-1">Net Profit (all)</p>
+                          <p className={`text-2xl font-bold ${totalProfit >= 0 ? "text-foreground" : "text-rose-600"}`}>
+                            ₹{totalProfit.toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <div className="bg-card border border-border rounded-xl p-4">
+                          <p className="text-sm text-muted-foreground mb-1">Top Branch</p>
+                          <p className="text-lg font-semibold text-foreground truncate" title={top?.name}>{top?.name ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground">₹{Number(top?.revenue ?? 0).toLocaleString("en-IN")}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div className="bg-card border border-border rounded-xl p-5">
+                  <h3 className="font-semibold text-foreground mb-4">Revenue by Branch</h3>
+                  <ResponsiveContainer width="100%" height={Math.max(240, compareRows.length * 38)}>
+                    <BarChart data={compareRows.map(r => ({ name: r.name, revenue: Number(r.revenue), orders: r.orders }))}
+                      layout="vertical" margin={{ top: 0, right: 16, left: 80, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 6" stroke="hsl(var(--border))" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={120} />
+                      <Tooltip formatter={(v: number) => [`₹${Number(v).toLocaleString("en-IN")}`, "Revenue"]} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
+                        {compareRows.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground">Side-by-side comparison</h3>
+                    <span className="text-xs text-muted-foreground">{compareRows.length} branches</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          {([
+                            { k: "name" as const, label: "Branch", align: "text-left" },
+                            { k: "revenue" as const, label: "Revenue", align: "text-right" },
+                            { k: "orders" as const, label: "Orders", align: "text-right" },
+                            { k: "avgOrderValue" as const, label: "Avg Order", align: "text-right" },
+                            { k: "tax" as const, label: "Tax", align: "text-right" },
+                            { k: "expenses" as const, label: "Expenses", align: "text-right" },
+                            { k: "netProfit" as const, label: "Net Profit", align: "text-right" },
+                          ]).map(col => (
+                            <th key={col.k} className={`px-5 py-2.5 text-muted-foreground font-medium ${col.align}`}>
+                              <button onClick={() => toggleCompareSort(col.k)} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                                {col.label}
+                                <ArrowUpDown className={`w-3 h-3 ${compareSort.key === col.k ? "text-primary" : "opacity-40"}`} />
+                              </button>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {compareRows.map(r => {
+                          const np = r.netProfit == null ? null : Number(r.netProfit);
+                          return (
+                            <tr key={r.restaurantId} className="border-t border-border hover:bg-muted/20">
+                              <td className="px-5 py-2.5">
+                                <div className="font-medium text-foreground">{r.name}</div>
+                                {r.city && <div className="text-xs text-muted-foreground">{r.city}</div>}
+                              </td>
+                              <td className="px-5 py-2.5 text-right font-medium text-foreground tabular-nums">₹{Number(r.revenue).toLocaleString("en-IN")}</td>
+                              <td className="px-5 py-2.5 text-right text-foreground tabular-nums">{r.orders.toLocaleString("en-IN")}</td>
+                              <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">₹{Number(r.avgOrderValue).toFixed(2)}</td>
+                              <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">₹{Number(r.tax).toLocaleString("en-IN")}</td>
+                              <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">
+                                {r.expenses == null ? "—" : `₹${Number(r.expenses).toLocaleString("en-IN")}`}
+                              </td>
+                              <td className={`px-5 py-2.5 text-right font-semibold tabular-nums ${np == null ? "text-muted-foreground" : np >= 0 ? "text-green-600 dark:text-green-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                {np == null ? "—" : `₹${np.toLocaleString("en-IN")}`}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}

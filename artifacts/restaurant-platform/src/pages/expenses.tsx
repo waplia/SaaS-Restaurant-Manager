@@ -12,7 +12,7 @@ import {
   useExpenseSummary,
 } from "@/lib/hooks";
 import { apiPost, getApiUrl } from "@/lib/api";
-import { RESTAURANT_ID } from "@/lib/hooks";
+import { useRestaurantId } from "@/lib/hooks";
 import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage, ShoppingBag, Utensils, Zap, Wifi, Wrench, Truck, Building2, Sparkles, FileText, CreditCard, Package, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, RecurringExpense } from "@/lib/types";
@@ -53,9 +53,9 @@ function fmtDate(d: string) {
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function monthAgoStr() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
 
-async function uploadReceipt(file: File): Promise<string> {
+async function uploadReceipt(rid: number, file: File): Promise<string> {
   const presign = await apiPost<{ uploadURL: string; objectPath: string }>(
-    `/restaurants/${RESTAURANT_ID}/storage/uploads/request-url`,
+    `/restaurants/${rid}/storage/uploads/request-url`,
     { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
   );
   const put = await fetch(presign.uploadURL, {
@@ -64,20 +64,21 @@ async function uploadReceipt(file: File): Promise<string> {
     body: file,
   });
   if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-  await apiPost(`/restaurants/${RESTAURANT_ID}/storage/uploads/finalize`, { objectPath: presign.objectPath });
+  await apiPost(`/restaurants/${rid}/storage/uploads/finalize`, { objectPath: presign.objectPath });
   return presign.objectPath;
 }
 
-function receiptHref(objectPath: string | null | undefined): string | null {
+function receiptHref(rid: number, objectPath: string | null | undefined): string | null {
   if (!objectPath) return null;
   if (/^https?:\/\//.test(objectPath)) return objectPath;
   if (objectPath.startsWith("/objects/")) {
-    return getApiUrl(`/restaurants/${RESTAURANT_ID}/storage${objectPath}`);
+    return getApiUrl(`/restaurants/${rid}/storage${objectPath}`);
   }
   return objectPath;
 }
 
 function ExpensesTab() {
+  const rid = useRestaurantId();
   const { toast } = useToast();
   const [from, setFrom] = useState(monthAgoStr());
   const [to, setTo] = useState(todayStr());
@@ -331,7 +332,7 @@ function ExpensesTab() {
                     }
                     setUploading(true);
                     try {
-                      const objectPath = await uploadReceipt(file);
+                      const objectPath = await uploadReceipt(rid, file);
                       setForm(f => ({ ...f, receiptUrl: objectPath }));
                       toast({ title: "Receipt uploaded" });
                     } catch {
@@ -350,7 +351,7 @@ function ExpensesTab() {
                   </Button>
                   {form.receiptUrl && (
                     <>
-                      <a href={receiptHref(form.receiptUrl) ?? "#"} target="_blank" rel="noreferrer"
+                      <a href={receiptHref(rid, form.receiptUrl) ?? "#"} target="_blank" rel="noreferrer"
                         className="text-xs text-primary hover:underline inline-flex items-center gap-1">
                         <FileImage className="w-3.5 h-3.5" /> View
                       </a>

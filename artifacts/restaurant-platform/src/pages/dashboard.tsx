@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useDashboardSummary, useRevenueTrend, usePopularItems, useLiveKitchen, useStaffActivity, useRestaurantId } from "@/lib/hooks";
+import {
+  useLiveKitchen, useStaffActivity, useRestaurantId,
+  useBranchAwareDashboardSummary, useBranchAwareRevenueTrend, useBranchAwarePopularItems,
+} from "@/lib/hooks";
+import { useBranchContext } from "@/lib/branch";
+import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -78,23 +83,45 @@ export default function DashboardPage() {
   const [trendPeriod, setTrendPeriod] = useState("7d");
   const trendGroupBy = TREND_PERIODS.find(p => p.val === trendPeriod)?.groupBy ?? "daily";
 
-  const { data: summary } = useDashboardSummary();
-  const { data: trendData = [] } = useRevenueTrend(trendPeriod, trendGroupBy);
-  const { data: popularItems = [] } = usePopularItems(6);
+  const { isAllBranches, hasMultipleBranches, branches, selectedBranchId } = useBranchContext();
+  const { data: summary } = useBranchAwareDashboardSummary();
+  const { data: trendData = [] } = useBranchAwareRevenueTrend(trendPeriod, trendGroupBy);
+  const { data: popularItems = [] } = useBranchAwarePopularItems(6);
+  // Live kitchen + staff activity remain scoped to the user's primary
+  // restaurant — these are "what's happening right now" views that don't
+  // make sense rolled up.
   const { data: kitchenData } = useLiveKitchen();
   const { data: activityData = [] } = useStaffActivity();
 
-  const s = summary as DashboardSummary | undefined;
+  const s = summary as (DashboardSummary & { branchCount?: number }) | undefined;
+  const selectedBranchName = selectedBranchId == null
+    ? null
+    : branches.find(b => b.id === selectedBranchId)?.name ?? null;
+  const subtitle = hasMultipleBranches
+    ? isAllBranches
+      ? `${format(new Date(), "EEEE, MMMM d")} · All ${s?.branchCount ?? branches.length} branches consolidated`
+      : `${format(new Date(), "EEEE, MMMM d")} · ${selectedBranchName ?? ""}`
+    : `${format(new Date(), "EEEE, MMMM d")} · Live overview`;
 
   return (
     <Layout>
       <PageHeader
         title="Dashboard"
-        subtitle={`${format(new Date(), "EEEE, MMMM d")} · Live overview`}
+        subtitle={subtitle}
+        actions={hasMultipleBranches ? <BranchSwitcher /> : undefined}
       />
 
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {s?.todayLabourCost != null && (
+            <StatCard
+              title="Labour (today)"
+              value={`₹${Number(s.todayLabourCost).toLocaleString()}`}
+              subtitle={`${s.todayLabourHours ?? "0.0"} hours${isAllBranches ? " · all branches" : ""}`}
+              icon={Users}
+              color="purple"
+            />
+          )}
           <StatCard
             title="Today's Revenue"
             value={s ? `₹${Number(s.todayRevenue).toLocaleString()}` : "–"}

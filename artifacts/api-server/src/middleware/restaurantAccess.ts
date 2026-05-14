@@ -36,6 +36,19 @@ export async function validateRestaurantAccess(
       res.status(403).json({ error: "Access denied: cross-tenant request" });
       return;
     }
+    // Branch-scope enforcement: users whose JWT pins them to a specific
+    // restaurantId (e.g. branch managers / waiters / kitchen staff) may
+    // only access that branch. Tenant-wide owners have `restaurantId`
+    // null on their JWT and pass through, matching the consolidation
+    // logic in `branches.ts`.
+    if (
+      req.user!.restaurantId != null &&
+      req.user!.role !== "owner" &&
+      req.user!.restaurantId !== restaurantId
+    ) {
+      res.status(403).json({ error: "Access denied: out-of-scope branch" });
+      return;
+    }
   }
 
   next();

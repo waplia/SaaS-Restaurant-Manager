@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch } from "./api";
-import { RESTAURANT_ID } from "./hooks";
+import { useRestaurantId } from "./hooks";
 
 export interface DeliveryRider {
   id: number;
@@ -55,6 +55,7 @@ export interface CodHandover {
 }
 
 export function useDeliveryExecutives() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["delivery", "executives", RESTAURANT_ID],
     queryFn: () => apiGet<DeliveryRider[]>(`/restaurants/${RESTAURANT_ID}/delivery/executives`),
@@ -63,6 +64,7 @@ export function useDeliveryExecutives() {
 }
 
 export function useDeliveryAssignments(status?: string) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["delivery", "assignments", RESTAURANT_ID, status],
     queryFn: () => apiGet<DeliveryAssignment[]>(`/restaurants/${RESTAURANT_ID}/delivery/assignments${status ? `?status=${status}` : ""}`),
@@ -72,6 +74,7 @@ export function useDeliveryAssignments(status?: string) {
 
 export function useAssignRider() {
   const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: (data: { orderId: number; riderId: number; notes?: string }) =>
       apiPost<DeliveryAssignment>(`/restaurants/${RESTAURANT_ID}/delivery/assign`, data),
@@ -84,6 +87,7 @@ export function useAssignRider() {
 
 export function useUpdateAssignmentStatus() {
   const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: ({ id, status, codCollected }: { id: number; status: string; codCollected?: boolean }) =>
       apiPatch<DeliveryAssignment>(`/restaurants/${RESTAURANT_ID}/delivery/assignments/${id}/status`, { status, codCollected }),
@@ -95,6 +99,7 @@ export function useUpdateAssignmentStatus() {
 }
 
 export function useCodSummary() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["delivery", "cod-summary", RESTAURANT_ID],
     queryFn: () => apiGet<CodSummaryRow[]>(`/restaurants/${RESTAURANT_ID}/delivery/cod-summary`),
@@ -103,6 +108,7 @@ export function useCodSummary() {
 }
 
 export function useCodHandovers() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["delivery", "handovers", RESTAURANT_ID],
     queryFn: () => apiGet<CodHandover[]>(`/restaurants/${RESTAURANT_ID}/delivery/handovers`),
@@ -111,6 +117,7 @@ export function useCodHandovers() {
 
 export function useRecordCodHandover() {
   const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: (data: { riderId: number; amount: number; notes?: string }) =>
       apiPost<CodHandover>(`/restaurants/${RESTAURANT_ID}/delivery/handovers`, data),

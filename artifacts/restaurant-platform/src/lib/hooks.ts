@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from "./api";
+import { useBranchContext } from "./branch";
+import { useAuth } from "./auth";
 import { toast as notify } from "@/hooks/use-toast";
 import type {
   DashboardSummary, RevenueTrendItem, PopularItem, LiveKitchenData, AuditLogEntry,
@@ -26,13 +28,37 @@ import type {
   DuePaymentsData,
 } from "./types";
 
-export const RESTAURANT_ID = 1;
+// Legacy fallback only. Real code paths derive the effective restaurant id
+// from auth + branch context via `useRestaurantId()` below.
+const RESTAURANT_ID_FALLBACK = 1;
 
-export function useRestaurantId() {
-  return RESTAURANT_ID;
+/**
+ * Effective restaurant id for `/restaurants/:restaurantId/...` calls.
+ *
+ * Order of precedence:
+ *  1. The authenticated user's pinned restaurantId on their JWT (waiter,
+ *     kitchen, branch-scoped manager etc.) — backend will 403 anything
+ *     else, so this is the only correct value for these roles.
+ *  2. The branch the user has selected via the branch switcher.
+ *  3. The first branch the user can see (consolidating owners that have
+ *     not made a selection yet).
+ *  4. The legacy hardcoded id `1` as an absolute last resort so SSR /
+ *     pre-auth boot paths don't crash.
+ */
+export function useRestaurantId(): number {
+  const { user } = useAuth();
+  const { selectedBranchId, branches } = useBranchContext();
+  if (user?.restaurantId != null) return user.restaurantId;
+  if (selectedBranchId != null) return selectedBranchId;
+  if (branches.length > 0) return branches[0].id;
+  return RESTAURANT_ID_FALLBACK;
 }
 
+/** @deprecated Prefer `useRestaurantId()`. Kept for one-off non-hook callers. */
+export const RESTAURANT_ID = RESTAURANT_ID_FALLBACK;
+
 export function useDashboardSummary() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["dashboard", "summary", RESTAURANT_ID],
     queryFn: () => apiGet<DashboardSummary>(`/restaurants/${RESTAURANT_ID}/dashboard/summary`),
@@ -41,6 +67,7 @@ export function useDashboardSummary() {
 }
 
 export function useRevenueTrend(period = "7d", groupBy = "daily") {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["dashboard", "revenue-trend", RESTAURANT_ID, period, groupBy],
     queryFn: () => apiGet<RevenueTrendItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/revenue-trend?period=${period}&groupBy=${groupBy}`),
@@ -48,6 +75,7 @@ export function useRevenueTrend(period = "7d", groupBy = "daily") {
 }
 
 export function usePopularItems(limit = 8) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["dashboard", "popular-items", RESTAURANT_ID, limit],
     queryFn: () => apiGet<PopularItem[]>(`/restaurants/${RESTAURANT_ID}/dashboard/popular-items?limit=${limit}`),
@@ -55,6 +83,7 @@ export function usePopularItems(limit = 8) {
 }
 
 export function useLiveKitchen() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["dashboard", "live-kitchen", RESTAURANT_ID],
     queryFn: () => apiGet<LiveKitchenData>(`/restaurants/${RESTAURANT_ID}/dashboard/live-kitchen`),
@@ -63,6 +92,7 @@ export function useLiveKitchen() {
 }
 
 export function useStaffActivity() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["dashboard", "staff-activity", RESTAURANT_ID],
     queryFn: () => apiGet<AuditLogEntry[]>(`/restaurants/${RESTAURANT_ID}/dashboard/staff-activity`),
@@ -70,6 +100,7 @@ export function useStaffActivity() {
 }
 
 export function useOrders(params?: { status?: string; tableId?: number; page?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.tableId) q.set("tableId", String(params.tableId));
@@ -82,6 +113,7 @@ export function useOrders(params?: { status?: string; tableId?: number; page?: n
 }
 
 export function useCreateOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data),
@@ -90,6 +122,7 @@ export function useCreateOrder() {
 }
 
 export function useUpdateOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateOrderInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
@@ -98,6 +131,7 @@ export function useUpdateOrder() {
 }
 
 export function usePayOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: PayOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data),
@@ -129,6 +163,7 @@ export function useSaveSetting<T = Record<string, unknown>>(section: string) {
 }
 
 export function useRestaurantInfo() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["restaurant", RESTAURANT_ID],
     queryFn: () => apiGet<import("./types").RestaurantInfo & { autoReorderEnabled?: boolean; autoReorderCron?: string | null }>(`/restaurants/${RESTAURANT_ID}`),
@@ -137,6 +172,7 @@ export function useRestaurantInfo() {
 }
 
 export function useUpdateRestaurant() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => apiPatch(`/restaurants/${RESTAURANT_ID}`, data),
@@ -145,6 +181,7 @@ export function useUpdateRestaurant() {
 }
 
 export function useRunAutoReorder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost<import("./types").AutoReorderRunResult>(`/restaurants/${RESTAURANT_ID}/auto-reorder/run`, {}),
@@ -174,6 +211,7 @@ export function useItemModifierGroups(menuItemId?: number) {
 }
 
 export function useCreatePaymentIntent() {
+  const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
       apiPost<import("./types").PaymentIntentResult>(
@@ -184,6 +222,7 @@ export function useCreatePaymentIntent() {
 }
 
 export function useCreateRazorpayOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
       apiPost<import("./types").RazorpayOrderResult>(
@@ -194,6 +233,7 @@ export function useCreateRazorpayOrder() {
 }
 
 export function useSplitOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, splits }: {
@@ -217,6 +257,7 @@ export function useSplitOrder() {
 }
 
 export function useOrderDetail(id?: number) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["orders", "detail", RESTAURANT_ID, id],
     queryFn: () => apiGet<import("./types").OrderDetail>(`/restaurants/${RESTAURANT_ID}/orders/${id}`),
@@ -225,6 +266,7 @@ export function useOrderDetail(id?: number) {
 }
 
 export function useAddOrderItem() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, ...data }: import("./types").AddOrderItemInput) =>
@@ -237,6 +279,7 @@ export function useAddOrderItem() {
 }
 
 export function useRemoveOrderItem() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, itemId }: { orderId: number; itemId: number }) =>
@@ -249,6 +292,7 @@ export function useRemoveOrderItem() {
 }
 
 export function useApplyDiscountLine() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, ...body }: import("./types").ApplyDiscountLineInput) =>
@@ -261,6 +305,7 @@ export function useApplyDiscountLine() {
 }
 
 export function useRemoveDiscountLine() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, discountId }: { orderId: number; discountId: number }) =>
@@ -273,6 +318,7 @@ export function useRemoveDiscountLine() {
 }
 
 export function useDiscountsConfig() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["settings", "discounts", RESTAURANT_ID],
     queryFn: async () => {
@@ -284,6 +330,7 @@ export function useDiscountsConfig() {
 }
 
 export function useVoidOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (orderId: number) =>
@@ -296,6 +343,7 @@ export function useVoidOrder() {
 }
 
 export function useKitchenTickets(statusOrParams?: string | { status?: string; kitchenId?: number | null }) {
+  const RESTAURANT_ID = useRestaurantId();
   const params = typeof statusOrParams === "string" ? { status: statusOrParams } : (statusOrParams ?? {});
   const qs = new URLSearchParams();
   if (params.status) qs.set("status", params.status);
@@ -309,6 +357,7 @@ export function useKitchenTickets(statusOrParams?: string | { status?: string; k
 }
 
 export function useKitchens() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["kitchens", RESTAURANT_ID],
     queryFn: () => apiGet<import("./types").Kitchen[]>(`/restaurants/${RESTAURANT_ID}/kitchens`),
@@ -317,6 +366,7 @@ export function useKitchens() {
 }
 
 export function useCreateKitchen() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").CreateKitchenInput) =>
@@ -326,6 +376,7 @@ export function useCreateKitchen() {
 }
 
 export function useUpdateKitchen() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: import("./types").UpdateKitchenInput) =>
@@ -335,6 +386,7 @@ export function useUpdateKitchen() {
 }
 
 export function useDeleteKitchen() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/kitchens/${id}`),
@@ -346,6 +398,7 @@ export function useDeleteKitchen() {
 }
 
 export function useReorderKitchens() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (order: number[]) => apiPost(`/restaurants/${RESTAURANT_ID}/kitchens/reorder`, { order }),
@@ -354,6 +407,7 @@ export function useReorderKitchens() {
 }
 
 export function useBulkAssignKitchen() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ itemIds, kitchenId }: { itemIds: number[]; kitchenId: number | null }) =>
@@ -363,6 +417,7 @@ export function useBulkAssignKitchen() {
 }
 
 export function useUpdateTicketStatus() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, { status }),
@@ -377,6 +432,7 @@ export function useUpdateTicketStatus() {
 }
 
 export function useFloorTables() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["tables", RESTAURANT_ID],
     queryFn: () => apiGet<FloorTable[]>(`/restaurants/${RESTAURANT_ID}/tables`),
@@ -385,6 +441,7 @@ export function useFloorTables() {
 }
 
 export function useCreateTable() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateTableInput) => apiPost(`/restaurants/${RESTAURANT_ID}/tables`, data),
@@ -393,6 +450,7 @@ export function useCreateTable() {
 }
 
 export function useUpdateTable() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateTableInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data),
@@ -401,6 +459,7 @@ export function useUpdateTable() {
 }
 
 export function useGetTableQr(tableId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["table-qr", RESTAURANT_ID, tableId],
     queryFn: () => apiGet<{ qrUrl: string; tableNumber: string }>(`/restaurants/${RESTAURANT_ID}/tables/${tableId}/qr`),
@@ -410,6 +469,7 @@ export function useGetTableQr(tableId: number | null) {
 }
 
 export function useMenus() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["menus", RESTAURANT_ID],
     queryFn: () => apiGet<Menu[]>(`/restaurants/${RESTAURANT_ID}/menus`),
@@ -417,6 +477,7 @@ export function useMenus() {
 }
 
 export function useMenuCategories(menuId?: number) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = menuId ? `?menuId=${menuId}` : "";
   return useQuery({
     queryKey: ["categories", RESTAURANT_ID, menuId],
@@ -425,6 +486,7 @@ export function useMenuCategories(menuId?: number) {
 }
 
 export function useMenuItems(params?: { categoryId?: number; search?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.categoryId) q.set("categoryId", String(params.categoryId));
   if (params?.search) q.set("search", params.search);
@@ -435,6 +497,7 @@ export function useMenuItems(params?: { categoryId?: number; search?: string }) 
 }
 
 export function useCreateMenuItem() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateMenuItemInput) => apiPost(`/restaurants/${RESTAURANT_ID}/items`, data),
@@ -443,6 +506,7 @@ export function useCreateMenuItem() {
 }
 
 export function useUpdateMenuItem() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateMenuItemInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/items/${id}`, data),
@@ -451,6 +515,7 @@ export function useUpdateMenuItem() {
 }
 
 export function useDeleteMenuItem() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/items/${id}`),
@@ -458,33 +523,50 @@ export function useDeleteMenuItem() {
   });
 }
 
+function useInventoryRestaurantId() {
+  // Same precedence as `useRestaurantId()`: a user pinned to a branch on
+  // their JWT must never bypass scope, even if `selectedBranchId` is
+  // somehow set; consolidating users may pick any accessible branch via
+  // the switcher. Fall back to `useRestaurantId()` (auth + branch ctx)
+  // rather than the legacy `RESTAURANT_ID = 1` constant.
+  const { user } = useAuth();
+  const { selectedBranchId } = useBranchContext();
+  const effective = useRestaurantId();
+  if (user?.restaurantId != null) return user.restaurantId;
+  return selectedBranchId ?? effective;
+}
+
 export function useInventory(params?: { lowStock?: boolean; search?: string }) {
+  const rid = useInventoryRestaurantId();
   const q = new URLSearchParams();
   if (params?.lowStock) q.set("lowStock", "true");
   if (params?.search) q.set("search", params.search);
   return useQuery({
-    queryKey: ["inventory", RESTAURANT_ID, params],
-    queryFn: () => apiGet<InventoryItem[]>(`/restaurants/${RESTAURANT_ID}/inventory?${q}`),
+    queryKey: ["inventory", rid, params],
+    queryFn: () => apiGet<InventoryItem[]>(`/restaurants/${rid}/inventory?${q}`),
   });
 }
 
 export function useCreateInventoryItem() {
   const qc = useQueryClient();
+  const rid = useInventoryRestaurantId();
   return useMutation({
-    mutationFn: (data: CreateInventoryItemInput) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory`, data),
+    mutationFn: (data: CreateInventoryItemInput) => apiPost(`/restaurants/${rid}/inventory`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
 
 export function useAdjustInventory() {
   const qc = useQueryClient();
+  const rid = useInventoryRestaurantId();
   return useMutation({
-    mutationFn: ({ id, ...data }: AdjustInventoryInput) => apiPost(`/restaurants/${RESTAURANT_ID}/inventory/${id}/adjust`, data),
+    mutationFn: ({ id, ...data }: AdjustInventoryInput) => apiPost(`/restaurants/${rid}/inventory/${id}/adjust`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
 
 export function useStaff(role?: string) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = role ? `?role=${role}` : "";
   return useQuery({
     queryKey: ["staff", RESTAURANT_ID, role],
@@ -553,6 +635,7 @@ export function useCreateUser() {
 }
 
 export function useCustomers(params?: { search?: string; page?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.page) q.set("page", String(params.page));
@@ -563,6 +646,7 @@ export function useCustomers(params?: { search?: string; page?: number }) {
 }
 
 export function useCreateCustomer() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCustomerInput) => apiPost(`/restaurants/${RESTAURANT_ID}/customers`, data),
@@ -571,6 +655,7 @@ export function useCreateCustomer() {
 }
 
 export function useReservations(params?: { date?: string; status?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.date) q.set("date", params.date);
   if (params?.status) q.set("status", params.status);
@@ -582,6 +667,7 @@ export function useReservations(params?: { date?: string; status?: string }) {
 }
 
 export function useCreateReservation() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateReservationInput) => apiPost(`/restaurants/${RESTAURANT_ID}/reservations`, data),
@@ -590,6 +676,7 @@ export function useCreateReservation() {
 }
 
 export function useUpdateReservation() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateReservationInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/reservations/${id}`, data),
@@ -598,6 +685,7 @@ export function useUpdateReservation() {
 }
 
 export function useDeleteReservation() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/reservations/${id}`),
@@ -606,6 +694,7 @@ export function useDeleteReservation() {
 }
 
 export function useUpdateTicketPriority() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/priority`, {}),
@@ -614,6 +703,7 @@ export function useUpdateTicketPriority() {
 }
 
 export function useMergeTables() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sourceTableId, targetTableId }: { sourceTableId: number; targetTableId: number }) =>
@@ -623,6 +713,7 @@ export function useMergeTables() {
 }
 
 export function useSplitOrderToTable() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, targetTableId, itemIds }: { orderId: number; targetTableId: number; itemIds: number[] }) =>
@@ -634,6 +725,7 @@ export function useSplitOrderToTable() {
 export { type Reservation };
 
 export function useSuppliers() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["suppliers", RESTAURANT_ID],
     queryFn: () => apiGet<Supplier[]>(`/restaurants/${RESTAURANT_ID}/suppliers`),
@@ -641,6 +733,7 @@ export function useSuppliers() {
 }
 
 export function useWaiterRequests(opts?: { enabled?: boolean }) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["waiter-requests", RESTAURANT_ID],
     queryFn: () => apiGet<WaiterRequest[]>(`/restaurants/${RESTAURANT_ID}/waiter-requests`),
@@ -650,6 +743,7 @@ export function useWaiterRequests(opts?: { enabled?: boolean }) {
 }
 
 export function useAcknowledgeWaiterRequest() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/waiter-requests/${id}/acknowledge`, {}),
@@ -658,6 +752,7 @@ export function useAcknowledgeWaiterRequest() {
 }
 
 export function useResolveWaiterRequest() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/waiter-requests/${id}/resolve`, {}),
@@ -666,6 +761,7 @@ export function useResolveWaiterRequest() {
 }
 
 export function useNotifications() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["notifications", RESTAURANT_ID],
     queryFn: () => apiGet<AppNotification[]>(`/restaurants/${RESTAURANT_ID}/notifications`),
@@ -674,6 +770,7 @@ export function useNotifications() {
 }
 
 export function useReports(period = "7d", custom?: { from: string; to: string }, groupBy = "daily") {
+  const RESTAURANT_ID = useRestaurantId();
   const q = custom
     ? `from=${custom.from}&to=${custom.to}&groupBy=${groupBy}`
     : `period=${period}&groupBy=${groupBy}`;
@@ -684,6 +781,7 @@ export function useReports(period = "7d", custom?: { from: string; to: string },
 }
 
 export function useCreateMenu() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateMenuInput) => apiPost<Menu>(`/restaurants/${RESTAURANT_ID}/menus`, data),
@@ -692,6 +790,7 @@ export function useCreateMenu() {
 }
 
 export function useUpdateMenu() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateMenuInput) => apiPatch<Menu>(`/restaurants/${RESTAURANT_ID}/menus/${id}`, data),
@@ -700,6 +799,7 @@ export function useUpdateMenu() {
 }
 
 export function useDeleteMenu() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/menus/${id}`),
@@ -708,6 +808,7 @@ export function useDeleteMenu() {
 }
 
 export function useCreateCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCategoryInput) => apiPost<MenuCategory>(`/restaurants/${RESTAURANT_ID}/categories`, data),
@@ -716,6 +817,7 @@ export function useCreateCategory() {
 }
 
 export function useUpdateCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateCategoryInput) => apiPatch<MenuCategory>(`/restaurants/${RESTAURANT_ID}/categories/${id}`, data),
@@ -724,6 +826,7 @@ export function useUpdateCategory() {
 }
 
 export function useDeleteCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/categories/${id}`),
@@ -764,6 +867,7 @@ export function useCreateModifier(groupId: number) {
 }
 
 export function useShifts() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["shifts", RESTAURANT_ID],
     queryFn: () => apiGet<Shift[]>(`/restaurants/${RESTAURANT_ID}/shifts`),
@@ -771,6 +875,7 @@ export function useShifts() {
 }
 
 export function useCreateShift() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateShiftInput) => apiPost<Shift>(`/restaurants/${RESTAURANT_ID}/shifts`, data),
@@ -779,6 +884,7 @@ export function useCreateShift() {
 }
 
 export function useUpdateShift() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: Partial<CreateShiftInput> & { id: number }) => apiPatch<Shift>(`/restaurants/${RESTAURANT_ID}/shifts/${id}`, data),
@@ -787,6 +893,7 @@ export function useUpdateShift() {
 }
 
 export function useDeleteShift() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/shifts/${id}`),
@@ -795,6 +902,7 @@ export function useDeleteShift() {
 }
 
 export function useStaffShifts(userId?: number) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = userId ? `?userId=${userId}` : "";
   return useQuery({
     queryKey: ["staff-shifts", RESTAURANT_ID, userId],
@@ -803,6 +911,7 @@ export function useStaffShifts(userId?: number) {
 }
 
 export function useCreateStaffShift() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateStaffShiftInput) => apiPost<StaffShift>(`/restaurants/${RESTAURANT_ID}/staff-shifts`, data),
@@ -811,6 +920,7 @@ export function useCreateStaffShift() {
 }
 
 export function useAttendance(userId?: number) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = userId ? `?userId=${userId}` : "";
   return useQuery({
     queryKey: ["attendance", RESTAURANT_ID, userId],
@@ -819,6 +929,7 @@ export function useAttendance(userId?: number) {
 }
 
 export function useClockIn() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: ClockInInput) => apiPost<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance`, data),
@@ -827,6 +938,7 @@ export function useClockIn() {
 }
 
 export function useClockOut() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, notes }: { id: number; notes?: string }) => apiPatch<AttendanceRecord>(`/restaurants/${RESTAURANT_ID}/attendance/${id}/clock-out`, { notes }),
@@ -835,6 +947,7 @@ export function useClockOut() {
 }
 
 export function useAuditLogs(params?: { userId?: number; action?: string; page?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.userId) q.set("userId", String(params.userId));
   if (params?.action) q.set("action", params.action);
@@ -923,29 +1036,33 @@ export function useRemoveRolePermission() {
 
 export function useUpdateInventoryItem() {
   const qc = useQueryClient();
+  const rid = useInventoryRestaurantId();
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateInventoryItemInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/inventory/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateInventoryItemInput) => apiPatch(`/restaurants/${rid}/inventory/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
 
 export function useDeleteInventoryItem() {
   const qc = useQueryClient();
+  const rid = useInventoryRestaurantId();
   return useMutation({
-    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/inventory/${id}`),
+    mutationFn: (id: number) => apiDelete(`/restaurants/${rid}/inventory/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory"] }),
   });
 }
 
 export function useInventoryTransactions(itemId: number | null) {
+  const rid = useInventoryRestaurantId();
   return useQuery({
-    queryKey: ["inventory", "transactions", RESTAURANT_ID, itemId],
-    queryFn: () => apiGet<InventoryTransaction[]>(`/restaurants/${RESTAURANT_ID}/inventory/${itemId}/transactions`),
+    queryKey: ["inventory", "transactions", rid, itemId],
+    queryFn: () => apiGet<InventoryTransaction[]>(`/restaurants/${rid}/inventory/${itemId}/transactions`),
     enabled: itemId !== null,
   });
 }
 
 export function useCreateSupplier() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateSupplierInput) => apiPost(`/restaurants/${RESTAURANT_ID}/suppliers`, data),
@@ -954,6 +1071,7 @@ export function useCreateSupplier() {
 }
 
 export function useUpdateSupplier() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateSupplierInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/suppliers/${id}`, data),
@@ -962,6 +1080,7 @@ export function useUpdateSupplier() {
 }
 
 export function useDeleteSupplier() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/suppliers/${id}`),
@@ -970,6 +1089,7 @@ export function useDeleteSupplier() {
 }
 
 export function usePurchaseOrders() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["purchase-orders", RESTAURANT_ID],
     queryFn: () => apiGet<PurchaseOrder[]>(`/restaurants/${RESTAURANT_ID}/purchase-orders`),
@@ -977,6 +1097,7 @@ export function usePurchaseOrders() {
 }
 
 export function useCreatePurchaseOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreatePurchaseOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/purchase-orders`, data),
@@ -985,6 +1106,7 @@ export function useCreatePurchaseOrder() {
 }
 
 export function useUpdatePurchaseOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: { id: number; status?: string; notes?: string; totalAmount?: string }) =>
@@ -994,6 +1116,7 @@ export function useUpdatePurchaseOrder() {
 }
 
 export function useUpdatePurchaseOrderItems() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, items }: { id: number; items: Array<{ inventoryItemId?: number | null; name: string; unit: string; quantity: string; costPerUnit: string }> }) =>
@@ -1003,6 +1126,7 @@ export function useUpdatePurchaseOrderItems() {
 }
 
 export function useDeletePurchaseOrder() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}`),
@@ -1011,6 +1135,7 @@ export function useDeletePurchaseOrder() {
 }
 
 export function useCustomer(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["customers", RESTAURANT_ID, id],
     queryFn: () => apiGet<Customer>(`/restaurants/${RESTAURANT_ID}/customers/${id}`),
@@ -1019,6 +1144,7 @@ export function useCustomer(id: number | null) {
 }
 
 export function useUpdateCustomer() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateCustomerInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/customers/${id}`, data),
@@ -1027,6 +1153,7 @@ export function useUpdateCustomer() {
 }
 
 export function useCustomerLoyalty(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["customers", "loyalty", RESTAURANT_ID, customerId],
     queryFn: () => apiGet<LoyaltyAccount>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/loyalty`),
@@ -1035,6 +1162,7 @@ export function useCustomerLoyalty(customerId: number | null) {
 }
 
 export function useAddLoyaltyPoints() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ customerId, ...data }: { customerId: number; points: number; type: string; reason?: string }) =>
@@ -1047,6 +1175,7 @@ export function useAddLoyaltyPoints() {
 }
 
 export function useCoupons() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["coupons", RESTAURANT_ID],
     queryFn: () => apiGet<Coupon[]>(`/restaurants/${RESTAURANT_ID}/coupons`),
@@ -1054,6 +1183,7 @@ export function useCoupons() {
 }
 
 export function useCreateCoupon() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCouponInput) => apiPost(`/restaurants/${RESTAURANT_ID}/coupons`, data),
@@ -1062,6 +1192,7 @@ export function useCreateCoupon() {
 }
 
 export function useUpdateCoupon() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateCouponInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/coupons/${id}`, data),
@@ -1070,6 +1201,7 @@ export function useUpdateCoupon() {
 }
 
 export function useDeleteCoupon() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/coupons/${id}`),
@@ -1078,6 +1210,7 @@ export function useDeleteCoupon() {
 }
 
 export function useCustomerOrders(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["orders", "customer", RESTAURANT_ID, customerId],
     queryFn: () => apiGet<{ data: import("./types").Order[]; total: number }>(`/restaurants/${RESTAURANT_ID}/orders?customerId=${customerId}&limit=20`),
@@ -1086,6 +1219,7 @@ export function useCustomerOrders(customerId: number | null) {
 }
 
 export function useWasteLog() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["inventory", "waste-log", RESTAURANT_ID],
     queryFn: () => apiGet<(import("./types").InventoryTransaction & { itemName: string; unit: string })[]>(`/restaurants/${RESTAURANT_ID}/inventory/waste-log`),
@@ -1093,6 +1227,7 @@ export function useWasteLog() {
 }
 
 export function useRecipeMappings(params?: { menuItemId?: number; inventoryItemId?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.menuItemId) q.set("menuItemId", String(params.menuItemId));
   if (params?.inventoryItemId) q.set("inventoryItemId", String(params.inventoryItemId));
@@ -1103,6 +1238,7 @@ export function useRecipeMappings(params?: { menuItemId?: number; inventoryItemI
 }
 
 export function useCreateRecipeMapping() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").CreateRecipeMappingInput) => apiPost(`/restaurants/${RESTAURANT_ID}/recipe-mappings`, data),
@@ -1114,6 +1250,7 @@ export function useCreateRecipeMapping() {
 }
 
 export function useDeleteRecipeMapping() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recipe-mappings/${id}`),
@@ -1125,6 +1262,7 @@ export function useDeleteRecipeMapping() {
 }
 
 export function useUpdateRecipeMapping() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: import("./types").UpdateRecipeMappingInput) =>
@@ -1137,6 +1275,7 @@ export function useUpdateRecipeMapping() {
 }
 
 export function useFoodCostReport(threshold: number = 65) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["food-cost", RESTAURANT_ID, threshold],
     queryFn: () => apiGet<import("./types").FoodCostReport>(`/restaurants/${RESTAURANT_ID}/food-cost?threshold=${threshold}`),
@@ -1144,6 +1283,7 @@ export function useFoodCostReport(threshold: number = 65) {
 }
 
 export function useCustomerAddresses(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["customer-addresses", customerId],
     queryFn: () => apiGet<import("./types").CustomerAddress[]>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/addresses`),
@@ -1152,6 +1292,7 @@ export function useCustomerAddresses(customerId: number | null) {
 }
 
 export function useCreateCustomerAddress() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ customerId, address, label, isDefault }: { customerId: number; address: string; label?: string; isDefault?: boolean }) =>
@@ -1162,6 +1303,7 @@ export function useCreateCustomerAddress() {
 }
 
 export function useDeleteCustomerAddress() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ customerId, addressId }: { customerId: number; addressId: number }) =>
@@ -1172,6 +1314,7 @@ export function useDeleteCustomerAddress() {
 }
 
 export function useApplyCoupon() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, code }: { orderId: number; code: string }) =>
@@ -1181,6 +1324,7 @@ export function useApplyCoupon() {
 }
 
 export function useApplyLoyalty() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, points }: { orderId: number; points: number }) =>
@@ -1193,6 +1337,7 @@ export function useApplyLoyalty() {
 }
 
 export function useCustomerByPhone(phone: string | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["customers", "phone", RESTAURANT_ID, phone],
     queryFn: () => apiGet<{ data: import("./types").Customer[]; total: number }>(`/restaurants/${RESTAURANT_ID}/customers?search=${encodeURIComponent(phone!)}`),
@@ -1202,6 +1347,7 @@ export function useCustomerByPhone(phone: string | null) {
 }
 
 export function useMarkAllNotificationsRead() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
@@ -1242,6 +1388,7 @@ export { type InventoryItem, type Customer, type Coupon, type LoyaltyTransaction
 export { type Supplier, type PurchaseOrder, type InventoryTransaction };
 
 export function useExpenseCategories() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["expense-categories", RESTAURANT_ID],
     queryFn: () => apiGet<import("./types").ExpenseCategory[]>(`/restaurants/${RESTAURANT_ID}/expense-categories`),
@@ -1249,6 +1396,7 @@ export function useExpenseCategories() {
 }
 
 export function useCreateExpenseCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: { name: string; color?: string; icon?: string }) =>
@@ -1258,6 +1406,7 @@ export function useCreateExpenseCategory() {
 }
 
 export function useUpdateExpenseCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: { id: number; name?: string; color?: string; icon?: string; isActive?: boolean }) =>
@@ -1267,6 +1416,7 @@ export function useUpdateExpenseCategory() {
 }
 
 export function useDeleteExpenseCategory() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/expense-categories/${id}`),
@@ -1275,6 +1425,7 @@ export function useDeleteExpenseCategory() {
 }
 
 export function useExpenses(params?: { from?: string; to?: string; categoryId?: number; search?: string; page?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1288,6 +1439,7 @@ export function useExpenses(params?: { from?: string; to?: string; categoryId?: 
 }
 
 export function useCreateExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").CreateExpenseInput) =>
@@ -1302,6 +1454,7 @@ export function useCreateExpense() {
 }
 
 export function useUpdateExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: Partial<import("./types").CreateExpenseInput> & { id: number }) =>
@@ -1316,6 +1469,7 @@ export function useUpdateExpense() {
 }
 
 export function useDeleteExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/expenses/${id}`),
@@ -1332,6 +1486,7 @@ export function useDeleteExpense() {
 // ===================== Cash Register =====================
 
 export function useCurrentCashRegister() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["cash-register", "current", RESTAURANT_ID],
     queryFn: () => apiGet<import("./types").CashRegisterCurrent>(`/restaurants/${RESTAURANT_ID}/cash-register/current`),
@@ -1340,6 +1495,7 @@ export function useCurrentCashRegister() {
 }
 
 export function useCashRegisterSessions(params?: { from?: string; to?: string; status?: string; page?: number; pageSize?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1353,6 +1509,7 @@ export function useCashRegisterSessions(params?: { from?: string; to?: string; s
 }
 
 export function useCashRegisterSession(sessionId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["cash-register", "session", RESTAURANT_ID, sessionId],
     queryFn: () => apiGet<import("./types").CashRegisterSessionDetail>(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}`),
@@ -1361,6 +1518,7 @@ export function useCashRegisterSession(sessionId: number | null) {
 }
 
 export function useOpenCashRegister() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").OpenRegisterInput) =>
@@ -1372,6 +1530,7 @@ export function useOpenCashRegister() {
 }
 
 export function useCloseCashRegister() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, ...data }: import("./types").CloseRegisterInput & { sessionId: number }) =>
@@ -1383,6 +1542,7 @@ export function useCloseCashRegister() {
 }
 
 export function useRecordCashMovement() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, ...data }: import("./types").CashMovementInput & { sessionId: number }) =>
@@ -1394,6 +1554,7 @@ export function useRecordCashMovement() {
 }
 
 export function useCashVarianceHistory(params?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1404,6 +1565,7 @@ export function useCashVarianceHistory(params?: { from?: string; to?: string }) 
 }
 
 export function useCashRegisterReport(sessionId: number | null, kind: "x" | "z") {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["cash-register", "report", RESTAURANT_ID, sessionId, kind],
     queryFn: () => apiGet<import("./types").CashRegisterReport>(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/${sessionId}/${kind}-report`),
@@ -1412,6 +1574,7 @@ export function useCashRegisterReport(sessionId: number | null, kind: "x" | "z")
 }
 
 export function useExpenseSummary(params?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1422,6 +1585,7 @@ export function useExpenseSummary(params?: { from?: string; to?: string }) {
 }
 
 export function useRecurringExpenses() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["recurring-expenses", RESTAURANT_ID],
     queryFn: () => apiGet<import("./types").RecurringExpense[]>(`/restaurants/${RESTAURANT_ID}/recurring-expenses`),
@@ -1429,6 +1593,7 @@ export function useRecurringExpenses() {
 }
 
 export function useCreateRecurringExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: import("./types").CreateRecurringExpenseInput) =>
@@ -1441,6 +1606,7 @@ export function useCreateRecurringExpense() {
 }
 
 export function useUpdateRecurringExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: Partial<import("./types").CreateRecurringExpenseInput> & { id: number; isActive?: boolean }) =>
@@ -1450,6 +1616,7 @@ export function useUpdateRecurringExpense() {
 }
 
 export function useDeleteRecurringExpense() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/recurring-expenses/${id}`),
@@ -1461,6 +1628,7 @@ export function usePayments(params?: {
   from?: string; to?: string; method?: string; direction?: string;
   partyType?: string; page?: number; pageSize?: number;
 }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1476,6 +1644,7 @@ export function usePayments(params?: {
 }
 
 export function usePaymentSummary(params?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
@@ -1486,6 +1655,7 @@ export function usePaymentSummary(params?: { from?: string; to?: string }) {
 }
 
 export function useCreatePayment() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreatePaymentInput) => apiPost<Payment>(`/restaurants/${RESTAURANT_ID}/payments`, data),
@@ -1498,6 +1668,7 @@ export function useCreatePayment() {
 }
 
 export function useSettlePayment() {
+  const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: SettlePaymentInput) => apiPost<Payment>(`/restaurants/${RESTAURANT_ID}/payments/settle`, data),
@@ -1511,9 +1682,128 @@ export function useSettlePayment() {
 }
 
 export function useDuePayments() {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["due-payments", RESTAURANT_ID],
     queryFn: () => apiGet<DuePaymentsData>(`/restaurants/${RESTAURANT_ID}/due-payments`),
     refetchInterval: 30000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Multi-branch consolidated dashboard hooks.
+//
+// When the branch switcher is on "All branches" these hooks hit the
+// tenant-level endpoints; when a specific branch is selected they fall back
+// to the existing per-restaurant endpoints.
+// ---------------------------------------------------------------------------
+
+export interface CompareBranchRow {
+  restaurantId: number;
+  name: string;
+  city: string | null;
+  revenue: string;
+  orders: number;
+  tax: string;
+  avgOrderValue: string;
+  expenses: string | null;
+  netProfit: string | null;
+}
+
+export interface AggregateInventoryItem {
+  key: string;
+  name: string;
+  unit: string;
+  category: string;
+  totalStock: string;
+  totalMin: string;
+  branchCount: number;
+  lowStockBranches: number;
+  isLowStock: boolean;
+  branches: {
+    restaurantId: number;
+    restaurantName: string;
+    currentStock: string;
+    minStockLevel: string;
+    isLowStock: boolean;
+  }[];
+}
+
+export function useBranchAwareDashboardSummary() {
+  const RESTAURANT_ID = useRestaurantId();
+  const { tenantId, selectedBranchId, isAllBranches } = useBranchContext();
+  const branchId = selectedBranchId ?? RESTAURANT_ID;
+  return useQuery({
+    queryKey: ["dashboard", "summary", { tenantId, selectedBranchId }],
+    queryFn: () =>
+      isAllBranches && tenantId != null
+        ? apiGet<DashboardSummary>(`/tenants/${tenantId}/dashboard/summary?branchId=all`)
+        : apiGet<DashboardSummary>(`/restaurants/${branchId}/dashboard/summary`),
+    refetchInterval: 30000,
+    enabled: tenantId != null || !isAllBranches,
+  });
+}
+
+export function useBranchAwareRevenueTrend(period = "7d", groupBy = "daily") {
+  const RESTAURANT_ID = useRestaurantId();
+  const { tenantId, selectedBranchId, isAllBranches } = useBranchContext();
+  const branchId = selectedBranchId ?? RESTAURANT_ID;
+  return useQuery({
+    queryKey: ["dashboard", "revenue-trend", { tenantId, selectedBranchId, period, groupBy }],
+    queryFn: () =>
+      isAllBranches && tenantId != null
+        ? apiGet<RevenueTrendItem[]>(`/tenants/${tenantId}/dashboard/revenue-trend?branchId=all&period=${period}&groupBy=${groupBy}`)
+        : apiGet<RevenueTrendItem[]>(`/restaurants/${branchId}/dashboard/revenue-trend?period=${period}&groupBy=${groupBy}`),
+    enabled: tenantId != null || !isAllBranches,
+  });
+}
+
+export function useBranchAwarePopularItems(limit = 8) {
+  const RESTAURANT_ID = useRestaurantId();
+  const { tenantId, selectedBranchId, isAllBranches } = useBranchContext();
+  const branchId = selectedBranchId ?? RESTAURANT_ID;
+  return useQuery({
+    queryKey: ["dashboard", "popular-items", { tenantId, selectedBranchId, limit }],
+    queryFn: () =>
+      isAllBranches && tenantId != null
+        ? apiGet<PopularItem[]>(`/tenants/${tenantId}/dashboard/popular-items?branchId=all&limit=${limit}`)
+        : apiGet<PopularItem[]>(`/restaurants/${branchId}/dashboard/popular-items?limit=${limit}`),
+    enabled: tenantId != null || !isAllBranches,
+  });
+}
+
+export function useBranchAwareReports(period = "7d", custom?: { from: string; to: string }, groupBy = "daily") {
+  const RESTAURANT_ID = useRestaurantId();
+  const { tenantId, selectedBranchId, isAllBranches } = useBranchContext();
+  const branchId = selectedBranchId ?? RESTAURANT_ID;
+  const qs = custom
+    ? `from=${custom.from}&to=${custom.to}&groupBy=${groupBy}`
+    : `period=${period}&groupBy=${groupBy}`;
+  return useQuery({
+    queryKey: ["reports", { tenantId, selectedBranchId, period, custom, groupBy }],
+    queryFn: () =>
+      isAllBranches && tenantId != null
+        ? apiGet<ReportsData>(`/tenants/${tenantId}/dashboard/reports?branchId=all&${qs}`)
+        : apiGet<ReportsData>(`/restaurants/${branchId}/dashboard/reports?${qs}`),
+    enabled: tenantId != null || !isAllBranches,
+  });
+}
+
+export function useCompareBranches(period = "30d", custom?: { from: string; to: string }) {
+  const { tenantId, canConsolidate, hasMultipleBranches } = useBranchContext();
+  const qs = custom ? `from=${custom.from}&to=${custom.to}` : `period=${period}`;
+  return useQuery({
+    queryKey: ["compare-branches", tenantId, period, custom],
+    queryFn: () => apiGet<{ branches: CompareBranchRow[] }>(`/tenants/${tenantId}/dashboard/compare-branches?${qs}`),
+    enabled: tenantId != null && canConsolidate && hasMultipleBranches,
+  });
+}
+
+export function useAggregateInventory() {
+  const { tenantId, canConsolidate, hasMultipleBranches } = useBranchContext();
+  return useQuery({
+    queryKey: ["inventory", "aggregate", tenantId],
+    queryFn: () => apiGet<AggregateInventoryItem[]>(`/tenants/${tenantId}/inventory/aggregate`),
+    enabled: tenantId != null && canConsolidate && hasMultipleBranches,
   });
 }

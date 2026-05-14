@@ -1,13 +1,12 @@
 import { useRef, useState } from "react";
 import { apiPost } from "@/lib/api";
-import { useSetting } from "@/lib/hooks";
+import { useSetting, useRestaurantId } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, Link as LinkIcon, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const RESTAURANT_ID = 1;
 
 interface MenuImageCfg {
   aspectRatio?: string;
@@ -85,6 +84,7 @@ async function compressImage(file: File, maxKb: number, aspectRatio: number): Pr
 }
 
 export function ImageUploadField({ value, onChange, label = "Image", className }: Props) {
+  const RESTAURANT_ID = useRestaurantId();
   const { data: settingResp } = useSetting<MenuImageCfg>("menu-image");
   const cfg = settingResp?.data ?? {};
   const aspectRatio = cfg.aspectRatio ?? "1:1";

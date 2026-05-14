@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { BranchProvider } from "@/lib/branch";
 import { useSocket } from "@/lib/realtime";
 import { useRestaurantId } from "@/lib/hooks";
 import NotFound from "@/pages/not-found";
@@ -135,13 +136,15 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <SocketMount />
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
+          <BranchProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <SocketMount />
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </BranchProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

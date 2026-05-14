@@ -7,7 +7,11 @@ import {
   useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useUpdatePurchaseOrderItems, useDeletePurchaseOrder,
   useRestaurantInfo, useUpdateRestaurant, useRunAutoReorder,
+  useAggregateInventory,
 } from "@/lib/hooks";
+import { useBranchContext } from "@/lib/branch";
+import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1080,16 +1084,180 @@ function SettingsTab() {
   );
 }
 
+function AggregateStockTab() {
+  const [search, setSearch] = useState("");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { data: rows = [], isLoading } = useAggregateInventory();
+
+  const filtered = rows.filter(r => {
+    if (lowStockOnly && !r.isLowStock) return false;
+    if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+  const lowCount = rows.filter(r => r.isLowStock).length;
+
+  const toggle = (key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search items…"
+            className="pl-9"
+          />
+        </div>
+        <button
+          onClick={() => setLowStockOnly(v => !v)}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5",
+            lowStockOnly ? "bg-red-50 border-red-200 text-red-700" : "border-border text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Low stock only
+          {lowCount > 0 && <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{lowCount}</span>}
+        </button>
+        <span className="text-sm text-muted-foreground ml-auto">
+          {filtered.length} of {rows.length} items aggregated across branches
+        </span>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {isLoading ? (
+          <div className="p-12 text-center text-muted-foreground">Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground">
+            {rows.length === 0 ? "No inventory items across any branch yet." : "No items match the current filter."}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="w-8"></th>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Item</th>
+                  <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Category</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Total Stock</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Total Min</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Branches</th>
+                  <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(item => {
+                  const isOpen = expanded.has(item.key);
+                  return (
+                    <Fragment key={item.key}>
+                      <tr
+                        className="border-t border-border hover:bg-muted/20 cursor-pointer"
+                        onClick={() => toggle(item.key)}
+                      >
+                        <td className="pl-4 w-8">
+                          <ChevronRight className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
+                        </td>
+                        <td className="px-5 py-2.5 font-medium text-foreground">{item.name}</td>
+                        <td className="px-5 py-2.5 text-muted-foreground capitalize">{item.category}</td>
+                        <td className="px-5 py-2.5 text-right font-medium text-foreground tabular-nums">
+                          {Number(item.totalStock).toLocaleString("en-IN", { maximumFractionDigits: 2 })} {item.unit}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">
+                          {Number(item.totalMin).toLocaleString("en-IN", { maximumFractionDigits: 2 })} {item.unit}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{item.branchCount}</td>
+                        <td className="px-5 py-2.5 text-right">
+                          {item.lowStockBranches > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                              <AlertTriangle className="w-3 h-3" />
+                              {item.lowStockBranches} low
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">OK</span>
+                          )}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="bg-muted/10 border-t border-border">
+                          <td></td>
+                          <td colSpan={6} className="px-5 py-3">
+                            <div className="rounded-lg border border-border overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead className="bg-muted/30">
+                                  <tr>
+                                    <th className="text-left px-3 py-1.5 text-muted-foreground font-medium">Branch</th>
+                                    <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Current</th>
+                                    <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Min</th>
+                                    <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {item.branches.map(b => (
+                                    <tr key={b.restaurantId} className="border-t border-border">
+                                      <td className="px-3 py-1.5 font-medium text-foreground">{b.restaurantName}</td>
+                                      <td className="px-3 py-1.5 text-right tabular-nums text-foreground">
+                                        {Number(b.currentStock).toLocaleString("en-IN", { maximumFractionDigits: 2 })} {item.unit}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                                        {Number(b.minStockLevel).toLocaleString("en-IN", { maximumFractionDigits: 2 })} {item.unit}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right">
+                                        {b.isLowStock ? (
+                                          <span className="text-red-600 dark:text-red-400 font-medium">Low</span>
+                                        ) : (
+                                          <span className="text-green-700 dark:text-green-400">OK</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const [tab, setTab] = useState<Tab>("Stock");
+  const { hasMultipleBranches, isAllBranches, branches, selectedBranchId } = useBranchContext();
   const { data: items = [] } = useInventory();
+  const { data: aggregateRows = [] } = useAggregateInventory();
   const lowStockCount = items.filter((i: InventoryItem) => i.isLowStock).length;
+  const aggregateLow = aggregateRows.filter(r => r.isLowStock).length;
+  const showAggregate = hasMultipleBranches && isAllBranches && tab === "Stock";
+  const selectedBranchName = selectedBranchId == null ? null : branches.find(b => b.id === selectedBranchId)?.name ?? null;
+  const subtitle = showAggregate
+    ? `${aggregateRows.length} items across ${branches.length} branches${aggregateLow > 0 ? ` · ${aggregateLow} low somewhere` : ""}`
+    : hasMultipleBranches && !isAllBranches
+      ? `${selectedBranchName ?? ""} · ${items.length} items${lowStockCount > 0 ? ` · ${lowStockCount} low stock` : ""}`
+      : `${items.length} items tracked${lowStockCount > 0 ? ` · ${lowStockCount} low stock` : ""}`;
 
   return (
     <Layout>
       <PageHeader
         title="Inventory"
-        subtitle={`${items.length} items tracked${lowStockCount > 0 ? ` · ${lowStockCount} low stock` : ""}`}
+        subtitle={subtitle}
+        actions={hasMultipleBranches ? <BranchSwitcher /> : undefined}
       />
       <div className="p-6">
         <div className="flex gap-1 mb-6 bg-muted/40 rounded-xl p-1 w-fit flex-wrap">
@@ -1108,14 +1276,16 @@ export default function InventoryPage() {
               {t === "Waste Log" && <Flame className="w-3.5 h-3.5" />}
               {t === "Settings" && <Settings className="w-3.5 h-3.5" />}
               {t}
-              {t === "Stock" && lowStockCount > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{lowStockCount}</span>
+              {t === "Stock" && (showAggregate ? aggregateLow : lowStockCount) > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  {showAggregate ? aggregateLow : lowStockCount}
+                </span>
               )}
             </button>
           ))}
         </div>
 
-        {tab === "Stock" && <StockTab />}
+        {tab === "Stock" && (showAggregate ? <AggregateStockTab /> : <StockTab />)}
         {tab === "Suppliers" && <SuppliersTab />}
         {tab === "Purchase Orders" && <PurchaseOrdersTab />}
         {tab === "Waste Log" && <WasteLogTab />}

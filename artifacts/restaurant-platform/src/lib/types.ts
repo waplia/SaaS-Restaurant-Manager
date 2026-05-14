@@ -9,6 +9,9 @@ export interface DashboardSummary {
   pendingTickets: number;
   lowStockAlerts: number;
   monthlyExpenses?: string;
+  todayLabourHours?: string;
+  todayLabourCost?: string;
+  branchCount?: number;
 }
 
 export interface ExpenseCategory {
