@@ -2657,11 +2657,6 @@ export const PostLeadsBody = zod.object({
   website: zod.string().nullish().describe("Honeypot — leave empty"),
 });
 
-export const PostLeadsResponse = zod.object({
-  success: zod.boolean(),
-  id: zod.number().optional(),
-});
-
 /**
  * @summary List published blog posts
  */
@@ -2802,23 +2797,6 @@ export const PostAdminBlogPostsBody = zod.object({
   author: zod.string(),
   readMinutes: zod.number().optional(),
   published: zod.boolean().optional(),
-});
-
-export const PostAdminBlogPostsResponse = zod.object({
-  id: zod.number(),
-  slug: zod.string(),
-  title: zod.string(),
-  excerpt: zod.string().nullish(),
-  content: zod.string(),
-  coverImage: zod.string().nullish(),
-  category: zod.string(),
-  tags: zod.string().nullish(),
-  author: zod.string(),
-  readMinutes: zod.number(),
-  published: zod.boolean(),
-  publishedAt: zod.coerce.date().nullish(),
-  createdAt: zod.coerce.date().optional(),
-  updatedAt: zod.coerce.date().optional(),
 });
 
 /**

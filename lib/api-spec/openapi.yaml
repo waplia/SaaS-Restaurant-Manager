@@ -2233,7 +2233,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/LeadInput' }
       responses:
-        '200':
+        '201':
           description: Lead recorded
           content:
             application/json:
@@ -2330,7 +2330,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/BlogPostInput' }
       responses:
-        '200':
+        '201':
           description: Created
           content:
             application/json:
