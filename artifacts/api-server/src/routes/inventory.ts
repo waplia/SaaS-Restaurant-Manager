@@ -8,7 +8,7 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "kitchen", "super_admin"), validateRestaurantAccess, requirePlanFeature("inventory_management"));
 
 router.get("/restaurants/:restaurantId/inventory", async (req, res) => {
   const { lowStock, search } = req.query;
