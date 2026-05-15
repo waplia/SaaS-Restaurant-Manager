@@ -1,6 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-// `isNotNull` retained for owners filter
-void isNotNull;
+import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import {
   db,
   tenantsTable,
@@ -13,6 +11,7 @@ import {
   type AudienceFilter,
   type BroadcastChannel,
   type NotificationBroadcast,
+  type NotificationDelivery,
 } from "./db";
 import { sendEmail, sendSms, sendWhatsApp, sendPush } from "./notifications";
 import { logger } from "./logger";
@@ -27,79 +26,77 @@ export type ResolvedRecipient = {
   pushTokens: string[];
 };
 
+type SendResult = {
+  status: "sent" | "failed" | "skipped";
+  recipient: string | null;
+  error?: string;
+  providerMessageId?: string | null;
+};
+
+function nonEmpty<T>(arr: T[] | undefined | null): arr is T[] {
+  return Array.isArray(arr) && arr.length > 0;
+}
+
 /**
- * Resolves an audience filter into a deduplicated list of tenant-scoped recipients.
- * Each row represents one user (typically tenant owner / manager) plus the set
- * of restaurants belonging to their tenant (for in-app fan-out).
+ * Resolves a combinable audience filter into a deduplicated list of
+ * tenant-scoped recipients. All populated criteria are AND-ed; within
+ * a single criterion the values are OR-ed. An empty filter matches
+ * all active tenants.
  */
 export async function resolveAudience(filter: AudienceFilter): Promise<ResolvedRecipient[]> {
-  // Find target tenant IDs first.
-  let tenantIds: number[] = [];
+  const tenantConditions: SQL[] = [eq(tenantsTable.isActive, true)];
+  if (nonEmpty(filter.tenantIds)) tenantConditions.push(inArray(tenantsTable.id, filter.tenantIds));
+  if (nonEmpty(filter.planIds)) tenantConditions.push(inArray(tenantsTable.planId, filter.planIds));
+  if (nonEmpty(filter.planStatuses)) tenantConditions.push(inArray(tenantsTable.planStatus, filter.planStatuses));
 
-  if (filter.type === "all") {
-    const rows = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(eq(tenantsTable.isActive, true));
-    tenantIds = rows.map(r => r.id);
-  } else if (filter.type === "tenants") {
-    tenantIds = (filter.ids ?? []).filter(n => Number.isFinite(n));
-  } else if (filter.type === "plan_status") {
-    const statuses = (filter.values ?? []).filter(Boolean);
-    if (statuses.length === 0) return [];
-    const rows = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(inArray(tenantsTable.planStatus, statuses));
-    tenantIds = rows.map(r => r.id);
-  } else if (filter.type === "plan") {
-    const planIds = (filter.ids ?? []).filter(n => Number.isFinite(n));
-    if (planIds.length === 0) return [];
-    const rows = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(inArray(tenantsTable.planId, planIds));
-    tenantIds = rows.map(r => r.id);
-  } else if (filter.type === "country" || filter.type === "city") {
-    const values = (filter.values ?? []).filter(Boolean);
-    if (values.length === 0) return [];
-    const col = filter.type === "country" ? restaurantsTable.country : restaurantsTable.city;
-    const rows = await db.selectDistinct({ id: restaurantsTable.tenantId }).from(restaurantsTable).where(inArray(col, values));
-    tenantIds = rows.map(r => r.id);
-  } else if (filter.type === "role") {
-    // Special case: dispatch to all users matching a role across all tenants.
-    const roles = (filter.values ?? []).filter(Boolean);
-    if (roles.length === 0) return [];
-    const users = await db.select({
-      id: usersTable.id,
-      tenantId: usersTable.tenantId,
-      name: usersTable.name,
-      email: usersTable.email,
-      phone: usersTable.phone,
-    }).from(usersTable).where(and(inArray(usersTable.role, roles), isNotNull(usersTable.tenantId)));
-    return await attachRestaurantsAndDevices(users.map(u => ({
-      tenantId: u.tenantId as number,
-      userId: u.id,
-      name: u.name,
-      email: u.email,
-      phone: u.phone,
-    })));
+  let tenantIds: number[] = [];
+  const baseRows = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(and(...tenantConditions));
+  tenantIds = baseRows.map(r => r.id);
+
+  // Geographic narrowing intersects with tenants that have restaurants in the requested countries/cities.
+  if (nonEmpty(filter.countries) || nonEmpty(filter.cities)) {
+    const geoConditions: SQL[] = [];
+    if (nonEmpty(filter.countries)) geoConditions.push(inArray(restaurantsTable.country, filter.countries));
+    if (nonEmpty(filter.cities)) geoConditions.push(inArray(restaurantsTable.city, filter.cities));
+    const geoRows = await db.selectDistinct({ id: restaurantsTable.tenantId })
+      .from(restaurantsTable).where(and(...geoConditions));
+    const geoSet = new Set(geoRows.map(r => r.id));
+    tenantIds = tenantIds.filter(id => geoSet.has(id));
   }
 
   tenantIds = Array.from(new Set(tenantIds));
   if (tenantIds.length === 0) return [];
 
-  // Default contact for tenant-scoped channels: the tenant's owner user(s).
-  const owners = await db.select({
+  // Resolve users for the tenant set, optionally narrowed by role.
+  const userConditions: SQL[] = [
+    isNotNull(usersTable.tenantId),
+    inArray(usersTable.tenantId, tenantIds),
+  ];
+  if (nonEmpty(filter.roles)) {
+    userConditions.push(inArray(usersTable.role, filter.roles));
+  } else {
+    // Default contact: tenant owner.
+    userConditions.push(eq(usersTable.role, "owner"));
+  }
+  const users = await db.select({
     id: usersTable.id,
     tenantId: usersTable.tenantId,
     name: usersTable.name,
     email: usersTable.email,
     phone: usersTable.phone,
-  }).from(usersTable).where(and(eq(usersTable.role, "owner"), inArray(usersTable.tenantId, tenantIds)));
+  }).from(usersTable).where(and(...userConditions));
 
-  // Tenants without an owner user still get in-app delivery via their restaurants — represent them with a null user.
-  const tenantsWithOwner = new Set(owners.map(o => o.tenantId).filter((x): x is number => x !== null));
-  const ownerlessTenants = tenantIds.filter(id => !tenantsWithOwner.has(id));
+  // Tenants with no matching user still receive in-app delivery via their restaurants.
+  const tenantsWithUser = new Set(users.map(u => u.tenantId).filter((x): x is number => x !== null));
+  const ownerlessTenants = tenantIds.filter(id => !tenantsWithUser.has(id));
 
   return await attachRestaurantsAndDevices([
-    ...owners.map(o => ({
-      tenantId: o.tenantId as number,
-      userId: o.id,
-      name: o.name,
-      email: o.email,
-      phone: o.phone,
+    ...users.map(u => ({
+      tenantId: u.tenantId as number,
+      userId: u.id,
+      name: u.name,
+      email: u.email,
+      phone: u.phone,
     })),
     ...ownerlessTenants.map(tenantId => ({
       tenantId,
@@ -153,11 +150,10 @@ function renderTemplate(text: string, vars: Record<string, string>): string {
 
 /**
  * Send a broadcast to all resolved recipients across the requested channels.
- * Writes one notificationDeliveriesTable row per (recipient × channel) and
- * updates the broadcast aggregate counts.
+ * Atomic claim ensures only one caller can transition draft|scheduled → sending.
+ * Finalizer guarantees a terminal status (sent|failed) so rows never get stuck in "sending".
  */
 export async function dispatchBroadcast(broadcastId: number): Promise<void> {
-  // Atomic state transition: only one caller can flip draft|scheduled → sending.
   const claimed = await db.update(notificationBroadcastsTable)
     .set({ status: "sending", updatedAt: new Date() })
     .where(and(
@@ -178,18 +174,16 @@ export async function dispatchBroadcast(broadcastId: number): Promise<void> {
 
   try {
     recipients = await resolveAudience(bc.audience);
-    const channels = bc.channels;
 
     for (const r of recipients) {
       const vars: Record<string, string> = {
-        tenantName: "",
         userName: r.name ?? "",
         userEmail: r.email ?? "",
       };
       const subject = renderTemplate(bc.subject ?? bc.title, vars);
       const message = renderTemplate(bc.message, vars);
 
-      for (const channel of channels) {
+      for (const channel of bc.channels) {
         const out = await sendOnChannel(bc, channel, r, subject, message);
         try {
           await db.insert(notificationDeliveriesTable).values({
@@ -200,6 +194,7 @@ export async function dispatchBroadcast(broadcastId: number): Promise<void> {
             recipient: out.recipient,
             status: out.status,
             error: out.error ?? null,
+            providerMessageId: out.providerMessageId ?? null,
             sentAt: out.status === "sent" ? new Date() : null,
           });
         } catch (insertErr) {
@@ -238,44 +233,123 @@ async function sendOnChannel(
   r: ResolvedRecipient,
   subject: string,
   message: string,
-): Promise<{ status: "sent" | "failed" | "skipped"; recipient: string | null; error?: string }> {
+): Promise<SendResult> {
   try {
     if (channel === "in_app") {
       if (r.restaurantIds.length === 0) return { status: "skipped", recipient: null, error: "No restaurants for tenant" };
       await db.insert(notificationsTable).values(r.restaurantIds.map(rid => ({
         restaurantId: rid,
-        type: "admin.broadcast",
+        type: bc.priority === "urgent" ? "admin.broadcast.urgent" : "admin.broadcast",
         title: subject,
         message,
         entityId: bc.id,
         entityType: "notification_broadcast",
       })));
-      return { status: "sent", recipient: `tenant:${r.tenantId}` };
+      return { status: "sent", recipient: `tenant:${r.tenantId}`, providerMessageId: null };
     }
     if (channel === "email") {
       if (!r.email) return { status: "skipped", recipient: null, error: "No email" };
-      await sendEmail({ to: r.email, subject, html: `<div style="font-family:sans-serif">${message.replace(/\n/g, "<br/>")}</div>`, text: message });
-      return { status: "sent", recipient: r.email };
+      const result = await sendEmail({ to: r.email, subject, html: `<div style="font-family:sans-serif">${message.replace(/\n/g, "<br/>")}</div>`, text: message });
+      return { status: "sent", recipient: r.email, providerMessageId: result?.messageId ?? null };
     }
     if (channel === "sms") {
       if (!r.phone) return { status: "skipped", recipient: null, error: "No phone" };
-      await sendSms({ to: r.phone, body: `${subject}\n\n${message}` });
-      return { status: "sent", recipient: r.phone };
+      const result = await sendSms({ to: r.phone, body: `${subject}\n\n${message}` });
+      return { status: "sent", recipient: r.phone, providerMessageId: result?.sid ?? null };
     }
     if (channel === "whatsapp") {
       if (!r.phone) return { status: "skipped", recipient: null, error: "No phone" };
-      await sendWhatsApp({ to: r.phone, body: `*${subject}*\n\n${message}` });
-      return { status: "sent", recipient: r.phone };
+      const result = await sendWhatsApp({ to: r.phone, body: `*${subject}*\n\n${message}` });
+      return { status: "sent", recipient: r.phone, providerMessageId: result?.sid ?? null };
     }
     if (channel === "push") {
       if (r.pushTokens.length === 0) return { status: "skipped", recipient: null, error: "No push tokens" };
-      await sendPush({ to: r.pushTokens, title: subject, body: message, data: { broadcastId: bc.id } });
-      return { status: "sent", recipient: `${r.pushTokens.length} device(s)` };
+      await sendPush({ to: r.pushTokens, title: subject, body: message, data: { broadcastId: bc.id, priority: bc.priority } });
+      return { status: "sent", recipient: `${r.pushTokens.length} device(s)`, providerMessageId: null };
     }
     return { status: "skipped", recipient: null, error: `Unknown channel ${channel}` };
   } catch (err) {
     return { status: "failed", recipient: null, error: (err as Error).message };
   }
+}
+
+/**
+ * Re-attempt a single delivery row. Loads the broadcast and recipient context,
+ * sends on the original channel, and updates the delivery row in place.
+ */
+export async function retryDelivery(deliveryId: number): Promise<NotificationDelivery> {
+  const [delivery] = await db.select().from(notificationDeliveriesTable).where(eq(notificationDeliveriesTable.id, deliveryId));
+  if (!delivery) throw new Error("Delivery not found");
+  const [bc] = await db.select().from(notificationBroadcastsTable).where(eq(notificationBroadcastsTable.id, delivery.broadcastId));
+  if (!bc) throw new Error("Broadcast not found");
+
+  // Rebuild the recipient context for this single user/tenant.
+  let recipientCtx: ResolvedRecipient;
+  if (delivery.userId) {
+    const [u] = await db.select({
+      id: usersTable.id, tenantId: usersTable.tenantId, name: usersTable.name,
+      email: usersTable.email, phone: usersTable.phone,
+    }).from(usersTable).where(eq(usersTable.id, delivery.userId));
+    if (!u) throw new Error("Recipient user no longer exists");
+    [recipientCtx] = await attachRestaurantsAndDevices([{
+      tenantId: u.tenantId as number, userId: u.id, name: u.name, email: u.email, phone: u.phone,
+    }]);
+  } else if (delivery.tenantId) {
+    [recipientCtx] = await attachRestaurantsAndDevices([{
+      tenantId: delivery.tenantId, userId: null, name: null, email: null, phone: null,
+    }]);
+  } else {
+    throw new Error("Delivery has no tenant or user context");
+  }
+
+  const subject = bc.subject ?? bc.title;
+  const out = await sendOnChannel(bc, delivery.channel, recipientCtx, subject, bc.message);
+  const wasSuccess = delivery.status === "sent";
+  const isSuccess = out.status === "sent";
+
+  const [updated] = await db.update(notificationDeliveriesTable).set({
+    status: out.status,
+    error: out.error ?? null,
+    recipient: out.recipient,
+    providerMessageId: out.providerMessageId ?? delivery.providerMessageId,
+    sentAt: out.status === "sent" ? new Date() : delivery.sentAt,
+  }).where(eq(notificationDeliveriesTable.id, deliveryId)).returning();
+
+  // Update aggregate counters if status flipped.
+  if (wasSuccess !== isSuccess) {
+    await db.update(notificationBroadcastsTable).set({
+      successCount: sql`${notificationBroadcastsTable.successCount} + ${isSuccess ? 1 : -1}`,
+      failureCount: sql`${notificationBroadcastsTable.failureCount} + ${isSuccess ? -1 : 1}`,
+      updatedAt: new Date(),
+    }).where(eq(notificationBroadcastsTable.id, bc.id));
+  }
+
+  return updated;
+}
+
+/**
+ * Resend all failed deliveries for a broadcast. Returns the number of
+ * deliveries retried and how many succeeded on the second attempt.
+ */
+export async function resendFailedDeliveries(broadcastId: number): Promise<{ retried: number; succeeded: number; failed: number }> {
+  const failedRows = await db.select({ id: notificationDeliveriesTable.id })
+    .from(notificationDeliveriesTable)
+    .where(and(
+      eq(notificationDeliveriesTable.broadcastId, broadcastId),
+      eq(notificationDeliveriesTable.status, "failed"),
+    ));
+  let succeeded = 0, failed = 0;
+  for (const row of failedRows) {
+    try {
+      const updated = await retryDelivery(row.id);
+      if (updated.status === "sent") succeeded++;
+      else failed++;
+    } catch (err) {
+      failed++;
+      logger.error({ err, deliveryId: row.id }, "Resend-failed retry threw");
+    }
+  }
+  return { retried: failedRows.length, succeeded, failed };
 }
 
 let schedulerStarted = false;

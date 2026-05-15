@@ -31,14 +31,18 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   text?: string;
-}): Promise<void> {
+}): Promise<{ messageId: string | null }> {
   const t = getTransporter();
   if (!t) {
-    logger.info({ to: opts.to, subject: opts.subject }, "[Email stub] Would send email");
-    return;
+    if (process.env.NOTIFICATIONS_ALLOW_STUBS === "1") {
+      logger.info({ to: opts.to, subject: opts.subject }, "[Email stub] Would send email");
+      return { messageId: null };
+    }
+    throw new Error("Email provider not configured (set SMTP_HOST/SMTP_USER/SMTP_PASS)");
   }
   try {
-    await t.sendMail({ from: SMTP_FROM, ...opts });
+    const info = await t.sendMail({ from: SMTP_FROM, ...opts });
+    return { messageId: info?.messageId ?? null };
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send email");
     throw err;
@@ -48,10 +52,13 @@ export async function sendEmail(opts: {
 export async function sendWhatsApp(opts: {
   to: string;
   body: string;
-}): Promise<void> {
+}): Promise<{ sid: string | null }> {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-    logger.info({ to: opts.to, body: opts.body }, "[WhatsApp stub] Would send WhatsApp message");
-    return;
+    if (process.env.NOTIFICATIONS_ALLOW_STUBS === "1") {
+      logger.info({ to: opts.to, body: opts.body }, "[WhatsApp stub] Would send WhatsApp message");
+      return { sid: null };
+    }
+    throw new Error("WhatsApp provider not configured (set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN)");
   }
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
   const formBody = new URLSearchParams({
@@ -73,6 +80,8 @@ export async function sendWhatsApp(opts: {
       logger.error({ status: res.status, text }, "Twilio WhatsApp error");
       throw new Error(`Twilio WhatsApp error ${res.status}: ${text}`);
     }
+    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    return { sid: typeof json.sid === "string" ? json.sid : null };
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send WhatsApp message");
     throw err;
@@ -82,11 +91,14 @@ export async function sendWhatsApp(opts: {
 export async function sendSms(opts: {
   to: string;
   body: string;
-}): Promise<void> {
+}): Promise<{ sid: string | null }> {
   const TWILIO_SMS_FROM = process.env.TWILIO_SMS_FROM ?? "";
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_SMS_FROM) {
-    logger.info({ to: opts.to, body: opts.body }, "[SMS stub] Would send SMS");
-    return;
+    if (process.env.NOTIFICATIONS_ALLOW_STUBS === "1") {
+      logger.info({ to: opts.to, body: opts.body }, "[SMS stub] Would send SMS");
+      return { sid: null };
+    }
+    throw new Error("SMS provider not configured (set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_SMS_FROM)");
   }
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
   const formBody = new URLSearchParams({ From: TWILIO_SMS_FROM, To: opts.to, Body: opts.body });
@@ -104,6 +116,8 @@ export async function sendSms(opts: {
       logger.error({ status: res.status, text }, "Twilio SMS error");
       throw new Error(`Twilio SMS error ${res.status}: ${text}`);
     }
+    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    return { sid: typeof json.sid === "string" ? json.sid : null };
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send SMS");
     throw err;
@@ -118,8 +132,7 @@ export async function sendPush(opts: {
 }): Promise<void> {
   const tokens = (Array.isArray(opts.to) ? opts.to : [opts.to]).filter(t => typeof t === "string" && t.startsWith("ExponentPushToken"));
   if (tokens.length === 0) {
-    logger.info({ to: opts.to, title: opts.title }, "[Push stub] No valid Expo push tokens");
-    return;
+    throw new Error("No valid Expo push tokens");
   }
   const messages = tokens.map(token => ({
     to: token,

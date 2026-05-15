@@ -5,12 +5,21 @@ import { usersTable } from "./users";
 
 export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+export type BroadcastPriority = "low" | "medium" | "high" | "urgent";
 export type DeliveryStatus = "pending" | "sent" | "failed" | "skipped";
 
+/**
+ * Combinable audience filter. Each populated field narrows the audience
+ * with AND semantics; within a single field the values are OR.
+ * Empty / undefined fields are ignored. An empty filter matches all active tenants.
+ */
 export type AudienceFilter = {
-  type: "all" | "tenants" | "plan_status" | "plan" | "role" | "country" | "city";
-  ids?: number[];
-  values?: string[];
+  tenantIds?: number[];
+  planIds?: number[];
+  planStatuses?: string[];
+  countries?: string[];
+  cities?: string[];
+  roles?: string[];
 };
 
 export const notificationTemplatesTable = pgTable("notification_templates", {
@@ -32,7 +41,8 @@ export const notificationBroadcastsTable = pgTable("notification_broadcasts", {
   message: text("message").notNull(),
   subject: text("subject"),
   channels: text("channels").array().$type<BroadcastChannel[]>().notNull().default([]),
-  audience: jsonb("audience").$type<AudienceFilter>().notNull().default({ type: "all" }),
+  audience: jsonb("audience").$type<AudienceFilter>().notNull().default({}),
+  priority: text("priority").$type<BroadcastPriority>().notNull().default("medium"),
   templateId: integer("template_id").references(() => notificationTemplatesTable.id),
   status: text("status").$type<BroadcastStatus>().notNull().default("draft"),
   scheduledAt: timestamp("scheduled_at"),
@@ -54,6 +64,7 @@ export const notificationDeliveriesTable = pgTable("notification_deliveries", {
   recipient: text("recipient"),
   status: text("status").$type<DeliveryStatus>().notNull().default("pending"),
   error: text("error"),
+  providerMessageId: text("provider_message_id"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

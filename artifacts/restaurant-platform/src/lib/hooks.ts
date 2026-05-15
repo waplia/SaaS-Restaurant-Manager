@@ -2366,10 +2366,17 @@ export function payrollSlipUrl(restaurantId: number, itemId: number, print = fal
 // ─── Admin: Notification Center (broadcasts + templates) ──────────
 export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+export type BroadcastPriority = "low" | "medium" | "high" | "urgent";
+export type DeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+
+/** Combinable filter — each populated field narrows the audience with AND. */
 export type AudienceFilter = {
-  type: "all" | "tenants" | "plan_status" | "plan" | "role" | "country" | "city";
-  ids?: number[];
-  values?: string[];
+  tenantIds?: number[];
+  planIds?: number[];
+  planStatuses?: string[];
+  countries?: string[];
+  cities?: string[];
+  roles?: string[];
 };
 
 export interface AdminBroadcast {
@@ -2379,6 +2386,7 @@ export interface AdminBroadcast {
   subject: string | null;
   channels: BroadcastChannel[];
   audience: AudienceFilter;
+  priority: BroadcastPriority;
   templateId: number | null;
   status: BroadcastStatus;
   scheduledAt: string | null;
@@ -2411,8 +2419,9 @@ export interface AdminBroadcastDelivery {
   tenantId: number | null;
   userId: number | null;
   recipient: string | null;
-  status: "pending" | "sent" | "failed" | "skipped";
+  status: DeliveryStatus;
   error: string | null;
+  providerMessageId: string | null;
   sentAt: string | null;
   createdAt: string;
 }
@@ -2428,27 +2437,83 @@ export function useAdminBroadcasts(status: BroadcastStatus | "all" = "all") {
 export function useAdminBroadcast(id: number | null) {
   return useQuery({
     queryKey: ["admin", "broadcasts", "detail", id],
-    queryFn: () => apiGet<{ broadcast: AdminBroadcast; deliveries: AdminBroadcastDelivery[] }>(`/admin/broadcasts/${id}`),
+    queryFn: () => apiGet<{ broadcast: AdminBroadcast }>(`/admin/broadcasts/${id}`),
     enabled: id !== null,
+  });
+}
+
+export function useAdminBroadcastRecipients(
+  id: number | null,
+  filters: { channel?: string; status?: string; search?: string } = {},
+) {
+  const qs = new URLSearchParams();
+  if (filters.channel && filters.channel !== "all") qs.set("channel", filters.channel);
+  if (filters.status && filters.status !== "all") qs.set("status", filters.status);
+  if (filters.search) qs.set("search", filters.search);
+  return useQuery({
+    queryKey: ["admin", "broadcasts", "recipients", id, filters],
+    queryFn: () => apiGet<{ data: AdminBroadcastDelivery[] }>(`/admin/broadcasts/${id}/recipients?${qs.toString()}`),
+    enabled: id !== null,
+    refetchInterval: 5_000,
   });
 }
 
 export function useAdminBroadcastsStats() {
   return useQuery({
     queryKey: ["admin", "broadcasts", "stats"],
-    queryFn: () => apiGet<{ byStatus: Array<{ status: string; count: number }>; totals: { total: number; success: number; failure: number } }>(`/admin/broadcasts-stats`),
+    queryFn: () => apiGet<{ byStatus: Array<{ status: string; count: number }>; totals: { totalRecipients: number; successCount: number; failureCount: number } }>(`/admin/broadcasts-stats`),
     refetchInterval: 30_000,
   });
+}
+
+export interface CreateAdminBroadcastBody {
+  title: string;
+  message: string;
+  subject?: string;
+  channels: BroadcastChannel[];
+  audience: AudienceFilter;
+  priority?: BroadcastPriority;
+  scheduledAt?: string | null;
+  sendNow?: boolean;
+  templateId?: number | null;
+  saveAsTemplate?: boolean;
+  templateName?: string;
+  templateSlug?: string;
 }
 
 export function useCreateAdminBroadcast() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: {
-      title: string; message: string; subject?: string;
-      channels: BroadcastChannel[]; audience: AudienceFilter;
-      scheduledAt?: string | null; sendNow?: boolean; templateId?: number | null;
-    }) => apiPost<AdminBroadcast>("/admin/broadcasts", body),
+    mutationFn: (body: CreateAdminBroadcastBody) => apiPost<AdminBroadcast>("/admin/broadcasts", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] });
+      qc.invalidateQueries({ queryKey: ["admin", "notification-templates"] });
+    },
+  });
+}
+
+export function useUpdateAdminBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Partial<Pick<CreateAdminBroadcastBody, "title" | "message" | "subject" | "channels" | "audience" | "priority" | "scheduledAt">>) =>
+      apiPut<AdminBroadcast>(`/admin/broadcasts/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useResendFailedBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<{ retried: number; succeeded: number; failed: number }>(`/admin/broadcasts/${id}/resend-failed`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useRetryBroadcastRecipient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ broadcastId, deliveryId }: { broadcastId: number; deliveryId: number }) =>
+      apiPost<AdminBroadcastDelivery>(`/admin/broadcasts/${broadcastId}/recipients/${deliveryId}/retry`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
   });
 }
