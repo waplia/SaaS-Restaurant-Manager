@@ -15,15 +15,23 @@ import { authenticate } from "../middleware/authenticate";
 const router = Router();
 
 router.post("/auth/register", async (req, res) => {
-  const { restaurantName, ownerName, email, password } = req.body as {
+  const { restaurantName, ownerName, email, password, phone } = req.body as {
     restaurantName?: string;
     ownerName?: string;
     email?: string;
     password?: string;
+    phone?: string;
   };
 
   if (!restaurantName || !ownerName || !email || !password) {
     res.status(400).json({ error: "restaurantName, ownerName, email and password are required" });
+    return;
+  }
+  // Phone is optional but, if provided, must include the country code.
+  // Stored as e.g. "+91 9876543210" — server stays format-agnostic, just ensures '+'.
+  const normalisedPhone = phone?.trim() ? phone.trim() : null;
+  if (normalisedPhone && !normalisedPhone.startsWith("+")) {
+    res.status(400).json({ error: "Phone must include a country code, e.g. +91 9876543210" });
     return;
   }
   if (password.length < 8) {
@@ -78,6 +86,7 @@ router.post("/auth/register", async (req, res) => {
     name: ownerName,
     email: email.toLowerCase(),
     passwordHash,
+    phone: normalisedPhone,
     role: "owner",
     tenantId: tenant.id,
     restaurantId: restaurant.id,

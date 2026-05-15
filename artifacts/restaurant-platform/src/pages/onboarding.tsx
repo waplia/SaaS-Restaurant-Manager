@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploadField } from "@/components/ImageUploadField";
+import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth } from "@/lib/auth";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
@@ -321,7 +322,7 @@ function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
         <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Khana Lagao Cafe" />
       </Field>
       <Field label="Phone number" required>
-        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" />
+        <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="9876543210" />
       </Field>
       <Field label="Street address" required>
         <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="MG Road, near City Mall" />
@@ -412,7 +413,7 @@ function BranchStep({ restaurantId, onDone }: { restaurantId: number; onDone: ()
         <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="100 Ft Road" />
       </Field>
       <Field label="Phone">
-        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 …" />
+        <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="9876543210" />
       </Field>
       <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name.trim()}>
         {mut.isPending ? "Adding…" : "Add branch"}

@@ -4,6 +4,7 @@ import { Flame, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth } from "@/lib/auth";
 
 const FEATURES = [
@@ -16,7 +17,7 @@ const FEATURES = [
 export default function RegisterPage() {
   const { register } = useAuth();
   const [, navigate] = useLocation();
-  const [form, setForm] = useState({ restaurantName: "", ownerName: "", email: "", password: "" });
+  const [form, setForm] = useState({ restaurantName: "", ownerName: "", email: "", password: "", phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -105,6 +106,16 @@ export default function RegisterPage() {
                 onChange={set("ownerName")}
                 required
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Phone (optional)</Label>
+              <PhoneInput
+                id="phone"
+                value={form.phone}
+                onChange={(v) => setForm(prev => ({ ...prev, phone: v }))}
+                placeholder="9876543210"
+              />
+              <p className="text-xs text-muted-foreground">We'll only use this for account recovery and important notices.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Work email</Label>

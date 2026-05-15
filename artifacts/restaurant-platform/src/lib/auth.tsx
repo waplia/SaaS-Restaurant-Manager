@@ -28,6 +28,7 @@ export interface RegisterInput {
   ownerName: string;
   email: string;
   password: string;
+  phone?: string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

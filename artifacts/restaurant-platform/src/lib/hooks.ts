@@ -1703,6 +1703,131 @@ export function useConfirmCashfreeOrder() {
   });
 }
 
+// ─── Razorpay + manual payment methods ──────────────────────────
+export interface PaymentMethodsView {
+  online: {
+    cashfree: { enabled: boolean };
+    razorpay: { enabled: boolean; keyId: string | null };
+    stripe:   { enabled: boolean };
+    default: "cashfree" | "razorpay" | null;
+  };
+  manual: {
+    bank: { enabled: boolean; bankName?: string; accountHolder?: string; accountNumber?: string; ifsc?: string; branch?: string; instructions?: string };
+    upi:  { enabled: boolean; upiId?: string; payeeName?: string; qrUrl?: string };
+  };
+  latestManual: {
+    id: number; planId: number; method: string; amount: string; currency: string;
+    reference: string | null; proofUrl: string | null; note: string | null;
+    status: "pending" | "approved" | "rejected"; reviewerNote: string | null;
+    submittedAt: string; reviewedAt: string | null;
+  } | null;
+  pendingManual: { id: number; planId: number; method: string; amount: string; status: string; submittedAt: string } | null;
+}
+
+export function usePaymentMethods(restaurantId: number) {
+  return useQuery({
+    queryKey: ["billing", "methods", restaurantId],
+    queryFn: () => apiGet<PaymentMethodsView>(`/restaurants/${restaurantId}/billing/methods`),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateSubscriptionRazorpayOrder() {
+  return useMutation({
+    mutationFn: ({ restaurantId, planId }: { restaurantId: number; planId: number }) =>
+      apiPost<{ orderId: string; amount: number; currency: string; keyId: string; receipt: string }>(
+        `/restaurants/${restaurantId}/subscription/create-razorpay-order`, { planId },
+      ),
+  });
+}
+
+export function useConfirmSubscriptionRazorpayOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ restaurantId, orderId, paymentId, signature }: { restaurantId: number; orderId: string; paymentId: string; signature: string }) =>
+      apiPost<{ activated: boolean; status?: string }>(`/restaurants/${restaurantId}/subscription/razorpay-confirm`, { orderId, paymentId, signature }),
+    onSuccess: (_d, { restaurantId }) => {
+      qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
+      qc.invalidateQueries({ queryKey: ["billing", "methods", restaurantId] });
+    },
+  });
+}
+
+export function useSubmitManualPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ restaurantId, planId, method, reference, proofUrl, note, amount }: { restaurantId: number; planId: number; method: "bank" | "upi"; reference?: string; proofUrl?: string; note?: string; amount?: number }) =>
+      apiPost<{ id: number; status: string }>(`/restaurants/${restaurantId}/subscription/manual-payment`, { planId, method, reference, proofUrl, note, amount }),
+    onSuccess: (_d, { restaurantId }) => {
+      qc.invalidateQueries({ queryKey: ["billing", "methods", restaurantId] });
+      qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
+    },
+  });
+}
+
+// ─── Super-admin: payment-method settings + approvals ───────────
+export interface PaymentProviderRow {
+  provider: "cashfree" | "razorpay" | "bank" | "upi";
+  isEnabled: boolean;
+  isDefault: boolean;
+  config: Record<string, unknown>;
+  updatedAt: string | null;
+}
+
+export function useAdminPaymentMethods() {
+  return useQuery({
+    queryKey: ["admin", "payment-methods"],
+    queryFn: () => apiGet<{ providers: PaymentProviderRow[] }>("/admin/payment-methods"),
+  });
+}
+
+export function useUpdateAdminPaymentMethod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ provider, ...body }: { provider: string; isEnabled?: boolean; isDefault?: boolean; config?: Record<string, unknown> }) =>
+      apiPut<PaymentProviderRow>(`/admin/payment-methods/${provider}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "payment-methods"] });
+      qc.invalidateQueries({ queryKey: ["billing", "methods"] });
+    },
+  });
+}
+
+export interface AdminManualPaymentRow {
+  id: number; tenantId: number; tenantName: string | null;
+  planId: number; planName: string | null;
+  amount: string; currency: string;
+  method: string; reference: string | null; proofUrl: string | null; note: string | null;
+  status: "pending" | "approved" | "rejected";
+  reviewerNote: string | null; reviewedBy: number | null; reviewedAt: string | null;
+  submittedBy: number | null; submittedByName: string | null;
+  createdAt: string;
+}
+
+export function useAdminManualPayments(status: "pending" | "approved" | "rejected" | "all" = "pending") {
+  return useQuery({
+    queryKey: ["admin", "manual-payments", status],
+    queryFn: () => apiGet<{ data: AdminManualPaymentRow[] }>(`/admin/manual-payments?status=${status}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useApproveManualPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: number; note?: string }) => apiPost(`/admin/manual-payments/${id}/approve`, { note }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "manual-payments"] }),
+  });
+}
+
+export function useRejectManualPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => apiPost(`/admin/manual-payments/${id}/reject`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "manual-payments"] }),
+  });
+}
+
 export function useMockActivate() {
   const qc = useQueryClient();
   return useMutation({

@@ -5,8 +5,9 @@ import { db, tenantsTable, subscriptionPlansTable, usersTable, floorTablesTable,
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
-  isCashfreeConfigured, createCashfreeOrder, fetchCashfreeOrder, buildCheckoutUrl, verifyCashfreeWebhook,
+  createCashfreeOrder, fetchCashfreeOrder, buildCheckoutUrl, verifyCashfreeWebhook,
 } from "../lib/cashfree";
+import { getEffectiveCashfreeConfig, getEffectiveRazorpayConfig } from "../lib/paymentSettings";
 import { logger } from "../lib/logger";
 import type { Request, Response } from "express";
 
@@ -35,10 +36,12 @@ router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
   const plans = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.isActive, true)).orderBy(subscriptionPlansTable.price);
 
   const restaurantId = Number(req.params.restaurantId);
-  const [staffCount, tableCount, menuItemCount] = await Promise.all([
+  const [staffCount, tableCount, menuItemCount, cashfree, razorpay] = await Promise.all([
     db.select({ count: count() }).from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.isActive, true))),
     db.select({ count: count() }).from(floorTablesTable).where(and(eq(floorTablesTable.restaurantId, restaurantId), eq(floorTablesTable.isActive, true))),
     db.select({ count: count() }).from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurantId), eq(menuItemsTable.isAvailable, true))),
+    getEffectiveCashfreeConfig(),
+    getEffectiveRazorpayConfig(),
   ]);
 
   const now = new Date();
@@ -71,7 +74,8 @@ router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
     },
     gateways: {
       stripe: !!getStripe(),
-      cashfree: isCashfreeConfigured(),
+      cashfree: cashfree.enabled,
+      razorpay: razorpay.enabled,
     },
   });
 });
@@ -133,7 +137,8 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
-  if (!isCashfreeConfigured()) {
+  const { enabled, config } = await getEffectiveCashfreeConfig();
+  if (!enabled || !config) {
     return void res.json({ url: null, mock: true, message: "Cashfree not configured — using mock checkout" });
   }
 
@@ -145,7 +150,7 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
   const customerIdStr = tenant.cashfreeCustomerId ?? `tenant_${tenantId}`;
 
   try {
-    const order = await createCashfreeOrder({
+    const order = await createCashfreeOrder(config, {
       orderId: cfOrderId,
       amount: Number(plan.price),
       currency: (plan.currency ?? "INR").toUpperCase(),
@@ -161,7 +166,7 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
       await db.update(tenantsTable).set({ cashfreeCustomerId: customerIdStr, updatedAt: new Date() }).where(eq(tenantsTable.id, tenantId));
     }
 
-    const url = order.payment_session_id ? buildCheckoutUrl(order.payment_session_id) : null;
+    const url = order.payment_session_id ? buildCheckoutUrl(config, order.payment_session_id) : null;
     res.json({ url, orderId: cfOrderId, paymentSessionId: order.payment_session_id ?? null });
   } catch (err) {
     logger.error({ err }, "Failed to create Cashfree order");
@@ -191,7 +196,9 @@ router.post("/restaurants/:restaurantId/subscription/portal", requireRole("owner
 });
 
 router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole("owner", "super_admin"), async (req, res) => {
-  if (getStripe() || isCashfreeConfigured()) {
+  const cf = await getEffectiveCashfreeConfig();
+  const rzp = await getEffectiveRazorpayConfig();
+  if (getStripe() || cf.enabled || rzp.enabled) {
     return void res.status(403).json({ error: "A payment gateway is configured — use the checkout flow instead of mock-activate." });
   }
   const tenantId = req.user?.tenantId;
@@ -301,13 +308,14 @@ export function createStripeWebhookRouter(): Router {
 export function createCashfreeWebhookRouter(): Router {
   const webhookRouter = Router();
   webhookRouter.post("/cashfree/webhook", async (req: Request, res: Response) => {
-    if (!isCashfreeConfigured()) return void res.status(200).json({ received: true });
+    const { enabled, config } = await getEffectiveCashfreeConfig();
+    if (!enabled || !config) return void res.status(200).json({ received: true });
 
     const raw = req.body instanceof Buffer ? req.body.toString("utf8") : typeof req.body === "string" ? req.body : JSON.stringify(req.body);
     const sig = req.headers["x-webhook-signature"] as string | undefined;
     const ts = req.headers["x-webhook-timestamp"] as string | undefined;
 
-    if (!verifyCashfreeWebhook(raw, sig, ts)) {
+    if (!verifyCashfreeWebhook(config, raw, sig, ts)) {
       return void res.status(401).json({ error: "Invalid Cashfree webhook signature" });
     }
 
@@ -349,9 +357,10 @@ router.post("/restaurants/:restaurantId/subscription/cashfree-confirm", requireR
   if (!m || Number(m[1]) !== callerTenantId) {
     return void res.status(403).json({ error: "This order does not belong to your tenant." });
   }
-  if (!isCashfreeConfigured()) return void res.json({ activated: false, mock: true });
+  const { enabled, config } = await getEffectiveCashfreeConfig();
+  if (!enabled || !config) return void res.json({ activated: false, mock: true });
   try {
-    const order = await fetchCashfreeOrder(orderId);
+    const order = await fetchCashfreeOrder(config, orderId);
     const cfStatus = (order.order_status ?? "").toUpperCase();
     if (cfStatus === "PAID" || cfStatus === "SUCCESS") {
       await activateFromCashfreeOrder(orderId);

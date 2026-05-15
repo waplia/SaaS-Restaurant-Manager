@@ -1,26 +1,45 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { logger } from "./logger";
 
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID ?? "";
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY ?? "";
-const CASHFREE_ENV = (process.env.CASHFREE_ENV ?? "sandbox").toLowerCase();
 const CASHFREE_API_VERSION = "2023-08-01";
 
-export function isCashfreeConfigured(): boolean {
-  return !!(CASHFREE_APP_ID && CASHFREE_SECRET_KEY);
+export interface CashfreeConfig {
+  appId: string;
+  secretKey: string;
+  env: string; // "sandbox" | "production"
 }
 
-function baseUrl(): string {
-  return CASHFREE_ENV === "production" || CASHFREE_ENV === "prod"
+export function envCashfreeConfig(): CashfreeConfig | null {
+  const appId = process.env.CASHFREE_APP_ID ?? "";
+  const secretKey = process.env.CASHFREE_SECRET_KEY ?? "";
+  if (!appId || !secretKey) return null;
+  return {
+    appId,
+    secretKey,
+    env: (process.env.CASHFREE_ENV ?? "sandbox").toLowerCase(),
+  };
+}
+
+/** @deprecated use isCashfreeReady(config) — kept so older callers still type-check. */
+export function isCashfreeConfigured(): boolean {
+  return !!envCashfreeConfig();
+}
+
+export function isCashfreeReady(cfg: CashfreeConfig | null | undefined): cfg is CashfreeConfig {
+  return !!(cfg && cfg.appId && cfg.secretKey);
+}
+
+function baseUrl(cfg: CashfreeConfig): string {
+  return cfg.env === "production" || cfg.env === "prod"
     ? "https://api.cashfree.com/pg"
     : "https://sandbox.cashfree.com/pg";
 }
 
-function headers(): Record<string, string> {
+function headers(cfg: CashfreeConfig): Record<string, string> {
   return {
     "x-api-version": CASHFREE_API_VERSION,
-    "x-client-id": CASHFREE_APP_ID,
-    "x-client-secret": CASHFREE_SECRET_KEY,
+    "x-client-id": cfg.appId,
+    "x-client-secret": cfg.secretKey,
     "Content-Type": "application/json",
   };
 }
@@ -47,7 +66,7 @@ export interface CashfreeOrderResponse {
   [k: string]: unknown;
 }
 
-export async function createCashfreeOrder(input: CashfreeOrderInput): Promise<CashfreeOrderResponse> {
+export async function createCashfreeOrder(cfg: CashfreeConfig, input: CashfreeOrderInput): Promise<CashfreeOrderResponse> {
   const body = {
     order_id: input.orderId,
     order_amount: Number(input.amount.toFixed(2)),
@@ -66,9 +85,9 @@ export async function createCashfreeOrder(input: CashfreeOrderInput): Promise<Ca
     order_tags: input.notes,
   };
 
-  const res = await fetch(`${baseUrl()}/orders`, {
+  const res = await fetch(`${baseUrl(cfg)}/orders`, {
     method: "POST",
-    headers: headers(),
+    headers: headers(cfg),
     body: JSON.stringify(body),
   });
 
@@ -80,10 +99,10 @@ export async function createCashfreeOrder(input: CashfreeOrderInput): Promise<Ca
   return (await res.json()) as CashfreeOrderResponse;
 }
 
-export async function fetchCashfreeOrder(orderId: string): Promise<CashfreeOrderResponse> {
-  const res = await fetch(`${baseUrl()}/orders/${encodeURIComponent(orderId)}`, {
+export async function fetchCashfreeOrder(cfg: CashfreeConfig, orderId: string): Promise<CashfreeOrderResponse> {
+  const res = await fetch(`${baseUrl(cfg)}/orders/${encodeURIComponent(orderId)}`, {
     method: "GET",
-    headers: headers(),
+    headers: headers(cfg),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -92,9 +111,8 @@ export async function fetchCashfreeOrder(orderId: string): Promise<CashfreeOrder
   return (await res.json()) as CashfreeOrderResponse;
 }
 
-export function buildCheckoutUrl(paymentSessionId: string): string {
-  // Cashfree's hosted checkout URL pattern
-  const host = CASHFREE_ENV === "production" || CASHFREE_ENV === "prod"
+export function buildCheckoutUrl(cfg: CashfreeConfig, paymentSessionId: string): string {
+  const host = cfg.env === "production" || cfg.env === "prod"
     ? "https://payments.cashfree.com"
     : "https://payments-test.cashfree.com";
   return `${host}/pg/view/sessions/checkout/web/${paymentSessionId}`;
@@ -105,10 +123,10 @@ export function buildCheckoutUrl(paymentSessionId: string): string {
  * Cashfree signs `${timestamp}${rawBody}` with HMAC-SHA256 using the secret key,
  * then base64-encodes it. Header: `x-webhook-signature`, timestamp: `x-webhook-timestamp`.
  */
-export function verifyCashfreeWebhook(rawBody: string, signature: string | undefined, timestamp: string | undefined): boolean {
-  if (!signature || !timestamp || !CASHFREE_SECRET_KEY) return false;
+export function verifyCashfreeWebhook(cfg: CashfreeConfig, rawBody: string, signature: string | undefined, timestamp: string | undefined): boolean {
+  if (!signature || !timestamp || !cfg.secretKey) return false;
   try {
-    const expected = createHmac("sha256", CASHFREE_SECRET_KEY).update(timestamp + rawBody).digest("base64");
+    const expected = createHmac("sha256", cfg.secretKey).update(timestamp + rawBody).digest("base64");
     const a = Buffer.from(expected);
     const b = Buffer.from(signature);
     return a.length === b.length && timingSafeEqual(a, b);

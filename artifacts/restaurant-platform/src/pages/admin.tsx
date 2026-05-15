@@ -3,13 +3,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
-  Plus, Pencil, Trash2, X, Mail, Eye,
+  Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
+  Landmark, Smartphone, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, apiAction } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useAdminPaymentMethods, useUpdateAdminPaymentMethod,
+  useAdminManualPayments, useApproveManualPayment, useRejectManualPayment,
+  type PaymentProviderRow, type AdminManualPaymentRow,
+} from "@/lib/hooks";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES, PLAN_FEATURE_CATEGORIES,
   defaultFeatureFlags, isFeatureEnabled,
@@ -729,7 +739,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -797,6 +807,8 @@ export default function AdminPage() {
           {[
             { id: "tenants" as const, label: "Tenants", icon: Users },
             { id: "plans" as const, label: "Plans", icon: Package },
+            { id: "payment_methods" as const, label: "Payment Methods", icon: CreditCard },
+            { id: "approvals" as const, label: "Approvals", icon: FileCheck2 },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -807,8 +819,294 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {tab === "tenants" ? <TenantsTab /> : <PlansTab />}
+        {tab === "tenants" && <TenantsTab />}
+        {tab === "plans" && <PlansTab />}
+        {tab === "payment_methods" && <PaymentMethodsTab />}
+        {tab === "approvals" && <ApprovalsTab />}
       </main>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Payment methods (super-admin)
+// ────────────────────────────────────────────────────────────────
+const PROVIDER_LABEL: Record<string, { title: string; subtitle: string; icon: typeof CreditCard }> = {
+  cashfree: { title: "Cashfree",  subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
+  razorpay: { title: "Razorpay",  subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
+  bank:     { title: "Bank transfer", subtitle: "Manual — tenant submits proof of transfer", icon: Landmark },
+  upi:      { title: "UPI",       subtitle: "Manual — tenant pays to your UPI ID and submits reference", icon: Smartphone },
+};
+
+function PaymentMethodsTab() {
+  const { data, isLoading } = useAdminPaymentMethods();
+  if (isLoading || !data) return <div className="p-8 text-center text-muted-foreground text-sm">Loading payment methods…</div>;
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 border border-border rounded-xl p-4 text-sm text-muted-foreground">
+        Configure the payment methods tenants can use to pay for their subscription. Online providers (Cashfree, Razorpay) collect payments automatically. Bank and UPI are reviewed manually under <strong>Approvals</strong>.
+      </div>
+      <div className="grid gap-4">
+        {data.providers.map(p => <ProviderCard key={p.provider} row={p} />)}
+      </div>
+    </div>
+  );
+}
+
+function ProviderCard({ row }: { row: PaymentProviderRow }) {
+  const { toast } = useToast();
+  const update = useUpdateAdminPaymentMethod();
+  const meta = PROVIDER_LABEL[row.provider];
+  const Icon = meta?.icon ?? CreditCard;
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5 text-primary" /></div>
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground capitalize flex items-center gap-2">
+              {meta?.title ?? row.provider}
+              {row.isDefault && <Badge className="text-[10px]">Default</Badge>}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{meta?.subtitle}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            size="sm"
+            variant={row.isEnabled ? "outline" : "default"}
+            onClick={() =>
+              update.mutate({ provider: row.provider, isEnabled: !row.isEnabled }, {
+                onSuccess: () => toast({ title: row.isEnabled ? "Disabled" : "Enabled" }),
+                onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+              })
+            }
+            disabled={update.isPending}
+          >
+            {row.isEnabled ? "Disable" : "Enable"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
+            {editing ? "Close" : "Configure"}
+          </Button>
+        </div>
+      </div>
+
+      {editing && (
+        <ProviderConfigForm
+          row={row}
+          onClose={() => setEditing(false)}
+          onSaved={() => { setEditing(false); toast({ title: "Saved" }); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow; onClose: () => void; onSaved: () => void }) {
+  const update = useUpdateAdminPaymentMethod();
+  const { toast } = useToast();
+  const [config, setConfig] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(row.config ?? {})) out[k] = typeof v === "string" ? v : "";
+    return out;
+  });
+  const [isDefault, setIsDefault] = useState(row.isDefault);
+
+  function save() {
+    update.mutate({ provider: row.provider, isEnabled: row.isEnabled, isDefault, config }, {
+      onSuccess: () => onSaved(),
+      onError: e => toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" }),
+    });
+  }
+
+  function field(key: string, label: string, opts: { type?: string; placeholder?: string; help?: string } = {}) {
+    return (
+      <div className="space-y-1.5" key={key}>
+        <Label htmlFor={`${row.provider}-${key}`}>{label}</Label>
+        <Input
+          id={`${row.provider}-${key}`}
+          type={opts.type ?? "text"}
+          value={config[key] ?? ""}
+          onChange={e => setConfig(c => ({ ...c, [key]: e.target.value }))}
+          placeholder={opts.placeholder}
+        />
+        {opts.help && <p className="text-xs text-muted-foreground">{opts.help}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border space-y-4">
+      {row.provider === "cashfree" && (
+        <div className="space-y-3">
+          {field("appId", "App ID", { placeholder: "TEST00000000…" })}
+          {field("secretKey", "Secret key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          <div className="space-y-1.5">
+            <Label htmlFor="cashfree-env">Environment</Label>
+            <select id="cashfree-env" value={config.env ?? "sandbox"} onChange={e => setConfig(c => ({ ...c, env: e.target.value }))}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
+              <option value="sandbox">Sandbox</option>
+              <option value="production">Production</option>
+            </select>
+          </div>
+        </div>
+      )}
+      {row.provider === "razorpay" && (
+        <div className="space-y-3">
+          {field("keyId", "Key ID", { placeholder: "rzp_test_…" })}
+          {field("keySecret", "Key Secret", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("webhookSecret", "Webhook secret", { type: "password", help: "Used to verify webhooks at /api/razorpay/webhook" })}
+        </div>
+      )}
+      {row.provider === "bank" && (
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            {field("bankName", "Bank name", { placeholder: "HDFC Bank" })}
+            {field("accountHolder", "Account holder", { placeholder: "Khana Lagao Pvt Ltd" })}
+            {field("accountNumber", "Account number", { placeholder: "1234567890" })}
+            {field("ifsc", "IFSC code", { placeholder: "HDFC0001234" })}
+            {field("branch", "Branch")}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bank-instructions">Instructions for tenants</Label>
+            <Textarea id="bank-instructions" rows={3} value={config.instructions ?? ""} onChange={e => setConfig(c => ({ ...c, instructions: e.target.value }))}
+              placeholder="e.g. Please add your tenant ID in the transfer narration." />
+          </div>
+        </div>
+      )}
+      {row.provider === "upi" && (
+        <div className="space-y-3">
+          {field("upiId", "UPI ID (VPA)", { placeholder: "khanalagao@hdfcbank" })}
+          {field("payeeName", "Payee name", { placeholder: "Khana Lagao Pvt Ltd" })}
+          <div className="space-y-1.5">
+            <ImageUploadField
+              label="UPI QR code (upload or paste URL)"
+              value={config.qrUrl ?? ""}
+              onChange={(url) => setConfig(c => ({ ...c, qrUrl: url }))}
+            />
+            <p className="text-[11px] text-muted-foreground">Shown to tenants on checkout. Upload a PNG/JPG generated from your UPI ID, or paste a hosted image URL.</p>
+          </div>
+        </div>
+      )}
+
+      {(row.provider === "cashfree" || row.provider === "razorpay") && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
+          Use as the default online provider (only one can be default).
+        </label>
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Saving…" : "Save"}</Button>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Manual payment approvals (super-admin)
+// ────────────────────────────────────────────────────────────────
+function ApprovalsTab() {
+  const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const { data, isLoading, refetch } = useAdminManualPayments(status);
+  const approve = useApproveManualPayment();
+  const reject = useRejectManualPayment();
+  const { toast } = useToast();
+
+  const rows = data?.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        {(["pending", "approved", "rejected", "all"] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setStatus(s)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${
+              status === s ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:text-foreground"
+            }`}
+          >{s}</button>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => refetch()} className="ml-auto">
+          <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading manual payments…</div>
+        ) : rows.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground text-sm">No {status === "all" ? "" : status} manual payments.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
+              <tr>
+                <th className="px-5 py-3 text-left">Tenant</th>
+                <th className="px-5 py-3 text-left">Plan</th>
+                <th className="px-5 py-3 text-left">Method</th>
+                <th className="px-5 py-3 text-left">Amount</th>
+                <th className="px-5 py-3 text-left">Reference</th>
+                <th className="px-5 py-3 text-left">Submitted</th>
+                <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r: AdminManualPaymentRow) => (
+                <tr key={r.id} className="border-t border-border align-top">
+                  <td className="px-5 py-3"><div className="font-medium text-foreground">{r.tenantName ?? `Tenant #${r.tenantId}`}</div><div className="text-xs text-muted-foreground">{r.submittedByName}</div></td>
+                  <td className="px-5 py-3">{r.planName ?? `#${r.planId}`}</td>
+                  <td className="px-5 py-3 capitalize">{r.method}</td>
+                  <td className="px-5 py-3 font-medium">{r.currency} {Number(r.amount).toLocaleString()}</td>
+                  <td className="px-5 py-3">
+                    <div className="font-mono text-xs">{r.reference ?? "—"}</div>
+                    {r.proofUrl && <a href={r.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mt-1"><ExternalLink className="w-3 h-3" />Proof</a>}
+                    {r.note && <div className="text-xs text-muted-foreground mt-1 max-w-xs">{r.note}</div>}
+                  </td>
+                  <td className="px-5 py-3 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
+                  <td className="px-5 py-3">
+                    {r.status === "pending" && <Badge variant="outline">Pending</Badge>}
+                    {r.status === "approved" && <Badge className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">Approved</Badge>}
+                    {r.status === "rejected" && <Badge className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30">Rejected</Badge>}
+                    {r.reviewerNote && <div className="text-xs text-muted-foreground mt-1 max-w-xs">{r.reviewerNote}</div>}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {r.status === "pending" ? (
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => approve.mutate({ id: r.id }, {
+                            onSuccess: () => toast({ title: "Approved", description: `${r.tenantName ?? "Tenant"} activated on ${r.planName ?? "plan"}.` }),
+                            onError: (e) => toast({ title: "Approve failed", description: (e as Error).message, variant: "destructive" }),
+                          })}
+                          disabled={approve.isPending}
+                        >Approve</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive"
+                          onClick={() => {
+                            const reason = window.prompt("Reason for rejection:");
+                            if (!reason) return;
+                            reject.mutate({ id: r.id, reason }, {
+                              onSuccess: () => toast({ title: "Rejected" }),
+                              onError: (e) => toast({ title: "Reject failed", description: (e as Error).message, variant: "destructive" }),
+                            });
+                          }}
+                          disabled={reject.isPending}
+                        >Reject</Button>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

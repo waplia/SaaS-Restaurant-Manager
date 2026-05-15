@@ -29,6 +29,7 @@ import deliveryRouter from "./delivery";
 import waiterRequestsRouter from "./waiter-requests";
 import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter, createCashfreeWebhookRouter } from "./subscriptions";
+import billingRouter, { createRazorpayWebhookRouter } from "./billing";
 import settingsRouter from "./settings";
 import marketingRouter, { marketingAdminRouter } from "./marketing";
 import onboardingRouter from "./onboarding";
@@ -44,6 +45,7 @@ router.use(publicStorageRouter);
 router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
 router.use(createCashfreeWebhookRouter());
+router.use(createRazorpayWebhookRouter());
 
 router.use(authenticate);
 
@@ -72,6 +74,7 @@ router.use(cashRegisterRouter);
 router.use(deliveryRouter);
 router.use(waiterRequestsRouter);
 router.use(subscriptionsRouter);
+router.use(billingRouter);
 router.use(settingsRouter);
 router.use(onboardingRouter);
 
