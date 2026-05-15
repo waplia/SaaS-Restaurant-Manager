@@ -5,6 +5,7 @@ import { startScheduler } from "./lib/scheduler";
 import { startBroadcastScheduler, seedDefaultTemplates } from "./lib/notificationCenter";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
+import { getAppSettings } from "./lib/appSettings";
 
 const rawPort = process.env["PORT"];
 
@@ -41,6 +42,10 @@ httpServer.listen(port, () => {
   backfillDefaultKitchens()
     .then(() => logger.info("Default kitchens backfill complete"))
     .catch((e) => logger.error({ err: e }, "Default kitchens backfill failed"));
+
+  getAppSettings(true)
+    .then(() => logger.info("App settings singleton ensured"))
+    .catch((e) => logger.error({ err: e }, "App settings singleton seed failed"));
 });
 
 function shutdown(signal: string) {

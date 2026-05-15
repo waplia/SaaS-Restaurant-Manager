@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth } from "@/lib/auth";
+import { useAppSettings } from "@/lib/appSettings";
 
 const FEATURES = [
   "14-day free trial — no credit card required",
@@ -16,10 +17,26 @@ const FEATURES = [
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const settings = useAppSettings();
   const [, navigate] = useLocation();
   const [form, setForm] = useState({ restaurantName: "", ownerName: "", email: "", password: "", phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (!settings.signupEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <div className="max-w-md text-center space-y-3">
+          <h1 className="text-2xl font-semibold">Signups are paused</h1>
+          <p className="text-muted-foreground">
+            New restaurant signups are currently disabled. Please contact{" "}
+            <a className="text-primary underline" href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> to get access.
+          </p>
+          <a href="/login" className="inline-block text-sm text-primary underline">Back to sign in</a>
+        </div>
+      </div>
+    );
+  }
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>

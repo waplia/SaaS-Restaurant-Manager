@@ -1,15 +1,41 @@
 import { Link } from "wouter";
+import { useAppSettings } from "@/lib/appSettings";
+
+const SOCIAL_LABELS: Record<string, string> = {
+  twitter: "Twitter",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+};
 
 export function Footer() {
+  const settings = useAppSettings();
+  const socialEntries = Object.entries(settings.socialLinks ?? {}).filter(([, v]) => !!v);
+
   return (
     <footer className="bg-foreground text-background py-16">
       <div className="container mx-auto px-4 md:px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 lg:gap-8">
           <div className="space-y-4 md:col-span-1">
-            <span className="font-serif text-2xl font-bold tracking-tight text-primary">Khana Lagao</span>
+            <div className="flex items-center gap-2">
+              {settings.logoUrl && <img src={settings.logoUrl} alt={settings.appName} className="h-8 w-auto" />}
+              <span className="font-serif text-2xl font-bold tracking-tight text-primary">{settings.appName}</span>
+            </div>
             <p className="text-sm text-muted opacity-80 leading-relaxed max-w-xs">
-              The operating system for modern restaurants. Built for owners who treat their kitchen like a craft and their numbers like a sport.
+              {settings.footerText ?? "The operating system for modern restaurants. Built for owners who treat their kitchen like a craft and their numbers like a sport."}
             </p>
+            {(settings.supportEmail || settings.supportPhone) && (
+              <div className="text-sm opacity-80 space-y-1">
+                {settings.supportEmail && (
+                  <p><a href={`mailto:${settings.supportEmail}`} className="hover:text-primary">{settings.supportEmail}</a></p>
+                )}
+                {settings.supportPhone && (
+                  <p><a href={`tel:${settings.supportPhone.replace(/\s+/g, "")}`} className="hover:text-primary">{settings.supportPhone}</a></p>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="space-y-4">
@@ -51,12 +77,16 @@ export function Footer() {
         </div>
         
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm opacity-60">
-          <p>© {new Date().getFullYear()} Khana Lagao. All rights reserved.</p>
-          <div className="flex gap-4">
-            <a href="https://twitter.com/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Twitter</a>
-            <a href="https://www.linkedin.com/company/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
-            <a href="https://www.instagram.com/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Instagram</a>
-          </div>
+          <p>© {new Date().getFullYear()} {settings.appName}. All rights reserved.</p>
+          {socialEntries.length > 0 && (
+            <div className="flex gap-4">
+              {socialEntries.map(([key, url]) => (
+                <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+                  {SOCIAL_LABELS[key] ?? key}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </footer>

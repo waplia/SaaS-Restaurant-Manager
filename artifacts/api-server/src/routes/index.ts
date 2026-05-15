@@ -41,15 +41,19 @@ import apiManagementRouter from "./api-management";
 import publicV1Router from "./public-v1";
 import adminEmailRouter from "./admin-email";
 import maintenanceRouter from "./maintenance";
+import adminSettingsRouter, { publicAppSettingsRouter } from "./admin-settings";
+import { maintenanceMode, maintenanceGate } from "../middleware/maintenanceMode";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(maintenanceGate);
 router.use(authRouter);
 router.use(publicRouter);
 router.use(marketingRouter);
 router.use(marketingAdminRouter);
 router.use(publicStorageRouter);
+router.use(publicAppSettingsRouter);
 router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
 router.use(createCashfreeWebhookRouter());
@@ -60,7 +64,9 @@ router.use(createRazorpayWebhookRouter());
 router.use(publicV1Router);
 
 router.use(authenticate);
+router.use(maintenanceMode);
 
+router.use(adminSettingsRouter);
 router.use(tenantsRouter);
 router.use(restaurantsRouter);
 router.use(usersRouter);

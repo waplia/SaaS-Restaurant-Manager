@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import { AppSettingsProvider, useAppSettings } from "@/lib/appSettings";
 
 // Pages
 import Home from "@/pages/home";
@@ -26,11 +27,42 @@ import BlogPost from "@/pages/blog/[slug]";
 
 const queryClient = new QueryClient();
 
+function HomeOrDisabled() {
+  const settings = useAppSettings();
+  if (!settings.landingPageEnabled) {
+    if (typeof window !== "undefined") {
+      window.location.replace("/app/login");
+    }
+    return null;
+  }
+  return <Home />;
+}
+
+function BookDemoOrDisabled() {
+  const s = useAppSettings();
+  if (!s.demoModeEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <div className="max-w-md text-center space-y-3">
+          <h1 className="text-2xl font-semibold">Demo bookings are paused</h1>
+          <p className="text-muted-foreground">Please check back soon or contact support.</p>
+          {s.supportEmail && (
+            <a href={`mailto:${s.supportEmail}`} className="text-sm text-primary underline">
+              {s.supportEmail}
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return <BookDemo />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/book-demo" component={BookDemo} />
+      <Route path="/" component={HomeOrDisabled} />
+      <Route path="/book-demo" component={BookDemoOrDisabled} />
       <Route path="/pricing" component={Pricing} />
       
       <Route path="/features" component={FeaturesIndex} />
@@ -66,12 +98,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <AppSettingsProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AppSettingsProvider>
     </QueryClientProvider>
   );
 }

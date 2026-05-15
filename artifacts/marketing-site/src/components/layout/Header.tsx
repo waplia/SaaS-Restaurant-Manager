@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useAppSettings } from "@/lib/appSettings";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Menu, X, ChevronDown } from "lucide-react";
@@ -25,13 +26,15 @@ const FEATURES = [
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
+  const settings = useAppSettings();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
       <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2" data-testid="link-home">
-            <span className="font-serif text-xl font-bold tracking-tight text-primary">Khana Lagao</span>
+            {settings.logoUrl && <img src={settings.logoUrl} alt={settings.appName} className="h-7 w-auto" />}
+            <span className="font-serif text-xl font-bold tracking-tight text-primary">{settings.appName}</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">

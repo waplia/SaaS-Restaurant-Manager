@@ -10,6 +10,7 @@ import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
+import { useAppSettings } from "@/lib/appSettings";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
@@ -88,6 +89,7 @@ export function Sidebar() {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const appSettings = useAppSettings();
 
   const canSeeWaiterRequests = user?.isSuperAdmin || (user?.role ? ["owner", "manager", "waiter"].includes(user.role) : false);
   const { data: waiterReqs = [] } = useWaiterRequests({ enabled: canSeeWaiterRequests });
@@ -158,11 +160,19 @@ export function Sidebar() {
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar border-r border-sidebar-border">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/30 ring-1 ring-primary/20">
-          <Flame className="w-5 h-5 text-white" />
-        </div>
+        {appSettings.logoUrl ? (
+          <img
+            src={appSettings.logoUrl}
+            alt={appSettings.appName}
+            className="w-9 h-9 rounded-xl object-cover shadow-md shadow-primary/30 ring-1 ring-primary/20"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/30 ring-1 ring-primary/20">
+            <Flame className="w-5 h-5 text-white" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sidebar-foreground leading-tight tracking-tight">Khana Lagao</p>
+          <p className="font-bold text-sidebar-foreground leading-tight tracking-tight">{appSettings.appName}</p>
           <p className="text-xs text-muted-foreground truncate">{user?.name ?? "Loading…"}</p>
         </div>
         <button
@@ -292,6 +302,10 @@ export function Sidebar() {
             <Link href="/admin/api-settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
               <Settings className="w-4 h-4" />
               API & Webhooks
+            </Link>
+            <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <Settings className="w-4 h-4" />
+              App Settings
             </Link>
           </>
         )}

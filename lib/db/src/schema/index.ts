@@ -25,3 +25,4 @@ export * from "./system-logs";
 export * from "./api-management";
 export * from "./email";
 export * from "./maintenance";
+export * from "./app-settings";

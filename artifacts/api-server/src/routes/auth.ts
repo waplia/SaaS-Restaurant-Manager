@@ -12,12 +12,18 @@ import {
 } from "../lib/auth";
 import { authenticate } from "../middleware/authenticate";
 import { sendByTemplateKey } from "../lib/emailSender";
+import { getAppSettings } from "../lib/appSettings";
 
 import { sendLifecycleSms } from "../lib/smsSender";
 
 const router = Router();
 
 router.post("/auth/register", async (req, res) => {
+  const settings = await getAppSettings();
+  if (!settings.signupEnabled) {
+    res.status(403).json({ error: "Signups are currently disabled by the platform administrator." });
+    return;
+  }
   const { restaurantName, ownerName, email, password, phone } = req.body as {
     restaurantName?: string;
     ownerName?: string;

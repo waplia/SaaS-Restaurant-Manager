@@ -41,6 +41,8 @@ import WebhooksPage from "@/pages/webhooks";
 import WebhookLogsPage from "@/pages/webhook-logs";
 import ApiLogsPage from "@/pages/api-logs";
 import DeveloperDocsPage from "@/pages/developer-docs";
+import AdminSettingsPage from "@/pages/admin-settings";
+import { AppSettingsProvider } from "@/lib/appSettings";
 import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
@@ -115,6 +117,7 @@ function Router() {
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
+      <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
       <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
@@ -162,6 +165,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
+          <AppSettingsProvider>
           <BranchProvider>
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
@@ -171,6 +175,7 @@ function App() {
               <Toaster />
             </TooltipProvider>
           </BranchProvider>
+          </AppSettingsProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>
