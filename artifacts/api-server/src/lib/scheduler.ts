@@ -9,6 +9,7 @@ import { runAutoReorderForRestaurant } from "./autoReorder";
 import { sendLifecycleSms, sweepQuotaAlerts } from "./smsSender";
 import { subscriptionPlansTable } from "../lib/db";
 import { registerCron, runTrackedCron } from "./systemLogs";
+import { processPendingWebhookDeliveries } from "./webhookDispatcher";
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -278,7 +279,18 @@ export function startScheduler(): void {
     }).catch(err => logger.error({ err }, "Auto-reorder tick failed"));
   }, { timezone: "Asia/Kolkata" });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST)");
+  // Webhook delivery retry processor — every minute, picks any deliveries
+  // whose nextAttemptAt has passed and re-attempts them with exponential backoff.
+  cron.schedule("* * * * *", async () => {
+    try {
+      const n = await processPendingWebhookDeliveries(50);
+      if (n > 0) logger.info({ n }, "Processed pending webhook deliveries");
+    } catch (err) {
+      logger.error({ err }, "Webhook retry tick failed");
+    }
+  });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute");
 }
 
 async function runAutoReorderTick(now: Date) {

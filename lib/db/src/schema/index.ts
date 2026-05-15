@@ -22,3 +22,4 @@ export * from "./notifications";
 export * from "./sms";
 export * from "./support-tickets";
 export * from "./system-logs";
+export * from "./api-management";

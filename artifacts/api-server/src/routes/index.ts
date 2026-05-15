@@ -37,6 +37,8 @@ import adminBroadcastsRouter from "./admin-broadcasts";
 import adminSmsRouter from "./admin-sms";
 import supportTicketsRouter from "./support-tickets";
 import systemHealthRouter from "./system-health";
+import apiManagementRouter from "./api-management";
+import publicV1Router from "./public-v1";
 
 const router: IRouter = Router();
 
@@ -50,6 +52,10 @@ router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
 router.use(createCashfreeWebhookRouter());
 router.use(createRazorpayWebhookRouter());
+
+// Public API namespace (api-key authenticated). Mounted BEFORE the JWT
+// `authenticate` gate so external clients can call it with `Bearer <api_key>`.
+router.use(publicV1Router);
 
 router.use(authenticate);
 
@@ -85,5 +91,6 @@ router.use(adminBroadcastsRouter);
 router.use(adminSmsRouter);
 router.use(supportTicketsRouter);
 router.use(systemHealthRouter);
+router.use(apiManagementRouter);
 
 export default router;

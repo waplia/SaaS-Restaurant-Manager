@@ -6,6 +6,7 @@ import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
+import { emitWebhookEvent } from "../lib/webhookDispatcher";
 import { pushToStaff } from "../lib/pushNotify";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
@@ -289,6 +290,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     entityId: order.id,
     entityType: "order",
   }).catch(() => {});
+  void emitWebhookEvent(restaurantId, "order.created", { id: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount, status: order.status, customerName: order.customerName });
   for (const t of createdTickets) {
     broadcastEvent(restaurantId, "order:new", { ...order, ticketId: t.ticketId, kitchenId: t.kitchenId });
     pushToStaff(
@@ -342,6 +344,7 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
+  void emitWebhookEvent(restaurantId, updated.status === "completed" ? "order.completed" : "order.updated", { id: updated.id, orderNumber: updated.orderNumber, status: updated.status });
 
   res.json(updated);
 });
@@ -1046,6 +1049,7 @@ router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
   }
 
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "cancelled", orderNumber: order.orderNumber });
+  void emitWebhookEvent(restaurantId, "order.cancelled", { id: orderId, orderNumber: order.orderNumber, status: "cancelled" });
 
   res.json(updated);
 });

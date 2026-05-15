@@ -35,6 +35,12 @@ import AdminBlogPage from "@/pages/admin-blog";
 import AdminSupportPage from "@/pages/admin-support";
 import SupportPage from "@/pages/support";
 import SystemHealthPage from "@/pages/system-health";
+import AdminApiSettingsPage from "@/pages/admin-api-settings";
+import ApiKeysPage from "@/pages/api-keys";
+import WebhooksPage from "@/pages/webhooks";
+import WebhookLogsPage from "@/pages/webhook-logs";
+import ApiLogsPage from "@/pages/api-logs";
+import DeveloperDocsPage from "@/pages/developer-docs";
 import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
@@ -134,6 +140,12 @@ function Router() {
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={WebhooksPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={ApiLogsPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/developer-docs" component={() => <RoleProtectedRoute component={DeveloperDocsPage} allow={["owner", "manager"]} />} />
+      <Route path="/admin/api-settings" component={() => <SuperAdminRoute component={AdminApiSettingsPage} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />
