@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Flame, Check, ChevronRight, ChevronLeft, SkipForward, Loader2, Plus, Trash2, Rocket } from "lucide-react";
@@ -56,6 +56,18 @@ export default function OnboardingPage() {
   const qc = useQueryClient();
   const { data: state, isLoading } = useOnboardingState();
   const [activeIdx, setActiveIdx] = useState(0);
+  const resumedRef = useRef(false);
+  // Resume the wizard at the first incomplete (and not-skipped) step so
+  // returning users land where they left off instead of step 1.
+  useEffect(() => {
+    if (resumedRef.current || !state) return;
+    resumedRef.current = true;
+    const idx = STEP_DEFS.findIndex(def => {
+      const s = state.steps.find(x => x.id === def.id);
+      return !s || (!s.completed && !s.skipped);
+    });
+    if (idx > 0) setActiveIdx(idx);
+  }, [state]);
 
   const skipMut = useMutation({
     mutationFn: (step: StepId) => apiPost<{ skippedSteps: string[] }>("/onboarding/skip", { step }),
