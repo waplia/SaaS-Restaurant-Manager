@@ -1,44 +1,61 @@
-# [Project name]
+# TableTrack
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A multi-tenant SaaS restaurant management platform — POS, table management, inventory, payroll, staff shifts, and AI-assisted menu generation for restaurant owners and staff.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- **API Server workflow** — runs `PORT=8080 pnpm --filter @workspace/api-server run dev` on port 8080
+- **Start application workflow** — runs `PORT=22508 BASE_PATH=/ pnpm --filter @workspace/restaurant-platform run dev` on port 22508 (external port 3001)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- API: Express 5 + Socket.io (real-time)
+- DB: PostgreSQL + Drizzle ORM (Replit managed)
 - Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
+- API codegen: Orval (from OpenAPI spec in `lib/api-spec/openapi.yaml`)
 - Build: esbuild (CJS bundle)
+- Frontend: React 19 + Vite 7 + TailwindCSS 4 + shadcn/ui
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/src/` — Express API server
+- `artifacts/restaurant-platform/src/` — React web admin/POS frontend
+- `artifacts/tabletrack-mobile/` — Expo mobile app (not yet wired up)
+- `lib/db/src/schema/` — Drizzle schema (source of truth for DB)
+- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API)
+- `lib/api-client-react/` — Generated React Query hooks (don't edit)
+- `lib/api-zod/` — Generated Zod schemas (don't edit)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Multi-tenant: all DB queries are scoped by `tenantId` via middleware
+- JWT auth: access + refresh token pair; `JWT_SECRET` and `JWT_RESET_SECRET` set as shared env vars
+- API is served at `/api` path prefix; frontend routes everything else through `/`
+- Real-time order/kitchen updates via Socket.io on the same HTTP server
+- Dev fallbacks exist for JWT secrets (dev-only; production enforces real secrets)
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Restaurant owners: dashboard, menu management, inventory, staff payroll/shifts, subscription management
+- Waiters/kitchen staff: order taking, kitchen ticket display, table management
+- Customers: QR-code menu browsing and order tracking
+- AI features: menu drafting from images/text via Gemini and Anthropic
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- User wants the full project running live with database
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Both workflows MUST include `PORT=...` in the command — the app throws if PORT is not set
+- Restaurant platform also needs `BASE_PATH=/` in its workflow command
+- API server dev mode builds first (esbuild), then starts — cold start ~1s
+- Run `pnpm --filter @workspace/db run push` after schema changes before starting the API
 
 ## Pointers
 

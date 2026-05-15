@@ -11,6 +11,43 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "API Server"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=22508 BASE_PATH=/ pnpm --filter @workspace/restaurant-platform run dev"
+waitForPort = 22508
+
+[[workflows.workflow]]
+name = "API Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
+waitForPort = 8080
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -41,3 +78,10 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "43df9788d1f8dc109ff4fb612327ef1141e462446acd435365013fdb1f689e6d7b84e0c2e91fb3b917ab5c55c331627b2269d677506dc4b1888031fed73b920e"
+JWT_RESET_SECRET = "f94bccf66030112453e1c2e41c30b6fca006ef9eda0f55d12b5acc8b76dbf6387d6ce3ed29affd9c2c254c996d32f15e738285d1d17751d9ef68d453d619634b"
+NODE_ENV = "development"
