@@ -8,6 +8,7 @@ import { expireDueLoyaltyPoints } from "./loyalty";
 import { runAutoReorderForRestaurant } from "./autoReorder";
 import { sendLifecycleSms, sweepQuotaAlerts } from "./smsSender";
 import { subscriptionPlansTable } from "../lib/db";
+import { registerCron, runTrackedCron } from "./systemLogs";
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -92,9 +93,14 @@ async function backfillPaymentsLedger(): Promise<void> {
 export function startScheduler(): void {
   backfillPaymentsLedger().catch(err => logger.error({ err }, "Backfill startup error"));
 
+  registerCron("daily-sales-summary", "0 23 * * *", "Emails per-restaurant daily sales summary at 23:00 IST");
+  registerCron("trial-expiry", "0 0 * * *", "Notifies tenants whose trial has expired at 00:00 IST");
+  registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
+  registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
+
   cron.schedule("0 23 * * *", async () => {
     logger.info("Running daily sales summary job");
-    try {
+    await runTrackedCron("daily-sales-summary", async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -148,14 +154,12 @@ export function startScheduler(): void {
           }
         }
       }
-    } catch (err) {
-      logger.error({ err }, "Daily summary job failed");
-    }
+    }).catch(err => logger.error({ err }, "Daily summary job failed"));
   }, { timezone: "Asia/Kolkata" });
 
   cron.schedule("0 0 * * *", async () => {
     logger.info("Running trial-expiry enforcement job");
-    try {
+    await runTrackedCron("trial-expiry", async () => {
       const now = new Date();
       const expiredTenants = await db
         .select()
@@ -200,9 +204,7 @@ export function startScheduler(): void {
       }
 
       logger.info({ count: expiredTenants.length }, "Trial-expiry job complete");
-    } catch (err) {
-      logger.error({ err }, "Trial-expiry job failed");
-    }
+    }).catch(err => logger.error({ err }, "Trial-expiry job failed"));
   }, { timezone: "Asia/Kolkata" });
 
   // Trial-ending warning — fires daily at 09:00 IST for tenants whose trial ends in ~3 days.
@@ -261,23 +263,19 @@ export function startScheduler(): void {
 
   cron.schedule("30 0 * * *", async () => {
     logger.info("Running loyalty-points expiry job");
-    try {
+    await runTrackedCron("loyalty-expiry", async () => {
       const expired = await expireDueLoyaltyPoints();
       logger.info({ expired }, "Loyalty-expiry job complete");
-    } catch (err) {
-      logger.error({ err }, "Loyalty-expiry job failed");
-    }
+    }).catch(err => logger.error({ err }, "Loyalty-expiry job failed"));
   }, { timezone: "Asia/Kolkata" });
 
   // Auto-reorder is per-restaurant: each tenant configures its own cron expression
   // (restaurants.autoReorderCron). We tick every minute in IST and run any restaurant
   // whose schedule matches the current minute.
   cron.schedule("* * * * *", async () => {
-    try {
+    await runTrackedCron("auto-reorder", async () => {
       await runAutoReorderTick(new Date());
-    } catch (err) {
-      logger.error({ err }, "Auto-reorder tick failed");
-    }
+    }).catch(err => logger.error({ err }, "Auto-reorder tick failed"));
   }, { timezone: "Asia/Kolkata" });
 
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST)");

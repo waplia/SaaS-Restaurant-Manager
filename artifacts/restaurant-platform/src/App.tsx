@@ -34,6 +34,7 @@ import AdminLeadsPage from "@/pages/admin-leads";
 import AdminBlogPage from "@/pages/admin-blog";
 import AdminSupportPage from "@/pages/admin-support";
 import SupportPage from "@/pages/support";
+import SystemHealthPage from "@/pages/system-health";
 import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
@@ -107,6 +108,7 @@ function Router() {
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
+      <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />

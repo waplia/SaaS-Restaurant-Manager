@@ -36,6 +36,7 @@ import onboardingRouter from "./onboarding";
 import adminBroadcastsRouter from "./admin-broadcasts";
 import adminSmsRouter from "./admin-sms";
 import supportTicketsRouter from "./support-tickets";
+import systemHealthRouter from "./system-health";
 
 const router: IRouter = Router();
 
@@ -83,5 +84,6 @@ router.use(onboardingRouter);
 router.use(adminBroadcastsRouter);
 router.use(adminSmsRouter);
 router.use(supportTicketsRouter);
+router.use(systemHealthRouter);
 
 export default router;

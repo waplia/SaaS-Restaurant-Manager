@@ -4,7 +4,7 @@ import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
-  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare,
+  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, Activity,
 } from "lucide-react";
 import AdminNotificationCenter from "./admin-notifications";
 import AdminSmsTab from "./admin-sms";
@@ -783,6 +783,11 @@ export default function AdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a href="/admin/system-health">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Activity className="w-4 h-4" /> System Health
+              </Button>
+            </a>
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-foreground">{user.name}</p>
               <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end"><Mail className="w-3 h-3" />{user.email}</p>

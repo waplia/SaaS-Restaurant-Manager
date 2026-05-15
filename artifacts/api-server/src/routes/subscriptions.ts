@@ -9,6 +9,7 @@ import {
 } from "../lib/cashfree";
 import { getEffectiveCashfreeConfig, getEffectiveRazorpayConfig } from "../lib/paymentSettings";
 import { logger } from "../lib/logger";
+import { recordSystemLog } from "../lib/systemLogs";
 import type { Request, Response } from "express";
 
 const router = Router();
@@ -252,6 +253,10 @@ export function createStripeWebhookRouter(): Router {
     try {
       event = stripe.webhooks.constructEvent(req.body as Buffer, sig, secret);
     } catch (err) {
+      await recordSystemLog({
+        category: "payment_webhook", source: "stripe", status: "failed", level: "error",
+        message: `Stripe webhook signature error: ${String(err)}`, route: "/api/stripe/webhook", method: "POST", statusCode: 400,
+      });
       return void res.status(400).json({ error: `Webhook signature error: ${String(err)}` });
     }
 
@@ -297,9 +302,19 @@ export function createStripeWebhookRouter(): Router {
       }
     } catch (err) {
       console.error("Webhook processing error:", err);
+      await recordSystemLog({
+        category: "payment_webhook", source: "stripe", status: "failed", level: "error",
+        message: `Stripe webhook processing error (${event.type}): ${(err as Error).message}`,
+        stack: (err as Error).stack ?? null, payload: { type: event.type }, route: "/api/stripe/webhook", method: "POST", statusCode: 500,
+      });
       return void res.status(500).json({ error: "Webhook handler failed — will retry" });
     }
 
+    await recordSystemLog({
+      category: "payment_webhook", source: "stripe", status: "success", level: "info",
+      message: `Stripe webhook processed: ${event.type}`, payload: { type: event.type, id: event.id },
+      route: "/api/stripe/webhook", method: "POST", statusCode: 200,
+    });
     res.json({ received: true });
   });
   return webhookRouter;
@@ -337,9 +352,19 @@ export function createCashfreeWebhookRouter(): Router {
       }
     } catch (err) {
       logger.error({ err }, "Cashfree webhook processing error");
+      await recordSystemLog({
+        category: "payment_webhook", source: "cashfree", status: "failed", level: "error",
+        message: `Cashfree webhook processing error: ${(err as Error).message}`, stack: (err as Error).stack ?? null,
+        payload: { type: event.type }, route: "/api/cashfree/webhook", method: "POST", statusCode: 500,
+      });
       return void res.status(500).json({ error: "Webhook handler failed — will retry" });
     }
 
+    await recordSystemLog({
+      category: "payment_webhook", source: "cashfree", status: "success", level: "info",
+      message: `Cashfree webhook processed: ${event.type ?? "unknown"}`, payload: { type: event.type },
+      route: "/api/cashfree/webhook", method: "POST", statusCode: 200,
+    });
     res.json({ received: true });
   });
   return webhookRouter;

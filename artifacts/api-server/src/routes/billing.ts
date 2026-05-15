@@ -308,8 +308,20 @@ export function createRazorpayWebhookRouter(): Router {
       }
     } catch (err) {
       logger.error({ err }, "Razorpay webhook processing error");
+      const { recordSystemLog } = await import("../lib/systemLogs");
+      await recordSystemLog({
+        category: "payment_webhook", source: "razorpay", status: "failed", level: "error",
+        message: `Razorpay webhook processing error: ${(err as Error).message}`, stack: (err as Error).stack ?? null,
+        payload: { event: event.event }, route: "/api/razorpay/webhook", method: "POST", statusCode: 500,
+      });
       return void res.status(500).json({ error: "Webhook handler failed — will retry" });
     }
+    const { recordSystemLog } = await import("../lib/systemLogs");
+    await recordSystemLog({
+      category: "payment_webhook", source: "razorpay", status: "success", level: "info",
+      message: `Razorpay webhook processed: ${event.event ?? "unknown"}`, payload: { event: event.event },
+      route: "/api/razorpay/webhook", method: "POST", statusCode: 200,
+    });
     res.json({ received: true });
   });
   return r;
