@@ -4,11 +4,12 @@ import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
-  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, Activity,
+  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, Activity, Wrench,
 } from "lucide-react";
 import AdminNotificationCenter from "./admin-notifications";
 import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
+import AdminMaintenance from "./admin-maintenance";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -742,7 +743,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "notifications" | "sms" | "email">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "notifications" | "sms" | "email" | "maintenance">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -820,6 +821,7 @@ export default function AdminPage() {
             { id: "notifications" as const, label: "Notifications", icon: Megaphone },
             { id: "sms" as const, label: "SMS", icon: MessageSquare },
             { id: "email" as const, label: "Email", icon: Mail },
+            { id: "maintenance" as const, label: "System Maintenance", icon: Wrench },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -837,6 +839,7 @@ export default function AdminPage() {
         {tab === "notifications" && <AdminNotificationCenter />}
         {tab === "sms" && <AdminSmsTab />}
         {tab === "email" && <AdminEmail />}
+        {tab === "maintenance" && <AdminMaintenance />}
       </main>
     </div>
   );

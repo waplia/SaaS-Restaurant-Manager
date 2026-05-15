@@ -11,6 +11,15 @@ import { sendLifecycleSms, sweepQuotaAlerts } from "./smsSender";
 import { subscriptionPlansTable } from "../lib/db";
 import { registerCron, runTrackedCron } from "./systemLogs";
 import { processPendingWebhookDeliveries } from "./webhookDispatcher";
+import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./maintenance";
+
+function trackCron(name: string, expr: string, fn: () => Promise<void>) {
+  registerCronJob(name, expr);
+  return cron.schedule(expr, async () => {
+    try { await fn(); recordCronRun(name, true); }
+    catch (err) { recordCronRun(name, false, (err as Error).message); throw err; }
+  }, { timezone: "Asia/Kolkata" });
+}
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -100,7 +109,7 @@ export function startScheduler(): void {
   registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
   registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
 
-  cron.schedule("0 23 * * *", async () => {
+  trackCron("daily_sales_summary", "0 23 * * *", async () => {
     logger.info("Running daily sales summary job");
     await runTrackedCron("daily-sales-summary", async () => {
       const today = new Date();
@@ -157,9 +166,9 @@ export function startScheduler(): void {
         }
       }
     }).catch(err => logger.error({ err }, "Daily summary job failed"));
-  }, { timezone: "Asia/Kolkata" });
+  });
 
-  cron.schedule("0 0 * * *", async () => {
+  trackCron("trial_expiry", "0 0 * * *", async () => {
     logger.info("Running trial-expiry enforcement job");
     await runTrackedCron("trial-expiry", async () => {
       const now = new Date();
@@ -209,11 +218,11 @@ export function startScheduler(): void {
 
       logger.info({ count: expiredTenants.length }, "Trial-expiry job complete");
     }).catch(err => logger.error({ err }, "Trial-expiry job failed"));
-  }, { timezone: "Asia/Kolkata" });
+  });
 
   // Trial-ending warning — fires daily at 09:00 IST for tenants whose trial ends in ~3 days.
   // Sends BOTH SMS and Email reminders.
-  cron.schedule("0 9 * * *", async () => {
+  trackCron("trial_ending_reminder", "0 9 * * *", async () => {
     try {
       const now = new Date();
       const winStart = new Date(now); winStart.setDate(winStart.getDate() + 2); winStart.setHours(0, 0, 0, 0);
@@ -244,10 +253,10 @@ export function startScheduler(): void {
       }
       logger.info({ count: tenants.length }, "Trial-ending reminder job complete (SMS+Email)");
     } catch (err) { logger.error({ err }, "Trial-ending reminder job failed"); }
-  }, { timezone: "Asia/Kolkata" });
+  });
 
   // Payment-reminder — fires daily at 10:00 IST for active tenants whose subscription ends in ~3 days.
-  cron.schedule("0 10 * * *", async () => {
+  trackCron("payment_reminder", "0 10 * * *", async () => {
     try {
       const now = new Date();
       const winStart = new Date(now); winStart.setDate(winStart.getDate() + 2); winStart.setHours(0, 0, 0, 0);
@@ -272,35 +281,34 @@ export function startScheduler(): void {
       }
       logger.info({ count: rows.length }, "Payment-reminder SMS job complete");
     } catch (err) { logger.error({ err }, "Payment-reminder SMS job failed"); }
-  }, { timezone: "Asia/Kolkata" });
+  });
 
   // Hourly SMS quota sweep — surfaces low-balance alerts in the Notification Center.
-  cron.schedule("15 * * * *", async () => {
+  trackCron("sms_quota_sweep", "15 * * * *", async () => {
     try { await sweepQuotaAlerts(); }
     catch (err) { logger.error({ err }, "SMS quota sweep failed"); }
   });
 
-
-  cron.schedule("30 0 * * *", async () => {
+  trackCron("loyalty_expiry", "30 0 * * *", async () => {
     logger.info("Running loyalty-points expiry job");
     await runTrackedCron("loyalty-expiry", async () => {
       const expired = await expireDueLoyaltyPoints();
       logger.info({ expired }, "Loyalty-expiry job complete");
     }).catch(err => logger.error({ err }, "Loyalty-expiry job failed"));
-  }, { timezone: "Asia/Kolkata" });
+  });
 
   // Auto-reorder is per-restaurant: each tenant configures its own cron expression
   // (restaurants.autoReorderCron). We tick every minute in IST and run any restaurant
   // whose schedule matches the current minute.
-  cron.schedule("* * * * *", async () => {
+  trackCron("auto_reorder_tick", "* * * * *", async () => {
     await runTrackedCron("auto-reorder", async () => {
       await runAutoReorderTick(new Date());
     }).catch(err => logger.error({ err }, "Auto-reorder tick failed"));
-  }, { timezone: "Asia/Kolkata" });
+  });
 
   // Webhook delivery retry processor — every minute, picks any deliveries
   // whose nextAttemptAt has passed and re-attempts them with exponential backoff.
-  cron.schedule("* * * * *", async () => {
+  trackCron("webhook_retry", "* * * * *", async () => {
     try {
       const n = await processPendingWebhookDeliveries(50);
       if (n > 0) logger.info({ n }, "Processed pending webhook deliveries");
@@ -309,7 +317,12 @@ export function startScheduler(): void {
     }
   });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute");
+  // Scheduled platform backups: tick every minute and run when next_run_at is due.
+  trackCron("scheduled_backup", "* * * * *", async () => {
+    await runScheduledBackupTick();
+  });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
 }
 
 async function runAutoReorderTick(now: Date) {
