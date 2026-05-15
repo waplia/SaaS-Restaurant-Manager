@@ -2,7 +2,7 @@ import http from "http";
 import app from "./app";
 import { initSocketIO } from "./lib/socketio";
 import { startScheduler } from "./lib/scheduler";
-import { startBroadcastScheduler } from "./lib/notificationCenter";
+import { startBroadcastScheduler, seedDefaultTemplates } from "./lib/notificationCenter";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 
@@ -24,6 +24,7 @@ const httpServer = http.createServer(app);
 initSocketIO(httpServer);
 startScheduler();
 startBroadcastScheduler();
+seedDefaultTemplates().catch(err => console.error("Failed to seed default templates", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {

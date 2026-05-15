@@ -6,7 +6,7 @@ import { usersTable } from "./users";
 export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
 export type BroadcastPriority = "low" | "medium" | "high" | "urgent";
-export type DeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+export type DeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "skipped" | "pending";
 
 /**
  * Combinable audience filter. Each populated field narrows the audience

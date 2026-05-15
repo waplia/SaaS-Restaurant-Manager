@@ -24,7 +24,7 @@ const router = Router();
 
 const ALLOWED_CHANNELS: BroadcastChannel[] = ["in_app", "email", "sms", "whatsapp", "push"];
 const ALLOWED_PRIORITIES: BroadcastPriority[] = ["low", "medium", "high", "urgent"];
-const ALLOWED_DELIVERY_STATUSES: DeliveryStatus[] = ["pending", "sent", "failed", "skipped"];
+const ALLOWED_DELIVERY_STATUSES: DeliveryStatus[] = ["queued", "sent", "delivered", "failed", "skipped", "pending"];
 
 function parseAudience(input: unknown): AudienceFilter {
   if (!input || typeof input !== "object") return {};
@@ -144,11 +144,34 @@ router.post("/admin/broadcasts/audience-preview", requireSuperAdmin, async (req,
 // ─── Broadcasts ──────────────────────────────────────────────────
 router.get("/admin/broadcasts", requireSuperAdmin, async (req, res) => {
   const status = (req.query.status as string | undefined) ?? "all";
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
   const where = status === "all" ? undefined : eq(notificationBroadcastsTable.status, status as never);
-  const rows = await db.select().from(notificationBroadcastsTable)
-    .where(where)
-    .orderBy(desc(notificationBroadcastsTable.createdAt))
-    .limit(200);
+
+  const [rows, totalRow] = await Promise.all([
+    db.select().from(notificationBroadcastsTable)
+      .where(where)
+      .orderBy(desc(notificationBroadcastsTable.createdAt))
+      .limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)::int` })
+      .from(notificationBroadcastsTable)
+      .where(where),
+  ]);
+  res.json({ data: rows, total: totalRow[0]?.count ?? 0, limit, offset });
+});
+
+// Per-channel breakdown for one broadcast (for the Sent detail panel).
+router.get("/admin/broadcasts/:id/recipient-stats", requireSuperAdmin, async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return void res.status(400).json({ error: "Invalid id" });
+  const rows = await db.select({
+    channel: notificationDeliveriesTable.channel,
+    status: notificationDeliveriesTable.status,
+    count: sql<number>`count(*)::int`,
+  })
+    .from(notificationDeliveriesTable)
+    .where(eq(notificationDeliveriesTable.broadcastId, id))
+    .groupBy(notificationDeliveriesTable.channel, notificationDeliveriesTable.status);
   res.json({ data: rows });
 });
 
@@ -167,6 +190,9 @@ router.get("/admin/broadcasts/:id/recipients", requireSuperAdmin, async (req, re
   const channel = typeof req.query.channel === "string" ? req.query.channel : "all";
   const status = typeof req.query.status === "string" ? req.query.status : "all";
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const tenantIdFilter = parseId(req.query.tenantId);
+  const dateFromRaw = typeof req.query.dateFrom === "string" ? req.query.dateFrom : "";
+  const dateToRaw = typeof req.query.dateTo === "string" ? req.query.dateTo : "";
   const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
 
   const conditions: SQL[] = [eq(notificationDeliveriesTable.broadcastId, id)];
@@ -175,6 +201,15 @@ router.get("/admin/broadcasts/:id/recipients", requireSuperAdmin, async (req, re
   }
   if (status !== "all" && (ALLOWED_DELIVERY_STATUSES as string[]).includes(status)) {
     conditions.push(eq(notificationDeliveriesTable.status, status as DeliveryStatus));
+  }
+  if (tenantIdFilter) conditions.push(eq(notificationDeliveriesTable.tenantId, tenantIdFilter));
+  if (dateFromRaw) {
+    const d = new Date(dateFromRaw);
+    if (!Number.isNaN(d.getTime())) conditions.push(sql`${notificationDeliveriesTable.createdAt} >= ${d}`);
+  }
+  if (dateToRaw) {
+    const d = new Date(dateToRaw);
+    if (!Number.isNaN(d.getTime())) conditions.push(sql`${notificationDeliveriesTable.createdAt} <= ${d}`);
   }
   if (search) {
     conditions.push(sql`(${notificationDeliveriesTable.recipient} ILIKE ${"%" + search + "%"} OR ${notificationDeliveriesTable.error} ILIKE ${"%" + search + "%"})`);

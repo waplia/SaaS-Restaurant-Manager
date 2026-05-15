@@ -7,6 +7,7 @@ import {
   notificationsTable,
   notificationBroadcastsTable,
   notificationDeliveriesTable,
+  notificationTemplatesTable,
   userDevicesTable,
   type AudienceFilter,
   type BroadcastChannel,
@@ -274,12 +275,16 @@ async function sendOnChannel(
 }
 
 /**
- * Re-attempt a single delivery row. Loads the broadcast and recipient context,
- * sends on the original channel, and updates the delivery row in place.
+ * Re-attempt a single delivery row. Only failed deliveries can be retried —
+ * skipped rows have a permanent reason (no contact info) and would corrupt
+ * aggregate counters if treated as a failure→success transition.
  */
 export async function retryDelivery(deliveryId: number): Promise<NotificationDelivery> {
   const [delivery] = await db.select().from(notificationDeliveriesTable).where(eq(notificationDeliveriesTable.id, deliveryId));
   if (!delivery) throw new Error("Delivery not found");
+  if (delivery.status !== "failed") {
+    throw new Error(`Only failed deliveries can be retried (current status: ${delivery.status})`);
+  }
   const [bc] = await db.select().from(notificationBroadcastsTable).where(eq(notificationBroadcastsTable.id, delivery.broadcastId));
   if (!bc) throw new Error("Broadcast not found");
 
@@ -304,8 +309,6 @@ export async function retryDelivery(deliveryId: number): Promise<NotificationDel
 
   const subject = bc.subject ?? bc.title;
   const out = await sendOnChannel(bc, delivery.channel, recipientCtx, subject, bc.message);
-  const wasSuccess = delivery.status === "sent";
-  const isSuccess = out.status === "sent";
 
   const [updated] = await db.update(notificationDeliveriesTable).set({
     status: out.status,
@@ -315,11 +318,14 @@ export async function retryDelivery(deliveryId: number): Promise<NotificationDel
     sentAt: out.status === "sent" ? new Date() : delivery.sentAt,
   }).where(eq(notificationDeliveriesTable.id, deliveryId)).returning();
 
-  // Update aggregate counters if status flipped.
-  if (wasSuccess !== isSuccess) {
+  // Counter math: previous status was "failed" (enforced above). Adjust only
+  // when the new status is "sent" (failure → success). Other outcomes
+  // (still failed, or skipped — though skipped should be rare on retry)
+  // leave aggregates untouched.
+  if (out.status === "sent") {
     await db.update(notificationBroadcastsTable).set({
-      successCount: sql`${notificationBroadcastsTable.successCount} + ${isSuccess ? 1 : -1}`,
-      failureCount: sql`${notificationBroadcastsTable.failureCount} + ${isSuccess ? -1 : 1}`,
+      successCount: sql`${notificationBroadcastsTable.successCount} + 1`,
+      failureCount: sql`greatest(${notificationBroadcastsTable.failureCount} - 1, 0)`,
       updatedAt: new Date(),
     }).where(eq(notificationBroadcastsTable.id, bc.id));
   }
@@ -350,6 +356,45 @@ export async function resendFailedDeliveries(broadcastId: number): Promise<{ ret
     }
   }
   return { retried: failedRows.length, succeeded, failed };
+}
+
+/**
+ * Seeds a small library of common admin broadcast templates the first time
+ * the table is empty. Slugs are unique and idempotent. Safe to call on every boot.
+ */
+export async function seedDefaultTemplates(): Promise<void> {
+  const existing = await db.select({ id: notificationTemplatesTable.id }).from(notificationTemplatesTable).limit(1);
+  if (existing.length > 0) return;
+  const defaults = [
+    { name: "Welcome message", slug: "welcome", channel: "email" as const,
+      subject: "Welcome to TableTrack, {{userName}}!",
+      body: "Hi {{userName}},\n\nThanks for joining TableTrack. Your account is ready — sign in to set up your first restaurant.\n\nNeed help? Just reply to this email." },
+    { name: "Trial ending soon", slug: "trial-ending", channel: "email" as const,
+      subject: "Your TableTrack trial ends in 3 days",
+      body: "Hi {{userName}},\n\nYour free trial ends in 3 days. Upgrade now to keep all your data, staff and integrations active without interruption." },
+    { name: "Plan upgraded", slug: "plan-upgraded", channel: "in_app" as const,
+      subject: "Plan upgraded — welcome aboard!",
+      body: "Your subscription has been upgraded successfully. Enjoy the new limits and features." },
+    { name: "Payment failed", slug: "payment-failed", channel: "email" as const,
+      subject: "We couldn't process your payment",
+      body: "Hi {{userName}},\n\nWe were unable to charge your card on file. Please update your billing details to avoid service interruption." },
+    { name: "Scheduled maintenance", slug: "maintenance", channel: "in_app" as const,
+      subject: "Scheduled maintenance",
+      body: "We'll be performing scheduled maintenance soon. The platform may be briefly unavailable. Thanks for your patience." },
+    { name: "New feature announcement", slug: "feature-announcement", channel: "in_app" as const,
+      subject: "Something new just landed",
+      body: "We've shipped a new capability we think you'll love. Open the app to check it out." },
+  ];
+  for (const t of defaults) {
+    try {
+      await db.insert(notificationTemplatesTable).values({
+        ...t, variables: ["userName"], createdBy: null,
+      });
+    } catch (err) {
+      logger.warn({ err, slug: t.slug }, "Default template seed skipped (likely already exists)");
+    }
+  }
+  logger.info({ count: defaults.length }, "Seeded default notification templates");
 }
 
 let schedulerStarted = false;

@@ -2367,7 +2367,7 @@ export function payrollSlipUrl(restaurantId: number, itemId: number, print = fal
 export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
 export type BroadcastPriority = "low" | "medium" | "high" | "urgent";
-export type DeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+export type DeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "skipped" | "pending";
 
 /** Combinable filter — each populated field narrows the audience with AND. */
 export type AudienceFilter = {
@@ -2426,10 +2426,28 @@ export interface AdminBroadcastDelivery {
   createdAt: string;
 }
 
-export function useAdminBroadcasts(status: BroadcastStatus | "all" = "all") {
+export function useAdminBroadcasts(status: BroadcastStatus | "all" = "all", page = 1, pageSize = 50) {
+  const offset = (page - 1) * pageSize;
   return useQuery({
-    queryKey: ["admin", "broadcasts", status],
-    queryFn: () => apiGet<{ data: AdminBroadcast[] }>(`/admin/broadcasts?status=${status}`),
+    queryKey: ["admin", "broadcasts", status, page, pageSize],
+    queryFn: () => apiGet<{ data: AdminBroadcast[]; total: number; limit: number; offset: number }>(
+      `/admin/broadcasts?status=${status}&limit=${pageSize}&offset=${offset}`,
+    ),
+    refetchInterval: 15_000,
+  });
+}
+
+export interface BroadcastRecipientStat {
+  channel: BroadcastChannel;
+  status: DeliveryStatus;
+  count: number;
+}
+
+export function useAdminBroadcastRecipientStats(id: number | null) {
+  return useQuery({
+    queryKey: ["admin", "broadcasts", "recipient-stats", id],
+    queryFn: () => apiGet<{ data: BroadcastRecipientStat[] }>(`/admin/broadcasts/${id}/recipient-stats`),
+    enabled: id !== null,
     refetchInterval: 15_000,
   });
 }
@@ -2442,14 +2460,23 @@ export function useAdminBroadcast(id: number | null) {
   });
 }
 
-export function useAdminBroadcastRecipients(
-  id: number | null,
-  filters: { channel?: string; status?: string; search?: string } = {},
-) {
+export interface RecipientFilters {
+  channel?: string;
+  status?: string;
+  search?: string;
+  tenantId?: number | null;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export function useAdminBroadcastRecipients(id: number | null, filters: RecipientFilters = {}) {
   const qs = new URLSearchParams();
   if (filters.channel && filters.channel !== "all") qs.set("channel", filters.channel);
   if (filters.status && filters.status !== "all") qs.set("status", filters.status);
   if (filters.search) qs.set("search", filters.search);
+  if (filters.tenantId) qs.set("tenantId", String(filters.tenantId));
+  if (filters.dateFrom) qs.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) qs.set("dateTo", filters.dateTo);
   return useQuery({
     queryKey: ["admin", "broadcasts", "recipients", id, filters],
     queryFn: () => apiGet<{ data: AdminBroadcastDelivery[] }>(`/admin/broadcasts/${id}/recipients?${qs.toString()}`),

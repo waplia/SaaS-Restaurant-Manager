@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Megaphone, Send, Calendar, FileText, ListChecks, Plus, Trash2, X,
   RefreshCw, Pencil, AlertTriangle, Mail, Smartphone, MessageSquare, Bell, MessageCircle,
+  Bold, Italic, Link as LinkIcon, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import {
   type DeliveryStatus,
   useAdminBroadcasts,
   useAdminBroadcastRecipients,
+  useAdminBroadcastRecipientStats,
   useAdminBroadcastsStats,
   useAdminNotificationTemplates,
   useAudiencePreview,
@@ -79,7 +81,9 @@ const STATUS_TONES: Record<BroadcastStatus, string> = {
 
 const DELIVERY_TONES: Record<DeliveryStatus, string> = {
   pending: "bg-slate-100 text-slate-700",
+  queued: "bg-slate-100 text-slate-700",
   sent: "bg-green-100 text-green-700",
+  delivered: "bg-emerald-100 text-emerald-700",
   failed: "bg-red-100 text-red-700",
   skipped: "bg-slate-100 text-slate-500",
 };
@@ -147,6 +151,40 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
   const update = useUpdateAdminBroadcast();
   const audiencePreview = useAudiencePreview();
   const templates = useAdminNotificationTemplates();
+  const messageRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Live (debounced) audience preview: refresh whenever the audience changes.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      audiencePreview.mutate(audience);
+    }, 400);
+    return () => window.clearTimeout(handle);
+    // We intentionally depend only on the serialized audience — calling mutate is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(audience)]);
+
+  // Rich-text-lite: wrap current selection with markers (bold/italic/link).
+  const wrapSelection = (kind: "bold" | "italic" | "link") => {
+    const ta = messageRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = message.slice(start, end);
+    let inserted = "";
+    if (kind === "bold") inserted = `**${selected || "bold text"}**`;
+    else if (kind === "italic") inserted = `*${selected || "italic text"}*`;
+    else if (kind === "link") {
+      const url = window.prompt("Link URL", "https://");
+      if (!url) return;
+      inserted = `[${selected || "link text"}](${url})`;
+    }
+    const next = message.slice(0, start) + inserted + message.slice(end);
+    setMessage(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + inserted.length, start + inserted.length);
+    });
+  };
 
   const toggleChannel = (c: BroadcastChannel) =>
     setChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
@@ -242,10 +280,23 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
           <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Optional subject line" />
         </div>
         <div>
-          <Label>Message</Label>
-          <Textarea value={message} onChange={e => setMessage(e.target.value)} rows={6}
-            placeholder="Body — supports {{userName}}, {{userEmail}} variables. Use plain text or basic line breaks." />
-          <p className="text-xs text-slate-500 mt-1">Use **bold** sparingly; HTML tags are not rendered in SMS/in-app.</p>
+          <div className="flex items-center justify-between">
+            <Label>Message</Label>
+            <div className="flex gap-1">
+              <Button type="button" size="sm" variant="outline" onClick={() => wrapSelection("bold")} title="Bold (**text**)">
+                <Bold className="h-3.5 w-3.5" />
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => wrapSelection("italic")} title="Italic (*text*)">
+                <Italic className="h-3.5 w-3.5" />
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => wrapSelection("link")} title="Link ([text](url))">
+                <LinkIcon className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <Textarea ref={messageRef} value={message} onChange={e => setMessage(e.target.value)} rows={6}
+            placeholder="Body — supports {{userName}}, {{userEmail}} variables. Markdown ** * [text](url) renders in email." />
+          <p className="text-xs text-slate-500 mt-1">SMS/in-app strip formatting; HTML is not rendered.</p>
         </div>
 
         <div>
@@ -321,13 +372,13 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
         <div className="border rounded-lg p-3 bg-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium">Audience preview</p>
-            <Button size="sm" variant="outline" onClick={previewAudience} disabled={audiencePreview.isPending}>
-              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${audiencePreview.isPending ? "animate-spin" : ""}`} /> Preview
-            </Button>
+            <span className="text-xs text-slate-400 flex items-center gap-1">
+              {audiencePreview.isPending && <RefreshCw className="h-3 w-3 animate-spin" />} Live
+            </span>
           </div>
           {previewData ? (
             <div className="text-sm space-y-1">
-              <div><strong>{previewData.total}</strong> recipients</div>
+              <div><strong className="text-2xl text-orange-600">{previewData.total}</strong> recipients</div>
               <div className="text-xs text-slate-500">
                 {previewData.withEmail} with email · {previewData.withPhone} with phone · {previewData.withPush} with push
               </div>
@@ -340,7 +391,7 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
               )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Click Preview to see who would receive this broadcast.</p>
+            <p className="text-xs text-slate-500">Adjust audience filters to see live recipient counts.</p>
           )}
         </div>
 
@@ -535,16 +586,14 @@ function ScheduledTab({ onOpenLogs }: { onOpenLogs: (id: number) => void }) {
 }
 
 function SentTab({ onOpenLogs }: { onOpenLogs: (id: number) => void }) {
-  const sent = useAdminBroadcasts("sent");
-  const sending = useAdminBroadcasts("sending");
-  const failed = useAdminBroadcasts("failed");
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"sent" | "sending" | "failed" | "all">("sent");
+  const list = useAdminBroadcasts(statusFilter === "all" ? "all" : statusFilter, page, PAGE_SIZE);
   const stats = useAdminBroadcastsStats();
-
-  const rows = [
-    ...(sending.data?.data ?? []),
-    ...(sent.data?.data ?? []),
-    ...(failed.data?.data ?? []),
-  ];
+  const total = list.data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rows = list.data?.data ?? [];
 
   return (
     <div className="space-y-3">
@@ -555,10 +604,76 @@ function SentTab({ onOpenLogs }: { onOpenLogs: (id: number) => void }) {
           <Stat label="Failed" value={stats.data.totals.failureCount} tone="text-red-600" />
         </div>
       )}
-      {rows.length === 0 && <p className="text-sm text-slate-500">No sent broadcasts yet.</p>}
+      <div className="flex items-center gap-2">
+        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v as typeof statusFilter); setPage(1); }}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sent">Sent</SelectItem>
+            <SelectItem value="sending">Sending</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="all">All non-draft</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-slate-500">{total} total</span>
+      </div>
+      {rows.length === 0 && <p className="text-sm text-slate-500">No broadcasts match this filter.</p>}
       {rows.map(bc => (
-        <BroadcastRow key={bc.id} bc={bc} onOpenLogs={onOpenLogs} showResendFailed />
+        <BroadcastRowWithDetail key={bc.id} bc={bc} onOpenLogs={onOpenLogs} />
       ))}
+      {pages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <span className="text-sm text-slate-600">Page {page} of {pages}</span>
+          <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BroadcastRowWithDetail({ bc, onOpenLogs }: { bc: AdminBroadcast; onOpenLogs: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const stats = useAdminBroadcastRecipientStats(open ? bc.id : null);
+
+  // Aggregate stats by channel for the detail panel.
+  const perChannel = useMemo(() => {
+    const map = new Map<BroadcastChannel, Record<string, number>>();
+    for (const c of bc.channels) map.set(c, { sent: 0, delivered: 0, failed: 0, queued: 0, skipped: 0 });
+    for (const row of stats.data?.data ?? []) {
+      const cur = map.get(row.channel) ?? {};
+      cur[row.status] = (cur[row.status] ?? 0) + row.count;
+      map.set(row.channel, cur);
+    }
+    return Array.from(map.entries());
+  }, [bc.channels, stats.data]);
+
+  return (
+    <div className="space-y-2">
+      <div className="cursor-pointer" onClick={() => setOpen(o => !o)}>
+        <BroadcastRow bc={bc} onOpenLogs={onOpenLogs} showResendFailed />
+      </div>
+      {open && (
+        <div className="border rounded-lg p-3 bg-slate-50 ml-4 text-sm">
+          <p className="font-medium text-xs text-slate-500 mb-2">Per-channel breakdown</p>
+          {perChannel.length === 0 && <p className="text-xs text-slate-500">No deliveries recorded.</p>}
+          <div className="space-y-1">
+            {perChannel.map(([channel, counts]) => (
+              <div key={channel} className="flex items-center gap-3 text-xs">
+                <Badge variant="outline" className="text-xs w-20 justify-center">{channel}</Badge>
+                <span>queued: <strong>{counts.queued ?? 0}</strong></span>
+                <span>sent: <strong className="text-green-700">{counts.sent ?? 0}</strong></span>
+                <span>delivered: <strong className="text-emerald-700">{counts.delivered ?? 0}</strong></span>
+                <span>failed: <strong className="text-red-700">{counts.failed ?? 0}</strong></span>
+                <span>skipped: <strong className="text-slate-500">{counts.skipped ?? 0}</strong></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -677,11 +792,19 @@ function TemplateEditor({ template, onClose }: { template: AdminNotificationTemp
 
 // ─── Delivery Logs ───────────────────────────────────────────────
 function DeliveryLogsTab({ broadcastId, setBroadcastId }: { broadcastId: number | null; setBroadcastId: (id: number | null) => void }) {
-  const all = useAdminBroadcasts("all");
+  const all = useAdminBroadcasts("all", 1, 200);
   const [channel, setChannel] = useState("all");
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
-  const recipients = useAdminBroadcastRecipients(broadcastId, { channel, status, search });
+  const [tenantId, setTenantId] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const recipients = useAdminBroadcastRecipients(broadcastId, {
+    channel, status, search,
+    tenantId: tenantId ? Number(tenantId) : null,
+    dateFrom: dateFrom ? new Date(dateFrom).toISOString() : "",
+    dateTo: dateTo ? new Date(dateTo).toISOString() : "",
+  });
   const retry = useRetryBroadcastRecipient();
   const resend = useResendFailedBroadcast();
   const { toast } = useToast();
@@ -738,13 +861,22 @@ function DeliveryLogsTab({ broadcastId, setBroadcastId }: { broadcastId: number 
                 <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="queued">Queued</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
                   <SelectItem value="skipped">Skipped</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
                 </SelectContent>
               </Select>
+              <Input placeholder="Tenant ID" value={tenantId} onChange={e => setTenantId(e.target.value.replace(/[^0-9]/g, ""))} className="w-[110px]" />
+              <Input type="datetime-local" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[200px]" title="From" />
+              <Input type="datetime-local" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[200px]" title="To" />
               <Input placeholder="Search recipient or error…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1 min-w-[200px]" />
+              {(channel !== "all" || status !== "all" || search || tenantId || dateFrom || dateTo) && (
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setChannel("all"); setStatus("all"); setSearch(""); setTenantId(""); setDateFrom(""); setDateTo("");
+                }}>Clear</Button>
+              )}
             </div>
 
             <div className="border rounded-lg bg-white overflow-auto max-h-[500px]">
@@ -771,7 +903,7 @@ function DeliveryLogsTab({ broadcastId, setBroadcastId }: { broadcastId: number 
                       <td className="p-2 text-xs text-slate-500">{d.sentAt ? new Date(d.sentAt).toLocaleString() : new Date(d.createdAt).toLocaleString()}</td>
                       <td className="p-2 text-xs text-red-600 max-w-[260px] truncate" title={d.error ?? ""}>{d.error ?? ""}</td>
                       <td className="p-2 text-right">
-                        {(d.status === "failed" || d.status === "skipped") && (
+                        {d.status === "failed" && (
                           <Button size="sm" variant="outline" disabled={retry.isPending}
                             onClick={() => retry.mutate({ broadcastId: selected.id, deliveryId: d.id }, {
                               onSuccess: r => toast({ title: r.status === "sent" ? "Retried successfully" : `Retry ${r.status}`, description: r.error ?? undefined }),
