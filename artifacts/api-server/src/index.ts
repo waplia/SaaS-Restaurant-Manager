@@ -2,6 +2,7 @@ import http from "http";
 import app from "./app";
 import { initSocketIO } from "./lib/socketio";
 import { startScheduler } from "./lib/scheduler";
+import { startBroadcastScheduler } from "./lib/notificationCenter";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 
@@ -22,6 +23,7 @@ if (Number.isNaN(port) || port <= 0) {
 const httpServer = http.createServer(app);
 initSocketIO(httpServer);
 startScheduler();
+startBroadcastScheduler();
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {

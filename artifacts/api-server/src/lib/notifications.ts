@@ -41,6 +41,7 @@ export async function sendEmail(opts: {
     await t.sendMail({ from: SMTP_FROM, ...opts });
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send email");
+    throw err;
   }
 }
 
@@ -70,9 +71,42 @@ export async function sendWhatsApp(opts: {
     if (!res.ok) {
       const text = await res.text();
       logger.error({ status: res.status, text }, "Twilio WhatsApp error");
+      throw new Error(`Twilio WhatsApp error ${res.status}: ${text}`);
     }
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send WhatsApp message");
+    throw err;
+  }
+}
+
+export async function sendSms(opts: {
+  to: string;
+  body: string;
+}): Promise<void> {
+  const TWILIO_SMS_FROM = process.env.TWILIO_SMS_FROM ?? "";
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_SMS_FROM) {
+    logger.info({ to: opts.to, body: opts.body }, "[SMS stub] Would send SMS");
+    return;
+  }
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
+  const formBody = new URLSearchParams({ From: TWILIO_SMS_FROM, To: opts.to, Body: opts.body });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+      },
+      body: formBody.toString(),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      logger.error({ status: res.status, text }, "Twilio SMS error");
+      throw new Error(`Twilio SMS error ${res.status}: ${text}`);
+    }
+  } catch (err) {
+    logger.error({ err, to: opts.to }, "Failed to send SMS");
+    throw err;
   }
 }
 
@@ -103,9 +137,11 @@ export async function sendPush(opts: {
     if (!res.ok) {
       const text = await res.text();
       logger.error({ status: res.status, text }, "Expo push error");
+      throw new Error(`Expo push error ${res.status}: ${text}`);
     }
   } catch (err) {
     logger.error({ err }, "Failed to send push notification");
+    throw err;
   }
 }
 

@@ -2362,3 +2362,159 @@ export function payrollSlipUrl(restaurantId: number, itemId: number, print = fal
   const base = getApiUrl(`/restaurants/${restaurantId}/payroll-items/${itemId}/slip`);
   return print ? `${base}?print=1` : base;
 }
+
+// ─── Admin: Notification Center (broadcasts + templates) ──────────
+export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
+export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+export type AudienceFilter = {
+  type: "all" | "tenants" | "plan_status" | "plan" | "role" | "country" | "city";
+  ids?: number[];
+  values?: string[];
+};
+
+export interface AdminBroadcast {
+  id: number;
+  title: string;
+  message: string;
+  subject: string | null;
+  channels: BroadcastChannel[];
+  audience: AudienceFilter;
+  templateId: number | null;
+  status: BroadcastStatus;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  totalRecipients: number;
+  successCount: number;
+  failureCount: number;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminNotificationTemplate {
+  id: number;
+  name: string;
+  slug: string;
+  channel: BroadcastChannel;
+  subject: string | null;
+  body: string;
+  variables: string[];
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminBroadcastDelivery {
+  id: number;
+  broadcastId: number;
+  channel: BroadcastChannel;
+  tenantId: number | null;
+  userId: number | null;
+  recipient: string | null;
+  status: "pending" | "sent" | "failed" | "skipped";
+  error: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export function useAdminBroadcasts(status: BroadcastStatus | "all" = "all") {
+  return useQuery({
+    queryKey: ["admin", "broadcasts", status],
+    queryFn: () => apiGet<{ data: AdminBroadcast[] }>(`/admin/broadcasts?status=${status}`),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAdminBroadcast(id: number | null) {
+  return useQuery({
+    queryKey: ["admin", "broadcasts", "detail", id],
+    queryFn: () => apiGet<{ broadcast: AdminBroadcast; deliveries: AdminBroadcastDelivery[] }>(`/admin/broadcasts/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export function useAdminBroadcastsStats() {
+  return useQuery({
+    queryKey: ["admin", "broadcasts", "stats"],
+    queryFn: () => apiGet<{ byStatus: Array<{ status: string; count: number }>; totals: { total: number; success: number; failure: number } }>(`/admin/broadcasts-stats`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCreateAdminBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      title: string; message: string; subject?: string;
+      channels: BroadcastChannel[]; audience: AudienceFilter;
+      scheduledAt?: string | null; sendNow?: boolean; templateId?: number | null;
+    }) => apiPost<AdminBroadcast>("/admin/broadcasts", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useSendAdminBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/admin/broadcasts/${id}/send`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useCancelAdminBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/admin/broadcasts/${id}/cancel`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useDeleteAdminBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/admin/broadcasts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "broadcasts"] }),
+  });
+}
+
+export function useAudiencePreview() {
+  return useMutation({
+    mutationFn: (audience: AudienceFilter) =>
+      apiPost<{ total: number; withEmail: number; withPhone: number; withPush: number; sample: Array<{ tenantId: number; name: string | null; email: string | null; phone: string | null }> }>(
+        "/admin/broadcasts/audience-preview", { audience },
+      ),
+  });
+}
+
+export function useAdminNotificationTemplates() {
+  return useQuery({
+    queryKey: ["admin", "notification-templates"],
+    queryFn: () => apiGet<{ data: AdminNotificationTemplate[] }>("/admin/notification-templates"),
+  });
+}
+
+export function useCreateAdminNotificationTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; slug: string; channel: BroadcastChannel; subject?: string; body: string; variables?: string[] }) =>
+      apiPost<AdminNotificationTemplate>("/admin/notification-templates", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "notification-templates"] }),
+  });
+}
+
+export function useUpdateAdminNotificationTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; name?: string; channel?: BroadcastChannel; subject?: string; body?: string; variables?: string[] }) =>
+      apiPut<AdminNotificationTemplate>(`/admin/notification-templates/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "notification-templates"] }),
+  });
+}
+
+export function useDeleteAdminNotificationTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/admin/notification-templates/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "notification-templates"] }),
+  });
+}

@@ -33,6 +33,7 @@ import billingRouter, { createRazorpayWebhookRouter } from "./billing";
 import settingsRouter from "./settings";
 import marketingRouter, { marketingAdminRouter } from "./marketing";
 import onboardingRouter from "./onboarding";
+import adminBroadcastsRouter from "./admin-broadcasts";
 
 const router: IRouter = Router();
 
@@ -77,5 +78,6 @@ router.use(subscriptionsRouter);
 router.use(billingRouter);
 router.use(settingsRouter);
 router.use(onboardingRouter);
+router.use(adminBroadcastsRouter);
 
 export default router;
