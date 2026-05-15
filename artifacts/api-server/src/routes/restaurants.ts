@@ -63,7 +63,7 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (!assertRestaurantAccess(req, existing.tenantId)) return void res.status(403).json({ error: "Access denied" });
 
-  const { name, description, phone, email, address, city, currency, taxRate, serviceCharge, logoUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron, acceptedPaymentMethods } = req.body;
+  const { name, description, phone, email, address, city, country, timezone, currency, taxRate, serviceCharge, logoUrl, coverImageUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron, acceptedPaymentMethods } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
@@ -71,7 +71,10 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (email !== undefined) updates.email = email;
   if (address !== undefined) updates.address = address;
   if (city !== undefined) updates.city = city;
+  if (country !== undefined) updates.country = country;
+  if (timezone !== undefined) updates.timezone = timezone;
   if (currency !== undefined) updates.currency = currency;
+  if (coverImageUrl !== undefined) updates.coverImageUrl = coverImageUrl;
   if (taxRate !== undefined) updates.taxRate = taxRate;
   if (acceptedPaymentMethods !== undefined && Array.isArray(acceptedPaymentMethods)) {
     updates.acceptedPaymentMethods = acceptedPaymentMethods.filter((m: unknown) => typeof m === "string");

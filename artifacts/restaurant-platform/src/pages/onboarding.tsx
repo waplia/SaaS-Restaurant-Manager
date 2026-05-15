@@ -86,6 +86,13 @@ export default function OnboardingPage() {
     navigate("/login");
     return null;
   }
+  // Onboarding is owner/manager only — bounce other roles back to dashboard
+  // so they don't sit on an indefinite loader (the state query is disabled
+  // for them by design).
+  if (user.isSuperAdmin || (user.role !== "owner" && user.role !== "manager")) {
+    navigate("/dashboard");
+    return null;
+  }
 
   if (isLoading || !state) {
     return (
@@ -233,12 +240,23 @@ export default function OnboardingPage() {
                 )}
                 {activeIdx < STEP_DEFS.length - 1 && (() => {
                   const status = stepStatus.get(activeStep.id);
-                  const canAdvance = !!status && (status.completed || status.skipped || activeStep.skippable === true);
+                  const isComplete = !!status?.completed;
+                  const isSkipped = !!status?.skipped;
+                  const canAdvance = isComplete || isSkipped || activeStep.skippable === true;
+                  // For optional steps, treat "Next" as an implicit Skip so
+                  // checklist semantics stay consistent with the user's intent.
+                  const handleNext = () => {
+                    if (!isComplete && !isSkipped && activeStep.skippable === true) {
+                      skipMut.mutate(activeStep.id, { onSuccess: () => goNext() });
+                    } else {
+                      goNext();
+                    }
+                  };
                   return (
                     <Button
                       variant="outline"
-                      onClick={goNext}
-                      disabled={!canAdvance}
+                      onClick={handleNext}
+                      disabled={!canAdvance || skipMut.isPending}
                       title={!canAdvance ? "Finish this step to continue" : undefined}
                     >
                       Next <ChevronRight className="w-4 h-4 ml-1" />
