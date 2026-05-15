@@ -34,6 +34,13 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       
       <Route path="/features" component={FeaturesIndex} />
+      <Route path="/pos-billing" component={POSBilling} />
+      <Route path="/qr-menu" component={QRMenu} />
+      <Route path="/online-ordering" component={OnlineOrdering} />
+      <Route path="/inventory-management" component={InventoryManagement} />
+      <Route path="/payroll" component={Payroll} />
+      <Route path="/reports" component={Reports} />
+      <Route path="/multi-outlet" component={MultiOutlet} />
       <Route path="/features/pos-billing" component={POSBilling} />
       <Route path="/features/qr-menu" component={QRMenu} />
       <Route path="/features/online-ordering" component={OnlineOrdering} />

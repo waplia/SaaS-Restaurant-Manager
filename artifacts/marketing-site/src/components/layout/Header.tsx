@@ -13,13 +13,13 @@ import {
 } from "@/components/ui/navigation-menu";
 
 const FEATURES = [
-  { title: "POS & Billing", href: "/features/pos-billing", desc: "Fast, reliable point of sale." },
-  { title: "QR Menu Ordering", href: "/features/qr-menu", desc: "Contactless dining experience." },
-  { title: "Online Ordering", href: "/features/online-ordering", desc: "Direct delivery & takeout." },
-  { title: "Inventory", href: "/features/inventory-management", desc: "Real-time stock tracking." },
-  { title: "Staff & Payroll", href: "/features/payroll", desc: "Manage shifts and wages." },
-  { title: "Reports", href: "/features/reports", desc: "Actionable business insights." },
-  { title: "Multi-Outlet", href: "/features/multi-outlet", desc: "Scale across locations." },
+  { title: "POS & Billing", href: "/pos-billing", desc: "Fast, reliable point of sale." },
+  { title: "QR Menu Ordering", href: "/qr-menu", desc: "Contactless dining experience." },
+  { title: "Online Ordering", href: "/online-ordering", desc: "Direct delivery & takeout." },
+  { title: "Inventory", href: "/inventory-management", desc: "Real-time stock tracking." },
+  { title: "Staff & Payroll", href: "/payroll", desc: "Manage shifts and wages." },
+  { title: "Reports", href: "/reports", desc: "Actionable business insights." },
+  { title: "Multi-Outlet", href: "/multi-outlet", desc: "Scale across locations." },
 ];
 
 export function Header() {

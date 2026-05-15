@@ -15,12 +15,13 @@ export function Footer() {
           <div className="space-y-4">
             <h4 className="font-medium text-lg">Product</h4>
             <ul className="space-y-2 text-sm opacity-80">
-              <li><Link href="/features/pos-billing" className="hover:text-primary transition-colors">POS & Billing</Link></li>
-              <li><Link href="/features/qr-menu" className="hover:text-primary transition-colors">QR Menu</Link></li>
-              <li><Link href="/features/online-ordering" className="hover:text-primary transition-colors">Online Ordering</Link></li>
-              <li><Link href="/features/inventory-management" className="hover:text-primary transition-colors">Inventory</Link></li>
-              <li><Link href="/features/payroll" className="hover:text-primary transition-colors">Payroll</Link></li>
-              <li><Link href="/features/reports" className="hover:text-primary transition-colors">Reports</Link></li>
+              <li><Link href="/pos-billing" className="hover:text-primary transition-colors">POS & Billing</Link></li>
+              <li><Link href="/qr-menu" className="hover:text-primary transition-colors">QR Menu</Link></li>
+              <li><Link href="/online-ordering" className="hover:text-primary transition-colors">Online Ordering</Link></li>
+              <li><Link href="/inventory-management" className="hover:text-primary transition-colors">Inventory</Link></li>
+              <li><Link href="/payroll" className="hover:text-primary transition-colors">Payroll</Link></li>
+              <li><Link href="/reports" className="hover:text-primary transition-colors">Reports</Link></li>
+              <li><Link href="/multi-outlet" className="hover:text-primary transition-colors">Multi-Outlet</Link></li>
             </ul>
           </div>
           
@@ -38,10 +39,13 @@ export function Footer() {
           <div className="space-y-4">
             <h4 className="font-medium text-lg">Compare</h4>
             <ul className="space-y-2 text-sm opacity-80">
-              <li><Link href="/restaurant-types/fine-dining" className="hover:text-primary transition-colors">For Fine Dining</Link></li>
-              <li><Link href="/restaurant-types/cafe" className="hover:text-primary transition-colors">For Cafes</Link></li>
-              <li><Link href="/restaurant-types/qsr" className="hover:text-primary transition-colors">For QSR</Link></li>
-              <li><Link href="/restaurant-types/multi-outlet-chain" className="hover:text-primary transition-colors">For Chains</Link></li>
+              <li><Link href="/restaurant-types/restaurants" className="hover:text-primary transition-colors">For Restaurants</Link></li>
+              <li><Link href="/restaurant-types/cafes" className="hover:text-primary transition-colors">For Cafes</Link></li>
+              <li><Link href="/restaurant-types/cloud-kitchens" className="hover:text-primary transition-colors">For Cloud Kitchens</Link></li>
+              <li><Link href="/restaurant-types/bakeries" className="hover:text-primary transition-colors">For Bakeries</Link></li>
+              <li><Link href="/restaurant-types/bars-pubs" className="hover:text-primary transition-colors">For Bars & Pubs</Link></li>
+              <li><Link href="/restaurant-types/hotels" className="hover:text-primary transition-colors">For Hotels</Link></li>
+              <li><Link href="/restaurant-types/food-courts" className="hover:text-primary transition-colors">For Food Courts</Link></li>
             </ul>
           </div>
         </div>

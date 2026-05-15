@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -172,12 +172,15 @@ function PostEditor({
 }) {
   const [draft, setDraft] = useState<Partial<BlogPost>>(post ?? EMPTY);
 
+  useEffect(() => {
+    if (post) setDraft(post);
+  }, [post?.id]);
+
   return (
     <Dialog
       open={!!post}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else if (post) setDraft(post);
       }}
     >
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

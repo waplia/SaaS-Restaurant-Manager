@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,19 +188,18 @@ function LeadDetailDialog({
   const [status, setStatus] = useState<string>(lead?.status ?? "new");
   const [notes, setNotes] = useState<string>(lead?.notes ?? "");
 
-  if (lead && status !== lead.status && !saving) {
-    // sync when opening a different lead
-  }
+  useEffect(() => {
+    if (lead) {
+      setStatus(lead.status);
+      setNotes(lead.notes ?? "");
+    }
+  }, [lead?.id]);
 
   return (
     <Dialog
       open={!!lead}
       onOpenChange={(open) => {
         if (!open) onClose();
-        else if (lead) {
-          setStatus(lead.status);
-          setNotes(lead.notes ?? "");
-        }
       }}
     >
       <DialogContent className="max-w-2xl">

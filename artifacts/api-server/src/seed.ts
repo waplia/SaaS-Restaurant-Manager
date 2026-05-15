@@ -16,6 +16,7 @@ import {
   orderItemsTable,
   kitchenTicketsTable,
   notificationsTable,
+  blogPostsTable,
 } from "./lib/db";
 import { eq } from "drizzle-orm";
 
@@ -357,6 +358,72 @@ export async function seed(): Promise<void> {
   ]).onConflictDoNothing();
 
   console.log("✅ Notifications created");
+
+  // ── Marketing blog posts ──────────────────────────────────────
+  await db.insert(blogPostsTable).values([
+    {
+      slug: "restaurant-pos-buying-guide-2026",
+      title: "The 2026 Restaurant POS Buying Guide: 12 Things Every Owner Should Demand",
+      excerpt: "From offline-first billing to staff-level audit logs — the checklist top operators use before signing any POS contract.",
+      content: `# The 2026 Restaurant POS Buying Guide\n\nMost POS demos are designed to dazzle. This guide is designed to protect you.\n\n## 1. Offline-first billing\nIf the POS dies when wifi dies, walk away. Your bills must keep printing.\n\n## 2. Per-seat KOTs and split bills\nIf splitting a check takes more than four taps, your servers will avoid it — and your guests will feel it.\n\n## 3. Inventory that ties to recipes\nA POS that doesn't deplete stock by recipe is just a calculator with a printer.\n\n## 4. Granular audit logs\nEvery void, discount, comp, and reprint must be timestamped against a user. No exceptions.\n\n## 5. Honest reporting\nDaily sales, item velocity, payment-method splits, void/comp rates, and labor-as-percent of sales — all in one screen.\n\n## 6. Pricing that scales with outlets, not transactions\nBeware vendors who tax your growth.\n\n## Final word\nA POS is a 5-year decision. Demand the boring stuff: uptime, audit, support response time. The flashy features age out — operational discipline doesn't.`,
+      coverImage: null,
+      category: "guides",
+      tags: "pos,buying-guide,operations",
+      author: "TableTrack Team",
+      readMinutes: 8,
+      published: true,
+    },
+    {
+      slug: "qr-menu-ordering-double-table-turns",
+      title: "How QR Menu Ordering Doubled Table Turns at a 60-Cover Cafe",
+      excerpt: "A real case study: dropping order-taking time from 6 minutes to 90 seconds — and what changed in the kitchen.",
+      content: `# QR Menu Ordering Doubled Table Turns\n\nWhen The Slow Pour cafe switched to QR-based ordering during their 11am-2pm rush, their average table turn dropped from 47 to 24 minutes.\n\n## The bottleneck wasn't the kitchen\nIt was the 6-minute gap between guests sitting down and orders hitting the KDS.\n\n## What changed\n- Guests scanned, browsed, and paid before a server arrived\n- Servers focused on hospitality instead of order entry\n- KDS lit up evenly instead of in chaotic batches\n\n## What didn't change\nFood quality. Wait staff. Tip pool. The only investment was a roll of QR stickers and 30 minutes of menu setup.\n\n## The numbers after 30 days\n- Covers per shift: +94%\n- Average ticket: +12% (suggested upsells in the menu UI)\n- Server complaints: down to zero (faster table turns = bigger tip pool)`,
+      coverImage: null,
+      category: "case-studies",
+      tags: "qr-menu,case-study,cafe",
+      author: "TableTrack Team",
+      readMinutes: 6,
+      published: true,
+    },
+    {
+      slug: "kitchen-inventory-without-spreadsheets",
+      title: "Stop Counting Tomatoes: Kitchen Inventory Without Spreadsheets",
+      excerpt: "Recipe-based depletion, par-level alerts, and supplier purchase orders — how modern kitchens stop bleeding 3-7% of revenue to waste.",
+      content: `# Stop Counting Tomatoes\n\nThe average independent restaurant loses 3-7% of revenue to silent inventory shrinkage. Most don't even know it.\n\n## The spreadsheet trap\nYou count Sunday night, you place orders Monday morning, and by Wednesday the numbers are fiction.\n\n## What recipe-based depletion does\nEvery sale automatically subtracts ingredients at the gram level. Your stock count is always live.\n\n## Par levels that think for you\nSet minimums per ingredient. The system flags re-orders before you run out, not after.\n\n## Closing the loop with suppliers\nGenerate purchase orders directly from low-stock alerts. Reconcile invoices against received quantities. Catch overcharges automatically.\n\n## What changes after 60 days\n- Food cost variance drops from ±4% to ±1%\n- Sunday inventory count goes from 3 hours to 30 minutes\n- 'Where did all the cheese go' becomes a question you can actually answer`,
+      coverImage: null,
+      category: "operations",
+      tags: "inventory,kitchen,operations",
+      author: "TableTrack Team",
+      readMinutes: 7,
+      published: true,
+    },
+    {
+      slug: "delivery-aggregator-margin-truth",
+      title: "The Uncomfortable Truth About Delivery Aggregator Margins",
+      excerpt: "Zomato, Swiggy, UberEats — what your real margin looks like after commissions, and the four levers that actually move it.",
+      content: `# The Uncomfortable Truth About Aggregator Margins\n\nAggregators are not your enemy. But pretending the 28% commission doesn't exist is.\n\n## Run the actual math\nA ₹400 order on Swiggy at 28% commission, after packaging (₹15), promo discounts (₹40), and food cost (35%) leaves you with ₹73.\n\nThat's an 18% margin — IF the order goes smoothly. One refund and you're underwater.\n\n## Four levers that move the number\n1. **Menu engineering for delivery**: lower food-cost items get prime placement\n2. **Combo pricing**: combos hide individual unit costs and lift average ticket\n3. **Direct ordering with re-engagement**: a single SMS coupon to past delivery customers can shift 12-18% of orders to your direct channel\n4. **Slot pricing**: surge your prices during peak windows when conversion is inelastic\n\n## Track per-platform profitability\nIf you don't know your margin per channel, you can't optimize it. TableTrack breaks down profitability by aggregator, by hour, by item — automatically.`,
+      coverImage: null,
+      category: "operations",
+      tags: "delivery,aggregators,margins",
+      author: "TableTrack Team",
+      readMinutes: 7,
+      published: true,
+    },
+    {
+      slug: "multi-outlet-without-losing-your-mind",
+      title: "Running Five Outlets Without Losing Your Mind",
+      excerpt: "Centralized menus, branch-level pricing, consolidated reports — the operating model that keeps growth from breaking you.",
+      content: `# Running Five Outlets Without Losing Your Mind\n\nGoing from 1 outlet to 5 doesn't multiply your work by 5. It multiplies it by 25 — unless you have the right operating model.\n\n## Central menu, branch overrides\nMaintain one master menu. Allow per-branch price overrides for cost-of-living differences. Push changes once.\n\n## Standardized recipes, local procurement\nRecipes are central; suppliers are local. Inventory rolls up to HQ for trend visibility while allowing branch managers to negotiate locally.\n\n## Consolidated dashboards (with drill-down)\nHQ sees portfolio-level KPIs. One click drills to a single branch, one more to a single shift. No exports, no spreadsheets.\n\n## Role-based access that respects autonomy\nBranch managers see their numbers. Area managers see their region. Owners see everything. Staff see only what they need.\n\n## The one metric that matters\nFour-wall EBITDA per outlet, normalized for opening date. Anything else is theater.`,
+      coverImage: null,
+      category: "growth",
+      tags: "multi-outlet,scaling,operations",
+      author: "TableTrack Team",
+      readMinutes: 8,
+      published: true,
+    },
+  ]).onConflictDoNothing();
+
+  console.log("✅ Marketing blog posts created");
   console.log("🎉 Seed complete!");
   console.log("Restaurant ID (Spice Garden):", spiceRestId);
 }
