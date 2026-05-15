@@ -6,10 +6,46 @@ import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const FAQ_ITEMS = [
+  {
+    q: "Is there a setup fee or minimum contract?",
+    a: "No setup fee and no annual lock-in. All plans are billed monthly and you can cancel any time from your account.",
+  },
+  {
+    q: "Can I switch plans as my restaurant grows?",
+    a: "Yes — you can upgrade or downgrade at any time. Pro-rated billing handles the difference automatically.",
+  },
+  {
+    q: "Does TableTrack work offline?",
+    a: "Yes. Billing and KOTs continue to print during internet outages and sync automatically once you're back online.",
+  },
+  {
+    q: "Do you support multi-outlet brands?",
+    a: "The Multi-Outlet plan is built for chains: centralized menus, branch-level overrides, role-based access, and consolidated reporting across every location.",
+  },
+  {
+    q: "What does onboarding look like?",
+    a: "Most single outlets are live in under a week — including menu setup, hardware configuration, staff training, and live support during your first service.",
+  },
+  {
+    q: "Which payment methods are supported?",
+    a: "Card, UPI, wallets, cash, and split payments are supported out of the box. Specific gateway integrations vary by region — talk to us for your market.",
+  },
+];
+
 export default function Pricing() {
   useSeo({
     title: "Pricing",
     description: "Simple, transparent pricing for restaurants of all sizes.",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
   });
 
   return (
@@ -27,7 +63,7 @@ export default function Pricing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto" data-testid="pricing-grid-anchor">
             <PricingCard 
               title="Starter"
               price="$79"

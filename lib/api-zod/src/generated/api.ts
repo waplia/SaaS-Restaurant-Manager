@@ -2642,3 +2642,225 @@ export const GetAdminStatsResponse = zod.object({
     )
     .optional(),
 });
+
+/**
+ * @summary Submit a marketing lead (book demo / contact form)
+ */
+export const PostLeadsBody = zod.object({
+  name: zod.string(),
+  email: zod.string().email(),
+  phone: zod.string().nullish(),
+  restaurantName: zod.string().nullish(),
+  businessType: zod.string().nullish(),
+  message: zod.string().nullish(),
+  sourcePage: zod.string().nullish(),
+  website: zod.string().nullish().describe("Honeypot — leave empty"),
+});
+
+export const PostLeadsResponse = zod.object({
+  success: zod.boolean(),
+  id: zod.number().optional(),
+});
+
+/**
+ * @summary List published blog posts
+ */
+export const GetBlogPostsResponseItem = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  readMinutes: zod.number(),
+  publishedAt: zod.coerce.date(),
+  author: zod.string(),
+});
+export const GetBlogPostsResponse = zod.array(GetBlogPostsResponseItem);
+
+/**
+ * @summary Get a single published blog post by slug, with related posts
+ */
+export const GetBlogPostsSlugParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetBlogPostsSlugResponse = zod.object({
+  post: zod.object({
+    id: zod.number(),
+    slug: zod.string(),
+    title: zod.string(),
+    excerpt: zod.string().nullish(),
+    content: zod.string(),
+    coverImage: zod.string().nullish(),
+    category: zod.string(),
+    tags: zod.string().nullish(),
+    author: zod.string(),
+    readMinutes: zod.number(),
+    published: zod.boolean(),
+    publishedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date().optional(),
+    updatedAt: zod.coerce.date().optional(),
+  }),
+  related: zod.array(
+    zod.object({
+      id: zod.number(),
+      slug: zod.string(),
+      title: zod.string(),
+      excerpt: zod.string().nullish(),
+      coverImage: zod.string().nullish(),
+      category: zod.string(),
+      readMinutes: zod.number(),
+      publishedAt: zod.coerce.date(),
+      author: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary List all marketing leads
+ */
+export const GetAdminLeadsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  phone: zod.string().nullish(),
+  restaurantName: zod.string().nullish(),
+  businessType: zod.string().nullish(),
+  message: zod.string().nullish(),
+  sourcePage: zod.string().nullish(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date().optional(),
+});
+export const GetAdminLeadsResponse = zod.array(GetAdminLeadsResponseItem);
+
+/**
+ * @summary Update lead status / notes
+ */
+export const PatchAdminLeadsIdParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PatchAdminLeadsIdBody = zod.object({
+  status: zod
+    .enum(["new", "contacted", "demo_scheduled", "converted", "lost"])
+    .optional(),
+  notes: zod.string().nullish(),
+});
+
+export const PatchAdminLeadsIdResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  phone: zod.string().nullish(),
+  restaurantName: zod.string().nullish(),
+  businessType: zod.string().nullish(),
+  message: zod.string().nullish(),
+  sourcePage: zod.string().nullish(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary List all blog posts (including drafts)
+ */
+export const GetAdminBlogPostsResponseItem = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  tags: zod.string().nullish(),
+  author: zod.string(),
+  readMinutes: zod.number(),
+  published: zod.boolean(),
+  publishedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+export const GetAdminBlogPostsResponse = zod.array(
+  GetAdminBlogPostsResponseItem,
+);
+
+/**
+ * @summary Create a blog post
+ */
+export const PostAdminBlogPostsBody = zod.object({
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  tags: zod.string().nullish(),
+  author: zod.string(),
+  readMinutes: zod.number().optional(),
+  published: zod.boolean().optional(),
+});
+
+export const PostAdminBlogPostsResponse = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  tags: zod.string().nullish(),
+  author: zod.string(),
+  readMinutes: zod.number(),
+  published: zod.boolean(),
+  publishedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Update a blog post
+ */
+export const PatchAdminBlogPostsIdParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PatchAdminBlogPostsIdBody = zod.object({
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  tags: zod.string().nullish(),
+  author: zod.string(),
+  readMinutes: zod.number().optional(),
+  published: zod.boolean().optional(),
+});
+
+export const PatchAdminBlogPostsIdResponse = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  title: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  coverImage: zod.string().nullish(),
+  category: zod.string(),
+  tags: zod.string().nullish(),
+  author: zod.string(),
+  readMinutes: zod.number(),
+  published: zod.boolean(),
+  publishedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Delete a blog post
+ */
+export const DeleteAdminBlogPostsIdParams = zod.object({
+  id: zod.coerce.number(),
+});

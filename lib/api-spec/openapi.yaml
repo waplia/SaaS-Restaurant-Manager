@@ -2222,6 +2222,152 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminStats"
 
+  # ── Marketing: Public ──
+  /leads:
+    post:
+      tags: [Marketing]
+      summary: Submit a marketing lead (book demo / contact form)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadInput' }
+      responses:
+        '200':
+          description: Lead recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LeadSubmitResult' }
+        '400': { description: Invalid input }
+        '429': { description: Rate limited }
+
+  /blog/posts:
+    get:
+      tags: [Marketing]
+      summary: List published blog posts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BlogPostSummary' }
+
+  /blog/posts/{slug}:
+    get:
+      tags: [Marketing]
+      summary: Get a single published blog post by slug, with related posts
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlogPostDetail' }
+        '404': { description: Not found }
+
+  # ── Marketing: Admin (super_admin only) ──
+  /admin/leads:
+    get:
+      tags: [Marketing Admin]
+      summary: List all marketing leads
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Lead' }
+  /admin/leads/{id}:
+    patch:
+      tags: [Marketing Admin]
+      summary: Update lead status / notes
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadUpdateInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Lead' }
+
+  /admin/blog/posts:
+    get:
+      tags: [Marketing Admin]
+      summary: List all blog posts (including drafts)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BlogPost' }
+    post:
+      tags: [Marketing Admin]
+      summary: Create a blog post
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlogPostInput' }
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlogPost' }
+  /admin/blog/posts/{id}:
+    patch:
+      tags: [Marketing Admin]
+      summary: Update a blog post
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlogPostInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlogPost' }
+    delete:
+      tags: [Marketing Admin]
+      summary: Delete a blog post
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Deleted }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3651,3 +3797,104 @@ components:
             properties:
               planName: { type: string }
               count: { type: integer }
+
+    # ── Marketing ──
+    LeadInput:
+      type: object
+      required: [name, email]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        restaurantName: { type: string, nullable: true }
+        businessType: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+        sourcePage: { type: string, nullable: true }
+        website: { type: string, nullable: true, description: "Honeypot — leave empty" }
+
+    LeadSubmitResult:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        id: { type: integer }
+
+    LeadUpdateInput:
+      type: object
+      properties:
+        status: { type: string, enum: [new, contacted, demo_scheduled, converted, lost] }
+        notes: { type: string, nullable: true }
+
+    Lead:
+      type: object
+      required: [id, name, email, status, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string, nullable: true }
+        restaurantName: { type: string, nullable: true }
+        businessType: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+        sourcePage: { type: string, nullable: true }
+        status: { type: string }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BlogPostSummary:
+      type: object
+      required: [id, slug, title, category, readMinutes, publishedAt, author]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        coverImage: { type: string, nullable: true }
+        category: { type: string }
+        readMinutes: { type: integer }
+        publishedAt: { type: string, format: date-time }
+        author: { type: string }
+
+    BlogPost:
+      type: object
+      required: [id, slug, title, content, category, author, readMinutes, published]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        content: { type: string }
+        coverImage: { type: string, nullable: true }
+        category: { type: string }
+        tags: { type: string, nullable: true }
+        author: { type: string }
+        readMinutes: { type: integer }
+        published: { type: boolean }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BlogPostInput:
+      type: object
+      required: [slug, title, content, category, author]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        content: { type: string }
+        coverImage: { type: string, nullable: true }
+        category: { type: string }
+        tags: { type: string, nullable: true }
+        author: { type: string }
+        readMinutes: { type: integer }
+        published: { type: boolean }
+
+    BlogPostDetail:
+      type: object
+      required: [post, related]
+      properties:
+        post: { $ref: '#/components/schemas/BlogPost' }
+        related:
+          type: array
+          items: { $ref: '#/components/schemas/BlogPostSummary' }

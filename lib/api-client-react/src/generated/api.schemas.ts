@@ -1319,6 +1319,101 @@ export interface AdminStats {
   planBreakdown?: AdminStatsPlanBreakdownItem[];
 }
 
+export interface LeadInput {
+  name: string;
+  email: string;
+  phone?: string | null;
+  restaurantName?: string | null;
+  businessType?: string | null;
+  message?: string | null;
+  sourcePage?: string | null;
+  /** Honeypot — leave empty */
+  website?: string | null;
+}
+
+export interface LeadSubmitResult {
+  success: boolean;
+  id?: number;
+}
+
+export type LeadUpdateInputStatus =
+  (typeof LeadUpdateInputStatus)[keyof typeof LeadUpdateInputStatus];
+
+export const LeadUpdateInputStatus = {
+  new: "new",
+  contacted: "contacted",
+  demo_scheduled: "demo_scheduled",
+  converted: "converted",
+  lost: "lost",
+} as const;
+
+export interface LeadUpdateInput {
+  status?: LeadUpdateInputStatus;
+  notes?: string | null;
+}
+
+export interface Lead {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  restaurantName?: string | null;
+  businessType?: string | null;
+  message?: string | null;
+  sourcePage?: string | null;
+  status: string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BlogPostSummary {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt?: string | null;
+  coverImage?: string | null;
+  category: string;
+  readMinutes: number;
+  publishedAt: string;
+  author: string;
+}
+
+export interface BlogPost {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt?: string | null;
+  content: string;
+  coverImage?: string | null;
+  category: string;
+  tags?: string | null;
+  author: string;
+  readMinutes: number;
+  published: boolean;
+  publishedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BlogPostInput {
+  slug: string;
+  title: string;
+  excerpt?: string | null;
+  content: string;
+  coverImage?: string | null;
+  category: string;
+  tags?: string | null;
+  author: string;
+  readMinutes?: number;
+  published?: boolean;
+}
+
+export interface BlogPostDetail {
+  post: BlogPost;
+  related: BlogPostSummary[];
+}
+
 export type RefreshTokenBody = {
   refreshToken: string;
 };

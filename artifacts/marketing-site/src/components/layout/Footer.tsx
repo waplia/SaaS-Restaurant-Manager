@@ -53,9 +53,9 @@ export function Footer() {
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm opacity-60">
           <p>© {new Date().getFullYear()} TableTrack. All rights reserved.</p>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-primary transition-colors">Twitter</a>
-            <a href="#" className="hover:text-primary transition-colors">LinkedIn</a>
-            <a href="#" className="hover:text-primary transition-colors">Instagram</a>
+            <a href="https://twitter.com/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Twitter</a>
+            <a href="https://www.linkedin.com/company/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
+            <a href="https://www.instagram.com/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Instagram</a>
           </div>
         </div>
       </div>
