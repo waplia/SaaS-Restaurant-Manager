@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
-  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays,
+  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -256,10 +256,20 @@ export function Sidebar() {
           Settings
         </Link>
         {user?.isSuperAdmin && (
-          <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-            <ShieldCheck className="w-4 h-4" />
-            Admin Panel
-          </Link>
+          <>
+            <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <ShieldCheck className="w-4 h-4" />
+              Admin Panel
+            </Link>
+            <Link href="/admin/leads" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <Inbox className="w-4 h-4" />
+              Marketing Leads
+            </Link>
+            <Link href="/admin/blog" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <FileText className="w-4 h-4" />
+              Blog Posts
+            </Link>
+          </>
         )}
 
         <div className="mt-2 pt-3 border-t border-sidebar-border">

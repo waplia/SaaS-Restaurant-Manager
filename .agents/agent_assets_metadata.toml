@@ -6,3 +6,51 @@ id = "Oy4OZk7y8qLBBYSWewEqz"
 uri = "file://artifacts/tabletrack-mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "A83Bwzk2RKCU_ZHeuCIhx"
+uri = "file://artifacts/marketing-site/src/assets/hero-dashboard.png"
+type = "image"
+title = "A modern restaurant dashboard"
+
+[[generated]]
+id = "4g5IFhX-irGhlGzkY8FEO"
+uri = "file://artifacts/marketing-site/src/assets/chef-kitchen.png"
+type = "image"
+title = "A busy chef in kitchen"
+
+[[generated]]
+id = "AF4DjvsapmYqd7eiYIRQA"
+uri = "file://artifacts/marketing-site/src/assets/pos-terminal.png"
+type = "image"
+title = "A sleek POS terminal"
+
+[[generated]]
+id = "-tIc_tPvIUSZ4hnlgSAh7"
+uri = "file://artifacts/marketing-site/src/assets/restaurant-interior.png"
+type = "image"
+title = "Restaurant interior"
+
+[[generated]]
+id = "a9kKhfKB9Cuzq2xa_eEty"
+uri = "file://artifacts/marketing-site/src/assets/food-plate.png"
+type = "image"
+title = "A fine dining plate"
+
+[[generated]]
+id = "ag6DSSkqk2uiSEdvmaYr9"
+uri = "file://artifacts/marketing-site/src/assets/barista.png"
+type = "image"
+title = "Cafe barista pouring coffee"
+
+[[generated]]
+id = "zx3nGyUOGqfcxrUnDsK8F"
+uri = "file://artifacts/marketing-site/src/assets/owner.png"
+type = "image"
+title = "Restaurant owner portrait"
+
+[[generated]]
+id = "KpMlPapwOeaTRG0l4xFDV"
+uri = "file://artifacts/marketing-site/src/assets/analytics.png"
+type = "image"
+title = "Data analytics graph"

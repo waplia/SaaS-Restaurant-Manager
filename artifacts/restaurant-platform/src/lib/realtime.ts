@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "";
+const API_BASE = "";
 
 export function useSocket(restaurantId: number) {
   const qc = useQueryClient();

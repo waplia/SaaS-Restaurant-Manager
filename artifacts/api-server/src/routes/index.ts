@@ -30,12 +30,15 @@ import waiterRequestsRouter from "./waiter-requests";
 import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
 import settingsRouter from "./settings";
+import marketingRouter, { marketingAdminRouter } from "./marketing";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(publicRouter);
+router.use(marketingRouter);
+router.use(marketingAdminRouter);
 router.use(publicStorageRouter);
 router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());

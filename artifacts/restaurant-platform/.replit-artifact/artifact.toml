@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/app/"
 title = "Restaurant Management Platform"
 version = "1.0.0"
 id = "artifacts/restaurant-platform"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/app/" ]
 localPort = 22508
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "22508"
-BASE_PATH = "/"
+BASE_PATH = "/app/"

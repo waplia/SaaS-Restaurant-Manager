@@ -29,6 +29,8 @@ import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
+import AdminLeadsPage from "@/pages/admin-leads";
+import AdminBlogPage from "@/pages/admin-blog";
 import PosPage from "@/pages/pos";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
@@ -98,6 +100,8 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
+      <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />

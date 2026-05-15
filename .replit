@@ -33,7 +33,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=22508 BASE_PATH=/ pnpm --filter @workspace/restaurant-platform run dev"
+args = "PORT=22508 BASE_PATH=/app/ pnpm --filter @workspace/restaurant-platform run dev"
 waitForPort = 22508
 
 [[workflows.workflow]]
@@ -63,6 +63,10 @@ externalPort = 8080
 [[ports]]
 localPort = 8081
 externalPort = 80
+
+[[ports]]
+localPort = 21209
+externalPort = 4200
 
 [[ports]]
 localPort = 21674

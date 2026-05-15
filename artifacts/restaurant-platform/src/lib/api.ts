@@ -1,5 +1,4 @@
-const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-const API_BASE = `${BASE_URL}/api`;
+const API_BASE = `/api`;
 
 const TOKEN_KEY = "tt_access_token";
 const REFRESH_KEY = "tt_refresh_token";
