@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed,
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
-  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText,
+  ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
+  { kind: "link", href: "/support", label: "Support", icon: LifeBuoy, roles: ["owner", "manager"] },
   {
     kind: "group", key: "delivery", label: "Delivery", icon: Truck,
     children: [
@@ -268,6 +269,10 @@ export function Sidebar() {
             <Link href="/admin/blog" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
               <FileText className="w-4 h-4" />
               Blog Posts
+            </Link>
+            <Link href="/admin/support" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <LifeBuoy className="w-4 h-4" />
+              Support Tickets
             </Link>
           </>
         )}

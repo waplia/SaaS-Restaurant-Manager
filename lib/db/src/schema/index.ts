@@ -20,3 +20,4 @@ export * from "./marketing";
 export * from "./billing";
 export * from "./notifications";
 export * from "./sms";
+export * from "./support-tickets";

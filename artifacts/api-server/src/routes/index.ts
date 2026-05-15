@@ -35,6 +35,7 @@ import marketingRouter, { marketingAdminRouter } from "./marketing";
 import onboardingRouter from "./onboarding";
 import adminBroadcastsRouter from "./admin-broadcasts";
 import adminSmsRouter from "./admin-sms";
+import supportTicketsRouter from "./support-tickets";
 
 const router: IRouter = Router();
 
@@ -81,5 +82,6 @@ router.use(settingsRouter);
 router.use(onboardingRouter);
 router.use(adminBroadcastsRouter);
 router.use(adminSmsRouter);
+router.use(supportTicketsRouter);
 
 export default router;
