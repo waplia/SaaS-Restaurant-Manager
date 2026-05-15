@@ -8,9 +8,13 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Check, Crown, Zap, Building, Users, Table2, UtensilsCrossed,
-  AlertTriangle, ExternalLink, RefreshCw, CreditCard,
+  AlertTriangle, ExternalLink, RefreshCw, CreditCard, Minus,
 } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/types";
+import {
+  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
+  isFeatureEnabled, formatQuantity,
+} from "@workspace/db/planFeatures";
 
 type Gateway = "cashfree" | "stripe";
 
@@ -88,17 +92,41 @@ function PlanCard({
       </div>
 
       <ul className="space-y-2 flex-1">
-        {[
-          `${plan.maxRestaurants} restaurant${plan.maxRestaurants > 1 ? "s" : ""}`,
-          `${plan.maxBranches} branch${plan.maxBranches > 1 ? "es" : ""}`,
-          `Up to ${plan.maxStaff} staff`,
-          `${plan.maxTables} tables`,
-          `${plan.maxMenuItems} menu items`,
-          ...(plan.features ?? []),
-        ].map(f => (
-          <li key={f} className="flex items-center gap-2 text-sm text-foreground">
+        {/* Quantity limits — always shown when set. */}
+        {PLAN_QUANTITY_FEATURES.map(q => {
+          const label = formatQuantity(q, Number(plan[q.key] ?? 0));
+          if (!label) return null;
+          return (
+            <li key={q.key} className="flex items-center gap-2 text-sm text-foreground">
+              <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              {label}
+            </li>
+          );
+        })}
+        {/* Boolean flags — show every catalogue entry; muted when disabled. */}
+        {PLAN_BOOLEAN_FEATURES.map(f => {
+          const on = isFeatureEnabled(plan.featureFlags, f.key);
+          return (
+            <li
+              key={f.key}
+              className={cn(
+                "flex items-center gap-2 text-sm",
+                on ? "text-foreground" : "text-muted-foreground/70 line-through decoration-muted-foreground/40",
+              )}
+              title={f.description}
+            >
+              {on
+                ? <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                : <Minus className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />}
+              {f.label}
+            </li>
+          );
+        })}
+        {/* Free-form marketing copy bullets last. */}
+        {(plan.features ?? []).map(extra => (
+          <li key={extra} className="flex items-center gap-2 text-sm text-foreground">
             <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-            {f}
+            {extra}
           </li>
         ))}
       </ul>

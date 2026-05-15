@@ -3,6 +3,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, menuItemsTable, menuCategoriesTable, menuItemAiDraftsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { generateImage } from "@workspace/integrations-gemini-ai/image";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -15,11 +16,13 @@ router.use(
   "/restaurants/:restaurantId/items/:itemId/ai-:rest",
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
+  requirePlanFeature("ai_menu_drafts"),
 );
 router.use(
   "/restaurants/:restaurantId/items/:itemId/ai-drafts",
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
+  requirePlanFeature("ai_menu_drafts"),
 );
 
 type DescriptionDraftPayload = {

@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, apiAction } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES, PLAN_FEATURE_CATEGORIES,
+  defaultFeatureFlags, isFeatureEnabled,
+} from "@workspace/db/planFeatures";
 
 interface Tenant {
   id: number;
@@ -55,6 +59,7 @@ interface Plan {
   maxMenuItems: number;
   trialDays: number;
   features: string[];
+  featureFlags: Record<string, boolean> | null;
   isActive: boolean;
 }
 
@@ -311,8 +316,22 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
     isActive: plan?.isActive ?? true,
   });
   const [featuresText, setFeaturesText] = useState((plan?.features ?? []).join("\n"));
+  // Boolean feature flags — initialise from existing plan, falling back to the
+  // catalogue defaults so plans that pre-date a flag still render sensibly.
+  const [flags, setFlags] = useState<Record<string, boolean>>(() => {
+    const seed = plan?.featureFlags && typeof plan.featureFlags === "object" ? plan.featureFlags : {};
+    const out: Record<string, boolean> = { ...defaultFeatureFlags() };
+    for (const k of Object.keys(seed)) {
+      if (typeof (seed as Record<string, unknown>)[k] === "boolean") out[k] = Boolean((seed as Record<string, unknown>)[k]);
+    }
+    return out;
+  });
   const [busy, setBusy] = useState(false);
   const isEdit = !!plan;
+
+  const setFlag = (key: string, val: boolean) => setFlags(prev => ({ ...prev, [key]: val }));
+  const setQty = (key: keyof Plan, val: number) =>
+    setForm(prev => ({ ...prev, [key]: val }) as typeof prev);
 
   const save = async () => {
     setBusy(true);
@@ -321,6 +340,7 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
         ...form,
         price: String(form.price),
         features: featuresText.split("\n").map(s => s.trim()).filter(Boolean),
+        featureFlags: flags,
       };
       if (isEdit) {
         await apiAction(`/subscription-plans/${plan.id}`, "PATCH", payload);
@@ -358,19 +378,71 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
           </select>
         </Field>
         <Field label="Trial days"><input className={inputCls} type="number" min="0" value={form.trialDays as number} onChange={e => setForm({ ...form, trialDays: Number(e.target.value) })} /></Field>
-        <Field label="Max restaurants" hint="0 = unlimited"><input className={inputCls} type="number" min="0" value={form.maxRestaurants as number} onChange={e => setForm({ ...form, maxRestaurants: Number(e.target.value) })} /></Field>
-        <Field label="Max branches"><input className={inputCls} type="number" min="0" value={form.maxBranches as number} onChange={e => setForm({ ...form, maxBranches: Number(e.target.value) })} /></Field>
-        <Field label="Max staff"><input className={inputCls} type="number" min="0" value={form.maxStaff as number} onChange={e => setForm({ ...form, maxStaff: Number(e.target.value) })} /></Field>
-        <Field label="Max tables"><input className={inputCls} type="number" min="0" value={form.maxTables as number} onChange={e => setForm({ ...form, maxTables: Number(e.target.value) })} /></Field>
-        <Field label="Max menu items"><input className={inputCls} type="number" min="0" value={form.maxMenuItems as number} onChange={e => setForm({ ...form, maxMenuItems: Number(e.target.value) })} /></Field>
         <Field label="Active">
           <select className={inputCls} value={String(form.isActive)} onChange={e => setForm({ ...form, isActive: e.target.value === "true" })}>
             <option value="true">Yes</option><option value="false">No</option>
           </select>
         </Field>
       </div>
-      <Field label="Features (one per line)">
-        <textarea className={inputCls + " min-h-24"} value={featuresText} onChange={e => setFeaturesText(e.target.value)} />
+
+      {/* ─── Quantity limits ───────────────────────────────────────── */}
+      <div className="mt-5">
+        <p className="text-sm font-semibold mb-1">Quantity limits</p>
+        <p className="text-xs text-muted-foreground mb-2">Use a high number (e.g. 999) for "Unlimited".</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {PLAN_QUANTITY_FEATURES.map(q => (
+            <Field key={q.key} label={q.label} hint={q.description}>
+              <input
+                className={inputCls}
+                type="number"
+                min="0"
+                value={Number(form[q.key as keyof Plan] ?? 0)}
+                onChange={e => setQty(q.key as keyof Plan, Number(e.target.value))}
+              />
+            </Field>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── Boolean feature flags grouped by category ─────────────── */}
+      <div className="mt-5">
+        <p className="text-sm font-semibold mb-2">Included features</p>
+        <div className="space-y-3">
+          {PLAN_FEATURE_CATEGORIES.map(cat => {
+            const items = PLAN_BOOLEAN_FEATURES.filter(f => f.category === cat.key);
+            if (items.length === 0) return null;
+            return (
+              <div key={cat.key} className="rounded-md border border-border/60 bg-muted/20 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{cat.label}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                  {items.map(feat => (
+                    <label key={feat.key} className="flex items-start gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                        checked={flags[feat.key] ?? false}
+                        onChange={e => setFlag(feat.key, e.target.checked)}
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">{feat.label}</span>
+                        <span className="block text-[11px] text-muted-foreground leading-tight">{feat.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <Field label="Marketing copy (one bullet per line, optional)">
+        <textarea
+          className={inputCls + " min-h-20"}
+          value={featuresText}
+          onChange={e => setFeaturesText(e.target.value)}
+          placeholder="Friendly extra bullets shown beneath the structured features."
+        />
       </Field>
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>

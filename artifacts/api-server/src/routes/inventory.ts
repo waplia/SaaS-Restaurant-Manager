@@ -3,6 +3,7 @@ import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable } from "../lib/db";
 import { runAutoReorderForRestaurant } from "../lib/autoReorder";
 import { requireRole } from "../middleware/authorize";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
@@ -25,7 +26,7 @@ router.get("/restaurants/:restaurantId/inventory", async (req, res) => {
   res.json(result);
 });
 
-router.post("/restaurants/:restaurantId/inventory", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/inventory", requireRole("owner", "manager", "super_admin"), requirePlanFeature("inventory_management"), async (req, res) => {
   const { name, unit, currentStock, minStockLevel, costPerUnit, category, supplierId, parLevel, reorderQuantity, autoReorderEnabled } = req.body;
   const [item] = await db.insert(inventoryItemsTable).values({
     restaurantId: Number(req.params.restaurantId),
@@ -155,7 +156,7 @@ router.get("/restaurants/:restaurantId/purchase-orders", async (req, res) => {
   res.json(rows.map(po => ({ ...po, items: byPo.get(po.id) ?? [] })));
 });
 
-router.post("/restaurants/:restaurantId/auto-reorder/run", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/auto-reorder/run", requireRole("owner", "manager", "super_admin"), requirePlanFeature("inventory_management"), async (req, res) => {
   try {
     const result = await runAutoReorderForRestaurant(Number(req.params.restaurantId));
     res.json(result);

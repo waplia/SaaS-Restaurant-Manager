@@ -1363,6 +1363,8 @@ export interface SubscriptionPlan {
   maxTables: number;
   maxMenuItems: number;
   features: string[] | null;
+  featureFlags: Record<string, boolean> | null;
+  trialDays: number;
   isActive: boolean;
   stripePriceId: string | null;
 }

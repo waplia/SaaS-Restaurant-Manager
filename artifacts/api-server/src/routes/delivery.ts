@@ -11,6 +11,7 @@ import {
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { broadcastEvent } from "../lib/socketio";
 import { sendPush } from "../lib/notifications";
 
@@ -20,6 +21,7 @@ router.use(
   "/restaurants/:restaurantId",
   requireRole("owner", "manager", "cashier", "waiter", "kitchen", "delivery_executive", "super_admin"),
   validateRestaurantAccess,
+  requirePlanFeature("delivery_module"),
 );
 
 // Roles allowed on non-COD delivery operations (excludes cashier).

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { eq, desc, count, and, or, ilike, sql } from "drizzle-orm";
-import { db, subscriptionPlansTable, tenantsTable, usersTable } from "../lib/db";
+import { db, subscriptionPlansTable, tenantsTable, usersTable, PLAN_BOOLEAN_FEATURE_KEYS, defaultFeatureFlags } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
 import { hashPassword, signResetToken, signImpersonationToken } from "../lib/auth";
 import { sendEmail } from "../lib/notifications";
@@ -58,6 +58,21 @@ function validatePlanInput(body: Record<string, unknown>, partial = false): { er
   if (body.features !== undefined) {
     if (!Array.isArray(body.features) || body.features.some(f => typeof f !== "string")) return { error: "features must be string[]" };
     out.features = body.features;
+  }
+  if (body.featureFlags !== undefined) {
+    if (!body.featureFlags || typeof body.featureFlags !== "object" || Array.isArray(body.featureFlags)) {
+      return { error: "featureFlags must be an object of { [key]: boolean }" };
+    }
+    const cleaned: Record<string, boolean> = {};
+    for (const k of PLAN_BOOLEAN_FEATURE_KEYS) {
+      const v = (body.featureFlags as Record<string, unknown>)[k];
+      if (typeof v === "boolean") cleaned[k] = v;
+    }
+    out.featureFlags = cleaned;
+  } else if (!partial) {
+    // New plan with no flags supplied → seed catalogue defaults so the
+    // structured grid in the admin UI doesn't show "missing" everywhere.
+    out.featureFlags = defaultFeatureFlags();
   }
   if (body.isActive !== undefined) out.isActive = Boolean(body.isActive);
   return { data: out };

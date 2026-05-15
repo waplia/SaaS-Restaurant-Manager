@@ -3,6 +3,7 @@ import { eq, and, gte, lte, desc, count, sql, ilike, or } from "drizzle-orm";
 import { db, expenseCategoriesTable, expensesTable, recurringExpensesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy } from "../lib/objectAcl";
 
@@ -35,7 +36,7 @@ async function assertReceiptUrlOwnership(
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, requirePlanFeature("expense_tracking"));
 
 const DEFAULT_CATEGORIES = [
   { name: "Rent", color: "#ef4444", icon: "building" },

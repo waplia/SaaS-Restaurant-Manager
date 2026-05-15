@@ -3,6 +3,7 @@ import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { pushToStaff } from "../lib/pushNotify";
@@ -470,7 +471,7 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   res.json({ ...updatedOrder, items });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { type, orderItemId, value, reason, managerPin } = req.body as {
@@ -584,7 +585,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
   res.json({ ...updatedOrder, items, discounts });
 });
 
-router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), async (req, res) => {
+router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const discountId = Number(req.params.discountId);
@@ -620,7 +621,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discount", (_req, res) => {
   });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", requirePlanFeature("loyalty_program"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { points } = req.body;
@@ -683,7 +684,7 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-loyalty", async (req, r
   res.json({ ...updatedOrder, items, discounts, loyaltyApplied: { pointsRequested: pointsToRedeem, pointsRedeemed: cappedPoints, discountValue: loyaltyDiscount, remainingBalance: customer.loyaltyPoints - cappedPoints } });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", requirePlanFeature("discounts_promotions"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { code } = req.body;

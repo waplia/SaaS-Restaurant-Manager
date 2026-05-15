@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq, and, or, inArray, gte, lte, ne, sql } from "drizzle-orm";
 import { db, floorTablesTable, reservationsTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
 import { pushToStaff } from "../lib/pushNotify";
@@ -52,7 +53,7 @@ router.delete("/restaurants/:restaurantId/tables/:id", requireRole("owner", "man
   res.status(204).send();
 });
 
-router.get("/restaurants/:restaurantId/tables/:id/qr", async (req, res) => {
+router.get("/restaurants/:restaurantId/tables/:id/qr", requirePlanFeature("qr_ordering"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const [table] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, restaurantId)));
   if (!table) return void res.status(404).json({ error: "Not found" });
@@ -220,7 +221,7 @@ router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), async (req, res) => {
   const { guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, durationMinutes, notes, status } = req.body;
   const restaurantId = Number(req.params.restaurantId);
 

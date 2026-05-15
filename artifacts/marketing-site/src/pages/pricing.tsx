@@ -6,6 +6,10 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
+  isFeatureEnabled, formatQuantity,
+} from "@workspace/db/planFeatures";
 
 interface PublicPlan {
   id: number;
@@ -22,7 +26,15 @@ interface PublicPlan {
   maxTables: number;
   maxMenuItems: number;
   features: string[] | null;
+  featureFlags: Record<string, boolean> | null;
   isActive: boolean;
+}
+
+interface PlanFeatureRow {
+  label: string;
+  enabled: boolean;
+  /** Subtle = quantity / always-shown row. Bold = on/off feature. */
+  muted?: boolean;
 }
 
 const FAQ_ITEMS = [
@@ -63,17 +75,26 @@ function formatPrice(plan: PublicPlan) {
   return `${currencySymbol(plan.currency)}${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
-function planFeatureList(plan: PublicPlan): string[] {
-  const limits: string[] = [];
-  const fmt = (n: number) => (n >= 999 ? "Unlimited" : n.toString());
-  if (plan.maxRestaurants > 0) limits.push(`${fmt(plan.maxRestaurants)} restaurant${plan.maxRestaurants === 1 ? "" : "s"}`);
-  if (plan.maxBranches > 0) limits.push(`${fmt(plan.maxBranches)} branch${plan.maxBranches === 1 ? "" : "es"}`);
-  if (plan.maxStaff > 0) limits.push(`${fmt(plan.maxStaff)} staff members`);
-  if (plan.maxTables > 0) limits.push(`${fmt(plan.maxTables)} tables`);
-  if (plan.maxMenuItems > 0) limits.push(`${fmt(plan.maxMenuItems)} menu items`);
-  if (plan.trialDays > 0) limits.push(`${plan.trialDays}-day free trial`);
-  const extra = Array.isArray(plan.features) ? plan.features : [];
-  return [...limits, ...extra];
+function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
+  const rows: PlanFeatureRow[] = [];
+  // 1. Quantity limits (always shown when > 0).
+  for (const q of PLAN_QUANTITY_FEATURES) {
+    const v = plan[q.key] ?? 0;
+    const label = formatQuantity(q, v);
+    if (label) rows.push({ label, enabled: true });
+  }
+  if (plan.trialDays > 0) rows.push({ label: `${plan.trialDays}-day free trial`, enabled: true });
+  // 2. Boolean flags — show every catalogue entry. Disabled flags render
+  // muted so customers can compare across plans at a glance.
+  for (const f of PLAN_BOOLEAN_FEATURES) {
+    const on = isFeatureEnabled(plan.featureFlags, f.key);
+    rows.push({ label: f.label, enabled: on, muted: !on });
+  }
+  // 3. Free-form marketing bullets last.
+  for (const extra of plan.features ?? []) {
+    rows.push({ label: extra, enabled: true });
+  }
+  return rows;
 }
 
 export default function Pricing() {
@@ -140,7 +161,7 @@ export default function Pricing() {
                   price={formatPrice(plan)}
                   period={Number(plan.price) === 0 ? "" : `/${plan.billingPeriod === "yearly" ? "yr" : "mo"}`}
                   desc={plan.description ?? `Includes a ${plan.trialDays}-day free trial.`}
-                  features={planFeatureList(plan)}
+                  features={planFeatureRows(plan)}
                   href="/app/register"
                   btnText={Number(plan.price) === 0 ? "Start free trial" : "Get started"}
                   isPopular={i === popularIdx}
@@ -182,7 +203,7 @@ function PricingCard({
   price: string;
   period: string;
   desc: string;
-  features: string[];
+  features: PlanFeatureRow[];
   href: string;
   btnText: string;
   isPopular?: boolean;
@@ -205,10 +226,16 @@ function PricingCard({
       </div>
 
       <div className="flex-grow space-y-3 mb-8">
-        {features.map((feature, i) => (
+        {features.map((row, i) => (
           <div key={i} className="flex items-start gap-3">
-            <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-            <span className="text-sm">{feature}</span>
+            {row.enabled ? (
+              <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+            ) : (
+              <span className="h-5 w-5 flex-shrink-0 mt-0.5 flex items-center justify-center text-muted-foreground/60">—</span>
+            )}
+            <span className={`text-sm ${row.muted ? "text-muted-foreground/70 line-through decoration-muted-foreground/40" : ""}`}>
+              {row.label}
+            </span>
           </div>
         ))}
       </div>

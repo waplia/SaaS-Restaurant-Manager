@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { useAuth } from "@/lib/auth";
 import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
@@ -348,10 +349,12 @@ function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
             <option value="America/New_York">America/New_York</option>
           </select>
         </Field>
-        <Field label="Logo URL (optional)">
-          <Input value={form.logoUrl} onChange={e => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://…/logo.png" />
-        </Field>
       </div>
+      <ImageUploadField
+        label="Logo (optional)"
+        value={form.logoUrl}
+        onChange={(v) => setForm({ ...form, logoUrl: v })}
+      />
       <Field label="Short description (optional)">
         <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Family-style North Indian, dine-in & takeaway." rows={2} />
       </Field>

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal, check } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, check, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -17,6 +17,7 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   trialDays: integer("trial_days").notNull().default(14),
   currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
+  featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

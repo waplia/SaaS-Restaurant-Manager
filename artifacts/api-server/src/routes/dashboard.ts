@@ -3,6 +3,7 @@ import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
 import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable } from "../lib/db";
 import { generateDueRecurringExpenses } from "./expenses";
 import { requireRole } from "../middleware/authorize";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
@@ -165,7 +166,7 @@ router.get("/restaurants/:restaurantId/dashboard/staff-activity", async (req, re
   res.json(rows);
 });
 
-router.get("/restaurants/:restaurantId/dashboard/live-kitchen", async (req, res) => {
+router.get("/restaurants/:restaurantId/dashboard/live-kitchen", requirePlanFeature("kitchen_display"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const tickets = await db.select().from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.restaurantId, restaurantId), sql`status NOT IN ('served','cancelled')`)).orderBy(desc(kitchenTicketsTable.isPriority), kitchenTicketsTable.createdAt);
 
