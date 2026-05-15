@@ -23,7 +23,7 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-const ALLOWED_CHANNELS: BroadcastChannel[] = ["in_app", "email", "sms", "whatsapp", "push"];
+const ALLOWED_CHANNELS: BroadcastChannel[] = ["in_app", "email", "sms", "whatsapp"];
 const ALLOWED_PRIORITIES: BroadcastPriority[] = ["low", "medium", "high", "urgent"];
 const ALLOWED_DELIVERY_STATUSES: DeliveryStatus[] = ["queued", "sent", "delivered", "failed", "skipped", "pending"];
 

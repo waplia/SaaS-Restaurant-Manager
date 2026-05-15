@@ -64,7 +64,6 @@ const ALL_CHANNELS: { id: BroadcastChannel; label: string; icon: typeof Mail }[]
   { id: "email", label: "Email", icon: Mail },
   { id: "sms", label: "SMS", icon: Smartphone },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "push", label: "Push", icon: MessageSquare },
 ];
 
 const PRIORITIES: { id: BroadcastPriority; label: string; tone: string }[] = [
@@ -206,7 +205,13 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
   const applyTemplate = (t: AdminNotificationTemplate) => {
     setMessage(t.body);
     if (t.subject) setSubject(t.subject);
-    if (!channels.includes(t.channel)) setChannels(prev => Array.from(new Set([...prev, t.channel])));
+    // Only auto-add the template's channel if it is one of the compose-allowed
+    // channels (in_app/email/sms/whatsapp). Push is intentionally excluded
+    // from admin broadcasts.
+    const allowed = ALL_CHANNELS.map(c => c.id);
+    if (allowed.includes(t.channel) && !channels.includes(t.channel)) {
+      setChannels(prev => Array.from(new Set([...prev, t.channel])));
+    }
     toast({ title: `Loaded template: ${t.name}` });
   };
 
@@ -454,30 +459,23 @@ function ComposeTab({ onOpenLogs, existing = null, onDone }: ComposeProps) {
   );
 }
 
-// ─── Audience builder (mode-based picker) ────────────────────────
-type AudienceMode = "all" | "by_status" | "by_plan" | "selected_tenants" | "advanced";
-
-function deriveMode(a: AudienceFilter): AudienceMode {
-  if (a.tenantIds?.length) return "selected_tenants";
-  if (a.planIds?.length) return "by_plan";
-  if (a.planStatuses?.length) return "by_status";
-  if (a.countries?.length || a.cities?.length || a.roles?.length) return "advanced";
-  return "all";
-}
+// ─── Audience builder (combinable, AND across categories) ────────
+const PLAN_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "trial", label: "Trial" },
+  { value: "active", label: "Active" },
+  { value: "expired", label: "Expired" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "suspended", label: "Suspended" },
+];
 
 function AudienceBuilder({ audience, onChange }: { audience: AudienceFilter; onChange: (a: AudienceFilter) => void }) {
-  const [mode, setMode] = useState<AudienceMode>(() => deriveMode(audience));
   const [tenantSearch, setTenantSearch] = useState("");
   const tenants = useAdminTenantsSearch(tenantSearch);
-
-  const switchMode = (m: AudienceMode) => {
-    setMode(m);
-    if (m === "all") onChange({});
-    else if (m === "by_status") onChange({ planStatuses: audience.planStatuses ?? [] });
-    else if (m === "by_plan") onChange({ planIds: audience.planIds ?? [] });
-    else if (m === "selected_tenants") onChange({ tenantIds: audience.tenantIds ?? [] });
-    else onChange({ countries: audience.countries, cities: audience.cities, roles: audience.roles });
-  };
+  const plans = useQuery({
+    queryKey: ["subscription-plans-lite"],
+    queryFn: () => apiGet<Array<{ id: number; name: string }>>("/subscription-plans"),
+    staleTime: 60_000,
+  });
 
   const toggleStatus = (s: string) => {
     const cur = new Set(audience.planStatuses ?? []);
@@ -498,93 +496,80 @@ function AudienceBuilder({ audience, onChange }: { audience: AudienceFilter; onC
     const cur = (audience.tenantIds ?? []).filter(x => x !== id);
     onChange({ ...audience, tenantIds: cur.length ? cur : undefined });
   };
-  const setAdvancedField = (key: "countries" | "cities" | "roles", raw: string) => {
+  const setListField = (key: "countries" | "cities" | "roles", raw: string) => {
     const arr = raw.split(",").map(s => s.trim()).filter(Boolean);
     onChange({ ...audience, [key]: arr.length ? arr : undefined });
   };
 
-  const plans = useQuery({
-    queryKey: ["subscription-plans-lite"],
-    queryFn: () => apiGet<Array<{ id: number; name: string }>>("/subscription-plans"),
-    staleTime: 60_000,
-  });
   const selectedTenantIds = audience.tenantIds ?? [];
   const tenantList = tenants.data?.data ?? [];
   const selectedTenantBadges = tenantList.filter(t => selectedTenantIds.includes(t.id));
+  const isEmpty = !audience.tenantIds?.length && !audience.planIds?.length && !audience.planStatuses?.length
+    && !audience.countries?.length && !audience.cities?.length && !audience.roles?.length;
 
   return (
-    <div className="border rounded-lg p-3 bg-white">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium">Audience</p>
-        <Button size="sm" variant="ghost" onClick={() => { setMode("all"); onChange({}); }}>Reset</Button>
+    <div className="border rounded-lg p-3 bg-white space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Audience</p>
+          <p className="text-[11px] text-slate-500">All filled categories combine with AND. Leave a category empty to ignore it.</p>
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => onChange({})}>Reset</Button>
       </div>
 
-      <div className="mb-3">
-        <Label className="text-xs">Audience mode</Label>
-        <Select value={mode} onValueChange={v => switchMode(v as AudienceMode)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All active tenant owners</SelectItem>
-            <SelectItem value="by_status">By plan status</SelectItem>
-            <SelectItem value="by_plan">By subscription plan</SelectItem>
-            <SelectItem value="selected_tenants">Selected restaurants</SelectItem>
-            <SelectItem value="advanced">Advanced (countries / cities / roles)</SelectItem>
-          </SelectContent>
-        </Select>
+      {isEmpty && (
+        <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+          No filters set — sends to every active tenant owner.
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <Label className="text-xs">Plan statuses</Label>
+        <div className="flex flex-wrap gap-1">
+          {PLAN_STATUS_OPTIONS.map(s => {
+            const on = (audience.planStatuses ?? []).includes(s.value);
+            return (
+              <Button key={s.value} type="button" size="sm" variant={on ? "default" : "outline"} onClick={() => toggleStatus(s.value)}>
+                {s.label}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
-      {mode === "all" && <p className="text-xs text-slate-500">Sends to every active tenant owner.</p>}
+      <div className="space-y-1">
+        <Label className="text-xs">Subscription plans</Label>
+        <div className="flex flex-wrap gap-1 max-h-32 overflow-auto">
+          {(plans.data ?? []).map(p => {
+            const on = (audience.planIds ?? []).includes(p.id);
+            return (
+              <Button key={p.id} type="button" size="sm" variant={on ? "default" : "outline"} onClick={() => togglePlan(p.id)}>
+                {p.name}
+              </Button>
+            );
+          })}
+          {plans.isLoading && <span className="text-xs text-slate-500">Loading plans…</span>}
+          {!plans.isLoading && (plans.data ?? []).length === 0 && <span className="text-xs text-slate-500">No plans configured.</span>}
+        </div>
+      </div>
 
-      {mode === "by_status" && (
-        <div className="space-y-1">
-          <Label className="text-xs">Plan statuses</Label>
+      <div className="space-y-2">
+        <Label className="text-xs">Selected restaurants (optional)</Label>
+        <Input value={tenantSearch} onChange={e => setTenantSearch(e.target.value)} placeholder="Type to search by name or slug…" />
+        {selectedTenantIds.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {["trial", "active", "past_due", "cancelled"].map(s => {
-              const on = (audience.planStatuses ?? []).includes(s);
+            {selectedTenantIds.map(id => {
+              const t = selectedTenantBadges.find(x => x.id === id);
               return (
-                <Button key={s} type="button" size="sm" variant={on ? "default" : "outline"} onClick={() => toggleStatus(s)}>
-                  {s}
-                </Button>
+                <Badge key={id} variant="secondary" className="gap-1">
+                  {t ? t.name : `tenant#${id}`}
+                  <button onClick={() => removeTenant(id)} className="ml-1 hover:text-red-600">×</button>
+                </Badge>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {mode === "by_plan" && (
-        <div className="space-y-1">
-          <Label className="text-xs">Subscription plans</Label>
-          <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-            {(plans.data ?? []).map(p => {
-              const on = (audience.planIds ?? []).includes(p.id);
-              return (
-                <Button key={p.id} type="button" size="sm" variant={on ? "default" : "outline"} onClick={() => togglePlan(p.id)}>
-                  {p.name}
-                </Button>
-              );
-            })}
-            {plans.isLoading && <span className="text-xs text-slate-500">Loading plans…</span>}
-          </div>
-        </div>
-      )}
-
-      {mode === "selected_tenants" && (
-        <div className="space-y-2">
-          <Label className="text-xs">Search restaurants</Label>
-          <Input value={tenantSearch} onChange={e => setTenantSearch(e.target.value)} placeholder="Type to search by name or slug…" />
-          {selectedTenantIds.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {selectedTenantIds.map(id => {
-                const t = selectedTenantBadges.find(x => x.id === id);
-                return (
-                  <Badge key={id} variant="secondary" className="gap-1">
-                    {t ? t.name : `tenant#${id}`}
-                    <button onClick={() => removeTenant(id)} className="ml-1 hover:text-red-600">×</button>
-                  </Badge>
-                );
-              })}
-            </div>
-          )}
+        )}
+        {tenantSearch.length > 0 && (
           <div className="border rounded max-h-40 overflow-auto">
             {tenantList.length === 0 && <p className="p-2 text-xs text-slate-500">{tenants.isLoading ? "Loading…" : "No matches"}</p>}
             {tenantList.filter(t => !selectedTenantIds.includes(t.id)).map(t => (
@@ -595,26 +580,23 @@ function AudienceBuilder({ audience, onChange }: { audience: AudienceFilter; onC
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {mode === "advanced" && (
-        <div className="space-y-2 text-xs">
-          <div>
-            <Label className="text-xs">Countries</Label>
-            <Input value={(audience.countries ?? []).join(", ")} onChange={e => setAdvancedField("countries", e.target.value)} placeholder="India, UAE" />
-          </div>
-          <div>
-            <Label className="text-xs">Cities</Label>
-            <Input value={(audience.cities ?? []).join(", ")} onChange={e => setAdvancedField("cities", e.target.value)} placeholder="Mumbai, Bengaluru" />
-          </div>
-          <div>
-            <Label className="text-xs">Roles (default: owner)</Label>
-            <Input value={(audience.roles ?? []).join(", ")} onChange={e => setAdvancedField("roles", e.target.value)} placeholder="owner, manager" />
-          </div>
-          <p className="text-[11px] text-slate-500">Combines with AND.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+        <div>
+          <Label className="text-xs">Countries</Label>
+          <Input value={(audience.countries ?? []).join(", ")} onChange={e => setListField("countries", e.target.value)} placeholder="India, UAE" />
         </div>
-      )}
+        <div>
+          <Label className="text-xs">Cities</Label>
+          <Input value={(audience.cities ?? []).join(", ")} onChange={e => setListField("cities", e.target.value)} placeholder="Mumbai, Bengaluru" />
+        </div>
+        <div>
+          <Label className="text-xs">Roles (default: owner)</Label>
+          <Input value={(audience.roles ?? []).join(", ")} onChange={e => setListField("roles", e.target.value)} placeholder="owner, manager" />
+        </div>
+      </div>
     </div>
   );
 }

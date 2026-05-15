@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import {
   db,
   tenantsTable,
@@ -48,7 +48,17 @@ export async function resolveAudience(filter: AudienceFilter): Promise<ResolvedR
   const tenantConditions: SQL[] = [eq(tenantsTable.isActive, true)];
   if (nonEmpty(filter.tenantIds)) tenantConditions.push(inArray(tenantsTable.id, filter.tenantIds));
   if (nonEmpty(filter.planIds)) tenantConditions.push(inArray(tenantsTable.planId, filter.planIds));
-  if (nonEmpty(filter.planStatuses)) tenantConditions.push(inArray(tenantsTable.planStatus, filter.planStatuses));
+  if (nonEmpty(filter.planStatuses)) {
+    // "suspended" is modeled as tenants.isSuspended=true; other statuses
+    // (trial/active/expired/cancelled) live on tenants.planStatus. Combine OR.
+    const includesSuspended = filter.planStatuses.includes("suspended");
+    const planStatusValues = filter.planStatuses.filter(s => s !== "suspended");
+    const orParts: SQL[] = [];
+    if (planStatusValues.length > 0) orParts.push(inArray(tenantsTable.planStatus, planStatusValues));
+    if (includesSuspended) orParts.push(eq(tenantsTable.isSuspended, true));
+    if (orParts.length === 1) tenantConditions.push(orParts[0]);
+    else if (orParts.length > 1) tenantConditions.push(or(...orParts) as SQL);
+  }
 
   let tenantIds: number[] = [];
   const baseRows = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(and(...tenantConditions));
@@ -237,16 +247,20 @@ async function sendOnChannel(
 ): Promise<SendResult> {
   try {
     if (channel === "in_app") {
+      // One row per recipient user (owner at minimum). The notifications table
+      // is restaurant-scoped, so we attach the user's first restaurant for
+      // visibility. This guarantees a 1:1 mapping between recipient and row.
       if (r.restaurantIds.length === 0) return { status: "skipped", recipient: null, error: "No restaurants for tenant" };
-      await db.insert(notificationsTable).values(r.restaurantIds.map(rid => ({
-        restaurantId: rid,
+      const primaryRestaurantId = r.restaurantIds[0];
+      await db.insert(notificationsTable).values({
+        restaurantId: primaryRestaurantId,
         type: bc.priority === "urgent" ? "admin.broadcast.urgent" : "admin.broadcast",
         title: subject,
         message,
         entityId: bc.id,
         entityType: "notification_broadcast",
-      })));
-      return { status: "sent", recipient: `tenant:${r.tenantId}`, providerMessageId: null };
+      });
+      return { status: "sent", recipient: r.userId ? `user:${r.userId}` : `tenant:${r.tenantId}`, providerMessageId: null };
     }
     if (channel === "email") {
       if (!r.email) return { status: "skipped", recipient: null, error: "No email" };
