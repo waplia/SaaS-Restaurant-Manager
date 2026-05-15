@@ -3,6 +3,7 @@ import { db } from "./db";
 import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzle-orm";
 import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable } from "../lib/db";
 import { sendEmail, dailySummaryEmail } from "./notifications";
+import { sendByTemplateKey } from "./emailSender";
 import { logger } from "./logger";
 import { expireDueLoyaltyPoints } from "./loyalty";
 import { runAutoReorderForRestaurant } from "./autoReorder";
@@ -193,12 +194,14 @@ export function startScheduler(): void {
 
           for (const owner of owners) {
             if (owner.email) {
-              await sendEmail({
-                to: owner.email,
-                subject: `Your Khana Lagao trial for ${restaurant.name} has expired`,
-                html: `<p>Hi ${owner.name ?? "there"},</p><p>Your 14-day free trial for <strong>${restaurant.name}</strong> on Khana Lagao has expired.</p><p>Upgrade now to continue managing your restaurant without interruption.</p><p><a href="${process.env.VITE_APP_URL ?? "https://khanalagao.app"}/settings/subscription" style="background:#f97316;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">Upgrade Now</a></p>`,
-                text: `Your Khana Lagao trial for ${restaurant.name} has expired. Visit your subscription settings to upgrade.`,
-              }).catch(console.error);
+              const upgradeUrl = `${(process.env.PUBLIC_APP_URL ?? process.env.VITE_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
+              await sendByTemplateKey("subscription_expired", owner.email, {
+                name: owner.name ?? "there",
+                plan: "Trial",
+                expiredAt: (tenant.trialEndsAt ?? new Date()).toISOString().slice(0, 10),
+                upgradeUrl,
+                appName: "Khana Lagao",
+              }, { tenantId: tenant.id });
             }
           }
         }
@@ -209,6 +212,7 @@ export function startScheduler(): void {
   }, { timezone: "Asia/Kolkata" });
 
   // Trial-ending warning — fires daily at 09:00 IST for tenants whose trial ends in ~3 days.
+  // Sends BOTH SMS and Email reminders.
   cron.schedule("0 9 * * *", async () => {
     try {
       const now = new Date();
@@ -220,12 +224,26 @@ export function startScheduler(): void {
         lte(tenantsTable.trialEndsAt, winEnd),
         eq(tenantsTable.isActive, true),
       ));
+      const upgradeUrl = `${(process.env.PUBLIC_APP_URL ?? process.env.VITE_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
       for (const t of tenants) {
         const daysLeft = Math.max(0, Math.ceil(((t.trialEndsAt?.getTime() ?? now.getTime()) - now.getTime()) / 86_400_000));
         void sendLifecycleSms({ tenantId: t.id, eventKey: "trial_ending", variables: { tenant: t.name, daysLeft } });
+        const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+          .from(usersTable)
+          .where(and(eq(usersTable.tenantId, t.id), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+        for (const owner of owners) {
+          if (!owner.email) continue;
+          await sendByTemplateKey("trial_ending", owner.email, {
+            name: owner.name ?? "there",
+            daysLeft,
+            trialEndsAt: (t.trialEndsAt ?? new Date()).toISOString().slice(0, 10),
+            upgradeUrl,
+            appName: "Khana Lagao",
+          }, { tenantId: t.id });
+        }
       }
-      logger.info({ count: tenants.length }, "Trial-ending SMS job complete");
-    } catch (err) { logger.error({ err }, "Trial-ending SMS job failed"); }
+      logger.info({ count: tenants.length }, "Trial-ending reminder job complete (SMS+Email)");
+    } catch (err) { logger.error({ err }, "Trial-ending reminder job failed"); }
   }, { timezone: "Asia/Kolkata" });
 
   // Payment-reminder — fires daily at 10:00 IST for active tenants whose subscription ends in ~3 days.
@@ -261,6 +279,7 @@ export function startScheduler(): void {
     try { await sweepQuotaAlerts(); }
     catch (err) { logger.error({ err }, "SMS quota sweep failed"); }
   });
+
 
   cron.schedule("30 0 * * *", async () => {
     logger.info("Running loyalty-points expiry job");

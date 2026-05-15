@@ -1,4 +1,5 @@
 import { db } from "./lib/db";
+import { seedDefaultEmailTemplates } from "./lib/emailSender";
 import {
   subscriptionPlansTable,
   tenantsTable,
@@ -473,6 +474,9 @@ export async function seed(): Promise<void> {
   const existingSla = await db.select().from(supportSlaSettingsTable).limit(1);
   if (existingSla.length === 0) await db.insert(supportSlaSettingsTable).values({});
   console.log("✅ Support ticket defaults created");
+
+  await seedDefaultEmailTemplates();
+  console.log("✅ Default email templates ensured");
 
   console.log("🎉 Seed complete!");
   console.log("Restaurant ID (Spice Garden):", spiceRestId);

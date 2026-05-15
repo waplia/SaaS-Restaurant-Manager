@@ -16,6 +16,7 @@ import {
   createRazorpayOrder, fetchRazorpayOrder, verifyRazorpayPaymentSignature, verifyRazorpayWebhook,
 } from "../lib/razorpay";
 import { logger } from "../lib/logger";
+import { sendByTemplateKey } from "../lib/emailSender";
 
 const router = Router();
 
@@ -297,6 +298,7 @@ export function createRazorpayWebhookRouter(): Router {
     try {
       const orderId = event.payload?.order?.entity?.id ?? event.payload?.payment?.entity?.order_id;
       const isSuccess = event.event === "payment.captured" || event.event === "order.paid";
+      const isFailed = event.event === "payment.failed";
       if (orderId && isSuccess) {
         const order = await fetchRazorpayOrder(config, orderId);
         const m = /^kl_(\d+)_(\d+)_/.exec(order.receipt ?? "");
@@ -305,6 +307,28 @@ export function createRazorpayWebhookRouter(): Router {
           amount: typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : undefined,
           currency: typeof order.currency === "string" ? order.currency : undefined,
         });
+      } else if (orderId && isFailed) {
+        try {
+          const order = await fetchRazorpayOrder(config, orderId);
+          const m = /^kl_(\d+)_(\d+)_/.exec(order.receipt ?? "");
+          if (m) {
+            const tenantId = Number(m[1]);
+            const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+              .from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+            const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
+            for (const o of owners) {
+              if (!o.email) continue;
+              await sendByTemplateKey("payment_failed", o.email, {
+                name: o.name ?? "there",
+                amount: typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : "",
+                currency: typeof order.currency === "string" ? order.currency : "INR",
+                reason: "Payment was declined by the gateway",
+                retryUrl,
+                appName: "Khana Lagao",
+              }, { tenantId });
+            }
+          }
+        } catch (err) { logger.error({ err }, "Razorpay payment_failed email failed"); }
       }
     } catch (err) {
       logger.error({ err }, "Razorpay webhook processing error");
@@ -473,6 +497,29 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     `Your ${reqRow.method.toUpperCase()} payment of ${reqRow.currency} ${reqRow.amount} has been approved and your subscription is now active.`,
     id,
   );
+
+  const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+    .from(usersTable)
+    .where(and(eq(usersTable.tenantId, reqRow.tenantId), eq(usersTable.role, "owner")))
+    .limit(1);
+  const [plan] = await db.select({ name: subscriptionPlansTable.name })
+    .from(subscriptionPlansTable)
+    .where(eq(subscriptionPlansTable.id, reqRow.planId));
+  if (owner?.email) {
+    void sendByTemplateKey("payment_successful", owner.email, {
+      name: owner.name,
+      amount: String(reqRow.amount),
+      currency: reqRow.currency,
+      plan: plan?.name ?? "your plan",
+      invoiceUrl: "",
+    }, { tenantId: reqRow.tenantId });
+    void sendByTemplateKey("subscription_activated", owner.email, {
+      name: owner.name,
+      plan: plan?.name ?? "your plan",
+      renewsAt: "",
+      appName: "Khana Lagao",
+    }, { tenantId: reqRow.tenantId });
+  }
   res.json({ ok: true });
 });
 

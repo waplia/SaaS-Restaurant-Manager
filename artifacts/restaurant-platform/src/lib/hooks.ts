@@ -2629,3 +2629,170 @@ export function useDeleteAdminNotificationTemplate() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "notification-templates"] }),
   });
 }
+
+// ─── Admin email (Task #27) ───────────────────────────────────────
+export type EmailDriver = "smtp" | "sendgrid" | "mailgun" | "ses" | "custom";
+export type EmailLogStatus = "queued" | "sent" | "delivered" | "bounced" | "failed";
+
+export interface AdminEmailProvider {
+  id: number; name: string; driver: EmailDriver;
+  config: Record<string, unknown>;
+  fromName: string; fromEmail: string; replyTo: string | null;
+  isEnabled: boolean; isDefault: boolean;
+  createdAt: string; updatedAt: string;
+}
+export interface AdminEmailTemplate {
+  id: number; key: string; name: string; event: string | null;
+  subject: string; body: string; variables: string[];
+  isEnabled: boolean; createdAt: string; updatedAt: string;
+}
+export interface AdminEmailLog {
+  id: number; tenantId: number | null; tenantName: string | null;
+  recipient: string; templateKey: string | null; templateId: number | null;
+  providerId: number | null; providerDriver: EmailDriver | null;
+  subject: string | null; status: EmailLogStatus; providerMessageId: string | null;
+  error: string | null; retryOf: number | null; sentAt: string | null; createdAt: string;
+}
+
+export function useAdminEmailProviders() {
+  return useQuery({
+    queryKey: ["admin", "email", "providers"],
+    queryFn: () => apiGet<{ data: AdminEmailProvider[] }>("/admin/email/providers"),
+  });
+}
+export function useCreateAdminEmailProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<AdminEmailProvider>) => apiPost<AdminEmailProvider>("/admin/email/providers", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "providers"] }),
+  });
+}
+export function useUpdateAdminEmailProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<AdminEmailProvider> & { id: number }) =>
+      apiPut<AdminEmailProvider>(`/admin/email/providers/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "providers"] }),
+  });
+}
+export function useDeleteAdminEmailProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/admin/email/providers/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "providers"] }),
+  });
+}
+export function useSetDefaultAdminEmailProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<AdminEmailProvider>(`/admin/email/providers/${id}/set-default`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "providers"] }),
+  });
+}
+export function useTestAdminEmailProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, to, subject, body }: { id: number; to: string; subject?: string; body?: string }) =>
+      apiPost<{ ok: boolean; logId: number; providerMessageId?: string | null }>(`/admin/email/providers/${id}/test`, { to, subject, body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
+  });
+}
+
+export function useAdminEmailTemplates() {
+  return useQuery({
+    queryKey: ["admin", "email", "templates"],
+    queryFn: () => apiGet<{ data: AdminEmailTemplate[]; defaults: Array<{ key: string; name: string; event: string | null }> }>("/admin/email/templates"),
+  });
+}
+export function useCreateAdminEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<AdminEmailTemplate>) => apiPost<AdminEmailTemplate>("/admin/email/templates", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "templates"] }),
+  });
+}
+export function useUpdateAdminEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<AdminEmailTemplate> & { id: number }) =>
+      apiPut<AdminEmailTemplate>(`/admin/email/templates/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "templates"] }),
+  });
+}
+export function useDeleteAdminEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/admin/email/templates/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "templates"] }),
+  });
+}
+export function usePreviewAdminEmailTemplate() {
+  return useMutation({
+    mutationFn: ({ id, sample }: { id: number; sample: Record<string, unknown> }) =>
+      apiPost<{ subject: string; html: string; text: string }>(`/admin/email/templates/${id}/preview`, { sample }),
+  });
+}
+export function useTestAdminEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, to, sample, providerId }: { id: number; to: string; sample?: Record<string, unknown>; providerId?: number }) =>
+      apiPost<{ ok: boolean; logId: number }>(`/admin/email/templates/${id}/test`, { to, sample, providerId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
+  });
+}
+
+export interface AdminEmailLogFilters {
+  status?: EmailLogStatus | "all";
+  provider?: string;
+  tenantId?: number | null;
+  template?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+export function useAdminEmailLogs(filters: AdminEmailLogFilters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.status && filters.status !== "all") qs.set("status", filters.status);
+  if (filters.provider && filters.provider !== "all") qs.set("provider", filters.provider);
+  if (filters.tenantId) qs.set("tenantId", String(filters.tenantId));
+  if (filters.template && filters.template !== "all") qs.set("template", filters.template);
+  if (filters.search) qs.set("search", filters.search);
+  if (filters.from) qs.set("from", filters.from);
+  if (filters.to) qs.set("to", filters.to);
+  if (filters.limit) qs.set("limit", String(filters.limit));
+  if (filters.offset) qs.set("offset", String(filters.offset));
+  return useQuery({
+    queryKey: ["admin", "email", "logs", filters],
+    queryFn: () => apiGet<{ data: AdminEmailLog[]; total: number; limit: number; offset: number }>(`/admin/email/logs?${qs.toString()}`),
+    refetchInterval: 15_000,
+  });
+}
+export function useSendAdminEmailAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      templateKey: string;
+      audience: "all_tenants" | "tenants" | "single";
+      tenantIds?: number[];
+      recipient?: string;
+      variables?: Record<string, unknown>;
+    }) => apiPost<{ templateKey: string; audience: string; total: number; sent: number; failed: number }>("/admin/email/announcements", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
+  });
+}
+export function useRetryAdminEmailLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<{ ok: boolean; newLogId?: number }>(`/admin/email/logs/${id}/retry`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
+  });
+}
+export function useBulkRetryAdminEmailLogs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => apiPost<{ retried: number; succeeded: number; failed: number }>(`/admin/email/logs/retry`, { ids }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
+  });
+}

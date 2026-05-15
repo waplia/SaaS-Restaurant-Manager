@@ -6,6 +6,7 @@ import { requireSuperAdmin, requireRole } from "../middleware/authorize";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { hashPassword, signResetToken, signImpersonationToken } from "../lib/auth";
 import { sendEmail } from "../lib/notifications";
+import { sendByTemplateKey } from "../lib/emailSender";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -228,12 +229,42 @@ router.get("/tenants/:id", requireSuperAdmin, async (req, res) => {
 });
 
 router.patch("/tenants/:id", requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.id);
   const { name, planId, planStatus, isActive, logoUrl, primaryColor } = req.body;
+  const [before] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!before) return void res.status(404).json({ error: "Not found" });
   const [updated] = await db.update(tenantsTable)
     .set({ name, planId, planStatus, isActive, logoUrl, primaryColor, updatedAt: new Date() })
-    .where(eq(tenantsTable.id, Number(req.params.id)))
+    .where(eq(tenantsTable.id, tenantId))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // Plan change → email owners (upgrade vs downgrade by price comparison).
+  if (planId && before.planId !== updated.planId) {
+    try {
+      const [oldPlan] = before.planId
+        ? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, before.planId))
+        : [undefined];
+      const [newPlan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, updated.planId!));
+      if (newPlan) {
+        const isUpgrade = !oldPlan || Number(newPlan.price) >= Number(oldPlan.price);
+        const tplKey = isUpgrade ? "package_upgraded" : "package_downgraded";
+        const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+          .from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+        for (const o of owners) {
+          if (!o.email) continue;
+          await sendByTemplateKey(tplKey, o.email, {
+            name: o.name ?? "there",
+            oldPlan: oldPlan?.name ?? "—",
+            newPlan: newPlan.name,
+            price: String(newPlan.price ?? ""),
+            currency: newPlan.currency ?? "INR",
+            appName: "Khana Lagao",
+          }, { tenantId });
+        }
+      }
+    } catch (err) { logger.error({ err, tenantId }, "Plan change email failed"); }
+  }
   res.json(updated);
 });
 
@@ -285,6 +316,20 @@ router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
       eventKey: "restaurant_suspended",
       variables: { tenant: updated.name },
     });
+    try {
+      const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+        .from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+      for (const o of owners) {
+        if (!o.email) continue;
+        await sendByTemplateKey("restaurant_suspended", o.email, {
+          name: o.name ?? "there",
+          tenantName: updated.name,
+          reason: typeof req.body?.reason === "string" ? req.body.reason : "Account suspended by administrator",
+          supportEmail: process.env.SUPPORT_EMAIL ?? "support@khanalagao.app",
+          appName: "Khana Lagao",
+        }, { tenantId });
+      }
+    } catch (err) { logger.error({ err, tenantId }, "Suspension email failed"); }
   }
   res.json(updated);
 });

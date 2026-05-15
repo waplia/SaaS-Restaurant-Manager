@@ -11,6 +11,7 @@ import {
   verifyResetToken,
 } from "../lib/auth";
 import { authenticate } from "../middleware/authenticate";
+import { sendByTemplateKey } from "../lib/emailSender";
 
 import { sendLifecycleSms } from "../lib/smsSender";
 
@@ -117,6 +118,18 @@ router.post("/auth/register", async (req, res) => {
       variables: { name: ownerName, restaurant: restaurantName, trialDays: 14 },
     });
   }
+  void sendByTemplateKey("welcome", user.email, {
+    name: user.name,
+    restaurant: restaurant.name,
+    appName: "Khana Lagao",
+    appUrl: process.env.PUBLIC_APP_URL ?? "",
+  }, { tenantId: tenant.id });
+  void sendByTemplateKey("trial_started", user.email, {
+    name: user.name,
+    trialDays: String(trialPlan?.trialDays ?? 14),
+    trialEndsAt: trialEndsAt.toISOString().slice(0, 10),
+    appName: "Khana Lagao",
+  }, { tenantId: tenant.id });
 
   res.status(201).json({
     accessToken,
@@ -239,10 +252,20 @@ router.post("/auth/forgot-password", async (req, res) => {
     .where(eq(usersTable.email, email.toLowerCase()));
 
   if (user) {
-    const _resetToken = signResetToken({ sub: user.id, email: user.email });
+    const resetToken = signResetToken({ sub: user.id, email: user.email });
     if (process.env.NODE_ENV === "development") {
       console.info(`[dev-only] password-reset token for user id=${user.id}`);
     }
+    const base = (process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    const resetLink = `${base}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const [u] = await db
+      .select({ name: usersTable.name, email: usersTable.email, tenantId: usersTable.tenantId })
+      .from(usersTable).where(eq(usersTable.id, user.id));
+    void sendByTemplateKey("password_reset", u.email, {
+      name: u.name,
+      resetLink,
+      appName: "Khana Lagao",
+    }, { tenantId: u.tenantId });
   }
   res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
 });

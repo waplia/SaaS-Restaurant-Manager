@@ -39,6 +39,7 @@ import supportTicketsRouter from "./support-tickets";
 import systemHealthRouter from "./system-health";
 import apiManagementRouter from "./api-management";
 import publicV1Router from "./public-v1";
+import adminEmailRouter from "./admin-email";
 
 const router: IRouter = Router();
 
@@ -92,5 +93,6 @@ router.use(adminSmsRouter);
 router.use(supportTicketsRouter);
 router.use(systemHealthRouter);
 router.use(apiManagementRouter);
+router.use(adminEmailRouter);
 
 export default router;
