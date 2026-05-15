@@ -25,6 +25,27 @@ export default function NotificationsPage() {
       <div className="p-6 max-w-2xl">
         <div className="space-y-3">
           {notifications.map((n: AppNotification) => {
+            const isUrgent = n.type === "admin.broadcast.urgent";
+            if (isUrgent) {
+              return (
+                <div key={n.id}
+                  className={cn("flex gap-4 p-4 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/30 shadow-sm")}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-600 text-white">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <p className="font-bold text-red-700 dark:text-red-300 text-sm">🚨 {n.title}</p>
+                      {!n.isRead && <span className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0 mt-1.5" />}
+                    </div>
+                    <p className="text-sm text-red-800 dark:text-red-200 mt-0.5 whitespace-pre-line">{n.message}</p>
+                    <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1">
+                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })} · Urgent admin broadcast
+                    </p>
+                  </div>
+                </div>
+              );
+            }
             const cfg = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.system;
             const Icon = cfg.icon;
             return (

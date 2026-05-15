@@ -2426,6 +2426,25 @@ export interface AdminBroadcastDelivery {
   createdAt: string;
 }
 
+export interface ChannelCapability { available: boolean; reason?: string }
+export function useBroadcastChannelCapabilities() {
+  return useQuery({
+    queryKey: ["admin", "broadcasts", "channel-capabilities"],
+    queryFn: () => apiGet<{ data: Record<BroadcastChannel, ChannelCapability> }>(`/admin/broadcasts/channel-capabilities`),
+    staleTime: 60_000,
+  });
+}
+
+export interface AdminTenantLite { id: number; name: string; slug: string; planStatus: string }
+export function useAdminTenantsSearch(search: string) {
+  return useQuery({
+    queryKey: ["admin", "tenants", "search", search],
+    queryFn: () => apiGet<{ data: AdminTenantLite[] }>(`/tenants?search=${encodeURIComponent(search)}&limit=20`),
+    enabled: search.length >= 0,
+    staleTime: 30_000,
+  });
+}
+
 export function useAdminBroadcasts(status: BroadcastStatus | "all" = "all", page = 1, pageSize = 50) {
   const offset = (page - 1) * pageSize;
   return useQuery({

@@ -17,6 +17,7 @@ import {
   resolveAudience,
   retryDelivery,
   resendFailedDeliveries,
+  getChannelCapabilities,
 } from "../lib/notificationCenter";
 import { logger } from "../lib/logger";
 
@@ -142,6 +143,10 @@ router.post("/admin/broadcasts/audience-preview", requireSuperAdmin, async (req,
 });
 
 // ─── Broadcasts ──────────────────────────────────────────────────
+router.get("/admin/broadcasts/channel-capabilities", requireSuperAdmin, (_req, res) => {
+  res.json({ data: getChannelCapabilities() });
+});
+
 router.get("/admin/broadcasts", requireSuperAdmin, async (req, res) => {
   const status = (req.query.status as string | undefined) ?? "all";
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);

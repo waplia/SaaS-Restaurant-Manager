@@ -363,38 +363,64 @@ export async function resendFailedDeliveries(broadcastId: number): Promise<{ ret
  * the table is empty. Slugs are unique and idempotent. Safe to call on every boot.
  */
 export async function seedDefaultTemplates(): Promise<void> {
-  const existing = await db.select({ id: notificationTemplatesTable.id }).from(notificationTemplatesTable).limit(1);
-  if (existing.length > 0) return;
+  // Slug-upsert — safe regardless of partial seeding state.
   const defaults = [
-    { name: "Welcome message", slug: "welcome", channel: "email" as const,
-      subject: "Welcome to TableTrack, {{userName}}!",
-      body: "Hi {{userName}},\n\nThanks for joining TableTrack. Your account is ready — sign in to set up your first restaurant.\n\nNeed help? Just reply to this email." },
-    { name: "Trial ending soon", slug: "trial-ending", channel: "email" as const,
+    { name: "Maintenance Notice", slug: "maintenance-notice", channel: "in_app" as const,
+      subject: "Scheduled maintenance window",
+      body: "Hi {{userName}},\n\nWe'll be performing scheduled maintenance shortly. The platform may be briefly unavailable. Thanks for your patience." },
+    { name: "New Feature Launch", slug: "new-feature-launch", channel: "in_app" as const,
+      subject: "Something new just launched",
+      body: "We've shipped a new capability we think you'll love. Open the app to explore it." },
+    { name: "Payment Reminder", slug: "payment-reminder", channel: "email" as const,
+      subject: "Payment reminder — action required",
+      body: "Hi {{userName}},\n\nThis is a friendly reminder that your subscription payment is due. Please update your billing to avoid service interruption." },
+    { name: "Trial Ending", slug: "trial-ending", channel: "email" as const,
       subject: "Your TableTrack trial ends in 3 days",
       body: "Hi {{userName}},\n\nYour free trial ends in 3 days. Upgrade now to keep all your data, staff and integrations active without interruption." },
-    { name: "Plan upgraded", slug: "plan-upgraded", channel: "in_app" as const,
-      subject: "Plan upgraded — welcome aboard!",
-      body: "Your subscription has been upgraded successfully. Enjoy the new limits and features." },
-    { name: "Payment failed", slug: "payment-failed", channel: "email" as const,
-      subject: "We couldn't process your payment",
-      body: "Hi {{userName}},\n\nWe were unable to charge your card on file. Please update your billing details to avoid service interruption." },
-    { name: "Scheduled maintenance", slug: "maintenance", channel: "in_app" as const,
-      subject: "Scheduled maintenance",
-      body: "We'll be performing scheduled maintenance soon. The platform may be briefly unavailable. Thanks for your patience." },
-    { name: "New feature announcement", slug: "feature-announcement", channel: "in_app" as const,
-      subject: "Something new just landed",
-      body: "We've shipped a new capability we think you'll love. Open the app to check it out." },
+    { name: "Subscription Expired", slug: "subscription-expired", channel: "email" as const,
+      subject: "Your subscription has expired",
+      body: "Hi {{userName}},\n\nYour TableTrack subscription has expired and access is now limited. Renew now to restore full access." },
+    { name: "Festival Offer", slug: "festival-offer", channel: "in_app" as const,
+      subject: "Special festival offer just for you",
+      body: "Celebrate the season with an exclusive offer on TableTrack — see the offer details inside the app." },
+    { name: "Emergency Downtime", slug: "emergency-downtime", channel: "in_app" as const,
+      subject: "Emergency downtime in progress",
+      body: "We're investigating a critical issue and the platform may be unavailable. We'll restore service as soon as possible." },
   ];
+  let inserted = 0;
   for (const t of defaults) {
+    const [existing] = await db.select({ id: notificationTemplatesTable.id })
+      .from(notificationTemplatesTable).where(eq(notificationTemplatesTable.slug, t.slug)).limit(1);
+    if (existing) continue;
     try {
       await db.insert(notificationTemplatesTable).values({
         ...t, variables: ["userName"], createdBy: null,
       });
+      inserted++;
     } catch (err) {
-      logger.warn({ err, slug: t.slug }, "Default template seed skipped (likely already exists)");
+      logger.warn({ err, slug: t.slug }, "Default template seed skipped");
     }
   }
-  logger.info({ count: defaults.length }, "Seeded default notification templates");
+  if (inserted > 0) logger.info({ count: inserted }, "Seeded default notification templates");
+}
+
+/**
+ * Reports which broadcast channels have provider credentials configured.
+ * `in_app` is always available because it just writes to the notifications table.
+ */
+export function getChannelCapabilities(): Record<BroadcastChannel, { available: boolean; reason?: string }> {
+  const hasEmail = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+  const hasSmsFrom = hasTwilio && !!process.env.TWILIO_SMS_FROM;
+  const hasWhatsapp = hasTwilio && !!process.env.TWILIO_WHATSAPP_FROM;
+  const hasPush = !!(process.env.FCM_SERVER_KEY || process.env.FIREBASE_SERVICE_ACCOUNT || process.env.EXPO_ACCESS_TOKEN);
+  return {
+    in_app: { available: true },
+    email: hasEmail ? { available: true } : { available: false, reason: "Email provider not configured (SMTP_HOST / SMTP_USER / SMTP_PASS missing)" },
+    sms: hasSmsFrom ? { available: true } : { available: false, reason: "SMS provider not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_SMS_FROM missing)" },
+    whatsapp: hasWhatsapp ? { available: true } : { available: false, reason: "WhatsApp provider not configured (Twilio credentials / TWILIO_WHATSAPP_FROM missing)" },
+    push: hasPush ? { available: true } : { available: false, reason: "Push provider not configured (FCM_SERVER_KEY / FIREBASE_SERVICE_ACCOUNT / EXPO_ACCESS_TOKEN missing)" },
+  };
 }
 
 let schedulerStarted = false;

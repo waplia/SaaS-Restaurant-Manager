@@ -105,29 +105,39 @@ export function NotificationDropdown() {
                 No notifications yet
               </div>
             ) : (
-              recent.map(n => (
-                <div
-                  key={n.id}
-                  className={cn(
-                    "flex items-start gap-3 px-4 py-3 border-b border-border/50 last:border-0 transition-colors",
-                    !n.isRead && "bg-primary/5",
-                  )}
-                >
-                  <NotifIcon type={n.type} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={cn("text-sm leading-snug truncate", !n.isRead ? "font-semibold text-foreground" : "text-foreground")}>
-                        {n.title}
-                      </p>
-                      {!n.isRead && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />
-                      )}
+              recent.map(n => {
+                const isUrgent = n.type === "admin.broadcast.urgent";
+                return (
+                  <div
+                    key={n.id}
+                    className={cn(
+                      "flex items-start gap-3 px-4 py-3 border-b border-border/50 last:border-0 transition-colors",
+                      isUrgent ? "bg-red-50 dark:bg-red-950/30 border-l-4 border-l-red-500"
+                        : !n.isRead && "bg-primary/5",
+                    )}
+                  >
+                    {isUrgent
+                      ? <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-red-100 text-red-600 dark:bg-red-900/40">
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                      : <NotifIcon type={n.type} />}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={cn("text-sm leading-snug truncate",
+                          isUrgent ? "font-bold text-red-700 dark:text-red-300"
+                          : !n.isRead ? "font-semibold text-foreground" : "text-foreground")}>
+                          {isUrgent && <span className="mr-1">🚨</span>}{n.title}
+                        </p>
+                        {!n.isRead && !isUrgent && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                        )}
+                      </div>
+                      <p className={cn("text-xs line-clamp-2 mt-0.5", isUrgent ? "text-red-700/90 dark:text-red-300/90" : "text-muted-foreground")}>{n.message}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">{timeAgo(n.createdAt)}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">{timeAgo(n.createdAt)}</p>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
