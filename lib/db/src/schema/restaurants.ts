@@ -1,4 +1,6 @@
 import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+// Payment methods accepted at billing — stored as a string[] so the bill UI can
+// hide unused tenders. Defaults cover the typical Indian dine-in setup.
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
@@ -25,6 +27,7 @@ export const restaurantsTable = pgTable("restaurants", {
   closingTime: text("closing_time").default("22:00"),
   autoReorderEnabled: boolean("auto_reorder_enabled").notNull().default(true),
   autoReorderCron: text("auto_reorder_cron").default("0 6 * * *"),
+  acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

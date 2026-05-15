@@ -123,18 +123,22 @@ router.get("/onboarding/state", requireRole("owner", "manager", "super_admin"), 
   res.json(state);
 });
 
+async function skipStep(tenantId: number, step: StepId) {
+  const [tenant] = await db.select({ skipped: tenantsTable.onboardingSkippedSteps })
+    .from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  const next = Array.from(new Set([...(tenant?.skipped ?? []), step]));
+  await db.update(tenantsTable)
+    .set({ onboardingSkippedSteps: next, updatedAt: new Date() })
+    .where(eq(tenantsTable.id, tenantId));
+  return next;
+}
+
 router.post("/onboarding/skip", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const user = req.user!;
   if (!user.tenantId) return void res.status(400).json({ error: "No tenant" });
   const step = String(req.body?.step ?? "") as StepId;
   if (!SKIPPABLE.has(step)) return void res.status(400).json({ error: "Step is not skippable" });
-
-  const [tenant] = await db.select({ skipped: tenantsTable.onboardingSkippedSteps })
-    .from(tenantsTable).where(eq(tenantsTable.id, user.tenantId));
-  const next = Array.from(new Set([...(tenant?.skipped ?? []), step]));
-  await db.update(tenantsTable)
-    .set({ onboardingSkippedSteps: next, updatedAt: new Date() })
-    .where(eq(tenantsTable.id, user.tenantId));
+  const next = await skipStep(user.tenantId, step);
   res.json({ ok: true, skippedSteps: next });
 });
 
@@ -154,6 +158,38 @@ router.post("/onboarding/complete", requireRole("owner", "manager", "super_admin
     .set({ onboardingCompletedAt: new Date(), updatedAt: new Date() })
     .where(eq(tenantsTable.id, user.tenantId));
   res.json({ ok: true, completedAt: new Date().toISOString() });
+});
+
+// Unified PATCH /onboarding/state — accepts { skip?: StepId, complete?: true }
+// Mirrors the per-action endpoints above but matches the single-state contract
+// described in the task spec.
+router.patch("/onboarding/state", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const user = req.user!;
+  if (!user.tenantId || !user.restaurantId) return void res.status(400).json({ error: "No tenant" });
+  const body = (req.body ?? {}) as { skip?: string; complete?: boolean };
+
+  if (body.skip) {
+    const step = body.skip as StepId;
+    if (!SKIPPABLE.has(step)) return void res.status(400).json({ error: "Step is not skippable" });
+    await skipStep(user.tenantId, step);
+  }
+
+  if (body.complete) {
+    const state = await buildState(user.tenantId, user.restaurantId);
+    const blocking = state.steps.filter(s => !s.completed && !s.skippable);
+    if (blocking.length > 0) {
+      return void res.status(400).json({
+        error: `Cannot complete onboarding — please finish: ${blocking.map(s => s.id).join(", ")}`,
+        blocking: blocking.map(s => s.id),
+      });
+    }
+    await db.update(tenantsTable)
+      .set({ onboardingCompletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(tenantsTable.id, user.tenantId));
+  }
+
+  const next = await buildState(user.tenantId, user.restaurantId);
+  res.json(next);
 });
 
 export default router;

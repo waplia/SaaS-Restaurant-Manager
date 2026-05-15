@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useOnboardingState } from "@/pages/onboarding";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -80,6 +82,19 @@ const TREND_PERIODS = [
 ];
 
 export default function DashboardPage() {
+  // Hard-redirect first-time owners straight into the wizard. After they
+  // dismiss it once via "Continue later", a session flag stops us bouncing
+  // them again — the persistent banner takes over from there.
+  const [, navigate] = useLocation();
+  const { data: onboarding } = useOnboardingState();
+  useEffect(() => {
+    if (!onboarding) return;
+    if (onboarding.isOnboarded) return;
+    if (sessionStorage.getItem("tt_onboarding_seen") === "1") return;
+    sessionStorage.setItem("tt_onboarding_seen", "1");
+    navigate("/onboarding");
+  }, [onboarding, navigate]);
+
   const [trendPeriod, setTrendPeriod] = useState("7d");
   const trendGroupBy = TREND_PERIODS.find(p => p.val === trendPeriod)?.groupBy ?? "daily";
 

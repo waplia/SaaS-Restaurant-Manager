@@ -429,16 +429,26 @@ function ItemsStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
     queryKey: ["all-categories", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}/categories`),
   });
+  const { data: kitchens = [] } = useQuery<{ id: number; name: string; isDefault?: boolean }[]>({
+    queryKey: ["kitchens", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/kitchens`),
+  });
   const { data: items = [] } = useQuery<{ id: number; name: string; price: string }[]>({
     queryKey: ["all-items", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}/items`),
   });
-  const [form, setForm] = useState({ categoryId: "", name: "", price: "", isVeg: true });
+  const [form, setForm] = useState({ categoryId: "", kitchenId: "", name: "", price: "", isVeg: true });
   const { toast } = useToast();
   const qc = useQueryClient();
+  // Default kitchen selection once kitchens load
+  if (kitchens.length > 0 && !form.kitchenId) {
+    const def = kitchens.find(k => k.isDefault) ?? kitchens[0];
+    setForm(f => ({ ...f, kitchenId: String(def.id) }));
+  }
   const mut = useMutation({
     mutationFn: (data: typeof form) => apiPost(`/restaurants/${restaurantId}/items`, {
       categoryId: Number(data.categoryId),
+      kitchenId: data.kitchenId ? Number(data.kitchenId) : null,
       name: data.name,
       price: data.price,
       isVeg: data.isVeg,
@@ -473,12 +483,19 @@ function ItemsStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
           ))}
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Category">
           <select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })}
             className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="">Select…</option>
             {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Kitchen">
+          <select value={form.kitchenId} onChange={e => setForm({ ...form, kitchenId: e.target.value })}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm" disabled={kitchens.length === 0}>
+            {kitchens.length === 0 && <option value="">Add a kitchen first</option>}
+            {kitchens.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         </Field>
         <Field label="Type">
@@ -498,7 +515,7 @@ function ItemsStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
         </Field>
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.categoryId || !form.name.trim() || !form.price}>
+        <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.categoryId || !form.kitchenId || !form.name.trim() || !form.price}>
           <Plus className="w-4 h-4 mr-1" /> Add item
         </Button>
         {items.length > 0 && <Button variant="outline" onClick={onDone}>Continue →</Button>}
@@ -508,7 +525,7 @@ function ItemsStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
 }
 
 function TablesStep({ restaurantId, onDone }: { restaurantId: number; onDone: () => void }) {
-  const { data: tables = [] } = useQuery<{ id: number; name: string; capacity: number }[]>({
+  const { data: tables = [] } = useQuery<{ id: number; tableNumber: string; capacity: number }[]>({
     queryKey: ["onboarding-tables", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}/tables`),
   });
@@ -523,7 +540,7 @@ function TablesStep({ restaurantId, onDone }: { restaurantId: number; onDone: ()
       for (let i = 0; i < count; i++) {
         try {
           const t = await apiPost(`/restaurants/${restaurantId}/tables`, {
-            name: `${bulk.prefix}${start + i}`,
+            tableNumber: `${bulk.prefix}${start + i}`,
             capacity: Number(bulk.capacity) || 4,
           });
           created.push(t);
@@ -554,7 +571,7 @@ function TablesStep({ restaurantId, onDone }: { restaurantId: number; onDone: ()
         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
           {tables.map(t => (
             <span key={t.id} className="inline-flex items-center gap-1 text-xs rounded-md bg-muted/60 px-2 py-1">
-              <Check className="w-3 h-3 text-emerald-500" />{t.name} · {t.capacity} seats
+              <Check className="w-3 h-3 text-emerald-500" />{t.tableNumber} · {t.capacity} seats
             </span>
           ))}
         </div>
@@ -580,7 +597,7 @@ function TablesStep({ restaurantId, onDone }: { restaurantId: number; onDone: ()
   );
 }
 
-function StaffStep({ restaurantId, onDone }: { restaurantId: number; onDone: () => void }) {
+function StaffStep({ restaurantId, onDone: _onDone }: { restaurantId: number; onDone: () => void }) {
   const { data: staff = [] } = useQuery<{ id: number; name: string; role: string }[]>({
     queryKey: ["onboarding-staff", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}/staff`),
@@ -589,7 +606,8 @@ function StaffStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
   const { toast } = useToast();
   const qc = useQueryClient();
   const mut = useMutation({
-    mutationFn: (data: typeof form) => apiPost(`/restaurants/${restaurantId}/staff`, data),
+    // Staff are user accounts — POST /users with this restaurant scope.
+    mutationFn: (data: typeof form) => apiPost(`/users`, { ...data, restaurantId }),
     onSuccess: () => {
       setForm({ name: "", email: "", role: "waiter", password: "" });
       qc.invalidateQueries({ queryKey: ["onboarding-staff", restaurantId] });
@@ -627,38 +645,68 @@ function StaffStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
             <option value="manager">Manager</option>
           </select>
         </Field>
-        <Field label="Temporary password"><Input type="text" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="At least 8 chars" /></Field>
+        <Field label="Temporary password"><Input type="text" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="At least 6 chars" /></Field>
       </div>
-      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name.trim() || !form.email.trim() || form.password.length < 8}>
+      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name.trim() || !form.email.trim() || form.password.length < 6}>
         <Plus className="w-4 h-4 mr-1" /> Add team member
       </Button>
     </StepShell>
   );
 }
 
+const PAYMENT_METHODS = [
+  { id: "cash", label: "Cash" },
+  { id: "upi", label: "UPI" },
+  { id: "card", label: "Card" },
+];
+
 function PaymentStep({ restaurantId, onDone }: { restaurantId: number; onDone: () => void }) {
-  const { data: restaurant } = useQuery<{ taxRate: string | null; serviceCharge: string | null }>({
+  const { data: restaurant } = useQuery<{ taxRate: string | null; serviceCharge: string | null; acceptedPaymentMethods: string[] | null }>({
     queryKey: ["restaurant", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}`),
   });
-  const [form, setForm] = useState({ taxRate: "5", serviceCharge: "0" });
+  const [form, setForm] = useState({ taxRate: "5", serviceCharge: "0", methods: ["cash", "upi", "card"] });
   const initialised = useState(false);
   if (restaurant && !initialised[0]) {
     setForm({
       taxRate: restaurant.taxRate ?? "5",
       serviceCharge: restaurant.serviceCharge ?? "0",
+      methods: restaurant.acceptedPaymentMethods ?? ["cash", "upi", "card"],
     });
     initialised[1](true);
   }
   const { toast } = useToast();
   const mut = useMutation({
-    mutationFn: (data: typeof form) => apiPatch(`/restaurants/${restaurantId}`, data),
-    onSuccess: () => { toast({ title: "Tax & charges saved" }); onDone(); },
+    mutationFn: (data: typeof form) => apiPatch(`/restaurants/${restaurantId}`, {
+      taxRate: data.taxRate,
+      serviceCharge: data.serviceCharge,
+      acceptedPaymentMethods: data.methods,
+    }),
+    onSuccess: () => { toast({ title: "Payment & tax saved" }); onDone(); },
     onError: (e) => toast({ title: "Save failed", description: e instanceof Error ? e.message : "", variant: "destructive" }),
   });
+  const toggleMethod = (id: string) =>
+    setForm(f => ({ ...f, methods: f.methods.includes(id) ? f.methods.filter(m => m !== id) : [...f.methods, id] }));
   return (
     <StepShell>
-      <p className="text-sm text-muted-foreground">Set the tax rate (e.g. GST) and any service charge applied to bills. You can connect online payments anytime from Settings → Subscription.</p>
+      <p className="text-sm text-muted-foreground">Pick the tenders you accept at the bill, set the tax rate (e.g. GST), and any service charge.</p>
+      <Field label="Accepted payment methods">
+        <div className="flex flex-wrap gap-2">
+          {PAYMENT_METHODS.map(m => {
+            const on = form.methods.includes(m.id);
+            return (
+              <button key={m.id} type="button" onClick={() => toggleMethod(m.id)}
+                className={cn(
+                  "px-3 py-1.5 rounded-md border text-sm font-medium transition-colors",
+                  on ? "bg-primary text-primary-foreground border-primary" : "bg-background border-input text-foreground hover:bg-muted/40"
+                )}>
+                {on && <Check className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />}
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Tax rate (%)">
           <Input type="number" step="0.01" value={form.taxRate} onChange={e => setForm({ ...form, taxRate: e.target.value })} />
@@ -667,7 +715,7 @@ function PaymentStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
           <Input type="number" step="0.01" value={form.serviceCharge} onChange={e => setForm({ ...form, serviceCharge: e.target.value })} />
         </Field>
       </div>
-      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending}>
+      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || form.methods.length === 0}>
         {mut.isPending ? "Saving…" : "Save and continue"}
       </Button>
     </StepShell>
