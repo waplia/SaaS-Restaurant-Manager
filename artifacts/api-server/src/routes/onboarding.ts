@@ -147,7 +147,9 @@ router.post("/onboarding/complete", requireRole("owner", "manager", "super_admin
   if (!user.tenantId || !user.restaurantId) return void res.status(400).json({ error: "No tenant" });
 
   const state = await buildState(user.tenantId, user.restaurantId);
-  const blocking = state.steps.filter(s => !s.completed && !s.skippable);
+  // `go_live` is the terminal action being executed by this very call —
+  // exclude it from prerequisites so completion is actually reachable.
+  const blocking = state.steps.filter(s => !s.completed && !s.skippable && s.id !== "go_live");
   if (blocking.length > 0) {
     return void res.status(400).json({
       error: `Cannot complete onboarding — please finish: ${blocking.map(s => s.id).join(", ")}`,
@@ -176,7 +178,7 @@ router.patch("/onboarding/state", requireRole("owner", "manager", "super_admin")
 
   if (body.complete) {
     const state = await buildState(user.tenantId, user.restaurantId);
-    const blocking = state.steps.filter(s => !s.completed && !s.skippable);
+    const blocking = state.steps.filter(s => !s.completed && !s.skippable && s.id !== "go_live");
     if (blocking.length > 0) {
       return void res.status(400).json({
         error: `Cannot complete onboarding — please finish: ${blocking.map(s => s.id).join(", ")}`,
