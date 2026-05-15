@@ -43,6 +43,7 @@ import adminEmailRouter from "./admin-email";
 import maintenanceRouter from "./maintenance";
 import adminSettingsRouter, { publicAppSettingsRouter } from "./admin-settings";
 import { maintenanceMode, maintenanceGate } from "../middleware/maintenanceMode";
+import whatsappRouter, { whatsappPublicRouter } from "./whatsapp";
 
 const router: IRouter = Router();
 
@@ -58,6 +59,7 @@ router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
 router.use(createCashfreeWebhookRouter());
 router.use(createRazorpayWebhookRouter());
+router.use(whatsappPublicRouter);
 
 // Public API namespace (api-key authenticated). Mounted BEFORE the JWT
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.
@@ -102,5 +104,6 @@ router.use(systemHealthRouter);
 router.use(apiManagementRouter);
 router.use(adminEmailRouter);
 router.use(maintenanceRouter);
+router.use(whatsappRouter);
 
 export default router;

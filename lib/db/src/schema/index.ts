@@ -26,3 +26,4 @@ export * from "./api-management";
 export * from "./email";
 export * from "./maintenance";
 export * from "./app-settings";
+export * from "./whatsapp";

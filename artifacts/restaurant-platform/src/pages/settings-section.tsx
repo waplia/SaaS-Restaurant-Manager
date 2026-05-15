@@ -1,4 +1,5 @@
 import { useParams, Redirect } from "wouter";
+import WhatsAppSection from "./settings-whatsapp";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Link } from "wouter";
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
-  "currencies", "taxes", "loyalty", "discounts",
+  "currencies", "taxes", "loyalty", "discounts", "whatsapp",
 ]);
 
 const ALLOWED_KEYS = new Set<SectionKey>([
@@ -20,7 +21,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "reservation", "about-us", "customer-site", "receipt", "printer",
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
-  "ai", "kiosk", "loyalty", "discounts",
+  "ai", "kiosk", "loyalty", "discounts", "whatsapp",
 ]);
 
 function findMeta(key: SectionKey) {
@@ -85,6 +86,7 @@ function renderSection(key: SectionKey) {
     case "kiosk": return <KioskSection />;
     case "loyalty": return <LoyaltySection />;
     case "discounts": return <DiscountsSection />;
+    case "whatsapp": return <WhatsAppSection />;
     default: return null;
   }
 }

@@ -9,7 +9,7 @@ import {
   Mail, Receipt, CreditCard, Palette, Shield, BadgeDollarSign,
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
-  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity,
+  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle,
 } from "lucide-react";
 
 export type SectionKey =
@@ -18,7 +18,7 @@ export type SectionKey =
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "refund-reasons"
-  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "subscription"
+  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "subscription" | "whatsapp"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs";
 
 type IconType = typeof Building2;
@@ -83,6 +83,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     label: "Modern features",
     items: [
       { key: "ai", label: "AI", icon: Sparkles, ownerOnly: true },
+      { key: "whatsapp", label: "WhatsApp", icon: MessageCircle, ownerOnly: true },
       { key: "kiosk", label: "Kiosk", icon: Tablet },
       { key: "loyalty", label: "Loyalty Program", icon: Heart, ownerOnly: true },
       { key: "discounts", label: "Discounts & Coupons", icon: BadgeDollarSign, ownerOnly: true },

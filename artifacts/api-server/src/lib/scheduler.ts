@@ -4,6 +4,7 @@ import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzl
 import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable } from "../lib/db";
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { sendByTemplateKey } from "./emailSender";
+import { sendBroadcastWhatsApp } from "./whatsapp";
 import { logger } from "./logger";
 import { expireDueLoyaltyPoints } from "./loyalty";
 import { runAutoReorderForRestaurant } from "./autoReorder";
@@ -197,7 +198,7 @@ export function startScheduler(): void {
             variables: { restaurant: restaurant.name, tenant: tenant.name },
           });
 
-          const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+          const owners = await db.select({ email: usersTable.email, name: usersTable.name, phone: usersTable.phone })
             .from(usersTable)
             .where(and(eq(usersTable.restaurantId, restaurant.id), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
 
@@ -211,6 +212,15 @@ export function startScheduler(): void {
                 upgradeUrl,
                 appName: "Khana Lagao",
               }, { tenantId: tenant.id });
+            }
+            if (owner.phone) {
+              await sendBroadcastWhatsApp({
+                restaurantId: restaurant.id,
+                to: owner.phone,
+                event: "trial_expiring",
+                body: `Hi ${owner.name ?? "there"}, your Khana Lagao free trial for ${restaurant.name} has expired. Upgrade now to keep using your account.`,
+                templateVars: { name: owner.name ?? "there", restaurant: restaurant.name },
+              }).catch(err => logger.warn({ err, restaurantId: restaurant.id }, "Trial-expiry WhatsApp send failed"));
             }
           }
         }

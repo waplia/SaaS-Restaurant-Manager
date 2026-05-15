@@ -16,6 +16,7 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   maxMenuItems: integer("max_menu_items").notNull().default(100),
   trialDays: integer("trial_days").notNull().default(14),
   smsMonthlyLimit: integer("sms_monthly_limit").notNull().default(0),
+  whatsappMonthlyLimit: integer("whatsapp_monthly_limit").notNull().default(0),
   currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
   featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),

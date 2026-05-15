@@ -28,6 +28,7 @@ export const restaurantsTable = pgTable("restaurants", {
   autoReorderEnabled: boolean("auto_reorder_enabled").notNull().default(true),
   autoReorderCron: text("auto_reorder_cron").default("0 6 * * *"),
   acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
+  whatsappMonthlyLimitOverride: integer("whatsapp_monthly_limit_override"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

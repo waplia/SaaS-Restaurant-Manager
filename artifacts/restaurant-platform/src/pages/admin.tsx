@@ -4,12 +4,13 @@ import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
-  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, Activity, Wrench,
+  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, MessageCircle, Activity, Wrench,
 } from "lucide-react";
 import AdminNotificationCenter from "./admin-notifications";
 import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
 import AdminMaintenance from "./admin-maintenance";
+import AdminWhatsAppTab from "./admin-whatsapp";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -314,7 +315,7 @@ function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: Tenant; onC
 // ─── Plan Modal ──────────────────────────────────────────────────
 function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
-  const [form, setForm] = useState<Partial<Plan> & { features: string[] }>({
+  const [form, setForm] = useState<Partial<Plan> & { features: string[]; whatsappMonthlyLimit?: number }>({
     name: plan?.name ?? "",
     slug: plan?.slug ?? "",
     price: plan?.price ?? "0",
@@ -326,6 +327,7 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
     maxTables: plan?.maxTables ?? 10,
     maxMenuItems: plan?.maxMenuItems ?? 50,
     trialDays: plan?.trialDays ?? 14,
+    whatsappMonthlyLimit: (plan as Plan & { whatsappMonthlyLimit?: number })?.whatsappMonthlyLimit ?? 0,
     features: plan?.features ?? [],
     isActive: plan?.isActive ?? true,
   });
@@ -392,6 +394,11 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
           </select>
         </Field>
         <Field label="Trial days"><input className={inputCls} type="number" min="0" value={form.trialDays as number} onChange={e => setForm({ ...form, trialDays: Number(e.target.value) })} /></Field>
+        <Field label="WhatsApp messages / month" hint="0 = WhatsApp not included">
+          <input className={inputCls} type="number" min="0"
+            value={(form as { whatsappMonthlyLimit?: number }).whatsappMonthlyLimit ?? 0}
+            onChange={e => setForm({ ...form, whatsappMonthlyLimit: Number(e.target.value) } as typeof form)} />
+        </Field>
         <Field label="Active">
           <select className={inputCls} value={String(form.isActive)} onChange={e => setForm({ ...form, isActive: e.target.value === "true" })}>
             <option value="true">Yes</option><option value="false">No</option>
@@ -743,7 +750,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "notifications" | "sms" | "email" | "maintenance">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -822,6 +829,7 @@ export default function AdminPage() {
             { id: "sms" as const, label: "SMS", icon: MessageSquare },
             { id: "email" as const, label: "Email", icon: Mail },
             { id: "maintenance" as const, label: "System Maintenance", icon: Wrench },
+            { id: "whatsapp" as const, label: "WhatsApp", icon: MessageCircle },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -840,6 +848,7 @@ export default function AdminPage() {
         {tab === "sms" && <AdminSmsTab />}
         {tab === "email" && <AdminEmail />}
         {tab === "maintenance" && <AdminMaintenance />}
+        {tab === "whatsapp" && <AdminWhatsAppTab />}
       </main>
     </div>
   );

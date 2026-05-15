@@ -14,7 +14,8 @@ import {
   type NotificationBroadcast,
   type NotificationDelivery,
 } from "./db";
-import { sendEmail, sendSms, sendWhatsApp, sendPush } from "./notifications";
+import { sendEmail, sendSms, sendPush } from "./notifications";
+import { sendBroadcastWhatsApp } from "./whatsapp";
 import { logger } from "./logger";
 
 export type ResolvedRecipient = {
@@ -274,8 +275,23 @@ async function sendOnChannel(
     }
     if (channel === "whatsapp") {
       if (!r.phone) return { status: "skipped", recipient: null, error: "No phone" };
-      const result = await sendWhatsApp({ to: r.phone, body: `*${subject}*\n\n${message}` });
-      return { status: "sent", recipient: r.phone, providerMessageId: result?.sid ?? null };
+      // WhatsApp is delivered through the per-tenant WhatsApp service which
+      // resolves credentials, enforces monthly quotas, and writes a row into
+      // the WhatsApp logs table. We pick the first restaurant in the
+      // recipient context for quota attribution; tenant broadcasts that fan
+      // out to multiple branches will share the first branch's quota.
+      const restaurantId = r.restaurantIds[0] ?? null;
+      const result = await sendBroadcastWhatsApp({
+        restaurantId,
+        tenantId: r.tenantId,
+        to: r.phone,
+        subject,
+        message,
+      });
+      if (result.status === "sent") {
+        return { status: "sent", recipient: r.phone, providerMessageId: result.messageId };
+      }
+      return { status: result.status === "blocked" ? "skipped" : "failed", recipient: r.phone, error: result.error };
     }
     if (channel === "push") {
       if (r.pushTokens.length === 0) return { status: "skipped", recipient: null, error: "No push tokens" };
