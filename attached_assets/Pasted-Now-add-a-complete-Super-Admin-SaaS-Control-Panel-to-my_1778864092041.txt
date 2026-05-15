@@ -1,0 +1,854 @@
+Now add a complete Super Admin SaaS Control Panel to my restaurant management software.
+
+Important:
+My restaurant software features are already complete. Now I want a powerful SaaS Super Admin panel like premium CodeCanyon SaaS scripts. This Super Admin is for me, the platform owner, to manage all restaurants, subscriptions, plans, payments, settings, notifications, SMS, email, WhatsApp, support, system health, landing page content, and global configuration.
+
+Do not break existing restaurant owner/admin features.
+Do not use mock data.
+Use real database tables, APIs, validations, role permissions, logs, and production-ready UI.
+
+Create a separate Super Admin area:
+URL examples:
+- /super-admin/login
+- /super-admin/dashboard
+- /super-admin/restaurants
+- /super-admin/plans
+- /super-admin/subscriptions
+- /super-admin/payments
+- /super-admin/settings
+- /super-admin/notifications
+- /super-admin/support
+- /super-admin/reports
+- /super-admin/system
+- /super-admin/cms
+
+Add the following modules:
+
+1. Super Admin Authentication
+- Separate secure login for super admin.
+- Super admin users should be separate from restaurant staff users.
+- Add role-based access for internal team.
+- Add password reset.
+- Add two-factor authentication structure if possible.
+- Add login history.
+- Add device/IP tracking.
+- Add session management.
+
+2. Super Admin Dashboard
+Create a modern dashboard with cards, charts, filters, and quick actions.
+
+Show:
+- Total restaurants
+- Active restaurants
+- Trial restaurants
+- Expired restaurants
+- Suspended restaurants
+- Total outlets
+- Total users
+- Monthly recurring revenue
+- Yearly revenue
+- Pending payments
+- Failed payments
+- Total subscription invoices
+- SMS sent
+- WhatsApp messages sent
+- Emails sent
+- Total orders processed across restaurants
+- Total bills generated
+- Storage used
+- Server health status
+- Recent restaurants
+- Recent payments
+- Recent support tickets
+- Recent audit logs
+
+Add charts:
+- Monthly revenue chart
+- Restaurant signup chart
+- Subscription status chart
+- Plan-wise restaurant chart
+- Message usage chart
+- Active vs inactive restaurants chart
+
+3. Restaurant / Tenant Management
+Create full restaurant/tenant management.
+
+Fields:
+- Restaurant name
+- Owner name
+- Owner email
+- Owner mobile
+- Business type
+- GST number
+- Address
+- City
+- State
+- Country
+- Timezone
+- Currency
+- Logo
+- Current plan
+- Subscription status
+- Trial start date
+- Trial end date
+- Subscription start date
+- Subscription end date
+- Payment status
+- Number of outlets
+- Number of users
+- Storage used
+- SMS used
+- WhatsApp used
+- Email used
+- Status: active, trial, expired, suspended, cancelled
+
+Actions:
+- Create restaurant
+- Edit restaurant
+- Suspend restaurant
+- Activate restaurant
+- Delete restaurant
+- Extend trial
+- Change plan
+- Add manual payment
+- View restaurant dashboard
+- Login as restaurant owner
+- Reset restaurant password
+- View usage
+- View invoices
+- View audit logs
+- View support tickets
+
+4. Subscription Plan Management
+Create a full SaaS plan management system.
+
+Plan fields:
+- Plan name
+- Monthly price
+- Yearly price
+- Trial days
+- Description
+- Plan badge
+- Is popular
+- Status active/inactive
+
+Plan limits:
+- Number of outlets
+- Number of staff users
+- Number of menu items
+- Number of QR codes
+- Number of monthly orders
+- Number of monthly invoices/bills
+- Storage limit
+- SMS monthly limit
+- WhatsApp monthly limit
+- Email monthly limit
+- API request limit
+
+Feature access:
+- POS Billing
+- QR Menu
+- Online Ordering
+- Table Management
+- KOT/KDS
+- Inventory
+- Recipe Management
+- Payroll
+- Attendance
+- CRM
+- Loyalty
+- Reports
+- Multi-outlet
+- Expense Management
+- Vendor Management
+- API Access
+- Webhooks
+- White Label
+- Custom Domain
+- Priority Support
+
+Actions:
+- Create plan
+- Edit plan
+- Delete plan
+- Activate/deactivate plan
+- Duplicate plan
+- Assign plan to restaurant
+- Compare plans
+- Show plan on pricing page toggle
+
+5. Subscription Management
+Create subscription management.
+
+Track:
+- Restaurant
+- Plan
+- Billing cycle: monthly/yearly/lifetime/custom
+- Start date
+- End date
+- Trial period
+- Renewal date
+- Status: trial, active, expired, cancelled, suspended
+- Auto-renew status
+- Payment gateway
+- Last payment date
+- Next payment date
+
+Actions:
+- Start subscription
+- Cancel subscription
+- Pause subscription
+- Resume subscription
+- Renew manually
+- Upgrade plan
+- Downgrade plan
+- Extend subscription
+- Send renewal reminder
+- Mark payment received
+- Generate invoice
+
+6. Payment & Invoice Management
+Create subscription billing and invoice management.
+
+Features:
+- View all payments
+- Filter by restaurant, plan, status, gateway, date
+- Manual payment entry
+- Online payment record
+- Failed payment tracking
+- Refund tracking
+- Payment notes
+- GST/tax support
+- Invoice PDF generation
+- Receipt PDF generation
+- Send invoice by email/WhatsApp
+- Payment reminder
+
+Invoice fields:
+- Invoice number
+- Restaurant
+- Plan
+- Amount
+- Tax
+- Discount
+- Total amount
+- Payment status
+- Due date
+- Paid date
+- Gateway transaction ID
+- Notes
+
+7. Payment Gateway Settings
+Add global payment gateway settings.
+
+Gateways:
+- Razorpay
+- Cashfree
+- PayU
+- PhonePe
+- Stripe
+- PayPal
+- Manual Bank Transfer
+- UPI QR
+
+For each gateway:
+- Enable/disable
+- Test/live mode
+- API key
+- Secret key
+- Webhook secret
+- Merchant ID if required
+- Salt/key if required
+- Callback URL
+- Webhook URL
+- Test connection button
+
+Manual bank transfer:
+- Bank name
+- Account holder
+- Account number
+- IFSC/SWIFT
+- UPI ID
+- Instructions
+- Upload QR image
+
+8. SMS Settings
+Create SMS provider settings.
+
+Providers:
+- Twilio
+- MSG91
+- Textlocal
+- Fast2SMS
+- Gupshup
+- Custom HTTP API
+
+Fields:
+- Provider name
+- Enable/disable
+- API key
+- Auth token
+- Sender ID
+- Route
+- Country code
+- Entity ID
+- Template ID support
+- Base URL for custom API
+- Test SMS button
+
+Features:
+- SMS credit management per restaurant
+- SMS usage logs
+- Failed SMS logs
+- Retry failed SMS
+- SMS templates
+- Low SMS credit alert
+- Monthly SMS usage report
+
+SMS templates:
+- Welcome message
+- OTP
+- Subscription activated
+- Subscription expiring
+- Payment reminder
+- Payment received
+- Trial ending
+- Restaurant suspended
+- Demo booked
+
+9. WhatsApp Settings
+Create WhatsApp messaging settings.
+
+Providers:
+- Meta WhatsApp Cloud API
+- Interakt
+- WATI
+- AiSensy
+- Gupshup
+- Custom WhatsApp API
+
+Fields:
+- Provider
+- Enable/disable
+- Access token
+- Phone number ID
+- WABA ID
+- Business ID
+- API key
+- Webhook verify token
+- Webhook URL
+- Template sync button
+- Test WhatsApp message button
+
+Features:
+- WhatsApp credits per restaurant
+- Usage logs
+- Failed message logs
+- Retry failed messages
+- Template management
+- Broadcast announcement to restaurants
+- Subscription reminder via WhatsApp
+- Payment reminder via WhatsApp
+
+10. Email / SMTP Settings
+Create email settings.
+
+Fields:
+- Mail driver: SMTP, SendGrid, Mailgun, Amazon SES, Custom
+- SMTP host
+- SMTP port
+- SMTP username
+- SMTP password
+- Encryption: TLS/SSL/None
+- From name
+- From email
+- Reply-to email
+- Test email button
+
+Email templates:
+- Welcome email
+- Trial started
+- Trial ending soon
+- Subscription activated
+- Subscription expired
+- Package upgraded
+- Package downgraded
+- Payment successful
+- Payment failed
+- Invoice generated
+- Password reset
+- Support ticket created
+- Support ticket replied
+- Restaurant suspended
+- New feature announcement
+
+Template editor:
+- Subject
+- Body
+- Variables
+- Preview
+- Send test email
+
+11. Notification Center
+Create a powerful notification system.
+
+Notification types:
+- In-app notification
+- Email
+- SMS
+- WhatsApp
+- Push notification
+
+Features:
+- Send to all restaurants
+- Send to selected restaurants
+- Send by plan
+- Send by subscription status
+- Send by city/country
+- Schedule notification
+- Save as template
+- Priority: low, medium, high, urgent
+- Read/unread tracking
+- Delivery logs
+- Failed logs
+
+Use cases:
+- Maintenance notice
+- New feature release
+- Payment reminder
+- Trial ending reminder
+- Festival offer
+- Policy update
+- Emergency downtime notice
+
+12. Global App Settings
+Create full application settings.
+
+Settings:
+- App name
+- App logo
+- Favicon
+- Primary color
+- Secondary color
+- Support email
+- Support phone
+- Support WhatsApp
+- Company address
+- Default currency
+- Default timezone
+- Date format
+- Time format
+- Default trial days
+- Signup enable/disable
+- Demo mode enable/disable
+- Maintenance mode enable/disable
+- Landing page enable/disable
+- User registration approval required yes/no
+- Default invoice prefix
+- Default subscription invoice prefix
+- Terms acceptance required yes/no
+
+13. Feature Flag Management
+Create feature control system.
+
+Super admin can enable/disable features:
+- Globally
+- Per plan
+- Per restaurant
+
+Features:
+- POS Billing
+- QR Menu
+- Online Ordering
+- Table Management
+- KOT/KDS
+- Inventory
+- Recipe Management
+- Payroll
+- Attendance
+- CRM
+- Loyalty
+- Expense
+- Vendor
+- Multi-outlet
+- Reports
+- API
+- Webhooks
+- SMS
+- WhatsApp
+- Email Campaigns
+- Custom Domain
+- White Label
+- AI Features
+
+If feature is disabled for a restaurant, show upgrade message instead of breaking page.
+
+14. Support Ticket System
+Create support system between restaurants and platform team.
+
+Restaurant side:
+- Create ticket
+- Select category
+- Select priority
+- Add subject
+- Add message
+- Upload attachment
+- View ticket replies
+- Close/reopen ticket
+
+Super admin side:
+- View all tickets
+- Assign ticket to internal staff
+- Add internal note
+- Reply to ticket
+- Change status
+- Change priority
+- Filter by restaurant/status/priority/category
+- Ticket SLA timer
+- Ticket categories
+
+Statuses:
+- Open
+- Pending
+- In Progress
+- Waiting for Customer
+- Resolved
+- Closed
+
+15. Internal Admin User Management
+Create internal staff management for platform team.
+
+Roles:
+- Super Admin
+- Admin
+- Sales Manager
+- Support Agent
+- Finance Manager
+- Account Manager
+- Developer
+- Content Manager
+
+Permission controls:
+- Dashboard view
+- Restaurant management
+- Plan management
+- Subscription management
+- Payment management
+- Support management
+- Notification management
+- SMS settings
+- WhatsApp settings
+- Email settings
+- App settings
+- CMS management
+- System logs
+- Audit logs
+- Backup access
+
+16. Audit Logs
+Create complete audit logging.
+
+Track:
+- Who performed action
+- Action type
+- Module
+- Old value
+- New value
+- IP address
+- User agent
+- Date/time
+- Restaurant affected if any
+
+Log actions:
+- Login
+- Logout
+- Failed login
+- Restaurant created/edited/suspended/deleted
+- Plan created/edited/deleted
+- Subscription changed
+- Payment added/refunded
+- Gateway settings changed
+- SMS settings changed
+- WhatsApp settings changed
+- Email template changed
+- Notification sent
+- Feature enabled/disabled
+- Admin user created/edited/deleted
+- Login-as restaurant used
+
+17. Backup & Maintenance
+Create system maintenance module.
+
+Features:
+- Database backup
+- File backup
+- Backup download
+- Backup delete
+- Backup schedule
+- Backup destination:
+  - Local
+  - Amazon S3
+  - Dropbox
+  - Google Drive placeholder
+- Restore backup placeholder with warning
+- Cache clear
+- Queue restart/status placeholder
+- Cron job status
+- Storage usage
+- Error logs
+- Server health
+- App version
+- Environment status
+
+18. System Health & Logs
+Create system health page.
+
+Show:
+- Server uptime
+- Database connection
+- Queue status
+- Cron status
+- Storage usage
+- Memory usage if available
+- API error logs
+- Payment webhook logs
+- SMS webhook logs
+- WhatsApp webhook logs
+- Email sending logs
+- Failed jobs
+- Recent exceptions
+
+19. API & Webhook Management
+Create API management.
+
+Features:
+- Global API enable/disable
+- Restaurant API keys
+- Generate/revoke API key
+- API usage logs
+- Rate limits
+- Webhook endpoints
+- Webhook secret
+- Failed webhook logs
+- Retry webhook
+- Developer documentation page
+
+20. Coupon & Promo Code Management
+Create coupon system for subscription billing.
+
+Coupon types:
+- Flat discount
+- Percentage discount
+- Free trial extension
+- First month discount
+- Lifetime discount
+- Plan-specific coupon
+- Restaurant-specific coupon
+
+Fields:
+- Code
+- Discount type
+- Discount value
+- Max usage
+- Used count
+- Valid from
+- Valid until
+- Applicable plans
+- Status
+
+21. CMS / Website Content Management
+Add CMS controls so super admin can manage website content.
+
+Manage:
+- Home page hero title/subtitle
+- Pricing page content
+- Feature page content
+- FAQ
+- Testimonials
+- Blog posts
+- About page
+- Contact details
+- Terms & Conditions
+- Privacy Policy
+- Refund Policy
+- Footer links
+- Social media links
+- SEO title/meta description for pages
+
+Blog module:
+- Create blog
+- Edit blog
+- Publish/unpublish blog
+- Featured image
+- SEO title
+- SEO description
+- Slug
+- Category
+- Tags
+
+22. Lead Management
+Since website has demo/contact forms, add lead management in super admin.
+
+Fields:
+- Name
+- Restaurant name
+- Phone
+- Email
+- City
+- Business type
+- Outlet count
+- Message
+- Source page
+- Status
+- Assigned to
+- Notes
+- Follow-up date
+
+Statuses:
+- New
+- Contacted
+- Demo Scheduled
+- Trial Created
+- Converted
+- Lost
+
+Actions:
+- Add note
+- Assign lead
+- Schedule follow-up
+- Convert lead to restaurant
+- Send email/SMS/WhatsApp
+- Export leads
+
+23. Reports for Super Admin
+Create super admin reports:
+
+- Revenue report
+- Subscription report
+- Restaurant signup report
+- Churn report
+- Trial conversion report
+- Payment report
+- Failed payment report
+- Plan-wise revenue
+- SMS usage report
+- WhatsApp usage report
+- Email usage report
+- Support ticket report
+- Lead conversion report
+- Restaurant activity report
+
+Add filters and export to Excel/PDF/CSV.
+
+24. White Label / Branding Control
+Add white-label settings per restaurant/plan.
+
+Features:
+- Custom logo
+- Custom domain placeholder
+- Hide platform branding
+- Custom invoice branding
+- Custom QR menu branding
+- Custom colors
+- Custom footer text
+
+25. Legal & Policy Settings
+Create pages/settings for:
+- Terms & Conditions
+- Privacy Policy
+- Refund Policy
+- Cookie Policy
+- Data Processing Agreement placeholder
+- Subscription terms
+- Restaurant signup agreement
+
+Add checkbox requirement during signup.
+
+26. UI/UX Requirements
+- Super admin UI should look premium, like a modern SaaS admin dashboard.
+- Use sidebar navigation with grouped modules.
+- Use charts, cards, tables, status badges, filters, search, pagination.
+- Add dark/light mode if possible.
+- Add responsive design.
+- Add loading states, empty states, error states.
+- Add confirmation modals for dangerous actions.
+- Add toast notifications for success/error.
+- Add clear status badges:
+  active, trial, expired, suspended, paid, unpaid, failed, pending.
+
+27. Technical Requirements
+- Create proper database schema/migrations.
+- Add backend APIs for every module.
+- Add permissions middleware.
+- Add validation for all forms.
+- Encrypt sensitive settings like API keys and SMTP passwords.
+- Never expose secret keys on frontend.
+- Add audit logs for important actions.
+- Add pagination and filters on all large lists.
+- Add export where required.
+- Use reusable components.
+- Make code scalable and production-ready.
+- No mock data.
+- No broken buttons.
+- Existing restaurant admin/user panels must continue working.
+
+28. Suggested Sidebar Structure
+
+Dashboard
+
+Restaurants
+- All Restaurants
+- Add Restaurant
+- Trial Restaurants
+- Expired Restaurants
+- Suspended Restaurants
+
+Subscriptions
+- Plans
+- Active Subscriptions
+- Payments
+- Invoices
+- Coupons
+
+Communication
+- Notifications
+- SMS Settings
+- WhatsApp Settings
+- Email Settings
+- Templates
+- Message Logs
+
+Support
+- Tickets
+- Ticket Categories
+- Internal Notes
+
+Website CMS
+- Pages
+- Blog
+- FAQs
+- Testimonials
+- Leads
+
+System
+- App Settings
+- Payment Gateways
+- Feature Flags
+- API & Webhooks
+- Backup
+- System Health
+- Error Logs
+- Audit Logs
+
+Team
+- Admin Users
+- Roles & Permissions
+
+Reports
+- Revenue Reports
+- Subscription Reports
+- Usage Reports
+- Lead Reports
+- Support Reports
+
+First analyze the current project structure, existing database, authentication, and roles. Then create the required schema and implement Super Admin module step by step. Make sure it looks modern, works properly, and does not affect existing restaurant features.
