@@ -6,6 +6,7 @@ import {
   notificationsTable, restaurantsTable,
 } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
+import { sendLifecycleSms } from "../lib/smsSender";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
   type ProviderKey, listProviderRows, getProviderRow, upsertProvider, maskConfig,
@@ -205,6 +206,22 @@ async function activateForTenant(
     periodStart,
     periodEnd: endsAt,
     status: "succeeded",
+  });
+
+  // Lifecycle SMS — payment received + subscription activated. Best-effort.
+  const amountStr = opts.amount ?? String(plan?.price ?? "0");
+  const currency = (opts.currency ?? plan?.currency ?? "INR").toUpperCase();
+  const planName = plan?.name ?? "your plan";
+  const endsAtStr = endsAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  void sendLifecycleSms({
+    tenantId,
+    eventKey: "payment_received",
+    variables: { amount: amountStr, currency, plan: planName, ref: externalRef },
+  });
+  void sendLifecycleSms({
+    tenantId,
+    eventKey: "subscription_activated",
+    variables: { plan: planName, endsAt: endsAtStr, amount: amountStr, currency },
   });
 }
 

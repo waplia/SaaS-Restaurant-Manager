@@ -17,6 +17,7 @@ import {
   kitchenTicketsTable,
   notificationsTable,
   blogPostsTable,
+  smsTemplatesTable,
 } from "./lib/db";
 import { eq } from "drizzle-orm";
 
@@ -52,6 +53,41 @@ export async function seed(): Promise<void> {
 
   if (!starterPlan || !proPlan) throw new Error("Failed to create/find plans");
   console.log("✅ Plans created");
+
+  // ── SMS Templates (lifecycle hooks) ─────────────────────────
+  const smsTemplates = [
+    { eventKey: "welcome" as const, name: "Welcome new owner",
+      body: "Welcome to Khana Lagao, {{name}}! Your {{trialDays}}-day free trial for {{restaurant}} is now active.",
+      variables: ["name", "restaurant", "trialDays"] },
+    { eventKey: "otp" as const, name: "OTP verification",
+      body: "Your Khana Lagao verification code is {{code}}. It is valid for {{minutes}} minutes.",
+      variables: ["code", "minutes"] },
+    { eventKey: "trial_ending" as const, name: "Trial ending soon",
+      body: "Hi {{tenant}}, your Khana Lagao trial ends in {{daysLeft}} day(s). Upgrade to keep going.",
+      variables: ["tenant", "daysLeft"] },
+    { eventKey: "subscription_activated" as const, name: "Subscription activated",
+      body: "Your Khana Lagao {{plan}} plan is now active. Next renewal: {{endsAt}}. Amount: {{currency}} {{amount}}.",
+      variables: ["plan", "endsAt", "amount", "currency"] },
+    { eventKey: "subscription_expired" as const, name: "Subscription expired",
+      body: "Your Khana Lagao subscription has expired. Renew now to restore access for {{restaurant}}.",
+      variables: ["restaurant", "tenant"] },
+    { eventKey: "payment_reminder" as const, name: "Payment reminder",
+      body: "Reminder: your Khana Lagao {{plan}} renewal of {{amount}} is due in {{daysLeft}} day(s) for {{tenant}}.",
+      variables: ["tenant", "plan", "amount", "daysLeft"] },
+    { eventKey: "payment_received" as const, name: "Payment received",
+      body: "Payment of {{currency}} {{amount}} received for Khana Lagao {{plan}}. Ref: {{ref}}. Thank you!",
+      variables: ["amount", "currency", "plan", "ref"] },
+    { eventKey: "restaurant_suspended" as const, name: "Restaurant suspended",
+      body: "Heads up: {{tenant}} on Khana Lagao has been suspended. Contact support to restore service.",
+      variables: ["tenant"] },
+    { eventKey: "demo_booked" as const, name: "Demo booked",
+      body: "Thanks {{name}}! Your Khana Lagao demo for {{restaurant}} is booked for {{when}}. We will reach out soon.",
+      variables: ["name", "restaurant", "when"] },
+  ];
+  for (const tpl of smsTemplates) {
+    await db.insert(smsTemplatesTable).values(tpl).onConflictDoNothing();
+  }
+  console.log("✅ SMS templates seeded");
 
   // ── Tenants ─────────────────────────────────────────────────
   const [spiceTenant] = await db.insert(tenantsTable).values({

@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { eq, desc, count, and, or, ilike, sql } from "drizzle-orm";
 import { db, subscriptionPlansTable, tenantsTable, usersTable, PLAN_BOOLEAN_FEATURE_KEYS, defaultFeatureFlags } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
+import { sendLifecycleSms } from "../lib/smsSender";
 import { hashPassword, signResetToken, signImpersonationToken } from "../lib/auth";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
@@ -271,11 +272,20 @@ router.delete("/tenants/:id", requireSuperAdmin, async (req, res) => {
 });
 
 router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.id);
+  const [tenantBefore] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   const [updated] = await db.update(tenantsTable)
     .set({ isSuspended: true, updatedAt: new Date() })
-    .where(eq(tenantsTable.id, Number(req.params.id)))
+    .where(eq(tenantsTable.id, tenantId))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  if (tenantBefore && !tenantBefore.isSuspended) {
+    void sendLifecycleSms({
+      tenantId,
+      eventKey: "restaurant_suspended",
+      variables: { tenant: updated.name },
+    });
+  }
   res.json(updated);
 });
 

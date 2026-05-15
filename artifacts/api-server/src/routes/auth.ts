@@ -12,6 +12,8 @@ import {
 } from "../lib/auth";
 import { authenticate } from "../middleware/authenticate";
 
+import { sendLifecycleSms } from "../lib/smsSender";
+
 const router = Router();
 
 router.post("/auth/register", async (req, res) => {
@@ -104,6 +106,17 @@ router.post("/auth/register", async (req, res) => {
 
   const accessToken = signAccessToken(tokenPayload);
   const refreshToken = signRefreshToken(tokenPayload);
+
+  // Lifecycle SMS — welcome owner. Best-effort, never fails registration.
+  if (normalisedPhone) {
+    void sendLifecycleSms({
+      tenantId: tenant.id,
+      restaurantId: restaurant.id,
+      to: normalisedPhone,
+      eventKey: "welcome",
+      variables: { name: ownerName, restaurant: restaurantName, trialDays: 14 },
+    });
+  }
 
   res.status(201).json({
     accessToken,

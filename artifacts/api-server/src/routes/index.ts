@@ -34,6 +34,7 @@ import settingsRouter from "./settings";
 import marketingRouter, { marketingAdminRouter } from "./marketing";
 import onboardingRouter from "./onboarding";
 import adminBroadcastsRouter from "./admin-broadcasts";
+import adminSmsRouter from "./admin-sms";
 
 const router: IRouter = Router();
 
@@ -79,5 +80,6 @@ router.use(billingRouter);
 router.use(settingsRouter);
 router.use(onboardingRouter);
 router.use(adminBroadcastsRouter);
+router.use(adminSmsRouter);
 
 export default router;

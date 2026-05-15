@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
 import { db, leadsTable, blogPostsTable, subscriptionPlansTable } from "../lib/db";
 import { authenticate } from "../middleware/authenticate";
+import { sendSmsMessage } from "../lib/smsSender";
 
 const router: IRouter = Router();
 
@@ -99,6 +100,19 @@ router.post("/leads", async (req, res) => {
       sourcePage: body.sourcePage ? String(body.sourcePage).slice(0, 120) : "contact",
     })
     .returning();
+
+  // Lifecycle SMS — confirm demo booked. Best-effort, never blocks the lead.
+  if (lead.phone) {
+    void sendSmsMessage({
+      to: lead.phone,
+      eventKey: "demo_booked",
+      variables: {
+        name: lead.name,
+        when: lead.preferredDateTime ?? "soon",
+        restaurant: lead.restaurantName ?? "your restaurant",
+      },
+    });
+  }
 
   res.status(201).json({ success: true, id: lead.id });
 });

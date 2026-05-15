@@ -6,6 +6,8 @@ import { sendEmail, dailySummaryEmail } from "./notifications";
 import { logger } from "./logger";
 import { expireDueLoyaltyPoints } from "./loyalty";
 import { runAutoReorderForRestaurant } from "./autoReorder";
+import { sendLifecycleSms, sweepQuotaAlerts } from "./smsSender";
+import { subscriptionPlansTable } from "../lib/db";
 
 async function backfillPaymentsLedger(): Promise<void> {
   // Postgres advisory lock: serializes backfill across concurrent app starts/instances.
@@ -173,6 +175,13 @@ export function startScheduler(): void {
             message: "Your free trial has ended. Upgrade to a paid plan to continue using Khana Lagao.",
           }).catch(() => {});
 
+          void sendLifecycleSms({
+            tenantId: tenant.id,
+            restaurantId: restaurant.id,
+            eventKey: "subscription_expired",
+            variables: { restaurant: restaurant.name, tenant: tenant.name },
+          });
+
           const owners = await db.select({ email: usersTable.email, name: usersTable.name })
             .from(usersTable)
             .where(and(eq(usersTable.restaurantId, restaurant.id), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
@@ -195,6 +204,60 @@ export function startScheduler(): void {
       logger.error({ err }, "Trial-expiry job failed");
     }
   }, { timezone: "Asia/Kolkata" });
+
+  // Trial-ending warning — fires daily at 09:00 IST for tenants whose trial ends in ~3 days.
+  cron.schedule("0 9 * * *", async () => {
+    try {
+      const now = new Date();
+      const winStart = new Date(now); winStart.setDate(winStart.getDate() + 2); winStart.setHours(0, 0, 0, 0);
+      const winEnd = new Date(now); winEnd.setDate(winEnd.getDate() + 3); winEnd.setHours(23, 59, 59, 999);
+      const tenants = await db.select().from(tenantsTable).where(and(
+        eq(tenantsTable.planStatus, "trial"),
+        gte(tenantsTable.trialEndsAt, winStart),
+        lte(tenantsTable.trialEndsAt, winEnd),
+        eq(tenantsTable.isActive, true),
+      ));
+      for (const t of tenants) {
+        const daysLeft = Math.max(0, Math.ceil(((t.trialEndsAt?.getTime() ?? now.getTime()) - now.getTime()) / 86_400_000));
+        void sendLifecycleSms({ tenantId: t.id, eventKey: "trial_ending", variables: { tenant: t.name, daysLeft } });
+      }
+      logger.info({ count: tenants.length }, "Trial-ending SMS job complete");
+    } catch (err) { logger.error({ err }, "Trial-ending SMS job failed"); }
+  }, { timezone: "Asia/Kolkata" });
+
+  // Payment-reminder — fires daily at 10:00 IST for active tenants whose subscription ends in ~3 days.
+  cron.schedule("0 10 * * *", async () => {
+    try {
+      const now = new Date();
+      const winStart = new Date(now); winStart.setDate(winStart.getDate() + 2); winStart.setHours(0, 0, 0, 0);
+      const winEnd = new Date(now); winEnd.setDate(winEnd.getDate() + 3); winEnd.setHours(23, 59, 59, 999);
+      const rows = await db.select({
+        id: tenantsTable.id, name: tenantsTable.name, endsAt: tenantsTable.subscriptionEndsAt,
+        planName: subscriptionPlansTable.name, price: subscriptionPlansTable.price,
+      }).from(tenantsTable)
+        .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, tenantsTable.planId))
+        .where(and(
+          eq(tenantsTable.planStatus, "active"),
+          gte(tenantsTable.subscriptionEndsAt, winStart),
+          lte(tenantsTable.subscriptionEndsAt, winEnd),
+          eq(tenantsTable.isActive, true),
+        ));
+      for (const t of rows) {
+        const daysLeft = Math.max(0, Math.ceil(((t.endsAt?.getTime() ?? now.getTime()) - now.getTime()) / 86_400_000));
+        void sendLifecycleSms({
+          tenantId: t.id, eventKey: "payment_reminder",
+          variables: { tenant: t.name, plan: t.planName ?? "your plan", amount: t.price ?? "0", daysLeft },
+        });
+      }
+      logger.info({ count: rows.length }, "Payment-reminder SMS job complete");
+    } catch (err) { logger.error({ err }, "Payment-reminder SMS job failed"); }
+  }, { timezone: "Asia/Kolkata" });
+
+  // Hourly SMS quota sweep — surfaces low-balance alerts in the Notification Center.
+  cron.schedule("15 * * * *", async () => {
+    try { await sweepQuotaAlerts(); }
+    catch (err) { logger.error({ err }, "SMS quota sweep failed"); }
+  });
 
   cron.schedule("30 0 * * *", async () => {
     logger.info("Running loyalty-points expiry job");
