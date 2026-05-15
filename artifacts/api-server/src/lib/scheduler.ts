@@ -170,7 +170,7 @@ export function startScheduler(): void {
             restaurantId: restaurant.id,
             type: "system_error",
             title: "Trial Expired",
-            message: "Your free trial has ended. Upgrade to a paid plan to continue using TableTrack.",
+            message: "Your free trial has ended. Upgrade to a paid plan to continue using Khana Lagao.",
           }).catch(() => {});
 
           const owners = await db.select({ email: usersTable.email, name: usersTable.name })
@@ -181,9 +181,9 @@ export function startScheduler(): void {
             if (owner.email) {
               await sendEmail({
                 to: owner.email,
-                subject: `Your TableTrack trial for ${restaurant.name} has expired`,
-                html: `<p>Hi ${owner.name ?? "there"},</p><p>Your 14-day free trial for <strong>${restaurant.name}</strong> on TableTrack has expired.</p><p>Upgrade now to continue managing your restaurant without interruption.</p><p><a href="${process.env.VITE_APP_URL ?? "https://tabletrack.app"}/settings/subscription" style="background:#f97316;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">Upgrade Now</a></p>`,
-                text: `Your TableTrack trial for ${restaurant.name} has expired. Visit your subscription settings to upgrade.`,
+                subject: `Your Khana Lagao trial for ${restaurant.name} has expired`,
+                html: `<p>Hi ${owner.name ?? "there"},</p><p>Your 14-day free trial for <strong>${restaurant.name}</strong> on Khana Lagao has expired.</p><p>Upgrade now to continue managing your restaurant without interruption.</p><p><a href="${process.env.VITE_APP_URL ?? "https://khanalagao.app"}/settings/subscription" style="background:#f97316;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">Upgrade Now</a></p>`,
+                text: `Your Khana Lagao trial for ${restaurant.name} has expired. Visit your subscription settings to upgrade.`,
               }).catch(console.error);
             }
           }

@@ -15,6 +15,7 @@ if (!RESET_SECRET) {
 const ACCESS_TOKEN_EXPIRY = "24h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const RESET_TOKEN_EXPIRY = "1h";
+const IMPERSONATION_TOKEN_EXPIRY = "15m";
 
 export const SALT_ROUNDS = 10;
 
@@ -26,6 +27,7 @@ export interface JwtPayload {
   restaurantId: number | null;
   isSuperAdmin: boolean;
   type: "access" | "refresh";
+  impersonated?: boolean;
 }
 
 export interface ResetPayload {
@@ -36,6 +38,10 @@ export interface ResetPayload {
 
 export function signAccessToken(payload: Omit<JwtPayload, "type">): string {
   return jwt.sign({ ...payload, type: "access" }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+}
+
+export function signImpersonationToken(payload: Omit<JwtPayload, "type">): string {
+  return jwt.sign({ ...payload, type: "access", impersonated: true }, JWT_SECRET, { expiresIn: IMPERSONATION_TOKEN_EXPIRY });
 }
 
 export function signRefreshToken(payload: Omit<JwtPayload, "type">): string {

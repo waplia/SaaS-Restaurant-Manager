@@ -127,7 +127,10 @@ export const ListSubscriptionPlansResponseItem = zod.object({
   name: zod.string(),
   slug: zod.string(),
   price: zod.string(),
-  billingPeriod: zod.string(),
+  currency: zod
+    .enum(["INR", "USD"])
+    .describe("Plan currency. INR defaults to Cashfree, USD to Stripe."),
+  billingPeriod: zod.enum(["monthly", "yearly"]),
   maxRestaurants: zod.number().optional(),
   maxBranches: zod.number().optional(),
   maxStaff: zod.number().optional(),
@@ -142,16 +145,41 @@ export const ListSubscriptionPlansResponse = zod.array(
   ListSubscriptionPlansResponseItem,
 );
 
-export const GetSubscriptionPlanParams = zod.object({
+/**
+ * @summary Create a subscription plan (super admin)
+ */
+export const CreateSubscriptionPlanBody = zod.object({
+  name: zod.string(),
+  slug: zod.string().describe("lowercase alphanumeric and hyphens"),
+  price: zod.string(),
+  currency: zod.enum(["INR", "USD"]).optional(),
+  billingPeriod: zod.enum(["monthly", "yearly"]).optional(),
+  maxRestaurants: zod.number().optional(),
+  maxBranches: zod.number().optional(),
+  maxStaff: zod.number().optional(),
+  maxTables: zod.number().optional(),
+  maxMenuItems: zod.number().optional(),
+  trialDays: zod.number().optional(),
+  features: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+});
+
+/**
+ * @summary Toggle a plan's active flag (super admin)
+ */
+export const ToggleSubscriptionPlanActiveParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const GetSubscriptionPlanResponse = zod.object({
+export const ToggleSubscriptionPlanActiveResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   slug: zod.string(),
   price: zod.string(),
-  billingPeriod: zod.string(),
+  currency: zod
+    .enum(["INR", "USD"])
+    .describe("Plan currency. INR defaults to Cashfree, USD to Stripe."),
+  billingPeriod: zod.enum(["monthly", "yearly"]),
   maxRestaurants: zod.number().optional(),
   maxBranches: zod.number().optional(),
   maxStaff: zod.number().optional(),
@@ -163,13 +191,90 @@ export const GetSubscriptionPlanResponse = zod.object({
   createdAt: zod.string().optional(),
 });
 
+export const GetSubscriptionPlanParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSubscriptionPlanResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  price: zod.string(),
+  currency: zod
+    .enum(["INR", "USD"])
+    .describe("Plan currency. INR defaults to Cashfree, USD to Stripe."),
+  billingPeriod: zod.enum(["monthly", "yearly"]),
+  maxRestaurants: zod.number().optional(),
+  maxBranches: zod.number().optional(),
+  maxStaff: zod.number().optional(),
+  maxTables: zod.number().optional(),
+  maxMenuItems: zod.number().optional(),
+  trialDays: zod.number().optional(),
+  features: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+});
+
+export const UpdateSubscriptionPlanParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSubscriptionPlanBody = zod
+  .object({
+    name: zod.string().optional(),
+    slug: zod.string().optional(),
+    price: zod.string().optional(),
+    currency: zod.enum(["INR", "USD"]).optional(),
+    billingPeriod: zod.enum(["monthly", "yearly"]).optional(),
+    maxRestaurants: zod.number().optional(),
+    maxBranches: zod.number().optional(),
+    maxStaff: zod.number().optional(),
+    maxTables: zod.number().optional(),
+    maxMenuItems: zod.number().optional(),
+    trialDays: zod.number().optional(),
+    features: zod.array(zod.string()).optional(),
+    isActive: zod.boolean().optional(),
+  })
+  .describe("All fields optional; backend applies a partial update.");
+
+export const UpdateSubscriptionPlanResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  price: zod.string(),
+  currency: zod
+    .enum(["INR", "USD"])
+    .describe("Plan currency. INR defaults to Cashfree, USD to Stripe."),
+  billingPeriod: zod.enum(["monthly", "yearly"]),
+  maxRestaurants: zod.number().optional(),
+  maxBranches: zod.number().optional(),
+  maxStaff: zod.number().optional(),
+  maxTables: zod.number().optional(),
+  maxMenuItems: zod.number().optional(),
+  trialDays: zod.number().optional(),
+  features: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+  createdAt: zod.string().optional(),
+});
+
+export const DeleteSubscriptionPlanParams = zod.object({
+  id: zod.coerce.number(),
+});
+
 /**
  * @summary List all tenants (super admin)
  */
 export const ListTenantsQueryParams = zod.object({
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional(),
-  status: zod.coerce.string().optional(),
+  search: zod.coerce
+    .string()
+    .optional()
+    .describe("Substring match on name or slug."),
+  status: zod
+    .enum(["trial", "active", "expired", "cancelled", "suspended"])
+    .optional(),
+  planId: zod.coerce.number().optional(),
 });
 
 export const ListTenantsResponse = zod.object({
@@ -185,6 +290,12 @@ export const ListTenantsResponse = zod.object({
       isSuspended: zod.boolean().optional(),
       logoUrl: zod.string().nullish(),
       primaryColor: zod.string().nullish(),
+      stripeCustomerId: zod.string().nullish(),
+      stripeSubscriptionId: zod.string().nullish(),
+      cashfreeCustomerId: zod.string().nullish(),
+      cashfreeSubscriptionId: zod.string().nullish(),
+      subscriptionStartedAt: zod.string().nullish(),
+      subscriptionEndsAt: zod.string().nullish(),
       createdAt: zod.string().optional(),
       updatedAt: zod.string().optional(),
     }),
@@ -197,6 +308,14 @@ export const CreateTenantBody = zod.object({
   slug: zod.string(),
   planId: zod.number().optional(),
   primaryColor: zod.string().optional(),
+  logoUrl: zod.string().optional(),
+  ownerEmail: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional. Creates an owner user and emails a one-hour password-set link.",
+    ),
+  ownerName: zod.string().optional(),
 });
 
 export const GetTenantParams = zod.object({
@@ -214,6 +333,12 @@ export const GetTenantResponse = zod.object({
   isSuspended: zod.boolean().optional(),
   logoUrl: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
+  stripeCustomerId: zod.string().nullish(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cashfreeCustomerId: zod.string().nullish(),
+  cashfreeSubscriptionId: zod.string().nullish(),
+  subscriptionStartedAt: zod.string().nullish(),
+  subscriptionEndsAt: zod.string().nullish(),
   createdAt: zod.string().optional(),
   updatedAt: zod.string().optional(),
 });
@@ -242,8 +367,27 @@ export const UpdateTenantResponse = zod.object({
   isSuspended: zod.boolean().optional(),
   logoUrl: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
+  stripeCustomerId: zod.string().nullish(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cashfreeCustomerId: zod.string().nullish(),
+  cashfreeSubscriptionId: zod.string().nullish(),
+  subscriptionStartedAt: zod.string().nullish(),
+  subscriptionEndsAt: zod.string().nullish(),
   createdAt: zod.string().optional(),
   updatedAt: zod.string().optional(),
+});
+
+/**
+ * @summary Permanently delete a tenant (super admin)
+ */
+export const DeleteTenantParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteTenantQueryParams = zod.object({
+  confirm: zod.coerce
+    .string()
+    .describe("Must equal the tenant slug to confirm deletion."),
 });
 
 export const SuspendTenantParams = zod.object({
@@ -261,6 +405,12 @@ export const SuspendTenantResponse = zod.object({
   isSuspended: zod.boolean().optional(),
   logoUrl: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
+  stripeCustomerId: zod.string().nullish(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cashfreeCustomerId: zod.string().nullish(),
+  cashfreeSubscriptionId: zod.string().nullish(),
+  subscriptionStartedAt: zod.string().nullish(),
+  subscriptionEndsAt: zod.string().nullish(),
   createdAt: zod.string().optional(),
   updatedAt: zod.string().optional(),
 });
@@ -280,8 +430,69 @@ export const ActivateTenantResponse = zod.object({
   isSuspended: zod.boolean().optional(),
   logoUrl: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
+  stripeCustomerId: zod.string().nullish(),
+  stripeSubscriptionId: zod.string().nullish(),
+  cashfreeCustomerId: zod.string().nullish(),
+  cashfreeSubscriptionId: zod.string().nullish(),
+  subscriptionStartedAt: zod.string().nullish(),
+  subscriptionEndsAt: zod.string().nullish(),
   createdAt: zod.string().optional(),
   updatedAt: zod.string().optional(),
+});
+
+/**
+ * @summary Mint a 15-minute scoped session token for a tenant's owner (super admin)
+ */
+export const ImpersonateTenantOwnerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ImpersonateTenantOwnerResponse = zod.object({
+  token: zod.string().optional(),
+  expiresIn: zod.number().optional().describe("Seconds until expiry."),
+  owner: zod
+    .object({
+      id: zod.number().optional(),
+      email: zod.string().optional(),
+      name: zod.string().optional(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Create a Cashfree hosted-checkout order for the caller's tenant
+ */
+export const CreateCashfreeOrderParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const CreateCashfreeOrderBody = zod.object({
+  planId: zod.number(),
+  successUrl: zod.string(),
+});
+
+export const CreateCashfreeOrderResponse = zod.object({
+  url: zod.string().nullish(),
+  orderId: zod.string().optional(),
+  paymentSessionId: zod.string().nullish(),
+  mock: zod.boolean().optional(),
+});
+
+/**
+ * @summary Confirm a Cashfree order from the success-redirect (tenant-bound)
+ */
+export const ConfirmCashfreeOrderParams = zod.object({
+  restaurantId: zod.coerce.number(),
+});
+
+export const ConfirmCashfreeOrderBody = zod.object({
+  orderId: zod.string().describe("Pattern kl_<tenantId>_<planId>_<ts>"),
+});
+
+export const ConfirmCashfreeOrderResponse = zod.object({
+  activated: zod.boolean().optional(),
+  status: zod.string().optional(),
+  mock: zod.boolean().optional(),
 });
 
 export const ListRestaurantsQueryParams = zod.object({

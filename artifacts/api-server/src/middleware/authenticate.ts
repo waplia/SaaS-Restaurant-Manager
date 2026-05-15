@@ -23,6 +23,12 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
       res.status(401).json({ error: "Refresh token cannot be used for API access" });
       return;
     }
+    // Impersonation tokens are read-only: super-admin "view as" sessions
+    // can browse but cannot mutate the tenant's data.
+    if (payload.impersonated && req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+      res.status(403).json({ error: "Impersonation session is read-only." });
+      return;
+    }
     req.user = payload;
     next();
   } catch {

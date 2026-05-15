@@ -1,10 +1,16 @@
 import { Router } from "express";
-import { eq, desc, count } from "drizzle-orm";
-import { db, subscriptionPlansTable, tenantsTable } from "../lib/db";
-import { requireSuperAdmin } from "../middleware/authorize";
-import { requireRole } from "../middleware/authorize";
+import crypto from "crypto";
+import { eq, desc, count, and, or, ilike, sql } from "drizzle-orm";
+import { db, subscriptionPlansTable, tenantsTable, usersTable } from "../lib/db";
+import { requireSuperAdmin, requireRole } from "../middleware/authorize";
+import { hashPassword, signResetToken, signImpersonationToken } from "../lib/auth";
+import { sendEmail } from "../lib/notifications";
+import { logger } from "../lib/logger";
 
 const router = Router();
+
+const ALLOWED_CURRENCIES = ["INR", "USD"] as const;
+type Currency = (typeof ALLOWED_CURRENCIES)[number];
 
 router.get("/subscription-plans", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (_req, res) => {
   const plans = await db.select().from(subscriptionPlansTable).orderBy(subscriptionPlansTable.price);
@@ -17,23 +23,186 @@ router.get("/subscription-plans/:id", requireRole("owner", "manager", "super_adm
   res.json(plan);
 });
 
+// ─── Plans CRUD (super-admin only) ────────────────────────────────
+function validatePlanInput(body: Record<string, unknown>, partial = false): { error?: string; data?: Record<string, unknown> } {
+  const out: Record<string, unknown> = {};
+  if (!partial || body.name !== undefined) {
+    if (typeof body.name !== "string" || !body.name.trim()) return { error: "name is required" };
+    out.name = body.name.trim();
+  }
+  if (!partial || body.slug !== undefined) {
+    if (typeof body.slug !== "string" || !/^[a-z0-9-]+$/.test(body.slug)) return { error: "slug must be lowercase alphanumeric/hyphen" };
+    out.slug = body.slug;
+  }
+  if (!partial || body.price !== undefined) {
+    const n = Number(body.price);
+    if (!isFinite(n) || n < 0) return { error: "price must be a non-negative number" };
+    out.price = n.toFixed(2);
+  }
+  if (!partial || body.currency !== undefined) {
+    const c = String(body.currency ?? "INR").toUpperCase();
+    if (!ALLOWED_CURRENCIES.includes(c as Currency)) return { error: `currency must be one of ${ALLOWED_CURRENCIES.join(", ")}` };
+    out.currency = c;
+  }
+  if (body.billingPeriod !== undefined) {
+    if (!["monthly", "yearly"].includes(String(body.billingPeriod))) return { error: "billingPeriod must be monthly or yearly" };
+    out.billingPeriod = body.billingPeriod;
+  }
+  for (const k of ["maxRestaurants", "maxBranches", "maxStaff", "maxTables", "maxMenuItems", "trialDays"] as const) {
+    if (body[k] !== undefined) {
+      const n = Number(body[k]);
+      if (!Number.isInteger(n) || n < 0) return { error: `${k} must be a non-negative integer` };
+      out[k] = n;
+    }
+  }
+  if (body.features !== undefined) {
+    if (!Array.isArray(body.features) || body.features.some(f => typeof f !== "string")) return { error: "features must be string[]" };
+    out.features = body.features;
+  }
+  if (body.isActive !== undefined) out.isActive = Boolean(body.isActive);
+  return { data: out };
+}
+
+router.post("/subscription-plans", requireSuperAdmin, async (req, res) => {
+  const v = validatePlanInput(req.body);
+  if (v.error || !v.data) return void res.status(400).json({ error: v.error });
+  const [existing] = await db.select({ id: subscriptionPlansTable.id }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, String(v.data.slug)));
+  if (existing) return void res.status(409).json({ error: "A plan with this slug already exists" });
+  const [plan] = await db.insert(subscriptionPlansTable).values(v.data as typeof subscriptionPlansTable.$inferInsert).returning();
+  res.status(201).json(plan);
+});
+
+router.patch("/subscription-plans/:id", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const v = validatePlanInput(req.body, true);
+  if (v.error || !v.data) return void res.status(400).json({ error: v.error });
+  if (typeof v.data.slug === "string") {
+    const [clash] = await db.select({ id: subscriptionPlansTable.id })
+      .from(subscriptionPlansTable)
+      .where(and(eq(subscriptionPlansTable.slug, v.data.slug), sql`${subscriptionPlansTable.id} <> ${id}`));
+    if (clash) return void res.status(409).json({ error: "Another plan already uses this slug." });
+  }
+  const [updated] = await db.update(subscriptionPlansTable)
+    .set({ ...v.data, updatedAt: new Date() })
+    .where(eq(subscriptionPlansTable.id, id))
+    .returning();
+  if (!updated) return void res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+router.post("/subscription-plans/:id/toggle-active", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
+  if (!plan) return void res.status(404).json({ error: "Not found" });
+  const [updated] = await db.update(subscriptionPlansTable)
+    .set({ isActive: !plan.isActive, updatedAt: new Date() })
+    .where(eq(subscriptionPlansTable.id, id))
+    .returning();
+  res.json(updated);
+});
+
+router.delete("/subscription-plans/:id", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const [{ c }] = await db.select({ c: count() }).from(tenantsTable).where(eq(tenantsTable.planId, id));
+  if (Number(c) > 0) {
+    return void res.status(409).json({ error: `This plan is in use by ${c} tenant(s). Reassign or delete those tenants first.` });
+  }
+  const [removed] = await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id)).returning();
+  if (!removed) return void res.status(404).json({ error: "Not found" });
+  res.status(204).end();
+});
+
+// ─── Tenants ──────────────────────────────────────────────────────
 router.get("/tenants", requireSuperAdmin, async (req, res) => {
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 20;
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   const offset = (page - 1) * limit;
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const status = typeof req.query.status === "string" ? req.query.status : "";
+  const planIdRaw = req.query.planId;
+
+  const conds: Parameters<typeof and>[number][] = [];
+  if (search) {
+    conds.push(or(ilike(tenantsTable.name, `%${search}%`), ilike(tenantsTable.slug, `%${search}%`)));
+  }
+  if (status === "trial" || status === "active" || status === "expired" || status === "cancelled") {
+    conds.push(eq(tenantsTable.planStatus, status));
+    // "active" and other live statuses exclude suspended tenants for clarity.
+    if (status !== "cancelled" && status !== "expired") {
+      conds.push(eq(tenantsTable.isSuspended, false));
+    }
+  } else if (status === "suspended") {
+    conds.push(eq(tenantsTable.isSuspended, true));
+  }
+  if (planIdRaw !== undefined && planIdRaw !== "") {
+    const pid = Number(planIdRaw);
+    if (!isNaN(pid)) conds.push(eq(tenantsTable.planId, pid));
+  }
+
+  const where = conds.length ? and(...conds) : undefined;
 
   const [rows, totalRows] = await Promise.all([
-    db.select().from(tenantsTable).orderBy(desc(tenantsTable.createdAt)).limit(limit).offset(offset),
-    db.select({ count: count() }).from(tenantsTable),
+    db.select().from(tenantsTable).where(where).orderBy(desc(tenantsTable.createdAt)).limit(limit).offset(offset),
+    db.select({ count: count() }).from(tenantsTable).where(where),
   ]);
-  res.json({ tenants: rows, total: totalRows[0]?.count ?? 0 });
+  res.json({ data: rows, tenants: rows, total: Number(totalRows[0]?.count ?? 0), page, limit });
 });
 
 router.post("/tenants", requireSuperAdmin, async (req, res) => {
-  const { name, slug, planId, primaryColor } = req.body;
+  const { name, slug, planId, primaryColor, logoUrl, ownerEmail, ownerName } = req.body as {
+    name?: string; slug?: string; planId?: number; primaryColor?: string; logoUrl?: string;
+    ownerEmail?: string; ownerName?: string;
+  };
+  if (!name?.trim() || !slug?.trim()) return void res.status(400).json({ error: "name and slug are required" });
+  if (!/^[a-z0-9-]+$/.test(slug)) return void res.status(400).json({ error: "slug must be lowercase alphanumeric/hyphen" });
+
+  const [existing] = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(eq(tenantsTable.slug, slug));
+  if (existing) return void res.status(409).json({ error: "A tenant with this slug already exists" });
+
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-  const [tenant] = await db.insert(tenantsTable).values({ name, slug, planId, primaryColor, planStatus: "trial", trialEndsAt }).returning();
-  res.status(201).json(tenant);
+  const [tenant] = await db.insert(tenantsTable).values({
+    name: name.trim(), slug, planId: planId ?? null, primaryColor: primaryColor ?? "#f97316",
+    logoUrl: logoUrl ?? null, planStatus: "trial", trialEndsAt,
+  }).returning();
+
+  let ownerInviteStatus: "sent" | "skipped_existing_email" | "not_requested" = "not_requested";
+  if (ownerEmail) {
+    const [emailExists] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, ownerEmail));
+    if (emailExists) {
+      ownerInviteStatus = "skipped_existing_email";
+    }
+    if (!emailExists) {
+      // Provision the user with a random unguessable password hash; the user
+      // sets their real password via the reset-token link emailed to them.
+      const placeholder = crypto.randomBytes(32).toString("hex");
+      const passwordHash = await hashPassword(placeholder);
+      const [newUser] = await db.insert(usersTable).values({
+        name: ownerName ?? name.trim() + " Owner",
+        email: ownerEmail,
+        passwordHash,
+        role: "owner",
+        tenantId: tenant.id,
+      }).returning();
+      const resetToken = signResetToken({ sub: newUser.id, email: newUser.email });
+      const rawAppUrl = process.env.APP_URL ?? process.env.PUBLIC_APP_URL ?? "";
+      const appUrl = (() => {
+        try { return rawAppUrl ? new URL(rawAppUrl).origin : ""; } catch { return ""; }
+      })();
+      if (!appUrl) {
+        logger.warn({ tenantId: tenant.id }, "APP_URL not configured — invite email will contain a path-only reset link");
+      }
+      const resetLink = `${appUrl}/app/reset-password?token=${encodeURIComponent(resetToken)}`;
+      await sendEmail({
+        to: ownerEmail,
+        subject: `You've been invited to ${name} on Khana Lagao`,
+        html: `<p>Hi ${ownerName ?? "there"},</p><p>You've been invited to manage <strong>${name}</strong> on Khana Lagao.</p><p><a href="${resetLink}">Set your password and sign in</a> (link expires in 1 hour).</p>`,
+        text: `You've been invited to ${name} on Khana Lagao. Set your password: ${resetLink}`,
+      }).catch(() => {});
+      ownerInviteStatus = "sent";
+    }
+  }
+
+  res.status(201).json({ ...tenant, ownerInviteStatus });
 });
 
 router.get("/tenants/:id", requireSuperAdmin, async (req, res) => {
@@ -50,6 +219,40 @@ router.patch("/tenants/:id", requireSuperAdmin, async (req, res) => {
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
+});
+
+// Super-admin "impersonate-light": mint a short-lived access token scoped to a
+// tenant owner so super admins can view a tenant's app as that owner.
+router.post("/tenants/:id/impersonate", requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.id);
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
+  const [owner] = await db.select().from(usersTable)
+    .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)))
+    .limit(1);
+  if (!owner) return void res.status(404).json({ error: "Tenant has no active owner to impersonate" });
+  const token = signImpersonationToken({
+    sub: owner.id, email: owner.email, role: owner.role,
+    tenantId: owner.tenantId, restaurantId: owner.restaurantId, isSuperAdmin: false,
+  });
+  logger.warn({ superAdminId: req.user?.sub, tenantId, ownerId: owner.id }, "super_admin.impersonate");
+  res.json({ token, expiresIn: 900, owner: { id: owner.id, email: owner.email, name: owner.name } });
+});
+
+router.delete("/tenants/:id", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const confirmSlug = typeof req.query.confirm === "string" ? req.query.confirm : "";
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, id));
+  if (!tenant) return void res.status(404).json({ error: "Not found" });
+  if (confirmSlug !== tenant.slug) {
+    return void res.status(400).json({ error: `Confirmation slug does not match. Pass ?confirm=${tenant.slug} to delete this tenant.` });
+  }
+  try {
+    await db.delete(tenantsTable).where(eq(tenantsTable.id, id));
+  } catch (err) {
+    return void res.status(409).json({ error: `Cannot delete: this tenant has related data (restaurants, users, etc.). Suspend it instead. (${(err as Error).message})` });
+  }
+  res.status(204).end();
 });
 
 router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
@@ -77,7 +280,7 @@ router.get("/admin/tenant-usage", requireSuperAdmin, async (_req, res) => {
     restaurant_count: string;
     table_count: string;
     menu_item_count: string;
-  }>(`
+  }>(sql`
     SELECT
       t.id as tenant_id,
       COUNT(DISTINCT u.id) FILTER (WHERE u.is_active = true) as staff_count,
@@ -107,8 +310,8 @@ router.get("/admin/tenant-usage", requireSuperAdmin, async (_req, res) => {
 router.get("/admin/stats", requireSuperAdmin, async (_req, res) => {
   const [tenantStats, restaurantCount, orderStats] = await Promise.all([
     db.select().from(tenantsTable),
-    db.execute<{ count: string }>("SELECT COUNT(*) as count FROM restaurants"),
-    db.execute<{ count: string; total: string }>("SELECT COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total FROM orders"),
+    db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM restaurants`),
+    db.execute<{ count: string; total: string }>(sql`SELECT COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total FROM orders`),
   ]);
 
   const totalTenants = tenantStats.length;

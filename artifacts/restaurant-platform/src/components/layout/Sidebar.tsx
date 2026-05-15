@@ -151,7 +151,7 @@ export function Sidebar() {
           <Flame className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sidebar-foreground leading-tight tracking-tight">TableTrack</p>
+          <p className="font-bold text-sidebar-foreground leading-tight tracking-tight">Khana Lagao</p>
           <p className="text-xs text-muted-foreground truncate">{user?.name ?? "Loading…"}</p>
         </div>
         <button

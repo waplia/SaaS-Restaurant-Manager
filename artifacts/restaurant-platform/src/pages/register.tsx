@@ -51,7 +51,7 @@ export default function RegisterPage() {
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
               <Flame className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-foreground">TableTrack</span>
+            <span className="text-xl font-bold text-foreground">Khana Lagao</span>
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground leading-tight">
@@ -78,7 +78,7 @@ export default function RegisterPage() {
             <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
               <Flame className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg">TableTrack</span>
+            <span className="font-bold text-lg">Khana Lagao</span>
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">Create your account</h2>

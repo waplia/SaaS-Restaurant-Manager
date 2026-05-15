@@ -175,7 +175,7 @@ adminRouter.post("/admin/blog/posts", async (req, res) => {
         coverImage: body.coverImage ? String(body.coverImage).slice(0, 500) : null,
         category: body.category ? String(body.category).slice(0, 80) : "guides",
         tags: body.tags ? String(body.tags).slice(0, 500) : null,
-        author: body.author ? String(body.author).slice(0, 120) : "TableTrack Team",
+        author: body.author ? String(body.author).slice(0, 120) : "Khana Lagao Team",
         readMinutes: Number(body.readMinutes) || 5,
         published: body.published !== false,
       })

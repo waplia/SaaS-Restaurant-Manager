@@ -1355,6 +1355,7 @@ export interface SubscriptionPlan {
   name: string;
   slug: string;
   price: string;
+  currency: string;
   billingPeriod: string;
   maxRestaurants: number;
   maxBranches: number;
@@ -1375,6 +1376,8 @@ export interface TenantSubscription {
   isTrialExpired: boolean;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
+  cashfreeCustomerId: string | null;
+  cashfreeSubscriptionId: string | null;
   subscriptionStartedAt: string | null;
   subscriptionEndsAt: string | null;
 }
@@ -1385,11 +1388,17 @@ export interface SubscriptionUsage {
   menuItemCount: number;
 }
 
+export interface SubscriptionGateways {
+  stripe?: boolean;
+  cashfree?: boolean;
+}
+
 export interface SubscriptionInfo {
   tenant: TenantSubscription;
   plan: SubscriptionPlan | null;
   plans: SubscriptionPlan[];
   usage: SubscriptionUsage;
+  gateways?: SubscriptionGateways;
 }
 
 export const INR_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1] as const;

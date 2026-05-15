@@ -205,7 +205,7 @@ export function dailySummaryEmail(opts: {
           <tr><td>Total Revenue</td><td><strong>₹${opts.totalRevenue}</strong></td></tr>
         </table>
         ${opts.topItems.length ? `<p><strong>Top Items:</strong></p><ul>${items}</ul>` : ""}
-        <p style="color:#888;font-size:0.85em">Generated automatically by TableTrack.</p>
+        <p style="color:#888;font-size:0.85em">Generated automatically by Khana Lagao.</p>
       </div>`,
   };
 }

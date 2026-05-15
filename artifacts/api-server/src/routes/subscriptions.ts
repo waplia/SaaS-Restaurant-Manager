@@ -1,9 +1,13 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { eq, and, count } from "drizzle-orm";
-import { db, tenantsTable, subscriptionPlansTable, usersTable, restaurantsTable, floorTablesTable, menuItemsTable } from "../lib/db";
+import { db, tenantsTable, subscriptionPlansTable, usersTable, floorTablesTable, menuItemsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import {
+  isCashfreeConfigured, createCashfreeOrder, fetchCashfreeOrder, buildCheckoutUrl, verifyCashfreeWebhook,
+} from "../lib/cashfree";
+import { logger } from "../lib/logger";
 import type { Request, Response } from "express";
 
 const router = Router();
@@ -53,6 +57,8 @@ router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
       isTrialExpired,
       stripeCustomerId: tenant.stripeCustomerId,
       stripeSubscriptionId: tenant.stripeSubscriptionId,
+      cashfreeCustomerId: tenant.cashfreeCustomerId,
+      cashfreeSubscriptionId: tenant.cashfreeSubscriptionId,
       subscriptionStartedAt: tenant.subscriptionStartedAt,
       subscriptionEndsAt: tenant.subscriptionEndsAt,
     },
@@ -62,6 +68,10 @@ router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
       staffCount: staffCount[0]?.count ?? 0,
       tableCount: tableCount[0]?.count ?? 0,
       menuItemCount: menuItemCount[0]?.count ?? 0,
+    },
+    gateways: {
+      stripe: !!getStripe(),
+      cashfree: isCashfreeConfigured(),
     },
   });
 });
@@ -91,13 +101,14 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   }
 
   const planPrice = Number(plan.price);
+  const stripeCurrency = (plan.currency ?? "INR").toLowerCase();
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     payment_method_types: ["card"],
     mode: "subscription",
     line_items: [{
       price_data: {
-        currency: "inr",
+        currency: stripeCurrency,
         product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
         unit_amount: Math.round(planPrice * 100),
         recurring: { interval: plan.billingPeriod === "yearly" ? "year" : "month" },
@@ -110,6 +121,52 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   });
 
   res.json({ url: session.url, sessionId: session.id });
+});
+
+router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", requireRole("owner", "super_admin"), async (req, res) => {
+  const tenantId = req.user?.tenantId;
+  if (!tenantId) return void res.status(403).json({ error: "No tenant" });
+
+  const { planId, successUrl } = req.body as { planId: number; successUrl: string };
+  const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
+  if (!plan) return void res.status(404).json({ error: "Plan not found" });
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
+
+  if (!isCashfreeConfigured()) {
+    return void res.json({ url: null, mock: true, message: "Cashfree not configured — using mock checkout" });
+  }
+
+  const [owner] = await db.select().from(usersTable)
+    .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)))
+    .limit(1);
+
+  const cfOrderId = `kl_${tenantId}_${planId}_${Date.now()}`;
+  const customerIdStr = tenant.cashfreeCustomerId ?? `tenant_${tenantId}`;
+
+  try {
+    const order = await createCashfreeOrder({
+      orderId: cfOrderId,
+      amount: Number(plan.price),
+      currency: (plan.currency ?? "INR").toUpperCase(),
+      customerId: customerIdStr,
+      customerName: owner?.name ?? tenant.name,
+      customerEmail: owner?.email ?? `tenant${tenantId}@khanalagao.app`,
+      customerPhone: owner?.phone ?? "9999999999",
+      returnUrl: successUrl,
+      notes: { tenantId: String(tenantId), planId: String(planId) },
+    });
+
+    if (!tenant.cashfreeCustomerId) {
+      await db.update(tenantsTable).set({ cashfreeCustomerId: customerIdStr, updatedAt: new Date() }).where(eq(tenantsTable.id, tenantId));
+    }
+
+    const url = order.payment_session_id ? buildCheckoutUrl(order.payment_session_id) : null;
+    res.json({ url, orderId: cfOrderId, paymentSessionId: order.payment_session_id ?? null });
+  } catch (err) {
+    logger.error({ err }, "Failed to create Cashfree order");
+    res.status(502).json({ error: "Failed to create Cashfree order. Please try again or use a different payment method." });
+  }
 });
 
 router.post("/restaurants/:restaurantId/subscription/portal", requireRole("owner", "super_admin"), async (req, res) => {
@@ -134,8 +191,8 @@ router.post("/restaurants/:restaurantId/subscription/portal", requireRole("owner
 });
 
 router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole("owner", "super_admin"), async (req, res) => {
-  if (getStripe()) {
-    return void res.status(403).json({ error: "Stripe is configured — use the checkout flow instead of mock-activate." });
+  if (getStripe() || isCashfreeConfigured()) {
+    return void res.status(403).json({ error: "A payment gateway is configured — use the checkout flow instead of mock-activate." });
   }
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
@@ -154,6 +211,27 @@ router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole
   }).where(eq(tenantsTable.id, tenantId));
   res.json({ success: true, planStatus: "active" });
 });
+
+async function activateFromCashfreeOrder(cfOrderId: string): Promise<void> {
+  // Order id pattern: kl_<tenantId>_<planId>_<timestamp>
+  const m = /^kl_(\d+)_(\d+)_/.exec(cfOrderId);
+  if (!m) return;
+  const tenantId = Number(m[1]);
+  const planId = Number(m[2]);
+  const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
+  const now = new Date();
+  const endsAt = new Date(now);
+  if (plan?.billingPeriod === "yearly") endsAt.setFullYear(endsAt.getFullYear() + 1);
+  else endsAt.setMonth(endsAt.getMonth() + 1);
+  await db.update(tenantsTable).set({
+    planId,
+    planStatus: "active",
+    cashfreeSubscriptionId: cfOrderId,
+    subscriptionStartedAt: now,
+    subscriptionEndsAt: endsAt,
+    updatedAt: now,
+  }).where(eq(tenantsTable.id, tenantId));
+}
 
 export function createStripeWebhookRouter(): Router {
   const webhookRouter = Router();
@@ -219,5 +297,71 @@ export function createStripeWebhookRouter(): Router {
   });
   return webhookRouter;
 }
+
+export function createCashfreeWebhookRouter(): Router {
+  const webhookRouter = Router();
+  webhookRouter.post("/cashfree/webhook", async (req: Request, res: Response) => {
+    if (!isCashfreeConfigured()) return void res.status(200).json({ received: true });
+
+    const raw = req.body instanceof Buffer ? req.body.toString("utf8") : typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const sig = req.headers["x-webhook-signature"] as string | undefined;
+    const ts = req.headers["x-webhook-timestamp"] as string | undefined;
+
+    if (!verifyCashfreeWebhook(raw, sig, ts)) {
+      return void res.status(401).json({ error: "Invalid Cashfree webhook signature" });
+    }
+
+    let event: { type?: string; data?: { order?: { order_id?: string; order_status?: string }; payment?: { payment_status?: string } } };
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return void res.status(400).json({ error: "Invalid JSON" });
+    }
+
+    try {
+      const orderId = event.data?.order?.order_id;
+      const paymentStatus = event.data?.payment?.payment_status ?? event.data?.order?.order_status;
+      const isSuccess = event.type === "PAYMENT_SUCCESS_WEBHOOK"
+        || paymentStatus === "SUCCESS"
+        || paymentStatus === "PAID";
+      if (orderId && isSuccess) {
+        await activateFromCashfreeOrder(orderId);
+      }
+    } catch (err) {
+      logger.error({ err }, "Cashfree webhook processing error");
+      return void res.status(500).json({ error: "Webhook handler failed — will retry" });
+    }
+
+    res.json({ received: true });
+  });
+  return webhookRouter;
+}
+
+// Public endpoint for confirming a Cashfree order from the success-redirect URL
+// (in case the webhook hasn't arrived yet). Falls back to fetching from Cashfree.
+router.post("/restaurants/:restaurantId/subscription/cashfree-confirm", requireRole("owner", "super_admin"), async (req, res) => {
+  const { orderId } = req.body as { orderId: string };
+  if (!orderId) return void res.status(400).json({ error: "orderId is required" });
+  const callerTenantId = req.user?.tenantId;
+  if (!callerTenantId) return void res.status(403).json({ error: "No tenant" });
+  // Bind orderId to caller's tenant: format is kl_<tenantId>_<planId>_<ts>
+  const m = /^kl_(\d+)_(\d+)_/.exec(orderId);
+  if (!m || Number(m[1]) !== callerTenantId) {
+    return void res.status(403).json({ error: "This order does not belong to your tenant." });
+  }
+  if (!isCashfreeConfigured()) return void res.json({ activated: false, mock: true });
+  try {
+    const order = await fetchCashfreeOrder(orderId);
+    const cfStatus = (order.order_status ?? "").toUpperCase();
+    if (cfStatus === "PAID" || cfStatus === "SUCCESS") {
+      await activateFromCashfreeOrder(orderId);
+      return void res.json({ activated: true });
+    }
+    res.json({ activated: false, status: order.order_status });
+  } catch (err) {
+    logger.error({ err }, "cashfree-confirm failed");
+    res.status(502).json({ error: "Could not verify Cashfree order" });
+  }
+});
 
 export default router;

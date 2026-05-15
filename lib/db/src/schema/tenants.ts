@@ -1,4 +1,5 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,11 +15,14 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   maxTables: integer("max_tables").notNull().default(20),
   maxMenuItems: integer("max_menu_items").notNull().default(100),
   trialDays: integer("trial_days").notNull().default(14),
+  currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  currencyCheck: check("subscription_plans_currency_check", sql`${t.currency} IN ('INR','USD')`),
+}));
 
 export const tenantsTable = pgTable("tenants", {
   id: serial("id").primaryKey(),
@@ -31,6 +35,8 @@ export const tenantsTable = pgTable("tenants", {
   subscriptionEndsAt: timestamp("subscription_ends_at"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  cashfreeCustomerId: text("cashfree_customer_id"),
+  cashfreeSubscriptionId: text("cashfree_subscription_id"),
   isActive: boolean("is_active").notNull().default(true),
   isSuspended: boolean("is_suspended").notNull().default(false),
   logoUrl: text("logo_url"),

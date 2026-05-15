@@ -1682,6 +1682,27 @@ export function useCreateCheckout() {
   });
 }
 
+export function useCreateCashfreeOrder() {
+  return useMutation({
+    mutationFn: ({ restaurantId, planId, successUrl }: { restaurantId: number; planId: number; successUrl: string }) =>
+      apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean }>(
+        `/restaurants/${restaurantId}/subscription/create-cashfree-order`,
+        { planId, successUrl },
+      ),
+  });
+}
+
+export function useConfirmCashfreeOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ restaurantId, orderId }: { restaurantId: number; orderId: string }) =>
+      apiPost<{ activated: boolean; status?: string; mock?: boolean }>(`/restaurants/${restaurantId}/subscription/cashfree-confirm`, { orderId }),
+    onSuccess: (_d, { restaurantId }) => {
+      qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
+    },
+  });
+}
+
 export function useMockActivate() {
   const qc = useQueryClient();
   return useMutation({

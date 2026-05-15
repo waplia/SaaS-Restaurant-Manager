@@ -54,6 +54,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Impersonation hand-off: super-admin opens /app/#impersonate=<jwt>
+    // Token is short-lived and minted server-side; we swap it in then fetch
+    // the authoritative user from /auth/me so display info matches the JWT.
+    if (window.location.hash.startsWith("#impersonate=")) {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const t = params.get("impersonate");
+      if (t) {
+        localStorage.setItem(TOKEN_KEY, t);
+        localStorage.removeItem(REFRESH_KEY);
+        localStorage.removeItem(USER_KEY);
+        window.history.replaceState(null, "", window.location.pathname);
+        fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${t}` } })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error("impersonation token rejected")))
+          .then((user: AuthUser) => {
+            localStorage.setItem(USER_KEY, JSON.stringify(user));
+            setState({ user, accessToken: t, isLoading: false, isAuthenticated: true });
+          })
+          .catch(() => {
+            localStorage.removeItem(TOKEN_KEY);
+            setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
+          });
+        return;
+      }
+    }
     const token = localStorage.getItem(TOKEN_KEY);
     const userRaw = localStorage.getItem(USER_KEY);
     if (token && userRaw) {

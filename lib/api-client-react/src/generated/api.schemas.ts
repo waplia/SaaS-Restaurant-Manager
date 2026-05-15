@@ -59,12 +59,33 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * Plan currency. INR defaults to Cashfree, USD to Stripe.
+ */
+export type SubscriptionPlanCurrency =
+  (typeof SubscriptionPlanCurrency)[keyof typeof SubscriptionPlanCurrency];
+
+export const SubscriptionPlanCurrency = {
+  INR: "INR",
+  USD: "USD",
+} as const;
+
+export type SubscriptionPlanBillingPeriod =
+  (typeof SubscriptionPlanBillingPeriod)[keyof typeof SubscriptionPlanBillingPeriod];
+
+export const SubscriptionPlanBillingPeriod = {
+  monthly: "monthly",
+  yearly: "yearly",
+} as const;
+
 export interface SubscriptionPlan {
   id: number;
   name: string;
   slug: string;
   price: string;
-  billingPeriod: string;
+  /** Plan currency. INR defaults to Cashfree, USD to Stripe. */
+  currency: SubscriptionPlanCurrency;
+  billingPeriod: SubscriptionPlanBillingPeriod;
   maxRestaurants?: number;
   maxBranches?: number;
   maxStaff?: number;
@@ -74,6 +95,74 @@ export interface SubscriptionPlan {
   features?: string[];
   isActive?: boolean;
   createdAt?: string;
+}
+
+export type SubscriptionPlanInputCurrency =
+  (typeof SubscriptionPlanInputCurrency)[keyof typeof SubscriptionPlanInputCurrency];
+
+export const SubscriptionPlanInputCurrency = {
+  INR: "INR",
+  USD: "USD",
+} as const;
+
+export type SubscriptionPlanInputBillingPeriod =
+  (typeof SubscriptionPlanInputBillingPeriod)[keyof typeof SubscriptionPlanInputBillingPeriod];
+
+export const SubscriptionPlanInputBillingPeriod = {
+  monthly: "monthly",
+  yearly: "yearly",
+} as const;
+
+export interface SubscriptionPlanInput {
+  name: string;
+  /** lowercase alphanumeric and hyphens */
+  slug: string;
+  price: string;
+  currency?: SubscriptionPlanInputCurrency;
+  billingPeriod?: SubscriptionPlanInputBillingPeriod;
+  maxRestaurants?: number;
+  maxBranches?: number;
+  maxStaff?: number;
+  maxTables?: number;
+  maxMenuItems?: number;
+  trialDays?: number;
+  features?: string[];
+  isActive?: boolean;
+}
+
+export type SubscriptionPlanPatchCurrency =
+  (typeof SubscriptionPlanPatchCurrency)[keyof typeof SubscriptionPlanPatchCurrency];
+
+export const SubscriptionPlanPatchCurrency = {
+  INR: "INR",
+  USD: "USD",
+} as const;
+
+export type SubscriptionPlanPatchBillingPeriod =
+  (typeof SubscriptionPlanPatchBillingPeriod)[keyof typeof SubscriptionPlanPatchBillingPeriod];
+
+export const SubscriptionPlanPatchBillingPeriod = {
+  monthly: "monthly",
+  yearly: "yearly",
+} as const;
+
+/**
+ * All fields optional; backend applies a partial update.
+ */
+export interface SubscriptionPlanPatch {
+  name?: string;
+  slug?: string;
+  price?: string;
+  currency?: SubscriptionPlanPatchCurrency;
+  billingPeriod?: SubscriptionPlanPatchBillingPeriod;
+  maxRestaurants?: number;
+  maxBranches?: number;
+  maxStaff?: number;
+  maxTables?: number;
+  maxMenuItems?: number;
+  trialDays?: number;
+  features?: string[];
+  isActive?: boolean;
 }
 
 export interface Tenant {
@@ -91,6 +180,18 @@ export interface Tenant {
   logoUrl?: string | null;
   /** @nullable */
   primaryColor?: string | null;
+  /** @nullable */
+  stripeCustomerId?: string | null;
+  /** @nullable */
+  stripeSubscriptionId?: string | null;
+  /** @nullable */
+  cashfreeCustomerId?: string | null;
+  /** @nullable */
+  cashfreeSubscriptionId?: string | null;
+  /** @nullable */
+  subscriptionStartedAt?: string | null;
+  /** @nullable */
+  subscriptionEndsAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -105,6 +206,10 @@ export interface TenantInput {
   slug: string;
   planId?: number;
   primaryColor?: string;
+  logoUrl?: string;
+  /** Optional. Creates an owner user and emails a one-hour password-set link. */
+  ownerEmail?: string;
+  ownerName?: string;
 }
 
 export interface TenantUpdate {
@@ -1444,7 +1549,68 @@ export type ResetPassword200 = {
 export type ListTenantsParams = {
   page?: number;
   limit?: number;
+  /**
+   * Substring match on name or slug.
+   */
+  search?: string;
+  status?: ListTenantsStatus;
+  planId?: number;
+};
+
+export type ListTenantsStatus =
+  (typeof ListTenantsStatus)[keyof typeof ListTenantsStatus];
+
+export const ListTenantsStatus = {
+  trial: "trial",
+  active: "active",
+  expired: "expired",
+  cancelled: "cancelled",
+  suspended: "suspended",
+} as const;
+
+export type DeleteTenantParams = {
+  /**
+   * Must equal the tenant slug to confirm deletion.
+   */
+  confirm: string;
+};
+
+export type ImpersonateTenantOwner200Owner = {
+  id?: number;
+  email?: string;
+  name?: string;
+};
+
+export type ImpersonateTenantOwner200 = {
+  token?: string;
+  /** Seconds until expiry. */
+  expiresIn?: number;
+  owner?: ImpersonateTenantOwner200Owner;
+};
+
+export type CreateCashfreeOrderBody = {
+  planId: number;
+  successUrl: string;
+};
+
+export type CreateCashfreeOrder200 = {
+  /** @nullable */
+  url?: string | null;
+  orderId?: string;
+  /** @nullable */
+  paymentSessionId?: string | null;
+  mock?: boolean;
+};
+
+export type ConfirmCashfreeOrderBody = {
+  /** Pattern kl_<tenantId>_<planId>_<ts> */
+  orderId: string;
+};
+
+export type ConfirmCashfreeOrder200 = {
+  activated?: boolean;
   status?: string;
+  mock?: boolean;
 };
 
 export type ListRestaurantsParams = {

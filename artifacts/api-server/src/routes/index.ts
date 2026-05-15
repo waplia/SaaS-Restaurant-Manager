@@ -28,7 +28,7 @@ import cashRegisterRouter from "./cash-register";
 import deliveryRouter from "./delivery";
 import waiterRequestsRouter from "./waiter-requests";
 import realtimeRouter from "./realtime";
-import subscriptionsRouter, { createStripeWebhookRouter } from "./subscriptions";
+import subscriptionsRouter, { createStripeWebhookRouter, createCashfreeWebhookRouter } from "./subscriptions";
 import settingsRouter from "./settings";
 import marketingRouter, { marketingAdminRouter } from "./marketing";
 
@@ -42,6 +42,7 @@ router.use(marketingAdminRouter);
 router.use(publicStorageRouter);
 router.use(realtimeRouter);
 router.use(createStripeWebhookRouter());
+router.use(createCashfreeWebhookRouter());
 
 router.use(authenticate);
 

@@ -36,11 +36,15 @@ import type {
   CallWaiterResult,
   ClockInInput,
   ClockOutInput,
+  ConfirmCashfreeOrder200,
+  ConfirmCashfreeOrderBody,
   Coupon,
   CouponInput,
   CouponUpdate,
   CouponValidateInput,
   CouponValidateResult,
+  CreateCashfreeOrder200,
+  CreateCashfreeOrderBody,
   CreatePaymentIntentBody,
   CreateRazorpayOrderBody,
   CreateRoleInput,
@@ -50,6 +54,7 @@ import type {
   CustomerList,
   CustomerUpdate,
   DashboardSummary,
+  DeleteTenantParams,
   FeedbackInput,
   FeedbackResult,
   FloorTable,
@@ -62,6 +67,7 @@ import type {
   GetRevenueTrendParams,
   GetStaffActivityParams,
   HealthStatus,
+  ImpersonateTenantOwner200,
   InventoryItem,
   InventoryItemInput,
   InventoryItemUpdate,
@@ -147,6 +153,8 @@ import type {
   StaffShift,
   StockAdjustmentInput,
   SubscriptionPlan,
+  SubscriptionPlanInput,
+  SubscriptionPlanPatch,
   Supplier,
   SupplierInput,
   SupplierUpdate,
@@ -893,6 +901,177 @@ export function useListSubscriptionPlans<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * @summary Create a subscription plan (super admin)
+ */
+export const getCreateSubscriptionPlanUrl = () => {
+  return `/api/subscription-plans`;
+};
+
+export const createSubscriptionPlan = async (
+  subscriptionPlanInput: SubscriptionPlanInput,
+  options?: RequestInit,
+): Promise<SubscriptionPlan> => {
+  return customFetch<SubscriptionPlan>(getCreateSubscriptionPlanUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(subscriptionPlanInput),
+  });
+};
+
+export const getCreateSubscriptionPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscriptionPlan>>,
+    TError,
+    { data: BodyType<SubscriptionPlanInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSubscriptionPlan>>,
+  TError,
+  { data: BodyType<SubscriptionPlanInput> },
+  TContext
+> => {
+  const mutationKey = ["createSubscriptionPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSubscriptionPlan>>,
+    { data: BodyType<SubscriptionPlanInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSubscriptionPlan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSubscriptionPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubscriptionPlan>>
+>;
+export type CreateSubscriptionPlanMutationBody =
+  BodyType<SubscriptionPlanInput>;
+export type CreateSubscriptionPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a subscription plan (super admin)
+ */
+export const useCreateSubscriptionPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscriptionPlan>>,
+    TError,
+    { data: BodyType<SubscriptionPlanInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSubscriptionPlan>>,
+  TError,
+  { data: BodyType<SubscriptionPlanInput> },
+  TContext
+> => {
+  return useMutation(getCreateSubscriptionPlanMutationOptions(options));
+};
+
+/**
+ * @summary Toggle a plan's active flag (super admin)
+ */
+export const getToggleSubscriptionPlanActiveUrl = (id: number) => {
+  return `/api/subscription-plans/${id}/toggle-active`;
+};
+
+export const toggleSubscriptionPlanActive = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SubscriptionPlan> => {
+  return customFetch<SubscriptionPlan>(getToggleSubscriptionPlanActiveUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getToggleSubscriptionPlanActiveMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["toggleSubscriptionPlanActive"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return toggleSubscriptionPlanActive(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ToggleSubscriptionPlanActiveMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>
+>;
+
+export type ToggleSubscriptionPlanActiveMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle a plan's active flag (super admin)
+ */
+export const useToggleSubscriptionPlanActive = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof toggleSubscriptionPlanActive>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getToggleSubscriptionPlanActiveMutationOptions(options));
+};
+
 export const getGetSubscriptionPlanUrl = (id: number) => {
   return `/api/subscription-plans/${id}`;
 };
@@ -972,6 +1151,166 @@ export function useGetSubscriptionPlan<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getUpdateSubscriptionPlanUrl = (id: number) => {
+  return `/api/subscription-plans/${id}`;
+};
+
+export const updateSubscriptionPlan = async (
+  id: number,
+  subscriptionPlanPatch: SubscriptionPlanPatch,
+  options?: RequestInit,
+): Promise<SubscriptionPlan> => {
+  return customFetch<SubscriptionPlan>(getUpdateSubscriptionPlanUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(subscriptionPlanPatch),
+  });
+};
+
+export const getUpdateSubscriptionPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubscriptionPlan>>,
+    TError,
+    { id: number; data: BodyType<SubscriptionPlanPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSubscriptionPlan>>,
+  TError,
+  { id: number; data: BodyType<SubscriptionPlanPatch> },
+  TContext
+> => {
+  const mutationKey = ["updateSubscriptionPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSubscriptionPlan>>,
+    { id: number; data: BodyType<SubscriptionPlanPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateSubscriptionPlan(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSubscriptionPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSubscriptionPlan>>
+>;
+export type UpdateSubscriptionPlanMutationBody =
+  BodyType<SubscriptionPlanPatch>;
+export type UpdateSubscriptionPlanMutationError = ErrorType<unknown>;
+
+export const useUpdateSubscriptionPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubscriptionPlan>>,
+    TError,
+    { id: number; data: BodyType<SubscriptionPlanPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSubscriptionPlan>>,
+  TError,
+  { id: number; data: BodyType<SubscriptionPlanPatch> },
+  TContext
+> => {
+  return useMutation(getUpdateSubscriptionPlanMutationOptions(options));
+};
+
+export const getDeleteSubscriptionPlanUrl = (id: number) => {
+  return `/api/subscription-plans/${id}`;
+};
+
+export const deleteSubscriptionPlan = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSubscriptionPlanUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSubscriptionPlanMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubscriptionPlan>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSubscriptionPlan>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSubscriptionPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSubscriptionPlan>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSubscriptionPlan(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSubscriptionPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSubscriptionPlan>>
+>;
+
+export type DeleteSubscriptionPlanMutationError = ErrorType<void>;
+
+export const useDeleteSubscriptionPlan = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubscriptionPlan>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSubscriptionPlan>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteSubscriptionPlanMutationOptions(options));
+};
 
 /**
  * @summary List all tenants (super admin)
@@ -1306,6 +1645,103 @@ export const useUpdateTenant = <
   return useMutation(getUpdateTenantMutationOptions(options));
 };
 
+/**
+ * @summary Permanently delete a tenant (super admin)
+ */
+export const getDeleteTenantUrl = (id: number, params: DeleteTenantParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/tenants/${id}?${stringifiedParams}`
+    : `/api/tenants/${id}`;
+};
+
+export const deleteTenant = async (
+  id: number,
+  params: DeleteTenantParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteTenantUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTenantMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTenant>>,
+    TError,
+    { id: number; params: DeleteTenantParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTenant>>,
+  TError,
+  { id: number; params: DeleteTenantParams },
+  TContext
+> => {
+  const mutationKey = ["deleteTenant"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTenant>>,
+    { id: number; params: DeleteTenantParams }
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return deleteTenant(id, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTenantMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTenant>>
+>;
+
+export type DeleteTenantMutationError = ErrorType<void>;
+
+/**
+ * @summary Permanently delete a tenant (super admin)
+ */
+export const useDeleteTenant = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTenant>>,
+    TError,
+    { id: number; params: DeleteTenantParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTenant>>,
+  TError,
+  { id: number; params: DeleteTenantParams },
+  TContext
+> => {
+  return useMutation(getDeleteTenantMutationOptions(options));
+};
+
 export const getSuspendTenantUrl = (id: number) => {
   return `/api/tenants/${id}/suspend`;
 };
@@ -1460,6 +1896,274 @@ export const useActivateTenant = <
   TContext
 > => {
   return useMutation(getActivateTenantMutationOptions(options));
+};
+
+/**
+ * @summary Mint a 15-minute scoped session token for a tenant's owner (super admin)
+ */
+export const getImpersonateTenantOwnerUrl = (id: number) => {
+  return `/api/tenants/${id}/impersonate`;
+};
+
+export const impersonateTenantOwner = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ImpersonateTenantOwner200> => {
+  return customFetch<ImpersonateTenantOwner200>(
+    getImpersonateTenantOwnerUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getImpersonateTenantOwnerMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof impersonateTenantOwner>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof impersonateTenantOwner>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["impersonateTenantOwner"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof impersonateTenantOwner>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return impersonateTenantOwner(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ImpersonateTenantOwnerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof impersonateTenantOwner>>
+>;
+
+export type ImpersonateTenantOwnerMutationError = ErrorType<void>;
+
+/**
+ * @summary Mint a 15-minute scoped session token for a tenant's owner (super admin)
+ */
+export const useImpersonateTenantOwner = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof impersonateTenantOwner>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof impersonateTenantOwner>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getImpersonateTenantOwnerMutationOptions(options));
+};
+
+/**
+ * @summary Create a Cashfree hosted-checkout order for the caller's tenant
+ */
+export const getCreateCashfreeOrderUrl = (restaurantId: number) => {
+  return `/api/restaurants/${restaurantId}/subscription/create-cashfree-order`;
+};
+
+export const createCashfreeOrder = async (
+  restaurantId: number,
+  createCashfreeOrderBody: CreateCashfreeOrderBody,
+  options?: RequestInit,
+): Promise<CreateCashfreeOrder200> => {
+  return customFetch<CreateCashfreeOrder200>(
+    getCreateCashfreeOrderUrl(restaurantId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createCashfreeOrderBody),
+    },
+  );
+};
+
+export const getCreateCashfreeOrderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCashfreeOrder>>,
+    TError,
+    { restaurantId: number; data: BodyType<CreateCashfreeOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCashfreeOrder>>,
+  TError,
+  { restaurantId: number; data: BodyType<CreateCashfreeOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["createCashfreeOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCashfreeOrder>>,
+    { restaurantId: number; data: BodyType<CreateCashfreeOrderBody> }
+  > = (props) => {
+    const { restaurantId, data } = props ?? {};
+
+    return createCashfreeOrder(restaurantId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateCashfreeOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCashfreeOrder>>
+>;
+export type CreateCashfreeOrderMutationBody = BodyType<CreateCashfreeOrderBody>;
+export type CreateCashfreeOrderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Cashfree hosted-checkout order for the caller's tenant
+ */
+export const useCreateCashfreeOrder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCashfreeOrder>>,
+    TError,
+    { restaurantId: number; data: BodyType<CreateCashfreeOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createCashfreeOrder>>,
+  TError,
+  { restaurantId: number; data: BodyType<CreateCashfreeOrderBody> },
+  TContext
+> => {
+  return useMutation(getCreateCashfreeOrderMutationOptions(options));
+};
+
+/**
+ * @summary Confirm a Cashfree order from the success-redirect (tenant-bound)
+ */
+export const getConfirmCashfreeOrderUrl = (restaurantId: number) => {
+  return `/api/restaurants/${restaurantId}/subscription/cashfree-confirm`;
+};
+
+export const confirmCashfreeOrder = async (
+  restaurantId: number,
+  confirmCashfreeOrderBody: ConfirmCashfreeOrderBody,
+  options?: RequestInit,
+): Promise<ConfirmCashfreeOrder200> => {
+  return customFetch<ConfirmCashfreeOrder200>(
+    getConfirmCashfreeOrderUrl(restaurantId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(confirmCashfreeOrderBody),
+    },
+  );
+};
+
+export const getConfirmCashfreeOrderMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmCashfreeOrder>>,
+    TError,
+    { restaurantId: number; data: BodyType<ConfirmCashfreeOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmCashfreeOrder>>,
+  TError,
+  { restaurantId: number; data: BodyType<ConfirmCashfreeOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["confirmCashfreeOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmCashfreeOrder>>,
+    { restaurantId: number; data: BodyType<ConfirmCashfreeOrderBody> }
+  > = (props) => {
+    const { restaurantId, data } = props ?? {};
+
+    return confirmCashfreeOrder(restaurantId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmCashfreeOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmCashfreeOrder>>
+>;
+export type ConfirmCashfreeOrderMutationBody =
+  BodyType<ConfirmCashfreeOrderBody>;
+export type ConfirmCashfreeOrderMutationError = ErrorType<void>;
+
+/**
+ * @summary Confirm a Cashfree order from the success-redirect (tenant-bound)
+ */
+export const useConfirmCashfreeOrder = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmCashfreeOrder>>,
+    TError,
+    { restaurantId: number; data: BodyType<ConfirmCashfreeOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmCashfreeOrder>>,
+  TError,
+  { restaurantId: number; data: BodyType<ConfirmCashfreeOrderBody> },
+  TContext
+> => {
+  return useMutation(getConfirmCashfreeOrderMutationOptions(options));
 };
 
 export const getListRestaurantsUrl = (params?: ListRestaurantsParams) => {

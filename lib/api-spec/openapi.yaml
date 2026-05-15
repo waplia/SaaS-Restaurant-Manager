@@ -214,6 +214,35 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SubscriptionPlan"
+    post:
+      operationId: createSubscriptionPlan
+      tags: [subscription-plans]
+      summary: Create a subscription plan (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionPlanInput" }
+      responses:
+        "201":
+          description: Created plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPlan" }
+
+  /subscription-plans/{id}/toggle-active:
+    post:
+      operationId: toggleSubscriptionPlanActive
+      tags: [subscription-plans]
+      summary: Toggle a plan's active flag (super admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPlan" }
 
   /subscription-plans/{id}:
     get:
@@ -228,6 +257,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionPlan"
+    patch:
+      operationId: updateSubscriptionPlan
+      tags: [subscription-plans]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionPlanPatch" }
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPlan" }
+    delete:
+      operationId: deleteSubscriptionPlan
+      tags: [subscription-plans]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted }
+        "409": { description: Plan in use by one or more tenants }
 
   # ─── Tenants ──────────────────────────────────────────────────
   /tenants:
@@ -238,7 +291,9 @@ paths:
       parameters:
         - { name: page, in: query, schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer } }
-        - { name: status, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string }, description: "Substring match on name or slug." }
+        - { name: status, in: query, schema: { type: string, enum: [trial, active, expired, cancelled, suspended] } }
+        - { name: planId, in: query, schema: { type: integer } }
       responses:
         "200":
           description: List of tenants
@@ -295,6 +350,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/Tenant"
 
+    delete:
+      operationId: deleteTenant
+      tags: [tenants]
+      summary: Permanently delete a tenant (super admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: confirm, in: query, required: true, schema: { type: string }, description: "Must equal the tenant slug to confirm deletion." }
+      responses:
+        "204": { description: Deleted }
+        "400": { description: Confirmation slug missing or mismatched }
+        "409": { description: Cannot delete due to related data (suspend instead) }
+
   /tenants/{id}/suspend:
     post:
       operationId: suspendTenant
@@ -322,6 +389,90 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Tenant"
+
+  /tenants/{id}/impersonate:
+    post:
+      operationId: impersonateTenantOwner
+      tags: [tenants]
+      summary: Mint a 15-minute scoped session token for a tenant's owner (super admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Short-lived impersonation token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expiresIn: { type: integer, description: "Seconds until expiry." }
+                  owner:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      email: { type: string }
+                      name: { type: string }
+        "404": { description: Tenant or active owner not found }
+
+  /restaurants/{restaurantId}/subscription/create-cashfree-order:
+    post:
+      operationId: createCashfreeOrder
+      tags: [subscriptions]
+      summary: Create a Cashfree hosted-checkout order for the caller's tenant
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId, successUrl]
+              properties:
+                planId: { type: integer }
+                successUrl: { type: string }
+      responses:
+        "200":
+          description: Hosted checkout URL or mock fallback indicator
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: ["string", "null"] }
+                  orderId: { type: string }
+                  paymentSessionId: { type: ["string", "null"] }
+                  mock: { type: boolean }
+
+  /restaurants/{restaurantId}/subscription/cashfree-confirm:
+    post:
+      operationId: confirmCashfreeOrder
+      tags: [subscriptions]
+      summary: Confirm a Cashfree order from the success-redirect (tenant-bound)
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId: { type: string, description: "Pattern kl_<tenantId>_<planId>_<ts>" }
+      responses:
+        "200":
+          description: Activation status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activated: { type: boolean }
+                  status: { type: string }
+                  mock: { type: boolean }
+        "403": { description: Order does not belong to the calling tenant }
 
   # ─── Restaurants ──────────────────────────────────────────────
   /restaurants:
@@ -2440,13 +2591,14 @@ components:
     # ── Subscription Plans ──
     SubscriptionPlan:
       type: object
-      required: [id, name, slug, price, billingPeriod]
+      required: [id, name, slug, price, billingPeriod, currency]
       properties:
         id: { type: integer }
         name: { type: string }
         slug: { type: string }
         price: { type: string }
-        billingPeriod: { type: string }
+        currency: { type: string, enum: [INR, USD], description: "Plan currency. INR defaults to Cashfree, USD to Stripe." }
+        billingPeriod: { type: string, enum: [monthly, yearly] }
         maxRestaurants: { type: integer }
         maxBranches: { type: integer }
         maxStaff: { type: integer }
@@ -2458,6 +2610,46 @@ components:
           items: { type: string }
         isActive: { type: boolean }
         createdAt: { type: string }
+
+    SubscriptionPlanInput:
+      type: object
+      required: [name, slug, price]
+      properties:
+        name: { type: string }
+        slug: { type: string, description: "lowercase alphanumeric and hyphens" }
+        price: { type: string }
+        currency: { type: string, enum: [INR, USD] }
+        billingPeriod: { type: string, enum: [monthly, yearly] }
+        maxRestaurants: { type: integer }
+        maxBranches: { type: integer }
+        maxStaff: { type: integer }
+        maxTables: { type: integer }
+        maxMenuItems: { type: integer }
+        trialDays: { type: integer }
+        features:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+
+    SubscriptionPlanPatch:
+      type: object
+      description: "All fields optional; backend applies a partial update."
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        price: { type: string }
+        currency: { type: string, enum: [INR, USD] }
+        billingPeriod: { type: string, enum: [monthly, yearly] }
+        maxRestaurants: { type: integer }
+        maxBranches: { type: integer }
+        maxStaff: { type: integer }
+        maxTables: { type: integer }
+        maxMenuItems: { type: integer }
+        trialDays: { type: integer }
+        features:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
 
     # ── Tenants ──
     Tenant:
@@ -2474,6 +2666,12 @@ components:
         isSuspended: { type: boolean }
         logoUrl: { type: ["string", "null"] }
         primaryColor: { type: ["string", "null"] }
+        stripeCustomerId: { type: ["string", "null"] }
+        stripeSubscriptionId: { type: ["string", "null"] }
+        cashfreeCustomerId: { type: ["string", "null"] }
+        cashfreeSubscriptionId: { type: ["string", "null"] }
+        subscriptionStartedAt: { type: ["string", "null"] }
+        subscriptionEndsAt: { type: ["string", "null"] }
         createdAt: { type: string }
         updatedAt: { type: string }
 
@@ -2495,6 +2693,9 @@ components:
         slug: { type: string }
         planId: { type: integer }
         primaryColor: { type: string }
+        logoUrl: { type: string }
+        ownerEmail: { type: string, description: "Optional. Creates an owner user and emails a one-hour password-set link." }
+        ownerName: { type: string }
 
     TenantUpdate:
       type: object

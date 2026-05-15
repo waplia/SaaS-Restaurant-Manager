@@ -167,7 +167,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
       totalAmount: totalQty,
       splitTotal: totalQty,
       footer: `${ticket.kitchen?.name ?? "Kitchen"} · ${totalQty} item${totalQty !== 1 ? "s" : ""}`,
-      restaurant: { name: restaurant?.name ?? "TableTrack" },
+      restaurant: { name: restaurant?.name ?? "Khana Lagao" },
     });
     toast({ title: "Reprinting KOT", description: ticket.kitchen?.name ?? undefined });
   };

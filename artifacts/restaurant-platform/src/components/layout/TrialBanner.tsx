@@ -79,7 +79,7 @@ export function TrialPaywall() {
         <div>
           <h2 className="text-xl font-bold text-foreground mb-2">Free Trial Expired</h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Your 14-day free trial has ended. Upgrade to a paid plan to continue using TableTrack and access all your data.
+            Your 14-day free trial has ended. Upgrade to a paid plan to continue using Khana Lagao and access all your data.
           </p>
         </div>
         <div className="space-y-3">

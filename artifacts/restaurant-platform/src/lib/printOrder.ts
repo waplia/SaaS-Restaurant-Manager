@@ -114,7 +114,7 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
     documentTitle ??
     (payment?.method && payment.method !== "pending" ? "Tax Invoice" : "Receipt");
 
-  const restName = restaurant?.name || "TableTrack";
+  const restName = restaurant?.name || "Khana Lagao";
   const subHeaderBits: string[] = [];
   if (restaurant?.address) subHeaderBits.push(restaurant.address);
   if (restaurant?.phone) subHeaderBits.push(`Tel: ${restaurant.phone}`);
