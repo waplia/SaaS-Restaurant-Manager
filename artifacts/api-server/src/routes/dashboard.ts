@@ -189,7 +189,7 @@ router.get("/restaurants/:restaurantId/dashboard/live-kitchen", requirePlanFeatu
   });
 });
 
-router.get("/restaurants/:restaurantId/dashboard/reports", async (req, res) => {
+router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("advanced_reports"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { period, from: fromStr, to: toStr } = req.query;
   let from = new Date();

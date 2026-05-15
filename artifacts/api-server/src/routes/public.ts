@@ -1,7 +1,40 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES } from "../lib/db";
+
+async function checkRestaurantFeature(
+  restaurantId: number | null | undefined,
+  featureKey: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!restaurantId) return { ok: false, status: 400, error: "Restaurant required" };
+  const [row] = await db
+    .select({ planId: tenantsTable.planId, isSuspended: tenantsTable.isSuspended })
+    .from(restaurantsTable)
+    .innerJoin(tenantsTable, eq(restaurantsTable.tenantId, tenantsTable.id))
+    .where(eq(restaurantsTable.id, restaurantId));
+  if (!row) return { ok: false, status: 404, error: "Restaurant not found" };
+  if (row.isSuspended) return { ok: false, status: 403, error: "Account suspended" };
+  if (!row.planId) return { ok: true };
+  const [plan] = await db
+    .select({ featureFlags: subscriptionPlansTable.featureFlags })
+    .from(subscriptionPlansTable)
+    .where(eq(subscriptionPlansTable.id, row.planId));
+  if (plan && !isFeatureEnabled(plan.featureFlags, featureKey)) {
+    const def = PLAN_BOOLEAN_FEATURES.find((f) => f.key === featureKey);
+    return { ok: false, status: 403, error: `This restaurant's plan doesn't include ${def?.label ?? featureKey}.` };
+  }
+  return { ok: true };
+}
+
+async function checkRestaurantFeatureBySlug(
+  slug: string,
+  featureKey: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const [r] = await db.select({ id: restaurantsTable.id }).from(restaurantsTable).where(eq(restaurantsTable.slug, slug));
+  if (!r) return { ok: false, status: 404, error: "Restaurant not found" };
+  return checkRestaurantFeature(r.id, featureKey);
+}
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
@@ -62,6 +95,9 @@ router.post("/public/orders", async (req, res) => {
   if (!restaurantId || !items || !Array.isArray(items) || items.length === 0) {
     return void res.status(400).json({ error: "restaurantId and items are required" });
   }
+
+  const onlineOk = await checkRestaurantFeature(restaurantId, "online_ordering");
+  if (!onlineOk.ok) return void res.status(onlineOk.status).json({ error: onlineOk.error });
 
   let subtotal = 0;
   const enrichedItems: Array<{ mi: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers: Array<{ id: number; name: string; price: string }> }> = [];
