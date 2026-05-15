@@ -8,8 +8,8 @@ import { ArrowRight, CheckCircle2, BarChart3, ChefHat, Smartphone, Store } from 
 
 export default function Home() {
   useSeo({
-    title: "TableTrack | The Operating System for Modern Restaurants",
-    description: "TableTrack powers POS billing, QR menus, inventory, and payroll for restaurants that treat their kitchen like a craft and their numbers like a sport.",
+    title: "Khana Lagao | The Operating System for Modern Restaurants",
+    description: "Khana Lagao powers POS billing, QR menus, inventory, and payroll for restaurants that treat their kitchen like a craft and their numbers like a sport.",
   });
 
   return (
@@ -132,7 +132,7 @@ export default function Home() {
           <div className="container mx-auto px-4 md:px-6 text-center max-w-4xl relative z-10">
             <h2 className="font-serif text-4xl md:text-6xl font-bold mb-8">Ready to bring order to the kitchen?</h2>
             <p className="text-xl text-muted/80 mb-10 max-w-2xl mx-auto">
-              Join hundreds of top-tier restaurants running their entire operation on TableTrack.
+              Join hundreds of top-tier restaurants running their entire operation on Khana Lagao.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <a href="/app/register">

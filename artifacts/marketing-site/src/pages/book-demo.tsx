@@ -6,7 +6,7 @@ import { LeadForm } from "@/components/LeadForm";
 export default function BookDemo() {
   useSeo({
     title: "Book a Demo",
-    description: "Schedule a personalized demo of TableTrack with our restaurant experts.",
+    description: "Schedule a personalized demo of Khana Lagao with our restaurant experts.",
   });
 
   return (
@@ -19,7 +19,7 @@ export default function BookDemo() {
             <div className="space-y-8">
               <div>
                 <h1 className="font-serif text-4xl md:text-5xl font-bold tracking-tight mb-4 text-foreground">
-                  See TableTrack in action
+                  See Khana Lagao in action
                 </h1>
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   Join a 30-minute walkthrough tailored to your restaurant's specific needs. Learn how you can streamline operations, reduce costs, and delight your guests.

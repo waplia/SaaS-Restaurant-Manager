@@ -7,7 +7,7 @@ import { Mail, Phone, MapPin } from "lucide-react";
 export default function Contact() {
   useSeo({
     title: "Contact Us",
-    description: "Get in touch with the TableTrack team.",
+    description: "Get in touch with the Khana Lagao team.",
   });
 
   return (

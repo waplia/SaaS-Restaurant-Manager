@@ -10,7 +10,7 @@ export default function MultiOutlet() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "TableTrack Multi-Outlet",
+      "name": "Khana Lagao Multi-Outlet",
       "description": "Scale across locations with centralized control and reporting."
     }
   });

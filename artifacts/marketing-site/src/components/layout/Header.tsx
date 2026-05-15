@@ -31,7 +31,7 @@ export function Header() {
       <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2" data-testid="link-home">
-            <span className="font-serif text-xl font-bold tracking-tight text-primary">TableTrack</span>
+            <span className="font-serif text-xl font-bold tracking-tight text-primary">Khana Lagao</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">

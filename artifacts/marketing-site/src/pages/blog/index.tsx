@@ -22,7 +22,7 @@ interface BlogPostListItem {
 
 export default function BlogIndex() {
   useSeo({
-    title: "Blog | TableTrack",
+    title: "Blog | Khana Lagao",
     description: "Insights, news, and guides for modern restaurant operations.",
   });
 
@@ -62,7 +62,7 @@ export default function BlogIndex() {
       <main className="flex-grow pt-24 pb-32">
         <div className="container mx-auto px-4 md:px-6">
           <div className="text-center max-w-3xl mx-auto mb-12">
-            <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">The TableTrack Blog</h1>
+            <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">The Khana Lagao Blog</h1>
             <p className="text-xl text-muted-foreground">Insights, news, and guides for modern restaurant operations.</p>
           </div>
 

@@ -19,7 +19,7 @@ export function useSeo({
 }: SeoProps) {
   useEffect(() => {
     // Update title
-    document.title = title.includes("TableTrack") ? title : `${title} | TableTrack`;
+    document.title = title.includes("Khana Lagao") ? title : `${title} | Khana Lagao`;
 
     // Update meta description
     let metaDesc = document.querySelector('meta[name="description"]');

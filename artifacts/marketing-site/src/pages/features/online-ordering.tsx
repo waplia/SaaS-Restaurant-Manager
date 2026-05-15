@@ -10,7 +10,7 @@ export default function OnlineOrdering() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "TableTrack Online Ordering",
+      "name": "Khana Lagao Online Ordering",
       "description": "Direct delivery & takeout without the massive commission fees."
     }
   });

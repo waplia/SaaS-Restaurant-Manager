@@ -1,9 +1,19 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
-import { db, leadsTable, blogPostsTable } from "../lib/db";
+import { db, leadsTable, blogPostsTable, subscriptionPlansTable } from "../lib/db";
 import { authenticate } from "../middleware/authenticate";
 
 const router: IRouter = Router();
+
+// ── Public: subscription plans (active only) ─────────────────
+router.get("/marketing/plans", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .where(eq(subscriptionPlansTable.isActive, true))
+    .orderBy(subscriptionPlansTable.price);
+  res.json(rows);
+});
 
 // ── Public: blog listing & detail ────────────────────────────
 router.get("/blog/posts", async (req, res) => {

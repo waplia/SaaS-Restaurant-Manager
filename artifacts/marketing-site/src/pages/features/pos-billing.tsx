@@ -10,7 +10,7 @@ export default function POSBilling() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "TableTrack POS",
+      "name": "Khana Lagao POS",
       "description": "Fast, reliable point of sale designed for high-volume environments."
     }
   });

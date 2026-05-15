@@ -6,7 +6,7 @@ export function Footer() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 lg:gap-8">
           <div className="space-y-4 md:col-span-1">
-            <span className="font-serif text-2xl font-bold tracking-tight text-primary">TableTrack</span>
+            <span className="font-serif text-2xl font-bold tracking-tight text-primary">Khana Lagao</span>
             <p className="text-sm text-muted opacity-80 leading-relaxed max-w-xs">
               The operating system for modern restaurants. Built for owners who treat their kitchen like a craft and their numbers like a sport.
             </p>
@@ -51,7 +51,7 @@ export function Footer() {
         </div>
         
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm opacity-60">
-          <p>© {new Date().getFullYear()} TableTrack. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Khana Lagao. All rights reserved.</p>
           <div className="flex gap-4">
             <a href="https://twitter.com/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Twitter</a>
             <a href="https://www.linkedin.com/company/tabletrack" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>

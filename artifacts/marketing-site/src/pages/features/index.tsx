@@ -8,7 +8,7 @@ import { Smartphone, Store, BarChart3, ChefHat, Wallet, Clock, Users, ArrowRight
 export default function FeaturesIndex() {
   useSeo({
     title: "All Features",
-    description: "Explore the complete suite of tools TableTrack offers to run your restaurant operation smoothly.",
+    description: "Explore the complete suite of tools Khana Lagao offers to run your restaurant operation smoothly.",
   });
 
   const features = [
@@ -28,7 +28,7 @@ export default function FeaturesIndex() {
         <div className="container mx-auto px-4 md:px-6">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">Everything you need to run your restaurant</h1>
-            <p className="text-xl text-muted-foreground">From the front of house to the back office, TableTrack connects every part of your operation.</p>
+            <p className="text-xl text-muted-foreground">From the front of house to the back office, Khana Lagao connects every part of your operation.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

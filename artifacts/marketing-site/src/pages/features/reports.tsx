@@ -10,7 +10,7 @@ export default function Reports() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "TableTrack Reports",
+      "name": "Khana Lagao Reports",
       "description": "Actionable business insights to improve your bottom line."
     }
   });

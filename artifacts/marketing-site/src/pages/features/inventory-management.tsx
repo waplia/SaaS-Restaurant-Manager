@@ -10,7 +10,7 @@ export default function InventoryManagement() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "TableTrack Inventory",
+      "name": "Khana Lagao Inventory",
       "description": "Real-time stock tracking and automated reordering alerts."
     }
   });
