@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
 type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[] };
@@ -90,6 +92,14 @@ export function Sidebar() {
   const canSeeWaiterRequests = user?.isSuperAdmin || (user?.role ? ["owner", "manager", "waiter"].includes(user.role) : false);
   const { data: waiterReqs = [] } = useWaiterRequests({ enabled: canSeeWaiterRequests });
   const activeWaiterCount = waiterReqs.filter(r => r.status === "pending" || r.status === "acknowledged").length;
+
+  const { data: leadStats } = useQuery<{ byStatus: { status: string; count: number }[] }>({
+    queryKey: ["admin-leads-new-count"],
+    queryFn: () => apiFetch("/admin/leads/stats"),
+    enabled: !!user?.isSuperAdmin,
+    refetchInterval: 60_000,
+  });
+  const newLeadsCount = leadStats?.byStatus.find(s => s.status === "new")?.count ?? 0;
 
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
@@ -264,7 +274,12 @@ export function Sidebar() {
             </Link>
             <Link href="/admin/leads" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
               <Inbox className="w-4 h-4" />
-              Marketing Leads
+              <span className="flex-1">Marketing Leads</span>
+              {newLeadsCount > 0 && (
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center bg-orange-500 text-white" data-testid="badge-new-leads">
+                  {newLeadsCount}
+                </span>
+              )}
             </Link>
             <Link href="/admin/blog" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
               <FileText className="w-4 h-4" />

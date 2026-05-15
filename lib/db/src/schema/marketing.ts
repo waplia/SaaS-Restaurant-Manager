@@ -1,4 +1,6 @@
-import { pgTable, serial, varchar, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+import { restaurantsTable } from "./restaurants";
 
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
@@ -16,8 +18,29 @@ export const leadsTable = pgTable("leads", {
   sourcePage: varchar("source_page", { length: 120 }).notNull().default("contact"),
   status: varchar("status", { length: 30 }).notNull().default("new"),
   notes: text("notes"),
+  assignedTo: integer("assigned_to").references(() => usersTable.id, { onDelete: "set null" }),
+  followUpAt: timestamp("follow_up_at", { withTimezone: true }),
+  followUpNote: text("follow_up_note"),
+  convertedRestaurantId: integer("converted_restaurant_id").references(() => restaurantsTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const leadNotesTable = pgTable("lead_notes", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull().references(() => leadsTable.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").references(() => usersTable.id, { onDelete: "set null" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const leadActivityTable = pgTable("lead_activity", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull().references(() => leadsTable.id, { onDelete: "cascade" }),
+  actorId: integer("actor_id").references(() => usersTable.id, { onDelete: "set null" }),
+  type: varchar("type", { length: 50 }).notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const blogPostsTable = pgTable("blog_posts", {
@@ -39,5 +62,7 @@ export const blogPostsTable = pgTable("blog_posts", {
 
 export type Lead = typeof leadsTable.$inferSelect;
 export type NewLead = typeof leadsTable.$inferInsert;
+export type LeadNote = typeof leadNotesTable.$inferSelect;
+export type LeadActivity = typeof leadActivityTable.$inferSelect;
 export type BlogPost = typeof blogPostsTable.$inferSelect;
 export type NewBlogPost = typeof blogPostsTable.$inferInsert;
