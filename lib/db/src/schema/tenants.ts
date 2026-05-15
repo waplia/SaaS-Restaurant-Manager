@@ -37,6 +37,8 @@ export const tenantsTable = pgTable("tenants", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   cashfreeCustomerId: text("cashfree_customer_id"),
   cashfreeSubscriptionId: text("cashfree_subscription_id"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  onboardingSkippedSteps: text("onboarding_skipped_steps").array().notNull().default(sql`ARRAY[]::text[]`),
   isActive: boolean("is_active").notNull().default(true),
   isSuspended: boolean("is_suspended").notNull().default(false),
   logoUrl: text("logo_url"),

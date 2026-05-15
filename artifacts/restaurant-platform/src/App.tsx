@@ -26,6 +26,7 @@ import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SubscriptionPage from "@/pages/subscription";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
+import OnboardingPage from "@/pages/onboarding";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
+      <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />

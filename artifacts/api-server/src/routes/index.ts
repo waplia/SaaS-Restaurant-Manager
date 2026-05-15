@@ -31,6 +31,7 @@ import realtimeRouter from "./realtime";
 import subscriptionsRouter, { createStripeWebhookRouter, createCashfreeWebhookRouter } from "./subscriptions";
 import settingsRouter from "./settings";
 import marketingRouter, { marketingAdminRouter } from "./marketing";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(deliveryRouter);
 router.use(waiterRequestsRouter);
 router.use(subscriptionsRouter);
 router.use(settingsRouter);
+router.use(onboardingRouter);
 
 export default router;

@@ -105,8 +105,11 @@ router.post("/leads", async (req, res) => {
 
 // ── Admin (super_admin only): lead management ─────────────────
 const adminRouter: IRouter = Router();
-adminRouter.use(authenticate);
-adminRouter.use((req, res, next) => {
+// Scope auth + super-admin gate to /admin/* only — without this prefix the
+// middlewares would run for every request reaching the parent router and
+// 403-block all non-super-admin users (owners, managers, waiters, …).
+adminRouter.use("/admin", authenticate);
+adminRouter.use("/admin", (req, res, next) => {
   if (!req.user?.isSuperAdmin) {
     res.status(403).json({ error: "Forbidden" });
     return;
