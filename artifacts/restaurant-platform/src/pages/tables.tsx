@@ -806,7 +806,10 @@ export default function TablesPage() {
               {tables.length === 0 && (
                 <div className="text-center py-16 text-muted-foreground">
                   <p className="text-lg font-medium mb-1">No tables yet</p>
-                  <p className="text-sm">Add your first table to get started</p>
+                  <p className="text-sm mb-3">Add your first table to get started</p>
+                  <a href="/onboarding" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                    Open the setup wizard →
+                  </a>
                 </div>
               )}
             </>

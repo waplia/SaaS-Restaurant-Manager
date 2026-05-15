@@ -36,10 +36,15 @@ interface OnboardingState {
 }
 
 export function useOnboardingState() {
+  const { user } = useAuth();
+  // Only owners and managers can read onboarding state — gate the request
+  // to avoid systematic 403s for waiters/cashiers/super-admins on every page.
+  const enabled = !!user && !user.isSuperAdmin && (user.role === "owner" || user.role === "manager");
   return useQuery({
     queryKey: ["onboarding-state"],
     queryFn: () => apiGet<OnboardingState>("/onboarding/state"),
     staleTime: 5000,
+    enabled,
   });
 }
 
@@ -196,7 +201,18 @@ export default function OnboardingPage() {
         <main>
           <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
             <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Step {activeIdx + 1} of {STEP_DEFS.length}</p>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Step {activeIdx + 1} of {STEP_DEFS.length}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {Array.from(stepStatus.values()).filter(v => v.completed).length} of {STEP_DEFS.length} complete
+                </p>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-4">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${Math.round((Array.from(stepStatus.values()).filter(v => v.completed).length / STEP_DEFS.length) * 100)}%` }}
+                />
+              </div>
               <h2 className="text-2xl font-bold mt-1">{activeStep.title}</h2>
               <p className="text-sm text-muted-foreground mt-1">{activeStep.desc}</p>
             </div>
@@ -215,11 +231,20 @@ export default function OnboardingPage() {
                     <SkipForward className="w-4 h-4 mr-1" /> Skip
                   </Button>
                 )}
-                {activeIdx < STEP_DEFS.length - 1 && (
-                  <Button variant="outline" onClick={goNext}>
-                    Next <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                )}
+                {activeIdx < STEP_DEFS.length - 1 && (() => {
+                  const status = stepStatus.get(activeStep.id);
+                  const canAdvance = !!status && (status.completed || status.skipped || activeStep.skippable === true);
+                  return (
+                    <Button
+                      variant="outline"
+                      onClick={goNext}
+                      disabled={!canAdvance}
+                      title={!canAdvance ? "Finish this step to continue" : undefined}
+                    >
+                      Next <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -234,20 +259,22 @@ function StepShell({ children }: { children: ReactNode }) {
 }
 
 function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: () => void }) {
-  const { data: restaurant } = useQuery<{ phone: string | null; address: string | null; city: string | null; currency: string | null; description: string | null }>({
+  const { data: restaurant } = useQuery<{ name: string; phone: string | null; address: string | null; city: string | null; currency: string | null; description: string | null; timezone: string | null; logoUrl: string | null }>({
     queryKey: ["restaurant", restaurantId],
     queryFn: () => apiGet(`/restaurants/${restaurantId}`),
   });
-  const [form, setForm] = useState({ phone: "", address: "", city: "", description: "", currency: "INR" });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", city: "", description: "", currency: "INR", timezone: "Asia/Kolkata", logoUrl: "" });
   const initialised = useState(false);
-  // Hydrate once from server
   if (restaurant && !initialised[0]) {
     setForm({
+      name: restaurant.name ?? "",
       phone: restaurant.phone ?? "",
       address: restaurant.address ?? "",
       city: restaurant.city ?? "",
       description: restaurant.description ?? "",
       currency: restaurant.currency ?? "INR",
+      timezone: restaurant.timezone ?? "Asia/Kolkata",
+      logoUrl: restaurant.logoUrl ?? "",
     });
     initialised[1](true);
   }
@@ -259,6 +286,9 @@ function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
   });
   return (
     <StepShell>
+      <Field label="Restaurant name" required>
+        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Khana Lagao Cafe" />
+      </Field>
       <Field label="Phone number" required>
         <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" />
       </Field>
@@ -277,10 +307,25 @@ function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
           </select>
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Timezone">
+          <select value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+            <option value="Asia/Dubai">Asia/Dubai</option>
+            <option value="Asia/Singapore">Asia/Singapore</option>
+            <option value="Europe/London">Europe/London</option>
+            <option value="America/New_York">America/New_York</option>
+          </select>
+        </Field>
+        <Field label="Logo URL (optional)">
+          <Input value={form.logoUrl} onChange={e => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://…/logo.png" />
+        </Field>
+      </div>
       <Field label="Short description (optional)">
         <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Family-style North Indian, dine-in & takeaway." rows={2} />
       </Field>
-      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.phone || !form.address || !form.city}>
+      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name || !form.phone || !form.address || !form.city}>
         {mut.isPending ? "Saving…" : "Save profile"}
       </Button>
     </StepShell>
@@ -313,7 +358,9 @@ function BranchStep({ restaurantId, onDone }: { restaurantId: number; onDone: ()
   });
   return (
     <StepShell>
-      <p className="text-sm text-muted-foreground">Add an additional location. Skip this step if you only run one place.</p>
+      <p className="text-sm text-muted-foreground">
+        We've already created your <strong>Main</strong> branch. Add another location only if you run multiple outlets — otherwise just hit <em>Skip</em>.
+      </p>
       {branches.length > 0 && (
         <div className="space-y-1.5">
           {branches.map(b => (

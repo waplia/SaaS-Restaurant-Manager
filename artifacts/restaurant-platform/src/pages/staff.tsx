@@ -1290,7 +1290,8 @@ function TeamTab({
             {staff.length === 0 && (
               <tr><td colSpan={6} className="text-center py-16 text-muted-foreground">
                 <User className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">No staff found</p>
+                <p className="text-sm mb-2">No staff found</p>
+                <a href="/onboarding" className="text-xs font-medium text-primary hover:underline">Invite your first team member →</a>
               </td></tr>
             )}
           </tbody>

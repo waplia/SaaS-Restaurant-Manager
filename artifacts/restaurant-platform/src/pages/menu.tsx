@@ -815,7 +815,12 @@ export default function MenuPage() {
                 </div>
               </div>
             ))}
-            {categories.length === 0 && activeMenuId && <p className="text-xs text-muted-foreground text-center py-3">No categories yet</p>}
+            {categories.length === 0 && activeMenuId && (
+              <div className="text-center py-3 space-y-1">
+                <p className="text-xs text-muted-foreground">No categories yet</p>
+                <a href="/onboarding" className="text-xs font-medium text-primary hover:underline">Use the setup wizard →</a>
+              </div>
+            )}
             {!activeMenuId && <p className="text-xs text-muted-foreground text-center py-3">Select a menu first</p>}
           </div>
 

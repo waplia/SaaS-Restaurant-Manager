@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, tenantsTable, restaurantsTable, subscriptionPlansTable } from "../lib/db";
+import { db, usersTable, tenantsTable, restaurantsTable, subscriptionPlansTable, branchesTable } from "../lib/db";
 import {
   hashPassword,
   comparePassword,
@@ -63,6 +63,15 @@ router.post("/auth/register", async (req, res) => {
     name: restaurantName,
     slug: `${baseSlug}-r-${uniqueSuffix}`,
   }).returning();
+
+  // Auto-create a default "Main" branch so trial/starter owners can run a
+  // single-location restaurant without ever opening the multi-branch step.
+  await db.insert(branchesTable).values({
+    restaurantId: restaurant.id,
+    name: "Main",
+    isMain: true,
+    isActive: true,
+  });
 
   const passwordHash = await hashPassword(password);
   const [user] = await db.insert(usersTable).values({
