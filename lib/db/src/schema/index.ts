@@ -36,3 +36,4 @@ export * from "./ai-khana-ops";
 export * from "./ai-upsell";
 export * from "./ai-sales-insights";
 export * from "./fraud";
+export * from "./menu-pricing";

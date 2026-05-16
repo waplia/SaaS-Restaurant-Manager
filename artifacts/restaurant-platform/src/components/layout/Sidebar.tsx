@@ -31,6 +31,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
   { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
+  { kind: "link", href: "/menu/pricing-optimizer", label: "Cost & Price Optimizer", icon: Flame, roles: ["owner", "manager"] },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },

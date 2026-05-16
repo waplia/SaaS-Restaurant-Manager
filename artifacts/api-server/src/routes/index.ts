@@ -56,6 +56,7 @@ import adminAiRouter from "./admin-ai";
 import adminAiCreditsRouter from "./admin-ai-credits";
 import aiRechargeRouter from "./ai-recharge";
 import fraudAlertsRouter from "./fraud-alerts";
+import menuPricingRouter from "./menu-pricing";
 
 const router: IRouter = Router();
 
@@ -130,5 +131,6 @@ router.use(adminAiRouter);
 router.use(adminAiCreditsRouter);
 router.use(aiRechargeRouter);
 router.use(fraudAlertsRouter);
+router.use(menuPricingRouter);
 
 export default router;
