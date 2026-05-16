@@ -6,6 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf,
+  Soup,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,16 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/food-courts", label: "Overview", icon: LayoutDashboard, roles: ["owner", "manager", "food_court_owner"] },
       { kind: "link", href: "/food-court/my-counter", label: "My Counter", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "staff"] },
+    ],
+  },
+  {
+    kind: "group", key: "tiffin", label: "Tiffin", icon: Soup,
+    children: [
+      { kind: "link", href: "/tiffin/plans", label: "Plans", icon: UtensilsCrossed, roles: ["owner", "manager"] },
+      { kind: "link", href: "/tiffin/subscriptions", label: "Subscriptions", icon: Users, roles: ["owner", "manager", "cashier"] },
+      { kind: "link", href: "/tiffin/deliveries", label: "Today's Deliveries", icon: Truck, roles: ["owner", "manager", "delivery_executive"] },
+      { kind: "link", href: "/tiffin/billing", label: "Billing", icon: Receipt, roles: ["owner", "manager"] },
+      { kind: "link", href: "/tiffin/customers", label: "Customer History", icon: History, roles: ["owner", "manager"] },
     ],
   },
   {

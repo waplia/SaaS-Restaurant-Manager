@@ -108,6 +108,11 @@ import FoodCourtSettlementsPage from "@/pages/food-court-settlements";
 import FoodCourtReportsPage from "@/pages/food-court-reports";
 import FoodCourtMyCounterPage from "@/pages/food-court-my-counter";
 import MembershipsPage from "@/pages/memberships";
+import TiffinPlansPage from "@/pages/tiffin-plans";
+import TiffinSubscriptionsPage from "@/pages/tiffin-subscriptions";
+import TiffinDeliveriesPage from "@/pages/tiffin-deliveries";
+import TiffinBillingPage from "@/pages/tiffin-billing";
+import TiffinCustomerHistoryPage from "@/pages/tiffin-customer-history";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -213,6 +218,11 @@ function Router() {
       <Route path="/sustainability" component={() => <RoleProtectedRoute component={SustainabilityPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
+      <Route path="/tiffin/plans" component={() => <RoleProtectedRoute component={TiffinPlansPage} allow={["owner", "manager"]} />} />
+      <Route path="/tiffin/subscriptions" component={() => <RoleProtectedRoute component={TiffinSubscriptionsPage} allow={["owner", "manager", "cashier"]} />} />
+      <Route path="/tiffin/deliveries" component={() => <RoleProtectedRoute component={TiffinDeliveriesPage} allow={["owner", "manager", "delivery_executive"]} />} />
+      <Route path="/tiffin/billing" component={() => <RoleProtectedRoute component={TiffinBillingPage} allow={["owner", "manager"]} />} />
+      <Route path="/tiffin/customers" component={() => <RoleProtectedRoute component={TiffinCustomerHistoryPage} allow={["owner", "manager"]} />} />
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />

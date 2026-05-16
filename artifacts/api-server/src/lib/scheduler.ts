@@ -476,6 +476,24 @@ export function startScheduler(): void {
     }
   });
 
+  registerCron("tiffin_billing_reminders", "30 9 * * *", "Daily 09:30 IST: tiffin invoice reminders T-3, T-0, T+2");
+  trackCron("tiffin_billing_reminders", "30 9 * * *", async () => {
+    try {
+      const { runTiffinBillingRemindersTick } = await import("../routes/tiffin-cron");
+      const r = await runTiffinBillingRemindersTick();
+      logger.info({ ...r }, "[tiffin] billing reminders tick complete");
+    } catch (err) { logger.error({ err }, "[tiffin] billing reminders failed"); }
+  });
+
+  registerCron("tiffin_monthly_invoices", "0 1 1 * *", "Monthly 01:00 IST on the 1st: generate prior-month tiffin invoices");
+  trackCron("tiffin_monthly_invoices", "0 1 1 * *", async () => {
+    try {
+      const { runTiffinMonthlyInvoicesTick } = await import("../routes/tiffin-cron");
+      const r = await runTiffinMonthlyInvoicesTick();
+      logger.info({ ...r }, "[tiffin] monthly invoice generation complete");
+    } catch (err) { logger.error({ err }, "[tiffin] monthly invoices failed"); }
+  });
+
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute, event payment reminders at 09:00 IST");
 }
 

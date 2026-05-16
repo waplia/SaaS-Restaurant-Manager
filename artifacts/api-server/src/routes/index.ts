@@ -81,6 +81,7 @@ import bakeryRouter, { bakeryPublicRouter } from "./bakery";
 import mealPlansRouter from "./meal-plans";
 import hotelRouter from "./hotel";
 import sustainabilityRouter from "./sustainability";
+import tiffinRouter from "./tiffin";
 
 const router: IRouter = Router();
 
@@ -181,5 +182,6 @@ router.use(bakeryRouter);
 router.use(mealPlansRouter);
 router.use(hotelRouter);
 router.use(sustainabilityRouter);
+router.use(tiffinRouter);
 
 export default router;

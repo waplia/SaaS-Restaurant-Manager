@@ -11,6 +11,7 @@ export default function DeliveryLayout() {
       }}
     >
       <Stack.Screen name="my-deliveries" options={{ headerShown: false }} />
+      <Stack.Screen name="tiffin-route" options={{ headerShown: false }} />
     </Stack>
   );
 }
