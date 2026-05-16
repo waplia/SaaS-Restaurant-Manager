@@ -20,6 +20,7 @@ export interface ExpenseCategory {
   name: string;
   color: string;
   icon: string;
+  categoryKind: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -27,6 +28,7 @@ export interface ExpenseCategory {
 export interface Expense {
   id: number;
   restaurantId: number;
+  branchId: number | null;
   categoryId: number;
   amount: string;
   expenseDate: string;
@@ -36,6 +38,11 @@ export interface Expense {
   receiptUrl: string | null;
   recurringTemplateId: number | null;
   createdBy: number | null;
+  status: string;
+  expenseType: string;
+  approvedByUserId: number | null;
+  approvedAt: string | null;
+  rejectionReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +81,7 @@ export interface CreateExpenseInput {
   paymentMethod?: string;
   notes?: string;
   receiptUrl?: string;
+  branchId?: number | null;
 }
 
 export interface CreateRecurringExpenseInput {

@@ -2140,7 +2140,7 @@ export function useCreateExpenseCategory() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; color?: string; icon?: string }) =>
+    mutationFn: (data: { name: string; color?: string; icon?: string; categoryKind?: string }) =>
       apiPost(`/restaurants/${RESTAURANT_ID}/expense-categories`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
   });
@@ -2150,9 +2150,52 @@ export function useUpdateExpenseCategory() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number; name?: string; color?: string; icon?: string; isActive?: boolean }) =>
+    mutationFn: ({ id, ...data }: { id: number; name?: string; color?: string; icon?: string; categoryKind?: string; isActive?: boolean }) =>
       apiPatch(`/restaurants/${RESTAURANT_ID}/expense-categories/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
+  });
+}
+
+export function useExpenses(params?: {
+  from?: string; to?: string; categoryId?: number; search?: string; page?: number; status?: string;
+}) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.categoryId) q.set("categoryId", String(params.categoryId));
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.status) q.set("status", params.status);
+  return useQuery({
+    queryKey: ["expenses", RESTAURANT_ID, params],
+    queryFn: () => apiGet<import("./types").ExpensesResponse>(`/restaurants/${RESTAURANT_ID}/expenses?${q}`),
+  });
+}
+
+export function useApproveExpense() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/expenses/${id}/approve`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-summary"] });
+      qc.invalidateQueries({ queryKey: ["pnl"] });
+    },
+  });
+}
+
+export function useRejectExpense() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/expenses/${id}/reject`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-summary"] });
+    },
   });
 }
 
@@ -2162,20 +2205,6 @@ export function useDeleteExpenseCategory() {
   return useMutation({
     mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/expense-categories/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["expense-categories"] }),
-  });
-}
-
-export function useExpenses(params?: { from?: string; to?: string; categoryId?: number; search?: string; page?: number }) {
-  const RESTAURANT_ID = useRestaurantId();
-  const q = new URLSearchParams();
-  if (params?.from) q.set("from", params.from);
-  if (params?.to) q.set("to", params.to);
-  if (params?.categoryId) q.set("categoryId", String(params.categoryId));
-  if (params?.search) q.set("search", params.search);
-  if (params?.page) q.set("page", String(params.page));
-  return useQuery({
-    queryKey: ["expenses", RESTAURANT_ID, params],
-    queryFn: () => apiGet<import("./types").ExpensesResponse>(`/restaurants/${RESTAURANT_ID}/expenses?${q}`),
   });
 }
 

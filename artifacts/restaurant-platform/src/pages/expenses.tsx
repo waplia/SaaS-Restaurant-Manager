@@ -9,11 +9,12 @@ import {
   useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense,
   useExpenseCategories, useCreateExpenseCategory, useUpdateExpenseCategory, useDeleteExpenseCategory,
   useRecurringExpenses, useCreateRecurringExpense, useUpdateRecurringExpense, useDeleteRecurringExpense,
-  useExpenseSummary,
+  useExpenseSummary, useApproveExpense, useRejectExpense,
 } from "@/lib/hooks";
 import { apiPost, getApiUrl } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
-import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage, ShoppingBag, Utensils, Zap, Wifi, Wrench, Truck, Building2, Sparkles, FileText, CreditCard, Package, Users } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Plus, Pencil, Trash2, X, Receipt, RefreshCw, Tag, Search, Calendar, Upload, ChevronLeft, ChevronRight, FileImage, ShoppingBag, Utensils, Zap, Wifi, Wrench, Truck, Building2, Sparkles, FileText, CreditCard, Package, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, RecurringExpense } from "@/lib/types";
 
@@ -77,13 +78,39 @@ function receiptHref(rid: number, objectPath: string | null | undefined): string
   return objectPath;
 }
 
+const CATEGORY_KINDS: Array<{ value: string; label: string; help: string }> = [
+  { value: "fixed", label: "Fixed cost", help: "Rent, insurance, fixed salaries" },
+  { value: "variable", label: "Variable cost", help: "Utilities, supplies that scale with sales" },
+  { value: "cogs", label: "Cost of goods", help: "Ingredients, packaging directly tied to a sale" },
+  { value: "marketing", label: "Marketing", help: "Ads, promotions, partnerships" },
+  { value: "other", label: "Other", help: "Anything that doesn't fit the buckets above" },
+];
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg: Record<string, { cls: string; Icon: typeof Clock; label: string }> = {
+    pending: { cls: "bg-amber-50 text-amber-700 border-amber-200", Icon: Clock, label: "Pending" },
+    approved: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2, label: "Approved" },
+    rejected: { cls: "bg-red-50 text-red-700 border-red-200", Icon: XCircle, label: "Rejected" },
+  };
+  const c = cfg[status] ?? cfg.pending;
+  const Icon = c.Icon;
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border", c.cls)}>
+      <Icon className="w-3 h-3" />{c.label}
+    </span>
+  );
+}
+
 function ExpensesTab() {
   const rid = useRestaurantId();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canApprove = user?.role === "owner" || user?.role === "manager" || user?.isSuperAdmin;
   const [from, setFrom] = useState(monthAgoStr());
   const [to, setTo] = useState(todayStr());
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -91,11 +118,24 @@ function ExpensesTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: cats = [] } = useExpenseCategories();
-  const { data: exp } = useExpenses({ from, to, categoryId: categoryId || undefined, search: search || undefined, page });
+  const { data: exp } = useExpenses({ from, to, categoryId: categoryId || undefined, search: search || undefined, page, status: statusFilter || undefined });
   const { data: summary } = useExpenseSummary({ from, to });
   const create = useCreateExpense();
   const update = useUpdateExpense();
   const del = useDeleteExpense();
+  const approve = useApproveExpense();
+  const reject = useRejectExpense();
+
+  const handleApprove = async (e: Expense) => {
+    try { await approve.mutateAsync(e.id); toast({ title: "Expense approved" }); }
+    catch (err) { toast({ title: "Failed to approve", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const handleReject = async (e: Expense) => {
+    const reason = prompt("Reason for rejecting this expense?");
+    if (!reason) return;
+    try { await reject.mutateAsync({ id: e.id, reason }); toast({ title: "Expense rejected" }); }
+    catch (err) { toast({ title: "Failed to reject", description: (err as Error).message, variant: "destructive" }); }
+  };
 
   const catMap = useMemo(() => new Map(cats.map(c => [c.id, c])), [cats]);
   const items = exp?.data ?? [];
@@ -195,6 +235,13 @@ function ExpensesTab() {
           <option value="">All Categories</option>
           {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="h-9 rounded-md border border-border bg-background px-3 text-sm capitalize">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search payee or notes…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
@@ -212,6 +259,7 @@ function ExpensesTab() {
               <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Category</th>
               <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Payee</th>
               <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Method</th>
+              <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Status</th>
               <th className="text-right px-4 py-2.5 text-muted-foreground font-medium">Amount</th>
               <th className="text-right px-4 py-2.5 text-muted-foreground font-medium">Actions</th>
             </tr>
@@ -231,9 +279,25 @@ function ExpensesTab() {
                   </td>
                   <td className="px-4 py-2.5 text-foreground">{e.payee ?? "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground capitalize">{e.paymentMethod ?? "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <StatusBadge status={e.status} />
+                    {e.status === "rejected" && e.rejectionReason && (
+                      <span className="block text-[10px] text-muted-foreground mt-0.5 max-w-[180px] truncate" title={e.rejectionReason}>{e.rejectionReason}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-semibold text-foreground">{fmtMoney(e.amount)}</td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="inline-flex gap-1">
+                      {canApprove && e.status === "pending" && e.createdBy !== user?.id && (
+                        <>
+                          <button onClick={() => handleApprove(e)} title="Approve" className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleReject(e)} title="Reject" className="p-1.5 text-red-600 hover:bg-red-50 rounded-md">
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                       <button onClick={() => startEdit(e)} className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -246,7 +310,7 @@ function ExpensesTab() {
               );
             })}
             {items.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No expenses in this range</td></tr>
+              <tr><td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">No expenses in this range</td></tr>
             )}
           </tbody>
         </table>
@@ -567,19 +631,19 @@ function CategoriesTab() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
-  const [form, setForm] = useState<{ name: string; color: string; icon: string }>({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key });
+  const [form, setForm] = useState<{ name: string; color: string; icon: string; categoryKind: string }>({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key, categoryKind: "variable" });
 
   const handleSubmit = async () => {
     if (!form.name) { toast({ title: "Name required", variant: "destructive" }); return; }
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, name: form.name, color: form.color, icon: form.icon });
+        await update.mutateAsync({ id: editing.id, name: form.name, color: form.color, icon: form.icon, categoryKind: form.categoryKind });
         toast({ title: "Category updated" });
       } else {
-        await create.mutateAsync({ name: form.name, color: form.color, icon: form.icon });
+        await create.mutateAsync({ name: form.name, color: form.color, icon: form.icon, categoryKind: form.categoryKind });
         toast({ title: "Category created" });
       }
-      setShowAdd(false); setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key });
+      setShowAdd(false); setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key, categoryKind: "variable" });
     } catch { toast({ title: "Failed to save", variant: "destructive" }); }
   };
 
@@ -593,7 +657,7 @@ function CategoriesTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-sm text-muted-foreground">Group your expenses for clearer reporting.</p>
-        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key }); setShowAdd(true); }}>
+        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", color: PALETTE[0], icon: ICON_OPTIONS[0].key, categoryKind: "variable" }); setShowAdd(true); }}>
           <Plus className="w-4 h-4 mr-1.5" /> New Category
         </Button>
       </div>
@@ -609,7 +673,7 @@ function CategoriesTab() {
               <p className="font-medium text-foreground truncate">{c.name}</p>
             </div>
             <div className="flex flex-col gap-1">
-              <button onClick={() => { setEditing(c); setForm({ name: c.name, color: c.color, icon: c.icon ?? ICON_OPTIONS[0].key }); setShowAdd(true); }} className="p-1 text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setEditing(c); setForm({ name: c.name, color: c.color, icon: c.icon ?? ICON_OPTIONS[0].key, categoryKind: c.categoryKind ?? "variable" }); setShowAdd(true); }} className="p-1 text-muted-foreground hover:text-foreground">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => handleDelete(c)} className="p-1 text-muted-foreground hover:text-destructive">
@@ -632,6 +696,14 @@ function CategoriesTab() {
               <div>
                 <Label>Name</Label>
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label>Cost type (for P&amp;L)</Label>
+                <select value={form.categoryKind} onChange={e => setForm({ ...form, categoryKind: e.target.value })}
+                  className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm mt-1">
+                  {CATEGORY_KINDS.map(k => <option key={k.value} value={k.value}>{k.label} — {k.help}</option>)}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Determines how this category is grouped in the P&amp;L statement.</p>
               </div>
               <div>
                 <Label>Color</Label>

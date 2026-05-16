@@ -563,6 +563,28 @@ export function startScheduler(): void {
     } catch (err) { logger.error({ err }, "[tiffin] monthly invoices failed"); }
   });
 
+  // Smart P&L (Task #146): warm yesterday's P&L for every active restaurant
+  // with the smart_pnl plan flag. We do not persist a snapshot — the
+  // computation is fast enough that this just primes any downstream caches
+  // and surfaces compute errors in nightly logs rather than at user request.
+  registerCron("pnl_nightly_snapshot", "30 3 * * *", "Smart P&L nightly warm-up at 03:30 IST");
+  trackCron("pnl_nightly_snapshot", "30 3 * * *", async () => {
+    try {
+      const { computePnl } = await import("./pnl");
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+      const from = new Date(yesterday); from.setHours(0, 0, 0, 0);
+      const to = new Date(yesterday); to.setHours(23, 59, 59, 999);
+      const restaurants = await db.select({ id: restaurantsTable.id })
+        .from(restaurantsTable).where(eq(restaurantsTable.isActive, true));
+      let ok = 0, failed = 0;
+      for (const r of restaurants) {
+        try { await computePnl(r.id, { from, to }); ok++; }
+        catch (err) { failed++; logger.warn({ err, restaurantId: r.id }, "[pnl] nightly compute failed"); }
+      }
+      logger.info({ ok, failed, total: restaurants.length }, "[pnl] nightly warm-up complete");
+    } catch (err) { logger.error({ err }, "[pnl] nightly warm-up failed"); }
+  });
+
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute, event payment reminders at 09:00 IST");
 }
 
