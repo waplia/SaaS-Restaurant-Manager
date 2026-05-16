@@ -1852,7 +1852,7 @@ const LOYALTY2_DEFAULTS: Loyalty2Cfg = {
 function LoyaltySection() {
   const [tab, setTab] = useState<Loyalty2Tab>("Core");
   return (
-    <SettingForm<Loyalty2Cfg> section="loyalty" defaults={LOYALTY2_DEFAULTS}>
+    <SettingForm section="loyalty" defaults={LOYALTY2_DEFAULTS}>
       {(s, set) => (
         <>
           <div className="flex flex-wrap gap-1.5 border-b border-border pb-2">
