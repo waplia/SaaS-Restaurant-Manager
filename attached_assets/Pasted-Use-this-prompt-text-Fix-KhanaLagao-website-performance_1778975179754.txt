@@ -1,0 +1,416 @@
+Use this prompt:
+
+```text
+Fix KhanaLagao website performance and loading speed urgently.
+
+Current issue:
+PageSpeed performance is very low and website loading feels slow. The site may have too much JavaScript, heavy images, large animations, large sections, unused components, and slow rendering. I want the website to be very fast, lightweight, optimized, and production-ready without changing the visual design too much.
+
+PageSpeed URL checked:
+https://pagespeed.web.dev/analysis/https-khanalagao-com/kfw1xq18ok?form_factor=desktop
+
+Important:
+- Do not break the website design.
+- Do not remove important content.
+- Do not break public pages, admin, dashboard, login, or backend.
+- Optimize public website performance first.
+- Keep the premium KhanaLagao design but make it much faster.
+- Focus on desktop and mobile performance.
+- Reduce loading time, JavaScript bundle size, image size, layout shift, and unnecessary API calls.
+
+Brand:
+KhanaLagao
+
+Goal:
+Improve PageSpeed score, reduce load time, improve Core Web Vitals, and make website feel instant.
+
+====================================================
+1. FIRST PERFORMANCE AUDIT
+====================================================
+
+First audit the current website and identify:
+
+- Largest JavaScript bundles
+- Unused JavaScript
+- Unused CSS
+- Heavy images
+- Unoptimized images
+- Large hero graphics
+- Large animation libraries
+- Slow third-party scripts
+- Render-blocking resources
+- Too many client components
+- Too much hydration
+- Layout shift issues
+- Slow fonts
+- API calls on public pages
+- Components loading unnecessarily
+- Duplicate components
+- Heavy icons imported fully
+- Carousels/animations loading globally
+- Pages loading admin/dashboard code in public bundle
+- Any console errors
+
+After audit, list:
+1. Biggest performance issues
+2. Files/components causing them
+3. Fixes required
+4. Expected performance improvement
+
+Then implement fixes.
+
+====================================================
+2. JAVASCRIPT OPTIMIZATION
+====================================================
+
+Reduce JavaScript load.
+
+- Remove unused JS.
+- Remove unused dependencies.
+- Do not load admin/dashboard code on public website.
+- Do not load all page components globally.
+- Use route-level code splitting.
+- Lazy load heavy sections.
+- Lazy load modals, carousels, charts, animations, and mockups.
+- Convert static website sections to server-rendered/static components where possible.
+- Avoid making every section a client component.
+- Use client components only where interactivity is required.
+- Remove unnecessary useEffect/useState from static sections.
+- Replace heavy animation libraries where not needed.
+- Disable complex animations on mobile.
+- Avoid loading full icon libraries. Import only used icons.
+- Tree-shake imports properly.
+- Remove duplicate components and repeated data.
+
+If using Next.js:
+- Use dynamic imports for heavy components.
+- Use next/dynamic for carousels, charts, animations, and mockups.
+- Use server components for static content.
+- Use next/image for all images.
+- Use next/font for fonts.
+- Enable production build optimization.
+- Check bundle analyzer if available.
+
+====================================================
+3. IMAGE OPTIMIZATION
+====================================================
+
+Optimize all images and visuals.
+
+- Convert large PNG/JPG images to WebP/AVIF where possible.
+- Compress images.
+- Use responsive image sizes.
+- Use lazy loading for below-the-fold images.
+- Preload only the main hero image if required.
+- Do not preload many images.
+- Use width/height to prevent layout shift.
+- Use next/image or optimized image component.
+- Replace heavy background images with CSS gradients where possible.
+- Use SVG icons for simple graphics.
+- Avoid huge dashboard mockup images if they can be built with lightweight HTML/CSS cards.
+- Use lower-size mobile images for mobile screens.
+- Remove broken/external image URLs.
+- Add proper alt text.
+
+Hero section:
+- Make hero mockup lightweight.
+- Do not use multiple large images in hero.
+- Floating metric cards should be CSS/HTML, not heavy images.
+- Keep only necessary visuals above the fold.
+
+====================================================
+4. CSS OPTIMIZATION
+====================================================
+
+- Remove unused CSS.
+- Avoid loading large global CSS unnecessarily.
+- Avoid duplicate Tailwind classes if possible.
+- Purge unused Tailwind styles.
+- Minify CSS.
+- Avoid heavy box shadows/blur on many elements.
+- Reduce glassmorphism blur effects if they hurt performance.
+- Keep gradients lightweight.
+- Avoid large fixed background effects on mobile.
+
+====================================================
+5. FONT OPTIMIZATION
+====================================================
+
+- Use only 1 or 2 font families.
+- Use limited font weights.
+- Use next/font or local optimized fonts if using Next.js.
+- Enable font-display swap.
+- Preload only required fonts.
+- Remove unused font imports.
+- Avoid loading fonts from multiple external providers.
+
+====================================================
+6. THIRD-PARTY SCRIPT OPTIMIZATION
+====================================================
+
+Audit third-party scripts.
+
+- Remove unnecessary scripts.
+- Delay analytics scripts.
+- Load chat widgets only after user interaction.
+- Load tracking pixels after page is interactive.
+- Do not load heavy scripts on every page if not needed.
+- Use defer/async.
+- Avoid loading Google Maps directly on Contact page until user clicks “View Map”.
+- Lazy load video embeds.
+- Lazy load YouTube/iframe embeds.
+- Do not load animation libraries globally.
+
+====================================================
+7. ABOVE-THE-FOLD OPTIMIZATION
+====================================================
+
+Improve first screen loading.
+
+- Keep hero lightweight.
+- Inline critical CSS if needed.
+- Avoid heavy animations above the fold.
+- Avoid large image downloads above the fold.
+- Reduce layout shift.
+- Preload only critical hero asset.
+- Use static text and lightweight HTML cards.
+- Delay below-the-fold sections.
+- Ensure header loads fast.
+- Avoid blocking scripts before hero.
+
+Target:
+- Fast first contentful paint
+- Fast largest contentful paint
+- Low total blocking time
+- Low cumulative layout shift
+
+====================================================
+8. COMPONENT LAZY LOADING
+====================================================
+
+Lazy load heavy homepage sections:
+
+- Testimonials
+- Feature directory
+- Solution grids
+- Pricing preview
+- FAQ
+- Blog cards
+- Large mockup sections
+- Animation-heavy sections
+- Carousels
+- Charts
+- Comparison tables
+
+Use intersection observer or dynamic imports if needed.
+
+On mobile:
+- Use accordions/tabs so not everything renders at once.
+- Do not render all hidden tab content until selected if possible.
+
+====================================================
+9. ROUTE OPTIMIZATION
+====================================================
+
+Each page should load only what it needs.
+
+- Public website routes should not import dashboard/admin modules.
+- Feature pages should use shared lightweight template.
+- Do not load all feature page content on every page.
+- Use content data per route.
+- Use static generation if possible.
+- Cache static pages.
+- Use dynamic imports for heavy visuals.
+
+If using Next.js:
+- Use static generation for marketing pages.
+- Use metadata API properly.
+- Use generateStaticParams for static feature/solution pages if suitable.
+- Avoid forcing dynamic rendering unless required.
+- Avoid unnecessary server fetches on static pages.
+
+====================================================
+10. API / DATA LOADING OPTIMIZATION
+====================================================
+
+Public website should not make unnecessary API calls.
+
+- Static website content should be bundled/static where possible.
+- CMS data should be cached.
+- Lead forms should call API only on submit.
+- Do not fetch admin/dashboard data on public pages.
+- Do not fetch all blogs/features if only few shown.
+- Paginate blog listing.
+- Cache repeated requests.
+- Avoid client-side fetching for static content where possible.
+
+====================================================
+11. MOBILE PERFORMANCE
+====================================================
+
+Mobile performance is very important.
+
+- Reduce animations on mobile.
+- Use smaller images on mobile.
+- Avoid rendering all feature cards vertically.
+- Use tabs/accordions/carousels.
+- Reduce DOM size.
+- Reduce section padding.
+- Avoid huge page height where possible.
+- Lazy render below-the-fold content.
+- Avoid heavy blur/shadow effects on mobile.
+- Keep mobile menu lightweight.
+
+====================================================
+12. PAGE-SPECIFIC OPTIMIZATION
+====================================================
+
+Optimize these pages:
+
+Homepage:
+- Hero must load fast.
+- Dashboard mockup should be lightweight.
+- Lazy load below sections.
+- Compress all visuals.
+
+Features page:
+- Do not render all 60+ feature cards at once on mobile.
+- Use category tabs.
+- Lazy render selected category.
+- Keep cards compact.
+
+Feature detail pages:
+- Use shared optimized template.
+- Lazy load related sections and FAQs.
+
+Khana AI pages:
+- Keep gradient/animation lightweight.
+- Lazy load AI mockups.
+
+Pricing page:
+- Optimize comparison table.
+- Use accordion on mobile.
+- Avoid heavy table rendering.
+
+Blog:
+- Optimize images.
+- Lazy load related posts.
+
+Contact page:
+- Lazy load map.
+- Do not load maps by default.
+
+Legal pages:
+- Should be mostly static and very fast.
+
+====================================================
+13. BUILD / SERVER OPTIMIZATION
+====================================================
+
+Check production build.
+
+- Run production build.
+- Fix build warnings.
+- Remove source maps from production if not needed.
+- Enable compression: gzip or Brotli.
+- Enable caching headers for static assets.
+- Use CDN/static caching if available.
+- Set proper cache-control for images, JS, CSS.
+- Ensure server serves optimized assets.
+- Use PM2/Nginx production config if deployed on VPS.
+
+Nginx suggestions:
+- Enable gzip/Brotli if available.
+- Cache static assets.
+- Serve images with proper headers.
+- Use HTTP/2 if SSL enabled.
+
+====================================================
+14. PERFORMANCE TARGETS
+====================================================
+
+Target scores:
+
+Desktop:
+- Performance: 90+
+- Accessibility: 90+
+- Best Practices: 90+
+- SEO: 95+
+
+Mobile:
+- Performance: 75+ minimum, ideally 85+
+- Accessibility: 90+
+- Best Practices: 90+
+- SEO: 95+
+
+Core Web Vitals targets:
+- LCP under 2.5s
+- CLS under 0.1
+- INP/TBT low
+- FCP under 1.8s
+
+====================================================
+15. TESTING
+====================================================
+
+After optimization:
+
+- Run production build.
+- Test homepage.
+- Test all public pages.
+- Test mobile and desktop.
+- Check console errors.
+- Check network waterfall.
+- Check bundle size.
+- Check image sizes.
+- Check Lighthouse/PageSpeed again.
+- Confirm no design is broken.
+- Confirm all header/footer links still work.
+- Confirm forms still work.
+- Confirm admin/dashboard still works.
+
+Test pages:
+- /
+- /platform
+- /features
+- /pricing
+- /khana-ai
+- /book-demo
+- /contact
+- /blog
+- feature detail pages
+- solution pages
+- legal pages
+
+====================================================
+16. FINAL OUTPUT
+====================================================
+
+After fixing, provide a short report:
+
+1. What was causing slow performance
+2. What files/components were optimized
+3. JavaScript bundle changes
+4. Image optimization changes
+5. CSS/font changes
+6. Third-party script changes
+7. Pages tested
+8. Remaining recommendations
+9. New expected PageSpeed score
+
+Do not mark complete until:
+- Website feels visibly faster.
+- Initial loading is reduced.
+- Public pages do not load unnecessary heavy JS.
+- Images are optimized.
+- No broken design.
+- No broken routes.
+- No console errors.
+- PageSpeed score improves significantly.
+```
+
+Add this strict line also:
+
+```text
+Do not just visually redesign. Optimize the actual performance: reduce JS, optimize images, lazy-load heavy sections, remove unused code, cache static assets, and ensure the public website does not load admin/dashboard code.
+```
