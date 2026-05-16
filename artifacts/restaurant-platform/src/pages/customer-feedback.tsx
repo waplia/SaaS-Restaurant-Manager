@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+
 import { useToast } from "@/hooks/use-toast";
 
 interface QrConfig {
@@ -25,26 +26,23 @@ const POSITIVE_TAGS = [
   "Good service",
   "Friendly staff",
   "Clean place",
-  "Good ambience",
+  "Nice ambience",
   "Value for money",
   "Fast service",
+  "Would visit again",
 ];
 const CRITICAL_TAGS = [
   "Slow service",
-  "Food quality issue",
-  "Staff behavior",
+  "Food quality",
+  "Staff behaviour",
   "Billing issue",
-  "Hygiene issue",
-  "Delivery delay",
-  "Price concern",
+  "Hygiene",
+  "Wait time",
+  "Pricing",
+  "Other",
 ];
 
-type Phase = "rate" | "tags" | "draft" | "done";
-
-function newSessionToken() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
+type Phase = "rate" | "tags" | "draft" | "private" | "done";
 
 export default function CustomerFeedbackPage() {
   const [, params] = useRoute<{ qrCode: string }>("/review/:qrCode");
@@ -56,26 +54,24 @@ export default function CustomerFeedbackPage() {
   const [rating, setRating] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("rate");
-  // aiAssistAvailable comes from /rate (QR config + Google URL). When false the
-  // UI never offers Generate/Regenerate; it goes straight to a manual draft.
-  const [aiAssistAvailable, setAiAssistAvailable] = useState(false);
+  const [aiAssistEnabled, setAiAssistEnabled] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [comment, setComment] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
   const [draftEdited, setDraftEdited] = useState("");
-  const [aiDelivered, setAiDelivered] = useState(false);
-  const [aiUnavailableReason, setAiUnavailableReason] = useState<string | null>(null);
-  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
+  const [feedbackId, setFeedbackId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
-  const [savingManual, setSavingManual] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [draftFailed, setDraftFailed] = useState<string | null>(null);
 
   useEffect(() => {
     if (!qrCode) return;
     fetch(`/api/public/review-qr/${qrCode}`)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error("Not found")))
-      .then((c: QrConfig) => { setConfig(c); setGoogleReviewUrl(c.googleReviewUrl); })
+      .then(setConfig)
       .catch(() => setError("This review link is no longer active."));
   }, [qrCode]);
 
@@ -86,14 +82,15 @@ export default function CustomerFeedbackPage() {
 
   const tagOptions = isPositive ? POSITIVE_TAGS : CRITICAL_TAGS;
 
-  async function pickRating(stars: number) {
+  async function submitRating(stars: number) {
     setRating(stars);
     setTags([]);
     setComment("");
+    setDraft(null);
     setDraftEdited("");
-    setAiDelivered(false);
-    setAiUnavailableReason(null);
+    setFeedbackId(null);
     setCopied(false);
+    setDraftFailed(null);
     try {
       const res = await fetch(`/api/public/review-qr/${qrCode}/rate`, {
         method: "POST",
@@ -101,10 +98,9 @@ export default function CustomerFeedbackPage() {
         body: JSON.stringify({ rating: stars, sessionToken }),
       });
       const data = await res.json();
-      setAiAssistAvailable(!!data.aiAssistEnabled);
-      if (typeof data.googleReviewUrl === "string") setGoogleReviewUrl(data.googleReviewUrl);
+      setAiAssistEnabled(!!data.aiAssistEnabled);
     } catch {
-      setAiAssistAvailable(false);
+      setAiAssistEnabled(false);
     }
     setPhase("tags");
   }
@@ -113,53 +109,54 @@ export default function CustomerFeedbackPage() {
     setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag].slice(0, 5));
   }
 
-  // Persist tags + comment + name + phone without spending AI credits. Used
-  // when ai_assist is off — keeps the feedback row in sync with what the
-  // customer typed even though we won't ask the model for a draft.
-  async function saveTagsAndContinue() {
+  async function continueFromTags() {
+    if (!rating || !config) return;
+    if (isPositive && config.googleReviewUrl && aiAssistEnabled) {
+      await generateDraft();
+    } else if (isPositive && config.googleReviewUrl) {
+      // Positive but AI disabled — just send to Google after capturing tags as feedback
+      await persistPositiveWithoutDraft();
+    } else {
+      setPhase("private");
+    }
+  }
+
+  async function persistPositiveWithoutDraft() {
     if (!rating) return;
-    setSavingManual(true);
     try {
-      // Re-call /rate with same rating just to ensure the row exists before
-      // generate-draft (no double counting — server only emits a scan event
-      // once per session for new rows).
-      // Then call /generate-draft which will short-circuit with ai_assist_disabled
-      // / no_google_url but still persist tags+comment+name+phone in the row.
-      await fetch(`/api/public/review-qr/${qrCode}/generate-draft`, {
+      const res = await fetch(`/api/public/review-qr/${qrCode}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, sessionToken, tags, comment, customerName, customerPhone }),
-      }).catch(() => undefined);
-    } finally {
-      setSavingManual(false);
-    }
-    setPhase("draft");
+        body: JSON.stringify({ rating, tags, comment }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.id) setFeedbackId(data.id);
+    } catch { /* non-fatal */ }
+    goToGoogle();
   }
 
   async function generateDraft() {
     if (!rating) return;
     setGenerating(true);
+    setDraftFailed(null);
     try {
       const res = await fetch(`/api/public/review-qr/${qrCode}/generate-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, sessionToken, tags, comment, customerName, customerPhone }),
+        body: JSON.stringify({ rating, tags, comment, customerName }),
       });
       const data = await res.json();
-      if (typeof data.googleReviewUrl === "string") setGoogleReviewUrl(data.googleReviewUrl);
-      const draftText = typeof data.draftText === "string" ? data.draftText : (typeof data.draft === "string" ? data.draft : "");
-      if (data.available && draftText.trim()) {
-        setAiDelivered(true);
-        setAiUnavailableReason(null);
-        setDraftEdited(draftText);
+      if (data.feedbackId) setFeedbackId(data.feedbackId);
+      if (data.available && typeof data.draft === "string" && data.draft.trim()) {
+        setDraft(data.draft);
+        setDraftEdited(data.draft);
+        setPhase("draft");
       } else {
-        setAiDelivered(false);
-        setAiUnavailableReason(data.reason ?? "unavailable");
+        setDraftFailed(data.reason ?? "unavailable");
+        setPhase("draft");
       }
-      setPhase("draft");
     } catch {
-      setAiDelivered(false);
-      setAiUnavailableReason("network");
+      setDraftFailed("network");
       setPhase("draft");
     } finally {
       setGenerating(false);
@@ -167,33 +164,45 @@ export default function CustomerFeedbackPage() {
   }
 
   async function copyDraft() {
-    const text = draftEdited.trim();
-    if (!text) return;
+    if (!draftEdited) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(draftEdited);
       setCopied(true);
       toast({ title: "Review copied", description: "Now paste it into Google when the page opens." });
       fetch(`/api/public/review-qr/${qrCode}/draft-copied`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionToken }),
+        body: JSON.stringify({ feedbackId, sessionToken }),
       }).catch(() => undefined);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
-      toast({ title: "Couldn't copy automatically", description: "Long-press the text and copy manually.", variant: "destructive" });
-    }
+    } catch { /* clipboard blocked */ }
   }
 
   function goToGoogle() {
     fetch(`/api/public/review-qr/${qrCode}/google-redirect`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionToken }),
+      body: JSON.stringify({ feedbackId, sessionToken }),
     }).catch(() => undefined);
-    if (googleReviewUrl) {
-      window.open(googleReviewUrl, "_blank", "noopener");
+    if (config?.googleReviewUrl) {
+      window.open(config.googleReviewUrl, "_blank", "noopener");
     }
     setPhase("done");
+  }
+
+  async function submitPrivateFeedback() {
+    if (!rating) return;
+    setSubmitting(true);
+    try {
+      await fetch(`/api/public/review-qr/${qrCode}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, tags, comment, customerName, customerPhone }),
+      });
+      setPhase("done");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (error) {
@@ -216,8 +225,6 @@ export default function CustomerFeedbackPage() {
   }
 
   const accent = { backgroundColor: config.accentColor, color: "white" };
-  const hasGoogleUrl = !!googleReviewUrl;
-  const showGenerate = aiAssistAvailable && hasGoogleUrl;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -242,7 +249,7 @@ export default function CustomerFeedbackPage() {
                     <button
                       key={n}
                       type="button"
-                      onClick={() => pickRating(n)}
+                      onClick={() => submitRating(n)}
                       onMouseEnter={() => setHover(n)}
                       className="p-2 transition-transform hover:scale-110"
                       data-testid={`button-rate-${n}`}
@@ -286,7 +293,7 @@ export default function CustomerFeedbackPage() {
                 })}
               </div>
               <div>
-                <Label className="text-xs">Tell us more (optional)</Label>
+                <Label className="text-xs">Anything else? (optional)</Label>
                 <Textarea
                   rows={3}
                   value={comment}
@@ -295,42 +302,30 @@ export default function CustomerFeedbackPage() {
                   data-testid="input-comment"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {isPositive && aiAssistEnabled && config.googleReviewUrl && (
                 <div>
-                  <Label className="text-xs">Your name (optional)</Label>
+                  <Label className="text-xs">Your name (optional, used in the draft)</Label>
                   <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} data-testid="input-name" />
                 </div>
-                {!isPositive && (
-                  <div>
-                    <Label className="text-xs">Phone (optional)</Label>
-                    <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} data-testid="input-phone" />
-                  </div>
+              )}
+              <Button
+                className="w-full"
+                style={accent}
+                onClick={continueFromTags}
+                disabled={generating}
+                data-testid="button-continue-tags"
+              >
+                {generating ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Writing your draft…</>
+                ) : isPositive && aiAssistEnabled && config.googleReviewUrl ? (
+                  <><Sparkles className="h-4 w-4 mr-2" /> Help me write a Google review</>
+                ) : (
+                  "Continue"
                 )}
-              </div>
-              {showGenerate ? (
-                <Button
-                  className="w-full"
-                  style={accent}
-                  onClick={generateDraft}
-                  disabled={generating}
-                  data-testid="button-generate-review"
-                >
-                  {generating ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Writing your draft…</>
-                  ) : (
-                    <><Sparkles className="h-4 w-4 mr-2" /> Generate Review</>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  className="w-full"
-                  style={accent}
-                  onClick={saveTagsAndContinue}
-                  disabled={savingManual}
-                  data-testid="button-continue-manual"
-                >
-                  {savingManual ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  Continue
+              </Button>
+              {isPositive && config.googleReviewUrl && !aiAssistEnabled && (
+                <Button variant="outline" className="w-full" onClick={persistPositiveWithoutDraft}>
+                  <ExternalLink className="h-4 w-4 mr-2" /> Skip & open Google
                 </Button>
               )}
             </div>
@@ -338,65 +333,80 @@ export default function CustomerFeedbackPage() {
 
           {phase === "draft" && (
             <div className="space-y-3">
-              {!isPositive && (
-                <p className="text-xs text-muted-foreground italic">
-                  {config.negativeFeedbackMessage} A manager will follow up on your feedback.
-                </p>
-              )}
-              <div className="flex items-center justify-between">
-                <Label className="text-sm flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4" style={{ color: config.accentColor }} />
-                  {aiDelivered ? "Your AI-written draft" : "Write your review"}
-                </Label>
-                {showGenerate && aiDelivered && (
-                  <button
-                    type="button"
-                    onClick={generateDraft}
-                    disabled={generating}
-                    className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                    data-testid="button-regenerate-draft"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${generating ? "animate-spin" : ""}`} /> Regenerate
+              {draft ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" style={{ color: config.accentColor }} /> Your AI-written draft
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={generateDraft}
+                      disabled={generating}
+                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                      data-testid="button-regenerate-draft"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${generating ? "animate-spin" : ""}`} /> Regenerate
+                    </button>
+                  </div>
+                  <Textarea
+                    rows={6}
+                    value={draftEdited}
+                    onChange={(e) => { setDraftEdited(e.target.value); setCopied(false); }}
+                    className="text-sm"
+                    data-testid="textarea-draft"
+                  />
+                  <p className="text-xs text-muted-foreground">Feel free to edit before posting. Copy it, then we'll open Google for you.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={copyDraft} data-testid="button-copy-draft">
+                      <Copy className="h-4 w-4 mr-2" /> {copied ? "Copied!" : "Copy"}
+                    </Button>
+                    <Button style={accent} onClick={goToGoogle} data-testid="button-open-google">
+                      <ExternalLink className="h-4 w-4 mr-2" /> Open Google
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center space-y-3 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    {draftFailed === "ai_assist_disabled"
+                      ? "AI assist is off for this QR — but you can still leave a review."
+                      : "We couldn't write a draft right now — but you can still leave a quick review."}
+                  </p>
+                  {config.googleReviewUrl && (
+                    <Button className="w-full" style={accent} onClick={goToGoogle}>
+                      <ExternalLink className="h-4 w-4 mr-2" /> Open Google review
+                    </Button>
+                  )}
+                  <button className="text-xs text-muted-foreground underline" onClick={() => setPhase("tags")}>
+                    Go back
                   </button>
-                )}
-              </div>
-              {!aiDelivered && showGenerate && aiUnavailableReason && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                  We couldn't generate a draft this time. You can write your review manually below.
-                </p>
+                </div>
               )}
-              {!showGenerate && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                  AI review generation is unavailable. You can write your review manually.
-                </p>
-              )}
-              <Textarea
-                rows={6}
-                value={draftEdited}
-                onChange={(e) => { setDraftEdited(e.target.value); setCopied(false); }}
-                placeholder={aiDelivered ? "" : "Write a short review you'd like to post on Google…"}
-                className="text-sm"
-                data-testid="textarea-draft"
-              />
-              <p className="text-xs text-muted-foreground">Feel free to edit before posting. Copy it, then we'll open Google for you.</p>
+            </div>
+          )}
+
+          {phase === "private" && (
+            <div className="space-y-3">
+              <p className="text-sm">{config.negativeFeedbackMessage}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={copyDraft} disabled={!draftEdited.trim()} data-testid="button-copy-draft">
-                  <Copy className="h-4 w-4 mr-2" /> {copied ? "Copied!" : "Copy Review"}
-                </Button>
-                <Button style={accent} onClick={goToGoogle} disabled={!hasGoogleUrl} data-testid="button-open-google">
-                  <ExternalLink className="h-4 w-4 mr-2" /> Open Google Review
-                </Button>
+                <div>
+                  <Label className="text-xs">Your name (optional)</Label>
+                  <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Phone (optional)</Label>
+                  <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                </div>
               </div>
-              {!hasGoogleUrl && (
-                <p className="text-xs text-muted-foreground text-center">
-                  This restaurant hasn't set up a Google review link yet — your feedback has still been sent to them.
-                </p>
+              <Button className="w-full" style={accent} onClick={submitPrivateFeedback} disabled={submitting} data-testid="button-submit-feedback">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send feedback"}
+              </Button>
+              {config.showGoogleButtonOnNegative && config.googleReviewUrl && (
+                <Button variant="outline" className="w-full" onClick={goToGoogle}>
+                  Or leave a public Google review
+                </Button>
               )}
-              <div className="text-center">
-                <button className="text-xs text-muted-foreground underline" onClick={() => setPhase("done")} data-testid="button-skip-google">
-                  Done
-                </button>
-              </div>
             </div>
           )}
 
@@ -405,11 +415,8 @@ export default function CustomerFeedbackPage() {
               <CheckCircle2 className="h-14 w-14 mx-auto text-green-500" />
               <p className="font-medium">{config.thankYouMessage}</p>
               <p className="text-sm text-muted-foreground">
-                Paste your copied review on Google and submit.
+                {isPositive ? "Thanks for sharing the love!" : "A manager will reach out shortly."}
               </p>
-              {!isPositive && (
-                <p className="text-xs text-muted-foreground">A manager will reach out shortly about your concerns.</p>
-              )}
             </div>
           )}
         </div>

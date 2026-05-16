@@ -136,6 +136,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "staff_insights",
+    featureLabel: "AI Staff Insights",
+    description: "Generate per-staff scorecards plus AI summary cards (best performer, training needs, suspicious activity, payroll anomaly, shift suggestion) for a date range.",
+    creditsPerUnit: "5",
+    minCharge: 5,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

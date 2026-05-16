@@ -13,7 +13,7 @@
  * deep-links into the existing Inventory PO module.
  */
 import { Router, type Request, type Response } from "express";
-import { eq, and, desc, gte, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import {
   db,
@@ -30,6 +30,12 @@ import {
   aiInventorySuggestionsTable,
   aiForecastsTable,
   aiRecipeCostSnapshotsTable,
+  staffTable,
+  attendanceTable,
+  orderDiscountsTable,
+  customerFeedbackTable,
+  payrollItemsTable,
+  usersTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -775,5 +781,414 @@ router.patch("/restaurants/:restaurantId/items/:itemId/ai-recipe-snapshots/:id",
   });
   res.json({ snapshot: row });
 });
+
+// ────────────────────────── Staff Insights ──────────────────────────
+
+interface StaffScorecard {
+  userId: number;
+  name: string;
+  jobTitle: string | null;
+  department: string | null;
+  attendanceDays: number;
+  scheduledDays: number;
+  attendanceRate: number;
+  lateCount: number;
+  avgLateMinutes: number;
+  overtimeMinutes: number;
+  workedMinutes: number;
+  ordersHandled: number;
+  ordersCancelled: number;
+  cancellationRate: number;
+  avgServiceMinutes: number | null;
+  feedbackCount: number;
+  feedbackAvgRating: number | null;
+  feedbackNegative: number;
+  discountCount: number;
+  discountTotal: number;
+  discountShare: number;
+  payrollGross: number;
+  payrollNet: number;
+  payrollLateDeduction: number;
+  payrollOvertimeAmount: number;
+}
+
+interface StaffInsightCard {
+  type: "best_performer" | "training_needs" | "suspicious_activity" | "payroll_anomaly" | "shift_suggestion";
+  title: string;
+  body: string;
+  citations: Array<{ userId: number; name: string; metric: string }>;
+  severity: "info" | "warn" | "critical";
+}
+
+interface StaffInsightsPayload {
+  from: string;
+  to: string;
+  generatedAt: string;
+  scorecards: StaffScorecard[];
+  cards: StaffInsightCard[];
+  summary: string;
+  cached: boolean;
+}
+
+const STAFF_INSIGHTS_CACHE = new Map<string, { expiresAt: number; payload: StaffInsightsPayload }>();
+const STAFF_INSIGHTS_TTL_MS = 60 * 60 * 1000;
+
+function staffInsightsCacheKey(opts: { tenantId: number; restaurantId: number; from: string; to: string }): string {
+  return `${opts.tenantId}:${opts.restaurantId}:${opts.from}:${opts.to}`;
+}
+
+function parseDateRange(body: unknown): { from: Date; to: Date; fromStr: string; toStr: string } {
+  const b = (body ?? {}) as { from?: string; to?: string };
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 86_400_000);
+  const from = b.from ? new Date(b.from) : defaultFrom;
+  const to = b.to ? new Date(b.to) : now;
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
+    throw Object.assign(new Error("Invalid date range"), { code: "BAD_RANGE" });
+  }
+  // Cap at 365 days.
+  if (to.getTime() - from.getTime() > 365 * 86_400_000) {
+    throw Object.assign(new Error("Date range cannot exceed 365 days"), { code: "RANGE_TOO_WIDE" });
+  }
+  const fromStr = from.toISOString().slice(0, 10);
+  const toStr = to.toISOString().slice(0, 10);
+  return { from, to, fromStr, toStr };
+}
+
+async function aggregateStaffMetrics(restaurantId: number, from: Date, to: Date): Promise<StaffScorecard[]> {
+  const [staffRows, attendance, orders, cancelled, completedTimes, discounts, feedback, payroll] = await Promise.all([
+    db.select({
+      userId: staffTable.userId,
+      name: usersTable.name,
+      jobTitle: staffTable.jobTitle,
+      department: staffTable.department,
+    }).from(staffTable)
+      .innerJoin(usersTable, eq(usersTable.id, staffTable.userId))
+      .where(and(eq(staffTable.restaurantId, restaurantId), eq(staffTable.isActive, true))),
+    db.select({
+      userId: attendanceTable.userId,
+      days: sql<string>`count(*)::int`,
+      worked: sql<string>`coalesce(sum(${attendanceTable.workedMinutes}), 0)`,
+      late: sql<string>`coalesce(sum(${attendanceTable.lateMinutes}), 0)`,
+      lateCount: sql<string>`count(*) filter (where ${attendanceTable.lateMinutes} > 0)::int`,
+      overtime: sql<string>`coalesce(sum(${attendanceTable.overtimeMinutes}), 0)`,
+      scheduled: sql<string>`count(*) filter (where ${attendanceTable.scheduledMinutes} > 0)::int`,
+    }).from(attendanceTable)
+      .where(and(
+        eq(attendanceTable.restaurantId, restaurantId),
+        gte(attendanceTable.clockIn, from),
+        lte(attendanceTable.clockIn, to),
+      ))
+      .groupBy(attendanceTable.userId),
+    db.select({
+      waiterId: ordersTable.waiterId,
+      n: sql<string>`count(*)::int`,
+    }).from(ordersTable)
+      .where(and(
+        eq(ordersTable.restaurantId, restaurantId),
+        gte(ordersTable.createdAt, from),
+        lte(ordersTable.createdAt, to),
+        sql`${ordersTable.waiterId} is not null`,
+      ))
+      .groupBy(ordersTable.waiterId),
+    db.select({
+      waiterId: ordersTable.waiterId,
+      n: sql<string>`count(*)::int`,
+    }).from(ordersTable)
+      .where(and(
+        eq(ordersTable.restaurantId, restaurantId),
+        gte(ordersTable.createdAt, from),
+        lte(ordersTable.createdAt, to),
+        eq(ordersTable.status, "cancelled"),
+        sql`${ordersTable.waiterId} is not null`,
+      ))
+      .groupBy(ordersTable.waiterId),
+    db.select({
+      waiterId: ordersTable.waiterId,
+      avgMin: sql<string>`avg(extract(epoch from (${ordersTable.completedAt} - ${ordersTable.createdAt})) / 60.0)`,
+    }).from(ordersTable)
+      .where(and(
+        eq(ordersTable.restaurantId, restaurantId),
+        gte(ordersTable.createdAt, from),
+        lte(ordersTable.createdAt, to),
+        sql`${ordersTable.completedAt} is not null`,
+        sql`${ordersTable.waiterId} is not null`,
+      ))
+      .groupBy(ordersTable.waiterId),
+    db.select({
+      userId: orderDiscountsTable.recordedByUserId,
+      n: sql<string>`count(*)::int`,
+      total: sql<string>`coalesce(sum(${orderDiscountsTable.amount}), 0)`,
+    }).from(orderDiscountsTable)
+      .where(and(
+        eq(orderDiscountsTable.restaurantId, restaurantId),
+        gte(orderDiscountsTable.createdAt, from),
+        lte(orderDiscountsTable.createdAt, to),
+        sql`${orderDiscountsTable.recordedByUserId} is not null`,
+      ))
+      .groupBy(orderDiscountsTable.recordedByUserId),
+    // Staff-tagged feedback: comments mentioning a staff member by name are
+    // not structured, so we scope to negative ratings and count per
+    // restaurant — owners can see overall feedback context. For per-staff
+    // attribution we only include feedback explicitly tagged via category
+    // = "staff" plus average rating across the window.
+    db.select({
+      n: sql<string>`count(*)::int`,
+      avg: sql<string>`avg(${customerFeedbackTable.rating})`,
+      neg: sql<string>`count(*) filter (where ${customerFeedbackTable.rating} <= 2)::int`,
+    }).from(customerFeedbackTable)
+      .where(and(
+        eq(customerFeedbackTable.restaurantId, restaurantId),
+        gte(customerFeedbackTable.createdAt, from),
+        lte(customerFeedbackTable.createdAt, to),
+        eq(customerFeedbackTable.category, "staff"),
+      )),
+    db.select({
+      userId: payrollItemsTable.userId,
+      gross: sql<string>`coalesce(sum(${payrollItemsTable.grossPay}), 0)`,
+      net: sql<string>`coalesce(sum(${payrollItemsTable.netPay}), 0)`,
+      lateDed: sql<string>`coalesce(sum(${payrollItemsTable.lateDeduction}), 0)`,
+      otAmt: sql<string>`coalesce(sum(${payrollItemsTable.overtimeAmount}), 0)`,
+    }).from(payrollItemsTable)
+      .where(and(
+        eq(payrollItemsTable.restaurantId, restaurantId),
+        gte(payrollItemsTable.createdAt, from),
+        lte(payrollItemsTable.createdAt, to),
+      ))
+      .groupBy(payrollItemsTable.userId),
+  ]);
+
+  const attMap = new Map(attendance.map((a) => [a.userId, a]));
+  const ordMap = new Map(orders.map((o) => [o.waiterId as number, Number(o.n) || 0]));
+  const cancMap = new Map(cancelled.map((o) => [o.waiterId as number, Number(o.n) || 0]));
+  const timeMap = new Map(completedTimes.map((o) => [o.waiterId as number, Number(o.avgMin) || 0]));
+  const discMap = new Map(discounts.map((d) => [d.userId as number, { n: Number(d.n) || 0, total: Number(d.total) || 0 }]));
+  const payMap = new Map(payroll.map((p) => [p.userId, p]));
+
+  const fbAgg = feedback[0] ?? { n: "0", avg: null, neg: "0" };
+  const totalStaff = Math.max(1, staffRows.length);
+  const fbPerStaff = Math.floor((Number(fbAgg.n) || 0) / totalStaff);
+  const fbAvg = fbAgg.avg != null ? Number(fbAgg.avg) : null;
+  const fbNegPerStaff = Math.floor((Number(fbAgg.neg) || 0) / totalStaff);
+
+  return staffRows.map((s) => {
+    const a = attMap.get(s.userId);
+    const orders = ordMap.get(s.userId) ?? 0;
+    const cancelled = cancMap.get(s.userId) ?? 0;
+    const svc = timeMap.get(s.userId) ?? null;
+    const d = discMap.get(s.userId) ?? { n: 0, total: 0 };
+    const p = payMap.get(s.userId);
+    const days = a ? Number(a.days) || 0 : 0;
+    const sched = a ? Number(a.scheduled) || days : 0;
+    const lateCount = a ? Number(a.lateCount) || 0 : 0;
+    const lateMin = a ? Number(a.late) || 0 : 0;
+    return {
+      userId: s.userId,
+      name: s.name,
+      jobTitle: s.jobTitle,
+      department: s.department,
+      attendanceDays: days,
+      scheduledDays: sched,
+      attendanceRate: sched > 0 ? Number(((days / sched) * 100).toFixed(1)) : 0,
+      lateCount,
+      avgLateMinutes: lateCount > 0 ? Number((lateMin / lateCount).toFixed(1)) : 0,
+      overtimeMinutes: a ? Number(a.overtime) || 0 : 0,
+      workedMinutes: a ? Number(a.worked) || 0 : 0,
+      ordersHandled: orders,
+      ordersCancelled: cancelled,
+      cancellationRate: orders > 0 ? Number(((cancelled / orders) * 100).toFixed(1)) : 0,
+      avgServiceMinutes: svc != null ? Number(svc.toFixed(1)) : null,
+      feedbackCount: fbPerStaff,
+      feedbackAvgRating: fbAvg,
+      feedbackNegative: fbNegPerStaff,
+      discountCount: d.n,
+      discountTotal: Number(d.total.toFixed(2)),
+      discountShare: orders > 0 ? Number(((d.n / orders) * 100).toFixed(1)) : 0,
+      payrollGross: p ? Number(Number(p.gross).toFixed(2)) : 0,
+      payrollNet: p ? Number(Number(p.net).toFixed(2)) : 0,
+      payrollLateDeduction: p ? Number(Number(p.lateDed).toFixed(2)) : 0,
+      payrollOvertimeAmount: p ? Number(Number(p.otAmt).toFixed(2)) : 0,
+    } satisfies StaffScorecard;
+  });
+}
+
+router.get(
+  "/restaurants/:restaurantId/ai-ops/staff-insights/cached",
+  async (req: Request, res: Response) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const tenantId = req.user?.tenantId ?? 0;
+    try {
+      const { fromStr, toStr } = parseDateRange({ from: req.query.from, to: req.query.to });
+      const key = staffInsightsCacheKey({ tenantId, restaurantId, from: fromStr, to: toStr });
+      const hit = STAFF_INSIGHTS_CACHE.get(key);
+      if (hit && hit.expiresAt > Date.now()) {
+        res.json({ insights: { ...hit.payload, cached: true } });
+        return;
+      }
+      res.json({ insights: null });
+    } catch (err) {
+      const e = err as { message?: string };
+      res.status(400).json({ error: e.message ?? "Invalid range" });
+    }
+  },
+);
+
+router.post(
+  "/restaurants/:restaurantId/ai-ops/staff-insights/generate",
+  // Cache short-circuit BEFORE credit reservation, so a 1hr-old generation
+  // for the same (tenant, range) does not re-spend credits.
+  async (req: Request, res: Response, next) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const tenantId = req.user?.tenantId ?? 0;
+    try {
+      const { fromStr, toStr } = parseDateRange(req.body);
+      const key = staffInsightsCacheKey({ tenantId, restaurantId, from: fromStr, to: toStr });
+      const hit = STAFF_INSIGHTS_CACHE.get(key);
+      if (hit && hit.expiresAt > Date.now()) {
+        res.json({ insights: { ...hit.payload, cached: true } });
+        return;
+      }
+      next();
+    } catch (err) {
+      const e = err as { message?: string };
+      res.status(400).json({ error: e.message ?? "Invalid range" });
+    }
+  },
+  requireAiCredits("staff_insights", () => ({ units: 1 })),
+  async (req: Request, res: Response) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const tenantId = req.user?.tenantId ?? 0;
+    const reservation = res.locals.aiCreditReservation as AiCreditReservation | null;
+    try {
+      const { from, to, fromStr, toStr } = parseDateRange(req.body);
+
+      const scorecards = await aggregateStaffMetrics(restaurantId, from, to);
+
+      if (scorecards.length === 0) {
+        if (reservation) await refundReservation(reservation, "no active staff");
+        res.status(400).json({ error: "No active staff in this restaurant to analyse." });
+        return;
+      }
+
+      // Compact compact lines for the prompt — keep token usage bounded.
+      const top = [...scorecards]
+        .sort((a, b) => b.ordersHandled - a.ordersHandled || b.attendanceRate - a.attendanceRate)
+        .slice(0, 30);
+      const lines = top.map((s) =>
+        `  - id=${s.userId} name="${s.name}" role=${s.jobTitle ?? "staff"} attend=${s.attendanceRate}% lateCnt=${s.lateCount} avgLateMin=${s.avgLateMinutes} otMin=${s.overtimeMinutes} orders=${s.ordersHandled} cancelled=${s.ordersCancelled}(${s.cancellationRate}%) avgSvcMin=${s.avgServiceMinutes ?? "n/a"} disc=${s.discountCount}/${s.discountTotal}(${s.discountShare}%) gross=${s.payrollGross} net=${s.payrollNet} lateDed=${s.payrollLateDeduction} otAmt=${s.payrollOvertimeAmount}`,
+      ).join("\n");
+
+      const prompt = `You are a restaurant operations analyst. Review per-staff metrics for ${fromStr} → ${toStr} and produce 5 actionable insight cards.
+
+Per-staff metrics:
+${lines}
+
+Return ONLY a JSON object:
+{
+  "summary": "1-2 sentence overall team-health summary",
+  "cards": [
+    {"type": "best_performer", "title": "<short>", "body": "<2-3 sentences with the key reason>", "citations": [{"userId": <id>, "name": "<name>", "metric": "<which metric proves it>"}], "severity": "info"},
+    {"type": "training_needs", "title": "<short>", "body": "<who needs coaching and on what specific weakness>", "citations": [...], "severity": "warn"},
+    {"type": "suspicious_activity", "title": "<short>", "body": "<unusual discount/cancellation/attendance pattern vs peers>", "citations": [...], "severity": "warn|critical"},
+    {"type": "payroll_anomaly", "title": "<short>", "body": "<overtime spike, late-deduction inconsistency, hours-vs-paid mismatch>", "citations": [...], "severity": "warn|critical"},
+    {"type": "shift_suggestion", "title": "<short>", "body": "<staffing/shift change suggestion based on service time + orders>", "citations": [], "severity": "info"}
+  ]
+}
+
+Rules:
+- Cite at least one staff member per card (except shift_suggestion may cite 0 if it's a structural suggestion).
+- Severity "critical" only when discount/cancellation outliers exceed 2× peer average AND > 5 events.
+- For best_performer: pick highest combined score across attendance, orders handled, low cancellation, low avg service time.
+- For payroll_anomaly: flag late-deduction > 10% of gross, OR overtime amount > 25% of gross, OR worked hours not matching expected scheduled hours.
+- Keep card body under 240 chars.
+- JSON only, no markdown.`;
+
+      const inputsHash = hashInputs({ from: fromStr, to: toStr, ids: scorecards.map((s) => s.userId).sort() });
+
+      const { data, result } = await AIProviderService.generateJson<{
+        summary?: unknown; cards?: unknown;
+      }>({
+        featureSlug: "staff_insights",
+        tenantId: req.user?.tenantId ?? null,
+        restaurantId,
+        userId: req.user?.sub ?? null,
+        metadata: { inputsHash, staffCount: scorecards.length, from: fromStr, to: toStr },
+      }, {
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        maxTokens: 2000,
+      });
+
+      const idToName = new Map(scorecards.map((s) => [s.userId, s.name]));
+      const allowed = new Set(["best_performer", "training_needs", "suspicious_activity", "payroll_anomaly", "shift_suggestion"]);
+      const sevAllowed = new Set(["info", "warn", "critical"]);
+      const rawCards = Array.isArray(data.cards) ? data.cards : [];
+      const cards: StaffInsightCard[] = rawCards
+        .map((raw: unknown): StaffInsightCard | null => {
+          const r = raw as Record<string, unknown>;
+          const type = String(r.type ?? "").toLowerCase();
+          if (!allowed.has(type)) return null;
+          const sev = String(r.severity ?? "info").toLowerCase();
+          const severity = (sevAllowed.has(sev) ? sev : "info") as StaffInsightCard["severity"];
+          const rawCit = Array.isArray(r.citations) ? r.citations : [];
+          const citations = rawCit
+            .map((c) => {
+              const cc = c as Record<string, unknown>;
+              const uid = Number(cc.userId);
+              if (!Number.isFinite(uid) || !idToName.has(uid)) return null;
+              return {
+                userId: uid,
+                name: idToName.get(uid) ?? String(cc.name ?? ""),
+                metric: String(cc.metric ?? "").slice(0, 120),
+              };
+            })
+            .filter((x): x is { userId: number; name: string; metric: string } => x !== null)
+            .slice(0, 5);
+          return {
+            type: type as StaffInsightCard["type"],
+            title: String(r.title ?? "").slice(0, 120),
+            body: String(r.body ?? "").slice(0, 320),
+            citations,
+            severity,
+          };
+        })
+        .filter((x): x is StaffInsightCard => x !== null);
+
+      const payload: StaffInsightsPayload = {
+        from: fromStr,
+        to: toStr,
+        generatedAt: new Date().toISOString(),
+        scorecards,
+        cards,
+        summary: typeof data.summary === "string" ? data.summary.trim().slice(0, 500) : "",
+        cached: false,
+      };
+
+      STAFF_INSIGHTS_CACHE.set(
+        staffInsightsCacheKey({ tenantId, restaurantId, from: fromStr, to: toStr }),
+        { expiresAt: Date.now() + STAFF_INSIGHTS_TTL_MS, payload },
+      );
+
+      if (reservation) {
+        await commitReservation({ reservation, userId: req.user?.sub ?? null, requestLogId: result.requestLogId });
+      }
+      await recordAuditLog({
+        req, module: "khana_ai", action: "staff_insights.generate",
+        entity: "ai_staff_insights",
+        newValue: { from: fromStr, to: toStr, staffCount: scorecards.length, cardCount: cards.length, requestLogId: result.requestLogId },
+      });
+      res.json({ insights: payload });
+    } catch (err) {
+      if (reservation) await refundReservation(reservation, (err as Error).message ?? "provider error");
+      req.log.error({ err }, "AI staff insights failed");
+      await recordAuditLog({
+        req, module: "khana_ai", action: "staff_insights.generate_failed",
+        entity: "ai_staff_insights",
+        newValue: { error: (err as Error).message ?? "provider error" },
+      });
+      res.status(502).json({ error: "Failed to generate staff insights" });
+    }
+  },
+);
 
 export default router;

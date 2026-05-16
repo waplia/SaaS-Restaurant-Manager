@@ -63,6 +63,7 @@ import AiInventoryPage from "@/pages/ai-inventory";
 import AiUpsellPage from "@/pages/ai-upsell";
 import AiForecastPage from "@/pages/ai-forecast";
 import AiSalesInsightsPage from "@/pages/ai-sales-insights";
+import AiStaffInsightsPage from "@/pages/ai-staff-insights";
 import AiMenuImportPage from "@/pages/ai-menu-import";
 import AiMenuImportHistoryPage from "@/pages/ai-menu-import-history";
 import AiUsagePage from "@/pages/ai-usage";
@@ -183,6 +184,7 @@ function Router() {
       <Route path="/ai/upsell" component={() => <RoleProtectedRoute component={AiUpsellPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/forecast" component={() => <RoleProtectedRoute component={AiForecastPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/insights" component={() => <RoleProtectedRoute component={AiSalesInsightsPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/staff-insights" component={() => <RoleProtectedRoute component={AiStaffInsightsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/menu-import/history" component={() => <RoleProtectedRoute component={AiMenuImportHistoryPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/menu-import/:id" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/menu-import" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />

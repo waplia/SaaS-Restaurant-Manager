@@ -66,6 +66,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/ai/feedback-recovery", label: "Feedback Recovery", icon: AlertTriangle, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/upsell", label: "Upsell Engine", icon: TrendingUp, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/insights", label: "AI Sales Insights", icon: TrendingUp, roles: ["owner", "manager"], planGate: "ai_insights" },
+      { kind: "link", href: "/ai/staff-insights", label: "AI Staff Insights", icon: UserCheck, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/usage", label: "AI Usage & Credits", icon: Coins, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/settings", label: "AI Settings", icon: Settings, roles: ["owner", "manager"] },
     ],
