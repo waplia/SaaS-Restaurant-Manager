@@ -124,13 +124,6 @@ export default function LoginScreen() {
               <Text style={styles.loginBtnText}>Sign in</Text>
             )}
           </Pressable>
-
-          <View style={[styles.hint, { backgroundColor: colors.accent, borderColor: colors.primary + "30" }]}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
-            <Text style={[styles.hintText, { color: colors.accentForeground }]}>
-              Demo: priya@spicegarden.com / password123
-            </Text>
-          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

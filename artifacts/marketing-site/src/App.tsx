@@ -65,22 +65,6 @@ function HomeOrDisabled() {
 }
 
 function BookDemoOrDisabled() {
-  const s = useAppSettings();
-  if (!s.demoModeEnabled) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-        <div className="max-w-md text-center space-y-3">
-          <h1 className="text-2xl font-semibold">Demo bookings are paused</h1>
-          <p className="text-muted-foreground">Please check back soon or contact support.</p>
-          {s.supportEmail && (
-            <a href={`mailto:${s.supportEmail}`} className="text-sm text-primary underline">
-              {s.supportEmail}
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
   return <BookDemo />;
 }
 

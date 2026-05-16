@@ -101,10 +101,6 @@ export default function LoginPage() {
             </a>
           </div>
         </div>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Demo: admin@demo.com / password123
-        </p>
       </div>
     </div>
   );

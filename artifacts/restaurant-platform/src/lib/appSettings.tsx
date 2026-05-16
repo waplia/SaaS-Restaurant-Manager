@@ -150,11 +150,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
           Maintenance mode is ON — only super admins can access the platform. Disable it in App Settings.
         </div>
       )}
-      {settings.demoModeEnabled && (
-        <div className="bg-sky-500 text-sky-950 text-center text-xs py-1.5 px-4 font-medium">
-          Demo mode — data shown may be sample data.
-        </div>
-      )}
       {children}
     </Ctx.Provider>
   );

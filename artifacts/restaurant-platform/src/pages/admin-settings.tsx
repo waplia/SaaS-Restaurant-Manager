@@ -224,7 +224,6 @@ export default function AdminSettingsPage() {
           <div className="space-y-3 pt-2">
             <ToggleRow label="Signups enabled" description="When off, new restaurants cannot register." checked={form.signupEnabled} onChange={(v) => set("signupEnabled", v)} />
             <ToggleRow label="Landing page enabled" description="When off, the marketing site redirects visitors to sign-in." checked={form.landingPageEnabled} onChange={(v) => set("landingPageEnabled", v)} />
-            <ToggleRow label="Demo mode" description="Show demo data badges in the app shell." checked={form.demoModeEnabled} onChange={(v) => set("demoModeEnabled", v)} />
             <ToggleRow label="Maintenance mode" description="Block all non-super-admin requests with a 503." checked={form.maintenanceMode} onChange={(v) => set("maintenanceMode", v)} />
           </div>
           <div>

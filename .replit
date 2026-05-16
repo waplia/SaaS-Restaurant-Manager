@@ -99,3 +99,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 NODE_ENV = "development"
+
+[userenv.production]
+ALLOWED_ORIGINS = "https://khanalagao.com,https://www.khanalagao.com"
