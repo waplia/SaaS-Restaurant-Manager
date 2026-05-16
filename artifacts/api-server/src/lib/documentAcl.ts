@@ -1,7 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, documentPermissionsTable, documentCategoryDefaultsTable, type DocumentPermission } from "./db";
 
-const FULL_ROLES = new Set(["super_admin", "owner"]);
+const FULL_ROLES = new Set(["owner"]);
+const READ_ONLY_ROLES = new Set(["super_admin"]);
+const READ_ONLY: DocumentPermission[] = ["view", "download"];
 // Sane defaults applied when no row exists in document_category_defaults.
 // Manager: full read/download on everything; edit/delete only on operational
 // docs (invoice, vendor, staff, payroll, other). Accountant: read+download on
@@ -51,6 +53,7 @@ export async function resolvePermissions(
 ): Promise<Set<DocumentPermission>> {
   if (doc.restaurantId !== ctx.restaurantId) return new Set();
   if (FULL_ROLES.has(ctx.role)) return new Set(["view", "download", "edit", "delete"]);
+  if (READ_ONLY_ROLES.has(ctx.role)) return new Set(READ_ONLY);
   if (doc.uploadedBy === ctx.userId) return new Set(["view", "download", "edit", "delete"]);
 
   const out = new Set<DocumentPermission>();
@@ -109,6 +112,10 @@ export async function bulkResolvePermissions(
   const sameTenant = docs.filter(d => d.restaurantId === ctx.restaurantId);
   if (FULL_ROLES.has(ctx.role)) {
     for (const d of sameTenant) result.set(d.id, new Set(["view", "download", "edit", "delete"]));
+    return result;
+  }
+  if (READ_ONLY_ROLES.has(ctx.role)) {
+    for (const d of sameTenant) result.set(d.id, new Set(READ_ONLY));
     return result;
   }
 
