@@ -61,7 +61,7 @@ export default function OwnerDashboard() {
   // ---- Tenant outlet list (drives the scope selector + comparison)
   const tenantBranchesQ = useQuery({
     queryKey: ["tenant-branches", tenantId],
-    queryFn: () => customFetch<TenantBranch[]>(`/tenants/${tenantId}/branches`),
+    queryFn: () => customFetch<TenantBranch[]>(`/api/tenants/${tenantId}/branches`),
     enabled: tenantId != null,
   });
   const tenantBranches: TenantBranch[] = Array.isArray(tenantBranchesQ.data)
@@ -85,7 +85,7 @@ export default function OwnerDashboard() {
       : getGetDashboardSummaryQueryKey(restaurantScopeId),
     queryFn: () =>
       isAllOutlets
-        ? customFetch<DashboardSummary>(`/tenants/${tenantId}/dashboard/summary`)
+        ? customFetch<DashboardSummary>(`/api/tenants/${tenantId}/dashboard/summary`)
         : getDashboardSummary(restaurantScopeId),
     enabled: !isAllOutlets || tenantId != null,
   });
@@ -144,26 +144,26 @@ export default function OwnerDashboard() {
 
   const cashQ = useQuery({
     queryKey: ["cash-register-current", restaurantScopeId],
-    queryFn: () => customFetch<CashSession>(`/restaurants/${restaurantScopeId}/cash-register/current`),
+    queryFn: () => customFetch<CashSession>(`/api/restaurants/${restaurantScopeId}/cash-register/current`),
     enabled: !isAllOutlets,
   });
 
   const fraudQ = useQuery({
     queryKey: ["fraud-alerts", restaurantScopeId],
-    queryFn: () => customFetch<FraudListResp>(`/restaurants/${restaurantScopeId}/fraud-alerts?status=open`),
+    queryFn: () => customFetch<FraudListResp>(`/api/restaurants/${restaurantScopeId}/fraud-alerts?status=open`),
     enabled: !isAllOutlets,
     refetchInterval: 30_000,
   });
 
   const reviewsQ = useQuery({
     queryKey: ["reviews-feedback", restaurantScopeId],
-    queryFn: () => customFetch<ReviewsResp>(`/restaurants/${restaurantScopeId}/reviews/feedback?limit=50`),
+    queryFn: () => customFetch<ReviewsResp>(`/api/restaurants/${restaurantScopeId}/reviews/feedback?limit=50`),
     enabled: !isAllOutlets,
   });
 
   const ticketsQ = useQuery({
     queryKey: ["support-tickets-open", restaurantScopeId],
-    queryFn: () => customFetch<TicketsResp>(`/support/tickets?status=open&limit=50`),
+    queryFn: () => customFetch<TicketsResp>(`/api/support/tickets?status=open&limit=50`),
     enabled: !isAllOutlets,
   });
 
@@ -184,8 +184,8 @@ export default function OwnerDashboard() {
       const qs = (from: Date, to: Date) =>
         `from=${fmt(from)}T00:00:00.000Z&to=${fmt(to)}T23:59:59.999Z`;
       const [todayResp, yestResp] = await Promise.all([
-        customFetch<CompareResp>(`/tenants/${tenantId}/dashboard/compare-branches?${qs(today, today)}`),
-        customFetch<CompareResp>(`/tenants/${tenantId}/dashboard/compare-branches?${qs(yest, yest)}`),
+        customFetch<CompareResp>(`/api/tenants/${tenantId}/dashboard/compare-branches?${qs(today, today)}`),
+        customFetch<CompareResp>(`/api/tenants/${tenantId}/dashboard/compare-branches?${qs(yest, yest)}`),
       ]);
       const yMap = new Map<number, CompareBranchRow>();
       const yBranches: CompareBranchRow[] = Array.isArray(yestResp?.branches) ? yestResp.branches : [];

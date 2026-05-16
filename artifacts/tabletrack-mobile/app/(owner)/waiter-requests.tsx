@@ -33,17 +33,17 @@ export default function WaiterRequestsScreen() {
 
   const q = useQuery({
     queryKey: ["waiter-requests", restaurantId],
-    queryFn: () => customFetch<Request[]>(`/restaurants/${restaurantId}/waiter-requests?status=pending,acknowledged`).catch(() => []),
+    queryFn: () => customFetch<Request[]>(`/api/restaurants/${restaurantId}/waiter-requests?status=pending,acknowledged`).catch(() => []),
     refetchInterval: 10_000,
   });
   const list = Array.isArray(q.data) ? q.data : [];
 
   const resolve = useMutation({
-    mutationFn: (id: number) => customFetch(`/restaurants/${restaurantId}/waiter-requests/${id}/resolve`, { method: "POST" }),
+    mutationFn: (id: number) => customFetch(`/api/restaurants/${restaurantId}/waiter-requests/${id}/resolve`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["waiter-requests"] }),
   });
   const ack = useMutation({
-    mutationFn: (id: number) => customFetch(`/restaurants/${restaurantId}/waiter-requests/${id}/acknowledge`, { method: "POST" }),
+    mutationFn: (id: number) => customFetch(`/api/restaurants/${restaurantId}/waiter-requests/${id}/acknowledge`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["waiter-requests"] }),
   });
 

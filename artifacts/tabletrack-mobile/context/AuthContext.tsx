@@ -112,15 +112,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const userRef = useRef<AuthUser | null>(null);
+  const tokenRef = useRef<string | null>(null);
 
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { tokenRef.current = accessToken; }, [accessToken]);
 
   useEffect(() => {
+    // Register a ref-reading getter once on mount so customFetch always sees
+    // the latest token, eliminating stale-closure 401s during hydration and
+    // immediately after login/token rotation.
+    setAuthTokenGetter(() => tokenRef.current);
     async function loadToken() {
       try {
         const token = await SecureStorage.getItem("accessToken");
         const userJson = await SecureStorage.getItem("authUser");
         if (token && userJson) {
+          tokenRef.current = token;
           setAccessToken(token);
           setUser(JSON.parse(userJson) as AuthUser);
         }
@@ -132,11 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     loadToken();
   }, []);
-
-  useEffect(() => {
-    const token = accessToken;
-    setAuthTokenGetter(() => token);
-  }, [accessToken]);
 
   // Deep-link on notification tap (foreground or cold-start).
   useEffect(() => {
@@ -166,6 +168,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStorage.setItem("accessToken", token);
     await SecureStorage.setItem("refreshToken", refreshTok);
     await SecureStorage.setItem("authUser", JSON.stringify(userData));
+    tokenRef.current = token;
+    userRef.current = userData;
     setAccessToken(token);
     setUser(userData);
 
@@ -179,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // returns fresh tokens for the current device.
     await SecureStorage.setItem("accessToken", newAccessToken);
     await SecureStorage.setItem("refreshToken", newRefreshToken);
+    tokenRef.current = newAccessToken;
     setAccessToken(newAccessToken);
   }, []);
 
@@ -191,6 +196,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStorage.deleteItem("accessToken");
     await SecureStorage.deleteItem("refreshToken");
     await SecureStorage.deleteItem("authUser");
+    tokenRef.current = null;
+    userRef.current = null;
     setAccessToken(null);
     setUser(null);
   }, [accessToken]);

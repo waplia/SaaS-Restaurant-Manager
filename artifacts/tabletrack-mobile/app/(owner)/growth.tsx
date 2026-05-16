@@ -19,11 +19,11 @@ export default function GrowthScreen() {
 
   const couponsQ = useQuery({
     queryKey: ["coupons", restaurantId],
-    queryFn: () => customFetch<Coupon[] | { coupons?: Coupon[] }>(`/restaurants/${restaurantId}/coupons`).catch(() => []),
+    queryFn: () => customFetch<Coupon[] | { coupons?: Coupon[] }>(`/api/restaurants/${restaurantId}/coupons`).catch(() => []),
   });
   const campaignsQ = useQuery({
     queryKey: ["campaigns", restaurantId],
-    queryFn: () => customFetch<Campaign[] | { campaigns?: Campaign[] }>(`/restaurants/${restaurantId}/growth/campaigns`).catch(() => []),
+    queryFn: () => customFetch<Campaign[] | { campaigns?: Campaign[] }>(`/api/restaurants/${restaurantId}/growth/campaigns`).catch(() => []),
   });
   const coupons: Coupon[] = Array.isArray(couponsQ.data) ? couponsQ.data : (couponsQ.data?.coupons ?? []);
   const campaigns: Campaign[] = Array.isArray(campaignsQ.data) ? campaignsQ.data : (campaignsQ.data?.campaigns ?? []);

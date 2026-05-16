@@ -41,27 +41,27 @@ export default function AlertsScreen() {
 
   const ordersQ = useQuery({
     queryKey: ["alerts-orders", restaurantId],
-    queryFn: () => customFetch<OrdersResp>(`/restaurants/${restaurantId}/orders?status=pending&limit=20`).catch(() => ({} as OrdersResp)),
+    queryFn: () => customFetch<OrdersResp>(`/api/restaurants/${restaurantId}/orders?status=pending&limit=20`).catch(() => ({} as OrdersResp)),
   });
   const inventoryQ = useQuery({
     queryKey: ["alerts-inventory", restaurantId],
-    queryFn: () => customFetch<Array<{ id: number; name: string; quantity?: number | string; reorderPoint?: number | string }>>(`/restaurants/${restaurantId}/inventory?lowStock=true`).catch(() => []),
+    queryFn: () => customFetch<Array<{ id: number; name: string; quantity?: number | string; reorderPoint?: number | string }>>(`/api/restaurants/${restaurantId}/inventory?lowStock=true`).catch(() => []),
   });
   const fraudQ = useQuery({
     queryKey: ["alerts-fraud", restaurantId],
-    queryFn: () => customFetch<FraudResp>(`/restaurants/${restaurantId}/fraud-alerts?status=open&limit=10`).catch(() => ({} as FraudResp)),
+    queryFn: () => customFetch<FraudResp>(`/api/restaurants/${restaurantId}/fraud-alerts?status=open&limit=10`).catch(() => ({} as FraudResp)),
   });
   const reviewsQ = useQuery({
     queryKey: ["alerts-reviews", restaurantId],
-    queryFn: () => customFetch<ReviewsResp>(`/restaurants/${restaurantId}/reviews?maxRating=2&limit=10`).catch(() => ({} as ReviewsResp)),
+    queryFn: () => customFetch<ReviewsResp>(`/api/restaurants/${restaurantId}/reviews?maxRating=2&limit=10`).catch(() => ({} as ReviewsResp)),
   });
   const kdsQ = useQuery({
     queryKey: ["alerts-kds-delays", restaurantId],
-    queryFn: () => customFetch<Array<{ id: number; delaySeconds?: number; orderId?: number }>>(`/restaurants/${restaurantId}/kitchen/tickets?delayed=true`).catch(() => []),
+    queryFn: () => customFetch<Array<{ id: number; delaySeconds?: number; orderId?: number }>>(`/api/restaurants/${restaurantId}/kitchen/tickets?delayed=true`).catch(() => []),
   });
   const attendanceQ = useQuery({
     queryKey: ["alerts-attendance", restaurantId],
-    queryFn: () => customFetch<AttendanceResp>(`/restaurants/${restaurantId}/attendance/today`).catch(() => ({} as AttendanceResp)),
+    queryFn: () => customFetch<AttendanceResp>(`/api/restaurants/${restaurantId}/attendance/today`).catch(() => ({} as AttendanceResp)),
   });
 
   const isLoading = ordersQ.isLoading || inventoryQ.isLoading || fraudQ.isLoading || reviewsQ.isLoading;

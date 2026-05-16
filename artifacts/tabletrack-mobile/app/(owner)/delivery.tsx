@@ -31,11 +31,11 @@ export default function DeliveryScreen() {
   type OrdersResp = { orders?: DeliveryOrder[] };
   const ordersQ = useQuery({
     queryKey: ["delivery-orders", restaurantId],
-    queryFn: () => customFetch<OrdersResp>(`/restaurants/${restaurantId}/orders?orderType=delivery&limit=50`).catch(() => ({} as OrdersResp)),
+    queryFn: () => customFetch<OrdersResp>(`/api/restaurants/${restaurantId}/orders?orderType=delivery&limit=50`).catch(() => ({} as OrdersResp)),
   });
   const codQ = useQuery<CodSummary | null>({
     queryKey: ["cod-summary", restaurantId],
-    queryFn: () => customFetch<CodSummary>(`/restaurants/${restaurantId}/delivery/cod-summary`).catch(() => null),
+    queryFn: () => customFetch<CodSummary>(`/api/restaurants/${restaurantId}/delivery/cod-summary`).catch(() => null),
   });
   const list: DeliveryOrder[] = ordersQ.data?.orders ?? [];
 

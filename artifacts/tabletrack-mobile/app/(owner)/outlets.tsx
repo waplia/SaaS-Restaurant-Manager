@@ -24,7 +24,7 @@ export default function OutletsScreen() {
 
   const q = useQuery({
     queryKey: ["tenant-branches", tenantId],
-    queryFn: () => customFetch<Branch[]>(`/tenants/${tenantId}/branches`).catch(() => []),
+    queryFn: () => customFetch<Branch[]>(`/api/tenants/${tenantId}/branches`).catch(() => []),
     enabled: tenantId != null,
   });
   const list = Array.isArray(q.data) ? q.data : [];

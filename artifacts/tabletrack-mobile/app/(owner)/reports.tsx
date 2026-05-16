@@ -19,11 +19,11 @@ export default function ReportsScreen() {
 
   const trendQ = useQuery({
     queryKey: ["revenue-trend-7d", restaurantId],
-    queryFn: () => customFetch<Trend[]>(`/restaurants/${restaurantId}/dashboard/revenue-trend?days=7`).catch(() => []),
+    queryFn: () => customFetch<Trend[]>(`/api/restaurants/${restaurantId}/dashboard/revenue-trend?days=7`).catch(() => []),
   });
   const popularQ = useQuery({
     queryKey: ["popular-items-7d", restaurantId],
-    queryFn: () => customFetch<Popular[]>(`/restaurants/${restaurantId}/dashboard/popular-items?days=7`).catch(() => []),
+    queryFn: () => customFetch<Popular[]>(`/api/restaurants/${restaurantId}/dashboard/popular-items?days=7`).catch(() => []),
   });
   const trend = Array.isArray(trendQ.data) ? trendQ.data : [];
   const popular = Array.isArray(popularQ.data) ? popularQ.data : [];

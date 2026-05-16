@@ -42,7 +42,7 @@ export default function NotificationsScreen() {
 
   const q = useQuery({
     queryKey: ["user-notifications", user?.id],
-    queryFn: () => customFetch<{ notifications?: Notif[] } | Notif[]>(`/users/${user?.id}/notifications?limit=100`).catch(() => []),
+    queryFn: () => customFetch<{ notifications?: Notif[] } | Notif[]>(`/api/users/${user?.id}/notifications?limit=100`).catch(() => []),
     enabled: !!user,
   });
   const list: Notif[] = useMemo(() => {
@@ -54,7 +54,7 @@ export default function NotificationsScreen() {
 
   const markRead = useMutation({
     mutationFn: (ids: number[]) =>
-      customFetch(`/restaurants/${restaurantId}/notifications/mark-read`, {
+      customFetch(`/api/restaurants/${restaurantId}/notifications/mark-read`, {
         method: "POST", body: JSON.stringify({ ids }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["user-notifications"] }),

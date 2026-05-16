@@ -32,7 +32,7 @@ export default function CustomersScreen() {
 
   const q = useQuery({
     queryKey: ["customers", restaurantId],
-    queryFn: () => customFetch<{ customers?: Customer[]; data?: Customer[] } | Customer[]>(`/restaurants/${restaurantId}/customers?limit=200`).catch(() => []),
+    queryFn: () => customFetch<{ customers?: Customer[]; data?: Customer[] } | Customer[]>(`/api/restaurants/${restaurantId}/customers?limit=200`).catch(() => []),
   });
   const list: Customer[] = Array.isArray(q.data) ? q.data : (q.data?.customers ?? q.data?.data ?? []);
   const filtered = list.filter(c =>

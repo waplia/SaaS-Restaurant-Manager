@@ -29,13 +29,13 @@ export default function ReservationsScreen() {
 
   const q = useQuery({
     queryKey: ["reservations", restaurantId, filter],
-    queryFn: () => customFetch<Reservation[] | { reservations?: Reservation[] }>(`/restaurants/${restaurantId}/reservations?range=${filter}`).catch(() => []),
+    queryFn: () => customFetch<Reservation[] | { reservations?: Reservation[] }>(`/api/restaurants/${restaurantId}/reservations?range=${filter}`).catch(() => []),
   });
   const list: Reservation[] = Array.isArray(q.data) ? q.data : (q.data?.reservations ?? []);
 
   const update = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
-      customFetch(`/restaurants/${restaurantId}/reservations/${id}`, {
+      customFetch(`/api/restaurants/${restaurantId}/reservations/${id}`, {
         method: "PATCH", body: JSON.stringify({ status }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),

@@ -25,7 +25,7 @@ export default function FeedbackScreen() {
 
   const q = useQuery({
     queryKey: ["reviews", restaurantId],
-    queryFn: () => customFetch<{ reviews?: Review[] } | Review[]>(`/restaurants/${restaurantId}/reviews?limit=50`).catch(() => []),
+    queryFn: () => customFetch<{ reviews?: Review[] } | Review[]>(`/api/restaurants/${restaurantId}/reviews?limit=50`).catch(() => []),
   });
   const list: Review[] = Array.isArray(q.data) ? q.data : (q.data?.reviews ?? []);
   const avg = list.length ? list.reduce((s, r) => s + (r.rating ?? 0), 0) / list.length : 0;

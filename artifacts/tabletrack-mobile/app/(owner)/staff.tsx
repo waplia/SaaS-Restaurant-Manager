@@ -18,7 +18,7 @@ export default function StaffScreen() {
   const isWeb = Platform.OS === "web";
   const q = useQuery({
     queryKey: ["staff-list", restaurantId],
-    queryFn: () => customFetch<Staff[] | { staff?: Staff[] }>(`/restaurants/${restaurantId}/staff`).catch(() => []),
+    queryFn: () => customFetch<Staff[] | { staff?: Staff[] }>(`/api/restaurants/${restaurantId}/staff`).catch(() => []),
   });
   const staff: Staff[] = Array.isArray(q.data) ? q.data : (q.data?.staff ?? []);
 

@@ -26,11 +26,11 @@ export default function FinanceScreen() {
   const today = new Date().toISOString().slice(0, 10);
   const summaryQ = useQuery({
     queryKey: ["payment-summary", restaurantId, today],
-    queryFn: () => customFetch<PaymentSummary>(`/restaurants/${restaurantId}/payments/summary?date=${today}`).catch(() => ({} as PaymentSummary)),
+    queryFn: () => customFetch<PaymentSummary>(`/api/restaurants/${restaurantId}/payments/summary?date=${today}`).catch(() => ({} as PaymentSummary)),
   });
   const payoutsQ = useQuery({
     queryKey: ["aggregator-payouts", restaurantId],
-    queryFn: () => customFetch<Payout[] | { payouts?: Payout[] }>(`/restaurants/${restaurantId}/aggregator-payouts?status=pending`).catch(() => []),
+    queryFn: () => customFetch<Payout[] | { payouts?: Payout[] }>(`/api/restaurants/${restaurantId}/aggregator-payouts?status=pending`).catch(() => []),
   });
   const sum = summaryQ.data ?? {};
   const payouts: Payout[] = Array.isArray(payoutsQ.data) ? payoutsQ.data : (payoutsQ.data?.payouts ?? []);

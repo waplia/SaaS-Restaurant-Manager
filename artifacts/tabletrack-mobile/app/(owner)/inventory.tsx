@@ -28,7 +28,7 @@ export default function InventoryScreen() {
 
   const q = useQuery({
     queryKey: ["inventory", restaurantId],
-    queryFn: () => customFetch<Item[]>(`/restaurants/${restaurantId}/inventory`).catch(() => []),
+    queryFn: () => customFetch<Item[]>(`/api/restaurants/${restaurantId}/inventory`).catch(() => []),
   });
 
   const items = (Array.isArray(q.data) ? q.data : []).filter(it => {

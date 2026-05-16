@@ -26,14 +26,14 @@ export default function MenuScreen() {
 
   const q = useQuery({
     queryKey: ["menu-items-mobile", restaurantId],
-    queryFn: () => customFetch<{ items?: MenuItem[] } | MenuItem[]>(`/restaurants/${restaurantId}/menu/items?limit=500`).catch(() => []),
+    queryFn: () => customFetch<{ items?: MenuItem[] } | MenuItem[]>(`/api/restaurants/${restaurantId}/menu/items?limit=500`).catch(() => []),
   });
   const items: MenuItem[] = Array.isArray(q.data) ? q.data : (q.data?.items ?? []);
   const filtered = items.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()));
 
   const toggle = useMutation({
     mutationFn: ({ id, isAvailable }: { id: number; isAvailable: boolean }) =>
-      customFetch(`/restaurants/${restaurantId}/items/${id}`, {
+      customFetch(`/api/restaurants/${restaurantId}/items/${id}`, {
         method: "PATCH", body: JSON.stringify({ isAvailable }),
       }),
     onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not update item"),

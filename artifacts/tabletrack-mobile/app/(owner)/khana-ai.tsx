@@ -38,7 +38,7 @@ export default function KhanaAIScreen() {
 
   const { data } = useQuery({
     queryKey: ["ai-usage-summary", restaurantId],
-    queryFn: () => customFetch<AiSummary>(`/restaurants/${restaurantId}/ai/usage-summary`).catch(() => ({} as AiSummary)),
+    queryFn: () => customFetch<AiSummary>(`/api/restaurants/${restaurantId}/ai/usage-summary`).catch(() => ({} as AiSummary)),
   });
   const balance = data?.balance ?? 0;
   const used = data?.used ?? 0;

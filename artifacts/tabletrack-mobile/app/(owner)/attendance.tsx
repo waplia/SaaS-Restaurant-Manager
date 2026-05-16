@@ -33,7 +33,7 @@ export default function AttendanceScreen() {
   const today = new Date().toISOString().slice(0, 10);
   const q = useQuery({
     queryKey: ["attendance-today", restaurantId, today],
-    queryFn: () => customFetch<AttendanceRow[] | { records?: AttendanceRow[] }>(`/restaurants/${restaurantId}/attendance?date=${today}`).catch(() => []),
+    queryFn: () => customFetch<AttendanceRow[] | { records?: AttendanceRow[] }>(`/api/restaurants/${restaurantId}/attendance?date=${today}`).catch(() => []),
   });
   const list: AttendanceRow[] = Array.isArray(q.data) ? q.data : (q.data?.records ?? []);
 

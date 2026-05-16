@@ -37,15 +37,15 @@ export default function ApprovalsScreen() {
   type ExpensesResp = { data?: Array<{ id: number; amount: string; payee?: string | null; expenseDate: string; status?: string }> };
   const expensesQ = useQuery({
     queryKey: ["pending-expenses", restaurantId],
-    queryFn: () => customFetch<ExpensesResp>(`/restaurants/${restaurantId}/expenses?status=pending&limit=50`).catch(() => ({} as ExpensesResp)),
+    queryFn: () => customFetch<ExpensesResp>(`/api/restaurants/${restaurantId}/expenses?status=pending&limit=50`).catch(() => ({} as ExpensesResp)),
   });
   const leavesQ = useQuery({
     queryKey: ["pending-leaves", restaurantId],
-    queryFn: () => customFetch<Array<{ id: number; userName?: string; startDate: string; endDate: string; reason?: string; status?: string }>>(`/restaurants/${restaurantId}/leave-requests?status=pending`).catch(() => []),
+    queryFn: () => customFetch<Array<{ id: number; userName?: string; startDate: string; endDate: string; reason?: string; status?: string }>>(`/api/restaurants/${restaurantId}/leave-requests?status=pending`).catch(() => []),
   });
   const posQ = useQuery({
     queryKey: ["pending-pos", restaurantId],
-    queryFn: () => customFetch<Array<{ id: number; supplierName?: string; total?: string; status?: string; createdAt: string }>>(`/restaurants/${restaurantId}/purchase-orders?status=pending_approval`).catch(() => []),
+    queryFn: () => customFetch<Array<{ id: number; supplierName?: string; total?: string; status?: string; createdAt: string }>>(`/api/restaurants/${restaurantId}/purchase-orders?status=pending_approval`).catch(() => []),
   });
 
   const items: ApprovalItem[] = useMemo(() => {

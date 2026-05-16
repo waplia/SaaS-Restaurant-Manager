@@ -13,7 +13,7 @@ export function AICreditChip({ compact = false }: { compact?: boolean }) {
   const { restaurantId } = useAuth();
   const { data } = useQuery({
     queryKey: ["ai-usage-summary", restaurantId],
-    queryFn: () => customFetch<AiSummary>(`/restaurants/${restaurantId}/ai/usage-summary`).catch(() => ({} as AiSummary)),
+    queryFn: () => customFetch<AiSummary>(`/api/restaurants/${restaurantId}/ai/usage-summary`).catch(() => ({} as AiSummary)),
     staleTime: 60_000,
   });
   const balance = data?.balance ?? 0;

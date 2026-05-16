@@ -32,7 +32,7 @@ export default function TablesScreen() {
 
   const q = useQuery({
     queryKey: ["tables", restaurantId],
-    queryFn: () => customFetch<Table[]>(`/restaurants/${restaurantId}/tables`).catch(() => []),
+    queryFn: () => customFetch<Table[]>(`/api/restaurants/${restaurantId}/tables`).catch(() => []),
   });
   const tables = Array.isArray(q.data) ? q.data : [];
 

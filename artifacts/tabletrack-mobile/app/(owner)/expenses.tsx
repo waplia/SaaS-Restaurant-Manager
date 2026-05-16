@@ -59,7 +59,7 @@ export default function MobileExpensesScreen() {
         method: "PUT", headers: { "Content-Type": contentType }, body: blob,
       });
       if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-      await customFetch(`/restaurants/${restaurantId}/storage/uploads/finalize`, {
+      await customFetch(`/api/restaurants/${restaurantId}/storage/uploads/finalize`, {
         method: "POST", body: JSON.stringify({ objectPath: presign.objectPath }),
       });
       setReceiptUri(asset.uri);
@@ -73,17 +73,17 @@ export default function MobileExpensesScreen() {
 
   const { data: cats = [] } = useQuery({
     queryKey: ["expense-categories", restaurantId],
-    queryFn: () => customFetch<ExpenseCategory[]>(`/restaurants/${restaurantId}/expense-categories`),
+    queryFn: () => customFetch<ExpenseCategory[]>(`/api/restaurants/${restaurantId}/expense-categories`),
   });
 
   const { data: recent, refetch, isRefetching } = useQuery({
     queryKey: ["expenses", restaurantId, "recent"],
-    queryFn: () => customFetch<ExpensesResponse>(`/restaurants/${restaurantId}/expenses?limit=20`),
+    queryFn: () => customFetch<ExpensesResponse>(`/api/restaurants/${restaurantId}/expenses?limit=20`),
   });
 
   const createExpense = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
-      customFetch(`/restaurants/${restaurantId}/expenses`, { method: "POST", body: JSON.stringify(body) }),
+      customFetch(`/api/restaurants/${restaurantId}/expenses`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       setAmount(""); setPayee(""); setNotes(""); setCategoryId(null); setPaymentMethod("cash");
       setReceiptUri(null); setReceiptPath(null);
