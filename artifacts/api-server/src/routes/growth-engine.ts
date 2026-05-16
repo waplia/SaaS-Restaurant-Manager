@@ -26,6 +26,7 @@ function parseScheduledAt(input: unknown): { ok: true; value: Date | null } | { 
   if (Number.isNaN(d.getTime())) return { ok: false, error: "scheduledAt is not a valid date" };
   return { ok: true, value: d };
 }
+
 const TYPES = new Set([
   "win_back",
   "birthday",
@@ -147,7 +148,7 @@ router.post("/restaurants/:restaurantId/growth/campaigns", async (req, res) => {
     content: (content && typeof content === "object") ? content : {},
     stats: { sent: 0, delivered: 0, opened: 0, clicked: 0, converted: 0, revenue: 0 },
     scheduledAt: parsed.value,
-    createdBy: req.user?.sub ?? null,
+    createdBy: req.user?.id ?? null,
   };
 
   const [c] = await db.insert(campaignsTable).values(values).returning();
@@ -155,7 +156,7 @@ router.post("/restaurants/:restaurantId/growth/campaigns", async (req, res) => {
     campaignId: c.id,
     restaurantId,
     event: "created",
-    actorId: req.user?.sub ?? null,
+    actorId: req.user?.id ?? null,
     payload: { name: c.name, type: c.type, channel: c.channel, status: c.status },
   });
   res.status(201).json(c);
@@ -199,7 +200,7 @@ router.patch("/restaurants/:restaurantId/growth/campaigns/:id", async (req, res)
     campaignId: id,
     restaurantId,
     event: "updated",
-    actorId: req.user?.sub ?? null,
+    actorId: req.user?.id ?? null,
     payload: { fields: Object.keys(updates).filter(k => k !== "updatedAt") },
   });
   res.json(updated);
@@ -240,7 +241,7 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/status", async (req
     campaignId: id,
     restaurantId,
     event: `status:${status}`,
-    actorId: req.user?.sub ?? null,
+    actorId: req.user?.id ?? null,
     payload: { status },
   });
   res.json(updated);

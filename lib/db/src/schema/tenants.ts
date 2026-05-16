@@ -55,6 +55,14 @@ export const tenantsTable = pgTable("tenants", {
   primaryColor: text("primary_color").default("#f97316"),
   lifetimeCouponId: integer("lifetime_coupon_id"),
   lifetimeCouponSnapshot: jsonb("lifetime_coupon_snapshot").$type<Record<string, unknown> | null>(),
+  // Fintech (Task #115): per-tenant feature toggles for wallets, gift cards,
+  // cashback, subscription wallet, and capital placeholders.
+  fintechWalletsEnabled: boolean("fintech_wallets_enabled").notNull().default(true),
+  fintechGiftCardsEnabled: boolean("fintech_gift_cards_enabled").notNull().default(true),
+  fintechCashbackEnabled: boolean("fintech_cashback_enabled").notNull().default(true),
+  fintechSubscriptionWalletEnabled: boolean("fintech_subscription_wallet_enabled").notNull().default(true),
+  fintechCapitalEnabled: boolean("fintech_capital_enabled").notNull().default(false),
+  fintechRequirePayoutApproval: boolean("fintech_require_payout_approval").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

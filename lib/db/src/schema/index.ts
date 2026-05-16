@@ -39,3 +39,4 @@ export * from "./fraud";
 export * from "./menu-pricing";
 export * from "./ai-chat";
 export * from "./addons";
+export * from "./fintech";

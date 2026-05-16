@@ -63,6 +63,7 @@ import dashboardChatRouter from "./dashboard-chat";
 import growthEngineRouter from "./growth-engine";
 import addonsRouter from "./addons";
 import adminAddonsRouter from "./admin-addons";
+import fintechRouter from "./fintech";
 
 const router: IRouter = Router();
 
@@ -144,5 +145,6 @@ router.use(menuPricingRouter);
 router.use(growthEngineRouter);
 router.use(addonsRouter);
 router.use(adminAddonsRouter);
+router.use(fintechRouter);
 
 export default router;

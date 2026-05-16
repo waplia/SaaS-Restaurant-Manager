@@ -52,6 +52,9 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
+      { kind: "link", href: "/wallets", label: "Wallet & Gift Cards", icon: Wallet, roles: ["owner", "manager"] },
+      { kind: "link", href: "/settlements", label: "Settlements & Recon", icon: TrendingUp, roles: ["owner", "manager", "cashier"] },
+      { kind: "link", href: "/capital", label: "Capital & Insurance", icon: Banknote, roles: ["owner", "manager"] },
     ],
   },
   {

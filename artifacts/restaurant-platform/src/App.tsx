@@ -77,6 +77,10 @@ import CustomerFeedbackPage from "@/pages/customer-feedback";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
 import GrowthEnginePage from "@/pages/growth-engine";
+import WalletsPage from "@/pages/wallets";
+import SettlementReconPage from "@/pages/settlement-recon";
+import CapitalInsurancePage from "@/pages/capital-insurance";
+import AdminFintechPage from "@/pages/admin-fintech";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -165,6 +169,10 @@ function Router() {
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
+      <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
+      <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />
+      <Route path="/capital" component={() => <RoleProtectedRoute component={CapitalInsurancePage} allow={["owner", "manager"]} />} />
+      <Route path="/admin/fintech" component={() => <SuperAdminRoute component={AdminFintechPage} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
       <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={FraudAlertsPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
