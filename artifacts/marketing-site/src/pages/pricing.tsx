@@ -1,15 +1,17 @@
+import { useState, useMemo } from "react";
 import { useSeo } from "@/lib/seo";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Link } from "wouter";
-import { Check } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
   isFeatureEnabled, formatQuantity,
 } from "@workspace/db/planFeatures";
-import { usePublicPlans, formatPlanPrice, type PublicPlan } from "@/lib/usePublicPlans";
+import { usePublicPlans, type PublicPlan, type BillingView } from "@/lib/usePublicPlans";
+import { BillingToggle } from "@/components/shared/BillingToggle";
 
 interface PlanFeatureRow {
   label: string;
@@ -82,21 +84,38 @@ export default function Pricing() {
     },
   });
 
-  const { plans: sorted, isLoading, error } = usePublicPlans();
-  const popularIdx = sorted.length >= 2 ? Math.floor(sorted.length / 2) : -1;
+  const { plans, getDisplayPlans, hasDerivedYearly, isLoading, error } = usePublicPlans();
+  const [view, setView] = useState<BillingView>("monthly");
+  const displayPlans = useMemo(() => getDisplayPlans(view), [getDisplayPlans, view]);
+  const popularIdx = displayPlans.length >= 2 ? Math.floor(displayPlans.length / 2) : -1;
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Header />
       <main className="flex-grow pt-24 pb-32">
         <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center max-w-3xl mx-auto mb-16">
+          <div className="text-center max-w-3xl mx-auto mb-12">
             <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
               Simple, transparent pricing.
             </h1>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-xl text-muted-foreground mb-8">
               No hidden fees. No long-term contracts. Just the tools you need to run your restaurant.
             </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
+              <a href="/app/register">
+                <Button size="lg" className="h-12 px-7 text-base w-full sm:w-auto" data-testid="btn-pricing-hero-get-started">
+                  Get started — free 14-day trial <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </a>
+              <Link href="/book-demo">
+                <Button size="lg" variant="outline" className="h-12 px-7 text-base w-full sm:w-auto" data-testid="btn-pricing-hero-book-demo">
+                  Book a demo
+                </Button>
+              </Link>
+            </div>
+            <div className="flex justify-center">
+              <BillingToggle view={view} onChange={setView} showSaveHint={hasDerivedYearly} />
+            </div>
           </div>
 
           {isLoading ? (
@@ -105,7 +124,7 @@ export default function Pricing() {
                 <Skeleton key={i} className="h-[460px] rounded-2xl" />
               ))}
             </div>
-          ) : error || sorted.length === 0 ? (
+          ) : error || plans.length === 0 ? (
             <div className="text-center py-24 bg-card rounded-2xl border border-border max-w-2xl mx-auto">
               <h3 className="text-xl font-bold mb-2">Pricing is being updated</h3>
               <p className="text-muted-foreground mb-6">Talk to our team for a personalized quote.</p>
@@ -115,19 +134,23 @@ export default function Pricing() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto" data-testid="pricing-grid-anchor">
-              {sorted.map((plan, i) => (
-                <PricingCard
-                  key={plan.id}
-                  title={plan.name}
-                  price={formatPlanPrice(plan)}
-                  period={Number(plan.price) === 0 ? "" : `/${plan.billingPeriod === "yearly" ? "yr" : "mo"}`}
-                  desc={plan.description ?? `Includes a ${plan.trialDays}-day free trial.`}
-                  features={planFeatureRows(plan)}
-                  href="/app/register"
-                  btnText={Number(plan.price) === 0 ? "Start free trial" : "Get started"}
-                  isPopular={i === popularIdx}
-                />
-              ))}
+              {displayPlans.map((dp, i) => {
+                const plan = dp.plan;
+                const isFree = Number(plan.price) === 0;
+                return (
+                  <PricingCard
+                    key={plan.id}
+                    title={plan.name}
+                    price={dp.displayPrice}
+                    period={isFree ? "" : `/${dp.period === "yearly" ? "yr" : "mo"}`}
+                    desc={plan.description ?? `Includes a ${plan.trialDays}-day free trial.`}
+                    features={planFeatureRows(plan)}
+                    href="/app/register"
+                    btnText={isFree ? "Start free trial" : "Get started"}
+                    isPopular={i === popularIdx}
+                  />
+                );
+              })}
             </div>
           )}
 

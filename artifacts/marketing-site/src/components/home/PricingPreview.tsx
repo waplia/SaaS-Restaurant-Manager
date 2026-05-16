@@ -3,18 +3,14 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, ArrowRight } from "lucide-react";
-import { usePublicPlans, formatPlanPrice, type PublicPlan } from "@/lib/usePublicPlans";
+import { usePublicPlans, type BillingView } from "@/lib/usePublicPlans";
+import { BillingToggle } from "@/components/shared/BillingToggle";
 
 export function PricingPreview() {
-  const { plans, monthlyPlans, yearlyPlans, hasMonthly, hasYearly, isLoading, error } = usePublicPlans();
-  const showToggle = hasMonthly && hasYearly;
-  const [yearly, setYearly] = useState(false);
+  const { plans, getDisplayPlans, hasDerivedYearly, isLoading, error } = usePublicPlans();
+  const [view, setView] = useState<BillingView>("monthly");
 
-  const displayPlans = useMemo<PublicPlan[]>(() => {
-    if (showToggle) return yearly ? yearlyPlans : monthlyPlans;
-    return plans;
-  }, [showToggle, yearly, plans, monthlyPlans, yearlyPlans]);
-
+  const displayPlans = useMemo(() => getDisplayPlans(view), [getDisplayPlans, view]);
   const popularIdx = displayPlans.length >= 2 ? Math.floor(displayPlans.length / 2) : -1;
 
   // Hide section entirely if API returned empty and no error — keeps page tidy.
@@ -29,24 +25,7 @@ export function PricingPreview() {
           </div>
           <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5">Plans for every stage of your restaurant.</h2>
           <p className="text-lg text-muted-foreground mb-7">Start free for 14 days. Upgrade only when you're ready.</p>
-          {showToggle && (
-            <div className="inline-flex items-center gap-3 rounded-full border border-border bg-card p-1">
-              <button
-                onClick={() => setYearly(false)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${!yearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                data-testid="btn-pricing-monthly"
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setYearly(true)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${yearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                data-testid="btn-pricing-yearly"
-              >
-                Yearly
-              </button>
-            </div>
-          )}
+          <BillingToggle view={view} onChange={setView} showSaveHint={hasDerivedYearly} />
         </div>
 
         {isLoading ? (
@@ -65,9 +44,9 @@ export function PricingPreview() {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
-            {displayPlans.map((plan, i) => {
+            {displayPlans.map((dp, i) => {
+              const plan = dp.plan;
               const popular = i === popularIdx;
-              const priceLabel = formatPlanPrice(plan);
               const isFree = Number(plan.price) === 0;
               const isEnterprise = /enterprise/i.test(plan.name);
               return (
@@ -86,13 +65,13 @@ export function PricingPreview() {
                     {plan.description ?? (isFree ? `Free for ${plan.trialDays} days.` : "Built for growing restaurants.")}
                   </p>
                   <div className="flex items-baseline gap-1 mb-1">
-                    <span className="text-3xl font-bold">{priceLabel}</span>
+                    <span className="text-3xl font-bold">{dp.displayPrice}</span>
                     {!isFree && (
-                      <span className="text-sm text-muted-foreground">/{plan.billingPeriod === "yearly" ? "yr" : "mo"}</span>
+                      <span className="text-sm text-muted-foreground">/{dp.period === "yearly" ? "yr" : "mo"}</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mb-5">
-                    {isFree ? `${plan.trialDays}-day trial` : `Billed ${plan.billingPeriod}`}
+                    {isFree ? `${plan.trialDays}-day trial` : `Billed ${dp.period}`}
                   </p>
                   <ul className="space-y-2 mb-6 flex-1">
                     {(plan.features ?? []).slice(0, 6).map((f) => (
