@@ -4,31 +4,12 @@ import { Footer } from "@/components/layout/Footer";
 import { Link } from "wouter";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
   isFeatureEnabled, formatQuantity,
 } from "@workspace/db/planFeatures";
-
-interface PublicPlan {
-  id: number;
-  slug: string;
-  name: string;
-  description: string | null;
-  price: string;
-  currency: "INR" | "USD";
-  billingPeriod: "monthly" | "yearly";
-  trialDays: number;
-  maxRestaurants: number;
-  maxBranches: number;
-  maxStaff: number;
-  maxTables: number;
-  maxMenuItems: number;
-  features: string[] | null;
-  featureFlags: Record<string, boolean> | null;
-  isActive: boolean;
-}
+import { usePublicPlans, formatPlanPrice, type PublicPlan } from "@/lib/usePublicPlans";
 
 interface PlanFeatureRow {
   label: string;
@@ -63,17 +44,6 @@ const FAQ_ITEMS = [
     a: "Card, UPI, wallets, cash, and split payments are supported out of the box. Cashfree and Stripe are both supported for subscription billing.",
   },
 ];
-
-function currencySymbol(c: string) {
-  return c === "USD" ? "$" : "₹";
-}
-
-function formatPrice(plan: PublicPlan) {
-  const n = Number(plan.price);
-  if (!Number.isFinite(n)) return plan.price;
-  if (n === 0) return "Free";
-  return `${currencySymbol(plan.currency)}${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
 
 function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
   const rows: PlanFeatureRow[] = [];
@@ -112,16 +82,7 @@ export default function Pricing() {
     },
   });
 
-  const { data: plans, isLoading, error } = useQuery<PublicPlan[]>({
-    queryKey: ["public-plans"],
-    queryFn: async () => {
-      const res = await fetch("/api/marketing/plans");
-      if (!res.ok) throw new Error("Failed to fetch plans");
-      return res.json();
-    },
-  });
-
-  const sorted = (plans ?? []).slice().sort((a, b) => Number(a.price) - Number(b.price));
+  const { plans: sorted, isLoading, error } = usePublicPlans();
   const popularIdx = sorted.length >= 2 ? Math.floor(sorted.length / 2) : -1;
 
   return (
@@ -139,8 +100,8 @@ export default function Pricing() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-              {[0, 1, 2].map((i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+              {[0, 1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-[460px] rounded-2xl" />
               ))}
             </div>
@@ -153,12 +114,12 @@ export default function Pricing() {
               </Button>
             </div>
           ) : (
-            <div className={`grid grid-cols-1 ${sorted.length >= 3 ? "md:grid-cols-3" : sorted.length === 2 ? "md:grid-cols-2" : "md:grid-cols-1 max-w-md"} gap-8 max-w-6xl mx-auto`} data-testid="pricing-grid-anchor">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto" data-testid="pricing-grid-anchor">
               {sorted.map((plan, i) => (
                 <PricingCard
                   key={plan.id}
                   title={plan.name}
-                  price={formatPrice(plan)}
+                  price={formatPlanPrice(plan)}
                   period={Number(plan.price) === 0 ? "" : `/${plan.billingPeriod === "yearly" ? "yr" : "mo"}`}
                   desc={plan.description ?? `Includes a ${plan.trialDays}-day free trial.`}
                   features={planFeatureRows(plan)}
