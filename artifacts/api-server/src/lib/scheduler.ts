@@ -1,7 +1,9 @@
 import cron from "node-cron";
 import { db } from "./db";
 import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzle-orm";
-import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable } from "../lib/db";
+import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable, reservationsTable, customersTable, restaurantSettingsTable } from "../lib/db";
+import { sendWhatsApp, reservationEmail } from "./notifications";
+import { pushToStaff } from "./pushNotify";
 import { sendEmail, dailySummaryEmail } from "./notifications";
 import { sendByTemplateKey } from "./emailSender";
 import { sendBroadcastWhatsApp } from "./whatsapp";
@@ -367,6 +369,20 @@ export function startScheduler(): void {
     await runScheduledBackupTick();
   });
 
+  // Reservation reminders + no-show sweep — runs every 5 minutes.
+  // - Sends a one-shot reminder for confirmed reservations whose start is
+  //   ~`reminderMinutes` minutes away (default 60).
+  // - Auto-marks reservations as no_show when grace period after the start
+  //   has elapsed and they are still pending/confirmed.
+  registerCron("reservation_sweep", "*/5 * * * *", "Reservation reminders + no-show sweep (every 5 min, IST)");
+  trackCron("reservation_sweep", "*/5 * * * *", async () => {
+    try {
+      await runReservationSweep(new Date());
+    } catch (err) {
+      logger.error({ err }, "[reservation-sweep] failed");
+    }
+  });
+
   // Kitchen delay alerts: scan active tickets every minute, emit alerts for
   // tickets past their per-restaurant configured threshold (default 10 min).
   trackCron("kitchen_delay_detector", "* * * * *", async () => {
@@ -380,6 +396,101 @@ export function startScheduler(): void {
   });
 
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
+}
+
+async function runReservationSweep(now: Date): Promise<void> {
+  // Per-restaurant reservation settings — read overrides from restaurant_settings.section="reservation"
+  const settingsRows = await db.select().from(restaurantSettingsTable).where(eq(restaurantSettingsTable.section, "reservation"));
+  const cfgByRestaurant = new Map<number, { reminderMinutes: number; gracePeriodMinutes: number; autoNoShow: boolean }>();
+  for (const row of settingsRows) {
+    const data = (row.data ?? {}) as Record<string, unknown>;
+    cfgByRestaurant.set(row.restaurantId, {
+      reminderMinutes: Number(data.reminderMinutes) || 60,
+      gracePeriodMinutes: Number(data.gracePeriodMinutes) || 15,
+      autoNoShow: data.autoNoShow !== false,
+    });
+  }
+  const defaultCfg = { reminderMinutes: 60, gracePeriodMinutes: 15, autoNoShow: true };
+
+  // Reminders: confirmed bookings whose start is in [now+reminderMinutes-3, now+reminderMinutes+3] minutes
+  // and that haven't been reminded yet.
+  const reminderWindowMin = new Date(now.getTime() + 55 * 60_000);
+  const reminderWindowMax = new Date(now.getTime() + 75 * 60_000);
+  const dueForReminder = await db.select().from(reservationsTable).where(and(
+    eq(reservationsTable.status, "confirmed"),
+    sql`${reservationsTable.reminderSentAt} IS NULL`,
+    gte(reservationsTable.scheduledAt, reminderWindowMin),
+    lte(reservationsTable.scheduledAt, reminderWindowMax),
+  )).limit(100);
+
+  for (const r of dueForReminder) {
+    const cfg = cfgByRestaurant.get(r.restaurantId) ?? defaultCfg;
+    // Tighter target check using configured reminderMinutes
+    const targetMs = r.scheduledAt.getTime() - cfg.reminderMinutes * 60_000;
+    if (Math.abs(targetMs - now.getTime()) > 5 * 60_000) continue;
+    try {
+      const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, r.restaurantId));
+      const tpl = reservationEmail({
+        customerName: r.guestName,
+        restaurantName: restaurant?.name ?? "Restaurant",
+        date: r.scheduledAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        time: r.scheduledAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        guests: r.partySize,
+      });
+      const reminderText = `Hi ${r.guestName}, this is a friendly reminder of your reservation at ${restaurant?.name ?? "our restaurant"} for ${r.partySize} on ${tpl.text.split("on ")[1] ?? ""}. See you soon!`;
+      if (r.guestEmail) {
+        await sendEmail({ to: r.guestEmail, subject: `Reminder: ${tpl.subject}`, html: tpl.html.replace("Reservation Confirmed", "Reservation Reminder"), text: reminderText }).catch(() => {});
+      }
+      if (r.guestPhone) {
+        await sendWhatsApp({ to: r.guestPhone, body: reminderText }).catch(() => {});
+      }
+      await db.update(reservationsTable).set({ reminderSentAt: new Date(), updatedAt: new Date() }).where(eq(reservationsTable.id, r.id));
+    } catch (err) {
+      logger.warn({ err, reservationId: r.id }, "[reservation-sweep] reminder failed");
+    }
+  }
+
+  // No-show sweep: pending/confirmed reservations whose start + grace period < now.
+  const overdue = await db.select().from(reservationsTable).where(and(
+    inArray(reservationsTable.status, ["pending", "confirmed"]),
+    sql`${reservationsTable.scheduledAt} + (${reservationsTable.gracePeriodMinutes} || ' minutes')::interval < ${now}`,
+  )).limit(200);
+
+  for (const r of overdue) {
+    const cfg = cfgByRestaurant.get(r.restaurantId) ?? defaultCfg;
+    if (!cfg.autoNoShow) continue;
+    await db.update(reservationsTable).set({
+      status: "no_show",
+      noShowMarkedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(reservationsTable.id, r.id));
+
+    if (r.customerId) {
+      await db.update(customersTable).set({
+        noShowCount: sql`${customersTable.noShowCount} + 1`,
+        lastNoShowAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(customersTable.id, r.customerId)).catch(() => {});
+    }
+
+    await db.insert(notificationsTable).values({
+      restaurantId: r.restaurantId,
+      type: "reservation_request",
+      title: "Reservation auto-marked no-show",
+      message: `${r.guestName} (${r.partySize} guests) at ${r.scheduledAt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`,
+      entityId: r.id,
+      entityType: "reservation",
+    }).catch(() => {});
+
+    pushToStaff(
+      { restaurantId: r.restaurantId, roles: ["owner", "manager", "waiter"], type: "reservation" },
+      { title: "Reservation no-show", body: `${r.guestName} • party of ${r.partySize}`, data: { reservationId: r.id } },
+    ).catch(() => {});
+  }
+
+  if (dueForReminder.length || overdue.length) {
+    logger.info({ reminders: dueForReminder.length, noShows: overdue.length }, "[reservation-sweep] done");
+  }
 }
 
 async function runAutoReorderTick(now: Date) {

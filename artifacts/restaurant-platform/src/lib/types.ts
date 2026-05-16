@@ -327,6 +327,8 @@ export interface FloorTable {
   positionX: number;
   positionY: number;
   shape: string;
+  needsCleaning?: boolean;
+  lastCleanedAt?: string | null;
 }
 
 export interface CreateTableInput {
@@ -977,11 +979,15 @@ export interface CreateCustomerInput {
 }
 
 export type ReservationStatus = "pending" | "confirmed" | "seated" | "completed" | "cancelled" | "no_show";
+export type ReservationOccasion = "birthday" | "anniversary" | "business" | "date" | "celebration" | "other";
+export type ReservationDepositStatus = "none" | "required" | "pending" | "paid" | "refunded" | "waived";
+export type ReservationSourceChannel = "staff" | "public" | "walkin" | "phone" | "mobile";
 
 export interface Reservation {
   id: number;
   restaurantId: number;
   tableId: number | null;
+  customerId: number | null;
   guestName: string;
   guestPhone: string | null;
   guestEmail: string | null;
@@ -990,6 +996,20 @@ export interface Reservation {
   durationMinutes: number;
   status: ReservationStatus;
   notes: string | null;
+  occasion: ReservationOccasion | null;
+  occasionNotes: string | null;
+  seatingNotes: string | null;
+  isVip: boolean;
+  depositAmount: string | null;
+  depositStatus: ReservationDepositStatus;
+  depositPaymentRef: string | null;
+  gracePeriodMinutes: number;
+  sourceChannel: ReservationSourceChannel;
+  walkInArrivedAt: string | null;
+  estimatedWaitMinutes: number | null;
+  cleaningRequiredOnComplete: boolean;
+  reminderSentAt: string | null;
+  noShowMarkedAt: string | null;
   createdAt: string;
 }
 
@@ -1003,18 +1023,87 @@ export interface CreateReservationInput {
   durationMinutes?: number;
   notes?: string;
   status?: ReservationStatus;
+  occasion?: ReservationOccasion | null;
+  occasionNotes?: string;
+  seatingNotes?: string;
+  isVip?: boolean;
+  depositAmount?: string | number | null;
+  depositStatus?: ReservationDepositStatus;
+  gracePeriodMinutes?: number;
+  sourceChannel?: ReservationSourceChannel;
+  customerId?: number | null;
+  cleaningRequiredOnComplete?: boolean;
 }
 
 export interface UpdateReservationInput {
   id: number;
   guestName?: string;
   guestPhone?: string;
+  guestEmail?: string;
   partySize?: number;
   scheduledAt?: string;
   durationMinutes?: number;
   status?: ReservationStatus;
   notes?: string;
   tableId?: number | null;
+  occasion?: ReservationOccasion | null;
+  occasionNotes?: string;
+  seatingNotes?: string;
+  isVip?: boolean;
+  depositAmount?: string | number | null;
+  depositStatus?: ReservationDepositStatus;
+  depositPaymentRef?: string | null;
+  gracePeriodMinutes?: number;
+  estimatedWaitMinutes?: number | null;
+  cleaningRequiredOnComplete?: boolean;
+}
+
+export type WaitlistStatus = "waiting" | "notified" | "seated" | "cancelled" | "no_show";
+
+export interface WaitlistEntry {
+  id: number;
+  restaurantId: number;
+  customerId: number | null;
+  guestName: string;
+  guestPhone: string | null;
+  partySize: number;
+  estimatedWaitMinutes: number | null;
+  quotedAt: string;
+  status: WaitlistStatus;
+  notifiedAt: string | null;
+  seatedAt: string | null;
+  seatedTableId: number | null;
+  reservationId: number | null;
+  notes: string | null;
+  occasion: ReservationOccasion | null;
+  isVip: boolean;
+  sourceChannel: ReservationSourceChannel;
+  createdAt: string;
+}
+
+export interface CreateWaitlistInput {
+  guestName: string;
+  guestPhone?: string;
+  partySize: number;
+  estimatedWaitMinutes?: number;
+  notes?: string;
+  occasion?: ReservationOccasion | null;
+  isVip?: boolean;
+  sourceChannel?: ReservationSourceChannel;
+  customerId?: number | null;
+}
+
+export interface UpdateWaitlistInput {
+  id: number;
+  guestName?: string;
+  guestPhone?: string;
+  partySize?: number;
+  estimatedWaitMinutes?: number | null;
+  notes?: string;
+  occasion?: ReservationOccasion | null;
+  isVip?: boolean;
+  status?: WaitlistStatus;
+  seatedTableId?: number | null;
 }
 
 export interface WaiterRequest {

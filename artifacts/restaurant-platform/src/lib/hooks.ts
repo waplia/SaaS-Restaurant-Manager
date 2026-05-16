@@ -853,6 +853,91 @@ export function useSplitOrderToTable() {
 
 export { type Reservation };
 
+export function useWaitlist(status?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (status) q.set("status", status);
+  return useQuery({
+    queryKey: ["waitlist", RESTAURANT_ID, status],
+    queryFn: () => apiGet<import("./types").WaitlistEntry[]>(`/restaurants/${RESTAURANT_ID}/waitlist?${q.toString()}`),
+    refetchInterval: 20000,
+  });
+}
+
+export function useCreateWaitlistEntry() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateWaitlistInput) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/waitlist`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waitlist"] }),
+  });
+}
+
+export function useUpdateWaitlistEntry() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: import("./types").UpdateWaitlistInput) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/waitlist/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waitlist"] }),
+  });
+}
+
+export function useSeatWaitlistEntry() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, tableId }: { id: number; tableId?: number | null }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/waitlist/${id}/seat`, { tableId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["waitlist"] });
+      qc.invalidateQueries({ queryKey: ["reservations"] });
+      qc.invalidateQueries({ queryKey: ["tables"] });
+    },
+  });
+}
+
+export function useDeleteWaitlistEntry() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/waitlist/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waitlist"] }),
+  });
+}
+
+export function useMarkTableClean() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tableId: number) => apiPost(`/restaurants/${RESTAURANT_ID}/tables/${tableId}/mark-clean`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
+  });
+}
+
+export function useMarkTableDirty() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tableId: number) => apiPost(`/restaurants/${RESTAURANT_ID}/tables/${tableId}/mark-dirty`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
+  });
+}
+
+export function useCreateWalkIn() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { guestName: string; guestPhone?: string; partySize: number; tableId?: number; notes?: string; isVip?: boolean }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/reservations/walkin`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reservations"] });
+      qc.invalidateQueries({ queryKey: ["tables"] });
+    },
+  });
+}
+
 export function useSuppliers() {
   const RESTAURANT_ID = useRestaurantId();
   return useQuery({

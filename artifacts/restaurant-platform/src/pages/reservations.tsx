@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useReservations, useCreateReservation, useUpdateReservation, useDeleteReservation,
   useFloorTables, useRestaurantInfo,
+  useWaitlist, useCreateWaitlistEntry, useUpdateWaitlistEntry, useSeatWaitlistEntry, useDeleteWaitlistEntry,
+  useMarkTableClean, useCreateWalkIn,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +13,12 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, X, CalendarDays, Clock, Users, Phone, Mail, Pencil, Trash2,
   CheckCircle2, UserCheck, XCircle, AlertCircle, Search, Link as LinkIcon, Copy, List, CalendarRange,
+  Star, Cake, Sparkles, Hourglass, Bell, Sparkle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import type { Reservation, ReservationStatus, FloorTable, CreateReservationInput } from "@/lib/types";
+import type { Reservation, ReservationStatus, FloorTable, CreateReservationInput, ReservationOccasion, WaitlistEntry, CreateWaitlistInput } from "@/lib/types";
 import { format, parseISO, isSameDay, addDays, startOfDay } from "date-fns";
 
 const STATUS_CONFIG: Record<ReservationStatus, { label: string; bg: string; text: string; dot: string }> = {
@@ -28,6 +31,19 @@ const STATUS_CONFIG: Record<ReservationStatus, { label: string; bg: string; text
 };
 
 const STATUS_OPTIONS: ReservationStatus[] = ["pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
+
+const OCCASION_OPTIONS: { value: ReservationOccasion; label: string }[] = [
+  { value: "birthday", label: "Birthday" },
+  { value: "anniversary", label: "Anniversary" },
+  { value: "business", label: "Business" },
+  { value: "date", label: "Date night" },
+  { value: "celebration", label: "Celebration" },
+  { value: "other", label: "Other" },
+];
+
+const OCCASION_ICON: Record<ReservationOccasion, string> = {
+  birthday: "🎂", anniversary: "💍", business: "💼", date: "💘", celebration: "🎉", other: "✨",
+};
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 9); // 9am - 10pm
 
@@ -64,6 +80,14 @@ function ReservationForm({
     tableId: reservation?.tableId ?? undefined,
     notes: reservation?.notes ?? "",
     status: reservation?.status ?? "confirmed",
+    occasion: reservation?.occasion ?? null,
+    occasionNotes: reservation?.occasionNotes ?? "",
+    seatingNotes: reservation?.seatingNotes ?? "",
+    isVip: reservation?.isVip ?? false,
+    depositAmount: reservation?.depositAmount ?? "",
+    depositStatus: reservation?.depositStatus ?? "none",
+    gracePeriodMinutes: reservation?.gracePeriodMinutes ?? 15,
+    sourceChannel: reservation?.sourceChannel ?? "staff",
   });
 
   const handleSave = async () => {
@@ -142,6 +166,58 @@ function ReservationForm({
               </select>
             </div>
           )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Occasion</Label>
+              <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
+                value={form.occasion ?? ""}
+                onChange={e => setForm(f => ({ ...f, occasion: (e.target.value || null) as ReservationOccasion | null }))}>
+                <option value="">None</option>
+                {OCCASION_OPTIONS.map(o => <option key={o.value} value={o.value}>{OCCASION_ICON[o.value]} {o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Grace period (min)</Label>
+              <Input type="number" min="0" value={form.gracePeriodMinutes ?? 15}
+                onChange={e => setForm(f => ({ ...f, gracePeriodMinutes: Number(e.target.value) }))} />
+            </div>
+          </div>
+          {form.occasion && (
+            <div>
+              <Label>Occasion details</Label>
+              <Input value={form.occasionNotes ?? ""} onChange={e => setForm(f => ({ ...f, occasionNotes: e.target.value }))}
+                placeholder="e.g., 30th birthday — surprise cake" />
+            </div>
+          )}
+          <div>
+            <Label>Seating preferences</Label>
+            <Input value={form.seatingNotes ?? ""} onChange={e => setForm(f => ({ ...f, seatingNotes: e.target.value }))}
+              placeholder="window, quiet area, high chair…" />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!form.isVip} onChange={e => setForm(f => ({ ...f, isVip: e.target.checked }))} />
+            <Star className="w-3.5 h-3.5 text-amber-500" /> Mark guest as VIP
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Deposit amount</Label>
+              <Input type="number" min="0" step="0.01" value={form.depositAmount ?? ""}
+                onChange={e => setForm(f => ({ ...f, depositAmount: e.target.value }))} placeholder="0.00" />
+            </div>
+            <div>
+              <Label>Deposit status</Label>
+              <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
+                value={form.depositStatus ?? "none"}
+                onChange={e => setForm(f => ({ ...f, depositStatus: e.target.value as CreateReservationInput["depositStatus"] }))}>
+                <option value="none">None</option>
+                <option value="required">Required</option>
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="refunded">Refunded</option>
+                <option value="waived">Waived</option>
+              </select>
+            </div>
+          </div>
           <div>
             <Label>Notes</Label>
             <Input value={form.notes ?? ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Special requests, allergies..." />
@@ -188,9 +264,34 @@ function ReservationRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-foreground truncate">{r.guestName}</p>
+            {r.isVip && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 uppercase tracking-wide">
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> VIP
+              </span>
+            )}
             <span className={cn("inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full", cfg.bg, cfg.text)}>
               <span className={cn("w-1.5 h-1.5 rounded-full", cfg.dot)} />{cfg.label}
             </span>
+            {r.occasion && (
+              <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded bg-pink-100 text-pink-800">
+                {OCCASION_ICON[r.occasion]} {r.occasion}
+              </span>
+            )}
+            {r.depositStatus && r.depositStatus !== "none" && (
+              <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide",
+                r.depositStatus === "paid" ? "bg-green-100 text-green-800" :
+                r.depositStatus === "refunded" ? "bg-gray-100 text-gray-700" :
+                r.depositStatus === "waived" ? "bg-blue-100 text-blue-800" :
+                "bg-orange-100 text-orange-800")}>
+                Deposit: {r.depositStatus}{r.depositAmount ? ` · ₹${r.depositAmount}` : ""}
+              </span>
+            )}
+            {r.sourceChannel === "walkin" && (
+              <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Walk-in</span>
+            )}
+            {r.sourceChannel === "public" && (
+              <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Public</span>
+            )}
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
             <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{format(dt, "MMM d, h:mm a")}</span>
@@ -202,6 +303,8 @@ function ReservationRow({
             {r.guestPhone && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{r.guestPhone}</span>}
             {r.guestEmail && <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />{r.guestEmail}</span>}
           </div>
+          {r.seatingNotes && <p className="text-xs text-muted-foreground mt-1"><span className="font-medium">Seating:</span> {r.seatingNotes}</p>}
+          {r.occasionNotes && <p className="text-xs text-muted-foreground mt-1"><span className="font-medium">Occasion:</span> {r.occasionNotes}</p>}
           {r.notes && <p className="text-xs italic text-muted-foreground mt-1">"{r.notes}"</p>}
         </div>
         <div className="flex flex-col gap-1 shrink-0">
@@ -294,14 +397,19 @@ function DayView({
   );
 }
 
+type Tab = "list" | "day" | "waitlist" | "cleaning";
+
 export default function ReservationsPage() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [date, setDate] = useState<string>(today);
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all">("all");
-  const [view, setView] = useState<"list" | "day">("list");
+  const [tab, setTab] = useState<Tab>("list");
+  const view = tab === "day" ? "day" : "list";
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Reservation | undefined>();
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  const [showWaitlistForm, setShowWaitlistForm] = useState(false);
 
   const { user } = useAuth();
   const canDelete = !!user && ["owner", "manager", "super_admin"].includes(user.role);
@@ -390,6 +498,12 @@ export default function ReservationsPage() {
                 <LinkIcon className="w-3 h-3" /> Open
               </a>
             )}
+            <Button variant="outline" onClick={() => setShowWalkIn(true)}>
+              <UserCheck className="w-4 h-4 mr-1.5" /> Walk-in
+            </Button>
+            <Button variant="outline" onClick={() => setShowWaitlistForm(true)}>
+              <Hourglass className="w-4 h-4 mr-1.5" /> Add to Waitlist
+            </Button>
             <Button onClick={() => { setEditing(undefined); setShowForm(true); }}>
               <Plus className="w-4 h-4 mr-1.5" /> New Reservation
             </Button>
@@ -400,15 +514,24 @@ export default function ReservationsPage() {
       <div className="p-6 flex-1 overflow-auto">
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex rounded-lg border border-border overflow-hidden">
-            <button onClick={() => setView("list")}
-              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5", view === "list" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+            <button onClick={() => setTab("list")}
+              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5", tab === "list" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
               <List className="w-3.5 h-3.5" /> List
             </button>
-            <button onClick={() => setView("day")}
-              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 border-l border-border", view === "day" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
-              <CalendarRange className="w-3.5 h-3.5" /> Day View
+            <button onClick={() => setTab("day")}
+              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 border-l border-border", tab === "day" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+              <CalendarRange className="w-3.5 h-3.5" /> Calendar
+            </button>
+            <button onClick={() => setTab("waitlist")}
+              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 border-l border-border", tab === "waitlist" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+              <Hourglass className="w-3.5 h-3.5" /> Waitlist
+            </button>
+            <button onClick={() => setTab("cleaning")}
+              className={cn("px-3 py-1.5 text-sm flex items-center gap-1.5 border-l border-border", tab === "cleaning" ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+              <Sparkle className="w-3.5 h-3.5" /> Cleaning
             </button>
           </div>
+          {(tab === "list" || tab === "day") && <></>}
 
           <div className="flex items-center gap-1.5">
             <Button size="sm" variant="outline" onClick={() => setDate(format(addDays(parseISO(`${date}T00:00`), -1), "yyyy-MM-dd"))}>‹</Button>
@@ -432,7 +555,11 @@ export default function ReservationsPage() {
           </div>
         </div>
 
-        {view === "day" ? (
+        {tab === "waitlist" ? (
+          <WaitlistPanel tables={tables as FloorTable[]} onAdd={() => setShowWaitlistForm(true)} />
+        ) : tab === "cleaning" ? (
+          <CleaningPanel tables={tables as FloorTable[]} />
+        ) : tab === "day" ? (
           <DayView reservations={reservations as Reservation[]} tables={tables as FloorTable[]} date={date} onEdit={r => { setEditing(r); setShowForm(true); }} />
         ) : (
           <div className="space-y-5">
@@ -474,6 +601,254 @@ export default function ReservationsPage() {
           onSaved={() => void refetch()}
         />
       )}
+      {showWalkIn && (
+        <WalkInForm tables={tables as FloorTable[]} onClose={() => setShowWalkIn(false)} onSaved={() => void refetch()} />
+      )}
+      {showWaitlistForm && (
+        <WaitlistForm onClose={() => setShowWaitlistForm(false)} />
+      )}
     </Layout>
+  );
+}
+
+function WalkInForm({ tables, onClose, onSaved }: { tables: FloorTable[]; onClose: () => void; onSaved: () => void }) {
+  const create = useCreateWalkIn();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ guestName: "", guestPhone: "", partySize: 2, tableId: "" as string, isVip: false, notes: "" });
+  const handleSave = async () => {
+    if (!form.guestName.trim()) { toast({ title: "Guest name required", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync({
+        guestName: form.guestName.trim(),
+        guestPhone: form.guestPhone.trim() || undefined,
+        partySize: form.partySize,
+        tableId: form.tableId ? Number(form.tableId) : undefined,
+        notes: form.notes.trim() || undefined,
+        isVip: form.isVip,
+      });
+      toast({ title: "Walk-in seated" });
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast({ title: "Failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
+  };
+  const availableTables = tables.filter(t => t.status === "free" && !t.needsCleaning);
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2"><UserCheck className="w-5 h-5" /> Seat walk-in</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div><Label>Guest name *</Label><Input value={form.guestName} onChange={e => setForm(f => ({ ...f, guestName: e.target.value }))} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Phone</Label><Input value={form.guestPhone} onChange={e => setForm(f => ({ ...f, guestPhone: e.target.value }))} /></div>
+            <div><Label>Party size</Label><Input type="number" min="1" value={form.partySize} onChange={e => setForm(f => ({ ...f, partySize: Number(e.target.value) }))} /></div>
+          </div>
+          <div>
+            <Label>Assign table (optional)</Label>
+            <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
+              value={form.tableId} onChange={e => setForm(f => ({ ...f, tableId: e.target.value }))}>
+              <option value="">Add to waitlist (no table yet)</option>
+              {availableTables.map(t => (
+                <option key={t.id} value={t.id}>Table {t.tableNumber} · seats {t.capacity}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.isVip} onChange={e => setForm(f => ({ ...f, isVip: e.target.checked }))} />
+            <Star className="w-3.5 h-3.5 text-amber-500" /> VIP guest
+          </label>
+          <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" onClick={handleSave} disabled={create.isPending}>Seat now</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WaitlistForm({ onClose }: { onClose: () => void }) {
+  const create = useCreateWaitlistEntry();
+  const { toast } = useToast();
+  const [form, setForm] = useState<CreateWaitlistInput>({ guestName: "", guestPhone: "", partySize: 2, estimatedWaitMinutes: 20, isVip: false, notes: "" });
+  const handleSave = async () => {
+    if (!form.guestName.trim()) { toast({ title: "Guest name required", variant: "destructive" }); return; }
+    try {
+      await create.mutateAsync(form);
+      toast({ title: "Added to waitlist" });
+      onClose();
+    } catch (err) {
+      toast({ title: "Failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
+  };
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Hourglass className="w-5 h-5" /> Add to waitlist</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div><Label>Guest name *</Label><Input value={form.guestName} onChange={e => setForm(f => ({ ...f, guestName: e.target.value }))} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Phone</Label><Input value={form.guestPhone ?? ""} onChange={e => setForm(f => ({ ...f, guestPhone: e.target.value }))} /></div>
+            <div><Label>Party size</Label><Input type="number" min="1" value={form.partySize} onChange={e => setForm(f => ({ ...f, partySize: Number(e.target.value) }))} /></div>
+          </div>
+          <div><Label>Quoted wait (minutes)</Label><Input type="number" min="0" value={form.estimatedWaitMinutes ?? 0} onChange={e => setForm(f => ({ ...f, estimatedWaitMinutes: Number(e.target.value) }))} /></div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!form.isVip} onChange={e => setForm(f => ({ ...f, isVip: e.target.checked }))} />
+            <Star className="w-3.5 h-3.5 text-amber-500" /> VIP guest
+          </label>
+          <div><Label>Notes</Label><Input value={form.notes ?? ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" onClick={handleSave} disabled={create.isPending}>Add</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WaitlistPanel({ tables, onAdd }: { tables: FloorTable[]; onAdd: () => void }) {
+  const { data: entries = [] } = useWaitlist();
+  const update = useUpdateWaitlistEntry();
+  const seat = useSeatWaitlistEntry();
+  const del = useDeleteWaitlistEntry();
+  const { toast } = useToast();
+  const availableTables = tables.filter(t => t.status === "free" && !t.needsCleaning);
+
+  if (!entries.length) {
+    return (
+      <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center text-muted-foreground">
+        <Hourglass className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm font-medium">No one is currently waiting</p>
+        <p className="text-xs mt-1 mb-4">Walk-ins waiting for a table will appear here.</p>
+        <Button size="sm" onClick={onAdd}><Plus className="w-3.5 h-3.5 mr-1.5" /> Add to waitlist</Button>
+      </div>
+    );
+  }
+
+  const fmtWait = (e: WaitlistEntry) => {
+    const mins = Math.floor((Date.now() - new Date(e.quotedAt).getTime()) / 60000);
+    return `${mins}m waiting${e.estimatedWaitMinutes ? ` · quoted ${e.estimatedWaitMinutes}m` : ""}`;
+  };
+
+  return (
+    <div className="space-y-2">
+      {entries.map((e: WaitlistEntry) => {
+        const fits = availableTables.filter(t => t.capacity >= e.partySize);
+        const overdue = e.estimatedWaitMinutes != null
+          && Date.now() - new Date(e.quotedAt).getTime() > e.estimatedWaitMinutes * 60_000;
+        return (
+          <div key={e.id} className={cn("border border-border rounded-xl p-3 bg-card flex items-start gap-3", overdue && "ring-1 ring-orange-300 bg-orange-50/50")}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold">{e.guestName}</p>
+                {e.isVip && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> VIP
+                  </span>
+                )}
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted">Party of {e.partySize}</span>
+                {e.status === "notified" && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 inline-flex items-center gap-1"><Bell className="w-3 h-3" />Notified</span>}
+                {overdue && <span className="text-[10px] uppercase font-bold text-orange-700">Overdue</span>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{fmtWait(e)}</p>
+              {e.guestPhone && <p className="text-xs text-muted-foreground"><Phone className="inline w-3 h-3 mr-1" />{e.guestPhone}</p>}
+              {e.notes && <p className="text-xs italic text-muted-foreground mt-1">"{e.notes}"</p>}
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <select className="h-8 text-xs border border-input rounded px-2 bg-background"
+                onChange={async ev => {
+                  const tableId = ev.target.value ? Number(ev.target.value) : null;
+                  if (!tableId) return;
+                  try {
+                    await seat.mutateAsync({ id: e.id, tableId });
+                    toast({ title: "Guest seated" });
+                  } catch (err) {
+                    toast({ title: "Failed to seat", description: err instanceof Error ? err.message : "", variant: "destructive" });
+                  }
+                }}
+                value="">
+                <option value="">Seat at…</option>
+                {fits.length === 0 && <option disabled>No tables fit party of {e.partySize}</option>}
+                {fits.map(t => <option key={t.id} value={t.id}>Table {t.tableNumber} ({t.capacity})</option>)}
+              </select>
+              {e.status !== "notified" && (
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                  onClick={() => update.mutate({ id: e.id, status: "notified" })}>
+                  <Bell className="w-3 h-3" /> Notify
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive"
+                onClick={async () => {
+                  if (!window.confirm(`Remove ${e.guestName} from waitlist?`)) return;
+                  await del.mutateAsync(e.id);
+                  toast({ title: "Removed" });
+                }}>
+                <X className="w-3 h-3" /> Remove
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CleaningPanel({ tables }: { tables: FloorTable[] }) {
+  const markClean = useMarkTableClean();
+  const { toast } = useToast();
+  const dirty = tables.filter(t => t.needsCleaning);
+  const clean = tables.filter(t => !t.needsCleaning);
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <Sparkle className="w-4 h-4 text-orange-500" /> Needs cleaning ({dirty.length})
+        </p>
+        {dirty.length === 0 ? (
+          <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-4 text-center">
+            All tables are clean. ✨
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {dirty.map(t => (
+              <div key={t.id} className="border border-orange-300 bg-orange-50 rounded-lg p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">Table {t.tableNumber}</p>
+                  <p className="text-xs text-muted-foreground">Seats {t.capacity}</p>
+                </div>
+                <Button size="sm" onClick={async () => {
+                  await markClean.mutateAsync(t.id);
+                  toast({ title: `Table ${t.tableNumber} marked clean` });
+                }}>
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Clean
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="text-sm font-semibold mb-2 text-muted-foreground">Recently cleaned ({clean.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+          {clean.map(t => (
+            <div key={t.id} className="border border-border rounded-lg p-2 flex flex-col">
+              <span className="font-semibold">T{t.tableNumber}</span>
+              <span className="text-muted-foreground">
+                {t.lastCleanedAt ? format(parseISO(t.lastCleanedAt), "MMM d, h:mm a") : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

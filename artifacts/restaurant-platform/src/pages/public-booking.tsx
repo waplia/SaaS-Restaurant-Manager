@@ -47,6 +47,8 @@ export default function PublicBookingPage() {
   const [form, setForm] = useState({
     guestName: "", guestPhone: "", guestEmail: "",
     partySize: 2, date: "", time: "19:00", notes: "",
+    occasion: "" as "" | "birthday" | "anniversary" | "business" | "date" | "celebration" | "other",
+    seatingNotes: "",
   });
 
   const [lookupPhone, setLookupPhone] = useState("");
@@ -81,6 +83,8 @@ export default function PublicBookingPage() {
         partySize: form.partySize,
         scheduledAt: `${form.date}T${form.time}`,
         notes: form.notes.trim() || undefined,
+        occasion: form.occasion || undefined,
+        seatingNotes: form.seatingNotes.trim() || undefined,
       });
       setConfirmation(result);
     } catch (err) {
@@ -218,9 +222,29 @@ export default function PublicBookingPage() {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" />Notes</label>
+              <label className="text-sm font-medium mb-1 block">Occasion (optional)</label>
+              <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                value={form.occasion}
+                onChange={e => setForm(f => ({ ...f, occasion: e.target.value as typeof f.occasion }))}>
+                <option value="">No special occasion</option>
+                <option value="birthday">Birthday</option>
+                <option value="anniversary">Anniversary</option>
+                <option value="business">Business meal</option>
+                <option value="date">Date night</option>
+                <option value="celebration">Celebration</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Seating preferences</label>
+              <input className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                value={form.seatingNotes} onChange={e => setForm(f => ({ ...f, seatingNotes: e.target.value }))}
+                placeholder="e.g., window, quiet area, high chair…" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" />Notes / Allergies</label>
               <textarea rows={2} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm resize-none"
-                value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Allergies, occasion, seating preferences…" />
+                value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Allergies, special requests…" />
             </div>
             {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
             <button type="submit" disabled={submitting}

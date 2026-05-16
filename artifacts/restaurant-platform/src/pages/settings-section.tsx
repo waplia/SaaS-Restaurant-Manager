@@ -837,13 +837,21 @@ interface ReservationCfg {
   blackoutDates: string[]; autoConfirm: boolean; cancelPolicy: string;
 }
 function ReservationSection() {
-  const defaults: ReservationCfg = {
+  const defaults: ReservationCfg & {
+    gracePeriodMinutes: number; reminderMinutes: number; autoNoShow: boolean;
+    waitlistEnabled: boolean; askOccasion: boolean;
+  } = {
     enabled: true, defaultPartyCap: 8,
     requireName: true, requirePhone: true, requireEmail: false,
     depositPolicy: "none", depositAmount: 0,
     leadMinutesMin: 60, leadMinutesMax: 60 * 24 * 30, slotMinutes: 30,
     blackoutDates: [], autoConfirm: true,
     cancelPolicy: "Cancellations within 2 hours of the reservation may incur a fee.",
+    gracePeriodMinutes: 15,
+    reminderMinutes: 60,
+    autoNoShow: true,
+    waitlistEnabled: true,
+    askOccasion: true,
   };
   return (
     <SettingForm section="reservation" defaults={defaults}>
@@ -883,6 +891,19 @@ function ReservationSection() {
           </Row>
           <Toggle label="Auto-confirm reservations" hint="Otherwise, staff must manually confirm each booking."
             checked={s.autoConfirm} onChange={v => set(p => ({ ...p, autoConfirm: v }))} />
+          <Row>
+            <Field label="Reminder lead time (minutes)" hint="Email/WhatsApp reminder fires this many minutes before scheduled time.">
+              <Input type="number" value={s.reminderMinutes} onChange={e => set(p => ({ ...p, reminderMinutes: Number(e.target.value) }))} />
+            </Field>
+            <Field label="Grace period (minutes)" hint="Auto-mark as no-show this many minutes after start.">
+              <Input type="number" value={s.gracePeriodMinutes} onChange={e => set(p => ({ ...p, gracePeriodMinutes: Number(e.target.value) }))} />
+            </Field>
+          </Row>
+          <Toggle label="Auto no-show" hint="When ON, late reservations are automatically marked no-show after the grace period."
+            checked={s.autoNoShow} onChange={v => set(p => ({ ...p, autoNoShow: v }))} />
+          <Toggle label="Enable walk-in waitlist" checked={s.waitlistEnabled} onChange={v => set(p => ({ ...p, waitlistEnabled: v }))} />
+          <Toggle label="Ask guests about occasion" hint="Show birthday/anniversary/etc. dropdown on the public booking page."
+            checked={s.askOccasion} onChange={v => set(p => ({ ...p, askOccasion: v }))} />
           <Field label="Blackout dates (comma-separated YYYY-MM-DD)">
             <Input value={s.blackoutDates.join(",")} onChange={e => set(p => ({ ...p, blackoutDates: e.target.value.split(",").map(x => x.trim()).filter(Boolean) }))} />
           </Field>

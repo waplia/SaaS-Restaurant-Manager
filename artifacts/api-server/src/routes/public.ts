@@ -485,7 +485,9 @@ router.get("/public/restaurants/:slug", async (req, res) => {
 });
 
 router.post("/public/restaurants/:slug/reservations", async (req, res) => {
-  const { guestName, guestPhone, guestEmail, partySize, scheduledAt, notes } = req.body;
+  const { guestName, guestPhone, guestEmail, partySize, scheduledAt, notes, occasion, occasionNotes, seatingNotes } = req.body;
+  const ALLOWED_OCCASIONS = ["birthday", "anniversary", "business", "date", "celebration", "other"];
+  const occ = (occasion && typeof occasion === "string" && ALLOWED_OCCASIONS.includes(occasion)) ? occasion : null;
   if (!guestName || typeof guestName !== "string" || !guestName.trim()) return void res.status(400).json({ error: "Name is required" });
   if (!guestPhone || typeof guestPhone !== "string" || !guestPhone.trim()) return void res.status(400).json({ error: "Phone is required" });
   const ps = Number(partySize);
@@ -508,6 +510,10 @@ router.post("/public/restaurants/:slug/reservations", async (req, res) => {
     scheduledAt: dt,
     durationMinutes: 90,
     notes: notes?.trim() ?? null,
+    occasion: occ,
+    occasionNotes: occasionNotes?.trim?.() ?? null,
+    seatingNotes: seatingNotes?.trim?.() ?? null,
+    sourceChannel: "public",
     status: "pending",
   }).returning();
 

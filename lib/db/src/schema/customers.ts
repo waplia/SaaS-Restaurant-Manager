@@ -15,6 +15,9 @@ export const customersTable = pgTable("customers", {
   totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).notNull().default("0.00"),
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
+  isVip: boolean("is_vip").notNull().default(false),
+  noShowCount: integer("no_show_count").notNull().default(0),
+  lastNoShowAt: timestamp("last_no_show_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
