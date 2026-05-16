@@ -58,6 +58,8 @@ import PublicSitePage from "@/pages/public-site";
 import AiDashboardPage from "@/pages/ai-dashboard";
 import AiDescriptionsPage from "@/pages/ai-descriptions";
 import AiImagesPage from "@/pages/ai-images";
+import AiMenuImportPage from "@/pages/ai-menu-import";
+import AiMenuImportHistoryPage from "@/pages/ai-menu-import-history";
 import AiUsagePage from "@/pages/ai-usage";
 import AiSettingsPage from "@/pages/ai-settings";
 
@@ -162,6 +164,9 @@ function Router() {
       <Route path="/ai" component={() => <RoleProtectedRoute component={AiDashboardPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/descriptions" component={() => <RoleProtectedRoute component={AiDescriptionsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/images" component={() => <RoleProtectedRoute component={AiImagesPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import/history" component={() => <RoleProtectedRoute component={AiMenuImportHistoryPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import/:id" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/usage" component={() => <RoleProtectedRoute component={AiUsagePage} allow={["owner", "manager"]} />} />
       <Route path="/ai/settings" component={() => <RoleProtectedRoute component={AiSettingsPage} allow={["owner", "manager"]} />} />
       <Route path="/site/:slug" component={PublicSitePage} />

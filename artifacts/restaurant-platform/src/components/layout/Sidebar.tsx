@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon,
+  Sparkles, ImageIcon, Upload, History,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,8 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/ai", label: "Dashboard", icon: LayoutDashboard, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/descriptions", label: "AI Item Descriptions", icon: FileText, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/images", label: "AI Food Images", icon: ImageIcon, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/menu-import", label: "AI Menu Import", icon: Upload, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/menu-import/history", label: "Import History", icon: History, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/usage", label: "AI Usage & Credits", icon: Coins, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/settings", label: "AI Settings", icon: Settings, roles: ["owner", "manager"] },
     ],

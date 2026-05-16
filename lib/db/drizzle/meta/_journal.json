@@ -36,6 +36,13 @@
       "when": 1778898215234,
       "tag": "0004_khana_ai_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778900298914,
+      "tag": "0005_menu_imports",
+      "breakpoints": true
     }
   ]
 }

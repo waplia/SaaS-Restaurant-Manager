@@ -36,6 +36,15 @@ const DEFAULT_RULES: SeedRule[] = [
     unitType: "image",
     pricingMode: "per_image",
   },
+  {
+    featureSlug: "ai_menu_import",
+    featureLabel: "AI Menu Import",
+    description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",
+    creditsPerUnit: "5",
+    minCharge: 5,
+    unitType: "page",
+    pricingMode: "per_unit",
+  },
 ];
 
 export async function seedDefaultAiCreditRules(): Promise<void> {
