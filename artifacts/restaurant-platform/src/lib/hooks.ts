@@ -2156,17 +2156,17 @@ export function useSubscription(restaurantId: number) {
 
 export function useCreateCheckout() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId, successUrl, cancelUrl }: { restaurantId: number; planId: number; successUrl: string; cancelUrl: string }) =>
-      apiPost<{ url: string | null; sessionId?: string; mock?: boolean }>(`/restaurants/${restaurantId}/subscription/create-checkout`, { planId, successUrl, cancelUrl }),
+    mutationFn: ({ restaurantId, planId, successUrl, cancelUrl, billingPeriod }: { restaurantId: number; planId: number; successUrl: string; cancelUrl: string; billingPeriod?: "monthly" | "yearly" }) =>
+      apiPost<{ url: string | null; sessionId?: string; mock?: boolean }>(`/restaurants/${restaurantId}/subscription/create-checkout`, { planId, successUrl, cancelUrl, billingPeriod }),
   });
 }
 
 export function useCreateCashfreeOrder() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId, successUrl, couponCode }: { restaurantId: number; planId: number; successUrl: string; couponCode?: string }) =>
+    mutationFn: ({ restaurantId, planId, successUrl, couponCode, billingPeriod }: { restaurantId: number; planId: number; successUrl: string; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
       apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean; activated?: boolean }>(
         `/restaurants/${restaurantId}/subscription/create-cashfree-order`,
-        { planId, successUrl, couponCode },
+        { planId, successUrl, couponCode, billingPeriod },
       ),
   });
 }
@@ -2213,9 +2213,9 @@ export function usePaymentMethods(restaurantId: number) {
 
 export function useCreateSubscriptionRazorpayOrder() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId, couponCode }: { restaurantId: number; planId: number; couponCode?: string }) =>
+    mutationFn: ({ restaurantId, planId, couponCode, billingPeriod }: { restaurantId: number; planId: number; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
       apiPost<{ orderId?: string; amount?: number; currency?: string; keyId?: string; receipt?: string; activated?: boolean }>(
-        `/restaurants/${restaurantId}/subscription/create-razorpay-order`, { planId, couponCode },
+        `/restaurants/${restaurantId}/subscription/create-razorpay-order`, { planId, couponCode, billingPeriod },
       ),
   });
 }
@@ -2235,8 +2235,8 @@ export function useConfirmSubscriptionRazorpayOrder() {
 export function useSubmitManualPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ restaurantId, planId, method, reference, proofUrl, note, amount, couponCode }: { restaurantId: number; planId: number; method: "bank" | "upi"; reference?: string; proofUrl?: string; note?: string; amount?: number; couponCode?: string }) =>
-      apiPost<{ id: number; status: string }>(`/restaurants/${restaurantId}/subscription/manual-payment`, { planId, method, reference, proofUrl, note, amount, couponCode }),
+    mutationFn: ({ restaurantId, planId, method, reference, proofUrl, note, amount, couponCode, billingPeriod }: { restaurantId: number; planId: number; method: "bank" | "upi"; reference?: string; proofUrl?: string; note?: string; amount?: number; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
+      apiPost<{ id: number; status: string }>(`/restaurants/${restaurantId}/subscription/manual-payment`, { planId, method, reference, proofUrl, note, amount, couponCode, billingPeriod }),
     onSuccess: (_d, { restaurantId }) => {
       qc.invalidateQueries({ queryKey: ["billing", "methods", restaurantId] });
       qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
@@ -2310,8 +2310,8 @@ export function useRejectManualPayment() {
 export function useMockActivate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ restaurantId, planId, couponCode }: { restaurantId: number; planId: number; couponCode?: string }) =>
-      apiPost(`/restaurants/${restaurantId}/subscription/mock-activate`, { planId, couponCode }),
+    mutationFn: ({ restaurantId, planId, couponCode, billingPeriod }: { restaurantId: number; planId: number; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
+      apiPost(`/restaurants/${restaurantId}/subscription/mock-activate`, { planId, couponCode, billingPeriod }),
     onSuccess: (_data, { restaurantId }) => {
       qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
     },

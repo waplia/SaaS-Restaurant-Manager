@@ -87,7 +87,9 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
 
-  const { planId, successUrl, cancelUrl } = req.body as { planId: number; successUrl: string; cancelUrl: string };
+  const { planId, successUrl, cancelUrl, billingPeriod: bodyPeriod } = req.body as {
+    planId: number; successUrl: string; cancelUrl: string; billingPeriod?: "monthly" | "yearly";
+  };
 
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
@@ -107,22 +109,39 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
     await db.update(tenantsTable).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(tenantsTable.id, tenantId));
   }
 
-  const planPrice = Number(plan.price);
+  // Resolve the chosen billing period and the right amount/price ID for it.
+  const period: "monthly" | "yearly" = bodyPeriod === "yearly" || bodyPeriod === "monthly"
+    ? bodyPeriod
+    : (plan.billingPeriod === "yearly" ? "yearly" : "monthly");
+  const yearlyConfigured = plan.yearlyPrice != null && Number(plan.yearlyPrice) > 0;
+  if (period === "yearly" && !yearlyConfigured && plan.billingPeriod !== "yearly") {
+    return void res.status(400).json({ error: "This plan does not offer yearly billing." });
+  }
+  const presetPriceId = period === "yearly" ? plan.stripeYearlyPriceId : plan.stripeMonthlyPriceId;
   const stripeCurrency = (plan.currency ?? "INR").toLowerCase();
+
+  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = presetPriceId
+    ? { price: presetPriceId, quantity: 1 }
+    : {
+        price_data: {
+          currency: stripeCurrency,
+          product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
+          unit_amount: Math.round(
+            (period === "yearly" && yearlyConfigured
+              ? Number(plan.yearlyPrice)
+              : Number(plan.price)) * 100,
+          ),
+          recurring: { interval: period === "yearly" ? "year" : "month" },
+        },
+        quantity: 1,
+      };
+
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     payment_method_types: ["card"],
     mode: "subscription",
-    line_items: [{
-      price_data: {
-        currency: stripeCurrency,
-        product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
-        unit_amount: Math.round(planPrice * 100),
-        recurring: { interval: plan.billingPeriod === "yearly" ? "year" : "month" },
-      },
-      quantity: 1,
-    }],
-    metadata: { tenantId: String(tenantId), planId: String(planId) },
+    line_items: [lineItem],
+    metadata: { tenantId: String(tenantId), planId: String(planId), billingPeriod: period },
     success_url: successUrl + "?session_id={CHECKOUT_SESSION_ID}",
     cancel_url: cancelUrl,
   });
@@ -134,7 +153,9 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
 
-  const { planId, successUrl, couponCode } = req.body as { planId: number; successUrl: string; couponCode?: string };
+  const { planId, successUrl, couponCode, billingPeriod: bodyPeriod } = req.body as {
+    planId: number; successUrl: string; couponCode?: string; billingPeriod?: "monthly" | "yearly";
+  };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
@@ -145,12 +166,21 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
     return void res.json({ url: null, mock: true, message: "Cashfree not configured — using mock checkout" });
   }
 
+  // Resolve the chosen billing period and pick the matching list price.
+  const period: "monthly" | "yearly" = bodyPeriod === "yearly" || bodyPeriod === "monthly"
+    ? bodyPeriod : (plan.billingPeriod === "yearly" ? "yearly" : "monthly");
+  const yearlyConfigured = plan.yearlyPrice != null && Number(plan.yearlyPrice) > 0;
+  if (period === "yearly" && !yearlyConfigured && plan.billingPeriod !== "yearly") {
+    return void res.status(400).json({ error: "This plan does not offer yearly billing." });
+  }
+  const listPrice = (period === "yearly" && yearlyConfigured) ? Number(plan.yearlyPrice) : Number(plan.price);
+
   // Validate the coupon now so we charge the discounted amount through Cashfree.
-  let amountToCharge = Number(plan.price);
+  let amountToCharge = listPrice;
   let appliedCouponCode: string | null = null;
   if (couponCode) {
     const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
-    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(listPrice) }, action: "payment", isFirstCycle: isFirst });
     if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
     amountToCharge = r.resolved.effectiveAmount;
     appliedCouponCode = r.resolved.coupon.code;
@@ -160,7 +190,9 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
     .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)))
     .limit(1);
 
-  const cfOrderId = `kl_${tenantId}_${planId}_${Date.now()}`;
+  // Encode the billing period into the order id so the webhook can recover it.
+  const periodTag = period === "yearly" ? "y" : "m";
+  const cfOrderId = `kl_${tenantId}_${planId}_${periodTag}_${Date.now()}`;
   const customerIdStr = tenant.cashfreeCustomerId ?? `tenant_${tenantId}`;
 
   // Coupon-zeroed payments skip Cashfree entirely and activate immediately.
@@ -168,6 +200,7 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
     await activateForTenant(tenantId, planId, `coupon_free_${cfOrderId}`, {
       provider: "cashfree", amount: "0.00", currency: (plan.currency ?? "INR").toUpperCase(),
       couponCode: appliedCouponCode, redeemedBy: req.user?.id ?? null,
+      billingPeriod: period,
     });
     return void res.json({ url: null, freeActivation: true, couponCode: appliedCouponCode });
   }
@@ -226,28 +259,36 @@ router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole
   }
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId, couponCode } = req.body as { planId: number; couponCode?: string };
+  const { planId, couponCode, billingPeriod: bodyPeriod } = req.body as {
+    planId: number; couponCode?: string; billingPeriod?: "monthly" | "yearly";
+  };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
+  const period: "monthly" | "yearly" | undefined =
+    bodyPeriod === "yearly" || bodyPeriod === "monthly" ? bodyPeriod : undefined;
   // Reuse the canonical activation path so coupon redemption, billing-history
   // rows, and lifecycle SMS all behave the same as a real provider.
   await activateForTenant(tenantId, planId, `mock_${tenantId}_${planId}_${Date.now()}`, {
     provider: "mock",
     couponCode: couponCode ?? null,
     redeemedBy: req.user?.id ?? null,
+    billingPeriod: period,
   });
   res.json({ success: true, planStatus: "active" });
 });
 
 async function activateFromCashfreeOrder(cfOrderId: string, couponCode?: string | null): Promise<void> {
-  // Order id pattern: kl_<tenantId>_<planId>_<timestamp>. Reuse the canonical
-  // activation path so coupon redemption + billing history rows behave
-  // consistently with Razorpay/manual flows.
-  const m = /^kl_(\d+)_(\d+)_/.exec(cfOrderId);
+  // Order id pattern: kl_<tenantId>_<planId>[_<m|y>]_<timestamp>. The optional
+  // 3rd segment encodes the billing period chosen at checkout; orders created
+  // before that field was added will simply use the plan's default period.
+  const m = /^kl_(\d+)_(\d+)(?:_([my]))?_/.exec(cfOrderId);
   if (!m) return;
+  const period: "monthly" | "yearly" | undefined =
+    m[3] === "y" ? "yearly" : m[3] === "m" ? "monthly" : undefined;
   await activateForTenant(Number(m[1]), Number(m[2]), `cf_${cfOrderId}`, {
     provider: "cashfree",
     couponCode: couponCode ?? null,
+    billingPeriod: period,
   });
 }
 

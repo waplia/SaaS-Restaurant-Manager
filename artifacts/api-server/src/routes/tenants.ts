@@ -51,6 +51,26 @@ function validatePlanInput(body: Record<string, unknown>, partial = false): { er
     if (!["monthly", "yearly"].includes(String(body.billingPeriod))) return { error: "billingPeriod must be monthly or yearly" };
     out.billingPeriod = body.billingPeriod;
   }
+  if (body.yearlyPrice !== undefined) {
+    if (body.yearlyPrice === null || body.yearlyPrice === "") {
+      out.yearlyPrice = null;
+    } else {
+      const n = Number(body.yearlyPrice);
+      if (!isFinite(n) || n < 0) return { error: "yearlyPrice must be a non-negative number or null" };
+      out.yearlyPrice = n.toFixed(2);
+    }
+  }
+  for (const k of ["stripeMonthlyPriceId", "stripeYearlyPriceId", "cashfreeMonthlyPlanId", "cashfreeYearlyPlanId"] as const) {
+    if (body[k] !== undefined) {
+      if (body[k] === null || body[k] === "") {
+        out[k] = null;
+      } else if (typeof body[k] !== "string") {
+        return { error: `${k} must be a string or null` };
+      } else {
+        out[k] = String(body[k]).trim().slice(0, 200) || null;
+      }
+    }
+  }
   for (const k of ["maxRestaurants", "maxBranches", "maxStaff", "maxTables", "maxMenuItems", "trialDays"] as const) {
     if (body[k] !== undefined) {
       const n = Number(body[k]);

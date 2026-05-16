@@ -76,6 +76,11 @@ interface Plan {
   price: string;
   currency: string;
   billingPeriod: string;
+  yearlyPrice?: string | null;
+  stripeMonthlyPriceId?: string | null;
+  stripeYearlyPriceId?: string | null;
+  cashfreeMonthlyPlanId?: string | null;
+  cashfreeYearlyPlanId?: string | null;
   maxRestaurants: number;
   maxBranches: number;
   maxStaff: number;
@@ -335,6 +340,11 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
     price: plan?.price ?? "0",
     currency: plan?.currency ?? "INR",
     billingPeriod: plan?.billingPeriod ?? "monthly",
+    yearlyPrice: plan?.yearlyPrice ?? "",
+    stripeMonthlyPriceId: plan?.stripeMonthlyPriceId ?? "",
+    stripeYearlyPriceId: plan?.stripeYearlyPriceId ?? "",
+    cashfreeMonthlyPlanId: plan?.cashfreeMonthlyPlanId ?? "",
+    cashfreeYearlyPlanId: plan?.cashfreeYearlyPlanId ?? "",
     maxRestaurants: plan?.maxRestaurants ?? 1,
     maxBranches: plan?.maxBranches ?? 1,
     maxStaff: plan?.maxStaff ?? 5,
@@ -394,6 +404,13 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
       const payload = {
         ...form,
         price: String(form.price),
+        yearlyPrice: form.yearlyPrice == null || String(form.yearlyPrice).trim() === ""
+          ? null
+          : String(form.yearlyPrice),
+        stripeMonthlyPriceId: form.stripeMonthlyPriceId?.toString().trim() || null,
+        stripeYearlyPriceId: form.stripeYearlyPriceId?.toString().trim() || null,
+        cashfreeMonthlyPlanId: form.cashfreeMonthlyPlanId?.toString().trim() || null,
+        cashfreeYearlyPlanId: form.cashfreeYearlyPlanId?.toString().trim() || null,
         features: featuresText.split("\n").map(s => s.trim()).filter(Boolean),
         featureFlags: flags,
         aiPerFeatureMonthlyCaps,
@@ -429,10 +446,16 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
             <option value="INR">INR (₹)</option><option value="USD">USD ($)</option>
           </select>
         </Field>
-        <Field label="Billing period">
+        <Field label="Billing period" hint="The period the 'Price' above represents">
           <select className={inputCls} value={form.billingPeriod as string} onChange={e => setForm({ ...form, billingPeriod: e.target.value })}>
             <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
           </select>
+        </Field>
+        <Field label="Yearly price" hint="Optional — when set, the marketing site shows this instead of a 16% discount derived from the monthly price">
+          <input className={inputCls} type="number" min="0" step="0.01"
+            value={(form.yearlyPrice as string) ?? ""}
+            placeholder="e.g. 49990"
+            onChange={e => setForm({ ...form, yearlyPrice: e.target.value })} />
         </Field>
         <Field label="Trial days"><input className={inputCls} type="number" min="0" value={form.trialDays as number} onChange={e => setForm({ ...form, trialDays: Number(e.target.value) })} /></Field>
         <Field label="WhatsApp messages / month" hint="0 = WhatsApp not included">
@@ -548,6 +571,30 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
           <Field label="Feature toggles" hint="One per line: feature-slug=on|off">
             <textarea className={inputCls + " min-h-20 font-mono text-xs"} value={aiTogglesText}
               onChange={e => setAiTogglesText(e.target.value)} placeholder={"menu-suggestions=on\nreport-summaries=off"} />
+          </Field>
+        </div>
+      </div>
+
+      {/* ─── Payment-provider price IDs ───────────────────────────── */}
+      <div className="mt-5 rounded-md border border-border/60 bg-muted/20 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Payment provider IDs</p>
+        <p className="text-xs text-muted-foreground mb-3">Optional. When set, checkout will attach the matching recurring price / plan for the chosen billing period.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Stripe monthly price ID" hint="e.g. price_1Abc…">
+            <input className={inputCls} value={form.stripeMonthlyPriceId as string ?? ""}
+              onChange={e => setForm({ ...form, stripeMonthlyPriceId: e.target.value })} placeholder="price_…" />
+          </Field>
+          <Field label="Stripe yearly price ID" hint="e.g. price_1Xyz…">
+            <input className={inputCls} value={form.stripeYearlyPriceId as string ?? ""}
+              onChange={e => setForm({ ...form, stripeYearlyPriceId: e.target.value })} placeholder="price_…" />
+          </Field>
+          <Field label="Cashfree monthly plan ID">
+            <input className={inputCls} value={form.cashfreeMonthlyPlanId as string ?? ""}
+              onChange={e => setForm({ ...form, cashfreeMonthlyPlanId: e.target.value })} placeholder="cf_plan_…" />
+          </Field>
+          <Field label="Cashfree yearly plan ID">
+            <input className={inputCls} value={form.cashfreeYearlyPlanId as string ?? ""}
+              onChange={e => setForm({ ...form, cashfreeYearlyPlanId: e.target.value })} placeholder="cf_plan_…" />
           </Field>
         </div>
       </div>

@@ -262,7 +262,17 @@ function CheckoutModal({
   const [reference, setReference] = useState("");
   const [proofUrl, setProofUrl] = useState("");
   const [note, setNote] = useState("");
-  const [amount, setAmount] = useState<string>(String(Number(plan.price) || ""));
+  // Billing period chosen at checkout. Defaults to the plan's stored period;
+  // if an admin set a real yearlyPrice we let tenants flip between monthly
+  // and yearly right here.
+  const planYearly = (plan as { yearlyPrice?: string | null }).yearlyPrice;
+  const yearlyConfigured = planYearly != null && planYearly !== "" && Number(planYearly) > 0;
+  const initialPeriod: "monthly" | "yearly" = plan.billingPeriod === "yearly" ? "yearly" : "monthly";
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">(initialPeriod);
+  const periodPrice = billingPeriod === "yearly" && yearlyConfigured
+    ? Number(planYearly)
+    : Number(plan.price);
+  const [amount, setAmount] = useState<string>(String(periodPrice || ""));
   const [busy, setBusy] = useState(false);
 
   async function handlePay() {
@@ -275,27 +285,27 @@ function CheckoutModal({
 
       const cc = couponResult?.code;
       if (method === "cashfree") {
-        const r = await createCashfree.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, couponCode: cc });
+        const r = await createCashfree.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, couponCode: cc, billingPeriod });
         if (r.activated) {
           toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
           onPaid(); return;
         }
         if (r.url) { window.location.href = r.url; return; }
         if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
+          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
           toast({ title: "Plan activated (demo)", description: "Cashfree not configured — plan upgraded in demo mode." });
           onPaid(); return;
         }
       } else if (method === "stripe") {
-        const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl });
+        const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl, billingPeriod });
         if (r.url) { window.location.href = r.url; return; }
         if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
+          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
           toast({ title: "Plan activated (demo)", description: "Stripe not configured — plan upgraded in demo mode." });
           onPaid(); return;
         }
       } else if (method === "razorpay") {
-        const order = await createRazorpay.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
+        const order = await createRazorpay.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
         if (order.activated) {
           toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
           onPaid(); return;
@@ -355,6 +365,7 @@ function CheckoutModal({
           note: note.trim() || undefined,
           amount: amt,
           couponCode: cc,
+          billingPeriod,
         });
         toast({ title: "Submitted for review", description: "Our team will verify and activate your plan within one business day." });
         onPaid();
@@ -368,13 +379,41 @@ function CheckoutModal({
 
   const sym = (plan.currency ?? "INR").toUpperCase() === "USD" ? "$" : "₹";
 
+  // Keep the manual-payment "amount" field in sync when the tenant flips
+  // between monthly and yearly — but only if they haven't typed their own
+  // amount yet (i.e. it still matches a list price).
+  const monthlyN = Number(plan.price) || 0;
+  const yearlyN = yearlyConfigured ? Number(planYearly) : 0;
+  const isStillListAmount = amount === "" || Number(amount) === monthlyN || Number(amount) === yearlyN;
+  function chooseBillingPeriod(next: "monthly" | "yearly") {
+    setBillingPeriod(next);
+    if (isStillListAmount) {
+      const np = next === "yearly" && yearlyConfigured ? yearlyN : monthlyN;
+      setAmount(String(np || ""));
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h3 className="font-semibold text-lg">Pay for {plan.name}</h3>
-            <p className="text-sm text-muted-foreground">{sym}{Number(plan.price).toLocaleString()} / {plan.billingPeriod === "yearly" ? "year" : "month"}</p>
+            <p className="text-sm text-muted-foreground">{sym}{periodPrice.toLocaleString()} / {billingPeriod === "yearly" ? "year" : "month"}</p>
+            {yearlyConfigured && plan.billingPeriod !== "yearly" && (
+              <div className="mt-2 inline-flex rounded-md border border-border bg-muted/40 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => chooseBillingPeriod("monthly")}
+                  className={`px-2.5 py-1 rounded ${billingPeriod === "monthly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                >Monthly</button>
+                <button
+                  type="button"
+                  onClick={() => chooseBillingPeriod("yearly")}
+                  className={`px-2.5 py-1 rounded ${billingPeriod === "yearly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                >Yearly</button>
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
         </div>

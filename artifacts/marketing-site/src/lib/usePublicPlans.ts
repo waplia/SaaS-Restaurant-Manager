@@ -6,6 +6,9 @@ export interface PublicPlan {
   name: string;
   description: string | null;
   price: string;
+  /** Optional admin-configured yearly price. When present, the yearly toggle
+   * shows this exact value instead of deriving 16% off monthly × 12. */
+  yearlyPrice?: string | null;
   currency: "INR" | "USD";
   billingPeriod: "monthly" | "yearly";
   trialDays: number;
@@ -70,7 +73,24 @@ export interface UsePublicPlansResult {
   error: unknown;
 }
 
-function deriveYearly(monthly: PublicPlan): DisplayPlan {
+function hasAdminYearlyPrice(plan: PublicPlan): boolean {
+  if (plan.yearlyPrice == null || plan.yearlyPrice === "") return false;
+  const n = Number(plan.yearlyPrice);
+  return Number.isFinite(n) && n > 0;
+}
+
+/** Yearly card derived from a monthly-billed plan row. Prefers the
+ * admin-configured `yearlyPrice` (real, not derived); otherwise falls back to
+ * the frontend's 16% discount on monthly × 12. */
+function yearlyDisplayFromMonthly(monthly: PublicPlan): DisplayPlan {
+  if (hasAdminYearlyPrice(monthly)) {
+    return {
+      plan: monthly,
+      period: "yearly",
+      displayPrice: formatAmount(Number(monthly.yearlyPrice), monthly.currency),
+      isDerived: false,
+    };
+  }
   const monthlyN = Number(monthly.price);
   if (!Number.isFinite(monthlyN) || monthlyN <= 0) {
     return {
@@ -131,10 +151,12 @@ export function usePublicPlans(): UsePublicPlansResult {
   const hasYearly = yearlyPlans.length > 0;
 
   // True if ANY plan needs derivation on a given side (no real variant for
-  // that slug on the opposite side). Covers fully-missing and mixed catalogs.
+  // that slug on the opposite side, and no admin-set yearly price either).
   const monthlySlugs = new Set(monthlyPlans.map((p) => p.slug));
   const yearlySlugs = new Set(yearlyPlans.map((p) => p.slug));
-  const hasDerivedYearly = monthlyPlans.some((p) => !yearlySlugs.has(p.slug));
+  const hasDerivedYearly = monthlyPlans.some(
+    (p) => !yearlySlugs.has(p.slug) && !hasAdminYearlyPrice(p),
+  );
   const hasDerivedMonthly = yearlyPlans.some((p) => !monthlySlugs.has(p.slug));
 
   const getDisplayPlans = (view: BillingView): DisplayPlan[] => {
@@ -147,11 +169,11 @@ export function usePublicPlans(): UsePublicPlansResult {
           isDerived: false,
         }));
         for (const m of monthlyPlans) {
-          if (!yearlySlugs.has(m.slug)) out.push(deriveYearly(m));
+          if (!yearlySlugs.has(m.slug)) out.push(yearlyDisplayFromMonthly(m));
         }
         return out.sort((a, b) => Number(a.plan.price) - Number(b.plan.price));
       }
-      return monthlyPlans.map(deriveYearly);
+      return monthlyPlans.map(yearlyDisplayFromMonthly);
     }
     if (hasMonthly) {
       const out: DisplayPlan[] = monthlyPlans.map((p) => ({

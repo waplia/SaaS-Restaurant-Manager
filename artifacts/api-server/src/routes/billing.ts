@@ -137,7 +137,9 @@ router.get("/restaurants/:restaurantId/billing/methods", requireRole("owner", "m
 router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId, couponCode } = req.body as { planId: number; couponCode?: string };
+  const { planId, couponCode, billingPeriod: bodyPeriod } = req.body as {
+    planId: number; couponCode?: string; billingPeriod?: "monthly" | "yearly";
+  };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
 
@@ -146,12 +148,21 @@ router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", req
     return void res.status(400).json({ error: "Razorpay is not configured" });
   }
 
+  // Resolve the chosen billing period and pick the matching list price.
+  const period: "monthly" | "yearly" = bodyPeriod === "yearly" || bodyPeriod === "monthly"
+    ? bodyPeriod : (plan.billingPeriod === "yearly" ? "yearly" : "monthly");
+  const yearlyConfigured = plan.yearlyPrice != null && Number(plan.yearlyPrice) > 0;
+  if (period === "yearly" && !yearlyConfigured && plan.billingPeriod !== "yearly") {
+    return void res.status(400).json({ error: "This plan does not offer yearly billing." });
+  }
+  const listPrice = (period === "yearly" && yearlyConfigured) ? Number(plan.yearlyPrice) : Number(plan.price);
+
   // Resolve coupon (if any) so we charge the discounted amount.
-  let amountToCharge = Number(plan.price);
+  let amountToCharge = listPrice;
   let appliedCouponCode: string | null = null;
   if (couponCode) {
     const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
-    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(listPrice) }, action: "payment", isFirstCycle: isFirst });
     if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
     amountToCharge = r.resolved.effectiveAmount;
     appliedCouponCode = r.resolved.coupon.code;
@@ -163,11 +174,13 @@ router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", req
     await activateForTenant(tenantId, planId, externalRef, {
       provider: "razorpay", amount: "0.00", currency: (plan.currency ?? "INR").toUpperCase(),
       couponCode: appliedCouponCode, redeemedBy: req.user?.id ?? null,
+      billingPeriod: period,
     });
     return void res.json({ orderId: null, activated: true, freeActivation: true, couponCode: appliedCouponCode });
   }
 
-  const receipt = `kl_${tenantId}_${planId}_${Date.now()}`;
+  const periodTag = period === "yearly" ? "y" : "m";
+  const receipt = `kl_${tenantId}_${planId}_${periodTag}_${Date.now()}`;
   try {
     const order = await createRazorpayOrder(config, {
       receipt,
@@ -186,7 +199,7 @@ export async function activateForTenant(
   tenantId: number,
   planId: number,
   externalRef: string,
-  opts: { provider: "cashfree" | "razorpay" | "stripe" | "bank" | "upi" | "mock"; amount?: string; currency?: string; manualRequestId?: number; couponCode?: string | null; redeemedBy?: number | null } = { provider: "mock" },
+  opts: { provider: "cashfree" | "razorpay" | "stripe" | "bank" | "upi" | "mock"; amount?: string; currency?: string; manualRequestId?: number; couponCode?: string | null; redeemedBy?: number | null; billingPeriod?: "monthly" | "yearly" } = { provider: "mock" },
 ): Promise<void> {
   // Idempotency guard: webhooks retry, and confirm + webhook can both fire for
   // the same order. We dedupe by externalRef so a single payment never extends
@@ -213,18 +226,29 @@ export async function activateForTenant(
     && new Date(existing.endsAt).getTime() > now.getTime();
   const periodStart = sameActivePlan ? new Date(existing!.endsAt!) : now;
   const endsAt = new Date(periodStart);
-  if (plan?.billingPeriod === "yearly") endsAt.setFullYear(endsAt.getFullYear() + 1);
+  // Effective period: explicit caller choice > plan's default billingPeriod.
+  const effectivePeriod: "monthly" | "yearly" =
+    opts.billingPeriod ?? (plan?.billingPeriod === "yearly" ? "yearly" : "monthly");
+  if (effectivePeriod === "yearly") endsAt.setFullYear(endsAt.getFullYear() + 1);
   else endsAt.setMonth(endsAt.getMonth() + 1);
 
   // Resolve the coupon to apply, if any. Order of precedence:
   //  1. Explicit code passed to this activation (one-shot codes, first-month, etc.)
   //  2. Tenant's persisted lifetime coupon (auto-reapplied on every renewal)
+  // Effective list price for this activation: yearly when we're activating a
+  // yearly term and the admin set a real one; otherwise the plan's stored
+  // monthly price. Used both for coupon validation and amount derivation so
+  // the two stay in lockstep.
+  const effectiveListPrice = (effectivePeriod === "yearly" && plan?.yearlyPrice != null && Number(plan.yearlyPrice) > 0)
+    ? Number(plan.yearlyPrice)
+    : Number(plan?.price ?? 0);
+
   let resolved: Awaited<ReturnType<typeof validateCoupon>> | null = null;
   let couponApplied: { id: number; code: string; type: string; discountApplied: number } | null = null;
   const isFirstCycle = plan ? (await countPriorPayments(tenantId, planId)) === 0 : true;
   if (opts.couponCode && plan) {
     const r = await validateCoupon({
-      code: opts.couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle,
+      code: opts.couponCode, tenantId, plan: { id: plan.id, price: String(effectiveListPrice) }, action: "payment", isFirstCycle,
     });
     if (r.ok) resolved = r;
     else logger.warn({ tenantId, planId, code: opts.couponCode, reason: r.reason }, "coupon failed validation at activation");
@@ -232,7 +256,7 @@ export async function activateForTenant(
     const [c] = await db.select().from(subscriptionCouponsTable).where(eq(subscriptionCouponsTable.id, existing.lifetimeCouponId));
     if (c && c.discountType === "lifetime" && effectiveStatus(c) === "active") {
       const r = await validateCoupon({
-        code: c.code, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle,
+        code: c.code, tenantId, plan: { id: plan.id, price: String(effectiveListPrice) }, action: "payment", isFirstCycle,
       });
       if (r.ok) resolved = r;
     }
@@ -241,7 +265,8 @@ export async function activateForTenant(
   // Compute final amount: prefer the caller's amount (what was actually charged)
   // but if not provided, derive from plan price minus discount.
   const planCurrency = (opts.currency ?? plan?.currency ?? "INR").toUpperCase();
-  const baseAmount = opts.amount !== undefined ? Number(opts.amount) : Number(plan?.price ?? 0);
+  const planListPrice = effectiveListPrice;
+  const baseAmount = opts.amount !== undefined ? Number(opts.amount) : planListPrice;
   const discountAmount = resolved?.ok ? resolved.resolved.discountAmount : 0;
   const finalAmount = (resolved?.ok && opts.amount === undefined)
     ? resolved.resolved.effectiveAmount.toFixed(2)
@@ -370,10 +395,12 @@ router.post("/restaurants/:restaurantId/subscription/razorpay-confirm", requireR
     logger.error({ err }, "razorpay-confirm fetch failed");
     return void res.status(502).json({ error: "Could not verify Razorpay order" });
   }
-  const m = /^kl_(\d+)_(\d+)_/.exec(order.receipt ?? "");
+  const m = /^kl_(\d+)_(\d+)(?:_([my]))?_/.exec(order.receipt ?? "");
   if (!m) return void res.status(400).json({ error: "Order receipt is malformed" });
   const orderTenantId = Number(m[1]);
   const orderPlanId = Number(m[2]);
+  const orderPeriod: "monthly" | "yearly" | undefined =
+    m[3] === "y" ? "yearly" : m[3] === "m" ? "monthly" : undefined;
   if (orderTenantId !== tenantId) return void res.status(403).json({ error: "This order does not belong to your tenant." });
   if (order.status !== "paid" && order.amount_paid < order.amount) {
     return void res.json({ activated: false, status: order.status });
@@ -390,6 +417,7 @@ router.post("/restaurants/:restaurantId/subscription/razorpay-confirm", requireR
     currency: typeof order.currency === "string" ? order.currency : undefined,
     couponCode: orderCouponCode,
     redeemedBy: req.user?.id ?? null,
+    billingPeriod: orderPeriod,
   });
   res.json({ activated: true });
 });
@@ -412,16 +440,19 @@ export function createRazorpayWebhookRouter(): Router {
       const isFailed = event.event === "payment.failed";
       if (orderId && isSuccess) {
         const order = await fetchRazorpayOrder(config, orderId);
-        const m = /^kl_(\d+)_(\d+)_/.exec(order.receipt ?? "");
+        const m = /^kl_(\d+)_(\d+)(?:_([my]))?_/.exec(order.receipt ?? "");
+        const period: "monthly" | "yearly" | undefined =
+          m?.[3] === "y" ? "yearly" : m?.[3] === "m" ? "monthly" : undefined;
         if (m) await activateForTenant(Number(m[1]), Number(m[2]), `rzp_${orderId}`, {
           provider: "razorpay",
           amount: typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : undefined,
           currency: typeof order.currency === "string" ? order.currency : undefined,
+          billingPeriod: period,
         });
       } else if (orderId && isFailed) {
         try {
           const order = await fetchRazorpayOrder(config, orderId);
-          const m = /^kl_(\d+)_(\d+)_/.exec(order.receipt ?? "");
+          const m = /^kl_(\d+)_(\d+)(?:_[my])?_/.exec(order.receipt ?? "");
           if (m) {
             const tenantId = Number(m[1]);
             const owners = await db.select({ email: usersTable.email, name: usersTable.name })
@@ -466,8 +497,9 @@ export function createRazorpayWebhookRouter(): Router {
 router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId, method, reference, proofUrl, note, amount, couponCode } = req.body as {
+  const { planId, method, reference, proofUrl, note, amount, couponCode, billingPeriod: bodyPeriod } = req.body as {
     planId: number; method: string; reference?: string; proofUrl?: string; note?: string; amount?: number | string; couponCode?: string;
+    billingPeriod?: "monthly" | "yearly";
   };
   if (!planId || (method !== "bank" && method !== "upi")) {
     return void res.status(400).json({ error: "planId and method (bank|upi) are required" });
@@ -495,14 +527,23 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
     return void res.status(409).json({ error: "You already have a pending manual payment under review." });
   }
 
+  // Resolve the chosen billing period and pick the matching list price.
+  const period: "monthly" | "yearly" = bodyPeriod === "yearly" || bodyPeriod === "monthly"
+    ? bodyPeriod : (plan.billingPeriod === "yearly" ? "yearly" : "monthly");
+  const yearlyConfigured = plan.yearlyPrice != null && Number(plan.yearlyPrice) > 0;
+  if (period === "yearly" && !yearlyConfigured && plan.billingPeriod !== "yearly") {
+    return void res.status(400).json({ error: "This plan does not offer yearly billing." });
+  }
+  const listPrice = (period === "yearly" && yearlyConfigured) ? Number(plan.yearlyPrice) : Number(plan.price);
+
   // If a coupon is supplied, validate it now and use the discounted price as
   // the default amount the tenant should pay. They can still override with a
   // declared amount, but the admin sees the coupon attached on review.
   let normalisedCoupon: string | null = null;
-  let discountedPrice = Number(plan.price);
+  let discountedPrice = listPrice;
   if (couponCode) {
     const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
-    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(listPrice) }, action: "payment", isFirstCycle: isFirst });
     if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
     normalisedCoupon = r.resolved.coupon.code;
     discountedPrice = r.resolved.effectiveAmount;
@@ -531,6 +572,7 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
     status: "pending",
     submittedBy: req.user?.id ?? null,
     couponCode: normalisedCoupon,
+    billingPeriod: period,
   }).returning();
 
   await recordAuditLog({
@@ -600,6 +642,8 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     manualRequestId: reqRow.id,
     couponCode: reqRow.couponCode ?? null,
     redeemedBy: req.user?.id ?? null,
+    billingPeriod: reqRow.billingPeriod === "yearly" || reqRow.billingPeriod === "monthly"
+      ? reqRow.billingPeriod : undefined,
   });
   await db.update(manualPaymentRequestsTable).set({
     status: "approved",

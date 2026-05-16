@@ -27,6 +27,7 @@ export const manualPaymentRequestsTable = pgTable("manual_payment_requests", {
   reviewedAt: timestamp("reviewed_at"),
   submittedBy: integer("submitted_by"),
   couponCode: text("coupon_code"),
+  billingPeriod: text("billing_period"), // "monthly" | "yearly" — period the tenant is paying for
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

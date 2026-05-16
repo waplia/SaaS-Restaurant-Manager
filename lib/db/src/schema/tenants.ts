@@ -9,6 +9,17 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   slug: text("slug").notNull().unique(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   billingPeriod: text("billing_period").notNull().default("monthly"),
+  // Optional admin-configured yearly price for this plan. When set, the
+  // marketing site's monthly/yearly toggle uses this value directly instead
+  // of deriving a 16% discount from the monthly price. When null, callers
+  // should fall back to the derived value.
+  yearlyPrice: decimal("yearly_price", { precision: 10, scale: 2 }),
+  // Optional payment-provider price/plan IDs so checkout can attach the
+  // right recurring price for each billing period.
+  stripeMonthlyPriceId: text("stripe_monthly_price_id"),
+  stripeYearlyPriceId: text("stripe_yearly_price_id"),
+  cashfreeMonthlyPlanId: text("cashfree_monthly_plan_id"),
+  cashfreeYearlyPlanId: text("cashfree_yearly_plan_id"),
   maxRestaurants: integer("max_restaurants").notNull().default(1),
   maxBranches: integer("max_branches").notNull().default(1),
   maxStaff: integer("max_staff").notNull().default(10),
