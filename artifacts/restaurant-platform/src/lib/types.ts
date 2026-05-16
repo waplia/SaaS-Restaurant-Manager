@@ -127,6 +127,13 @@ export interface KitchenTicket {
   kitchen: { id: number; name: string; autoPrint: boolean; printerName: string | null; paperSize: string } | null;
   createdAt: string;
   items: KitchenTicketItem[];
+  expectedPrepMinutes?: number | null;
+  expectedReadyAt?: string | null;
+  delayAlertCount?: number;
+  lastDelayAlertAt?: string | null;
+  elapsedMinutes?: number;
+  overdueMinutes?: number;
+  isDelayed?: boolean;
 }
 
 export interface Kitchen {

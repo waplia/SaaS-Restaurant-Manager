@@ -17,6 +17,10 @@ interface KitchenTicketCardProps {
   status: string;
   createdAt: string;
   onMarkReady?: (id: number) => void;
+  isDelayed?: boolean;
+  overdueMinutes?: number;
+  delayAlertCount?: number;
+  expectedPrepMinutes?: number | null;
 }
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -28,23 +32,41 @@ const STATUS_MAP: Record<string, { color: string; label: string }> = {
 
 export function KitchenTicketCard({
   ticketId, orderNumber, tableLabel, items, status, createdAt, onMarkReady,
+  isDelayed, overdueMinutes, delayAlertCount, expectedPrepMinutes,
 }: KitchenTicketCardProps) {
   const colors = useColors();
   const sm = STATUS_MAP[status] ?? STATUS_MAP.pending;
   const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+  const hasAlertedDelay = (delayAlertCount ?? 0) > 0;
+  const showDelay = hasAlertedDelay || (isDelayed ?? false);
+  const overdue = overdueMinutes ?? 0;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: sm.color }]}>
+    <View style={[
+      styles.card,
+      { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: sm.color },
+      showDelay && { borderLeftColor: "#dc2626", borderColor: "#fecaca", backgroundColor: "#fef2f2" },
+    ]}>
       <View style={styles.header}>
         <View>
-          <Text style={[styles.order, { color: colors.foreground }]}>#{orderNumber}</Text>
+          <Text style={[styles.order, { color: colors.foreground }, showDelay && { color: "#7f1d1d" }]}>#{orderNumber}</Text>
           {tableLabel ? <Text style={[styles.table, { color: colors.mutedForeground }]}>{tableLabel}</Text> : null}
+          {showDelay ? (
+            <View style={styles.delayBadge}>
+              <Ionicons name="warning" size={11} color="#dc2626" />
+              <Text style={styles.delayText}>
+                DELAYED{overdue > 0 ? ` +${overdue}m` : ""}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.headerRight}>
           <View style={[styles.badge, { backgroundColor: sm.color + "22" }]}>
             <Text style={[styles.badgeText, { color: sm.color }]}>{sm.label}</Text>
           </View>
-          <Text style={[styles.elapsed, { color: colors.mutedForeground }]}>{elapsed}m ago</Text>
+          <Text style={[styles.elapsed, { color: showDelay ? "#dc2626" : colors.mutedForeground }]}>
+            {elapsed}m ago{expectedPrepMinutes ? ` / ${expectedPrepMinutes}m` : ""}
+          </Text>
         </View>
       </View>
       <View style={styles.items}>
@@ -84,6 +106,8 @@ const styles = StyleSheet.create({
   table: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   badgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  delayBadge: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4, alignSelf: "flex-start", backgroundColor: "#fee2e2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
+  delayText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc2626", letterSpacing: 0.3 },
   elapsed: { fontSize: 11, fontFamily: "Inter_400Regular" },
   items: { gap: 4 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 6 },

@@ -1400,6 +1400,13 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
 
     const kitchen = t.kitchenId != null ? kitchenMap.get(t.kitchenId) ?? null : null;
 
+    const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(t.createdAt).getTime()) / 60000));
+    const expectedReadyMs = t.expectedReadyAt
+      ? new Date(t.expectedReadyAt).getTime()
+      : new Date(t.createdAt).getTime() + (t.expectedPrepMinutes ?? 15) * 60_000;
+    const overdueMinutes = Math.floor((Date.now() - expectedReadyMs) / 60_000);
+    const isDelayed = (t.delayAlertCount ?? 0) > 0 || overdueMinutes > 0;
+
     return {
       ...t,
       orderNumber: order?.orderNumber ?? "",
@@ -1407,6 +1414,9 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
       orderType: order?.orderType ?? "dine_in",
       items: enrichedItems,
       kitchen: kitchen ? { id: kitchen.id, name: kitchen.name, autoPrint: kitchen.autoPrint, printerName: kitchen.printerName, paperSize: kitchen.paperSize } : null,
+      elapsedMinutes,
+      overdueMinutes: overdueMinutes > 0 ? overdueMinutes : 0,
+      isDelayed,
     };
   }));
 
@@ -1416,11 +1426,34 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
 router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { status } = req.body;
-  const updates: Record<string, unknown> = { status, updatedAt: new Date() };
-  if (status === "preparing") updates.startedAt = new Date();
-  if (status === "ready" || status === "served") updates.completedAt = new Date();
+  const now = new Date();
+  const updates: Record<string, unknown> = { status, updatedAt: now };
+  if (status === "preparing") updates.startedAt = now;
+  if (status === "ready" || status === "served") updates.completedAt = now;
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // Mirror timing onto order_items for this ticket's kitchen so per-item analytics work.
+  if (status === "preparing" || status === "ready" || status === "served") {
+    const allItems = await db.select({ id: orderItemsTable.id, menuItemId: orderItemsTable.menuItemId })
+      .from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.orderId));
+    const ids = allItems.map(i => i.menuItemId).filter((x): x is number => x != null);
+    const menuRows = ids.length > 0
+      ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
+          .from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, ids)))
+      : [];
+    const kitchenById = new Map(menuRows.map(m => [m.id, m.kitchenId] as const));
+    const matchIds = allItems
+      .filter(i => updated.kitchenId == null || (i.menuItemId != null && kitchenById.get(i.menuItemId) === updated.kitchenId))
+      .map(i => i.id);
+    if (matchIds.length > 0) {
+      const itemUpdates: Record<string, unknown> = {};
+      if (status === "preparing") itemUpdates.startedAt = now;
+      if (status === "ready" || status === "served") itemUpdates.readyAt = now;
+      await db.update(orderItemsTable).set(itemUpdates).where(inArray(orderItemsTable.id, matchIds));
+    }
+  }
+
   broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
 
   if (status === "ready") {

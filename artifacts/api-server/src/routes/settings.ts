@@ -22,7 +22,7 @@ const ALL_SECTIONS = new Set([
   "reservation", "about-us", "customer-site", "receipt", "printer",
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
-  "ai", "kiosk", "loyalty", "discounts",
+  "ai", "kiosk", "loyalty", "discounts", "kitchen-delay",
 ]);
 
 function rolesForSection(section: string): AppRole[] {

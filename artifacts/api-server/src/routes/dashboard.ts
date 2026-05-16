@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, floorTablesTable, kitchenTicketsTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable } from "../lib/db";
+import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable, ticketDelayAlertsTable } from "../lib/db";
+import { AIProviderService } from "../lib/aiProviderService";
+import { loadKitchenDelayConfig } from "../lib/kitchenDelay";
 import { generateDueRecurringExpenses } from "./expenses";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -407,5 +409,317 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
       : { totalExpenses: null, netProfit: null, expensesByCategory: [] }),
   });
 });
+
+// ─────────────────────── Kitchen Performance Report ───────────────────────
+
+interface KitchenPerfRow {
+  station: { id: number | null; name: string };
+  ticketsTotal: number;
+  ticketsDelayed: number;
+  avgPrepMinutes: number | null;
+  delayedPct: number;
+}
+
+interface DelayedItemRow {
+  menuItemId: number | null;
+  name: string;
+  ticketsDelayed: number;
+  avgDelayMinutes: number;
+}
+
+interface PeakHourRow { hour: number; ticketsDelayed: number; }
+
+router.get(
+  "/restaurants/:restaurantId/dashboard/kitchen-performance",
+  requirePlanFeature("kitchen_display"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const fromStr = req.query["from"] ? String(req.query["from"]) : null;
+    const toStr = req.query["to"] ? String(req.query["to"]) : null;
+    const kitchenIdQ = req.query["kitchenId"] ? Number(req.query["kitchenId"]) : null;
+
+    const to = toStr ? new Date(toStr) : new Date();
+    const from = fromStr ? new Date(fromStr) : new Date(to.getTime() - 7 * 86_400_000);
+
+    const conds = [
+      eq(kitchenTicketsTable.restaurantId, restaurantId),
+      gte(kitchenTicketsTable.createdAt, from),
+      lte(kitchenTicketsTable.createdAt, to),
+    ];
+    if (kitchenIdQ != null) conds.push(eq(kitchenTicketsTable.kitchenId, kitchenIdQ));
+
+    const tickets = await db.select({
+      id: kitchenTicketsTable.id,
+      orderId: kitchenTicketsTable.orderId,
+      kitchenId: kitchenTicketsTable.kitchenId,
+      status: kitchenTicketsTable.status,
+      isPriority: kitchenTicketsTable.isPriority,
+      createdAt: kitchenTicketsTable.createdAt,
+      startedAt: kitchenTicketsTable.startedAt,
+      completedAt: kitchenTicketsTable.completedAt,
+      expectedPrepMinutes: kitchenTicketsTable.expectedPrepMinutes,
+      expectedReadyAt: kitchenTicketsTable.expectedReadyAt,
+      delayAlertCount: kitchenTicketsTable.delayAlertCount,
+    }).from(kitchenTicketsTable).where(and(...conds));
+
+    const kitchens = await db.select().from(kitchensTable).where(eq(kitchensTable.restaurantId, restaurantId));
+    const kitchenMap = new Map(kitchens.map(k => [k.id, k.name] as const));
+
+    // Per-station aggregates
+    const stationAgg = new Map<number | null, { total: number; delayed: number; prepSum: number; prepCount: number }>();
+    for (const t of tickets) {
+      const key = t.kitchenId;
+      const a = stationAgg.get(key) ?? { total: 0, delayed: 0, prepSum: 0, prepCount: 0 };
+      a.total++;
+      if ((t.delayAlertCount ?? 0) > 0) a.delayed++;
+      if (t.completedAt && t.startedAt) {
+        a.prepSum += (new Date(t.completedAt).getTime() - new Date(t.startedAt).getTime()) / 60_000;
+        a.prepCount++;
+      } else if (t.completedAt) {
+        a.prepSum += (new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime()) / 60_000;
+        a.prepCount++;
+      }
+      stationAgg.set(key, a);
+    }
+    const stations: KitchenPerfRow[] = Array.from(stationAgg.entries()).map(([kid, a]) => ({
+      station: { id: kid, name: kid != null ? (kitchenMap.get(kid) ?? `Kitchen ${kid}`) : "Unassigned" },
+      ticketsTotal: a.total,
+      ticketsDelayed: a.delayed,
+      avgPrepMinutes: a.prepCount > 0 ? Number((a.prepSum / a.prepCount).toFixed(1)) : null,
+      delayedPct: a.total > 0 ? Number(((a.delayed / a.total) * 100).toFixed(1)) : 0,
+    })).sort((a, b) => b.ticketsTotal - a.ticketsTotal);
+
+    // Top delayed items (from order_items in delayed tickets' orders)
+    const delayedTicketIds = tickets.filter(t => (t.delayAlertCount ?? 0) > 0).map(t => t.id);
+    const delayedAlerts = delayedTicketIds.length > 0
+      ? await db.select({
+          ticketId: ticketDelayAlertsTable.ticketId,
+          delayedByMinutes: ticketDelayAlertsTable.delayedByMinutes,
+        }).from(ticketDelayAlertsTable)
+          .where(and(eq(ticketDelayAlertsTable.restaurantId, restaurantId), gte(ticketDelayAlertsTable.createdAt, from), lte(ticketDelayAlertsTable.createdAt, to)))
+      : [];
+    const delayByTicket = new Map<number, number[]>();
+    for (const a of delayedAlerts) {
+      const arr = delayByTicket.get(a.ticketId) ?? [];
+      arr.push(a.delayedByMinutes);
+      delayByTicket.set(a.ticketId, arr);
+    }
+
+    const orderIdsForDelayed = Array.from(new Set(tickets.filter(t => (t.delayAlertCount ?? 0) > 0).map(t => t.orderId)));
+    const delayedOrderItems = orderIdsForDelayed.length > 0
+      ? await db.select({
+          orderId: orderItemsTable.orderId,
+          menuItemId: orderItemsTable.menuItemId,
+          menuItemName: orderItemsTable.menuItemName,
+        }).from(orderItemsTable).where(sql`${orderItemsTable.orderId} = ANY(${orderIdsForDelayed})`)
+      : [];
+
+    const ticketsByOrder = new Map<number, typeof tickets[number][]>();
+    for (const t of tickets) {
+      const arr = ticketsByOrder.get(t.orderId) ?? [];
+      arr.push(t);
+      ticketsByOrder.set(t.orderId, arr);
+    }
+
+    const itemAgg = new Map<string, { name: string; menuItemId: number | null; count: number; delaySum: number }>();
+    for (const oi of delayedOrderItems) {
+      const orderTickets = (ticketsByOrder.get(oi.orderId) ?? []).filter(t => (t.delayAlertCount ?? 0) > 0);
+      if (orderTickets.length === 0) continue;
+      const avgDelay = orderTickets
+        .map(t => {
+          const delays = delayByTicket.get(t.id) ?? [];
+          return delays.length > 0 ? Math.max(...delays) : 0;
+        })
+        .reduce((s, v) => s + v, 0) / orderTickets.length;
+      const k = String(oi.menuItemId ?? oi.menuItemName);
+      const a = itemAgg.get(k) ?? { name: oi.menuItemName, menuItemId: oi.menuItemId, count: 0, delaySum: 0 };
+      a.count++;
+      a.delaySum += avgDelay;
+      itemAgg.set(k, a);
+    }
+    const topDelayedItems: DelayedItemRow[] = Array.from(itemAgg.values())
+      .map(a => ({
+        menuItemId: a.menuItemId,
+        name: a.name,
+        ticketsDelayed: a.count,
+        avgDelayMinutes: Number((a.delaySum / a.count).toFixed(1)),
+      }))
+      .sort((a, b) => b.ticketsDelayed - a.ticketsDelayed)
+      .slice(0, 10);
+
+    // Peak delay hours (group alert createdAt by hour-of-day)
+    const alertsForHours = await db.select({
+      createdAt: ticketDelayAlertsTable.createdAt,
+    }).from(ticketDelayAlertsTable).where(and(
+      eq(ticketDelayAlertsTable.restaurantId, restaurantId),
+      gte(ticketDelayAlertsTable.createdAt, from),
+      lte(ticketDelayAlertsTable.createdAt, to),
+    ));
+    const hourBuckets = new Array(24).fill(0);
+    for (const a of alertsForHours) {
+      const h = new Date(a.createdAt).getHours();
+      hourBuckets[h]++;
+    }
+    const peakHours: PeakHourRow[] = hourBuckets.map((c, h) => ({ hour: h, ticketsDelayed: c }));
+
+    // Station overload: max concurrent open tickets per kitchen during the window.
+    // Approximate by sweeping ticket create/complete events.
+    const overload = stations.map(s => {
+      const sTickets = tickets.filter(t => t.kitchenId === s.station.id);
+      const events: Array<{ t: number; delta: number }> = [];
+      for (const t of sTickets) {
+        events.push({ t: new Date(t.createdAt).getTime(), delta: 1 });
+        const end = t.completedAt ? new Date(t.completedAt).getTime() : to.getTime();
+        events.push({ t: end, delta: -1 });
+      }
+      events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+      let cur = 0, peak = 0;
+      for (const e of events) { cur += e.delta; if (cur > peak) peak = cur; }
+      return { stationId: s.station.id, stationName: s.station.name, peakConcurrent: peak };
+    });
+
+    const totalTickets = tickets.length;
+    const totalDelayed = tickets.filter(t => (t.delayAlertCount ?? 0) > 0).length;
+    const completedTickets = tickets.filter(t => t.completedAt);
+    const allPrepMinutes = completedTickets.map(t => {
+      const start = t.startedAt ? new Date(t.startedAt).getTime() : new Date(t.createdAt).getTime();
+      return (new Date(t.completedAt!).getTime() - start) / 60_000;
+    });
+    const avgPrep = allPrepMinutes.length > 0
+      ? Number((allPrepMinutes.reduce((s, v) => s + v, 0) / allPrepMinutes.length).toFixed(1))
+      : null;
+
+    res.json({
+      window: { from: from.toISOString(), to: to.toISOString() },
+      kitchenId: kitchenIdQ,
+      summary: {
+        ticketsTotal: totalTickets,
+        ticketsDelayed: totalDelayed,
+        delayedPct: totalTickets > 0 ? Number(((totalDelayed / totalTickets) * 100).toFixed(1)) : 0,
+        avgPrepMinutes: avgPrep,
+        alertsTotal: alertsForHours.length,
+      },
+      stations,
+      topDelayedItems,
+      peakHours,
+      overload,
+    });
+  },
+);
+
+router.get(
+  "/restaurants/:restaurantId/dashboard/kitchen-delay-alerts",
+  requirePlanFeature("kitchen_display"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const limit = Math.min(200, Math.max(1, Number(req.query["limit"] ?? 50)));
+    const rows = await db.select({
+      id: ticketDelayAlertsTable.id,
+      ticketId: ticketDelayAlertsTable.ticketId,
+      kitchenId: ticketDelayAlertsTable.kitchenId,
+      thresholdMinutes: ticketDelayAlertsTable.thresholdMinutes,
+      delayedByMinutes: ticketDelayAlertsTable.delayedByMinutes,
+      createdAt: ticketDelayAlertsTable.createdAt,
+      orderId: kitchenTicketsTable.orderId,
+      orderNumber: ordersTable.orderNumber,
+      ticketStatus: kitchenTicketsTable.status,
+    })
+    .from(ticketDelayAlertsTable)
+    .innerJoin(kitchenTicketsTable, eq(kitchenTicketsTable.id, ticketDelayAlertsTable.ticketId))
+    .innerJoin(ordersTable, eq(ordersTable.id, kitchenTicketsTable.orderId))
+    .where(eq(ticketDelayAlertsTable.restaurantId, restaurantId))
+    .orderBy(desc(ticketDelayAlertsTable.createdAt))
+    .limit(limit);
+    res.json(rows);
+  },
+);
+
+// AI summary cache (in-memory) keyed by restaurant + window
+interface AiSummaryCacheEntry { key: string; expiresAt: number; payload: { summary: string; insights: string[]; generatedAt: string; cached: boolean } }
+const aiSummaryCache = new Map<number, AiSummaryCacheEntry>();
+const AI_SUMMARY_TTL_MS = 5 * 60 * 1000;
+
+router.get(
+  "/restaurants/:restaurantId/dashboard/kitchen-performance/ai-summary",
+  requireRole("owner", "manager", "super_admin"),
+  requirePlanFeature("kitchen_display"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const fromStr = req.query["from"] ? String(req.query["from"]) : null;
+    const toStr = req.query["to"] ? String(req.query["to"]) : null;
+    const cacheKey = `${fromStr ?? ""}|${toStr ?? ""}`;
+    const now = Date.now();
+    const existing = aiSummaryCache.get(restaurantId);
+    if (existing && existing.key === cacheKey && existing.expiresAt > now) {
+      return void res.json({ ...existing.payload, cached: true });
+    }
+
+    // Reuse the perf endpoint's data by calling the aggregation logic inline.
+    // Simpler: refetch a minimal payload here.
+    const to = toStr ? new Date(toStr) : new Date();
+    const from = fromStr ? new Date(fromStr) : new Date(to.getTime() - 7 * 86_400_000);
+    const tickets = await db.select({
+      id: kitchenTicketsTable.id,
+      kitchenId: kitchenTicketsTable.kitchenId,
+      createdAt: kitchenTicketsTable.createdAt,
+      completedAt: kitchenTicketsTable.completedAt,
+      startedAt: kitchenTicketsTable.startedAt,
+      delayAlertCount: kitchenTicketsTable.delayAlertCount,
+    }).from(kitchenTicketsTable).where(and(
+      eq(kitchenTicketsTable.restaurantId, restaurantId),
+      gte(kitchenTicketsTable.createdAt, from),
+      lte(kitchenTicketsTable.createdAt, to),
+    ));
+    const totalDelayed = tickets.filter(t => (t.delayAlertCount ?? 0) > 0).length;
+    const cfg = await loadKitchenDelayConfig(restaurantId);
+
+    const stats = {
+      windowDays: Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000)),
+      ticketsTotal: tickets.length,
+      ticketsDelayed: totalDelayed,
+      delayedPct: tickets.length > 0 ? (totalDelayed / tickets.length) * 100 : 0,
+      thresholdMinutes: cfg.thresholdMinutes,
+    };
+
+    let summary = `Over the last ${stats.windowDays} day(s) the kitchen processed ${stats.ticketsTotal} tickets. ${stats.ticketsDelayed} were flagged as delayed (${stats.delayedPct.toFixed(1)}%) past the ${stats.thresholdMinutes} min threshold.`;
+    let insights: string[] = [];
+    if (stats.ticketsTotal === 0) {
+      insights = ["No kitchen activity in this window."];
+    } else if (stats.ticketsDelayed === 0) {
+      insights = ["No delays detected — kitchen is operating within target."];
+    } else {
+      insights = [
+        `${stats.ticketsDelayed} of ${stats.ticketsTotal} tickets exceeded the ${stats.thresholdMinutes}-minute threshold.`,
+        stats.delayedPct > 20 ? "High delay rate — consider reviewing station load or staffing during peak hours." : "Delay rate is within an acceptable range.",
+      ];
+    }
+
+    // Try to enrich with AI if a provider is configured. Fall back silently otherwise.
+    try {
+      const ai = await AIProviderService.generateText(
+        { featureSlug: "kitchen_performance_summary", restaurantId },
+        {
+          systemPrompt: "You are an operations analyst. Produce a concise, plain-English summary of kitchen performance and 3 short, actionable insights. Output JSON: {\"summary\":string,\"insights\":string[]}.",
+          messages: [{ role: "user", content: `Stats: ${JSON.stringify(stats)}` }],
+          temperature: 0.4,
+          maxTokens: 400,
+          jsonMode: true,
+        },
+      );
+      try {
+        const parsed = JSON.parse(ai.text) as { summary?: unknown; insights?: unknown };
+        if (typeof parsed.summary === "string" && parsed.summary.trim()) summary = parsed.summary.trim();
+        if (Array.isArray(parsed.insights)) {
+          const arr = parsed.insights.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 6);
+          if (arr.length > 0) insights = arr;
+        }
+      } catch { /* keep heuristic fallback */ }
+    } catch { /* AI not configured or failed — silently use heuristic */ }
+
+    const payload = { summary, insights, generatedAt: new Date().toISOString(), cached: false };
+    aiSummaryCache.set(restaurantId, { key: cacheKey, expiresAt: now + AI_SUMMARY_TTL_MS, payload });
+    res.json(payload);
+  },
+);
 
 export default router;

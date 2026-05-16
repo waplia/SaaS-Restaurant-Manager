@@ -44,6 +44,8 @@ export const orderItemsTable = pgTable("order_items", {
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
   status: text("status").notNull().default("pending"),
+  startedAt: timestamp("started_at"),
+  readyAt: timestamp("ready_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -64,9 +66,29 @@ export const kitchenTicketsTable = pgTable("kitchen_tickets", {
   isPriority: boolean("is_priority").notNull().default(false),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  expectedPrepMinutes: integer("expected_prep_minutes"),
+  expectedReadyAt: timestamp("expected_ready_at"),
+  delayAlertCount: integer("delay_alert_count").notNull().default(0),
+  lastDelayAlertAt: timestamp("last_delay_alert_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const ticketDelayAlertsTable = pgTable("ticket_delay_alerts", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => kitchenTicketsTable.id),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  kitchenId: integer("kitchen_id").references(() => kitchensTable.id),
+  thresholdMinutes: integer("threshold_minutes").notNull(),
+  delayedByMinutes: integer("delayed_by_minutes").notNull(),
+  expectedReadyAt: timestamp("expected_ready_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  byRestaurant: index("ticket_delay_alerts_restaurant_idx").on(t.restaurantId, t.createdAt),
+  byTicket: index("ticket_delay_alerts_ticket_idx").on(t.ticketId),
+}));
+
+export type TicketDelayAlert = typeof ticketDelayAlertsTable.$inferSelect;
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertOrder = z.infer<typeof insertOrderSchema>;

@@ -898,6 +898,79 @@ export function useNotifications() {
   });
 }
 
+export interface KitchenPerformanceData {
+  window: { from: string; to: string };
+  kitchenId: number | null;
+  summary: {
+    ticketsTotal: number;
+    ticketsDelayed: number;
+    delayedPct: number;
+    avgPrepMinutes: number | null;
+    alertsTotal: number;
+  };
+  stations: Array<{
+    station: { id: number | null; name: string };
+    ticketsTotal: number;
+    ticketsDelayed: number;
+    avgPrepMinutes: number | null;
+    delayedPct: number;
+  }>;
+  topDelayedItems: Array<{ menuItemId: number | null; name: string; ticketsDelayed: number; avgDelayMinutes: number }>;
+  peakHours: Array<{ hour: number; ticketsDelayed: number }>;
+  overload: Array<{ stationId: number | null; stationName: string; peakConcurrent: number }>;
+}
+
+export interface KitchenAiSummary {
+  summary: string;
+  insights: string[];
+  generatedAt: string;
+  cached: boolean;
+}
+
+export function useKitchenPerformance(custom?: { from: string; to: string }, kitchenId?: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (custom) { params.set("from", custom.from); params.set("to", custom.to); }
+  if (kitchenId != null) params.set("kitchenId", String(kitchenId));
+  const q = params.toString();
+  return useQuery({
+    queryKey: ["kitchen-performance", RESTAURANT_ID, custom, kitchenId],
+    queryFn: () => apiGet<KitchenPerformanceData>(`/restaurants/${RESTAURANT_ID}/dashboard/kitchen-performance${q ? `?${q}` : ""}`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useKitchenPerformanceAiSummary(custom?: { from: string; to: string }, enabled = true) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (custom) { params.set("from", custom.from); params.set("to", custom.to); }
+  const q = params.toString();
+  return useQuery({
+    queryKey: ["kitchen-performance", "ai", RESTAURANT_ID, custom],
+    queryFn: () => apiGet<KitchenAiSummary>(`/restaurants/${RESTAURANT_ID}/dashboard/kitchen-performance/ai-summary${q ? `?${q}` : ""}`),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useKitchenDelayConfig() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["settings", "kitchen-delay", RESTAURANT_ID],
+    queryFn: () => apiGet<{ section: string; data: { enabled?: boolean; thresholdMinutes?: number; perKitchen?: Record<string, number> } }>(`/restaurants/${RESTAURANT_ID}/settings/kitchen-delay`),
+  });
+}
+
+export function useUpdateKitchenDelayConfig() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { enabled?: boolean; thresholdMinutes?: number; perKitchen?: Record<string, number> }) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/settings/kitchen-delay`, { data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "kitchen-delay", RESTAURANT_ID] }),
+  });
+}
+
 export function useReports(period = "7d", custom?: { from: string; to: string }, groupBy = "daily") {
   const RESTAURANT_ID = useRestaurantId();
   const q = custom

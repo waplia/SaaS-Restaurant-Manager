@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, type CompareBranchRow } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, type CompareBranchRow } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import {
@@ -47,10 +48,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -577,6 +578,7 @@ export default function ReportsPage() {
             { label: "Discounts", val: "discounts" as Tab },
             { label: "Food Cost", val: "food-cost" as Tab },
             { label: "Cash Variance", val: "cash-variance" as Tab },
+            { label: "Kitchen Performance", val: "kitchen-performance" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -1181,8 +1183,132 @@ export default function ReportsPage() {
         )}
 
         {tab === "cash-variance" && <CashVarianceTab from={useCustom ? customFrom : undefined} to={useCustom ? customTo : undefined} />}
+
+        {tab === "kitchen-performance" && (
+          <KitchenPerformanceTab from={useCustom ? customFrom : undefined} to={useCustom ? customTo : undefined} />
+        )}
       </div>
     </Layout>
+  );
+}
+
+function KitchenPerformanceTab({ from, to }: { from?: string; to?: string }) {
+  const range = from && to ? { from, to } : undefined;
+  const { data, isLoading } = useKitchenPerformance(range);
+  const { data: ai, isLoading: aiLoading } = useKitchenPerformanceAiSummary(range);
+
+  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading kitchen performance…</p>;
+  const summary = data.summary;
+  const fmtMin = (n: number | null) => (n == null ? "—" : `${n.toFixed(1)}m`);
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border border-orange-200 dark:border-orange-900 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">AI Insight</span>
+          {ai?.cached && <span className="text-[10px] text-muted-foreground">(cached)</span>}
+        </div>
+        {aiLoading ? (
+          <p className="text-sm text-muted-foreground">Generating summary…</p>
+        ) : ai ? (
+          <>
+            <p className="text-sm text-foreground leading-relaxed">{ai.summary}</p>
+            {ai.insights?.length > 0 && (
+              <ul className="mt-3 space-y-1.5 text-sm text-foreground">
+                {ai.insights.map((it, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-orange-500 shrink-0">•</span>
+                    <span>{it}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No insight available.</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <KpiCard label="Tickets" value={summary.ticketsTotal.toString()} />
+        <KpiCard label="Delayed" value={summary.ticketsDelayed.toString()} sub={`${summary.delayedPct.toFixed(1)}%`} />
+        <KpiCard label="Avg Prep Time" value={fmtMin(summary.avgPrepMinutes)} />
+        <KpiCard label="Alerts Fired" value={summary.alertsTotal.toString()} />
+        <KpiCard label="Stations" value={data.stations.length.toString()} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="font-semibold text-foreground mb-4">Per-Station Performance</h3>
+          <div className="space-y-2">
+            {data.stations.map(s => (
+              <div key={s.station.id ?? "unassigned"} className="flex items-center gap-3 text-sm">
+                <span className="font-medium flex-1 truncate">{s.station.name}</span>
+                <span className="text-muted-foreground tabular-nums w-16 text-right">{fmtMin(s.avgPrepMinutes)}</span>
+                <span className="text-muted-foreground tabular-nums w-12 text-right">{s.ticketsTotal}</span>
+                <span className={cn("tabular-nums w-14 text-right text-xs px-1.5 py-0.5 rounded-full", s.delayedPct > 20 ? "bg-red-100 text-red-700" : s.delayedPct > 10 ? "bg-orange-100 text-orange-700" : "bg-emerald-100 text-emerald-700")}>{s.delayedPct.toFixed(0)}%</span>
+              </div>
+            ))}
+            {data.stations.length === 0 && <p className="text-sm text-muted-foreground">No data in this window.</p>}
+          </div>
+          <div className="grid grid-cols-3 text-[10px] uppercase text-muted-foreground tracking-wide mt-3 px-1">
+            <span>Station</span>
+            <span className="text-right">Avg / Tickets</span>
+            <span className="text-right">Delayed</span>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="font-semibold text-foreground mb-4">Top Delayed Items</h3>
+          <div className="space-y-2">
+            {data.topDelayedItems.map((it, i) => (
+              <div key={`${it.menuItemId ?? "x"}-${i}`} className="flex items-center gap-3 text-sm">
+                <span className="font-medium flex-1 truncate">{it.name}</span>
+                <span className="text-muted-foreground tabular-nums w-12 text-right">{it.ticketsDelayed}×</span>
+                <span className="text-red-600 tabular-nums w-16 text-right">+{it.avgDelayMinutes.toFixed(1)}m</span>
+              </div>
+            ))}
+            {data.topDelayedItems.length === 0 && <p className="text-sm text-muted-foreground">No delayed items in this window.</p>}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="font-semibold text-foreground mb-4">Peak Delay Hours</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={data.peakHours} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 6" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(h: number) => `${h}:00`} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} labelFormatter={(h: number) => `${h}:00`} />
+              <Bar dataKey="ticketsDelayed" fill="hsl(20 92% 46%)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="font-semibold text-foreground mb-4">Station Overload (Peak Concurrent Tickets)</h3>
+          <div className="space-y-2">
+            {data.overload.map(o => (
+              <div key={o.stationId ?? "x"} className="flex items-center gap-3 text-sm">
+                <span className="font-medium flex-1 truncate">{o.stationName}</span>
+                <span className="text-muted-foreground tabular-nums w-16 text-right">peak {o.peakConcurrent}</span>
+              </div>
+            ))}
+            {data.overload.length === 0 && <p className="text-sm text-muted-foreground">No overload data.</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-2xl font-bold mt-1 tabular-nums">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
   );
 }
 

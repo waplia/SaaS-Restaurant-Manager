@@ -71,17 +71,31 @@ export default function KitchenScreen() {
           keyExtractor={(t) => String(t.id)}
           contentContainerStyle={[styles.list, { paddingBottom: isWeb ? 34 + 90 : insets.bottom + 90 }]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
-          renderItem={({ item: t }) => (
-            <KitchenTicketCard
-              ticketId={t.id}
-              orderNumber={(t as unknown as { orderNumber?: string }).orderNumber ?? String(t.id)}
-              tableLabel={(t as unknown as { tableLabel?: string | null }).tableLabel}
-              items={(t.items ?? []).map((i) => ({ name: (i as unknown as { menuItemName?: string }).menuItemName ?? "", quantity: i.quantity ?? 1, notes: (i as unknown as { notes?: string | null }).notes ?? null }))}
-              status={t.status ?? "pending"}
-              createdAt={t.createdAt ?? new Date().toISOString()}
-              onMarkReady={handleMarkReady}
-            />
-          )}
+          renderItem={({ item: t }) => {
+            const tx = t as unknown as {
+              orderNumber?: string;
+              tableLabel?: string | null;
+              isDelayed?: boolean;
+              overdueMinutes?: number;
+              delayAlertCount?: number;
+              expectedPrepMinutes?: number | null;
+            };
+            return (
+              <KitchenTicketCard
+                ticketId={t.id}
+                orderNumber={tx.orderNumber ?? String(t.id)}
+                tableLabel={tx.tableLabel}
+                items={(t.items ?? []).map((i) => ({ name: (i as unknown as { menuItemName?: string }).menuItemName ?? "", quantity: i.quantity ?? 1, notes: (i as unknown as { notes?: string | null }).notes ?? null }))}
+                status={t.status ?? "pending"}
+                createdAt={t.createdAt ?? new Date().toISOString()}
+                onMarkReady={handleMarkReady}
+                isDelayed={tx.isDelayed}
+                overdueMinutes={tx.overdueMinutes}
+                delayAlertCount={tx.delayAlertCount}
+                expectedPrepMinutes={tx.expectedPrepMinutes}
+              />
+            );
+          }}
         />
       )}
     </View>

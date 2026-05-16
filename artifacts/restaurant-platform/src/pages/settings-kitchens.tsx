@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useKitchens, useCreateKitchen, useUpdateKitchen, useDeleteKitchen } from "@/lib/hooks";
+import { useKitchens, useCreateKitchen, useUpdateKitchen, useDeleteKitchen, useKitchenDelayConfig, useUpdateKitchenDelayConfig } from "@/lib/hooks";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Star, X, Printer, ChefHat } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -183,6 +183,7 @@ export default function SettingsKitchensPage() {
             </table>
           </div>
         )}
+        <DelayAlertSettings />
       </div>
 
       {showModal && (
@@ -239,5 +240,98 @@ export default function SettingsKitchensPage() {
         </div>
       )}
     </Layout>
+  );
+}
+
+function DelayAlertSettings() {
+  const { data: kitchens = [] } = useKitchens();
+  const { data: cfgRes, isLoading } = useKitchenDelayConfig();
+  const save = useUpdateKitchenDelayConfig();
+  const { toast } = useToast();
+  const cfg = cfgRes?.data ?? {};
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [thresholdMinutes, setThresholdMinutes] = useState<number>(10);
+  const [perKitchen, setPerKitchen] = useState<Record<string, string>>({});
+  const [hydrated, setHydrated] = useState(false);
+
+  if (!hydrated && cfgRes) {
+    setEnabled(cfg.enabled !== false);
+    setThresholdMinutes(typeof cfg.thresholdMinutes === "number" ? cfg.thresholdMinutes : 10);
+    const pk: Record<string, string> = {};
+    for (const [k, v] of Object.entries(cfg.perKitchen ?? {})) pk[k] = String(v);
+    setPerKitchen(pk);
+    setHydrated(true);
+  }
+
+  const handleSave = async () => {
+    const pk: Record<string, number> = {};
+    for (const [k, v] of Object.entries(perKitchen)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) pk[k] = Math.floor(n);
+    }
+    try {
+      await save.mutateAsync({ enabled, thresholdMinutes: Math.max(1, Math.floor(thresholdMinutes)), perKitchen: pk });
+      toast({ title: "Delay alert settings saved" });
+    } catch (e) {
+      toast({ title: "Save failed", description: e instanceof Error ? e.message : undefined, variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 mt-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-semibold">Delay Alerts</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Notify waiters, managers, and owners when a kitchen ticket runs past its expected ready time. Default threshold is 10 minutes; override per kitchen below.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer shrink-0">
+          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+          Enabled
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label>Default threshold (minutes past expected)</Label>
+          <Input
+            type="number"
+            min={1}
+            value={thresholdMinutes}
+            onChange={e => setThresholdMinutes(Number(e.target.value))}
+            disabled={isLoading}
+          />
+        </div>
+      </div>
+
+      {kitchens.length > 0 && (
+        <div>
+          <Label className="mb-2 block">Per-kitchen overrides</Label>
+          <div className="border border-border rounded-lg divide-y divide-border">
+            {kitchens.map(k => (
+              <div key={k.id} className="flex items-center gap-3 px-3 py-2">
+                <ChefHat className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium flex-1">{k.name}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder={`${thresholdMinutes}`}
+                  className="w-28"
+                  value={perKitchen[String(k.id)] ?? ""}
+                  onChange={e => setPerKitchen(p => ({ ...p, [String(k.id)]: e.target.value }))}
+                />
+                <span className="text-xs text-muted-foreground w-12">min</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Leave blank to use the default threshold.</p>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save delay settings"}</Button>
+      </div>
+    </div>
   );
 }

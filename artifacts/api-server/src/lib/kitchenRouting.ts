@@ -60,23 +60,38 @@ export async function createKitchenTicketsForOrder(args: {
     .where(eq(orderItemsTable.orderId, orderId));
 
   const uniqueMenuItemIds = Array.from(new Set(orderItems.map(oi => oi.menuItemId)));
-  const itemKitchenMap = await resolveItemKitchenIds(restaurantId, uniqueMenuItemIds);
+  const menuRows = uniqueMenuItemIds.length > 0
+    ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId, preparationTime: menuItemsTable.preparationTime })
+        .from(menuItemsTable)
+        .where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, uniqueMenuItemIds)))
+    : [];
+  const menuById = new Map(menuRows.map(m => [m.id, m] as const));
 
-  const kitchenIds = new Set<number>();
+  const itemsByKitchen = new Map<number, number[]>();
   for (const oi of orderItems) {
-    kitchenIds.add(itemKitchenMap.get(oi.menuItemId) ?? defaultKitchenId);
+    const m = menuById.get(oi.menuItemId);
+    const kid = m?.kitchenId ?? defaultKitchenId;
+    const prep = m?.preparationTime ?? 15;
+    const arr = itemsByKitchen.get(kid) ?? [];
+    arr.push(prep);
+    itemsByKitchen.set(kid, arr);
   }
-  if (kitchenIds.size === 0) {
-    kitchenIds.add(defaultKitchenId);
+  if (itemsByKitchen.size === 0) {
+    itemsByKitchen.set(defaultKitchenId, [15]);
   }
 
   const created: Array<{ ticketId: number; kitchenId: number }> = [];
-  for (const kid of kitchenIds) {
+  const now = new Date();
+  for (const [kid, preps] of itemsByKitchen) {
+    const expectedPrepMinutes = Math.max(...preps, 1);
+    const expectedReadyAt = new Date(now.getTime() + expectedPrepMinutes * 60_000);
     const [t] = await db.insert(kitchenTicketsTable).values({
       orderId,
       restaurantId,
       kitchenId: kid,
       isPriority,
+      expectedPrepMinutes,
+      expectedReadyAt,
     }).returning();
     created.push({ ticketId: t.id, kitchenId: kid });
   }

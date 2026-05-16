@@ -122,18 +122,29 @@ function TicketCard({
   const ageMs = Date.now() - new Date(ticket.createdAt).getTime();
   const isOld = ageMs > 15 * 60 * 1000;
   const isVeryOld = ageMs > 30 * 60 * 1000;
+  const overdueMinutes = ticket.overdueMinutes ?? 0;
+  const hasAlertedDelay = (ticket.delayAlertCount ?? 0) > 0;
 
   return (
     <div
       className={cn(
         "border rounded-xl p-4 space-y-3 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5",
-        ticket.isPriority ? "border-orange-400 bg-orange-50 text-orange-950 ring-2 ring-orange-300/60 dark:bg-orange-950/30 dark:text-orange-100 dark:border-orange-500" : `border-border/60 ${cfg.col}`,
+        hasAlertedDelay
+          ? "border-red-400 bg-red-50 text-red-950 ring-2 ring-red-300/60 dark:bg-red-950/30 dark:text-red-100 dark:border-red-500"
+          : ticket.isPriority
+            ? "border-orange-400 bg-orange-50 text-orange-950 ring-2 ring-orange-300/60 dark:bg-orange-950/30 dark:text-orange-100 dark:border-orange-500"
+            : `border-border/60 ${cfg.col}`,
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="font-bold">{ticket.orderNumber}</p>
+            {hasAlertedDelay && (
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded-full animate-pulse">
+                <AlertTriangle className="w-3 h-3" /> DELAYED {overdueMinutes > 0 ? `+${overdueMinutes}m` : ""}
+              </span>
+            )}
             {ticket.isPriority && (
               <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded-full">
                 <AlertTriangle className="w-3 h-3" /> PRIORITY
@@ -339,6 +350,23 @@ export default function KitchenPage() {
 
     socket.on("ticket:priority", () => {
       void refetch();
+    });
+
+    socket.on("ticket:delayed", (payload: { orderNumber?: string | null; delayedByMinutes?: number; kitchenId?: number | null } | undefined) => {
+      if (
+        activeKitchenId !== ALL_KITCHENS &&
+        payload?.kitchenId != null &&
+        Number(payload.kitchenId) !== Number(activeKitchenId)
+      ) {
+        return;
+      }
+      void refetch();
+      if (soundEnabled) playBeep();
+      toast({
+        title: "Kitchen delay alert",
+        description: `Order ${payload?.orderNumber ?? "#?"} is ${payload?.delayedByMinutes ?? 0} min late`,
+        variant: "destructive",
+      });
     });
 
     return () => { socket.disconnect(); };

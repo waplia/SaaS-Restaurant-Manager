@@ -351,6 +351,18 @@ export function startScheduler(): void {
     await runScheduledBackupTick();
   });
 
+  // Kitchen delay alerts: scan active tickets every minute, emit alerts for
+  // tickets past their per-restaurant configured threshold (default 10 min).
+  trackCron("kitchen_delay_detector", "* * * * *", async () => {
+    try {
+      const { runDelayDetectionTick } = await import("./kitchenDelay");
+      const r = await runDelayDetectionTick(new Date());
+      if (r.alertsCreated > 0) logger.info({ alerts: r.alertsCreated }, "Kitchen delay alerts emitted");
+    } catch (err) {
+      logger.error({ err }, "Kitchen delay detector failed");
+    }
+  });
+
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
 }
 
