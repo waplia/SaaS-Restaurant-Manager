@@ -315,6 +315,76 @@ router.post("/auth/logout", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// Self-service password change for any authenticated user. Requires the
+// current password (so a stolen-but-still-valid access token cannot be used
+// to silently swap the password). Bumps tokenVersion so every other session
+// for this user — including the one used to make this request, before it
+// receives the new tokens below — is invalidated immediately.
+const changePasswordLimitByIp = rateLimit({ name: "auth.change.ip", windowMs: 15 * 60 * 1000, max: 10 });
+router.post("/auth/change-password", authenticate, changePasswordLimitByIp, async (req, res) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" });
+    return;
+  }
+  const userId = req.user!.sub;
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId));
+  if (!user || !user.isActive) {
+    res.status(401).json({ error: "Session expired" });
+    return;
+  }
+  const valid = await comparePassword(currentPassword, user.passwordHash);
+  if (!valid) {
+    await recordAuditLog({
+      req, module: "auth", action: "password.change.failed", entity: "auth",
+      userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
+      restaurantId: user.restaurantId ?? null,
+      newValue: { reason: "bad_current_password" },
+    });
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+  const passwordHash = await hashPassword(newPassword);
+  const [updated] = await db
+    .update(usersTable)
+    .set({
+      passwordHash,
+      tokenVersion: sql`${usersTable.tokenVersion} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, userId))
+    .returning({ tokenVersion: usersTable.tokenVersion });
+  invalidateTokenVersionCache(userId);
+  await recordAuditLog({
+    req, module: "auth", action: "password.change", entity: "auth",
+    userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
+    restaurantId: user.restaurantId ?? null,
+  });
+  // Issue fresh tokens bound to the new tokenVersion so the caller stays
+  // signed in on this device while every other session is killed.
+  const tokenPayload = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+    tenantId: user.tenantId,
+    restaurantId: user.restaurantId,
+    isSuperAdmin: user.isSuperAdmin,
+    tv: updated.tokenVersion,
+  };
+  res.json({
+    success: true,
+    accessToken: signAccessToken(tokenPayload),
+    refreshToken: signRefreshToken(tokenPayload),
+  });
+});
+
 router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, async (req, res) => {
   const { email } = req.body as { email?: string };
   if (!email) {

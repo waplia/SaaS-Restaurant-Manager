@@ -133,6 +133,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Fire-and-forget: ask the server to bump our tokenVersion so every
+    // other session for this user (other tabs, phone, stolen laptop) is
+    // revoked immediately. We don't await — clearing local storage and
+    // navigating away matters more than waiting on the network round-trip.
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      // `keepalive: true` lets the request survive tab close / navigation so
+      // the server-side revocation actually happens even if the user closes
+      // the browser immediately after clicking sign out.
+      void fetch(`${API_BASE}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        keepalive: true,
+      }).catch(() => { /* best-effort */ });
+    }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
