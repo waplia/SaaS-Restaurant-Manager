@@ -4,6 +4,7 @@ import { initSocketIO } from "./lib/socketio";
 import { startScheduler } from "./lib/scheduler";
 import { startBroadcastScheduler, seedDefaultTemplates } from "./lib/notificationCenter";
 import { seedDefaultAiCreditRules } from "./lib/aiCreditRulesSeeder";
+import { seedAddonCatalogue } from "./lib/addons";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { getAppSettings } from "./lib/appSettings";
@@ -29,6 +30,7 @@ startScheduler();
 startBroadcastScheduler();
 seedDefaultTemplates().catch(err => console.error("Failed to seed default templates", err));
 seedDefaultAiCreditRules().catch(err => console.error("Failed to seed default AI credit rules", err));
+seedAddonCatalogue().catch(err => console.error("Failed to seed add-on catalogue", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {

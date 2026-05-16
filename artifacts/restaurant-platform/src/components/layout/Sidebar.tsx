@@ -35,6 +35,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
   { kind: "link", href: "/growth", label: "Growth Engine", icon: Megaphone, roles: ["owner", "manager"] },
+  { kind: "link", href: "/marketplace", label: "Marketplace", icon: Package, roles: ["owner", "manager"] },
   { kind: "link", href: "/support", label: "Support", icon: LifeBuoy, roles: ["owner", "manager"] },
   {
     kind: "group", key: "delivery", label: "Delivery", icon: Truck,
@@ -355,6 +356,10 @@ export function Sidebar() {
             <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
               <Settings className="w-4 h-4" />
               App Settings
+            </Link>
+            <Link href="/admin/addons" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
+              <Package className="w-4 h-4" />
+              Add-on Marketplace
             </Link>
           </>
         )}

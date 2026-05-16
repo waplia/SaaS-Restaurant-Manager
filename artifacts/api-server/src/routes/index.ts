@@ -61,6 +61,8 @@ import fraudAlertsRouter from "./fraud-alerts";
 import menuPricingRouter from "./menu-pricing";
 import dashboardChatRouter from "./dashboard-chat";
 import growthEngineRouter from "./growth-engine";
+import addonsRouter from "./addons";
+import adminAddonsRouter from "./admin-addons";
 
 const router: IRouter = Router();
 
@@ -140,5 +142,7 @@ router.use(aiRechargeRouter);
 router.use(fraudAlertsRouter);
 router.use(menuPricingRouter);
 router.use(growthEngineRouter);
+router.use(addonsRouter);
+router.use(adminAddonsRouter);
 
 export default router;

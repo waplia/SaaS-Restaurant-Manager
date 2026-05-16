@@ -32,6 +32,8 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
 import AdminLeadsPage from "@/pages/admin-leads";
+import MarketplacePage from "@/pages/marketplace";
+import AdminAddonsPage from "@/pages/admin-addons";
 import AdminAuditLogsPage from "@/pages/admin-audit-logs";
 import AdminBlogPage from "@/pages/admin-blog";
 import AdminSupportPage from "@/pages/admin-support";
@@ -140,6 +142,8 @@ function Router() {
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
+      <Route path="/admin/addons" component={() => <SuperAdminRoute component={AdminAddonsPage} />} />
+      <Route path="/marketplace" component={() => <RoleProtectedRoute component={MarketplacePage} allow={["owner", "manager"]} />} />
       <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
       <Route path="/setup-wizard" component={() => <ProtectedRoute component={SetupWizardPage} />} />
       <Route path="/setup" component={() => <Redirect to="/setup-wizard" />} />

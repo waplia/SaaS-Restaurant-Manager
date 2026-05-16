@@ -118,6 +118,16 @@ export function startScheduler(): void {
   registerCron("fraud-detect-fast", "5 * * * *", "Hourly fast fraud detectors (discounts, voids, KOT cancels, refunds, free items)");
   registerCron("fraud-detect-slow", "30 2 * * *", "Nightly slow fraud detectors at 02:30 IST (cash, attendance, inventory)");
   registerCron("nightly-demand-forecast", "0 * * * *", "Per-restaurant nightly tomorrow forecast: ticks hourly and runs whenever a restaurant's local time is 02:00 in its configured timezone (gated on plan, feature toggle, history, and credits)");
+  registerCron("addon-lifecycle-sweep", "*/15 * * * *", "Expires add-on trials and ended billing periods every 15 min");
+
+  trackCron("addon_lifecycle_sweep", "*/15 * * * *", async () => {
+    try {
+      const { sweepAddonLifecycle } = await import("./addons");
+      await sweepAddonLifecycle(new Date());
+    } catch (err) {
+      logger.error({ err }, "Add-on lifecycle sweep failed");
+    }
+  });
 
   trackCron("fraud_detect_fast", "5 * * * *", async () => {
     await runFraudCronTick("fast");
