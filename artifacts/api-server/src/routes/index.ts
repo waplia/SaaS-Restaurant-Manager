@@ -87,6 +87,7 @@ import tiffinRouter from "./tiffin";
 import cloudKitchenRouter from "./cloud-kitchen";
 import portalRouter from "./portal";
 import barRouter from "./bar";
+import mysteryAuditsRouter from "./mystery-audits";
 
 const router: IRouter = Router();
 
@@ -193,5 +194,6 @@ router.use(tiffinRouter);
 router.use(cloudKitchenRouter);
 router.use(portalRouter);
 router.use(barRouter);
+router.use(mysteryAuditsRouter);
 
 export default router;

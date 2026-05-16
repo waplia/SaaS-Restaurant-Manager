@@ -4,6 +4,7 @@ export type AppRole =
   | "super_admin"
   | "owner"
   | "manager"
+  | "auditor"
   | "accountant"
   | "cashier"
   | "staff"

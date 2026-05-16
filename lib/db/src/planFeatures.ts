@@ -59,6 +59,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "sop_training",          label: "SOP & Training",              description: "Publish standard operating procedures, run staff training courses, quizzes, and certificates.", category: "operations", defaultValue: false },
   { key: "compliance_manager",    label: "Compliance Manager",          description: "Document vault, expiry reminders, and global tax/tip/privacy settings.", category: "operations", defaultValue: false },
   { key: "cloud_kitchen",         label: "Cloud Kitchen mode",          description: "Run multiple virtual brands from one branch with shared stock, separate menus, channels, KOTs, packaging and brand-wise reports.", category: "operations", defaultValue: false },
+  { key: "mystery_audits",        label: "Mystery Audits",              description: "Mystery-shopper audit templates, outlet assignments, scoring with photos, corrective actions and PDF reports.", category: "operations", defaultValue: false },
 ];
 
 export const PLAN_QUANTITY_FEATURES: PlanQuantityFeature[] = [

@@ -59,6 +59,17 @@ Kitchen ticket priority: O, M, K.
 
 ### `storage.ts` — O, M only.
 
+### `mystery-audits.ts` — parent gate: plan flag `mystery_audits`
+- Templates CRUD (`/mystery-audits/templates*`) — O, M, SA
+- Assignments list, create, cancel (`/mystery-audits/assignments*`) — O, M, SA (create/cancel); list visible to O, M, Auditor, SA
+- `GET /mystery-audits/my-audits` — O, M, Auditor, SA (auditor sees own assignments)
+- Submission load + draft save + submit/lock + regenerate-pdf (`/mystery-audits/assignments/:id/submission`, `/mystery-audits/submissions/:id*`) — assigned auditor, plus O/M/SA in tenant; submit locks the row and uploads a private PDF to object storage
+- History + chain-wide CSV export (`/mystery-audits/history`, `/mystery-audits/export.csv`) — O, M, Auditor, SA (CSV: O, M, SA only)
+- Corrective actions CRUD (`/mystery-audits/corrective-actions*`) — list visible to O, M, Auditor, SA; create/patch/delete restricted to O, M, SA
+- Auditor lookup (`/mystery-audits/auditors`) — O, M, SA
+- All routes pass `requirePlanFeature("mystery_audits")` and write `audit_logs` entries under module `mystery_audits`. Notifications are inserted on assignment create, submission lock, and corrective-action assignment.
+- New role `auditor` was added to `AppRole` and may only access mystery-audit endpoints (their own assignments, draft saves, submit, history view, corrective-action list).
+
 ### `accounting.ts` — parent gate: O, M, Accountant, Super Admin
 - `GET /restaurants/:id/accounting/targets`, `GET .../targets/:target`, `GET .../targets/:target/mappings`, `GET .../targets/:target/exports` — O, M, Accountant, SA
 - `PUT .../targets/:target/connection`, `POST .../targets/:target/test`, `PUT .../targets/:target/mappings/:kind` — O, M, SA only
@@ -70,6 +81,7 @@ Already role-gated via `RoleProtectedRoute`:
 - `/cash-register` → owner, manager, waiter
 - `/expenses`, `/delivery/*`, `/settings/:section`, `/settings/subscription`, `/settings/kitchens` → owner, manager
 - `/waiter-requests` → owner, manager, waiter
+- `/mystery-audits` → owner, manager, auditor, super_admin
 
 Currently `ProtectedRoute` (any signed-in user) — server enforces, but UX could be tightened (tracked as follow-up #69):
 - `/staff`, `/customers`, `/inventory`, `/payments`, `/due-payments`, `/menu`, `/menu-management`, `/notifications`, `/reports/:section`, `/reservations`, `/orders`, `/kitchen`, `/tables`, `/pos`, `/dashboard`, `/settings`

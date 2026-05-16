@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf,
-  Soup, Wine,
+  Soup, Wine, ClipboardCheck,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/documents", label: "Documents", icon: Folder, requiresDocsAccess: true },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"] },
+  { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"] },
   { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
   { kind: "link", href: "/memberships", label: "Memberships", icon: Receipt, roles: ["owner", "manager", "waiter", "super_admin"] },

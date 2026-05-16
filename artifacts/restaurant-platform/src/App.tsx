@@ -105,6 +105,7 @@ import AdminFintechPage from "@/pages/admin-fintech";
 import HealthScorePage from "@/pages/health-score";
 import SustainabilityPage from "@/pages/sustainability";
 import SopTrainingPage from "@/pages/sop-training";
+import MysteryAuditsPage from "@/pages/mystery-audits";
 import MyTrainingPage from "@/pages/my-training";
 import PortalHomePage from "@/pages/portal";
 import PortalAttendancePage from "@/pages/portal/attendance";
@@ -210,6 +211,7 @@ function Router() {
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
       <Route path="/sop-training" component={() => <RoleProtectedRoute component={SopTrainingPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/mystery-audits" component={() => <RoleProtectedRoute component={MysteryAuditsPage} allow={["owner", "manager", "auditor", "super_admin"]} />} />
       <Route path="/my-training" component={() => <ProtectedRoute component={MyTrainingPage} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
