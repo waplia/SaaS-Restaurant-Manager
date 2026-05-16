@@ -624,6 +624,7 @@ function ProfileStep() {
         label="Logo (optional)"
         value={form.logoUrl}
         onChange={(v) => setForm({ ...form, logoUrl: v })}
+        compact
       />
       <Field label="Short description (optional)">
         <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Family-style North Indian, dine-in & takeaway." rows={2} />

@@ -21,6 +21,8 @@ interface Props {
   onChange: (url: string) => void;
   label?: string;
   className?: string;
+  compact?: boolean;
+  previewSize?: number;
 }
 
 function aspectRatioToNumber(ar: string | undefined): number {
@@ -83,7 +85,7 @@ async function compressImage(file: File, maxKb: number, aspectRatio: number): Pr
   return blob ?? new Blob();
 }
 
-export function ImageUploadField({ value, onChange, label = "Image", className }: Props) {
+export function ImageUploadField({ value, onChange, label = "Image", className, compact = false, previewSize }: Props) {
   const RESTAURANT_ID = useRestaurantId();
   const { data: settingResp } = useSetting<MenuImageCfg>("menu-image");
   const cfg = settingResp?.data ?? {};
@@ -186,11 +188,15 @@ export function ImageUploadField({ value, onChange, label = "Image", className }
         }}
         onClick={() => { if (!previewSrc && !busy) fileRef.current?.click(); }}
         className={cn(
-          "relative w-full overflow-hidden rounded-md border transition-colors",
+          "relative overflow-hidden rounded-md border transition-colors",
+          compact || previewSize ? "" : "w-full",
           previewSrc ? "border-border bg-muted/30" : "border-dashed border-border bg-muted/20 cursor-pointer hover:bg-muted/30",
           dragOver && "border-primary bg-primary/5 ring-2 ring-primary/30",
         )}
-        style={{ aspectRatio: arNum }}
+        style={{
+          aspectRatio: arNum,
+          width: previewSize ?? (compact ? 112 : undefined),
+        }}
       >
         {previewSrc ? (
           <img src={previewSrc} alt="preview" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
