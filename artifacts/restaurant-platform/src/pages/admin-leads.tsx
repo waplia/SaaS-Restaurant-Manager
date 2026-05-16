@@ -591,7 +591,7 @@ function SendMessagePanel({
 }) {
   const [channel, setChannel] = useState<"email" | "sms" | "whatsapp">("email");
   const [subject, setSubject] = useState("Following up from Khana Lagao");
-  const [body, setBody] = useState(`Hi ${lead.name.split(" ")[0]},\n\nThanks for reaching out. Happy to set up a quick call.\n\n— TableTrack team`);
+  const [body, setBody] = useState(`Hi ${lead.name.split(" ")[0]},\n\nThanks for reaching out. Happy to set up a quick call.\n\n— KhanaLagao team`);
 
   const channelEnabled = channels[channel];
   const missingTo = (channel === "email" && !lead.email) || ((channel === "sms" || channel === "whatsapp") && !lead.phone);

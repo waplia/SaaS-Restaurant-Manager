@@ -159,7 +159,7 @@ export default function CustomerSurveyPage() {
           </Button>
         </div>
 
-        <p className="text-xs text-center text-muted-foreground">Powered by TableTrack</p>
+        <p className="text-xs text-center text-muted-foreground">Powered by KhanaLagao</p>
       </div>
     </div>
   );

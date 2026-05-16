@@ -179,7 +179,7 @@ export default function DisplayTokenPage() {
           </div>
         </div>
       )}
-      <div className="mt-10 text-center text-xs text-slate-500">Updated automatically • TableTrack token display</div>
+      <div className="mt-10 text-center text-xs text-slate-500">Updated automatically • KhanaLagao token display</div>
     </div>
   );
 }

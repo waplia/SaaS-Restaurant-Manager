@@ -52,7 +52,7 @@ export const blogPostsTable = pgTable("blog_posts", {
   coverImage: varchar("cover_image", { length: 500 }),
   category: varchar("category", { length: 80 }).notNull().default("guides"),
   tags: text("tags"),
-  author: varchar("author", { length: 120 }).notNull().default("TableTrack Team"),
+  author: varchar("author", { length: 120 }).notNull().default("KhanaLagao Team"),
   readMinutes: integer("read_minutes").notNull().default(5),
   published: boolean("published").notNull().default(true),
   publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),

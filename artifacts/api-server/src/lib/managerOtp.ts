@@ -62,7 +62,7 @@ export async function requestManagerDiscountOtp(opts: {
     expiresAt,
   }).returning();
 
-  const body = `${code} is your ${restaurant?.name ?? "TableTrack"} manager OTP to approve a high-value discount. Expires in 5 minutes.`;
+  const body = `${code} is your ${restaurant?.name ?? "KhanaLagao"} manager OTP to approve a high-value discount. Expires in 5 minutes.`;
 
   let smsLogId: number | undefined;
   try {
@@ -70,7 +70,7 @@ export async function requestManagerDiscountOtp(opts: {
       to: recipient.phone,
       body,
       eventKey: "otp",
-      variables: { code, restaurant: restaurant?.name ?? "TableTrack" },
+      variables: { code, restaurant: restaurant?.name ?? "KhanaLagao" },
       tenantId: restaurant?.tenantId ?? null,
       restaurantId,
     });

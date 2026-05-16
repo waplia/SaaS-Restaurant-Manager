@@ -68,7 +68,7 @@ export default function LoginScreen() {
           <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
             <Ionicons name="restaurant" size={32} color="#fff" />
           </View>
-          <Text style={[styles.brandName, { color: colors.foreground }]}>TableTrack</Text>
+          <Text style={[styles.brandName, { color: colors.foreground }]}>KhanaLagao</Text>
           <Text style={[styles.brandSub, { color: colors.mutedForeground }]}>Restaurant Management</Text>
         </View>
 

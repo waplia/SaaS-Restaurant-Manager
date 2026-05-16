@@ -264,13 +264,19 @@ function isActiveHref(location: string, href: string) {
   return true;
 }
 
+const DEFAULT_OPEN_GROUPS: Record<string, boolean> = { sell: true };
+
 function loadOpenState(): Record<string, boolean> {
-  if (typeof window === "undefined") return {};
+  if (typeof window === "undefined") return { ...DEFAULT_OPEN_GROUPS };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+    if (!raw) return { ...DEFAULT_OPEN_GROUPS };
+    const parsed = JSON.parse(raw) as Record<string, boolean>;
+    // Ensure Sell defaults to expanded if user has never explicitly toggled it.
+    if (!("sell" in parsed)) parsed.sell = true;
+    return parsed;
   } catch {
-    return {};
+    return { ...DEFAULT_OPEN_GROUPS };
   }
 }
 

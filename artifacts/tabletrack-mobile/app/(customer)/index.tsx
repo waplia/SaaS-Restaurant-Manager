@@ -28,7 +28,7 @@ export default function QRScanScreen() {
         setTable(parsed.restaurantId, parsed.tableId, parsed.token ?? "");
         router.push(`/(customer)/menu?restaurantId=${parsed.restaurantId}&tableId=${parsed.tableId}&token=${parsed.token ?? ""}`);
       } else {
-        Alert.alert("Invalid QR", "This QR code is not a valid TableTrack code.", [{ text: "OK", onPress: () => setScanned(false) }]);
+        Alert.alert("Invalid QR", "This QR code is not a valid KhanaLagao code.", [{ text: "OK", onPress: () => setScanned(false) }]);
       }
     } catch {
       Alert.alert("Invalid QR", "Could not read QR code.", [{ text: "OK", onPress: () => setScanned(false) }]);
@@ -50,7 +50,7 @@ export default function QRScanScreen() {
           <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
             <Ionicons name="restaurant" size={36} color="#fff" />
           </View>
-          <Text style={[styles.title, { color: colors.foreground }]}>TableTrack</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>KhanaLagao</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             {isWeb ? "Enter a table number to browse the menu" : "Enter a table number manually"}
           </Text>

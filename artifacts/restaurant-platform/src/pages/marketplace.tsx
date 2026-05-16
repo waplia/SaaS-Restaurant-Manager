@@ -125,7 +125,7 @@ export default function MarketplacePage() {
     <Layout>
       <PageHeader
         title="Marketplace"
-        subtitle="Add new capabilities to your TableTrack workspace — install, trial, or remove anytime."
+        subtitle="Add new capabilities to your KhanaLagao workspace — install, trial, or remove anytime."
       />
 
       <div className="p-6 space-y-6">

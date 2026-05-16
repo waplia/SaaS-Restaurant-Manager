@@ -12,7 +12,7 @@ interface SeoProps {
 export function useSeo({
   title,
   description,
-  ogImage = "https://tabletrack.com/og-image.jpg",
+  ogImage = "https://khanalagao.com/opengraph.jpg",
   ogType = "website",
   url,
   schema,

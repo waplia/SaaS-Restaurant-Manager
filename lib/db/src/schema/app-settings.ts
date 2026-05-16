@@ -7,13 +7,13 @@ import { pgTable, integer, text, boolean, timestamp, jsonb } from "drizzle-orm/p
 export const appSettingsTable = pgTable("app_settings", {
   id: integer("id").primaryKey().default(1),
   // Branding
-  appName: text("app_name").notNull().default("TableTrack"),
+  appName: text("app_name").notNull().default("KhanaLagao"),
   logoUrl: text("logo_url"),
   faviconUrl: text("favicon_url"),
   primaryColor: text("primary_color").notNull().default("#f97316"),
   secondaryColor: text("secondary_color").notNull().default("#fb923c"),
   // Support & Contact
-  supportEmail: text("support_email").notNull().default("support@tabletrack.app"),
+  supportEmail: text("support_email").notNull().default("support@khanalagao.com"),
   supportPhone: text("support_phone"),
   supportWhatsapp: text("support_whatsapp"),
   companyAddress: text("company_address"),

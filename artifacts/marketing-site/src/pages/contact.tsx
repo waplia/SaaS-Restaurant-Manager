@@ -27,7 +27,7 @@ export default function Contact() {
                   <Mail className="w-6 h-6 text-primary mt-1 mr-4" />
                   <div>
                     <h3 className="font-bold text-lg">Email us</h3>
-                    <p className="text-muted-foreground">hello@tabletrack.com</p>
+                    <p className="text-muted-foreground">hello@khanalagao.com</p>
                   </div>
                 </div>
                 <div className="flex items-start">
