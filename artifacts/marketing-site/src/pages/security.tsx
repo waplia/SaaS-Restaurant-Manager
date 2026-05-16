@@ -196,7 +196,7 @@ export default function Security() {
       <CTASection
         title="Want to see our security documentation?"
         subtitle="Enterprise customers can request our security questionnaire, sub-processor list and counter-signed DPA."
-        primary={{ label: "Email security@khanalagao", href: `mailto:${COMPANY.supportEmail}?subject=Security%20Documentation%20Request` }}
+        primary={{ label: `Email ${COMPANY.supportEmail}`, href: `mailto:${COMPANY.supportEmail}?subject=Security%20Documentation%20Request` }}
         secondary={{ label: "Read the DPA", href: "/data-processing-agreement" }}
       />
     </SiteLayout>
