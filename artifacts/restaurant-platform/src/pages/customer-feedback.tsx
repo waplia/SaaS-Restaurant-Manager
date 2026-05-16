@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 
 interface QrConfig {
   qrCode: string;
@@ -51,6 +52,7 @@ export default function CustomerFeedbackPage() {
   const [config, setConfig] = useState<QrConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionToken] = useState<string>(() => newSessionToken());
+  const { toast } = useToast();
   const [rating, setRating] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("rate");
@@ -145,10 +147,11 @@ export default function CustomerFeedbackPage() {
       });
       const data = await res.json();
       if (typeof data.googleReviewUrl === "string") setGoogleReviewUrl(data.googleReviewUrl);
-      if (data.available && typeof data.draft === "string" && data.draft.trim()) {
+      const draftText = typeof data.draftText === "string" ? data.draftText : (typeof data.draft === "string" ? data.draft : "");
+      if (data.available && draftText.trim()) {
         setAiDelivered(true);
         setAiUnavailableReason(null);
-        setDraftEdited(data.draft);
+        setDraftEdited(draftText);
       } else {
         setAiDelivered(false);
         setAiUnavailableReason(data.reason ?? "unavailable");
@@ -169,13 +172,16 @@ export default function CustomerFeedbackPage() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast({ title: "Review copied", description: "Now paste it into Google when the page opens." });
       fetch(`/api/public/review-qr/${qrCode}/draft-copied`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionToken }),
       }).catch(() => undefined);
       setTimeout(() => setCopied(false), 2500);
-    } catch { /* clipboard blocked */ }
+    } catch {
+      toast({ title: "Couldn't copy automatically", description: "Long-press the text and copy manually.", variant: "destructive" });
+    }
   }
 
   function goToGoogle() {

@@ -817,6 +817,79 @@ export function requireAiCredits(featureSlug: string, estimator: CreditEstimator
   };
 }
 
+/**
+ * Public-route equivalent of `requireAiCredits` for unauthenticated endpoints
+ * (e.g. customer review-QR drafts) where there is no `req.user`. Mirrors the
+ * same plan / feature-toggle / cap gating then reserves credits. Returns
+ * either `{ ok: true, reservation }` or `{ ok: false, reason }` so the caller
+ * can degrade gracefully with HTTP 200.
+ */
+export async function gatePublicAiCall(opts: {
+  tenantId: number;
+  featureSlug: string;
+  units?: number;
+  meta?: Record<string, unknown>;
+}): Promise<
+  | { ok: true; reservation: AiCreditReservation }
+  | { ok: false; reason: "tenant_suspended" | "ai_not_in_plan" | "ai_feature_disabled" | "daily_cap_reached" | "feature_cap_reached" | "no_credit_rule" | "insufficient_credits" | "wallet_blocked" | "wallet_error" }
+> {
+  const [tenant] = await db.select({
+    planId: tenantsTable.planId,
+    isSuspended: tenantsTable.isSuspended,
+  }).from(tenantsTable).where(eq(tenantsTable.id, opts.tenantId));
+  if (!tenant) return { ok: false, reason: "tenant_suspended" };
+  if (tenant.isSuspended) return { ok: false, reason: "tenant_suspended" };
+
+  if (tenant.planId) {
+    const [plan] = await db.select({
+      aiEnabled: subscriptionPlansTable.aiEnabled,
+      aiFeatureToggles: subscriptionPlansTable.aiFeatureToggles,
+      featureFlags: subscriptionPlansTable.featureFlags,
+    }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+    if (plan) {
+      const khanaFlag = isFeatureEnabled(plan.featureFlags ?? null, "khana_ai_enabled");
+      const planAllowsAi = khanaFlag || !!plan.aiEnabled;
+      if (!planAllowsAi) return { ok: false, reason: "ai_not_in_plan" };
+      const toggles = plan.aiFeatureToggles as Record<string, boolean> | null;
+      if (toggles && opts.featureSlug in toggles && toggles[opts.featureSlug] === false) {
+        return { ok: false, reason: "ai_feature_disabled" };
+      }
+    }
+  }
+
+  try {
+    await checkDailyRequestCap(opts.tenantId, tenant.planId);
+  } catch (err) {
+    const e = err as { code?: string };
+    if (e.code === "DAILY_CAP_REACHED") return { ok: false, reason: "daily_cap_reached" };
+    throw err;
+  }
+  try {
+    await checkPerFeatureMonthlyCap(opts.tenantId, tenant.planId, opts.featureSlug);
+  } catch (err) {
+    const e = err as { code?: string };
+    if (e.code === "FEATURE_CAP_REACHED") return { ok: false, reason: "feature_cap_reached" };
+    throw err;
+  }
+
+  const rule = await resolveCreditRule({ featureSlug: opts.featureSlug, planId: tenant.planId ?? null });
+  if (!rule) return { ok: false, reason: "no_credit_rule" };
+  const credits = priceCredits(rule, Math.max(0, opts.units ?? 1));
+
+  try {
+    const reservation = await reserveCredits({
+      tenantId: opts.tenantId, featureSlug: opts.featureSlug, credits,
+      meta: { ...(opts.meta ?? {}), ruleId: rule.id, pricingMode: rule.pricingMode, units: opts.units ?? 1 },
+    });
+    return { ok: true, reservation };
+  } catch (err) {
+    const e = err as { code?: string };
+    if (e.code === "INSUFFICIENT_CREDITS") return { ok: false, reason: "insufficient_credits" };
+    if (e.code === "WALLET_BLOCKED") return { ok: false, reason: "wallet_blocked" };
+    return { ok: false, reason: "wallet_error" };
+  }
+}
+
 // ─── Read-side helpers used by routes ────────────────────────────────────────
 
 export async function listTransactions(walletId: number, limit = 50): Promise<Array<typeof aiCreditTransactionsTable.$inferSelect>> {

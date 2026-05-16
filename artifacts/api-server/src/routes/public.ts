@@ -2,7 +2,7 @@ import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable } from "../lib/db";
-import { reserveCredits, commitReservation, refundReservation, resolveCreditRule, priceCredits, type AiCreditReservation } from "../lib/aiCredits";
+import { commitReservation, refundReservation, gatePublicAiCall, type AiCreditReservation } from "../lib/aiCredits";
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
 import { createHash } from "crypto";
@@ -831,23 +831,19 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
     return void res.status(429).json({ ...baseResponse, available: false, reason: "rate_limited", retryAfterMs: cooldown.retryAfterMs });
   }
 
-  // Reserve credits ourselves (public route — no req.user). Degrade gracefully
-  // if the wallet is empty/blocked so the customer can still leave a manual
-  // Google review.
-  let reservation: AiCreditReservation | null = null;
-  try {
-    const rule = await resolveCreditRule({ featureSlug: "ai_review_draft" });
-    const credits = rule ? priceCredits(rule, 1) : 1;
-    reservation = await reserveCredits({
-      tenantId: restaurant.tenantId,
-      featureSlug: "ai_review_draft",
-      credits,
-      meta: { qrId: qr.id, feedbackId: fb.id, restaurantId: restaurant.id },
-    });
-  } catch (err) {
-    const e = err as { code?: string };
-    return void res.json({ ...baseResponse, available: false, reason: e.code ?? "wallet_error" });
+  // Plan/feature/cap gating + credit reservation in one shot. Public-route
+  // equivalent of `requireAiCredits` — returns a structured reason so we can
+  // degrade gracefully (HTTP 200 + available:false) instead of erroring.
+  const gated = await gatePublicAiCall({
+    tenantId: restaurant.tenantId,
+    featureSlug: "ai_review_draft",
+    units: 1,
+    meta: { qrId: qr.id, feedbackId: fb.id, restaurantId: restaurant.id },
+  });
+  if (!gated.ok) {
+    return void res.json({ ...baseResponse, available: false, reason: gated.reason });
   }
+  const reservation: AiCreditReservation = gated.reservation;
 
   const systemPrompt = `You write short, warm, authentic-sounding Google reviews from the guest's point of view. Keep it 2-4 sentences, first-person, mention 1-2 specific things they liked. Never invent details that weren't provided. No emojis, no hashtags, no quotation marks. Plain text only.`;
   const userPrompt = [
@@ -874,7 +870,7 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
       metadata: { feedbackId: fb.id, tagCount: tags.length, hasComment: !!comment },
     });
     await commitReservation({ reservation, requestLogId: result.requestLogId });
-    res.json({ ...baseResponse, available: true, draft });
+    res.json({ ...baseResponse, available: true, draftText: draft, requestLogId: result.requestLogId });
   } catch (err) {
     await refundReservation(reservation, "ai_review_draft generation failed").catch(() => undefined);
     logger.warn({ err, qrId: qr.id }, "ai_review_draft generation failed");
