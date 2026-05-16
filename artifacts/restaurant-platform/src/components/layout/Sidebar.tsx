@@ -79,6 +79,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/reports/payments", label: "Payments", icon: Wallet },
       { kind: "link", href: "/reports/cash-variance", label: "Cash Variance", icon: AlertTriangle, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/food-cost", label: "Food Cost", icon: Flame, roles: ["owner", "manager", "super_admin"] },
+      { kind: "link", href: "/reports/fraud-alerts", label: "Fraud Alerts", icon: AlertTriangle, roles: ["owner", "manager", "super_admin"] },
     ],
   },
 ];

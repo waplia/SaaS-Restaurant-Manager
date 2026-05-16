@@ -1217,6 +1217,47 @@ export interface AuditLogDetail extends AuditLog {
   userEmail?: string | null;
 }
 
+export interface FraudAlert {
+  id: number;
+  restaurantId: number;
+  detector: string;
+  severity: "low" | "medium" | "high";
+  status: "open" | "acknowledged" | "resolved" | "false_positive";
+  subjectUserId: number | null;
+  subjectRole: string | null;
+  entityType: string | null;
+  entityId: number | null;
+  windowStart: string;
+  windowEnd: string;
+  score: string;
+  threshold: string | null;
+  observedValue: string | null;
+  evidence: Record<string, unknown>;
+  aiSummary: string | null;
+  aiSummaryFallback: boolean;
+  reviewedByUserId: number | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  subjectName?: string | null;
+}
+
+export interface FraudAlertList {
+  data: FraudAlert[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface FraudDetectorSetting {
+  detector: string;
+  isEnabled: boolean;
+  threshold: number;
+  config: Record<string, unknown>;
+  defaultThreshold: number;
+}
+
 export interface AuditLogFilters {
   userId?: number;
   role?: string;

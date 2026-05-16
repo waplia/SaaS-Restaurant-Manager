@@ -70,6 +70,7 @@ import ReviewQrsPage from "@/pages/review-qrs";
 import AiReviewRepliesPage from "@/pages/ai-review-replies";
 import FeedbackRecoveryPage from "@/pages/feedback-recovery";
 import CustomerFeedbackPage from "@/pages/customer-feedback";
+import FraudAlertsPage from "@/pages/fraud-alerts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -153,6 +154,7 @@ function Router() {
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
+      <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={FraudAlertsPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />

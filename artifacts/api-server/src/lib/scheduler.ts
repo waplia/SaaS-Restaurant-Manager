@@ -14,6 +14,7 @@ import { registerCron, runTrackedCron } from "./systemLogs";
 import { processPendingWebhookDeliveries } from "./webhookDispatcher";
 import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./maintenance";
 import { runMonthlyAllocationSweep } from "./aiCredits";
+import { runFraudCronTick } from "./fraudDetection";
 
 function trackCron(name: string, expr: string, fn: () => Promise<void>) {
   registerCronJob(name, expr);
@@ -111,6 +112,15 @@ export function startScheduler(): void {
   registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
   registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
   registerCron("ai-monthly-allocation", "0 1 * * *", "Credits each tenant's Khana AI monthly allowance on their renewal-cycle anniversary day at 01:00 IST (idempotent per cycle)");
+  registerCron("fraud-detect-fast", "5 * * * *", "Hourly fast fraud detectors (discounts, voids, KOT cancels, refunds, free items)");
+  registerCron("fraud-detect-slow", "30 2 * * *", "Nightly slow fraud detectors at 02:30 IST (cash, attendance, inventory)");
+
+  trackCron("fraud_detect_fast", "5 * * * *", async () => {
+    await runFraudCronTick("fast");
+  });
+  trackCron("fraud_detect_slow", "30 2 * * *", async () => {
+    await runFraudCronTick("slow");
+  });
 
   trackCron("ai_monthly_allocation", "0 1 * * *", async () => {
     await runTrackedCron("ai-monthly-allocation", async () => {
