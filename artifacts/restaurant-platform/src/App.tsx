@@ -56,6 +56,7 @@ import DeveloperDocsPage from "@/pages/developer-docs";
 import AdminSettingsPage from "@/pages/admin-settings";
 import { AppSettingsProvider } from "@/lib/appSettings";
 import PosPage from "@/pages/pos";
+import HotelPage from "@/pages/hotel";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
 import DuePaymentsPage from "@/pages/due-payments";
@@ -182,6 +183,7 @@ function Router() {
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/documents" component={() => <ProtectedRoute component={DocumentsPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
+      <Route path="/hotel" component={() => <RoleProtectedRoute component={HotelPage} allow={["owner", "manager", "cashier", "waiter", "kitchen", "staff"]} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
       <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />

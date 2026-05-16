@@ -1227,6 +1227,88 @@ export interface RestaurantInfo {
   phone?: string | null;
   email?: string | null;
   enableVoiceOrdering?: boolean;
+  isHotelMode?: boolean;
+  tenantId?: number | null;
+}
+
+export interface HotelGuest {
+  id: number;
+  tenantId: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  isVip: boolean;
+  allergies: string | null;
+  preferences: string | null;
+  notes: string | null;
+}
+
+export interface HotelStay {
+  id: number;
+  tenantId: number;
+  guestId: number;
+  roomNumber: string;
+  partySize: number;
+  packageId: number | null;
+  checkInAt: string;
+  checkOutAt: string | null;
+  status: string;
+  notes: string | null;
+  guest?: HotelGuest | null;
+  folio?: HotelFolio | null;
+}
+
+export interface HotelFolio {
+  id: number;
+  tenantId: number;
+  stayId: number | null;
+  banquetEventId: number | null;
+  status: string;
+  totalCharges: string;
+  totalPayments: string;
+  balance: string;
+  invoiceNumber: string | null;
+  closedAt: string | null;
+}
+
+export interface HotelFolioLine {
+  id: number;
+  folioId: number;
+  restaurantId: number | null;
+  kind: string;
+  source: string;
+  description: string;
+  amount: string;
+  refType: string | null;
+  refId: number | null;
+  createdAt: string;
+}
+
+export interface HotelPackage {
+  id: number;
+  tenantId: number;
+  name: string;
+  description: string | null;
+  mealType: string;
+  dailyEntitlement: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  eligibleCategoryIds: number[] | null;
+}
+
+export interface HotelBanquetEvent {
+  id: number;
+  tenantId: number;
+  restaurantId: number;
+  name: string;
+  hostStayId: number | null;
+  hostName: string | null;
+  hostPhone: string | null;
+  partySize: number;
+  scheduledAt: string | null;
+  status: string;
+  folioId: number | null;
+  notes: string | null;
 }
 
 export interface PosModifier {

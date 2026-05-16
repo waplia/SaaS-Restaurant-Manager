@@ -34,6 +34,10 @@ export const ordersTable = pgTable("orders", {
   // came through and the external id we'll match payout-sheet rows on.
   aggregatorName: text("aggregator_name"),
   aggregatorOrderId: text("aggregator_order_id"),
+  // Hotel mode linkage — set when order is taken by room or fired from a
+  // banquet hall. Both nullable so non-hotel outlets are unaffected.
+  hotelStayId: integer("hotel_stay_id"),
+  banquetEventId: integer("banquet_event_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

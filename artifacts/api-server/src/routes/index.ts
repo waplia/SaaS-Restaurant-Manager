@@ -77,6 +77,7 @@ import accountingRouter from "./accounting";
 import foodCourtRouter from "./food-court";
 import bakeryRouter, { bakeryPublicRouter } from "./bakery";
 import mealPlansRouter from "./meal-plans";
+import hotelRouter from "./hotel";
 
 const router: IRouter = Router();
 
@@ -173,5 +174,6 @@ router.use(accountingRouter);
 router.use(foodCourtRouter);
 router.use(bakeryRouter);
 router.use(mealPlansRouter);
+router.use(hotelRouter);
 
 export default router;

@@ -3221,3 +3221,309 @@ export function useDeviceHeartbeat() {
     },
   });
 }
+
+export function useEvents(params?: Record<string, unknown>) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, String(v)])).toString() : "";
+  return useQuery({
+    queryKey: ["events", RESTAURANT_ID, params ?? {}],
+    queryFn: () => apiGet<unknown[]>(`/restaurants/${RESTAURANT_ID}/events${qs}`),
+  });
+}
+
+export function useEventDetail(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["event-detail", RESTAURANT_ID, id],
+    queryFn: () => apiGet<Record<string, unknown>>(`/restaurants/${RESTAURANT_ID}/events/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useEventCalendar(params?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v).map(([k, v]) => [k, String(v)])).toString() : "";
+  return useQuery({
+    queryKey: ["event-calendar", RESTAURANT_ID, params ?? {}],
+    queryFn: () => apiGet<unknown[]>(`/restaurants/${RESTAURANT_ID}/events/calendar${qs}`),
+  });
+}
+
+export function useCreateEvent() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => apiPost(`/restaurants/${RESTAURANT_ID}/events`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["events", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateEvent() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Record<string, unknown>) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/events/${id}`, data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["events", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, vars.id] });
+    },
+  });
+}
+
+export function useDeleteEvent() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/events/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["events", RESTAURANT_ID] }),
+  });
+}
+
+function eventChildHook<T>(child: string, method: "post" | "delete" | "patch") {
+  return function () {
+    const RESTAURANT_ID = useRestaurantId();
+    const qc = useQueryClient();
+    return useMutation({
+      mutationFn: (vars: { eventId: number; childId?: number } & Record<string, unknown>) => {
+        const { eventId, childId, ...data } = vars;
+        const path = childId
+          ? `/restaurants/${RESTAURANT_ID}/events/${eventId}/${child}/${childId}`
+          : `/restaurants/${RESTAURANT_ID}/events/${eventId}/${child}`;
+        if (method === "post") return apiPost<T>(path, data);
+        if (method === "patch") return apiPatch<T>(path, data);
+        return apiDelete(path) as unknown as Promise<T>;
+      },
+      onSuccess: (_d, vars) => {
+        qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, vars.eventId] });
+      },
+    });
+  };
+}
+
+export const useCreateEventItem = eventChildHook<unknown>("items", "post");
+export const useDeleteEventItem = eventChildHook<unknown>("items", "delete");
+export const useCreateEventPayment = eventChildHook<unknown>("payments", "post");
+export const useUpdateEventPayment = eventChildHook<unknown>("payments", "patch");
+export const useDeleteEventPayment = eventChildHook<unknown>("payments", "delete");
+export const useCreateEventStaff = eventChildHook<unknown>("staff", "post");
+export const useDeleteEventStaff = eventChildHook<unknown>("staff", "delete");
+export const useCreateEventVendor = eventChildHook<unknown>("vendors", "post");
+export const useDeleteEventVendor = eventChildHook<unknown>("vendors", "delete");
+export const useCreateEventChecklistItem = eventChildHook<unknown>("checklist", "post");
+export const useToggleEventChecklistItem = eventChildHook<unknown>("checklist", "patch");
+export const useDeleteEventChecklistItem = eventChildHook<unknown>("checklist", "delete");
+
+export function useEventStatusTransition() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/events/${id}/status`, { status }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["events", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, vars.id] });
+    },
+  });
+}
+
+export function useConvertEventToInvoice() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<{ orderNumber: string; invoiceOrderId: number }>(
+        `/restaurants/${RESTAURANT_ID}/events/${id}/convert-to-invoice`, {}
+      ),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["events", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, id] });
+    },
+  });
+}
+
+// ===== Hotel Mode =====================================================
+
+export function useToggleHotelMode() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/hotel-mode`, { enabled }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurant", RESTAURANT_ID] }),
+  });
+}
+
+export function useHotelGuests(q?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-guests", RESTAURANT_ID, q ?? ""],
+    queryFn: () => apiGet<import("./types").HotelGuest[]>(
+      `/restaurants/${RESTAURANT_ID}/hotel/guests${q ? `?q=${encodeURIComponent(q)}` : ""}`
+    ),
+  });
+}
+
+export function useCreateHotelGuest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("./types").HotelGuest>) =>
+      apiPost<import("./types").HotelGuest>(`/restaurants/${RESTAURANT_ID}/hotel/guests`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hotel-guests", RESTAURANT_ID] }),
+  });
+}
+
+export function useHotelStays(status: string = "in_house") {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-stays", RESTAURANT_ID, status],
+    queryFn: () => apiGet<import("./types").HotelStay[]>(
+      `/restaurants/${RESTAURANT_ID}/hotel/stays?status=${encodeURIComponent(status)}`
+    ),
+  });
+}
+
+export function useHotelStay(stayId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-stay", RESTAURANT_ID, stayId],
+    queryFn: () => apiGet<import("./types").HotelStay & {
+      folio: import("./types").HotelFolio;
+      lines: import("./types").HotelFolioLine[];
+      package: import("./types").HotelPackage | null;
+      packageUsedToday: number;
+    }>(`/restaurants/${RESTAURANT_ID}/hotel/stays/${stayId}`),
+    enabled: !!stayId,
+  });
+}
+
+export function useCreateHotelStay() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { guestId: number; roomNumber: string; partySize?: number; packageId?: number; notes?: string }) =>
+      apiPost<import("./types").HotelStay>(`/restaurants/${RESTAURANT_ID}/hotel/stays`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] }),
+  });
+}
+
+export function useHotelPackages() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-packages", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").HotelPackage[]>(`/restaurants/${RESTAURANT_ID}/hotel/packages`),
+  });
+}
+
+export function useCreateHotelPackage() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("./types").HotelPackage>) =>
+      apiPost<import("./types").HotelPackage>(`/restaurants/${RESTAURANT_ID}/hotel/packages`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hotel-packages", RESTAURANT_ID] }),
+  });
+}
+
+export function useAddFolioLine() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ folioId, ...data }: { folioId: number; kind: string; description: string; amount: number; source?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/hotel/folios/${folioId}/lines`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hotel-stay"] });
+      qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useCloseFolio() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ folioId, splits }: { folioId: number; splits: Array<{ method: string; amount: number; notes?: string }> }) =>
+      apiPost<{ folioId: number; invoiceNumber: string; balance: number }>(
+        `/restaurants/${RESTAURANT_ID}/hotel/folios/${folioId}/close`, { splits }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hotel-stay"] });
+      qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function usePostMinibar() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { stayId: number; itemName: string; quantity: number; unitPrice: number; notes?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/hotel/minibar`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hotel-stay"] });
+      qc.invalidateQueries({ queryKey: ["hotel-minibar", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useMinibarPostings() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-minibar", RESTAURANT_ID],
+    queryFn: () => apiGet<Array<{ id: number; itemName: string; quantity: number; unitPrice: string; totalAmount: string; createdAt: string; stayId: number }>>(
+      `/restaurants/${RESTAURANT_ID}/hotel/minibar`
+    ),
+  });
+}
+
+export function useHousekeepingRequests() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-housekeeping", RESTAURANT_ID],
+    queryFn: () => apiGet<Array<{ id: number; stayId: number; description: string; orderId: number | null; createdAt: string; status: string }>>(
+      `/restaurants/${RESTAURANT_ID}/hotel/housekeeping-requests`
+    ),
+  });
+}
+
+export function useCreateHousekeepingRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { stayId: number; description: string; items?: Array<{ menuItemId: number; quantity: number; notes?: string }>; notes?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/hotel/housekeeping-requests`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hotel-housekeeping", RESTAURANT_ID] }),
+  });
+}
+
+export function useBanquetEvents() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["hotel-banquet", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").HotelBanquetEvent[]>(`/restaurants/${RESTAURANT_ID}/hotel/banquet-events`),
+  });
+}
+
+export function useCreateBanquetEvent() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("./types").HotelBanquetEvent>) =>
+      apiPost<import("./types").HotelBanquetEvent>(`/restaurants/${RESTAURANT_ID}/hotel/banquet-events`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hotel-banquet", RESTAURANT_ID] }),
+  });
+}
+
+export function useCloseBanquetEvent() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, rollToHostFolio }: { eventId: number; rollToHostFolio?: boolean }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/hotel/banquet-events/${eventId}/close`, { rollToHostFolio: !!rollToHostFolio }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hotel-banquet", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] });
+    },
+  });
+}

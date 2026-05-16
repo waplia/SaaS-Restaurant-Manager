@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -214,7 +214,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId } = req.body;
+  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId, hotelStayId, banquetEventId } = req.body;
 
   let subtotal = 0;
   const enrichedItems: Array<{
@@ -285,6 +285,8 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     serviceCharge: serviceCharge.toFixed(2),
     discountAmount: "0.00",
     totalAmount: totalAmount.toFixed(2),
+    hotelStayId: hotelStayId ? Number(hotelStayId) : null,
+    banquetEventId: banquetEventId ? Number(banquetEventId) : null,
   }).returning();
 
   for (const ei of enrichedItems) {
@@ -1252,8 +1254,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   const { paymentMethod, stripePaymentIntentId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
 
   // Strict payment method enum validation
-  if (!["cash", "card", "upi"].includes(String(paymentMethod))) {
-    return void res.status(400).json({ error: `Invalid payment method '${paymentMethod}'. Must be cash, card, or upi.` });
+  if (!["cash", "card", "upi", "room_charge"].includes(String(paymentMethod))) {
+    return void res.status(400).json({ error: `Invalid payment method '${paymentMethod}'. Must be cash, card, upi, or room_charge.` });
   }
 
   // Load order — verify it exists and is payable before touching payment gateway
@@ -1262,6 +1264,83 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.status === "completed" || order.status === "cancelled") {
     return void res.status(400).json({ error: "Order is already completed or cancelled" });
+  }
+
+  // Room charge: post the order onto the guest's hotel folio instead of taking
+  // payment now. The folio is settled at check-out via the consolidated flow.
+  if (paymentMethod === "room_charge") {
+    if (!order.hotelStayId) {
+      return void res.status(400).json({ error: "Order is not linked to a hotel stay" });
+    }
+    const [restaurant] = await db.select({ tenantId: restaurantsTable.tenantId, isHotelMode: restaurantsTable.isHotelMode })
+      .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    if (!restaurant?.isHotelMode) {
+      return void res.status(400).json({ error: "Hotel mode is not enabled for this outlet" });
+    }
+    const [stay] = await db.select().from(hotelStaysTable)
+      .where(and(eq(hotelStaysTable.id, order.hotelStayId), eq(hotelStaysTable.tenantId, restaurant.tenantId)));
+    if (!stay || stay.status !== "in_house") {
+      return void res.status(400).json({ error: "Hotel stay is not in-house" });
+    }
+    let folio = (await db.select().from(hotelFoliosTable)
+      .where(and(eq(hotelFoliosTable.stayId, stay.id), eq(hotelFoliosTable.status, "open"))))[0];
+    if (!folio) {
+      [folio] = await db.insert(hotelFoliosTable).values({
+        tenantId: restaurant.tenantId, stayId: stay.id, status: "open",
+      }).returning();
+    }
+    const total = Number(order.totalAmount);
+    let updatedOrder: typeof ordersTable.$inferSelect | undefined;
+    try {
+      updatedOrder = await db.transaction(async tx => {
+        const [u] = await tx.update(ordersTable).set({
+          paymentMethod: "room_charge",
+          paymentStatus: "paid",
+          status: "completed",
+          updatedAt: new Date(),
+        }).where(and(
+          eq(ordersTable.id, orderId),
+          eq(ordersTable.restaurantId, restaurantId),
+          notInArray(ordersTable.status, ["completed", "cancelled"]),
+          ne(ordersTable.paymentStatus, "paid"),
+        )).returning();
+        if (!u) throw new Error("ORDER_ALREADY_PAID");
+        if (u.tableId) {
+          await tx.update(floorTablesTable).set({ status: "free" })
+            .where(and(eq(floorTablesTable.id, u.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+        }
+        await tx.insert(hotelFolioLinesTable).values({
+          folioId: folio!.id, tenantId: restaurant.tenantId, restaurantId,
+          kind: "charge", source: "f&b",
+          description: `Order #${u.orderNumber}`,
+          amount: total.toFixed(2),
+          refType: "order", refId: u.id,
+          recordedByUserId: req.user?.sub ?? null,
+        });
+        const lines = await tx.select().from(hotelFolioLinesTable).where(eq(hotelFolioLinesTable.folioId, folio!.id));
+        let charges = 0, payments = 0;
+        for (const l of lines) {
+          const a = Number(l.amount);
+          if (l.kind === "charge") charges += a;
+          else if (l.kind === "discount" || l.kind === "comp") charges -= a;
+          else if (l.kind === "payment") payments += a;
+        }
+        await tx.update(hotelFoliosTable).set({
+          totalCharges: charges.toFixed(2), totalPayments: payments.toFixed(2),
+          balance: (charges - payments).toFixed(2), updatedAt: new Date(),
+        }).where(eq(hotelFoliosTable.id, folio!.id));
+        return u;
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === "ORDER_ALREADY_PAID") return void res.status(409).json({ error: "Order is already paid", code: "ORDER_ALREADY_PAID" });
+      console.error("[Pay/RoomCharge] Transaction failed:", err);
+      return void res.status(500).json({ error: "Failed to post room charge" });
+    }
+    handleOrderCompletion(orderId, restaurantId, updatedOrder).catch(console.error);
+    broadcastEvent(restaurantId, "order:status", { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
+    broadcastOrderUpdate(updatedOrder.id, { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
+    return void res.json(updatedOrder);
   }
 
   // Cash payments require an open cash register session — pre-flight check.

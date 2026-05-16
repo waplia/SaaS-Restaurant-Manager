@@ -35,6 +35,9 @@ export const restaurantsTable = pgTable("restaurants", {
   acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
   whatsappMonthlyLimitOverride: integer("whatsapp_monthly_limit_override"),
   googleReviewLink: text("google_review_link"),
+  // When true, this outlet runs in "Hotel Restaurant Mode" — POS exposes
+  // room/guest pickers, room-charge settlement, and folio rollups.
+  isHotelMode: boolean("is_hotel_mode").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

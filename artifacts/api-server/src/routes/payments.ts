@@ -204,7 +204,7 @@ router.post(
     if (!["in", "out"].includes(String(direction))) {
       return void res.status(400).json({ error: "direction must be 'in' or 'out'" });
     }
-    if (!["cash", "card", "upi", "stripe", "razorpay", "bank", "other"].includes(String(method))) {
+    if (!["cash", "card", "upi", "stripe", "razorpay", "bank", "room_charge", "package_comp", "other"].includes(String(method))) {
       return void res.status(400).json({ error: "Invalid payment method" });
     }
     const amountNum = Number(amount);

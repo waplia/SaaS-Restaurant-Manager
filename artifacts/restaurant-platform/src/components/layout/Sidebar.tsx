@@ -31,6 +31,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
   { kind: "link", href: "/events", label: "Events & Catering", icon: PartyPopper, roles: ["owner", "manager", "waiter", "kitchen"] },
   { kind: "link", href: "/bakery", label: "Bakery", icon: Cake, roles: ["owner", "manager", "waiter", "kitchen", "cashier"], requiresBakeryMode: true },
+  { kind: "link", href: "/hotel", label: "Hotel Mode", icon: BellRing, roles: ["owner", "manager", "cashier", "waiter", "staff"] },
   { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
