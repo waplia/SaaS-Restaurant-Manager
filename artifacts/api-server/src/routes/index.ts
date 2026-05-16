@@ -88,6 +88,7 @@ import cloudKitchenRouter from "./cloud-kitchen";
 import portalRouter from "./portal";
 import barRouter from "./bar";
 import mysteryAuditsRouter from "./mystery-audits";
+import adminMetricsRouter from "./admin-metrics";
 
 const router: IRouter = Router();
 
@@ -176,6 +177,7 @@ router.use(pricingRulesRouter);
 router.use(growthEngineRouter);
 router.use(addonsRouter);
 router.use(adminAddonsRouter);
+router.use(adminMetricsRouter);
 router.use(fintechRouter);
 router.use(documentsRouter);
 router.use(devicesRouter);

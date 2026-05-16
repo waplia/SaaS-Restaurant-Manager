@@ -17,6 +17,7 @@ import AdminEmail from "./admin-email";
 import AdminMaintenance from "./admin-maintenance";
 import AdminWhatsAppTab from "./admin-whatsapp";
 import AdminAiTab from "./admin-ai";
+import AdminMetricsTab from "./admin-metrics";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1041,7 +1042,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai" | "health">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai" | "health" | "metrics">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -1129,6 +1130,7 @@ export default function AdminPage() {
             { id: "whatsapp" as const, label: "WhatsApp", icon: MessageCircle },
             { id: "ai" as const, label: "AI Control Center", icon: Brain },
             { id: "health" as const, label: "Restaurant Health", icon: Activity },
+            { id: "metrics" as const, label: "Investor Metrics", icon: TrendingUp },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -1151,6 +1153,7 @@ export default function AdminPage() {
         {tab === "whatsapp" && <AdminWhatsAppTab />}
         {tab === "ai" && <AdminAiTab />}
         {tab === "health" && <AdminHealthScoreTab />}
+        {tab === "metrics" && <AdminMetricsTab />}
       </main>
     </div>
   );
