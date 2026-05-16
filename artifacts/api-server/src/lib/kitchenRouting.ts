@@ -1,5 +1,6 @@
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db, kitchensTable, menuItemsTable, kitchenTicketsTable, orderItemsTable, restaurantsTable } from "./db";
+import { dispatchTicketsToDevices } from "./devices";
 
 export async function getDefaultKitchenId(restaurantId: number): Promise<number> {
   const existing = await db
@@ -94,6 +95,13 @@ export async function createKitchenTicketsForOrder(args: {
       expectedReadyAt,
     }).returning();
     created.push({ ticketId: t.id, kitchenId: kid });
+  }
+  if (created.length > 0) {
+    try {
+      await dispatchTicketsToDevices({ restaurantId, orderId, tickets: created });
+    } catch (err) {
+      console.error("[devices] dispatch error", err);
+    }
   }
   return created;
 }

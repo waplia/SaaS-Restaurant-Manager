@@ -41,3 +41,4 @@ export * from "./ai-chat";
 export * from "./addons";
 export * from "./fintech";
 export * from "./documents";
+export * from "./devices";

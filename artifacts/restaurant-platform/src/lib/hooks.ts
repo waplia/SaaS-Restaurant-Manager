@@ -3034,3 +3034,191 @@ export function useBulkRetryAdminEmailLogs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "email", "logs"] }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Devices & Hardware (Task 118)
+// ---------------------------------------------------------------------------
+
+export type DeviceType =
+  | "thermal_printer" | "kot_printer" | "kitchen_display" | "customer_display"
+  | "barcode_scanner" | "qr_scanner" | "cash_drawer" | "biometric"
+  | "android_pos" | "tablet_menu" | "self_kiosk" | "token_display";
+
+export type DeviceStatus = "online" | "offline" | "error" | "pairing";
+
+export interface DeviceRecord {
+  id: number;
+  restaurantId: number;
+  branchId: number | null;
+  kitchenId: number | null;
+  type: DeviceType;
+  name: string;
+  status: DeviceStatus;
+  lastSeenAt: string | null;
+  firmwareVersion: string | null;
+  appVersion: string | null;
+  registrationToken: string | null;
+  pairedAt: string | null;
+  paperSize: string | null;
+  consecutiveErrors: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  sync?: { lastSyncAt: string | null; pendingCount: number } | null;
+  pairingToken?: string;
+}
+
+export interface DeviceLogRecord {
+  id: number;
+  deviceId: number;
+  eventType: string;
+  message: string | null;
+  metadata: Record<string, unknown>;
+  source: string | null;
+  createdAt: string;
+}
+
+export interface DeviceRoutingRule {
+  id?: number;
+  deviceId?: number;
+  branchId: number | null;
+  categoryId: number | null;
+  kitchenId: number | null;
+  orderType: string | null;
+  isDefaultReceipt: boolean;
+  priority: number;
+}
+
+export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
+  thermal_printer: "Thermal Printer",
+  kot_printer: "KOT Printer",
+  kitchen_display: "Kitchen Display (KDS)",
+  customer_display: "Customer Display",
+  barcode_scanner: "Barcode Scanner",
+  qr_scanner: "QR Scanner",
+  cash_drawer: "Cash Drawer",
+  biometric: "Biometric",
+  android_pos: "Android POS Terminal",
+  tablet_menu: "Tablet Menu",
+  self_kiosk: "Self-Service Kiosk",
+  token_display: "Token Display",
+};
+
+export const PRINTER_TYPES: DeviceType[] = ["thermal_printer", "kot_printer"];
+export const OFFLINE_CAPABLE_TYPES: DeviceType[] = ["android_pos", "tablet_menu", "self_kiosk"];
+
+export function useDevices(filters?: { branchId?: number | null; type?: DeviceType; status?: DeviceStatus }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (filters?.branchId != null) params.set("branchId", String(filters.branchId));
+  if (filters?.type) params.set("type", filters.type);
+  if (filters?.status) params.set("status", filters.status);
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return useQuery({
+    queryKey: ["devices", RESTAURANT_ID, filters ?? {}],
+    queryFn: () => apiGet<DeviceRecord[]>(`/restaurants/${RESTAURANT_ID}/devices${q}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useDevice(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["device", RESTAURANT_ID, id],
+    queryFn: () => apiGet<DeviceRecord & { stations: Array<{ kitchenId: number }>; rules: DeviceRoutingRule[] }>(`/restaurants/${RESTAURANT_ID}/devices/${id}`),
+    enabled: id != null,
+  });
+}
+
+export function useDeviceLogs(id: number | null, limit = 100) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["device-logs", RESTAURANT_ID, id, limit],
+    queryFn: () => apiGet<DeviceLogRecord[]>(`/restaurants/${RESTAURANT_ID}/devices/${id}/logs?limit=${limit}`),
+    enabled: id != null,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCreateDevice() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { name: string; type: DeviceType; branchId?: number | null; kitchenId?: number | null; paperSize?: string | null }) =>
+      apiPost<DeviceRecord>(`/restaurants/${RESTAURANT_ID}/devices`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateDevice() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<{ name: string; branchId: number | null; kitchenId: number | null; paperSize: string | null; status: DeviceStatus; metadata: Record<string, unknown> }>) =>
+      apiPatch<DeviceRecord>(`/restaurants/${RESTAURANT_ID}/devices/${id}`, data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, vars.id] });
+    },
+  });
+}
+
+export function useDeleteDevice() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/devices/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
+  });
+}
+
+export function useTestPrintDevice() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<{ queued: boolean; success: boolean }>(`/restaurants/${RESTAURANT_ID}/devices/${id}/test-print`, {}),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["device-logs", RESTAURANT_ID, id] });
+      qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useUpdateDeviceRoutingRules() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: ({ id, rules }: { id: number; rules: DeviceRoutingRule[] }) =>
+      apiPut<DeviceRoutingRule[]>(`/restaurants/${RESTAURANT_ID}/devices/${id}/routing-rules`, { rules }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, vars.id] }),
+  });
+}
+
+export function useUpdateDeviceStations() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: ({ id, kitchenIds }: { id: number; kitchenIds: number[] }) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/devices/${id}/station-mappings`, { kitchenIds }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, vars.id] }),
+  });
+}
+
+export function useSyncDevice() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/devices/${id}/sync`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
+  });
+}
+
+export function useDeviceHeartbeat() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/devices/${id}/heartbeat`, { status: "online" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
+  });
+}
+

@@ -23,6 +23,7 @@ import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
 import SettingsSectionPage from "@/pages/settings-section";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
+import SettingsDevicesPage from "@/pages/settings-devices";
 import SubscriptionPage from "@/pages/subscription";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
@@ -184,6 +185,7 @@ function Router() {
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={WebhooksPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />
