@@ -33,6 +33,7 @@ interface AuthContextType {
   tenantId: number | null;
   login: (token: string, refreshToken: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
+  updateTokens: (accessToken: string, refreshToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -171,6 +172,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     registerPushToken(userData.id, token);
   }, []);
 
+  const updateTokens = useCallback(async (newAccessToken: string, newRefreshToken: string) => {
+    // Atomically swap stored + in-memory tokens so subsequent authenticated
+    // requests (and `setAuthTokenGetter`) immediately use the new credentials.
+    // Used after change-password, where the server bumps tokenVersion and
+    // returns fresh tokens for the current device.
+    await SecureStorage.setItem("accessToken", newAccessToken);
+    await SecureStorage.setItem("refreshToken", newRefreshToken);
+    setAccessToken(newAccessToken);
+  }, []);
+
   const logout = useCallback(async () => {
     const currentUser = userRef.current;
     const currentToken = accessToken;
@@ -188,7 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const tenantId = user?.tenantId ?? null;
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, login, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, login, logout, updateTokens }}>
       {children}
     </AuthContext.Provider>
   );

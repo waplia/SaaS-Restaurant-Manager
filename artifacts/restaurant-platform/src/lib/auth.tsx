@@ -21,6 +21,7 @@ interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (data: RegisterInput) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 export interface RegisterInput {
@@ -132,6 +133,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: data.user, accessToken: data.accessToken, isLoading: false, isAuthenticated: true });
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Could not change password" }));
+      throw new Error(err.error ?? "Could not change password");
+    }
+    const data = await res.json() as { accessToken: string; refreshToken: string };
+    // Swap in the fresh tokens bound to the new tokenVersion so this device
+    // stays signed in while every other session for this user is revoked.
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    setState(s => ({ ...s, accessToken: data.accessToken }));
+  }, []);
+
   const logout = useCallback(() => {
     // Fire-and-forget: ask the server to bump our tokenVersion so every
     // other session for this user (other tabs, phone, stolen laptop) is
@@ -155,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, register }}>
+    <AuthContext.Provider value={{ ...state, login, logout, register, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

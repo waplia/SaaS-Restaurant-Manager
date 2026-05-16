@@ -29,6 +29,7 @@ import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
 import SettingsSectionPage from "@/pages/settings-section";
+import SettingsAccountPage from "@/pages/settings-account";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
@@ -348,6 +349,7 @@ function Router() {
       <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={ApiLogsPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/developer-docs" component={() => <RoleProtectedRoute component={DeveloperDocsPage} allow={["owner", "manager"]} />} />
       <Route path="/admin/api-settings" component={() => <SuperAdminRoute component={AdminApiSettingsPage} />} />
+      <Route path="/settings/account" component={() => <ProtectedRoute component={SettingsAccountPage} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />

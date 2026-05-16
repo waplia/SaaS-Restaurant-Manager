@@ -10,6 +10,7 @@ import {
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
   Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash, Calculator,
+  Lock,
 } from "lucide-react";
 
 export type SectionKey =
@@ -20,7 +21,7 @@ export type SectionKey =
   | "cancellation-reasons" | "order-settings" | "refund-reasons"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs"
-  | "accounting";
+  | "accounting" | "account";
 
 type IconType = typeof Building2;
 
@@ -70,6 +71,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
   {
     label: "User & Security",
     items: [
+      { key: "account", label: "Account & Password", icon: Lock, href: "/settings/account" },
       { key: "roles", label: "Roles & Permissions", icon: Shield, ownerOnly: true },
     ],
   },

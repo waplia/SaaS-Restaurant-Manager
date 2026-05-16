@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Clock, CalendarDays, Wallet, ListChecks, GraduationCap,
   Megaphone, TrendingUp, Award, Folder, LifeBuoy, LogOut, Sun, Moon, Flame,
-  ArrowLeftRight,
+  ArrowLeftRight, Lock,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -84,13 +84,16 @@ export function PortalLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          {isPriv && (
-            <div className="mt-3 pt-3 border-t border-sidebar-border">
+          <div className="mt-3 pt-3 border-t border-sidebar-border space-y-0.5">
+            <Link href="/settings/account" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent" data-testid="portal-nav-account">
+              <Lock className="w-4 h-4" />Change password
+            </Link>
+            {isPriv && (
               <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent">
                 <LayoutDashboard className="w-4 h-4" />Switch to Admin
               </Link>
-            </div>
-          )}
+            )}
+          </div>
         </nav>
 
         <div className="px-3 py-3 border-t border-sidebar-border">
