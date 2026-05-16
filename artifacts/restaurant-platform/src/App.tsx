@@ -74,6 +74,7 @@ import FeedbackRecoveryPage from "@/pages/feedback-recovery";
 import CustomerFeedbackPage from "@/pages/customer-feedback";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
+import GrowthEnginePage from "@/pages/growth-engine";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -151,6 +152,7 @@ function Router() {
       <Route path="/menu" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/menu-management" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/menu/pricing-optimizer" component={() => <RoleProtectedRoute component={PricingOptimizerPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth" component={() => <RoleProtectedRoute component={GrowthEnginePage} allow={["owner", "manager"]} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />

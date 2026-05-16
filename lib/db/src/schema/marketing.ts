@@ -66,3 +66,41 @@ export type LeadNote = typeof leadNotesTable.$inferSelect;
 export type LeadActivity = typeof leadActivityTable.$inferSelect;
 export type BlogPost = typeof blogPostsTable.$inferSelect;
 export type NewBlogPost = typeof blogPostsTable.$inferInsert;
+
+// Growth Engine — campaigns (win-back, birthday, anniversary, inactive,
+// first-order, repeat-order, festival, slow-day, item-specific, segment,
+// whatsapp-draft, sms-draft, email-draft, coupon-automation, referral,
+// review-booster, calendar, analytics, roi-report).
+// `type` is open text rather than a pg enum so we can add templates over
+// time without migrations; the UI is the source of truth for valid values.
+export const campaignsTable = pgTable("growth_campaigns", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 200 }).notNull(),
+  type: varchar("type", { length: 60 }).notNull(),
+  channel: varchar("channel", { length: 30 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  audience: jsonb("audience").$type<Record<string, unknown>>().notNull().default({}),
+  content: jsonb("content").$type<Record<string, unknown>>().notNull().default({}),
+  stats: jsonb("stats").$type<Record<string, number>>().notNull().default({}),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const campaignLogsTable = pgTable("growth_campaign_logs", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => campaignsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  event: varchar("event", { length: 40 }).notNull(),
+  actorId: integer("actor_id").references(() => usersTable.id, { onDelete: "set null" }),
+  payload: jsonb("payload").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type Campaign = typeof campaignsTable.$inferSelect;
+export type NewCampaign = typeof campaignsTable.$inferInsert;
+export type CampaignLog = typeof campaignLogsTable.$inferSelect;

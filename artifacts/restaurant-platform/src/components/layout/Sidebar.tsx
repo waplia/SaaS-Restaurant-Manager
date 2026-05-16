@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon, Upload, History,
+  Sparkles, ImageIcon, Upload, History, Megaphone,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
+  { kind: "link", href: "/growth", label: "Growth Engine", icon: Megaphone, roles: ["owner", "manager"] },
   { kind: "link", href: "/support", label: "Support", icon: LifeBuoy, roles: ["owner", "manager"] },
   {
     kind: "group", key: "delivery", label: "Delivery", icon: Truck,
