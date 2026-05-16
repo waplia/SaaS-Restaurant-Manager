@@ -39,6 +39,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"] },
   { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
+  { kind: "link", href: "/memberships", label: "Memberships", icon: Receipt, roles: ["owner", "manager", "waiter", "super_admin"] },
   { kind: "link", href: "/growth", label: "Growth Engine", icon: Megaphone, roles: ["owner", "manager"] },
   { kind: "link", href: "/marketplace", label: "Marketplace", icon: Package, roles: ["owner", "manager"] },
   { kind: "link", href: "/support", label: "Support", icon: LifeBuoy, roles: ["owner", "manager"] },

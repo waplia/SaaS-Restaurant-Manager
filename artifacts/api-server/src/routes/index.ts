@@ -76,6 +76,7 @@ import aggregatorPayoutsRouter from "./aggregator-payouts";
 import accountingRouter from "./accounting";
 import foodCourtRouter from "./food-court";
 import bakeryRouter, { bakeryPublicRouter } from "./bakery";
+import mealPlansRouter from "./meal-plans";
 
 const router: IRouter = Router();
 
@@ -171,5 +172,6 @@ router.use(aggregatorPayoutsRouter);
 router.use(accountingRouter);
 router.use(foodCourtRouter);
 router.use(bakeryRouter);
+router.use(mealPlansRouter);
 
 export default router;

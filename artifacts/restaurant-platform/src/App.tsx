@@ -105,6 +105,7 @@ import FoodCourtTokensPage from "@/pages/food-court-tokens";
 import FoodCourtSettlementsPage from "@/pages/food-court-settlements";
 import FoodCourtReportsPage from "@/pages/food-court-reports";
 import FoodCourtMyCounterPage from "@/pages/food-court-my-counter";
+import MembershipsPage from "@/pages/memberships";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -257,6 +258,7 @@ function Router() {
       <Route path="/food-court/my-counter" component={() => <ProtectedRoute component={FoodCourtMyCounterPage} />} />
       <Route path="/site/:slug" component={PublicSitePage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
+      <Route path="/memberships" component={() => <RoleProtectedRoute component={MembershipsPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
       <Route component={NotFound} />

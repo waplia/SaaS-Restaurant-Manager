@@ -16,6 +16,7 @@ import { processPendingWebhookDeliveries } from "./webhookDispatcher";
 import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./maintenance";
 import { runMonthlyAllocationSweep } from "./aiCredits";
 import { runFraudCronTick } from "./fraudDetection";
+import { processSubscriptionRenewalsAndReminders } from "../routes/meal-plans";
 import { runNightlyDemandForecastsForHour } from "./demandForecast";
 import { snapshotAllRestaurants } from "./healthScore";
 
@@ -113,6 +114,7 @@ export function startScheduler(): void {
   registerCron("daily-sales-summary", "0 23 * * *", "Emails per-restaurant daily sales summary at 23:00 IST");
   registerCron("trial-expiry", "0 0 * * *", "Notifies tenants whose trial has expired at 00:00 IST");
   registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
+  registerCron("meal_plan_billing", "0 2 * * *", "Daily 02:00 IST: charges due meal-plan subscriptions, runs dunning ladder, sends renewal reminders, expires ended subscriptions");
   registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
   registerCron("ai-monthly-allocation", "0 1 * * *", "Credits each tenant's Khana AI monthly allowance on their renewal-cycle anniversary day at 01:00 IST (idempotent per cycle)");
   registerCron("fraud-detect-fast", "5 * * * *", "Hourly fast fraud detectors (discounts, voids, KOT cancels, refunds, free items)");
@@ -382,6 +384,16 @@ export function startScheduler(): void {
       const expired = await expireDueLoyaltyPoints();
       logger.info({ expired }, "Loyalty-expiry job complete");
     }).catch(err => logger.error({ err }, "Loyalty-expiry job failed"));
+  });
+
+  trackCron("meal_plan_billing", "0 2 * * *", async () => {
+    logger.info("Running meal-plan auto-billing & reminders");
+    try {
+      const result = await processSubscriptionRenewalsAndReminders();
+      logger.info(result, "Meal-plan billing job complete");
+    } catch (err) {
+      logger.error({ err }, "Meal-plan billing job failed");
+    }
   });
 
   // Auto-reorder is per-restaurant: each tenant configures its own cron expression
