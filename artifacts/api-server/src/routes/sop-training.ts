@@ -28,6 +28,7 @@ import { requireRole } from "../middleware/authorize";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
 import { setObjectAclPolicy } from "../lib/objectAcl";
 
 const router = Router();
@@ -665,6 +666,17 @@ router.post("/sop-training/uploads/finalize", requireRole(...AUTHOR_ROLES), plan
   if (!objectPath.startsWith("/objects/")) return void res.status(400).json({ error: "Invalid objectPath" });
   try {
     const file = await objectStorage.getObjectEntityFile(objectPath);
+    try {
+      await sanitizeStoredUpload(file, {
+        allowedKinds: ["image", "pdf", "video"],
+        maxBytes: 500 * 1024 * 1024,
+      });
+    } catch (sanErr) {
+      if (sanErr instanceof UploadValidationError) {
+        return void res.status(sanErr.statusCode).json({ error: sanErr.message });
+      }
+      throw sanErr;
+    }
     await setObjectAclPolicy(file, {
       restaurantId: `tenant:${req.user?.tenantId ?? "anon"}`,
       uploaderId: req.user?.sub ? String(req.user.sub) : undefined,

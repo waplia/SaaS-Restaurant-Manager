@@ -19,6 +19,7 @@ import {
   type TicketEventType,
 } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
+import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
 import {
   computeSlaInfo,
   getCategoryById,
@@ -433,6 +434,18 @@ router.post("/support/tickets/uploads/finalize", requireRole("owner", "manager",
   if (!objectPath.startsWith("/objects/")) return void res.status(400).json({ error: "Invalid objectPath" });
   try {
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const settings = await getSlaSettings();
+    try {
+      await sanitizeStoredUpload(objectFile, {
+        allowedKinds: ["image", "pdf"],
+        maxBytes: settings.maxAttachmentMb * 1024 * 1024,
+      });
+    } catch (sanErr) {
+      if (sanErr instanceof UploadValidationError) {
+        return void res.status(sanErr.statusCode).json({ error: sanErr.message });
+      }
+      throw sanErr;
+    }
     const existing = await getObjectAclPolicy(objectFile);
     if (!existing) {
       // Tag with a synthetic "support:<tenantId>" owner so later support reads can authorize.

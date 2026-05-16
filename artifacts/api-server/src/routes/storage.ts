@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
+import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requireRole } from "../middleware/authorize";
 
@@ -78,6 +79,18 @@ router.post(
         res.status(403).json({ error: "Object already owned by another tenant" });
         return;
       }
+      try {
+        await sanitizeStoredUpload(objectFile, {
+          allowedKinds: ["image", "pdf"],
+          maxBytes: 10 * 1024 * 1024,
+        });
+      } catch (sanErr) {
+        if (sanErr instanceof UploadValidationError) {
+          res.status(sanErr.statusCode).json({ error: sanErr.message });
+          return;
+        }
+        throw sanErr;
+      }
       await setObjectAclPolicy(objectFile, {
         restaurantId: String(restaurantId),
         uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
@@ -121,6 +134,18 @@ router.post(
       if (existing && existing.restaurantId !== String(restaurantId)) {
         res.status(403).json({ error: "Object already owned by another tenant" });
         return;
+      }
+      try {
+        await sanitizeStoredUpload(objectFile, {
+          allowedKinds: ["image"],
+          maxBytes: 10 * 1024 * 1024,
+        });
+      } catch (sanErr) {
+        if (sanErr instanceof UploadValidationError) {
+          res.status(sanErr.statusCode).json({ error: sanErr.message });
+          return;
+        }
+        throw sanErr;
       }
       await setObjectAclPolicy(objectFile, {
         restaurantId: String(restaurantId),

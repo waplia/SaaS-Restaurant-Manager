@@ -5,6 +5,7 @@ import { requireSuperAdmin } from "../middleware/authorize";
 import { getAppSettings, updateAppSettings, toPublicAppSettings } from "../lib/appSettings";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { setObjectAclPolicy } from "../lib/objectAcl";
+import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
@@ -21,9 +22,13 @@ const ASSET_URL_OPTIONAL = z
   .nullish();
 const PHONE_RE = /^\+[1-9]\d{6,14}(?:[\s-]?\d{1,6})?$/; // E.164-ish, allows one space/dash group
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
+// Only raster images that the server can fully decode + re-encode. SVG and
+// ICO are intentionally rejected because they cannot be safely re-encoded —
+// SVG can carry scripts (XSS), and ICO is a multi-image container that
+// browsers handle inconsistently. PNG/JPEG/WebP cover every favicon and
+// logo use case after server-side conversion.
 const ALLOWED_UPLOAD_MIME = new Set([
-  "image/png", "image/jpeg", "image/webp", "image/svg+xml",
-  "image/x-icon", "image/vnd.microsoft.icon",
+  "image/png", "image/jpeg", "image/webp",
 ]);
 const phoneSchema = z.string().trim().regex(PHONE_RE, "Phone must include country code, e.g. +91 9876543210").max(40);
 
@@ -152,29 +157,30 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
   }
   try {
     const file = await objectStorageService.getObjectEntityFile(objectPath);
-    const [meta] = await file.getMetadata();
-    const size = Number(meta.size ?? 0);
-    const contentType = String(meta.contentType ?? "").toLowerCase();
-    if (size === 0) {
-      res.status(400).json({ error: "Uploaded file is empty" });
-      return;
+    let result;
+    try {
+      result = await sanitizeStoredUpload(file, {
+        allowedKinds: ["image"],
+        maxBytes: MAX_UPLOAD_BYTES,
+      });
+    } catch (sanErr) {
+      if (sanErr instanceof UploadValidationError) {
+        res.status(sanErr.statusCode).json({ error: sanErr.message });
+        return;
+      }
+      throw sanErr;
     }
-    if (size > MAX_UPLOAD_BYTES) {
-      await file.delete().catch(() => undefined);
-      res.status(413).json({ error: `File too large. Max ${MAX_UPLOAD_BYTES} bytes.` });
-      return;
-    }
-    if (!ALLOWED_UPLOAD_MIME.has(contentType)) {
+    if (!ALLOWED_UPLOAD_MIME.has(result.mime)) {
       await file.delete().catch(() => undefined);
       res.status(415).json({
-        error: `Unsupported file type "${contentType}". Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}`,
+        error: `Unsupported file type "${result.mime}". Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}`,
       });
       return;
     }
     await setObjectAclPolicy(file, { owner: "system:app-settings", visibility: "public" });
     const wildcardPath = objectPath.replace(/^\/objects\//, "");
     const publicUrl = `/api/public/storage/objects/${wildcardPath}`;
-    res.json({ objectPath, publicUrl, contentType, size });
+    res.json({ objectPath, publicUrl, contentType: result.mime, size: result.size });
   } catch (err) {
     res.status(500).json({ error: "Failed to finalize upload", message: (err as Error).message });
   }
