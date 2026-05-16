@@ -20,7 +20,7 @@ const ALL_SECTIONS = new Set([
   "general", "app", "shifts", "open-close", "branch", "currencies",
   "email", "taxes", "payment", "theme", "roles", "billing",
   "reservation", "about-us", "customer-site", "receipt", "printer",
-  "downloads", "menu-image", "delivery", "allergens", "kot",
+  "downloads", "menu-image", "menu-nutrition", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "kitchen-delay",
 ]);

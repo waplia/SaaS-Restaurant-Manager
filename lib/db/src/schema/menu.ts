@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -45,6 +45,16 @@ export const menuItemsTable = pgTable("menu_items", {
   isAvailable: boolean("is_available").notNull().default(true),
   preparationTime: integer("preparation_time").default(15),
   calories: integer("calories"),
+  proteinG: decimal("protein_g", { precision: 6, scale: 2 }),
+  fatG: decimal("fat_g", { precision: 6, scale: 2 }),
+  carbsG: decimal("carbs_g", { precision: 6, scale: 2 }),
+  containsDairy: boolean("contains_dairy"),
+  containsNuts: boolean("contains_nuts"),
+  containsGluten: boolean("contains_gluten"),
+  isVegan: boolean("is_vegan"),
+  isJain: boolean("is_jain"),
+  spicyLevel: integer("spicy_level"),
+  nutritionAiMeta: jsonb("nutrition_ai_meta"),
   sortOrder: integer("sort_order").notNull().default(0),
   tags: text("tags").array().default([]),
   allergens: text("allergens").array().default([]),

@@ -375,6 +375,15 @@ export interface MenuItem {
   allergens: string[] | null;
   sortOrder: number;
   kitchenId: number | null;
+  proteinG?: string | null;
+  fatG?: string | null;
+  carbsG?: string | null;
+  containsDairy?: boolean | null;
+  containsNuts?: boolean | null;
+  containsGluten?: boolean | null;
+  isVegan?: boolean | null;
+  isJain?: boolean | null;
+  spicyLevel?: number | null;
 }
 
 export interface CreateMenuItemInput {

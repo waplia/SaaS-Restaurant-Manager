@@ -42,6 +42,18 @@ interface PublicModifierGroup {
   modifiers: PublicModifier[];
 }
 
+interface PublicMenuNutrition {
+  proteinG: number | null;
+  fatG: number | null;
+  carbsG: number | null;
+  containsDairy: boolean | null;
+  containsNuts: boolean | null;
+  containsGluten: boolean | null;
+  isVegan: boolean | null;
+  isJain: boolean | null;
+  spicyLevel: number | null;
+}
+
 interface PublicMenuItem {
   id: number;
   name: string;
@@ -49,8 +61,12 @@ interface PublicMenuItem {
   price: string;
   imageUrl: string | null;
   isAvailable: boolean;
+  isVeg?: boolean;
   calories: number | null;
   prepTime: number | null;
+  tags?: string[] | null;
+  allergens?: string[] | null;
+  nutrition?: PublicMenuNutrition;
   modifierGroups: PublicModifierGroup[];
 }
 
@@ -75,6 +91,7 @@ interface PublicMenu {
   currency: string;
   menuBannerUrl?: string | null;
   menuImageConfig?: MenuImageConfig;
+  showNutritionOnQrMenu?: boolean;
   categories: PublicMenuCategory[];
 }
 
@@ -183,6 +200,9 @@ export default function CustomerMenuPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
+  const [dietFilters, setDietFilters] = useState<{ vegan: boolean; jain: boolean; noDairy: boolean; noNuts: boolean; noGluten: boolean; spicyMax: number | null }>({
+    vegan: false, jain: false, noDairy: false, noNuts: false, noGluten: false, spicyMax: null,
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
 
@@ -874,12 +894,77 @@ export default function CustomerMenuPage() {
         </div>
       </div>
 
+      {menu.showNutritionOnQrMenu && (
+        <div className="px-4 pt-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            {([
+              ["vegan", "Vegan"],
+              ["jain", "Jain"],
+              ["noDairy", "No dairy"],
+              ["noNuts", "No nuts"],
+              ["noGluten", "Gluten-free"],
+            ] as const).map(([key, label]) => {
+              const active = dietFilters[key];
+              return (
+                <button
+                  key={key}
+                  onClick={() => setDietFilters(p => ({ ...p, [key]: !p[key] }))}
+                  className={cn(
+                    "text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap border transition",
+                    active ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-600 border-gray-200",
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            {([["1", "Mild only"], ["2", "≤ Medium"]] as const).map(([val, label]) => {
+              const n = Number(val);
+              const active = dietFilters.spicyMax === n;
+              return (
+                <button
+                  key={val}
+                  onClick={() => setDietFilters(p => ({ ...p, spicyMax: active ? null : n }))}
+                  className={cn(
+                    "text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap border transition",
+                    active ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-600 border-gray-200",
+                  )}
+                >
+                  🌶 {label}
+                </button>
+              );
+            })}
+            {(dietFilters.vegan || dietFilters.jain || dietFilters.noDairy || dietFilters.noNuts || dietFilters.noGluten || dietFilters.spicyMax != null) && (
+              <button
+                onClick={() => setDietFilters({ vegan: false, jain: false, noDairy: false, noNuts: false, noGluten: false, spicyMax: null })}
+                className="text-[11px] font-medium px-2 py-1.5 text-gray-400 underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="px-4 pt-4 pb-32 space-y-6">
-        {menu.categories.map(cat => (
+        {menu.categories.map(cat => {
+          const visibleItems = cat.items.filter(item => {
+            const n = item.nutrition;
+            if (dietFilters.vegan && !(n?.isVegan === true)) return false;
+            if (dietFilters.jain && !(n?.isJain === true)) return false;
+            if (dietFilters.noDairy && n?.containsDairy === true) return false;
+            if (dietFilters.noNuts && n?.containsNuts === true) return false;
+            if (dietFilters.noGluten && n?.containsGluten === true) return false;
+            if (dietFilters.spicyMax != null && n?.spicyLevel != null && n.spicyLevel > dietFilters.spicyMax) return false;
+            return true;
+          });
+          const anyFilter = dietFilters.vegan || dietFilters.jain || dietFilters.noDairy || dietFilters.noNuts || dietFilters.noGluten || dietFilters.spicyMax != null;
+          if (anyFilter && visibleItems.length === 0) return null;
+          return (
           <div key={cat.id} ref={el => { categoryRefs.current[cat.id] = el; }}>
             <h2 className="text-base font-bold text-gray-900 mb-3">{cat.name}</h2>
             <div className="space-y-3">
-              {cat.items.map(item => {
+              {visibleItems.map(item => {
                 const cartCount = cart.filter(c => c.menuItemId === item.id).reduce((s, c) => s + c.quantity, 0);
                 const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
                 return (
@@ -901,8 +986,24 @@ export default function CustomerMenuPage() {
                       <div>
                         <p className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</p>
                         {item.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>}
-                        <div className="flex gap-2 mt-0.5">
-                          {item.calories && <p className="text-xs text-gray-400">{item.calories} cal</p>}
+                        <div className="flex gap-2 mt-0.5 flex-wrap items-center">
+                          {menu.showNutritionOnQrMenu && item.calories != null && item.nutrition && (item.nutrition.proteinG != null || item.nutrition.fatG != null || item.nutrition.carbsG != null) ? (
+                            <p className="text-[10px] text-gray-400">
+                              {item.calories} kcal
+                              {item.nutrition.proteinG != null && ` · P${item.nutrition.proteinG}`}
+                              {item.nutrition.fatG != null && ` · F${item.nutrition.fatG}`}
+                              {item.nutrition.carbsG != null && ` · C${item.nutrition.carbsG}`}
+                            </p>
+                          ) : (item.calories && <p className="text-xs text-gray-400">{item.calories} cal</p>)}
+                          {menu.showNutritionOnQrMenu && item.nutrition?.spicyLevel != null && item.nutrition.spicyLevel > 0 && (
+                            <span className="text-[10px] text-red-500">{"🌶".repeat(item.nutrition.spicyLevel)}</span>
+                          )}
+                          {menu.showNutritionOnQrMenu && item.nutrition?.isVegan && (
+                            <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Vegan</span>
+                          )}
+                          {menu.showNutritionOnQrMenu && item.nutrition?.isJain && (
+                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">Jain</span>
+                          )}
                           {hasModifiers && <p className="text-xs text-orange-400">Customizable</p>}
                         </div>
                       </div>
@@ -922,10 +1023,11 @@ export default function CustomerMenuPage() {
                   </div>
                 );
               })}
-              {cat.items.length === 0 && <p className="text-sm text-gray-400 py-2">No items available in this category.</p>}
+              {visibleItems.length === 0 && <p className="text-sm text-gray-400 py-2">No items match the current filters.</p>}
             </div>
           </div>
-        ))}
+          );
+        })}
         {menu.categories.length === 0 && (
           <div className="text-center py-20"><p className="text-gray-400">No menu items available.</p></div>
         )}
@@ -1021,7 +1123,44 @@ export default function CustomerMenuPage() {
                 <span className="text-lg font-bold text-orange-500 ml-3">{currSymbol}{Number(selectedItem.price).toFixed(2)}</span>
               </div>
               {selectedItem.description && <p className="text-sm text-gray-500 mb-3">{selectedItem.description}</p>}
-              {selectedItem.calories && <p className="text-xs text-gray-400 mb-4">{selectedItem.calories} cal{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
+              {selectedItem.calories && <p className="text-xs text-gray-400 mb-2">{selectedItem.calories} cal{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
+              {menu.showNutritionOnQrMenu && selectedItem.nutrition && (
+                <div className="mb-4 space-y-2">
+                  {(selectedItem.nutrition.proteinG != null || selectedItem.nutrition.fatG != null || selectedItem.nutrition.carbsG != null) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedItem.nutrition.proteinG != null && (
+                        <div className="bg-gray-50 rounded-lg px-2 py-1.5 text-center">
+                          <p className="text-[10px] uppercase text-gray-400">Protein</p>
+                          <p className="text-xs font-bold text-gray-700">{selectedItem.nutrition.proteinG}g</p>
+                        </div>
+                      )}
+                      {selectedItem.nutrition.fatG != null && (
+                        <div className="bg-gray-50 rounded-lg px-2 py-1.5 text-center">
+                          <p className="text-[10px] uppercase text-gray-400">Fat</p>
+                          <p className="text-xs font-bold text-gray-700">{selectedItem.nutrition.fatG}g</p>
+                        </div>
+                      )}
+                      {selectedItem.nutrition.carbsG != null && (
+                        <div className="bg-gray-50 rounded-lg px-2 py-1.5 text-center">
+                          <p className="text-[10px] uppercase text-gray-400">Carbs</p>
+                          <p className="text-xs font-bold text-gray-700">{selectedItem.nutrition.carbsG}g</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedItem.nutrition.isVegan && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Vegan</span>}
+                    {selectedItem.nutrition.isJain && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Jain</span>}
+                    {selectedItem.nutrition.spicyLevel != null && selectedItem.nutrition.spicyLevel > 0 && (
+                      <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">Spicy {selectedItem.nutrition.spicyLevel}/3</span>
+                    )}
+                    {selectedItem.nutrition.containsDairy && <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">Contains dairy</span>}
+                    {selectedItem.nutrition.containsNuts && <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">Contains nuts</span>}
+                    {selectedItem.nutrition.containsGluten && <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">Contains gluten</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-400 italic">Estimated values — please ask staff if you have a serious allergy.</p>
+                </div>
+              )}
 
               {selectedItem.modifierGroups.map(group => (
                 <div key={group.id} className="mb-4">

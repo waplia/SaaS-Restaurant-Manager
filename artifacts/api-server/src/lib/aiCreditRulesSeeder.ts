@@ -127,6 +127,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "ai_nutrition",
+    featureLabel: "AI Nutrition & Allergens",
+    description: "Estimate calories/protein/fat/carbs, allergen flags (dairy/nuts/gluten), dietary tags (vegan/jain) and spicy level for a single dish.",
+    creditsPerUnit: "1",
+    minCharge: 1,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

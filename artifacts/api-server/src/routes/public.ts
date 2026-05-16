@@ -65,7 +65,42 @@ router.get("/public/menu/:slug", async (req, res) => {
     showInCustomerMenu: imageSettings.showInCustomerMenu !== false,
   };
 
-  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, categories: [] });
+  const [nutritionSettingRow] = await db.select().from(restaurantSettingsTable).where(and(eq(restaurantSettingsTable.restaurantId, restaurant.id), eq(restaurantSettingsTable.section, "menu-nutrition")));
+  const nutritionSettings = (nutritionSettingRow?.data as Record<string, unknown> | undefined) ?? {};
+  const showNutritionOnQrMenu = nutritionSettings.showNutritionOnQrMenu === true;
+
+  const projectItem = (item: typeof menuItemsTable.$inferSelect) => {
+    const base = {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      imageUrl: item.imageUrl,
+      isAvailable: item.isAvailable,
+      isVeg: item.isVeg,
+      calories: item.calories,
+      prepTime: item.preparationTime,
+      tags: item.tags ?? [],
+      allergens: item.allergens ?? [],
+    };
+    if (!showNutritionOnQrMenu) return base;
+    return {
+      ...base,
+      nutrition: {
+        proteinG: item.proteinG != null ? Number(item.proteinG) : null,
+        fatG: item.fatG != null ? Number(item.fatG) : null,
+        carbsG: item.carbsG != null ? Number(item.carbsG) : null,
+        containsDairy: item.containsDairy,
+        containsNuts: item.containsNuts,
+        containsGluten: item.containsGluten,
+        isVegan: item.isVegan,
+        isJain: item.isJain,
+        spicyLevel: item.spicyLevel,
+      },
+    };
+  };
+
+  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, showNutritionOnQrMenu, categories: [] });
 
   const categories = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
   const enriched = await Promise.all(categories.map(async (cat) => {
@@ -76,7 +111,7 @@ router.get("/public/menu/:slug", async (req, res) => {
         const mods = await db.select().from(modifiersTable).where(and(eq(modifiersTable.groupId, g.id), eq(modifiersTable.isAvailable, true)));
         return { ...g, modifiers: mods };
       }));
-      return { ...item, modifierGroups: groupsWithMods };
+      return { ...projectItem(item), modifierGroups: groupsWithMods };
     }));
     return { ...cat, items: itemsWithMods };
   }));
@@ -88,6 +123,7 @@ router.get("/public/menu/:slug", async (req, res) => {
     logoUrl: restaurant.logoUrl,
     currency: restaurant.currency,
     menuImageConfig,
+    showNutritionOnQrMenu,
     menuBannerUrl: menu.imageUrl ?? null,
     categories: enriched,
   });

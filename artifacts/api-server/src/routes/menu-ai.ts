@@ -16,7 +16,7 @@ import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { AIProviderService } from "../lib/aiProviderService";
-import { requireAiCredits, commitReservation, refundReservation, type AiCreditReservation } from "../lib/aiCredits";
+import { requireAiCredits, reserveCredits, commitReservation, refundReservation, type AiCreditReservation } from "../lib/aiCredits";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { setObjectAclPolicy } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
@@ -32,6 +32,12 @@ router.use(
 );
 router.use(
   "/restaurants/:restaurantId/items/:itemId/ai-drafts",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  requirePlanFeature("khana_ai_enabled"),
+);
+router.use(
+  "/restaurants/:restaurantId/items/ai-nutrition-bulk",
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("khana_ai_enabled"),
@@ -277,6 +283,255 @@ router.post(
   },
 );
 
+type NutritionDraftPayload = {
+  calories: number | null;
+  proteinG: number | null;
+  fatG: number | null;
+  carbsG: number | null;
+  containsDairy: boolean | null;
+  containsNuts: boolean | null;
+  containsGluten: boolean | null;
+  isVegan: boolean | null;
+  isJain: boolean | null;
+  spicyLevel: number | null;
+  notes: string | null;
+};
+
+const NUTRITION_PROMPT_FIELDS = `{
+  "calories": "integer kcal per serving (typical restaurant portion), or null if unsure",
+  "proteinG": "grams of protein per serving (number), or null",
+  "fatG": "grams of fat per serving (number), or null",
+  "carbsG": "grams of carbohydrates per serving (number), or null",
+  "containsDairy": "true | false — does this typically contain dairy (milk, cream, butter, cheese, ghee, yoghurt)",
+  "containsNuts": "true | false — does this typically contain tree nuts or peanuts",
+  "containsGluten": "true | false — does this typically contain gluten (wheat, barley, rye)",
+  "isVegan": "true | false — strictly vegan (no dairy, eggs, honey, animal products)",
+  "isJain": "true | false — Jain-friendly (no onion, garlic, root vegetables, plus vegetarian)",
+  "spicyLevel": "integer 0-3 (0 = not spicy, 1 = mild, 2 = medium, 3 = hot)",
+  "notes": "1-sentence caveat for the owner, e.g. 'estimate assumes ghee — swap to oil for vegan'"
+}`;
+
+function buildNutritionPrompt(name: string, category: string | null, isVeg: boolean, description: string | null): string {
+  const dietHint = isVeg ? "vegetarian" : "non-vegetarian (may contain meat, seafood or eggs)";
+  return `You are a food scientist helping a restaurant fill in nutrition + allergen data for a dish.
+
+Dish name: ${name}
+Category: ${category ?? "Uncategorised"}
+Diet hint: ${dietHint}
+${description ? `Description: ${description}\n` : ""}
+Estimate values for a single typical restaurant serving. Be conservative — when unsure about an allergen, set it to true (safer to over-flag than under-flag). Round grams to whole numbers.
+
+Return ONLY a JSON object with these fields:
+${NUTRITION_PROMPT_FIELDS}
+
+Rules: respond with JSON only, no prose, no markdown fence.`;
+}
+
+function parseNutritionResponse(data: Record<string, unknown>): NutritionDraftPayload {
+  const num = (v: unknown): number | null => {
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const bool = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
+  const spicy = num(data.spicyLevel);
+  return {
+    calories: num(data.calories) != null ? Math.round(num(data.calories)!) : null,
+    proteinG: num(data.proteinG),
+    fatG: num(data.fatG),
+    carbsG: num(data.carbsG),
+    containsDairy: bool(data.containsDairy),
+    containsNuts: bool(data.containsNuts),
+    containsGluten: bool(data.containsGluten),
+    isVegan: bool(data.isVegan),
+    isJain: bool(data.isJain),
+    spicyLevel: spicy != null ? Math.max(0, Math.min(3, Math.round(spicy))) : null,
+    notes: typeof data.notes === "string" && data.notes.trim() ? data.notes.trim().slice(0, 240) : null,
+  };
+}
+
+async function generateNutritionForItem(
+  restaurantId: number,
+  itemId: number,
+  userId: number | null,
+  tenantId: number | null,
+  metaExtra: Record<string, unknown> = {},
+): Promise<{ payload: NutritionDraftPayload; requestLogId: number | null } | { error: string }> {
+  const [item] = await db
+    .select({
+      id: menuItemsTable.id,
+      name: menuItemsTable.name,
+      isVeg: menuItemsTable.isVeg,
+      description: menuItemsTable.description,
+      categoryName: menuCategoriesTable.name,
+    })
+    .from(menuItemsTable)
+    .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
+    .where(and(eq(menuItemsTable.id, itemId), eq(menuItemsTable.restaurantId, restaurantId)));
+  if (!item) return { error: "Item not found" };
+
+  const prompt = buildNutritionPrompt(item.name, item.categoryName, !!item.isVeg, item.description);
+  const { data, result } = await AIProviderService.generateJson<Record<string, unknown>>({
+    featureSlug: "ai_nutrition",
+    tenantId,
+    restaurantId,
+    userId,
+    metadata: { itemId, ...metaExtra },
+  }, {
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.2,
+    maxTokens: 500,
+  });
+  return { payload: parseNutritionResponse(data), requestLogId: result.requestLogId ?? null };
+}
+
+router.post(
+  "/restaurants/:restaurantId/items/:itemId/ai-nutrition",
+  requireAiCredits("ai_nutrition", () => ({ units: 1 })),
+  async (req: Request, res: Response) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const itemId = Number(req.params.itemId);
+    const reservation = res.locals.aiCreditReservation as AiCreditReservation | null;
+
+    try {
+      const out = await generateNutritionForItem(
+        restaurantId,
+        itemId,
+        req.user?.sub ?? null,
+        req.user?.tenantId ?? null,
+      );
+      if ("error" in out) {
+        if (reservation) await refundReservation(reservation, out.error);
+        return void res.status(404).json({ error: out.error });
+      }
+
+      const [draft] = await db
+        .insert(menuItemAiDraftsTable)
+        .values({ menuItemId: itemId, restaurantId, kind: "nutrition", payload: out.payload })
+        .returning();
+      await trimDrafts(itemId, "nutrition");
+
+      if (reservation) await commitReservation({
+        reservation,
+        userId: req.user?.sub ?? null,
+        requestLogId: out.requestLogId,
+      });
+      await recordAuditLog({
+        req,
+        module: "khana_ai",
+        action: "ai_nutrition.generate",
+        entity: "menu_item",
+        entityId: itemId,
+        newValue: { draftId: draft?.id, requestLogId: out.requestLogId },
+      });
+
+      res.json({ draft, payload: out.payload });
+    } catch (error) {
+      if (reservation) await refundReservation(reservation, (error as Error).message ?? "provider error");
+      req.log.error({ err: error }, "AI nutrition generation failed");
+      await recordAuditLog({
+        req,
+        module: "khana_ai",
+        action: "ai_nutrition.generate_failed",
+        entity: "menu_item",
+        entityId: itemId,
+        newValue: { error: (error as Error).message ?? "provider error" },
+      });
+      res.status(502).json({ error: "Failed to generate nutrition" });
+    }
+  },
+);
+
+// Bulk generation. Reserves + commits credits PER ITEM so the wallet only
+// gets charged for items that actually succeed. The middleware does cap +
+// plan checks once with units=0, then we hand-roll per-item reservations
+// inside the handler — keeping the credit ledger contract clean (no forged
+// reservation casts, no partial-commit hacks).
+router.post(
+  "/restaurants/:restaurantId/items/ai-nutrition-bulk",
+  requireAiCredits("ai_nutrition", () => ({ units: 0 })),
+  async (req: Request, res: Response) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const tenantId = req.user?.tenantId ?? null;
+    const itemIds = Array.isArray((req.body as { itemIds?: unknown[] })?.itemIds)
+      ? (req.body as { itemIds: unknown[] }).itemIds.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (itemIds.length === 0) {
+      return void res.status(400).json({ error: "itemIds is required" });
+    }
+    if (itemIds.length > 50) {
+      return void res.status(400).json({ error: "Max 50 items per bulk request" });
+    }
+
+    type RowResult = { itemId: number; status: "ok" | "error"; draftId?: number; payload?: NutritionDraftPayload; error?: string };
+    const results: RowResult[] = [];
+    let successCount = 0;
+    let chargedCredits = 0;
+
+    for (const itemId of itemIds) {
+      let perItemReservation: AiCreditReservation | null = null;
+      // Per-item reservation: 1 credit each. Super-admins skip wallets.
+      if (tenantId && !req.user?.isSuperAdmin) {
+        try {
+          perItemReservation = await reserveCredits({
+            tenantId,
+            featureSlug: "ai_nutrition",
+            credits: 1,
+            meta: { itemId, bulk: true },
+          });
+        } catch (err) {
+          const e = err as { code?: string };
+          results.push({ itemId, status: "error", error: e.code === "INSUFFICIENT_CREDITS" ? "Out of credits" : "Reservation failed" });
+          continue;
+        }
+      }
+      try {
+        const out = await generateNutritionForItem(
+          restaurantId,
+          itemId,
+          req.user?.sub ?? null,
+          tenantId,
+          { bulk: true },
+        );
+        if ("error" in out) {
+          if (perItemReservation) await refundReservation(perItemReservation, out.error);
+          results.push({ itemId, status: "error", error: out.error });
+          continue;
+        }
+        const [draft] = await db
+          .insert(menuItemAiDraftsTable)
+          .values({ menuItemId: itemId, restaurantId, kind: "nutrition", payload: out.payload })
+          .returning();
+        await trimDrafts(itemId, "nutrition");
+        if (perItemReservation) {
+          await commitReservation({
+            reservation: perItemReservation,
+            userId: req.user?.sub ?? null,
+            requestLogId: out.requestLogId,
+          });
+          chargedCredits += perItemReservation.reservedCredits;
+        }
+        successCount++;
+        results.push({ itemId, status: "ok", draftId: draft?.id, payload: out.payload });
+      } catch (e) {
+        if (perItemReservation) await refundReservation(perItemReservation, (e as Error).message ?? "provider error");
+        results.push({ itemId, status: "error", error: (e as Error).message ?? "provider error" });
+      }
+    }
+
+    await recordAuditLog({
+      req,
+      module: "khana_ai",
+      action: "ai_nutrition.bulk_generate",
+      entity: "menu_items",
+      entityId: null,
+      newValue: { restaurantId, attempted: itemIds.length, succeeded: successCount, chargedCredits },
+    });
+
+    res.json({ results, summary: { attempted: itemIds.length, succeeded: successCount, failed: itemIds.length - successCount, chargedCredits } });
+  },
+);
+
 router.get(
   "/restaurants/:restaurantId/items/:itemId/ai-drafts",
   async (req: Request, res: Response) => {
@@ -293,7 +548,8 @@ router.get(
 
     const description = rows.filter((r) => r.kind === "description").slice(0, 3);
     const photo = rows.filter((r) => r.kind === "photo").slice(0, 3);
-    res.json({ description, photo });
+    const nutrition = rows.filter((r) => r.kind === "nutrition").slice(0, 3);
+    res.json({ description, photo, nutrition });
   },
 );
 

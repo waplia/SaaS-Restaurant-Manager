@@ -139,12 +139,29 @@ router.get("/restaurants/:restaurantId/items/:id", async (req, res) => {
 });
 
 router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, kitchenId, tags, allergens } = req.body;
+  const {
+    name, description, price, imageUrl, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, kitchenId, tags, allergens,
+    proteinG, fatG, carbsG, containsDairy, containsNuts, containsGluten, isVegan, isJain, spicyLevel, nutritionAiMeta,
+  } = req.body as Record<string, unknown>;
   const updates: Record<string, unknown> = { name, description, price, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() };
   if (tags !== undefined) updates.tags = tags;
   if (allergens !== undefined) updates.allergens = allergens;
   if (imageUrl !== undefined) updates.imageUrl = imageUrl === "" ? null : imageUrl;
   if (kitchenId !== undefined) updates.kitchenId = kitchenId === "" ? null : kitchenId;
+  const decOrNull = (v: unknown) => (v === "" || v == null ? null : String(Number(v)));
+  if (proteinG !== undefined) updates.proteinG = decOrNull(proteinG);
+  if (fatG !== undefined) updates.fatG = decOrNull(fatG);
+  if (carbsG !== undefined) updates.carbsG = decOrNull(carbsG);
+  if (containsDairy !== undefined) updates.containsDairy = containsDairy === null ? null : !!containsDairy;
+  if (containsNuts !== undefined) updates.containsNuts = containsNuts === null ? null : !!containsNuts;
+  if (containsGluten !== undefined) updates.containsGluten = containsGluten === null ? null : !!containsGluten;
+  if (isVegan !== undefined) updates.isVegan = isVegan === null ? null : !!isVegan;
+  if (isJain !== undefined) updates.isJain = isJain === null ? null : !!isJain;
+  if (spicyLevel !== undefined) {
+    const n = spicyLevel === null || spicyLevel === "" ? null : Math.max(0, Math.min(3, Math.round(Number(spicyLevel))));
+    updates.spicyLevel = n;
+  }
+  if (nutritionAiMeta !== undefined) updates.nutritionAiMeta = nutritionAiMeta;
   const [updated] = await db.update(menuItemsTable).set(updates).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
   res.json(updated);
@@ -158,6 +175,9 @@ router.delete("/restaurants/:restaurantId/items/:id", requireRole("owner", "mana
 const EXPORT_HEADERS = [
   "SKU", "Menu", "Category", "Name", "Description", "Price", "Tax Rate",
   "Veg", "Available", "Prep Time", "Calories", "Tags", "Allergens", "Image URL",
+  "Protein (g)", "Fat (g)", "Carbs (g)",
+  "Contains Dairy", "Contains Nuts", "Contains Gluten",
+  "Vegan", "Jain", "Spicy Level",
 ] as const;
 
 router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "manager", "super_admin"), async (req, res) => {
@@ -186,6 +206,15 @@ router.get("/restaurants/:restaurantId/items/export.csv", requireRole("owner", "
       Array.isArray(item.tags) ? (item.tags as string[]).join(";") : "",
       Array.isArray(item.allergens) ? (item.allergens as string[]).join(";") : "",
       item.imageUrl ?? "",
+      item.proteinG ?? "",
+      item.fatG ?? "",
+      item.carbsG ?? "",
+      item.containsDairy == null ? "" : (item.containsDairy ? "Yes" : "No"),
+      item.containsNuts == null ? "" : (item.containsNuts ? "Yes" : "No"),
+      item.containsGluten == null ? "" : (item.containsGluten ? "Yes" : "No"),
+      item.isVegan == null ? "" : (item.isVegan ? "Yes" : "No"),
+      item.isJain == null ? "" : (item.isJain ? "Yes" : "No"),
+      item.spicyLevel == null ? "" : String(item.spicyLevel),
     ].map(escape).join(",");
   });
 
@@ -229,8 +258,19 @@ function csvToImportRows(text: string): ImportRowInput[] {
     veg: idx("Veg"), available: idx("Available"), prep: idx("Prep Time"),
     calories: idx("Calories"), tags: idx("Tags"), allergens: idx("Allergens"),
     imageUrl: idx("Image URL"),
+    protein: idx("Protein (g)"), fat: idx("Fat (g)"), carbs: idx("Carbs (g)"),
+    dairy: idx("Contains Dairy"), nuts: idx("Contains Nuts"), gluten: idx("Contains Gluten"),
+    vegan: idx("Vegan"), jain: idx("Jain"), spicy: idx("Spicy Level"),
   };
   const get = (cols: string[], k: number) => (k >= 0 ? (cols[k] ?? "").trim() : "");
+  const num = (s: string): number | null => (s === "" ? null : (Number.isFinite(Number(s)) ? Number(s) : null));
+  const tri = (s: string): boolean | null => {
+    const v = s.trim().toLowerCase();
+    if (v === "") return null;
+    if (v === "yes" || v === "true" || v === "1") return true;
+    if (v === "no" || v === "false" || v === "0") return false;
+    return null;
+  };
   return rows.slice(1).map(cols => ({
     sku: get(cols, i.sku) || null,
     name: get(cols, i.name),
@@ -246,6 +286,15 @@ function csvToImportRows(text: string): ImportRowInput[] {
     tags: get(cols, i.tags) ? get(cols, i.tags).split(";").map(s => s.trim()).filter(Boolean) : [],
     allergens: get(cols, i.allergens) ? get(cols, i.allergens).split(";").map(s => s.trim()).filter(Boolean) : [],
     imageUrl: get(cols, i.imageUrl) || null,
+    proteinG: num(get(cols, i.protein)),
+    fatG: num(get(cols, i.fat)),
+    carbsG: num(get(cols, i.carbs)),
+    containsDairy: tri(get(cols, i.dairy)),
+    containsNuts: tri(get(cols, i.nuts)),
+    containsGluten: tri(get(cols, i.gluten)),
+    isVegan: tri(get(cols, i.vegan)),
+    isJain: tri(get(cols, i.jain)),
+    spicyLevel: get(cols, i.spicy) === "" ? null : Math.max(0, Math.min(3, Math.round(Number(get(cols, i.spicy))))),
   }));
 }
 
@@ -264,6 +313,15 @@ type ImportRowInput = {
   tags?: string[] | null;
   allergens?: string[] | null;
   imageUrl?: string | null;
+  proteinG?: number | string | null;
+  fatG?: number | string | null;
+  carbsG?: number | string | null;
+  containsDairy?: boolean | null;
+  containsNuts?: boolean | null;
+  containsGluten?: boolean | null;
+  isVegan?: boolean | null;
+  isJain?: boolean | null;
+  spicyLevel?: number | string | null;
 };
 
 type ImportRowResult = {
@@ -409,6 +467,15 @@ router.post(
 
     if (errors.length) continue;
 
+    const dec = (v: unknown): string | null => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n.toFixed(2) : null;
+    };
+    const triBool = (v: unknown): boolean | null => (v === null || v === undefined ? null : !!v);
+    const spicy = r.spicyLevel == null || r.spicyLevel === "" ? null
+      : Math.max(0, Math.min(3, Math.round(Number(r.spicyLevel))));
+
     const baseValues = {
       restaurantId,
       sku: sku || null,
@@ -423,6 +490,15 @@ router.post(
       tags: Array.isArray(r.tags) ? r.tags.filter(Boolean) : [],
       allergens: Array.isArray(r.allergens) ? r.allergens.filter(Boolean) : [],
       imageUrl: r.imageUrl ? String(r.imageUrl) : null,
+      proteinG: dec(r.proteinG),
+      fatG: dec(r.fatG),
+      carbsG: dec(r.carbsG),
+      containsDairy: triBool(r.containsDairy),
+      containsNuts: triBool(r.containsNuts),
+      containsGluten: triBool(r.containsGluten),
+      isVegan: triBool(r.isVegan),
+      isJain: triBool(r.isJain),
+      spicyLevel: spicy,
     };
 
     if (matchedId) {

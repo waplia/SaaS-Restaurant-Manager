@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -19,13 +19,13 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Pencil, Trash2, ChevronRight, Download, Upload,
   UtensilsCrossed, Settings2, X, Check, Tag, Clock, Flame, Leaf, ChefHat,
-  Sparkles, ImagePlus, Loader2, History,
+  Sparkles, ImagePlus, Loader2, History, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
-import { apiPost, apiGet } from "@/lib/api";
+import { apiPost, apiGet, apiPut } from "@/lib/api";
 
 
 type ParsedRow = {
@@ -505,6 +505,8 @@ function RecipePanel({ itemId, itemPrice }: { itemId: number; itemPrice: string 
   );
 }
 
+type TriBool = "yes" | "no" | "";
+
 type ItemForm = {
   name: string;
   price: string;
@@ -517,19 +519,48 @@ type ItemForm = {
   tags: string;
   allergens: string;
   kitchenId: string;
+  proteinG: string;
+  fatG: string;
+  carbsG: string;
+  containsDairy: TriBool;
+  containsNuts: TriBool;
+  containsGluten: TriBool;
+  isVegan: TriBool;
+  isJain: TriBool;
+  spicyLevel: string;
 };
 
 const EMPTY_ITEM_FORM: ItemForm = {
   name: "", price: "", description: "", categoryId: "", isVeg: true,
   preparationTime: "15", imageUrl: "", calories: "", tags: "", allergens: "", kitchenId: "",
+  proteinG: "", fatG: "", carbsG: "",
+  containsDairy: "", containsNuts: "", containsGluten: "",
+  isVegan: "", isJain: "", spicyLevel: "",
 };
+
+const triFromBool = (v: boolean | null | undefined): TriBool => (v == null ? "" : v ? "yes" : "no");
+const triToBool = (v: TriBool): boolean | null => (v === "" ? null : v === "yes");
 
 type DescriptionDraftPayload = { description: string; allergens: string[]; tags: string[] };
 type PhotoDraftPayload = { imageUrl: string };
+type NutritionDraftPayload = {
+  calories: number | null;
+  proteinG: number | null;
+  fatG: number | null;
+  carbsG: number | null;
+  containsDairy: boolean | null;
+  containsNuts: boolean | null;
+  containsGluten: boolean | null;
+  isVegan: boolean | null;
+  isJain: boolean | null;
+  spicyLevel: number | null;
+  notes: string | null;
+};
 type AiDraft<T> = { id: number; kind: string; payload: T; createdAt: string };
 type AiDraftsResponse = {
   description: AiDraft<DescriptionDraftPayload>[];
   photo: AiDraft<PhotoDraftPayload>[];
+  nutrition?: AiDraft<NutritionDraftPayload>[];
 };
 
 export default function MenuPage() {
@@ -570,8 +601,32 @@ export default function MenuPage() {
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
   const [activeTab, setActiveTab] = useState<"details" | "modifiers" | "recipe">("details");
-  const [aiBusy, setAiBusy] = useState<null | "description" | "photo">(null);
-  const [aiDrafts, setAiDrafts] = useState<AiDraftsResponse>({ description: [], photo: [] });
+  const [aiBusy, setAiBusy] = useState<null | "description" | "photo" | "nutrition">(null);
+  const [aiDrafts, setAiDrafts] = useState<AiDraftsResponse>({ description: [], photo: [], nutrition: [] });
+  const [bulkNutritionBusy, setBulkNutritionBusy] = useState(false);
+  const [nutritionAiMeta, setNutritionAiMeta] = useState<Record<string, { source: "ai"; at: string; requestLogId?: number | null }>>({});
+  const [showNutritionOnQrMenu, setShowNutritionOnQrMenu] = useState<boolean>(false);
+  const [savingQrToggle, setSavingQrToggle] = useState(false);
+
+  useEffect(() => {
+    apiGet<{ data?: { showNutritionOnQrMenu?: boolean } }>(`/restaurants/${RESTAURANT_ID}/settings/menu-nutrition`)
+      .then((r) => setShowNutritionOnQrMenu(r?.data?.showNutritionOnQrMenu === true))
+      .catch(() => { /* setting may not exist yet */ });
+  }, [RESTAURANT_ID]);
+
+  const toggleQrNutrition = async (next: boolean) => {
+    setSavingQrToggle(true);
+    setShowNutritionOnQrMenu(next);
+    try {
+      await apiPut(`/restaurants/${RESTAURANT_ID}/settings/menu-nutrition`, { data: { showNutritionOnQrMenu: next } });
+      toast({ title: next ? "Customers will now see nutrition on the QR menu" : "Hidden nutrition on the QR menu" });
+    } catch (e: unknown) {
+      setShowNutritionOnQrMenu(!next);
+      toast({ title: (e as { message?: string })?.message ?? "Failed to update setting", variant: "destructive" });
+    } finally {
+      setSavingQrToggle(false);
+    }
+  };
   const [showHistory, setShowHistory] = useState(false);
 
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -599,11 +654,21 @@ export default function MenuPage() {
       tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
       allergens: Array.isArray(item.allergens) ? item.allergens.join(", ") : "",
       kitchenId: item.kitchenId != null ? String(item.kitchenId) : "",
+      proteinG: item.proteinG != null ? String(item.proteinG) : "",
+      fatG: item.fatG != null ? String(item.fatG) : "",
+      carbsG: item.carbsG != null ? String(item.carbsG) : "",
+      containsDairy: triFromBool(item.containsDairy),
+      containsNuts: triFromBool(item.containsNuts),
+      containsGluten: triFromBool(item.containsGluten),
+      isVegan: triFromBool(item.isVegan),
+      isJain: triFromBool(item.isJain),
+      spicyLevel: item.spicyLevel != null ? String(item.spicyLevel) : "",
     });
+    setNutritionAiMeta(((item as unknown as { nutritionAiMeta?: Record<string, { source: "ai"; at: string }> }).nutritionAiMeta) ?? {});
     setActiveTab("details");
     setShowItemModal(true);
     setShowHistory(false);
-    setAiDrafts({ description: [], photo: [] });
+    setAiDrafts({ description: [], photo: [], nutrition: [] });
     apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${item.id}/ai-drafts`)
       .then(setAiDrafts)
       .catch(() => { /* silent */ });
@@ -637,6 +702,77 @@ export default function MenuPage() {
       toast({ title: (e as { message?: string })?.message ?? "AI draft failed", variant: "destructive" });
     } finally {
       setAiBusy(null);
+    }
+  };
+
+  const applyNutritionDraft = (p: NutritionDraftPayload) => {
+    const at = new Date().toISOString();
+    const nextMeta: Record<string, { source: "ai"; at: string }> = { ...nutritionAiMeta };
+    const markIf = (key: string, val: unknown) => { if (val != null) nextMeta[key] = { source: "ai", at }; };
+    markIf("calories", p.calories);
+    markIf("proteinG", p.proteinG);
+    markIf("fatG", p.fatG);
+    markIf("carbsG", p.carbsG);
+    markIf("containsDairy", p.containsDairy);
+    markIf("containsNuts", p.containsNuts);
+    markIf("containsGluten", p.containsGluten);
+    markIf("isVegan", p.isVegan);
+    markIf("isJain", p.isJain);
+    markIf("spicyLevel", p.spicyLevel);
+    setNutritionAiMeta(nextMeta);
+    setItemForm(prev => ({
+      ...prev,
+      calories: p.calories != null ? String(p.calories) : prev.calories,
+      proteinG: p.proteinG != null ? String(p.proteinG) : prev.proteinG,
+      fatG: p.fatG != null ? String(p.fatG) : prev.fatG,
+      carbsG: p.carbsG != null ? String(p.carbsG) : prev.carbsG,
+      containsDairy: p.containsDairy != null ? triFromBool(p.containsDairy) : prev.containsDairy,
+      containsNuts: p.containsNuts != null ? triFromBool(p.containsNuts) : prev.containsNuts,
+      containsGluten: p.containsGluten != null ? triFromBool(p.containsGluten) : prev.containsGluten,
+      isVegan: p.isVegan != null ? triFromBool(p.isVegan) : prev.isVegan,
+      isJain: p.isJain != null ? triFromBool(p.isJain) : prev.isJain,
+      spicyLevel: p.spicyLevel != null ? String(p.spicyLevel) : prev.spicyLevel,
+    }));
+  };
+
+  const handleGenerateNutrition = async () => {
+    if (!editItem) {
+      toast({ title: "Save the item first, then estimate nutrition", variant: "destructive" });
+      return;
+    }
+    setAiBusy("nutrition");
+    try {
+      const res = await apiPost<{ payload: NutritionDraftPayload }>(
+        `/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-nutrition`,
+        {},
+      );
+      applyNutritionDraft(res.payload);
+      const drafts = await apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-drafts`);
+      setAiDrafts(drafts);
+      toast({ title: "Nutrition estimated — review and save when happy" });
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "Nutrition estimate failed", variant: "destructive" });
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const handleBulkNutrition = async () => {
+    const ids = Array.from(selectedItemIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Generate nutrition & allergens for ${ids.length} items? This costs ~${ids.length} AI credits (only successful items are charged).`)) return;
+    setBulkNutritionBusy(true);
+    try {
+      const res = await apiPost<{ summary: { attempted: number; succeeded: number; failed: number } }>(
+        `/restaurants/${RESTAURANT_ID}/items/ai-nutrition-bulk`,
+        { itemIds: ids },
+      );
+      toast({ title: `Drafted ${res.summary.succeeded} of ${res.summary.attempted}`, description: res.summary.failed > 0 ? `${res.summary.failed} failed and were not charged.` : "Open each item to review and save the draft." });
+      setSelectedItemIds(new Set());
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "Bulk nutrition failed", variant: "destructive" });
+    } finally {
+      setBulkNutritionBusy(false);
     }
   };
 
@@ -679,6 +815,16 @@ export default function MenuPage() {
       tags: itemForm.tags.split(",").map(t => t.trim()).filter(Boolean),
       allergens: itemForm.allergens.split(",").map(t => t.trim()).filter(Boolean),
       kitchenId: itemForm.kitchenId ? Number(itemForm.kitchenId) : null,
+      proteinG: itemForm.proteinG === "" ? null : Number(itemForm.proteinG),
+      fatG: itemForm.fatG === "" ? null : Number(itemForm.fatG),
+      carbsG: itemForm.carbsG === "" ? null : Number(itemForm.carbsG),
+      containsDairy: triToBool(itemForm.containsDairy),
+      containsNuts: triToBool(itemForm.containsNuts),
+      containsGluten: triToBool(itemForm.containsGluten),
+      isVegan: triToBool(itemForm.isVegan),
+      isJain: triToBool(itemForm.isJain),
+      spicyLevel: itemForm.spicyLevel === "" ? null : Math.max(0, Math.min(3, Math.round(Number(itemForm.spicyLevel)))),
+      nutritionAiMeta: Object.keys(nutritionAiMeta).length ? nutritionAiMeta : null,
     };
     try {
       if (editItem) {
@@ -943,11 +1089,22 @@ export default function MenuPage() {
         </aside>
 
         <main className="flex-1 overflow-y-auto p-5">
-          <div className="flex gap-3 mb-4">
+          <div className="flex gap-3 mb-4 items-center flex-wrap">
             <div className="relative flex-1 max-w-xs">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
             </div>
+            <label className="ml-auto inline-flex items-center gap-2 text-xs text-muted-foreground border border-input rounded-md px-3 py-1.5 cursor-pointer hover:bg-muted/50" title="When on, customers see calories, macros, allergen flags and dietary filters on the QR menu.">
+              <input
+                type="checkbox"
+                checked={showNutritionOnQrMenu}
+                disabled={savingQrToggle}
+                onChange={e => toggleQrNutrition(e.target.checked)}
+              />
+              <Activity className="w-3 h-3 text-violet-600" />
+              <span className="font-medium text-foreground">Show nutrition & allergens on QR menu</span>
+              {savingQrToggle && <Loader2 className="w-3 h-3 animate-spin" />}
+            </label>
           </div>
 
           {selectedItemIds.size > 0 && (
@@ -978,6 +1135,16 @@ export default function MenuPage() {
                 }}
               >
                 Apply
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={bulkNutritionBusy}
+                onClick={handleBulkNutrition}
+                title="Estimate calories, allergens and dietary tags for all selected items"
+              >
+                {bulkNutritionBusy ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Activity className="w-3 h-3 mr-1.5" />}
+                Generate nutrition
               </Button>
               <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelectedItemIds(new Set())}>Clear</Button>
             </div>
@@ -1317,6 +1484,120 @@ export default function MenuPage() {
                     <div className="col-span-2">
                       <Label>Allergens</Label>
                       <Input placeholder="dairy, gluten, nuts (comma-sep)" value={itemForm.allergens} onChange={e => setItemForm(p => ({ ...p, allergens: e.target.value }))} />
+                    </div>
+                    <div className="col-span-2 border border-violet-200 dark:border-violet-900 bg-violet-50/40 dark:bg-violet-950/20 rounded-lg p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold flex items-center gap-1.5">
+                            <Activity className="w-3 h-3 text-violet-600" /> Nutrition & allergens
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">Estimate macros, allergen flags & dietary tags from name + category. Costs 1 credit.</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={handleGenerateNutrition}
+                          disabled={!editItem || aiBusy !== null}
+                          title={!editItem ? "Save the item first" : "Estimate nutrition & allergens from name + category"}
+                        >
+                          {aiBusy === "nutrition" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                          Generate with AI
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([["proteinG", "Protein (g)"], ["fatG", "Fat (g)"], ["carbsG", "Carbs (g)"]] as const).map(([key, label]) => (
+                          <div key={key}>
+                            <Label className="text-[10px] flex items-center gap-1">
+                              {label}
+                              {nutritionAiMeta[key] && <span className="text-[8px] font-bold bg-violet-100 text-violet-700 px-1 rounded">AI</span>}
+                            </Label>
+                            <Input
+                              type="number" step="0.1" min="0" placeholder="–"
+                              value={itemForm[key]}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setItemForm(p => ({ ...p, [key]: v }));
+                                setNutritionAiMeta(m => { const c = { ...m }; delete c[key]; return c; });
+                              }}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([
+                          ["containsDairy", "Contains dairy"],
+                          ["containsNuts", "Contains nuts"],
+                          ["containsGluten", "Contains gluten"],
+                          ["isVegan", "Vegan"],
+                          ["isJain", "Jain"],
+                        ] as const).map(([key, label]) => (
+                          <div key={key} className="flex items-center gap-2">
+                            <Label className="text-[10px] flex-1 flex items-center gap-1">
+                              {label}
+                              {nutritionAiMeta[key] && <span className="text-[8px] font-bold bg-violet-100 text-violet-700 px-1 rounded">AI</span>}
+                            </Label>
+                            <select
+                              className="border border-input rounded-md px-1.5 py-1 text-xs bg-background"
+                              value={itemForm[key]}
+                              onChange={e => {
+                                const v = e.target.value as TriBool;
+                                setItemForm(p => ({ ...p, [key]: v }));
+                                setNutritionAiMeta(m => { const c = { ...m }; delete c[key]; return c; });
+                              }}
+                            >
+                              <option value="">–</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[10px] flex-1 flex items-center gap-1">
+                            Spicy (0–3)
+                            {nutritionAiMeta.spicyLevel && <span className="text-[8px] font-bold bg-violet-100 text-violet-700 px-1 rounded">AI</span>}
+                          </Label>
+                          <select
+                            className="border border-input rounded-md px-1.5 py-1 text-xs bg-background"
+                            value={itemForm.spicyLevel}
+                            onChange={e => {
+                              const v = e.target.value;
+                              setItemForm(p => ({ ...p, spicyLevel: v }));
+                              setNutritionAiMeta(m => { const c = { ...m }; delete c.spicyLevel; return c; });
+                            }}
+                          >
+                            <option value="">–</option>
+                            <option value="0">0</option>
+                            <option value="1">1 mild</option>
+                            <option value="2">2 medium</option>
+                            <option value="3">3 hot</option>
+                          </select>
+                        </div>
+                      </div>
+                      {(aiDrafts.nutrition?.length ?? 0) > 0 && (
+                        <div className="border-t border-violet-200/60 dark:border-violet-900 pt-2">
+                          <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1.5">Recent estimates</p>
+                          <div className="space-y-1.5">
+                            {aiDrafts.nutrition!.map(d => (
+                              <div key={d.id} className="text-xs bg-card border border-border rounded-md p-2">
+                                <p className="text-foreground">
+                                  {d.payload.calories ?? "?"} kcal · P{d.payload.proteinG ?? "?"} / F{d.payload.fatG ?? "?"} / C{d.payload.carbsG ?? "?"}
+                                  {d.payload.spicyLevel != null && ` · spicy ${d.payload.spicyLevel}/3`}
+                                </p>
+                                {d.payload.notes && <p className="text-[10px] text-muted-foreground italic mt-0.5">{d.payload.notes}</p>}
+                                <div className="flex items-center justify-between mt-1.5">
+                                  <span className="text-[9px] text-muted-foreground">{new Date(d.createdAt).toLocaleString()}</span>
+                                  <Button type="button" size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => applyNutritionDraft(d.payload)}>
+                                    Use this
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <Label>Kitchen / Station</Label>
