@@ -277,8 +277,9 @@ export default function OwnerDashboard() {
   }, [liveOrdersQ.data]);
 
   const trend = useMemo(() => {
-    const t = trendQ.data as Array<{ date: string; revenue: string }> | undefined;
-    return (t ?? []).slice(-7).map((p) => ({
+    const raw = trendQ.data as unknown;
+    const t = Array.isArray(raw) ? (raw as Array<{ date: string; revenue: string }>) : [];
+    return t.slice(-7).map((p) => ({
       label: new Date(p.date).toLocaleDateString(undefined, { weekday: "narrow" }),
       value: Number(p.revenue ?? 0),
     }));
