@@ -64,6 +64,7 @@ import growthEngineRouter from "./growth-engine";
 import addonsRouter from "./addons";
 import adminAddonsRouter from "./admin-addons";
 import fintechRouter from "./fintech";
+import documentsRouter from "./documents";
 
 const router: IRouter = Router();
 
@@ -146,5 +147,6 @@ router.use(growthEngineRouter);
 router.use(addonsRouter);
 router.use(adminAddonsRouter);
 router.use(fintechRouter);
+router.use(documentsRouter);
 
 export default router;

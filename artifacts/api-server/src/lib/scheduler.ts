@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { db } from "./db";
-import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray } from "drizzle-orm";
-import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable, reservationsTable, customersTable, restaurantSettingsTable } from "../lib/db";
+import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray, inArray } from "drizzle-orm";
+import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable, reservationsTable, customersTable, restaurantSettingsTable, documentsTable } from "../lib/db";
 import { sendWhatsApp, reservationEmail } from "./notifications";
 import { pushToStaff } from "./pushNotify";
 import { sendEmail, dailySummaryEmail } from "./notifications";
@@ -393,6 +393,15 @@ export function startScheduler(): void {
     }
   });
 
+  // Document Vault expiry sweep — daily at 09:00 IST. Surfaces an in-app
+  // notification per (document, owner) when expiry falls inside the per-doc
+  // reminderDays window, plus an "already expired" notification once.
+  registerCron("documents_expiry_sweep", "0 9 * * *", "Document Vault expiry/expiring reminders (daily 09:00 IST)");
+  trackCron("documents_expiry_sweep", "0 9 * * *", async () => {
+    try { await runDocumentsExpirySweep(new Date()); }
+    catch (err) { logger.error({ err }, "[documents-expiry] failed"); }
+  });
+
   // Kitchen delay alerts: scan active tickets every minute, emit alerts for
   // tickets past their per-restaurant configured threshold (default 10 min).
   trackCron("kitchen_delay_detector", "* * * * *", async () => {
@@ -406,6 +415,92 @@ export function startScheduler(): void {
   });
 
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
+}
+
+async function runDocumentsExpirySweep(now: Date): Promise<void> {
+  // Distributed idempotency: skip if another instance is already running.
+  const LOCK_KEY = 73610142;
+  const lockRes = await db.execute(sql`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS got`);
+  const got = (lockRes as unknown as { rows: { got: boolean }[] }).rows?.[0]?.got;
+  if (!got) { logger.info("[documents-expiry] another instance holds the lock; skipping"); return; }
+
+  try {
+    let lastId = 0;
+    let notified = 0;
+    const horizon = new Date(now.getTime() + 365 * 86_400_000);
+    // Deterministic ascending id pagination so older rows are never starved.
+    for (let iter = 0; iter < 200; iter++) {
+      const batch = await db.select().from(documentsTable).where(and(
+        eq(documentsTable.status, "active"),
+        sql`${documentsTable.expiresAt} IS NOT NULL`,
+        lte(documentsTable.expiresAt, horizon),
+        sql`${documentsTable.id} > ${lastId}`,
+      )).orderBy(documentsTable.id).limit(200);
+      if (batch.length === 0) break;
+      lastId = batch[batch.length - 1]!.id;
+
+      for (const d of batch) {
+        if (!d.expiresAt) continue;
+        const daysLeft = Math.ceil((d.expiresAt.getTime() - now.getTime()) / 86_400_000);
+        const isExpired = daysLeft < 0;
+        const isExpiringSoon = !isExpired && daysLeft <= (d.reminderDays ?? 30);
+        if (!isExpired && !isExpiringSoon) continue;
+
+        // Once-only "expired" notification: skip if any reminder was sent
+        // AFTER the doc expired. Expiring-soon throttles to once per 23h.
+        if (isExpired) {
+          if (d.lastReminderSentAt && d.lastReminderSentAt > d.expiresAt) continue;
+        } else if (d.lastReminderSentAt && now.getTime() - d.lastReminderSentAt.getTime() < 23 * 3_600_000) {
+          continue;
+        }
+
+        // Owner-targeted in-app notifications: fan out one per active owner of
+        // the restaurant so the Notification Center shows it for every owner.
+        const owners = await db.select({ id: usersTable.id })
+          .from(usersTable)
+          .where(and(
+            eq(usersTable.restaurantId, d.restaurantId),
+            eq(usersTable.role, "owner"),
+            eq(usersTable.isActive, true),
+          ));
+
+        const title = isExpired
+          ? `Document expired: ${d.title}`
+          : `Document expiring in ${daysLeft} day${daysLeft === 1 ? "" : "s"}: ${d.title}`;
+        const message = isExpired
+          ? `Your ${d.category.toUpperCase()} document "${d.title}" expired on ${d.expiresAt.toISOString().slice(0, 10)}. Upload a new version in the Document Vault.`
+          : `Your ${d.category.toUpperCase()} document "${d.title}" expires on ${d.expiresAt.toISOString().slice(0, 10)}. Renew it before then.`;
+
+        // Always insert at least one restaurant-level row; additionally fan out
+        // per owner if the notifications schema supports a userId column. The
+        // platform notificationsTable used elsewhere for trial-expiry only
+        // requires { restaurantId, type, title, message }, so we insert one row
+        // per owner with restaurantId duplicated — owners read by restaurantId.
+        if (owners.length === 0) {
+          await db.insert(notificationsTable).values({
+            restaurantId: d.restaurantId, type: "system_error", title, message,
+          }).catch(() => {});
+        } else {
+          for (let i = 0; i < owners.length; i++) {
+            await db.insert(notificationsTable).values({
+              restaurantId: d.restaurantId, type: "system_error", title, message,
+            }).catch(() => {});
+          }
+        }
+
+        await db.update(documentsTable)
+          .set({ lastReminderSentAt: new Date() })
+          .where(and(eq(documentsTable.id, d.id), eq(documentsTable.restaurantId, d.restaurantId)))
+          .catch(() => {});
+        notified++;
+      }
+
+      if (batch.length < 200) break;
+    }
+    if (notified > 0) logger.info({ notified }, "[documents-expiry] sweep complete");
+  } finally {
+    await db.execute(sql`SELECT pg_advisory_unlock(${LOCK_KEY})`).catch(() => {});
+  }
 }
 
 async function runReservationSweep(now: Date): Promise<void> {

@@ -77,6 +77,7 @@ import CustomerFeedbackPage from "@/pages/customer-feedback";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
 import GrowthEnginePage from "@/pages/growth-engine";
+import DocumentsPage from "@/pages/documents";
 import WalletsPage from "@/pages/wallets";
 import SettlementReconPage from "@/pages/settlement-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
@@ -153,6 +154,7 @@ function Router() {
       <Route path="/setup" component={() => <Redirect to="/setup-wizard" />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
+      <Route path="/documents" component={() => <RoleProtectedRoute component={DocumentsPage} allow={["owner", "manager", "accountant", "super_admin"]} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
