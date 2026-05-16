@@ -13,7 +13,10 @@ export type AppRole =
   | "delivery_executive"
   | "customer"
   | "food_court_owner"
-  | "food_court_cashier";
+  | "food_court_cashier"
+  | "canteen_admin"
+  | "counter_staff"
+  | "parent";
 
 export function requireRole(...roles: AppRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {

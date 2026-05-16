@@ -44,6 +44,13 @@ export const restaurantsTable = pgTable("restaurants", {
   //   'bar'        — bar-only outlet; food workflows still available.
   //   'hybrid'     — restaurant + bar (kitchen + bar stations).
   serviceMode: text("service_mode").notNull().default("restaurant"),
+  // Canteen mode (Task #203) — when true, the canteen module is available
+  // (students, ID-card QR wallets, parent dashboard, counter POS).
+  canteenModeEnabled: boolean("canteen_mode_enabled").notNull().default(false),
+  // Default daily spending cap for students (paise). 0 = no cap.
+  canteenDefaultDailyCap: integer("canteen_default_daily_cap").notNull().default(0),
+  // Default low-balance alert threshold (paise).
+  canteenLowBalanceThreshold: integer("canteen_low_balance_threshold").notNull().default(5000),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

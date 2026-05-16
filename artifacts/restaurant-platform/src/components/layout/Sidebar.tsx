@@ -19,7 +19,7 @@ import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
 type PlanGate = "ai" | "ai_insights" | "cloud_kitchen";
-type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate; requiresDocsAccess?: boolean; requiresBakeryMode?: boolean; requiresBarMode?: boolean };
+type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate; requiresDocsAccess?: boolean; requiresBakeryMode?: boolean; requiresBarMode?: boolean; requiresCanteenMode?: boolean };
 type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: PlanGate };
 type NavEntry = LinkItem | GroupItem;
 
@@ -74,6 +74,16 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/corporate/bulk-orders", label: "Bulk & Catering", icon: PartyPopper, roles: ["owner", "manager"] },
       { kind: "link", href: "/corporate/scheduled", label: "Scheduled", icon: CalendarDays, roles: ["owner", "manager"] },
       { kind: "link", href: "/corporate/invoices", label: "Invoices", icon: Receipt, roles: ["owner", "manager"] },
+    ],
+  },
+  {
+    kind: "group", key: "canteen", label: "Canteen", icon: GraduationCap,
+    children: [
+      { kind: "link", href: "/canteen/students", label: "Students", icon: Users, roles: ["owner", "manager", "canteen_admin"], requiresCanteenMode: true },
+      { kind: "link", href: "/canteen/meal-plans", label: "Meal Plans & Restrictions", icon: UtensilsCrossed, roles: ["owner", "manager", "canteen_admin"], requiresCanteenMode: true },
+      { kind: "link", href: "/canteen/pos", label: "Counter POS", icon: Monitor, roles: ["owner", "manager", "cashier", "counter_staff", "canteen_admin"], requiresCanteenMode: true },
+      { kind: "link", href: "/canteen/reports", label: "Reports", icon: BarChart3, roles: ["owner", "manager", "canteen_admin"], requiresCanteenMode: true },
+      { kind: "link", href: "/canteen/help", label: "Help", icon: LifeBuoy, requiresCanteenMode: true },
     ],
   },
   {
@@ -209,7 +219,7 @@ export function Sidebar() {
   });
   const docsHasAccess = docsAccess?.hasAccess ?? false;
 
-  const { data: restaurantInfo } = useQuery<{ bakeryModeEnabled?: boolean; serviceMode?: string }>({
+  const { data: restaurantInfo } = useQuery<{ bakeryModeEnabled?: boolean; serviceMode?: string; canteenModeEnabled?: boolean }>({
     queryKey: ["restaurant", restaurantId],
     queryFn: () => apiFetch(`/restaurants/${restaurantId}`),
     enabled: !!restaurantId && !!user,
@@ -217,6 +227,7 @@ export function Sidebar() {
   });
   const bakeryModeOn = restaurantInfo?.bakeryModeEnabled ?? false;
   const barModeOn = (restaurantInfo?.serviceMode ?? "restaurant") !== "restaurant";
+  const canteenModeOn = restaurantInfo?.canteenModeEnabled ?? false;
 
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
@@ -226,6 +237,7 @@ export function Sidebar() {
     if (item.requiresDocsAccess) return docsHasAccess;
     if (item.requiresBakeryMode && !bakeryModeOn) return false;
     if (item.requiresBarMode && !barModeOn) return false;
+    if (item.requiresCanteenMode && !canteenModeOn) return false;
     if (!item.roles) return true;
     if (user?.isSuperAdmin) return true;
     return user?.role ? item.roles.includes(user.role) : false;
