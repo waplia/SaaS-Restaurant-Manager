@@ -123,6 +123,15 @@ export function startScheduler(): void {
   registerCron("addon-lifecycle-sweep", "*/15 * * * *", "Expires add-on trials and ended billing periods every 15 min");
   registerCron("health-score-nightly", "0 3 * * *", "Computes nightly Restaurant Health Score (0–100) for all active restaurants at 03:00 IST");
   registerCron("compliance-reminders", "15 8 * * *", "Daily Compliance Manager reminders at 08:15 IST (60/30/15/7/1d before expiry, on day, weekly when overdue)");
+  registerCron("gift-card-expiry", "0 1 * * *", "Daily 01:00 IST: marks gift cards whose expiresAt has passed as expired");
+
+  trackCron("gift_card_expiry", "0 1 * * *", async () => {
+    await runTrackedCron("gift-card-expiry", async () => {
+      const { expireDue } = await import("./giftCards");
+      const n = await expireDue(new Date());
+      if (n > 0) logger.info({ expired: n }, "[gift-cards] expiry sweep complete");
+    }).catch(err => logger.error({ err }, "[gift-cards] expiry sweep failed"));
+  });
   registerCron("bakery-shelf-life", "*/30 * * * *", "Per-restaurant bakery shelf-life sweep: marks expired finished-goods batches and emits expiring-soon + cake-booking-due notifications (every 30 min)");
 
   trackCron("bakery_shelf_life", "*/30 * * * *", async () => {

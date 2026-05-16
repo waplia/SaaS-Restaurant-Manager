@@ -398,82 +398,9 @@ router.post("/restaurants/:restaurantId/refunds/:id/mark-succeeded", requireRole
 });
 
 // ─── Gift cards ─────────────────────────────────────────────────────────────
-
-router.get("/restaurants/:restaurantId/gift-cards", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
-  const rows = await db.select().from(giftCardsTable)
-    .where(eq(giftCardsTable.tenantId, tid(req)))
-    .orderBy(desc(giftCardsTable.createdAt)).limit(200);
-  res.json(rows);
-});
-
-router.post("/restaurants/:restaurantId/gift-cards", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const schema = z.object({
-    initialAmountPaise: z.number().int().positive(),
-    recipientName: z.string().optional(),
-    recipientEmail: z.string().optional(),
-    recipientCustomerId: z.number().int().optional(),
-    expiresAt: z.string().datetime().optional(),
-    notes: z.string().optional(),
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
-  const d = parsed.data;
-  const tFlags = await tenantFintech(tid(req));
-  if (!tFlags.giftCardsEnabled) { res.status(403).json({ error: "gift_cards_disabled" }); return; }
-
-  const [created] = await db.insert(giftCardsTable).values({
-    tenantId: tid(req), restaurantId: rid(req),
-    code: genGiftCardCode(),
-    recipientName: d.recipientName, recipientEmail: d.recipientEmail,
-    recipientCustomerId: d.recipientCustomerId,
-    initialAmount: d.initialAmountPaise,
-    expiresAt: d.expiresAt ? new Date(d.expiresAt) : undefined,
-    notes: d.notes, issuedBy: uid(req),
-  }).returning();
-  // Wallet for the gift card (kind=gift_card) credited with initial amount.
-  const w = await wallet.getOrCreateWallet({ tenantId: tid(req), kind: "gift_card", giftCardId: created.id });
-  await db.update(giftCardsTable).set({ walletId: w.id }).where(eq(giftCardsTable.id, created.id));
-  await wallet.credit({ tenantId: tid(req), kind: "gift_card", giftCardId: created.id }, {
-    amount: d.initialAmountPaise, type: "gift_card_load", channel: "manual",
-    idempotencyKey: `gc_load_${created.id}`, createdBy: uid(req), notes: "Initial load",
-  });
-  await recordAuditLog({ req, module: "fintech", action: "gift_card_issued", entity: "gift_card", entityId: created.id, restaurantId: rid(req), newValue: created });
-  res.json(created);
-});
-
-router.post("/restaurants/:restaurantId/gift-cards/:id/redeem", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
-  const schema = z.object({ amountPaise: z.number().int().positive(), referenceType: z.string().optional(), referenceId: z.number().int().optional(), idempotencyKey: z.string().min(8) });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "validation_failed" }); return; }
-  const id = Number(req.params.id);
-  const [gc] = await db.select().from(giftCardsTable).where(and(eq(giftCardsTable.id, id), eq(giftCardsTable.tenantId, tid(req))));
-  if (!gc) { res.status(404).json({ error: "not_found" }); return; }
-  if (gc.status !== "active") { res.status(409).json({ error: "gift_card_not_active" }); return; }
-  try {
-    const r = await wallet.debit({ tenantId: tid(req), kind: "gift_card", giftCardId: gc.id }, {
-      amount: parsed.data.amountPaise, type: "gift_card_redeem", channel: "wallet_transfer",
-      referenceType: parsed.data.referenceType, referenceId: parsed.data.referenceId,
-      idempotencyKey: parsed.data.idempotencyKey, createdBy: uid(req),
-    });
-    if (r.wallet.balance === 0) {
-      await db.update(giftCardsTable).set({ status: "redeemed", updatedAt: new Date() }).where(eq(giftCardsTable.id, gc.id));
-    }
-    await recordAuditLog({ req, module: "fintech", action: "gift_card_redeemed", entity: "gift_card", entityId: gc.id, restaurantId: rid(req), newValue: { amount: parsed.data.amountPaise } });
-    res.json(r);
-  } catch (e: any) {
-    res.status(e.status ?? 400).json({ error: e.code ?? "error", message: e.message });
-  }
-});
-
-router.post("/restaurants/:restaurantId/gift-cards/:id/void", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const id = Number(req.params.id);
-  const reason = String(req.body?.reason ?? "voided");
-  const [gc] = await db.select().from(giftCardsTable).where(and(eq(giftCardsTable.id, id), eq(giftCardsTable.tenantId, tid(req))));
-  if (!gc) { res.status(404).json({ error: "not_found" }); return; }
-  await db.update(giftCardsTable).set({ status: "void", voidedBy: uid(req), voidReason: reason, updatedAt: new Date() }).where(eq(giftCardsTable.id, id));
-  await recordAuditLog({ req, module: "fintech", action: "gift_card_voided", entity: "gift_card", entityId: id, restaurantId: rid(req), newValue: { reason } });
-  res.json({ ok: true });
-});
+// Moved to dedicated routes/gift-cards.ts router (issue, batch, redeem, transfer,
+// refund, void, settings, sales report, code lookup). The router is mounted
+// alongside this one in routes/index.ts; the same URL prefix is preserved.
 
 // ─── Cashback rules ─────────────────────────────────────────────────────────
 

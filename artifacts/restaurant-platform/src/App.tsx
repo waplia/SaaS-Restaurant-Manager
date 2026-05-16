@@ -100,6 +100,7 @@ import PricingRulesPage from "@/pages/pricing-rules";
 import GrowthEnginePage from "@/pages/growth-engine";
 import DocumentsPage from "@/pages/documents";
 import WalletsPage from "@/pages/wallets";
+import GiftCardsPage from "@/pages/gift-cards";
 import SettlementReconPage from "@/pages/settlement-recon";
 import AggregatorReconPage from "@/pages/aggregator-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
@@ -276,6 +277,7 @@ function Router() {
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/staff-incentives" component={() => <RoleProtectedRoute component={StaffIncentivesPage} allow={["owner", "manager"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
+      <Route path="/gift-cards" component={() => <RoleProtectedRoute component={GiftCardsPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/aggregator-payouts" component={() => <RoleProtectedRoute component={AggregatorReconPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/capital" component={() => <RoleProtectedRoute component={CapitalInsurancePage} allow={["owner", "manager"]} />} />

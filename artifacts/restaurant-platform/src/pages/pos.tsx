@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
-import { apiPost } from "@/lib/api";
+import { apiPost, apiAction } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
 import { printOrder } from "@/lib/printOrder";
@@ -24,7 +24,7 @@ import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic,
+  Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift,
 } from "lucide-react";
 import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
 
@@ -51,7 +51,7 @@ interface Totals {
   totalAmount: number;
 }
 
-type PayStage = "select" | "cash-confirm" | "card-form" | "upi-form" | "processing";
+type PayStage = "select" | "cash-confirm" | "card-form" | "upi-form" | "gift-card-form" | "processing";
 
 function makeLineKey(menuItemId: number, modifiers: CartModifier[]): string {
   const modKey = [...modifiers].sort((a, b) => a.name.localeCompare(b.name)).map(m => m.name).join("|");
@@ -68,6 +68,7 @@ const PAYMENT_METHODS = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "card", label: "Card", icon: CreditCard },
   { value: "upi", label: "UPI", icon: Smartphone },
+  { value: "gift_card", label: "Gift Card", icon: Gift },
 ];
 
 const TABLE_STATUS_STYLE: Record<string, string> = {
@@ -626,6 +627,8 @@ interface PaymentConfirmDetails {
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   razorpaySignature?: string;
+  giftCardCode?: string;
+  redeemedPaise?: number;
 }
 
 function PaymentModal({
@@ -641,10 +644,13 @@ function PaymentModal({
   onConfirm: (method: string, details?: PaymentConfirmDetails) => Promise<void>;
   isPending: boolean;
 }) {
-  const [method, setMethod] = useState<"cash" | "card" | "upi">("cash");
+  const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card">("cash");
   const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
   const [upiId, setUpiId] = useState("");
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCardError, setGiftCardError] = useState("");
+  const restaurantIdForGift = useRestaurantId();
   const [cardReady, setCardReady] = useState(false);
   const [stripeError, setStripeError] = useState("");
   const cardMountRef = useRef<HTMLDivElement>(null);
@@ -698,6 +704,7 @@ function PaymentModal({
   const handleProceed = () => {
     if (method === "card") { setStage("card-form"); return; }
     if (method === "upi") { setStage("upi-form"); return; }
+    if (method === "gift_card") { setStage("gift-card-form"); return; }
     setStage("cash-confirm");
   };
 
@@ -762,12 +769,34 @@ function PaymentModal({
           await new Promise(r => setTimeout(r, 1500));
           await onConfirm("upi", { razorpayPaymentId: `demo_rzp_pay_${orderId}_${Date.now()}` });
         }
+      } else if (method === "gift_card") {
+        if (!restaurantIdForGift) throw new Error("No restaurant context");
+        try {
+          const result = await apiAction<{ redeemedPaise: number; remainingBalancePaise: number; code: string }>(
+            `/restaurants/${restaurantIdForGift}/gift-cards/redeem-by-code`,
+            "POST",
+            {
+              code: giftCardCode.trim(),
+              amountPaise: Math.round(totals.totalAmount * 100),
+              referenceType: "order",
+              referenceId: orderId,
+              idempotencyKey: `pos-${orderId}-${Date.now()}`,
+              notes: `POS payment for order #${orderId}`,
+            },
+          );
+          await onConfirm("gift_card", { giftCardCode: result.code, redeemedPaise: result.redeemedPaise });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Gift card redemption failed";
+          setGiftCardError(msg);
+          setStage("gift-card-form");
+          return;
+        }
       } else {
         await onConfirm("cash", { amountTendered: Number(amountTendered) || undefined });
       }
     } catch {
       toast({ title: "Payment failed", description: "Please try again.", variant: "destructive" });
-      setStage(method === "cash" ? "cash-confirm" : method === "card" ? "card-form" : "upi-form");
+      setStage(method === "cash" ? "cash-confirm" : method === "card" ? "card-form" : method === "gift_card" ? "gift-card-form" : "upi-form");
     }
   };
 
@@ -825,7 +854,7 @@ function PaymentModal({
                         key={value}
                         disabled={disabled}
                         title={disabled ? "Open the cash register before accepting cash" : ""}
-                        onClick={() => setMethod(value as "cash" | "card" | "upi")}
+                        onClick={() => setMethod(value as "cash" | "card" | "upi" | "gift_card")}
                         className={cn(
                           "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
                           disabled
@@ -852,7 +881,7 @@ function PaymentModal({
                 )}
               </div>
               <Button className="w-full h-11" onClick={handleProceed} disabled={method === "cash" && !isRegisterOpen}>
-                Continue with {method === "cash" ? "Cash" : method === "card" ? "Card" : "UPI"}
+                Continue with {method === "cash" ? "Cash" : method === "card" ? "Card" : method === "gift_card" ? "Gift Card" : "UPI"}
               </Button>
             </>
           )}
@@ -989,13 +1018,48 @@ function PaymentModal({
             </>
           )}
 
+          {/* Gift card form stage */}
+          {stage === "gift-card-form" && (
+            <>
+              <TotalsSummary />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-800 rounded-lg text-xs text-pink-700 dark:text-pink-400">
+                  <Gift className="w-3.5 h-3.5 flex-shrink-0" />
+                  Enter the gift card code to redeem ₹{totals.totalAmount.toFixed(2)}. Insufficient balance will be rejected.
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Gift Card Code</label>
+                  <Input
+                    placeholder="e.g. GC-XXXX-XXXX-XXXX"
+                    value={giftCardCode}
+                    onChange={e => { setGiftCardCode(e.target.value); setGiftCardError(""); }}
+                    autoFocus
+                    className="font-mono uppercase"
+                  />
+                  {giftCardError && <p className="text-xs text-red-500 mt-1">{giftCardError}</p>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
+                <Button
+                  className="flex-1 h-11"
+                  disabled={isPending || !giftCardCode.trim()}
+                  onClick={handleProcessPayment}
+                >
+                  <Gift className="w-3.5 h-3.5 mr-2" />
+                  Redeem ₹{totals.totalAmount.toFixed(2)}
+                </Button>
+              </div>
+            </>
+          )}
+
           {/* Processing stage */}
           {stage === "processing" && (
             <div className="py-8 flex flex-col items-center gap-4">
               <Loader2 className="w-12 h-12 animate-spin text-primary" />
               <p className="text-base font-medium text-foreground">Processing payment…</p>
               <p className="text-sm text-muted-foreground">
-                {method === "card" ? "Contacting payment gateway" : method === "upi" ? "Awaiting UPI confirmation" : "Confirming payment"}
+                {method === "card" ? "Contacting payment gateway" : method === "upi" ? "Awaiting UPI confirmation" : method === "gift_card" ? "Redeeming gift card" : "Confirming payment"}
               </p>
             </div>
           )}

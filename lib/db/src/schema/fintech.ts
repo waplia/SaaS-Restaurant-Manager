@@ -172,29 +172,94 @@ export const refundsTable = pgTable("fintech_refunds", {
 
 // ─── Gift cards ─────────────────────────────────────────────────────────────
 
+export const giftCardBatchesTable = pgTable("fintech_gift_card_batches", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").references(() => restaurantsTable.id, { onDelete: "set null" }),
+  batchType: text("batch_type").notNull(), // physical | corporate
+  buyerName: text("buyer_name"),
+  buyerEmail: text("buyer_email"),
+  buyerPhone: text("buyer_phone"),
+  poNumber: text("po_number"),
+  cardCount: integer("card_count").notNull().default(0),
+  amountPerCardPaise: bigint("amount_per_card_paise", { mode: "number" }).notNull().default(0),
+  currency: text("currency").notNull().default("INR"),
+  expiresAt: timestamp("expires_at"),
+  notes: text("notes"),
+  issuedBy: integer("issued_by").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  tenantIdx: index("fintech_gc_batch_tenant_idx").on(t.tenantId, t.createdAt),
+}));
+
 export const giftCardsTable = pgTable("fintech_gift_cards", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
   restaurantId: integer("restaurant_id").references(() => restaurantsTable.id, { onDelete: "set null" }),
   code: text("code").notNull(),
+  cardType: text("card_type").notNull().default("digital"), // digital | physical | corporate
+  batchId: integer("batch_id"),
   recipientCustomerId: integer("recipient_customer_id").references(() => customersTable.id, { onDelete: "set null" }),
   recipientName: text("recipient_name"),
   recipientEmail: text("recipient_email"),
+  recipientPhone: text("recipient_phone"),
+  senderName: text("sender_name"),
+  senderEmail: text("sender_email"),
+  message: text("message"),
   initialAmount: bigint("initial_amount", { mode: "number" }).notNull(),
   currency: text("currency").notNull().default("INR"),
   expiresAt: timestamp("expires_at"),
-  status: text("status").notNull().default("active"), // active | redeemed | void | expired
+  status: text("status").notNull().default("active"), // active | redeemed | void | expired | refunded
   walletId: integer("wallet_id").references(() => walletsTable.id, { onDelete: "set null" }),
+  paymentReference: text("payment_reference"), // gateway/upi/cash ref or "offline"
   issuedBy: integer("issued_by").references(() => usersTable.id, { onDelete: "set null" }),
   voidedBy: integer("voided_by").references(() => usersTable.id, { onDelete: "set null" }),
   voidReason: text("void_reason"),
+  refundedAt: timestamp("refunded_at"),
+  refundedAmount: bigint("refunded_amount", { mode: "number" }),
+  refundDestination: text("refund_destination"), // source | store_credit
+  refundedBy: integer("refunded_by").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, t => ({
   tenantIdx: index("fintech_gc_tenant_idx").on(t.tenantId, t.createdAt),
   uqCode: uniqueIndex("fintech_gc_uq_code").on(t.tenantId, t.code),
+  typeIdx: index("fintech_gc_type_idx").on(t.tenantId, t.cardType, t.status),
+  expiryIdx: index("fintech_gc_expiry_idx").on(t.expiresAt, t.status),
+  batchIdx: index("fintech_gc_batch_idx").on(t.batchId),
 }));
+
+export const giftCardTransfersTable = pgTable("fintech_gift_card_transfers", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  giftCardId: integer("gift_card_id").notNull(),
+  fromCustomerId: integer("from_customer_id").references(() => customersTable.id, { onDelete: "set null" }),
+  fromName: text("from_name"),
+  fromEmail: text("from_email"),
+  toCustomerId: integer("to_customer_id").references(() => customersTable.id, { onDelete: "set null" }),
+  toName: text("to_name"),
+  toEmail: text("to_email"),
+  toPhone: text("to_phone"),
+  note: text("note"),
+  transferredBy: integer("transferred_by").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  cardIdx: index("fintech_gc_xfer_card_idx").on(t.giftCardId, t.createdAt),
+  tenantIdx: index("fintech_gc_xfer_tenant_idx").on(t.tenantId, t.createdAt),
+}));
+
+export const giftCardSettingsTable = pgTable("fintech_gift_card_settings", {
+  tenantId: integer("tenant_id").primaryKey().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  refundsAllowed: boolean("refunds_allowed").notNull().default(true),
+  refundWindowDays: integer("refund_window_days").notNull().default(30),
+  refundPartiallyUsed: boolean("refund_partially_used").notNull().default(false),
+  defaultRefundDestination: text("default_refund_destination").notNull().default("source"), // source | store_credit
+  defaultExpiryDays: integer("default_expiry_days").notNull().default(365),
+  maskCodeForStaff: boolean("mask_code_for_staff").notNull().default(true),
+  updatedBy: integer("updated_by").references(() => usersTable.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 // ─── Cashback rules ─────────────────────────────────────────────────────────
 
@@ -480,6 +545,9 @@ export type GatewayPaymentRecord = typeof gatewayPaymentRecordsTable.$inferSelec
 export type UpiPaymentRecord = typeof upiPaymentRecordsTable.$inferSelect;
 export type Refund = typeof refundsTable.$inferSelect;
 export type GiftCard = typeof giftCardsTable.$inferSelect;
+export type GiftCardBatch = typeof giftCardBatchesTable.$inferSelect;
+export type GiftCardTransfer = typeof giftCardTransfersTable.$inferSelect;
+export type GiftCardSettings = typeof giftCardSettingsTable.$inferSelect;
 export type CashbackRule = typeof cashbackRulesTable.$inferSelect;
 export type StaffPayout = typeof staffPayoutsTable.$inferSelect;
 export type VendorPayment = typeof vendorPaymentsTable.$inferSelect;
