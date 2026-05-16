@@ -1734,6 +1734,88 @@ export function useCoupons() {
   });
 }
 
+// ===== Loyalty 2.0 hooks =====
+export function useLoyalty2Summary(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["loyalty2", "summary", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<any>(`/restaurants/${RESTAURANT_ID}/loyalty/summary/${customerId}`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useLoyalty2Cashback(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["loyalty2", "cashback", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<any>(`/restaurants/${RESTAURANT_ID}/loyalty/cashback/${customerId}`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useLoyalty2CashbackMutate() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, ...body }: { customerId: number; amount: number; type: "credit" | "redeem"; reason?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/loyalty/cashback/${customerId}`, body),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["loyalty2", "cashback", RESTAURANT_ID, customerId] });
+      qc.invalidateQueries({ queryKey: ["loyalty2", "summary", RESTAURANT_ID, customerId] });
+    },
+  });
+}
+
+export function useLoyalty2AddStamp() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, cardKey, qty }: { customerId: number; cardKey: string; qty?: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/loyalty/stamps/${customerId}`, { cardKey, qty }),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["loyalty2", "summary", RESTAURANT_ID, customerId] }),
+  });
+}
+
+export function useLoyalty2FamilyAdd() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, phone }: { customerId: number; phone: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/loyalty/family/${customerId}/add`, { phone }),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["loyalty2", "summary", RESTAURANT_ID, customerId] }),
+  });
+}
+
+export function useLoyalty2Analytics(days: number = 30) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["loyalty2", "analytics", RESTAURANT_ID, days],
+    queryFn: () => apiGet<any>(`/restaurants/${RESTAURANT_ID}/loyalty/analytics?days=${days}`),
+  });
+}
+
+export function loyalty2AnalyticsCsvUrl(restaurantId: number, days: number = 30) {
+  return `/api/restaurants/${restaurantId}/loyalty/analytics/export.csv?days=${days}`;
+}
+
+export function useLoyalty2ReferralLeaderboard() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["loyalty2", "leaderboard", RESTAURANT_ID],
+    queryFn: () => apiGet<any[]>(`/restaurants/${RESTAURANT_ID}/loyalty/referral/leaderboard?limit=20`),
+  });
+}
+
+export function useLoyalty2RevealMystery() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, id }: { customerId: number; id: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/loyalty/mystery/${customerId}/reveal/${id}`, {}),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["loyalty2", "summary", RESTAURANT_ID, customerId] }),
+  });
+}
+
 export function useCreateCoupon() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();

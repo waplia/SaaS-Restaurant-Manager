@@ -148,6 +148,14 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
     earnLoyaltyForOrder(paidOrder, restaurantId).catch((err) => {
       console.error(`[OrderCompletion] Loyalty earn failed for order ${orderId}:`, err);
     }),
+    (async () => {
+      try {
+        const { runOrderPaidPipeline } = await import("../lib/loyalty/pipeline");
+        await runOrderPaidPipeline({ restaurantId, order: paidOrder });
+      } catch (err) {
+        console.error(`[OrderCompletion] Loyalty 2.0 pipeline failed for order ${orderId}:`, err);
+      }
+    })(),
     updateCouponUsage(paidOrder.couponCode, restaurantId).catch((err) => {
       console.error(`[OrderCompletion] Coupon usage update failed for order ${orderId}:`, err);
     }),

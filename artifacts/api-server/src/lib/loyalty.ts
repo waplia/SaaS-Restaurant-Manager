@@ -2,6 +2,27 @@ import { eq, and, sql, lt, isNull, isNotNull, desc, asc, inArray } from "drizzle
 import { db, restaurantSettingsTable, customersTable, loyaltyTransactionsTable } from "./db";
 import { logger } from "./logger";
 
+// Re-export the modular Loyalty 2.0 surface so callers can `import { ... } from "./loyalty"`.
+export * from "./loyalty/types";
+export { loadLoyalty2Config, isEnabled as isLoyaltyMechanicEnabled, mergeWithDefaults } from "./loyalty/config";
+export { runOrderPaidPipeline } from "./loyalty/pipeline";
+export {
+  creditCashback, debitCashback, getOrCreateWallet,
+  computeCashbackEarn, computeRedeemableCashback,
+} from "./loyalty/cashback";
+export { listStampCards, manualAddStamp, awardStampsForOrder } from "./loyalty/stamps";
+export {
+  ensureReferralCode, attachReferralByCode, listReferralsForReferrer, referralLeaderboard,
+} from "./loyalty/referrals";
+export { listMysteryGrants, revealMysteryGrant, maybeGrantMystery, pickWeighted } from "./loyalty/mystery";
+export { getStreakState, recordVisitForStreak } from "./loyalty/streaks";
+export { activeDoublePointsMultiplier } from "./loyalty/doublePoints";
+export {
+  getFamilyGroupForCustomer, addFamilyMemberByPhone, removeFamilyMember, ensureGroupForPrimary, resolveSharedCustomerId,
+} from "./loyalty/family";
+export { logAudit, listRecentAudit } from "./loyalty/audit";
+export { isBirthdayWithinWindow, hasBirthdayGrantThisYear, recordBirthdayGrant } from "./loyalty/birthday";
+
 export interface LoyaltyTier {
   id: string;
   name: string;

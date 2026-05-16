@@ -114,6 +114,10 @@ export function startScheduler(): void {
   registerCron("daily-sales-summary", "0 23 * * *", "Emails per-restaurant daily sales summary at 23:00 IST");
   registerCron("trial-expiry", "0 0 * * *", "Notifies tenants whose trial has expired at 00:00 IST");
   registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
+  registerCron("loyalty2-birthday", "0 6 * * *", "Loyalty 2.0: grants birthday rewards at 06:00 IST");
+  registerCron("loyalty2-milestones", "10 * * * *", "Loyalty 2.0: hourly milestone sweep (catches config-change crossings)");
+  registerCron("loyalty2-streak-expiry", "0 1 * * *", "Loyalty 2.0: resets streaks that exceeded their grace period at 01:00 IST");
+  registerCron("loyalty2-double-points", "5 * * * *", "Loyalty 2.0: hourly double-points day announcer");
   registerCron("meal_plan_billing", "0 2 * * *", "Daily 02:00 IST: charges due meal-plan subscriptions, runs dunning ladder, sends renewal reminders, expires ended subscriptions");
   registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
   registerCron("ai-monthly-allocation", "0 1 * * *", "Credits each tenant's Khana AI monthly allowance on their renewal-cycle anniversary day at 01:00 IST (idempotent per cycle)");
@@ -393,6 +397,42 @@ export function startScheduler(): void {
       const expired = await expireDueLoyaltyPoints();
       logger.info({ expired }, "Loyalty-expiry job complete");
     }).catch(err => logger.error({ err }, "Loyalty-expiry job failed"));
+  });
+
+  // Loyalty 2.0 — birthday rewards: every day at 06:00 IST, scan opted-in customers
+  // whose birthday is within the configured window, grant once per year.
+  trackCron("loyalty2_birthday", "0 6 * * *", async () => {
+    try {
+      const { runBirthdayJob } = await import("./loyalty/jobs");
+      await runBirthdayJob();
+    } catch (err) { logger.error({ err }, "Loyalty 2.0 birthday job failed"); }
+  });
+
+  // Loyalty 2.0 — milestone sweep: hourly, picks up milestones for any customer
+  // who crossed a threshold but didn't pass through the order pipeline (e.g. config change).
+  trackCron("loyalty2_milestones", "10 * * * *", async () => {
+    try {
+      const { runMilestoneSweep } = await import("./loyalty/jobs");
+      await runMilestoneSweep();
+    } catch (err) { logger.error({ err }, "Loyalty 2.0 milestone sweep failed"); }
+  });
+
+  // Loyalty 2.0 — streak grace expiry: daily at 01:00 IST, resets streaks that
+  // missed their window beyond the grace period.
+  trackCron("loyalty2_streak_expiry", "0 1 * * *", async () => {
+    try {
+      const { runStreakGraceJob } = await import("./loyalty/jobs");
+      await runStreakGraceJob();
+    } catch (err) { logger.error({ err }, "Loyalty 2.0 streak grace job failed"); }
+  });
+
+  // Loyalty 2.0 — double-points day announcer: hourly check posts a notification
+  // when a configured rule starts.
+  trackCron("loyalty2_double_points", "5 * * * *", async () => {
+    try {
+      const { runDoublePointsAnnouncer } = await import("./loyalty/jobs");
+      await runDoublePointsAnnouncer();
+    } catch (err) { logger.error({ err }, "Loyalty 2.0 double-points announcer failed"); }
   });
 
   trackCron("meal_plan_billing", "0 2 * * *", async () => {

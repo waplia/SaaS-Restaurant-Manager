@@ -6,6 +6,7 @@ import {
   useCustomerLoyalty, useAddLoyaltyPoints,
   useCoupons, useCreateCoupon, useUpdateCoupon, useDeleteCoupon,
   useCustomerOrders, useCustomerAddresses, useCreateCustomerAddress, useDeleteCustomerAddress,
+  useLoyalty2Summary, useLoyalty2CashbackMutate, useLoyalty2AddStamp, useLoyalty2FamilyAdd,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -229,6 +230,8 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
               </div>
             </div>
 
+            <LoyaltyTwoStaffActions customerId={customer.id} />
+
             {loyalty?.transactions && loyalty.transactions.length > 0 && (
               <div className="px-4 pb-4 border-t border-border">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-3 mb-2">Point History</h3>
@@ -284,6 +287,97 @@ function CustomerDetailPanel({ customer, onClose }: { customer: Customer; onClos
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function LoyaltyTwoStaffActions({ customerId }: { customerId: number }) {
+  const { data: summary } = useLoyalty2Summary(customerId);
+  const cashback = useLoyalty2CashbackMutate();
+  const stamp = useLoyalty2AddStamp();
+  const family = useLoyalty2FamilyAdd();
+  const { toast } = useToast();
+  const [cb, setCb] = useState({ amount: "", type: "credit" as "credit" | "redeem", reason: "" });
+  const [stampForm, setStampForm] = useState({ cardKey: "", qty: "1" });
+  const [familyPhone, setFamilyPhone] = useState("");
+
+  if (!summary?.config?.enabled) return null;
+
+  const cfg = summary.config;
+  const wallet = summary.cashback;
+  const stampCards = (cfg.stampCards as { id: string; name: string }[]) ?? [];
+
+  return (
+    <div className="px-4 py-3 border-t border-border space-y-4">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Loyalty 2.0</h3>
+
+      {summary.tier?.current && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-2.5">
+          <p className="text-xs font-semibold text-amber-800">{summary.tier.current.name} tier · {summary.tier.current.multiplier}× points</p>
+          {summary.tier.next && (
+            <p className="text-[10px] text-amber-700">Next: {summary.tier.next.name} at {Number(summary.tier.next.threshold).toLocaleString()} lifetime points</p>
+          )}
+        </div>
+      )}
+
+      {cfg.cashback?.enabled && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">Cashback wallet</p>
+            <p className="text-sm font-bold">₹{Number(wallet?.balance ?? 0).toLocaleString()}</p>
+          </div>
+          <div className="flex gap-1.5">
+            <button onClick={() => setCb(p => ({ ...p, type: "credit" }))}
+              className={cn("flex-1 text-xs py-1 rounded border", cb.type === "credit" ? "bg-green-500 text-white border-green-500" : "border-border")}>Credit</button>
+            <button onClick={() => setCb(p => ({ ...p, type: "redeem" }))}
+              className={cn("flex-1 text-xs py-1 rounded border", cb.type === "redeem" ? "bg-orange-500 text-white border-orange-500" : "border-border")}>Redeem</button>
+          </div>
+          <Input type="number" placeholder="Amount ₹" value={cb.amount} onChange={e => setCb(p => ({ ...p, amount: e.target.value }))} className="h-8 text-sm" />
+          <Input placeholder="Reason" value={cb.reason} onChange={e => setCb(p => ({ ...p, reason: e.target.value }))} className="h-8 text-sm" />
+          <Button size="sm" className="w-full h-8" disabled={!cb.amount || cashback.isPending}
+            onClick={async () => {
+              try { await cashback.mutateAsync({ customerId, amount: Number(cb.amount), type: cb.type, reason: cb.reason }); toast({ title: "Cashback updated" }); setCb({ amount: "", type: "credit", reason: "" }); }
+              catch { toast({ title: "Failed", variant: "destructive" }); }
+            }}>Apply</Button>
+        </div>
+      )}
+
+      {stampCards.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">Add stamp</p>
+          <select value={stampForm.cardKey} onChange={e => setStampForm(p => ({ ...p, cardKey: e.target.value }))}
+            className="w-full h-8 text-sm rounded-md border border-border bg-card px-2">
+            <option value="">Select card</option>
+            {stampCards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <div className="flex gap-2">
+            <Input type="number" min="1" value={stampForm.qty} onChange={e => setStampForm(p => ({ ...p, qty: e.target.value }))} className="w-20 h-8 text-sm" />
+            <Button size="sm" className="flex-1 h-8" disabled={!stampForm.cardKey || stamp.isPending}
+              onClick={async () => {
+                try { await stamp.mutateAsync({ customerId, cardKey: stampForm.cardKey, qty: Number(stampForm.qty) || 1 }); toast({ title: "Stamp added" }); }
+                catch { toast({ title: "Failed", variant: "destructive" }); }
+              }}>Stamp</Button>
+          </div>
+        </div>
+      )}
+
+      {cfg.family?.enabled && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">Family group ({summary.family?.members?.length ?? 0} members)</p>
+          <div className="flex gap-2">
+            <Input placeholder="Member phone" value={familyPhone} onChange={e => setFamilyPhone(e.target.value)} className="h-8 text-sm" />
+            <Button size="sm" className="h-8" disabled={!familyPhone || family.isPending}
+              onClick={async () => {
+                try { const r = await family.mutateAsync({ customerId, phone: familyPhone }); if (!(r as any).ok) toast({ title: (r as any).reason || "Could not add", variant: "destructive" }); else { toast({ title: "Member added" }); setFamilyPhone(""); } }
+                catch { toast({ title: "Failed", variant: "destructive" }); }
+              }}>Add</Button>
+          </div>
+        </div>
+      )}
+
+      {summary.referral?.code && (
+        <p className="text-xs text-muted-foreground">Referral code: <span className="font-mono font-semibold text-foreground">{summary.referral.code}</span></p>
+      )}
     </div>
   );
 }

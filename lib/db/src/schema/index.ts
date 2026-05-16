@@ -10,6 +10,7 @@ export * from "./orders";
 export * from "./inventory";
 export * from "./staff";
 export * from "./customers";
+export * from "./loyalty";
 export * from "./expenses";
 export * from "./payments";
 export * from "./delivery";

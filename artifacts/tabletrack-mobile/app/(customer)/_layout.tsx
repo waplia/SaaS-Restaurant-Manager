@@ -20,6 +20,7 @@ export default function CustomerLayout() {
       <Stack.Screen name="plans" options={{ headerTitle: "Meal Plans", headerBackTitle: "Back" }} />
       <Stack.Screen name="my-subscriptions" options={{ headerTitle: "My Subscriptions", headerBackTitle: "Back" }} />
       <Stack.Screen name="tiffin" options={{ headerTitle: "My Tiffin", headerBackTitle: "Back" }} />
+      <Stack.Screen name="rewards" options={{ headerTitle: "My Rewards", headerBackTitle: "Back" }} />
     </Stack>
   );
 }

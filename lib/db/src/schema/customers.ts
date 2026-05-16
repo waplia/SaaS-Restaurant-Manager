@@ -16,6 +16,7 @@ export const customersTable = pgTable("customers", {
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
   isVip: boolean("is_vip").notNull().default(false),
+  dateOfBirth: text("date_of_birth"),
   noShowCount: integer("no_show_count").notNull().default(0),
   lastNoShowAt: timestamp("last_no_show_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

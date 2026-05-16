@@ -100,6 +100,7 @@ import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
 import PricingRulesPage from "@/pages/pricing-rules";
 import GrowthEnginePage from "@/pages/growth-engine";
+import LoyaltyAnalyticsPage from "@/pages/loyalty-analytics";
 import DocumentsPage from "@/pages/documents";
 import WalletsPage from "@/pages/wallets";
 import GiftCardsPage from "@/pages/gift-cards";
@@ -270,6 +271,7 @@ function Router() {
       <Route path="/competitors" component={() => <RoleProtectedRoute component={CompetitorsPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/comparison" component={() => <RoleProtectedRoute component={CompetitorComparisonPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/:id" component={() => <RoleProtectedRoute component={CompetitorDetailPage} allow={["owner", "manager"]} />} />
+      <Route path="/loyalty/analytics" component={() => <RoleProtectedRoute component={LoyaltyAnalyticsPage} allow={["owner", "manager"]} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />

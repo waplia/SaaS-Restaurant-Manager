@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf,
+  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
   Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
@@ -50,6 +50,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/memberships", label: "Memberships", icon: Receipt, roles: ["owner", "manager", "waiter", "super_admin"] },
   { kind: "link", href: "/growth", label: "Growth Engine", icon: Megaphone, roles: ["owner", "manager"] },
   { kind: "link", href: "/competitors", label: "Competitor Tracker", icon: Eye, roles: ["owner", "manager"] },
+  { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"] },
   { kind: "link", href: "/marketplace", label: "Marketplace", icon: Package, roles: ["owner", "manager"] },
   { kind: "link", href: "/support", label: "Support", icon: LifeBuoy, roles: ["owner", "manager"] },
   {

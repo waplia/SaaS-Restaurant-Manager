@@ -1798,29 +1798,452 @@ function DiscountsSection() {
   );
 }
 
-/* ---------------- 28. Loyalty Program ---------------- */
-interface LoyaltyTier { id: string; name: string; threshold: number; multiplier: number; }
-interface LoyaltyCfg {
+/* ---------------- 28. Loyalty Program 2.0 (12 mechanics, tabbed) ---------------- */
+const LOYALTY2_TABS = [
+  "Core", "Tiers", "Stamps", "Cashback", "Referrals",
+  "Mystery", "Streaks", "Milestones", "Birthday", "Double Points",
+  "Item Rules", "Family",
+] as const;
+type Loyalty2Tab = typeof LOYALTY2_TABS[number];
+
+// Mirrors api-server's Loyalty2Config — kept loosely typed in the UI for brevity.
+interface Loyalty2Cfg {
   enabled: boolean;
   pointsPerCurrencyUnit: number; redemptionRate: number;
-  signupBonus: number; birthdayBonus: number; referralBonus: number;
-  tiers: LoyaltyTier[];
-  expiryMonths: number;
+  signupBonus: number; expiryMonths: number;
+  tiers: { id: string; name: string; threshold: number; multiplier: number; perks?: string[] }[];
+  tierRules: { basis: "lifetime_points" | "lifetime_spend" | "rolling_visits"; windowDays: number; graceDays: number };
+  stampCards: { id: string; name: string; required: number; rewardType: "free_item" | "coupon" | "points"; rewardValue: number | string; rewardLabel?: string }[];
+  cashback: { enabled: boolean; percent: number; minOrderAmount: number; maxRedeemPercent: number; minRedeemAmount: number; expiryDays: number };
+  referral: { enabled: boolean; rewardType: "points" | "cashback" | "coupon"; referrerReward: number; refereeReward: number; minFirstOrder: number };
+  mystery: { enabled: boolean; triggerKind: "order_count" | "order_chance" | "scratch"; triggerValue: number; pool: { key: string; label: string; weight: number; rewardType: "points"|"cashback"|"coupon"|"free_item"; rewardValue: number | string }[] };
+  streak: { enabled: boolean; windowKind: "day" | "week"; targetStreak: number; rewardType: "points"|"cashback"|"coupon"; rewardValue: number | string };
+  milestones: { enabled: boolean; windowDays: number; tiers: { key: string; threshold: number; rewardType: "points"|"cashback"|"coupon"; rewardValue: number | string }[] };
+  birthday: { enabled: boolean; windowDays: number; rewardType: "points"|"cashback"|"coupon"; rewardValue: number | string; notify: boolean };
+  doublePoints: { enabled: boolean; rules: { id: string; label: string; multiplier: number; daysOfWeek?: number[]; startHour?: number; endHour?: number }[] };
+  itemRules: { enabled: boolean; rules: { id: string; scope: "item"|"category"; refId: number; multiplier?: number; bonusPoints?: number; earnsStampCardId?: string }[] };
+  family: { enabled: boolean; maxMembers: number; shareCashback: boolean; sharePoints: boolean };
+  featureFlags: Partial<Record<string, boolean>>;
 }
+
+const LOYALTY2_DEFAULTS: Loyalty2Cfg = {
+  enabled: false,
+  pointsPerCurrencyUnit: 1, redemptionRate: 0.05,
+  signupBonus: 0, expiryMonths: 0,
+  tiers: [
+    { id: "bronze", name: "Bronze", threshold: 0, multiplier: 1, perks: [] },
+    { id: "silver", name: "Silver", threshold: 1000, multiplier: 1.25, perks: ["Priority support"] },
+    { id: "gold", name: "Gold", threshold: 5000, multiplier: 1.5, perks: ["Free delivery", "Birthday surprise"] },
+  ],
+  tierRules: { basis: "lifetime_points", windowDays: 365, graceDays: 30 },
+  stampCards: [],
+  cashback: { enabled: false, percent: 0, minOrderAmount: 0, maxRedeemPercent: 50, minRedeemAmount: 0, expiryDays: 90 },
+  referral: { enabled: false, rewardType: "points", referrerReward: 200, refereeReward: 100, minFirstOrder: 0 },
+  mystery: { enabled: false, triggerKind: "order_count", triggerValue: 5, pool: [] },
+  streak: { enabled: false, windowKind: "day", targetStreak: 5, rewardType: "points", rewardValue: 100 },
+  milestones: { enabled: false, windowDays: 0, tiers: [] },
+  birthday: { enabled: false, windowDays: 7, rewardType: "points", rewardValue: 100, notify: true },
+  doublePoints: { enabled: false, rules: [] },
+  itemRules: { enabled: false, rules: [] },
+  family: { enabled: false, maxMembers: 5, shareCashback: true, sharePoints: true },
+  featureFlags: {},
+};
+
 function LoyaltySection() {
-  const defaults: LoyaltyCfg = {
-    enabled: false,
-    pointsPerCurrencyUnit: 1, redemptionRate: 0.05,
-    signupBonus: 100, birthdayBonus: 50, referralBonus: 200,
-    tiers: [
-      { id: "bronze", name: "Bronze", threshold: 0, multiplier: 1 },
-      { id: "silver", name: "Silver", threshold: 1000, multiplier: 1.25 },
-      { id: "gold", name: "Gold", threshold: 5000, multiplier: 1.5 },
-    ],
-    expiryMonths: 0,
-  };
+  const [tab, setTab] = useState<Loyalty2Tab>("Core");
   return (
-    <SettingForm section="loyalty" defaults={defaults}>
+    <SettingForm<Loyalty2Cfg> section="loyalty" defaults={LOYALTY2_DEFAULTS}>
+      {(s, set) => (
+        <>
+          <div className="flex flex-wrap gap-1.5 border-b border-border pb-2">
+            {LOYALTY2_TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${tab === t ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-accent"}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+          {tab === "Core" && <LoyaltyCoreTab s={s} set={set} />}
+          {tab === "Tiers" && <LoyaltyTiersTab s={s} set={set} />}
+          {tab === "Stamps" && <LoyaltyStampsTab s={s} set={set} />}
+          {tab === "Cashback" && <LoyaltyCashbackTab s={s} set={set} />}
+          {tab === "Referrals" && <LoyaltyReferralsTab s={s} set={set} />}
+          {tab === "Mystery" && <LoyaltyMysteryTab s={s} set={set} />}
+          {tab === "Streaks" && <LoyaltyStreaksTab s={s} set={set} />}
+          {tab === "Milestones" && <LoyaltyMilestonesTab s={s} set={set} />}
+          {tab === "Birthday" && <LoyaltyBirthdayTab s={s} set={set} />}
+          {tab === "Double Points" && <LoyaltyDoublePointsTab s={s} set={set} />}
+          {tab === "Item Rules" && <LoyaltyItemRulesTab s={s} set={set} />}
+          {tab === "Family" && <LoyaltyFamilyTab s={s} set={set} />}
+        </>
+      )}
+    </SettingForm>
+  );
+}
+
+type Setter = (updater: (p: Loyalty2Cfg) => Loyalty2Cfg) => void;
+function flagToggle(s: Loyalty2Cfg, set: Setter, key: string, label: string) {
+  return (
+    <Toggle label={label} checked={s.featureFlags[key] !== false}
+      hint="Per-mechanic feature flag — turn off here without losing config."
+      onChange={v => set(p => ({ ...p, featureFlags: { ...p.featureFlags, [key]: v } }))} />
+  );
+}
+
+function LoyaltyCoreTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  return (
+    <>
+      <Toggle label="Loyalty program enabled (master switch — defaults OFF for existing tenants)"
+        checked={s.enabled} onChange={v => set(p => ({ ...p, enabled: v }))} />
+      <Row>
+        <Field label="Points per currency unit" hint="₹1 spent earns this many points (before tier/double-points multipliers).">
+          <Input type="number" step="0.1" value={s.pointsPerCurrencyUnit}
+            onChange={e => set(p => ({ ...p, pointsPerCurrencyUnit: Number(e.target.value) }))} />
+        </Field>
+        <Field label="Redemption rate" hint="Currency value per point (e.g. 0.05 = ₹0.05 per point).">
+          <Input type="number" step="0.01" value={s.redemptionRate}
+            onChange={e => set(p => ({ ...p, redemptionRate: Number(e.target.value) }))} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Sign-up bonus (points)">
+          <Input type="number" value={s.signupBonus}
+            onChange={e => set(p => ({ ...p, signupBonus: Number(e.target.value) }))} />
+        </Field>
+        <Field label="Points expiry (months)" hint="0 = never expires.">
+          <Input type="number" value={s.expiryMonths}
+            onChange={e => set(p => ({ ...p, expiryMonths: Number(e.target.value) }))} />
+        </Field>
+      </Row>
+    </>
+  );
+}
+
+function LoyaltyTiersTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  return (
+    <>
+      {flagToggle(s, set, "tiers", "Tiers enabled")}
+      <Row>
+        <Field label="Tier basis">
+          <Select value={s.tierRules.basis}
+            onChange={v => set(p => ({ ...p, tierRules: { ...p.tierRules, basis: v } }))}
+            options={[
+              { value: "lifetime_points", label: "Lifetime points" },
+              { value: "lifetime_spend",  label: "Lifetime spend" },
+              { value: "rolling_visits",  label: "Rolling visits" },
+            ]} />
+        </Field>
+        <Field label="Rolling window (days)" hint="Used for spend/visits bases. 0 = lifetime.">
+          <Input type="number" value={s.tierRules.windowDays}
+            onChange={e => set(p => ({ ...p, tierRules: { ...p.tierRules, windowDays: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <Field label="Grace period (days)" hint="Tier downgrade is delayed by this many days after threshold lapses.">
+        <Input type="number" value={s.tierRules.graceDays}
+          onChange={e => set(p => ({ ...p, tierRules: { ...p.tierRules, graceDays: Number(e.target.value) } }))} />
+      </Field>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Tier ladder</p>
+      <ListEditor items={s.tiers}
+        onChange={items => set(p => ({ ...p, tiers: items }))}
+        addLabel="Add tier"
+        makeNew={() => ({ id: `tier-${Date.now()}`, name: "", threshold: 0, multiplier: 1, perks: [] })}
+        render={(item, _i, update, remove) => (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Input className="flex-1" placeholder="Tier name" value={item.name} onChange={e => update({ name: e.target.value })} />
+              <span className="text-xs text-muted-foreground">at</span>
+              <Input className="w-28" type="number" placeholder="Threshold" value={item.threshold} onChange={e => update({ threshold: Number(e.target.value) })} />
+              <Input className="w-24" type="number" step="0.05" value={item.multiplier} onChange={e => update({ multiplier: Number(e.target.value) })} />
+              <span className="text-xs text-muted-foreground">×</span>
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+            </div>
+            <Input placeholder="Perks (comma-separated)" value={(item.perks ?? []).join(", ")}
+              onChange={e => update({ perks: e.target.value.split(",").map(p => p.trim()).filter(Boolean) })} />
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyStampsTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  return (
+    <>
+      {flagToggle(s, set, "stamps", "Punch / stamp cards enabled")}
+      <ListEditor items={s.stampCards}
+        onChange={cards => set(p => ({ ...p, stampCards: cards }))}
+        addLabel="Add stamp card"
+        makeNew={() => ({ id: `card-${Date.now()}`, name: "Buy 5, get 1 free", required: 5, rewardType: "free_item", rewardValue: "", rewardLabel: "" })}
+        render={(item, _i, update, remove) => (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Input className="flex-1" placeholder="Card name" value={item.name} onChange={e => update({ name: e.target.value })} />
+              <Input className="w-20" type="number" placeholder="Stamps" value={item.required} onChange={e => update({ required: Number(e.target.value) })} />
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={item.rewardType}
+                onChange={v => update({ rewardType: v })}
+                options={[{ value: "free_item", label: "Free item" }, { value: "coupon", label: "Coupon" }, { value: "points", label: "Points" }]} />
+              <Input className="flex-1" placeholder="Reward value (item name, coupon code, or points)" value={String(item.rewardValue)} onChange={e => update({ rewardValue: e.target.value })} />
+            </div>
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyCashbackTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const c = s.cashback;
+  return (
+    <>
+      <Toggle label="Cashback wallet enabled" checked={c.enabled}
+        onChange={v => set(p => ({ ...p, cashback: { ...p.cashback, enabled: v } }))} />
+      <Row>
+        <Field label="Earn %" hint="Percent of subtotal credited as cashback.">
+          <Input type="number" step="0.5" value={c.percent} onChange={e => set(p => ({ ...p, cashback: { ...p.cashback, percent: Number(e.target.value) } }))} />
+        </Field>
+        <Field label="Min order to earn (₹)">
+          <Input type="number" value={c.minOrderAmount} onChange={e => set(p => ({ ...p, cashback: { ...p.cashback, minOrderAmount: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Max redeem %" hint="Cap on how much of an order can be paid via cashback.">
+          <Input type="number" value={c.maxRedeemPercent} onChange={e => set(p => ({ ...p, cashback: { ...p.cashback, maxRedeemPercent: Number(e.target.value) } }))} />
+        </Field>
+        <Field label="Min wallet balance to redeem (₹)">
+          <Input type="number" value={c.minRedeemAmount} onChange={e => set(p => ({ ...p, cashback: { ...p.cashback, minRedeemAmount: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <Field label="Cashback expiry (days)" hint="0 = never">
+        <Input type="number" value={c.expiryDays} onChange={e => set(p => ({ ...p, cashback: { ...p.cashback, expiryDays: Number(e.target.value) } }))} />
+      </Field>
+    </>
+  );
+}
+
+function LoyaltyReferralsTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const r = s.referral;
+  return (
+    <>
+      <Toggle label="Referrals enabled" checked={r.enabled}
+        onChange={v => set(p => ({ ...p, referral: { ...p.referral, enabled: v } }))} />
+      <Row>
+        <Field label="Reward type">
+          <Select value={r.rewardType} onChange={v => set(p => ({ ...p, referral: { ...p.referral, rewardType: v } }))}
+            options={[{ value: "points", label: "Points" }, { value: "cashback", label: "Cashback" }, { value: "coupon", label: "Coupon" }]} />
+        </Field>
+        <Field label="Min first order (₹)" hint="Referee must spend at least this for the referral to convert.">
+          <Input type="number" value={r.minFirstOrder} onChange={e => set(p => ({ ...p, referral: { ...p.referral, minFirstOrder: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Referrer reward"><Input type="number" value={r.referrerReward} onChange={e => set(p => ({ ...p, referral: { ...p.referral, referrerReward: Number(e.target.value) } }))} /></Field>
+        <Field label="Referee reward"><Input type="number" value={r.refereeReward} onChange={e => set(p => ({ ...p, referral: { ...p.referral, refereeReward: Number(e.target.value) } }))} /></Field>
+      </Row>
+    </>
+  );
+}
+
+function LoyaltyMysteryTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const m = s.mystery;
+  return (
+    <>
+      <Toggle label="Mystery rewards enabled" checked={m.enabled}
+        onChange={v => set(p => ({ ...p, mystery: { ...p.mystery, enabled: v } }))} />
+      <Row>
+        <Field label="Trigger">
+          <Select value={m.triggerKind} onChange={v => set(p => ({ ...p, mystery: { ...p.mystery, triggerKind: v } }))}
+            options={[
+              { value: "order_count",  label: "Every Nth order" },
+              { value: "order_chance", label: "Chance per order (%)" },
+              { value: "scratch",      label: "Always grant a scratch card" },
+            ]} />
+        </Field>
+        <Field label={m.triggerKind === "order_chance" ? "Chance %" : "N (orders)"}>
+          <Input type="number" value={m.triggerValue} onChange={e => set(p => ({ ...p, mystery: { ...p.mystery, triggerValue: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Reward pool (weighted)</p>
+      <ListEditor items={m.pool}
+        onChange={pool => set(p => ({ ...p, mystery: { ...p.mystery, pool } }))}
+        addLabel="Add reward"
+        makeNew={() => ({ key: `r-${Date.now()}`, label: "", weight: 1, rewardType: "points", rewardValue: 50 })}
+        render={(item, _i, update, remove) => (
+          <div className="flex items-center gap-2">
+            <Input className="flex-1" placeholder="Label" value={item.label} onChange={e => update({ label: e.target.value })} />
+            <Input className="w-20" type="number" placeholder="Weight" value={item.weight} onChange={e => update({ weight: Number(e.target.value) })} />
+            <Select value={item.rewardType} onChange={v => update({ rewardType: v })}
+              options={[{ value: "points", label: "Points" }, { value: "cashback", label: "Cashback" }, { value: "coupon", label: "Coupon" }, { value: "free_item", label: "Free item" }]} />
+            <Input className="w-32" placeholder="Value" value={String(item.rewardValue)} onChange={e => update({ rewardValue: e.target.value })} />
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyStreaksTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const st = s.streak;
+  return (
+    <>
+      <Toggle label="Visit streaks enabled" checked={st.enabled}
+        onChange={v => set(p => ({ ...p, streak: { ...p.streak, enabled: v } }))} />
+      <Row>
+        <Field label="Window">
+          <Select value={st.windowKind} onChange={v => set(p => ({ ...p, streak: { ...p.streak, windowKind: v } }))}
+            options={[{ value: "day", label: "Daily streak" }, { value: "week", label: "Weekly streak" }]} />
+        </Field>
+        <Field label="Target streak length">
+          <Input type="number" value={st.targetStreak} onChange={e => set(p => ({ ...p, streak: { ...p.streak, targetStreak: Number(e.target.value) } }))} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Reward type">
+          <Select value={st.rewardType} onChange={v => set(p => ({ ...p, streak: { ...p.streak, rewardType: v } }))}
+            options={[{ value: "points", label: "Points" }, { value: "cashback", label: "Cashback" }, { value: "coupon", label: "Coupon" }]} />
+        </Field>
+        <Field label="Reward value">
+          <Input value={String(st.rewardValue)} onChange={e => set(p => ({ ...p, streak: { ...p.streak, rewardValue: e.target.value } }))} />
+        </Field>
+      </Row>
+    </>
+  );
+}
+
+function LoyaltyMilestonesTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const m = s.milestones;
+  return (
+    <>
+      <Toggle label="Spend milestones enabled" checked={m.enabled}
+        onChange={v => set(p => ({ ...p, milestones: { ...p.milestones, enabled: v } }))} />
+      <Field label="Window (days)" hint="0 = lifetime">
+        <Input type="number" value={m.windowDays} onChange={e => set(p => ({ ...p, milestones: { ...p.milestones, windowDays: Number(e.target.value) } }))} />
+      </Field>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Milestone tiers</p>
+      <ListEditor items={m.tiers}
+        onChange={tiers => set(p => ({ ...p, milestones: { ...p.milestones, tiers } }))}
+        addLabel="Add milestone"
+        makeNew={() => ({ key: `ms-${Date.now()}`, threshold: 1000, rewardType: "points", rewardValue: 100 })}
+        render={(item, _i, update, remove) => (
+          <div className="flex items-center gap-2">
+            <Input className="w-32" placeholder="Key" value={item.key} onChange={e => update({ key: e.target.value })} />
+            <Input className="w-32" type="number" placeholder="Spend ≥ ₹" value={item.threshold} onChange={e => update({ threshold: Number(e.target.value) })} />
+            <Select value={item.rewardType} onChange={v => update({ rewardType: v })}
+              options={[{ value: "points", label: "Points" }, { value: "cashback", label: "Cashback" }, { value: "coupon", label: "Coupon" }]} />
+            <Input className="w-32" placeholder="Value" value={String(item.rewardValue)} onChange={e => update({ rewardValue: e.target.value })} />
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyBirthdayTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const b = s.birthday;
+  return (
+    <>
+      <Toggle label="Birthday rewards enabled" checked={b.enabled}
+        onChange={v => set(p => ({ ...p, birthday: { ...p.birthday, enabled: v } }))} />
+      <Row>
+        <Field label="Window (days around birthday)">
+          <Input type="number" value={b.windowDays} onChange={e => set(p => ({ ...p, birthday: { ...p.birthday, windowDays: Number(e.target.value) } }))} />
+        </Field>
+        <Field label="Reward type">
+          <Select value={b.rewardType} onChange={v => set(p => ({ ...p, birthday: { ...p.birthday, rewardType: v } }))}
+            options={[{ value: "points", label: "Points" }, { value: "cashback", label: "Cashback" }, { value: "coupon", label: "Coupon" }]} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Reward value"><Input value={String(b.rewardValue)} onChange={e => set(p => ({ ...p, birthday: { ...p.birthday, rewardValue: e.target.value } }))} /></Field>
+        <Field label="Notify customer (in-app)">
+          <Toggle label="Send notification" checked={b.notify} onChange={v => set(p => ({ ...p, birthday: { ...p.birthday, notify: v } }))} />
+        </Field>
+      </Row>
+    </>
+  );
+}
+
+function LoyaltyDoublePointsTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  return (
+    <>
+      <Toggle label="Double-points days/dayparts enabled" checked={s.doublePoints.enabled}
+        onChange={v => set(p => ({ ...p, doublePoints: { ...p.doublePoints, enabled: v } }))} />
+      <ListEditor items={s.doublePoints.rules}
+        onChange={rules => set(p => ({ ...p, doublePoints: { ...p.doublePoints, rules } }))}
+        addLabel="Add rule"
+        makeNew={() => ({ id: `dp-${Date.now()}`, label: "Happy hours", multiplier: 2, daysOfWeek: [], startHour: 0, endHour: 24 })}
+        render={(item, _i, update, remove) => (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Input className="flex-1" placeholder="Label (e.g. Mon Madness)" value={item.label} onChange={e => update({ label: e.target.value })} />
+              <Input className="w-20" type="number" step="0.5" placeholder="× mult" value={item.multiplier} onChange={e => update({ multiplier: Number(e.target.value) })} />
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Days (0=Sun..6=Sat):</span>
+              <Input className="flex-1" placeholder="e.g. 1,3,5" value={(item.daysOfWeek ?? []).join(",")}
+                onChange={e => update({ daysOfWeek: e.target.value.split(",").map(x => Number(x.trim())).filter(n => Number.isFinite(n)) })} />
+              <span className="text-muted-foreground">Hours:</span>
+              <Input className="w-16" type="number" value={item.startHour ?? 0} onChange={e => update({ startHour: Number(e.target.value) })} />
+              <span>—</span>
+              <Input className="w-16" type="number" value={item.endHour ?? 24} onChange={e => update({ endHour: Number(e.target.value) })} />
+            </div>
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyItemRulesTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  return (
+    <>
+      <Toggle label="Item-specific bonuses enabled" checked={s.itemRules.enabled}
+        onChange={v => set(p => ({ ...p, itemRules: { ...p.itemRules, enabled: v } }))} />
+      <ListEditor items={s.itemRules.rules}
+        onChange={rules => set(p => ({ ...p, itemRules: { ...p.itemRules, rules } }))}
+        addLabel="Add rule"
+        makeNew={() => ({ id: `ir-${Date.now()}`, scope: "item", refId: 0, multiplier: 1, bonusPoints: 0, earnsStampCardId: "" })}
+        render={(item, _i, update, remove) => (
+          <div className="flex items-center gap-2">
+            <Select value={item.scope} onChange={v => update({ scope: v })}
+              options={[{ value: "item", label: "Menu item id" }, { value: "category", label: "Category id" }]} />
+            <Input className="w-24" type="number" placeholder="Ref id" value={item.refId} onChange={e => update({ refId: Number(e.target.value) })} />
+            <Input className="w-24" type="number" step="0.1" placeholder="× mult" value={item.multiplier ?? 1} onChange={e => update({ multiplier: Number(e.target.value) })} />
+            <Input className="w-24" type="number" placeholder="+ pts" value={item.bonusPoints ?? 0} onChange={e => update({ bonusPoints: Number(e.target.value) })} />
+            <Input className="w-32" placeholder="Stamp card id" value={item.earnsStampCardId ?? ""} onChange={e => update({ earnsStampCardId: e.target.value })} />
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+          </div>
+        )} />
+    </>
+  );
+}
+
+function LoyaltyFamilyTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
+  const f = s.family;
+  return (
+    <>
+      <Toggle label="Family accounts enabled (members share rewards)" checked={f.enabled}
+        onChange={v => set(p => ({ ...p, family: { ...p.family, enabled: v } }))} />
+      <Row>
+        <Field label="Max members per family"><Input type="number" value={f.maxMembers} onChange={e => set(p => ({ ...p, family: { ...p.family, maxMembers: Number(e.target.value) } }))} /></Field>
+        <Field label="Sharing">
+          <div className="flex flex-col gap-1">
+            <Toggle label="Share points" checked={f.sharePoints} onChange={v => set(p => ({ ...p, family: { ...p.family, sharePoints: v } }))} />
+            <Toggle label="Share cashback" checked={f.shareCashback} onChange={v => set(p => ({ ...p, family: { ...p.family, shareCashback: v } }))} />
+          </div>
+        </Field>
+      </Row>
+    </>
+  );
+}
+
+// Legacy compat wrapper (unused — kept for the old shape so older code doesn't error).
+interface LoyaltyTier { id: string; name: string; threshold: number; multiplier: number; }
+interface _LegacyLoyaltyCfg { enabled: boolean; pointsPerCurrencyUnit: number; redemptionRate: number; tiers: LoyaltyTier[]; expiryMonths: number; }
+function _UnusedLegacyLoyaltySection() {
+  const defaults: _LegacyLoyaltyCfg = { enabled: false, pointsPerCurrencyUnit: 1, redemptionRate: 0.05, tiers: [], expiryMonths: 0 };
+  return (
+    <SettingForm section="loyalty_legacy_unused" defaults={defaults}>
       {(s, set) => (
         <>
           <Toggle label="Loyalty program enabled" checked={s.enabled} onChange={v => set(p => ({ ...p, enabled: v }))} />
