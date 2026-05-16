@@ -376,3 +376,61 @@ export type PayrollItem = typeof payrollItemsTable.$inferSelect;
 export const insertPayrollPaymentSchema = createInsertSchema(payrollPaymentsTable).omit({ id: true, createdAt: true });
 export type InsertPayrollPayment = z.infer<typeof insertPayrollPaymentSchema>;
 export type PayrollPayment = typeof payrollPaymentsTable.$inferSelect;
+
+// ===================== Staff Incentives (Task #199) =====================
+// Owner-configured incentive rules per restaurant. Six rule types (one row
+// each per restaurant): upsell_commission, review_bonus, attendance_bonus,
+// sales_target, table_turnover, low_complaint_bonus. `params` is rule-shape
+// specific (e.g. {ratePct:1.5, minOrderAmount:200} for upsell_commission).
+export const staffIncentiveRulesTable = pgTable("staff_incentive_rules", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  ruleType: text("rule_type").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
+  monthlyCap: decimal("monthly_cap", { precision: 12, scale: 2 }),
+  updatedByUserId: integer("updated_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique("staff_incentive_rules_rest_type_uq").on(t.restaurantId, t.ruleType)]);
+
+// One computed incentive per (staff, period, rule_type). Status drives the
+// approval workflow; only `approved` rows feed payroll runs.
+export const staffIncentivesTable = pgTable("staff_incentives", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  periodYear: integer("period_year").notNull(),
+  periodMonth: integer("period_month").notNull(),
+  ruleType: text("rule_type").notNull(),
+  computedAmount: decimal("computed_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  approvedAmount: decimal("approved_amount", { precision: 12, scale: 2 }),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  breakdown: jsonb("breakdown").$type<Record<string, unknown>>().notNull().default({}),
+  approverUserId: integer("approver_user_id").references(() => usersTable.id),
+  decidedAt: timestamp("decided_at"),
+  notes: text("notes"),
+  computedAt: timestamp("computed_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  unique("staff_incentives_uq").on(t.restaurantId, t.userId, t.periodYear, t.periodMonth, t.ruleType),
+  index("staff_incentives_period_idx").on(t.restaurantId, t.periodYear, t.periodMonth, t.status),
+]);
+
+export const insertStaffIncentiveRuleSchema = createInsertSchema(staffIncentiveRulesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStaffIncentiveRule = z.infer<typeof insertStaffIncentiveRuleSchema>;
+export type StaffIncentiveRule = typeof staffIncentiveRulesTable.$inferSelect;
+
+export const insertStaffIncentiveSchema = createInsertSchema(staffIncentivesTable).omit({ id: true, computedAt: true, updatedAt: true });
+export type InsertStaffIncentive = z.infer<typeof insertStaffIncentiveSchema>;
+export type StaffIncentive = typeof staffIncentivesTable.$inferSelect;
+
+export const STAFF_INCENTIVE_RULE_TYPES = [
+  "upsell_commission",
+  "review_bonus",
+  "attendance_bonus",
+  "sales_target",
+  "table_turnover",
+  "low_complaint_bonus",
+] as const;
+export type StaffIncentiveRuleType = (typeof STAFF_INCENTIVE_RULE_TYPES)[number];

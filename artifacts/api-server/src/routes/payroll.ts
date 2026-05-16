@@ -18,6 +18,7 @@ import {
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { computePayroll, monthBounds, formatMoney, type CalcSalaryStructure, type CalcAttendanceRow } from "../lib/payroll";
+import { getApprovedIncentiveTotals } from "../lib/incentives";
 import { pushToUserIds } from "../lib/pushNotify";
 import { logger } from "../lib/logger";
 
@@ -238,17 +239,47 @@ async function gatherInputs(restaurantId: number, year: number, month: number) {
     logger.warn({ err }, "payroll commission lookup failed");
   }
 
-  const items: ComputedItem[] = staff.map((u) => ({
-    userId: u.id,
-    userName: u.name ?? `User #${u.id}`,
-    employeeCode: null,
-    structure: structureByUser.get(u.id) ?? null,
-    attendance: attByUser.get(u.id) ?? [],
-    advances: advByUser.get(u.id) ?? [],
-    adjustments: adjByUser.get(u.id) ?? [],
-    commissionSales: String(salesByUser.get(u.id)?.sales ?? 0),
-    commissionOrders: salesByUser.get(u.id)?.orders ?? 0,
-  }));
+  // Approved incentives for the period (Task #199) — appear as bonus
+  // earnings line items, one per incentive rule, with stable labels so the
+  // staff member can see why they were paid extra.
+  let incentivesByUser = new Map<number, { total: number; lines: Array<{ ruleType: string; amount: number }> }>();
+  try {
+    incentivesByUser = await getApprovedIncentiveTotals(restaurantId, year, month);
+  } catch (err) {
+    logger.warn({ err }, "payroll incentive fetch failed");
+  }
+  function ruleLabel(ruleType: string): string {
+    const map: Record<string, string> = {
+      upsell_commission: "Incentive — Upsell commission",
+      review_bonus: "Incentive — Review bonus",
+      attendance_bonus: "Incentive — Attendance bonus",
+      sales_target: "Incentive — Sales target",
+      table_turnover: "Incentive — Table turnover",
+      low_complaint_bonus: "Incentive — Low complaint bonus",
+    };
+    return map[ruleType] ?? `Incentive — ${ruleType}`;
+  }
+
+  const items: ComputedItem[] = staff.map((u) => {
+    const baseAdjustments = adjByUser.get(u.id) ?? [];
+    const incLines = incentivesByUser.get(u.id)?.lines ?? [];
+    const incAdjustments = incLines.map((l) => ({
+      kind: "bonus" as const,
+      amount: l.amount.toFixed(2),
+      label: ruleLabel(l.ruleType),
+    }));
+    return {
+      userId: u.id,
+      userName: u.name ?? `User #${u.id}`,
+      employeeCode: null,
+      structure: structureByUser.get(u.id) ?? null,
+      attendance: attByUser.get(u.id) ?? [],
+      advances: advByUser.get(u.id) ?? [],
+      adjustments: [...baseAdjustments, ...incAdjustments],
+      commissionSales: String(salesByUser.get(u.id)?.sales ?? 0),
+      commissionOrders: salesByUser.get(u.id)?.orders ?? 0,
+    };
+  });
 
   return { items, daysInMonth };
 }

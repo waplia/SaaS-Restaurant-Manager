@@ -22,6 +22,7 @@ import WastePage from "@/pages/waste";
 import CompliancePage from "@/pages/compliance";
 import CloudKitchenPage from "@/pages/cloud-kitchen";
 import PayrollPage from "@/pages/payroll";
+import StaffIncentivesPage from "@/pages/staff-incentives";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
@@ -252,6 +253,7 @@ function Router() {
       <Route path="/compliance" component={() => <RoleProtectedRoute component={CompliancePage} allow={["owner", "manager"]} />} />
       <Route path="/cloud-kitchen" component={() => <RoleProtectedRoute component={CloudKitchenPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
+      <Route path="/staff-incentives" component={() => <RoleProtectedRoute component={StaffIncentivesPage} allow={["owner", "manager"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
       <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/aggregator-payouts" component={() => <RoleProtectedRoute component={AggregatorReconPage} allow={["owner", "manager", "super_admin"]} />} />

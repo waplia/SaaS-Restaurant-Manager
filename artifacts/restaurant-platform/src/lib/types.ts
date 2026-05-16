@@ -2213,3 +2213,51 @@ export interface WasteByReason { reasonId: number | null; reasonLabel: string | 
 export interface WasteByStaff { userId: number | null; userName: string | null; count: number; approvedCount: number; rejectedCount: number; cost: string }
 export interface WasteByItem { itemId: number; itemName: string | null; itemUnit: string | null; qty: string; cost: string; count: number }
 export interface WasteDashboardTile { totalCost: string; pendingCount: number; donatedCost: string }
+
+// ---------- Staff incentives (Task #199) ----------
+export type StaffIncentiveRuleType =
+  | "upsell_commission"
+  | "review_bonus"
+  | "attendance_bonus"
+  | "sales_target"
+  | "table_turnover"
+  | "low_complaint_bonus";
+
+export interface StaffIncentiveRule {
+  id: number;
+  restaurantId: number;
+  ruleType: StaffIncentiveRuleType;
+  enabled: boolean;
+  params: Record<string, unknown>;
+  monthlyCap: string | null;
+  updatedByUserId: number | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface StaffIncentive {
+  id: number;
+  restaurantId: number;
+  userId: number;
+  userName: string;
+  periodYear: number;
+  periodMonth: number;
+  ruleType: StaffIncentiveRuleType;
+  computedAmount: string;
+  approvedAmount: string | null;
+  status: "pending" | "approved" | "rejected";
+  breakdown: Record<string, unknown>;
+  approverUserId: number | null;
+  decidedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffIncentiveLeaderboardRow {
+  userId: number;
+  userName: string;
+  totalApproved: number;
+  totalPending: number;
+  breakdown: Record<string, number>;
+}

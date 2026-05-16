@@ -485,6 +485,75 @@ export function startScheduler(): void {
     } catch (err) { logger.error({ err }, "[tiffin] billing reminders failed"); }
   });
 
+  registerCron("staff_incentives_recompute", "0 4 * * *", "Daily 04:00 IST: recompute staff incentives for current and previous month for all restaurants");
+  trackCron("staff_incentives_recompute", "0 4 * * *", async () => {
+    try {
+      const { computeIncentivesForPeriod } = await import("./incentives");
+      const { staffIncentivesTable, staffIncentiveRulesTable } = await import("./db");
+      const restaurants = await db
+        .select({ id: restaurantsTable.id })
+        .from(restaurantsTable);
+      const now = new Date();
+      const ist = new Date(now.getTime() + (5 * 60 + 30) * 60 * 1000);
+      const periods: Array<{ y: number; m: number }> = [];
+      const cy = ist.getUTCFullYear();
+      const cm = ist.getUTCMonth() + 1;
+      periods.push({ y: cy, m: cm });
+      const prev = new Date(Date.UTC(cy, cm - 2, 1));
+      periods.push({ y: prev.getUTCFullYear(), m: prev.getUTCMonth() + 1 });
+      let totalUpserts = 0;
+      for (const r of restaurants) {
+        const enabled = await db
+          .select({ id: staffIncentiveRulesTable.id })
+          .from(staffIncentiveRulesTable)
+          .where(and(eq(staffIncentiveRulesTable.restaurantId, r.id), eq(staffIncentiveRulesTable.enabled, true)))
+          .limit(1);
+        if (enabled.length === 0) continue;
+        for (const p of periods) {
+          try {
+            const computed = await computeIncentivesForPeriod(r.id, p.y, p.m);
+            const existing = await db
+              .select()
+              .from(staffIncentivesTable)
+              .where(and(
+                eq(staffIncentivesTable.restaurantId, r.id),
+                eq(staffIncentivesTable.periodYear, p.y),
+                eq(staffIncentivesTable.periodMonth, p.m),
+              ));
+            const existingByKey = new Map(existing.map((e) => [`${e.userId}:${e.ruleType}`, e]));
+            for (const c of computed) {
+              const key = `${c.userId}:${c.ruleType}`;
+              const ex = existingByKey.get(key);
+              const amount = c.amount.toFixed(2);
+              if (!ex) {
+                await db.insert(staffIncentivesTable).values({
+                  restaurantId: r.id,
+                  userId: c.userId,
+                  periodYear: p.y,
+                  periodMonth: p.m,
+                  ruleType: c.ruleType,
+                  computedAmount: amount,
+                  status: "pending",
+                  breakdown: c.breakdown,
+                });
+                totalUpserts++;
+              } else if (ex.status === "pending") {
+                await db
+                  .update(staffIncentivesTable)
+                  .set({ computedAmount: amount, breakdown: c.breakdown, updatedAt: new Date() })
+                  .where(eq(staffIncentivesTable.id, ex.id));
+                totalUpserts++;
+              }
+            }
+          } catch (err) {
+            logger.warn({ err, restaurantId: r.id, period: p }, "[incentives] recompute failed");
+          }
+        }
+      }
+      logger.info({ totalUpserts }, "[incentives] nightly recompute complete");
+    } catch (err) { logger.error({ err }, "[incentives] nightly job failed"); }
+  });
+
   registerCron("tiffin_monthly_invoices", "0 1 1 * *", "Monthly 01:00 IST on the 1st: generate prior-month tiffin invoices");
   trackCron("tiffin_monthly_invoices", "0 1 1 * *", async () => {
     try {

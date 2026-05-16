@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl } from "./api";
+import type { StaffIncentiveRule, StaffIncentive, StaffIncentiveLeaderboardRow } from "./types";
 import { useBranchContext } from "./branch";
 import { useAuth } from "./auth";
 import { toast as notify } from "@/hooks/use-toast";
@@ -3744,4 +3745,98 @@ export function useWasteDashboardTile() {
     queryFn: () => apiGet<import("./types").WasteDashboardTile>(`/restaurants/${rid}/waste/dashboard-tile`),
     refetchInterval: 60_000,
   });
+}
+
+// ---------- Staff incentives (Task #199) ----------
+export function useStaffIncentiveRules() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery<StaffIncentiveRule[]>({
+    queryKey: ["staff-incentive-rules", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/staff-incentive-rules`),
+  });
+}
+
+export function useUpdateStaffIncentiveRule() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { ruleType: string; enabled: boolean; params: Record<string, unknown>; monthlyCap: string | null }) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/staff-incentive-rules/${input.ruleType}`, {
+        enabled: input.enabled, params: input.params, monthlyCap: input.monthlyCap,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["staff-incentive-rules", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useStaffIncentives(year: number, month: number, status?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery<StaffIncentive[]>({
+    queryKey: ["staff-incentives", RESTAURANT_ID, year, month, status ?? null],
+    queryFn: () => {
+      const qs = new URLSearchParams({ year: String(year), month: String(month) });
+      if (status) qs.set("status", status);
+      return apiGet(`/restaurants/${RESTAURANT_ID}/staff-incentives?${qs}`);
+    },
+  });
+}
+
+export function useRecomputeStaffIncentives() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { year: number; month: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/staff-incentives/recompute`, {
+        periodYear: input.year, periodMonth: input.month,
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["staff-incentives", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["staff-incentive-leaderboard", RESTAURANT_ID, v.year, v.month] });
+    },
+  });
+}
+
+export function useDecideStaffIncentive() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: number; decision: "approve" | "reject"; approvedAmount?: string; notes?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/staff-incentives/${input.id}/decide`, {
+        decision: input.decision,
+        approvedAmount: input.approvedAmount,
+        notes: input.notes,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["staff-incentives", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["staff-incentive-leaderboard", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useApproveAllStaffIncentives() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { year: number; month: number }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/staff-incentives/approve-all`, {
+        periodYear: input.year, periodMonth: input.month,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["staff-incentives", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["staff-incentive-leaderboard", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useStaffIncentiveLeaderboard(year: number, month: number) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery<StaffIncentiveLeaderboardRow[]>({
+    queryKey: ["staff-incentive-leaderboard", RESTAURANT_ID, year, month],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/staff-incentives/leaderboard?year=${year}&month=${month}`),
+  });
+}
+
+export function staffIncentiveCsvUrl(restaurantId: number, year: number, month: number): string {
+  return `/api/restaurants/${restaurantId}/staff-incentives/report.csv?year=${year}&month=${month}`;
 }
