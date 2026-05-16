@@ -60,6 +60,7 @@ interface AiLog {
   latencyMs: number | null; retries: number; fallbackUsed: boolean;
   costUsd: string; creditsUsed: number;
   restaurantId: number | null; userId: number | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -726,6 +727,7 @@ function SafetySubTab() {
 
 // ─── Logs ────────────────────────────────────────────────────────────────────
 function LogsSubTab() {
+  const { toast } = useToast();
   const [filters, setFilters] = useState({ featureSlug: "", providerSlug: "", model: "", status: "", restaurantId: "", userId: "", from: "", to: "" });
   const [page, setPage] = useState(0);
   const limit = 50;
