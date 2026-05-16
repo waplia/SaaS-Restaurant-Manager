@@ -1,0 +1,957 @@
+Audit and upgrade the public KhanaLagao website.
+
+Current issue:
+The homepage is designed well, but not all pages are designed with the same quality. Some pages look basic, some pages do not have rich content/media/icons/graphics, and the header menu does not show all important pages/features. I want the complete public website to look premium and consistent across every page.
+
+Important:
+- Do not break app/dashboard routes.
+- Do not change restaurant admin or super admin.
+- Work only on the public marketing website and public legal/content pages.
+- Do not redesign only homepage.
+- Every page should look premium, rich, modern, responsive, and SEO-friendly.
+- Use the same design system, header, footer, spacing, typography, buttons, cards, icons, gradients, and visual style across all pages.
+- No basic/plain pages.
+- No empty pages.
+- No broken links.
+- No lorem ipsum.
+- No missing header/footer.
+- Every important feature should have a proper page or section.
+
+Brand:
+KhanaLagao
+
+Positioning:
+Restaurant Operating System + Growth Cloud + Finance + Khana AI
+
+Website goal:
+Make KhanaLagao look like a world-class SaaS platform for restaurants, cafes, cloud kitchens, hotels, food courts, tiffin services, catering businesses, and franchise chains.
+
+====================================================
+1. GLOBAL WEBSITE DESIGN SYSTEM
+====================================================
+
+Create or standardize reusable components:
+
+- MainWebsiteHeader
+- MegaMenu
+- MobileMenu
+- WebsiteFooter
+- PageHero
+- FeatureHero
+- SolutionHero
+- FeatureGrid
+- FeatureCard
+- BenefitsSection
+- HowItWorksSection
+- ScreenshotMockup
+- DashboardMockup
+- StatsSection
+- UseCaseSection
+- ComparisonTable
+- FAQSection
+- CTASection
+- TestimonialSection
+- PricingCard
+- BlogCard
+- Breadcrumbs
+- SEOHead
+- LegalPageLayout
+
+Every page should use these shared components so design is consistent.
+
+Design style:
+- Premium SaaS
+- Modern restaurant-tech
+- Orange/dark/white theme
+- Gradient hero sections
+- Clean cards
+- Icons
+- Graphics
+- Dashboard mockups
+- Section dividers
+- Mobile responsive
+- Professional spacing
+- Strong CTAs
+- Rich content
+
+Each page must include:
+- Header
+- Footer
+- Hero section
+- Rich content sections
+- Icons/visuals/mockups
+- CTA section
+- FAQ section where useful
+- SEO metadata
+- Breadcrumbs where useful
+
+====================================================
+2. HEADER / NAVIGATION / MEGA MENU
+====================================================
+
+Fix website header so it shows all important pages clearly.
+
+Header should include:
+
+Logo: KhanaLagao
+
+Top-level menu:
+- Platform
+- Features
+- Solutions
+- Khana AI
+- Pricing
+- Resources
+- Company
+
+Right-side buttons:
+- Login
+- Book Demo
+- Start Free Trial
+
+Create mega menus.
+
+Platform mega menu:
+- Platform Overview
+- Restaurant POS
+- QR Menu
+- Online Ordering
+- Kitchen Display / KOT
+- Table Management
+- Inventory Management
+- Staff & Payroll
+- Finance & P&L
+- Growth Engine
+- Khana AI
+- Reports & Analytics
+- Super Admin SaaS
+
+Features mega menu:
+Sell:
+- POS Terminal
+- Orders
+- Kitchen / KDS
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery Management
+
+Menu:
+- Menu Management
+- QR Menu
+- Combos & Add-ons
+- Dynamic Pricing
+- Competitor Tracker
+
+Inventory:
+- Stock Management
+- Purchase Orders
+- Vendors
+- Waste Management
+- Recipes
+- Stock Transfers
+
+Customers:
+- CRM
+- Feedback & Surveys
+- Loyalty
+- Memberships
+- Review Booster
+
+Growth:
+- Campaigns
+- Coupons
+- Referrals
+- Loyalty Analytics
+- Customer Segments
+
+Staff:
+- Staff Directory
+- Attendance
+- Payroll
+- Staff Tasks
+- SOP & Training
+- Mystery Audits
+
+Finance:
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+
+Operations:
+- Events & Catering
+- Hotel Mode
+- Food Court
+- Corporate Ordering
+- Tiffin Management
+
+Marketplace:
+- Vendor Marketplace
+- Add-ons
+- Hardware
+- Integrations
+
+Solutions mega menu:
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Bakeries
+- Bars & Pubs
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering & Banquets
+- Franchise Chains
+- Corporate Canteens
+- School/College Canteens
+
+Khana AI menu:
+- Khana AI Overview
+- AI Menu Import
+- AI Descriptions
+- AI Food Images
+- AI Review Booster
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Chat Assistant
+- AI Credits
+
+Resources menu:
+- Blog
+- Help Center
+- Guides
+- FAQs
+- Comparison
+- Case Studies
+- Partner Program
+
+Company menu:
+- About
+- Contact
+- Security
+- Careers placeholder
+- Privacy Policy
+- Terms & Conditions
+- Refund Policy
+- Cookie Policy
+
+Mobile menu:
+- Should show all same menus in collapsible groups.
+- Should be easy to scroll.
+- CTA buttons should be visible.
+- No hidden important pages.
+
+====================================================
+3. REQUIRED PUBLIC PAGES
+====================================================
+
+Make sure these pages exist and are fully designed.
+
+Main pages:
+- /
+- /platform
+- /features
+- /pricing
+- /book-demo
+- /contact
+- /about
+- /security
+- /partners
+- /compare
+- /faq
+
+Core feature pages:
+- /features/pos-terminal
+- /features/orders
+- /features/kitchen-display
+- /features/table-management
+- /features/reservations
+- /features/waiter-requests
+- /features/delivery-management
+- /features/menu-management
+- /features/qr-menu
+- /features/online-ordering
+- /features/dynamic-pricing
+- /features/competitor-tracker
+- /features/inventory-management
+- /features/purchase-orders
+- /features/vendor-management
+- /features/waste-management
+- /features/recipe-management
+- /features/stock-transfers
+- /features/customer-crm
+- /features/feedback-surveys
+- /features/loyalty
+- /features/memberships
+- /features/review-booster
+- /features/growth-engine
+- /features/campaigns
+- /features/coupons
+- /features/referrals
+- /features/staff-management
+- /features/attendance
+- /features/payroll
+- /features/staff-tasks
+- /features/sop-training
+- /features/mystery-audits
+- /features/finance
+- /features/payments
+- /features/expenses
+- /features/wallet
+- /features/settlements
+- /features/profit-loss
+- /features/invoices
+- /features/reports-analytics
+- /features/marketplace
+- /features/vendor-marketplace
+- /features/hardware
+- /features/integrations
+- /features/super-admin
+
+Khana AI pages:
+- /khana-ai
+- /khana-ai/menu-import
+- /khana-ai/descriptions
+- /khana-ai/food-images
+- /khana-ai/review-booster
+- /khana-ai/campaigns
+- /khana-ai/sales-insights
+- /khana-ai/forecasting
+- /khana-ai/chat-assistant
+- /khana-ai/credits
+
+Solution pages:
+- /solutions/restaurants
+- /solutions/cafes
+- /solutions/cloud-kitchens
+- /solutions/bakeries
+- /solutions/bars-pubs
+- /solutions/hotels
+- /solutions/food-courts
+- /solutions/tiffin-services
+- /solutions/catering-banquets
+- /solutions/franchise-chains
+- /solutions/corporate-canteens
+- /solutions/school-college-canteens
+
+Operations pages:
+- /solutions/events-catering
+- /solutions/hotel-mode
+- /solutions/food-court-management
+- /solutions/corporate-ordering
+- /solutions/tiffin-management
+
+Resource pages:
+- /blog
+- /blog/[slug]
+- /help
+- /guides
+- /case-studies
+- /resources
+
+Legal pages:
+- /privacy-policy
+- /terms
+- /refund-policy
+- /cookie-policy
+- /data-processing-agreement
+- /acceptable-use-policy
+
+Utility pages:
+- /login
+- /start-free-trial
+- /thank-you
+- /404
+
+If some pages already exist, upgrade them. If missing, create them.
+
+====================================================
+4. PAGE QUALITY STANDARD
+====================================================
+
+Every feature page must not be plain.
+
+Each feature page should include:
+
+1. SEO metadata
+- Meta title
+- Meta description
+- Keywords
+- Canonical
+- Open Graph tags
+
+2. Hero section
+- Feature title
+- Benefit-focused subtitle
+- CTA buttons
+- Visual mockup or illustration
+- Breadcrumb
+
+3. Problem section
+- Explain restaurant problem
+
+4. Solution section
+- How KhanaLagao solves it
+
+5. Feature breakdown
+- 6 to 12 feature cards with icons
+
+6. How it works
+- 3 to 5 steps
+
+7. Benefits section
+- Faster service
+- Lower cost
+- Better control
+- More revenue
+- Better customer experience
+
+8. Product visual section
+- Dashboard mockup
+- POS screen mockup
+- Mobile QR mockup
+- KDS mockup
+- Report mockup
+Use relevant visual depending on page.
+
+9. Related modules section
+- Link to related pages
+
+10. Use cases
+- Who should use it
+
+11. FAQ section
+- 5 to 8 FAQs
+
+12. CTA section
+- Book demo
+- Start trial
+
+Every solution page should include:
+
+1. SEO metadata
+2. Hero section
+3. Industry pain points
+4. Recommended modules
+5. Workflow example
+6. Benefits
+7. Case-style scenario
+8. FAQ
+9. CTA
+
+Every legal page should include:
+- Proper header/footer
+- Clean legal layout
+- Table of contents
+- Last updated date
+- Clear sections
+- Professional language
+- Contact email placeholder from site settings
+- SEO metadata
+- No fancy unnecessary graphics, but still polished layout
+
+====================================================
+5. RICH CONTENT REQUIREMENTS
+====================================================
+
+Add rich content across pages.
+
+Use:
+- Icons
+- Product UI mockups
+- Screenshots placeholders
+- Graph cards
+- Floating metrics
+- Feature cards
+- Timeline
+- Workflow diagrams
+- Comparison tables
+- Testimonial cards
+- FAQ accordions
+- CTA banners
+- Stats blocks
+- Industry-specific illustrations
+- Mobile app/QR menu mockups
+- Dashboard visuals
+
+No page should look like only text.
+
+Use high-quality content style:
+- Clear headings
+- Short paragraphs
+- Benefit-focused copy
+- Business owner language
+- SEO-friendly keywords
+- Conversion-focused CTAs
+
+====================================================
+6. CONTENT DIRECTION FOR KEY PAGES
+====================================================
+
+Home page should show complete platform story:
+- POS
+- QR Menu
+- Online Ordering
+- Kitchen
+- Inventory
+- Payroll
+- Customers
+- Growth Engine
+- Khana AI
+- Finance
+- Marketplace
+- Reports
+- Multi-outlet
+- CTA
+
+Platform page should explain:
+- Complete restaurant operating system
+- Workflow from order to kitchen to inventory to payment to reports
+- Why it is better than separate tools
+- Multi-outlet readiness
+- AI and growth layer
+
+Features page should be a rich feature directory:
+- Organized by Sell, Menu, Inventory, Customers, Growth, AI, Staff, Finance, Operations, Marketplace, Reports
+
+Khana AI page should explain:
+- AI Menu Import
+- AI Descriptions
+- AI Food Images
+- AI Review Booster
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Chat
+- AI Credits
+
+Pricing page should include:
+- Starter
+- Growth
+- Pro
+- Enterprise
+- Add-ons
+- AI credit packs
+- Feature comparison
+- FAQ
+- Contact sales CTA
+
+Super Admin page should explain:
+- SaaS control
+- Restaurant management
+- Plans/subscriptions
+- AI providers
+- Credits
+- CMS
+- Leads
+- Support
+- Reports
+- Feature flags
+
+Review Booster page should explain:
+- Customer scans QR
+- Gives rating/tags
+- AI drafts review
+- Customer copies
+- Opens Google review link
+- No Google API required
+- Feedback analytics
+
+Growth Engine page should explain:
+- Campaigns
+- Customer segments
+- Win-back
+- Birthday/anniversary
+- Coupons
+- Referrals
+- Loyalty analytics
+
+Finance page should explain:
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+- True profit visibility
+
+Marketplace page should explain:
+- Vendor marketplace
+- Add-ons
+- Hardware
+- Integrations
+
+====================================================
+7. LEGAL PAGES REQUIREMENTS
+====================================================
+
+Create polished legal pages:
+
+Privacy Policy:
+Sections:
+- Introduction
+- Information we collect
+- How we use information
+- Restaurant/customer data
+- Payment data
+- AI feature data
+- Cookies
+- Data sharing
+- Data security
+- Data retention
+- User rights
+- Contact
+
+Terms & Conditions:
+Sections:
+- Acceptance of terms
+- Use of platform
+- Restaurant responsibilities
+- Subscription and billing
+- AI feature usage
+- Prohibited use
+- Account security
+- Intellectual property
+- Limitation of liability
+- Termination
+- Changes to terms
+- Contact
+
+Refund Policy:
+Sections:
+- Subscription refunds
+- Setup fee refunds
+- AI credit refunds
+- Cancellation
+- Billing disputes
+- Contact
+
+Cookie Policy:
+Sections:
+- What cookies are
+- Types of cookies
+- Analytics cookies
+- Preference cookies
+- How to manage cookies
+- Contact
+
+Data Processing Agreement:
+Sections:
+- Data controller/processor
+- Processing purpose
+- Security measures
+- Subprocessors
+- Data retention
+- Deletion request
+- Contact
+
+Acceptable Use Policy:
+Sections:
+- Prohibited content
+- Spam
+- Abuse
+- Unauthorized access
+- AI misuse
+- Review misuse
+- Suspension rights
+
+Keep legal language professional but simple.
+
+====================================================
+8. SEO REQUIREMENTS
+====================================================
+
+Every public page needs:
+- Unique meta title
+- Unique meta description
+- SEO-friendly slug
+- H1
+- H2/H3 hierarchy
+- Internal links
+- Image alt tags
+- Open Graph
+- Canonical
+- Breadcrumbs
+
+Add structured data where suitable:
+- Organization schema
+- SoftwareApplication schema
+- Product schema
+- FAQ schema
+- Breadcrumb schema
+- BlogPosting schema
+- Article schema
+- LocalBusiness schema where suitable
+
+Add/update:
+- sitemap.xml
+- robots.txt
+- dynamic sitemap for feature pages and blog pages
+- 404 page
+- thank-you page
+
+SEO keyword focus:
+- Restaurant management software
+- Restaurant POS software
+- Restaurant billing software
+- QR menu software
+- Restaurant inventory software
+- Restaurant payroll software
+- Restaurant CRM software
+- Restaurant loyalty software
+- Restaurant AI software
+- AI restaurant management software
+- Restaurant growth software
+- Cloud kitchen software
+- Tiffin management software
+- Catering management software
+- Food court management software
+- Restaurant franchise software
+- Restaurant P&L software
+- Restaurant review management software
+
+====================================================
+9. FOOTER REQUIREMENTS
+====================================================
+
+Footer should be rich and include all important links.
+
+Footer columns:
+
+Product:
+- Platform Overview
+- POS Terminal
+- QR Menu
+- Online Ordering
+- Kitchen Display
+- Inventory
+- Staff & Payroll
+- Finance
+- Reports
+
+Khana AI:
+- AI Menu Import
+- AI Review Booster
+- AI Campaigns
+- AI Insights
+- AI Forecasting
+- AI Chat
+- AI Credits
+
+Solutions:
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Bakeries
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering
+- Franchise Chains
+
+Growth:
+- Growth Engine
+- Campaigns
+- Coupons
+- Loyalty
+- Review Booster
+- Customer Segments
+
+Resources:
+- Blog
+- Help Center
+- Guides
+- FAQ
+- Compare
+- Security
+- Partner Program
+
+Company:
+- About
+- Contact
+- Careers
+- Partners
+- Book Demo
+
+Legal:
+- Privacy Policy
+- Terms & Conditions
+- Refund Policy
+- Cookie Policy
+- Data Processing Agreement
+- Acceptable Use Policy
+
+Contact:
+- Email
+- Phone
+- WhatsApp
+- Address placeholder
+- Social links
+
+Footer should also include:
+- Newsletter signup
+- Copyright
+- Small product tagline
+
+====================================================
+10. HEADER BEHAVIOR
+====================================================
+
+Header should:
+- Be sticky or fixed on scroll if current design supports.
+- Work on all pages.
+- Show active state.
+- Support mega menus.
+- Work on mobile.
+- Not hide menus on inner pages.
+- Have correct links.
+- Have login/demo CTAs.
+- Not overlap page content.
+- Not break on mobile.
+
+====================================================
+11. VISUAL MEDIA / GRAPHICS
+====================================================
+
+Add visuals even if real screenshots are not available.
+
+Use designed mockup cards:
+- POS terminal mockup
+- QR menu mobile mockup
+- Kitchen display mockup
+- Inventory dashboard mockup
+- Payroll dashboard mockup
+- Growth campaign mockup
+- Khana AI chat mockup
+- Finance/P&L mockup
+- Reports dashboard mockup
+- Super Admin dashboard mockup
+
+Use icon libraries already available in project.
+Do not use broken image URLs.
+Use local placeholder/mock visuals if needed.
+Add proper alt tags.
+
+====================================================
+12. CONSISTENCY FIXES
+====================================================
+
+Check all pages and fix:
+- Header missing
+- Footer missing
+- Different spacing
+- Different button styles
+- Different card styles
+- Old/basic layouts
+- Broken responsive layout
+- Missing CTAs
+- Missing SEO
+- Missing breadcrumbs
+- Broken links
+- Duplicate titles
+- Placeholder/lorem ipsum
+- Low content pages
+- Empty sections
+- Inconsistent colors
+- Inconsistent icons
+
+====================================================
+13. LEAD FORMS
+====================================================
+
+Every CTA should work.
+
+Forms:
+- Book Demo
+- Contact
+- Partner
+- Pricing Contact Sales
+- Newsletter
+- Start Free Trial
+
+Each form should:
+- Validate fields
+- Show loading state
+- Show success message
+- Save lead if lead system exists
+- Redirect to thank-you page if suitable
+- Include source_page
+
+====================================================
+14. FINAL TESTING
+====================================================
+
+After updates, test:
+
+Desktop:
+- Home
+- All main pages
+- All feature pages
+- All solution pages
+- All legal pages
+- Blog pages
+- Header menus
+- Footer links
+- Forms
+
+Mobile:
+- Header mobile menu
+- Mega menu collapse
+- Page hero
+- Feature cards
+- Pricing table
+- Forms
+- Footer
+
+SEO:
+- Meta tags
+- Sitemap
+- Robots
+- H1
+- Schema
+- Internal links
+
+Performance:
+- No console errors
+- No broken images
+- No broken links
+- Fast loading
+- Lazy load heavy visuals
+
+====================================================
+15. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+The website is complete only if:
+
+- Homepage is premium.
+- Every feature page is premium.
+- Every solution page is premium.
+- Header shows all important pages/features.
+- Mobile menu shows all important pages/features.
+- Footer contains complete link structure.
+- Legal pages exist and are polished.
+- SEO metadata exists for all pages.
+- No page looks basic.
+- No broken links.
+- No missing header/footer.
+- No lorem ipsum.
+- CTA buttons work.
+- Forms save leads or show proper success.
+- Website clearly communicates all KhanaLagao features.
+- Design feels consistent across the entire public website.
+
+First scan the current website routes and components. Create a list of:
+1. Pages already good
+2. Pages needing redesign
+3. Missing pages
+4. Header/menu issues
+5. Footer issues
+6. SEO issues
+7. Broken links
+
+Then implement all missing pages, redesign weak pages, fix header/footer, add rich content, add SEO, and test responsiveness.

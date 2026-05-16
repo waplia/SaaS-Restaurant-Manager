@@ -1,0 +1,907 @@
+Perform a complete final review, testing, cleanup, and production-readiness audit of my platform.
+
+Platform name:
+KhanaLagao
+
+Product positioning:
+KhanaLagao is a complete Restaurant Operating System with POS, QR Menu, Orders, Kitchen/KDS, Inventory, Staff, Payroll, Customers, Growth Engine, Khana AI, Finance, Reports, Marketplace, Super Admin, and Website.
+
+Important:
+The platform is already built. Do not rebuild from scratch. Do not remove working features. First scan the current codebase, routes, database, UI, APIs, roles, permissions, and existing features. Then fix, complete, polish, connect, test, and document everything.
+
+Goal:
+Make the platform work properly from start to end like a production-ready SaaS.
+
+====================================================
+FINAL PLATFORM FLOW
+====================================================
+
+The complete platform should work like this:
+
+1. Public Website
+- Visitor opens KhanaLagao website.
+- Website looks premium, modern, fast, mobile responsive, and SEO friendly.
+- Visitor can understand all features clearly.
+- Visitor can view pricing, features, Khana AI, Growth Engine, solutions, blog, about, contact.
+- Visitor can submit Book Demo / Contact / Partner form.
+- Lead should be saved in Super Admin.
+- Visitor can click Login or Start Free Trial.
+
+2. Super Admin Flow
+- Super Admin logs in from separate secure login.
+- Super Admin can manage:
+  - Restaurants
+  - Plans
+  - Subscriptions
+  - Payments
+  - Invoices
+  - Leads
+  - Website CMS
+  - Feature flags
+  - AI providers
+  - AI credits
+  - SMS settings
+  - WhatsApp settings
+  - Email settings
+  - Payment gateways
+  - Marketplace
+  - Add-ons
+  - Reports
+  - Support tickets
+  - Audit logs
+  - System settings
+- Super Admin can create restaurant account manually.
+- Super Admin can assign plan and modules.
+- Super Admin can enable/disable features per plan or restaurant.
+- Super Admin can add AI credits.
+- Super Admin can view SaaS revenue, restaurant usage, and investor-style metrics.
+
+3. Restaurant Onboarding Flow
+- Restaurant owner signs up or is created by Super Admin.
+- Restaurant owner logs in.
+- Setup wizard should guide owner:
+  - Restaurant profile
+  - Outlet setup
+  - Business hours
+  - Tax/GST settings
+  - Currency/timezone
+  - Table/floor setup
+  - Menu setup or AI menu import
+  - Payment settings
+  - QR menu settings
+  - Staff setup
+  - Printer/KOT settings
+- After onboarding, owner reaches restaurant dashboard.
+
+4. Restaurant Dashboard Flow
+- Dashboard shows:
+  - Today sales
+  - Live orders
+  - Kitchen status
+  - Tables status
+  - Inventory alerts
+  - Staff attendance
+  - Customer activity
+  - Revenue chart
+  - AI insights
+  - Pending actions
+- Dashboard should not show fake data unless demo mode is enabled.
+- If no data, show helpful empty states.
+
+5. Daily Restaurant Operation Flow
+- Cashier opens POS Terminal.
+- Cashier creates dine-in/takeaway/delivery order.
+- Order creates bill and KOT.
+- Kitchen receives KOT/KDS.
+- Table status updates.
+- Inventory deducts stock based on recipe.
+- Payment is collected.
+- Invoice is generated.
+- Customer is saved in CRM.
+- Reports update automatically.
+
+6. QR Menu Flow
+- Owner creates QR menu.
+- Customer scans table QR.
+- Customer browses menu.
+- Customer adds items.
+- Customer places order.
+- Order appears in restaurant dashboard/POS/Kitchen.
+- Staff accepts/prepares/serves order.
+- Payment can be collected depending on settings.
+
+7. Review QR Flow
+- Customer scans review QR.
+- Customer selects rating.
+- Customer selects feedback tags.
+- Customer optionally writes feedback.
+- AI generates review draft if enabled and credits are available.
+- Customer can edit/copy review.
+- Customer clicks Open Google Review.
+- Customer manually pastes and submits on Google.
+- No Google API is required.
+- Feedback and analytics are saved.
+
+8. Khana AI Flow
+- Restaurant uses Khana AI features.
+- AI credits are checked before request.
+- AI output is generated.
+- Credits are deducted only after successful generation.
+- Usage logs are saved.
+- If credits are not enough, show recharge/upgrade message.
+- Super Admin can control provider, model, credits, and limits.
+
+9. Growth Engine Flow
+- Owner creates campaign.
+- Selects customer segment.
+- Selects channel: WhatsApp/SMS/email/in-app.
+- Creates or AI-generates content.
+- Reviews and approves campaign.
+- Campaign is scheduled or sent.
+- Logs and analytics are saved.
+
+10. Finance Flow
+- Payments, expenses, wallet, settlements, invoices, and P&L are tracked.
+- Owner can see real profit, not only sales.
+- Reports can be filtered/exported.
+
+11. Support Flow
+- Restaurant can raise ticket.
+- Super Admin/support team can reply.
+- Ticket status updates.
+- All communication is logged.
+
+====================================================
+FINAL SIDEBAR STRUCTURE CHECK
+====================================================
+
+Restaurant Admin sidebar should be clean and grouped like this:
+
+Dashboard
+
+Sell
+- POS Terminal
+- Orders
+- Kitchen / KDS
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery
+
+Menu
+- Menu Items
+- Categories
+- Combos & Add-ons
+- QR Menu
+- Dynamic Pricing
+- Competitor Tracker
+
+Inventory
+- Stock
+- Purchase Orders
+- Vendors
+- Waste
+- Recipes
+- Stock Transfers
+
+Customers
+- CRM
+- Feedback & Surveys
+- Loyalty
+- Memberships
+- Review Booster
+
+Growth Engine
+- Campaigns
+- Coupons
+- Referrals
+- Loyalty Analytics
+- Customer Segments
+
+Khana AI
+- AI Dashboard
+- AI Menu Import
+- AI Descriptions
+- AI Images
+- AI Review Booster
+- AI Campaigns
+- AI Insights
+- AI Forecasting
+- AI Chat
+- AI Usage & Credits
+
+Staff
+- Staff Directory
+- Attendance
+- Payroll
+- Staff Tasks
+- SOP & Training
+- Mystery Audits
+
+Finance
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+
+Operations
+- Events & Catering
+- Hotel Mode
+- Food Court
+- Corporate
+- Tiffin
+
+Marketplace
+- Vendor Marketplace
+- Add-ons
+- Hardware
+- Integrations
+
+Reports
+
+Support
+
+Settings
+
+Sidebar behavior:
+- Sell menu must always remain open by default.
+- Sell should remain open after refresh.
+- Sell should remain open after route change.
+- Sell should remain open after login.
+- Do not auto-collapse Sell when another menu opens.
+- Active child route should highlight correctly.
+- Role and plan permissions should still work.
+
+====================================================
+FEATURE COMPLETION CHECKLIST
+====================================================
+
+Check and complete these core modules:
+
+Public Website:
+- Home page
+- Platform page
+- Features page
+- Khana AI page
+- Growth Engine page
+- Pricing page
+- Solutions pages
+- Blog
+- Contact
+- Book Demo
+- About
+- Security
+- Terms
+- Privacy
+- Refund Policy
+- SEO metadata
+- Sitemap
+- Robots.txt
+- Lead capture forms
+
+Super Admin:
+- Dashboard
+- Restaurant management
+- Plan management
+- Subscription management
+- Payment/invoice management
+- Leads
+- CMS
+- Feature flags
+- Module controls
+- AI Control Center
+- AI provider settings
+- OpenAI API settings
+- Claude API settings
+- Gemini API settings
+- AI credit rules
+- AI wallets
+- AI usage logs
+- SMS settings
+- WhatsApp settings
+- Email settings
+- Payment gateway settings
+- Support tickets
+- Reports
+- Audit logs
+- System settings
+
+Restaurant Core:
+- Dashboard
+- POS Terminal
+- Orders
+- Kitchen/KDS
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery
+- Menu
+- QR Menu
+- Inventory
+- Purchase Orders
+- Vendors
+- Waste
+- Recipes
+- Stock Transfers
+- Customers
+- CRM
+- Feedback/Surveys
+- Loyalty
+- Memberships
+- Review Booster
+- Staff
+- Attendance
+- Payroll
+- Staff Tasks
+- SOP & Training
+- Mystery Audits
+- Finance
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+- Reports
+- Support
+- Settings
+
+Growth Engine:
+- Campaigns
+- Coupons
+- Referrals
+- Loyalty analytics
+- Customer segments
+- Win-back campaigns
+- Birthday campaigns
+- Anniversary campaigns
+- Festival campaigns
+- Campaign analytics
+
+Khana AI:
+- AI Dashboard
+- AI Menu Import
+- AI Descriptions
+- AI Images
+- AI Menu Translation
+- AI Review Booster
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Inventory Assistant
+- AI Chat
+- AI Usage & Credits
+- AI Settings
+
+Operations:
+- Events & Catering
+- Hotel Mode
+- Food Court
+- Corporate
+- Tiffin
+
+Marketplace:
+- Vendor Marketplace
+- Add-ons
+- Hardware
+- Integrations
+
+====================================================
+FEATURE VISIBILITY CHECK
+====================================================
+
+Core features should be visible by default:
+- Dashboard
+- Sell
+- Menu
+- Inventory
+- Customers
+- Staff
+- Finance
+- Reports
+- Support
+- Settings
+
+Premium or plan-based features:
+- Khana AI
+- Growth Engine
+- Marketplace
+- Operations
+- Reservations
+- Delivery
+- Dynamic Pricing
+- Competitor Tracker
+- Loyalty
+- Memberships
+- Wallet
+- Settlements
+- Mystery Audits
+- Events & Catering
+- Hotel Mode
+- Food Court
+- Corporate
+- Tiffin
+
+If feature is locked:
+- Do not show broken page.
+- Show upgrade screen.
+- Show plan required.
+- Show “Contact Admin” or “Upgrade Plan”.
+- Log access attempt if needed.
+
+====================================================
+ROLE-BASED ACCESS CHECK
+====================================================
+
+Test these roles:
+
+Owner/Admin:
+- Full access based on plan.
+
+Cashier:
+- Dashboard limited
+- POS Terminal
+- Orders
+- Tables
+- Customers limited
+- Payments limited
+- Reports limited
+
+Waiter/Captain:
+- Tables
+- Orders
+- Waiter Requests
+- Menu view
+- No finance/payroll/settings.
+
+Chef/Kitchen:
+- Kitchen/KDS
+- Orders limited
+- KOT status update
+- No finance/customers/settings.
+
+Inventory Manager:
+- Inventory
+- Vendors
+- Purchase Orders
+- Waste
+- Stock Transfers
+- Inventory reports.
+
+HR/Payroll:
+- Staff
+- Attendance
+- Payroll
+- Leave
+- Payroll reports.
+
+Marketing Manager:
+- Customers
+- Growth Engine
+- Review Booster
+- Campaign reports
+- Khana AI campaigns if enabled.
+
+Accountant:
+- Finance
+- Payments
+- Expenses
+- Invoices
+- P&L
+- Finance reports.
+
+Super Admin:
+- Full SaaS control.
+
+Support Agent:
+- Support tickets
+- Leads if allowed
+- Restaurant view limited.
+
+Developer/Admin:
+- System settings
+- Logs
+- API/webhook settings if allowed.
+
+Make sure restricted users cannot access pages directly via URL.
+
+====================================================
+TESTING CHECKLIST
+====================================================
+
+Test authentication:
+- Public routes open without login.
+- Restaurant login works.
+- Super Admin login works.
+- Wrong password shows error.
+- Logout works.
+- Session expiry works.
+- Password reset if available.
+- Role-based redirects work.
+
+Test website:
+- All pages load.
+- Navigation works.
+- Mobile menu works.
+- CTA buttons work.
+- Forms submit.
+- Leads save.
+- SEO tags exist.
+- No broken links.
+- No console errors.
+- Fast loading.
+
+Test onboarding:
+- New restaurant signup.
+- Restaurant profile setup.
+- Outlet creation.
+- Menu setup.
+- Table setup.
+- Staff setup.
+- Tax setting.
+- QR menu setup.
+- Onboarding progress saves.
+
+Test POS:
+- Create dine-in order.
+- Create takeaway order.
+- Create delivery order.
+- Add item.
+- Add variants/add-ons.
+- Apply discount.
+- Add tax/service charge.
+- Split bill.
+- Merge table.
+- Hold bill.
+- Reopen bill.
+- Cancel bill.
+- Refund bill.
+- Print/download invoice.
+- Payment success.
+- Payment failure.
+- Day closing.
+
+Test Kitchen/KDS:
+- KOT generated.
+- KOT reaches kitchen.
+- Kitchen status updates.
+- Item status updates.
+- Cancelled KOT logs reason.
+- Delayed order alerts if available.
+
+Test Tables:
+- Create floor/table.
+- Table available/occupied/billed/cleaning.
+- Transfer table.
+- Merge table.
+- Assign waiter.
+- QR table mapping.
+
+Test QR Menu:
+- QR opens public menu.
+- Menu categories load.
+- Item images load.
+- Add to cart.
+- Place order.
+- Order reaches dashboard/kitchen.
+- QR menu works on mobile.
+- Out-of-stock item behavior works.
+
+Test Review QR:
+- QR scan opens review page.
+- Rating works.
+- Tags work.
+- Optional feedback works.
+- AI review generation works if credits available.
+- Copy review works.
+- Open Google Review button opens saved link.
+- No Google API required.
+- Data saves in admin.
+- Analytics update.
+
+Test AI:
+- AI provider settings saved in Super Admin.
+- API keys are masked.
+- API keys are not exposed in frontend.
+- Model selection works.
+- AI credits deduct correctly.
+- Failed AI request does not wrongly deduct credits.
+- Usage logs save.
+- Low credits show warning.
+- No credits shows upgrade/recharge message.
+- AI Menu Import works.
+- AI Descriptions work.
+- AI Images work if configured.
+- AI Campaigns work.
+- AI Insights work.
+- AI Chat works if enabled.
+
+Test Inventory:
+- Add raw material.
+- Add supplier/vendor.
+- Create recipe.
+- Stock deducts after sale.
+- Low stock alert.
+- Purchase order.
+- Stock adjustment.
+- Waste entry.
+- Stock transfer.
+- Inventory report.
+
+Test Staff/Payroll:
+- Add staff.
+- Attendance.
+- Shift.
+- Leave.
+- Salary setup.
+- Overtime.
+- Bonus.
+- Advance.
+- Deduction.
+- Generate payroll.
+- Salary slip PDF.
+- Payroll report.
+
+Test Customers:
+- Customer created from order.
+- Customer profile.
+- Order history.
+- Loyalty points.
+- Membership.
+- Feedback.
+- Segments.
+
+Test Growth:
+- Create campaign.
+- Select customers.
+- Generate content.
+- Schedule/send.
+- Coupon works.
+- Campaign analytics updates.
+
+Test Finance:
+- Payment records.
+- Expense records.
+- Wallet ledger.
+- Settlement report.
+- Invoice generation.
+- P&L report.
+- Export.
+
+Test Reports:
+- Date filters.
+- Outlet filters.
+- Export CSV/Excel/PDF.
+- Empty state.
+- Large data pagination.
+- Correct totals.
+
+Test Marketplace:
+- Add-ons show.
+- Locked add-ons show upgrade.
+- Vendor marketplace works if enabled.
+- Hardware/integration settings accessible.
+
+Test Operations:
+- Reservation flow.
+- Event/catering flow.
+- Hotel mode if enabled.
+- Food court if enabled.
+- Corporate if enabled.
+- Tiffin if enabled.
+
+Test Super Admin:
+- Create restaurant.
+- Assign plan.
+- Change plan.
+- Suspend restaurant.
+- Activate restaurant.
+- Add payment.
+- Generate invoice.
+- Add AI credits.
+- View usage.
+- Feature flags work.
+- CMS updates website.
+- Support ticket works.
+- Audit logs record actions.
+
+====================================================
+UI/UX FINAL POLISH
+====================================================
+
+Apply these final UI improvements:
+
+- Consistent brand name: KhanaLagao
+- Logo appears correctly everywhere.
+- Page titles are clean.
+- Sidebar icons are consistent.
+- Sidebar grouping is clean.
+- Sell menu always open.
+- Active menu highlighting works.
+- Buttons are consistent.
+- Tables have search/filter/pagination.
+- Forms have validation.
+- Empty states are helpful.
+- Loading states exist.
+- Success/error toast messages exist.
+- Confirmation modals for delete/cancel/refund/suspend.
+- Status badges are clear.
+- Mobile responsive pages.
+- Dashboard cards are aligned.
+- No overlapping text.
+- No broken layout.
+- No placeholder lorem ipsum.
+- No fake demo buttons unless demo mode.
+- No unused sample data in production mode.
+
+====================================================
+SEO FINAL CHECK
+====================================================
+
+Website SEO check:
+- Unique meta title for each page.
+- Unique meta description for each page.
+- H1 exists on each page.
+- Proper H2/H3 structure.
+- Open Graph tags.
+- Twitter card tags if possible.
+- Canonical URL.
+- Sitemap.xml.
+- Robots.txt.
+- Image alt tags.
+- Internal links between pages.
+- Blog schema.
+- FAQ schema.
+- SoftwareApplication schema.
+- Organization schema.
+- Breadcrumb schema.
+- Fast mobile performance.
+
+Target keywords:
+- Restaurant management software
+- Restaurant POS software
+- Restaurant billing software
+- QR menu software
+- Restaurant inventory software
+- Restaurant payroll software
+- Restaurant CRM software
+- Restaurant loyalty software
+- Cloud kitchen software
+- Cafe billing software
+- KOT software
+- Kitchen display system
+- Restaurant online ordering software
+- Restaurant AI software
+- AI restaurant management software
+- Multi outlet restaurant software
+- Tiffin management software
+- Catering management software
+- Food court management software
+- Restaurant franchise software
+- Restaurant P&L software
+
+====================================================
+SECURITY CHECKLIST
+====================================================
+
+Check:
+- API keys are not exposed.
+- AI keys encrypted/masked.
+- SMTP/SMS/WhatsApp/payment keys secure.
+- Role permissions enforced backend-side.
+- Direct URL access blocked for unauthorized users.
+- File upload validation.
+- PDF/image upload size limit.
+- No SQL injection risks.
+- No XSS in forms/blog/CMS.
+- Passwords hashed.
+- Sensitive logs hidden.
+- Rate limit login and AI requests.
+- CSRF protection if applicable.
+- Secure cookies/session.
+- Audit logs for important actions.
+- Delete/suspend actions require confirmation.
+
+====================================================
+PERFORMANCE CHECKLIST
+====================================================
+
+Check:
+- Website loads fast.
+- Dashboard loads fast.
+- Large tables paginated.
+- Reports optimized.
+- Images optimized.
+- Lazy loading used.
+- No unnecessary API calls.
+- No infinite loops.
+- No console errors.
+- No memory-heavy frontend rendering.
+- API responses are reasonable.
+- Mobile performance is acceptable.
+
+====================================================
+DATABASE / API CHECKLIST
+====================================================
+
+Check:
+- All migrations are safe.
+- No duplicate tables.
+- No broken relationships.
+- Required indexes exist for large tables.
+- Foreign keys are correct where used.
+- Soft delete where needed.
+- Created_at/updated_at fields exist.
+- Tenant/restaurant_id scoping is correct.
+- Super Admin data is not mixed with restaurant data.
+- API validation exists.
+- API errors are clear.
+- Pagination exists on large APIs.
+- Export APIs work.
+
+====================================================
+FINAL CHANGE REQUESTS
+====================================================
+
+Make these final changes if missing:
+
+1. Rename all public branding to KhanaLagao.
+2. Keep Khana AI as the AI module name.
+3. Keep Sell menu always open by default.
+4. Make Review QR flow simple:
+   Scan QR → Rating → Tags → AI review draft → Copy → Open Google review link.
+5. Remove Google API requirement from Review QR.
+6. Make AI provider APIs only in Super Admin:
+   OpenAI, Claude, Gemini and others.
+7. Add AI credit limits and usage logs.
+8. Add upgrade screen for locked modules.
+9. Add empty states for all new modules.
+10. Add final CMS/lead capture connection for website forms.
+11. Add audit logs for plan/module/credit/settings changes.
+12. Add final role permission checks.
+13. Add mobile responsive fixes.
+14. Add SEO metadata for all public pages.
+15. Remove unused demo/mock data unless demo mode is enabled.
+
+====================================================
+FINAL ACCEPTANCE CRITERIA
+====================================================
+
+The project is complete only if:
+
+- Public website looks premium and professional.
+- Website forms save leads.
+- Restaurant signup/onboarding works.
+- Super Admin can manage restaurants/plans/features/AI.
+- Restaurant owner can run daily operations.
+- POS → KOT → Inventory → Payment → Report flow works.
+- QR menu ordering works.
+- Review QR works without Google API.
+- Khana AI works with credits and provider settings.
+- Growth Engine works or shows proper configuration states.
+- Finance/P&L works with real data.
+- Reports are accurate and exportable.
+- Sidebar is clean and Sell menu always open.
+- Permissions work.
+- Locked modules show upgrade screen.
+- No broken buttons.
+- No broken routes.
+- No console errors.
+- No exposed secret keys.
+- Mobile layout works.
+- SEO basics are complete.
+- Platform feels ready for demo to restaurants and investors.
+
+After scanning, provide a checklist of:
+1. Already working
+2. Partially working
+3. Missing
+4. Bugs found
+5. Security issues
+6. UI issues
+7. Performance issues
+8. Final fixes applied
+
+Then implement fixes one by one.
