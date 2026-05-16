@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable, surveysTable, surveyQuestionsTable, surveyResponsesTable } from "../lib/db";
 import { reserveCredits, commitReservation, refundReservation, resolveCreditRule, priceCredits, gatePublicAiCall, type AiCreditReservation } from "../lib/aiCredits";
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
@@ -1225,6 +1225,123 @@ router.get("/marketing/testimonials", async (_req, res) => {
 
   res.set("Cache-Control", "public, max-age=300");
   res.json(enriched);
+});
+
+// ─── Public surveys ─────────────────────────────────────────────────────────
+
+const surveySubmitCooldown = new Map<string, number>();
+
+router.get("/public/surveys/:slug", async (req, res) => {
+  const [survey] = await db.select().from(surveysTable).where(eq(surveysTable.slug, req.params.slug));
+  if (!survey || !survey.isActive) return void res.status(404).json({ error: "Not found" });
+  const [restaurant] = await db.select({
+    id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug, logoUrl: restaurantsTable.logoUrl,
+  }).from(restaurantsTable).where(eq(restaurantsTable.id, survey.restaurantId));
+  if (!restaurant) return void res.status(404).json({ error: "Not found" });
+
+  const [siteRow] = await db.select().from(restaurantSettingsTable)
+    .where(and(eq(restaurantSettingsTable.restaurantId, restaurant.id), eq(restaurantSettingsTable.section, "customer-site")));
+  const site = (siteRow?.data as Record<string, unknown> | undefined) ?? {};
+  const accent = typeof site.accentColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(site.accentColor) ? site.accentColor : "#c2410c";
+
+  const questions = await db.select().from(surveyQuestionsTable)
+    .where(eq(surveyQuestionsTable.surveyId, survey.id))
+    .orderBy(surveyQuestionsTable.sortOrder);
+
+  res.json({
+    slug: survey.slug,
+    type: survey.type,
+    title: survey.title,
+    description: survey.description,
+    thankYouMessage: survey.thankYouMessage,
+    collectName: survey.collectName,
+    collectPhone: survey.collectPhone,
+    collectTableNumber: survey.collectTableNumber,
+    questions: questions.map(q => ({
+      id: q.id,
+      type: q.type,
+      label: q.label,
+      required: q.required,
+      options: q.options ?? [],
+      scaleMin: q.scaleMin,
+      scaleMax: q.scaleMax,
+    })),
+    restaurant: { name: restaurant.name, slug: restaurant.slug, logoUrl: restaurant.logoUrl },
+    accentColor: accent,
+  });
+});
+
+router.post("/public/surveys/:slug/responses", async (req, res) => {
+  const [survey] = await db.select().from(surveysTable).where(eq(surveysTable.slug, req.params.slug));
+  if (!survey || !survey.isActive) return void res.status(404).json({ error: "Not found" });
+
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+  const ipHash = hashIp(ip);
+  const cooldownKey = `${survey.id}:${ipHash ?? "anon"}`;
+  const now = Date.now();
+  const last = surveySubmitCooldown.get(cooldownKey) ?? 0;
+  if (now - last < 5000) return void res.status(429).json({ error: "Too many requests" });
+  surveySubmitCooldown.set(cooldownKey, now);
+  // Trim memory
+  if (surveySubmitCooldown.size > 5000) {
+    for (const [k, t] of surveySubmitCooldown) {
+      if (now - t > 60_000) surveySubmitCooldown.delete(k);
+    }
+  }
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const questions = await db.select().from(surveyQuestionsTable)
+    .where(eq(surveyQuestionsTable.surveyId, survey.id));
+
+  const incoming = (b.answers ?? {}) as Record<string, unknown>;
+  const cleanAnswers: Record<string, unknown> = {};
+  for (const q of questions) {
+    const raw = incoming[String(q.id)];
+    if (raw == null || raw === "") {
+      if (q.required) return void res.status(400).json({ error: `Question "${q.label}" is required` });
+      continue;
+    }
+    if (q.type === "rating_5" || q.type === "rating_10" || q.type === "nps") {
+      const n = Number(raw);
+      const min = q.scaleMin ?? 0;
+      const max = q.scaleMax ?? (q.type === "rating_5" ? 5 : 10);
+      if (!Number.isFinite(n) || n < min || n > max) {
+        if (q.required) return void res.status(400).json({ error: `Invalid value for "${q.label}"` });
+        continue;
+      }
+      cleanAnswers[String(q.id)] = n;
+    } else if (q.type === "single_choice") {
+      const s = String(raw);
+      if (!(q.options ?? []).includes(s)) {
+        if (q.required) return void res.status(400).json({ error: `Invalid choice for "${q.label}"` });
+        continue;
+      }
+      cleanAnswers[String(q.id)] = s;
+    } else {
+      cleanAnswers[String(q.id)] = String(raw).slice(0, 4000);
+    }
+  }
+
+  const respondentName = survey.collectName && typeof b.respondentName === "string" ? b.respondentName.slice(0, 120) : null;
+  const respondentPhone = survey.collectPhone && typeof b.respondentPhone === "string" ? b.respondentPhone.slice(0, 30) : null;
+  const tableNumber = survey.collectTableNumber && typeof b.tableNumber === "string" ? b.tableNumber.slice(0, 30) : null;
+
+  await db.insert(surveyResponsesTable).values({
+    surveyId: survey.id,
+    tenantId: survey.tenantId,
+    restaurantId: survey.restaurantId,
+    respondentName,
+    respondentPhone,
+    tableNumber,
+    answers: cleanAnswers,
+    ipHash,
+  });
+
+  await db.update(surveysTable)
+    .set({ responseCount: sql`${surveysTable.responseCount} + 1` })
+    .where(eq(surveysTable.id, survey.id));
+
+  res.json({ success: true, thankYouMessage: survey.thankYouMessage });
 });
 
 export default router;

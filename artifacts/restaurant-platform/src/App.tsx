@@ -94,6 +94,8 @@ import FeedbackRecoveryPage from "@/pages/feedback-recovery";
 import FeedbackWallPage from "@/pages/feedback-wall";
 import PublicFeedbackWallPage from "@/pages/public-feedback-wall";
 import CustomerFeedbackPage from "@/pages/customer-feedback";
+import SurveysPage from "@/pages/surveys";
+import CustomerSurveyPage from "@/pages/customer-survey";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
 import PricingRulesPage from "@/pages/pricing-rules";
@@ -368,6 +370,8 @@ function Router() {
       <Route path="/memberships" component={() => <RoleProtectedRoute component={MembershipsPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
+      <Route path="/surveys" component={() => <RoleProtectedRoute component={SurveysPage} allow={["owner", "manager"]} />} />
+      <Route path="/survey/:slug" component={CustomerSurveyPage} />
       <Route component={NotFound} />
     </Switch>
   );
