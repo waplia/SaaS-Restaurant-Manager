@@ -1,15 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Flame, ChevronRight, ChevronLeft, Loader2, Plus, Trash2, Check, Sparkles, Rocket,
   Store, Utensils, MapPin, FileUp, Star, CreditCard, Receipt,
+  Building2, ChefHat, Grid3x3, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ImageUploadField } from "@/components/ImageUploadField";
+import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth } from "@/lib/auth";
-import { apiGet, apiPost, apiPatch } from "@/lib/api";
+import { apiGet, apiPost, apiPatch, ApiError } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -79,10 +83,14 @@ const COUNTRIES = [
 ];
 
 const STEPS = [
+  { id: "profile", title: "Restaurant profile", icon: Building2 },
   { id: "type", title: "Restaurant type", icon: Store },
   { id: "cuisines", title: "Cuisines", icon: Utensils },
   { id: "outlets", title: "Outlets", icon: MapPin },
+  { id: "kitchen", title: "Kitchens", icon: ChefHat },
   { id: "menu", title: "Menu upload", icon: FileUp },
+  { id: "tables", title: "Tables", icon: Grid3x3 },
+  { id: "staff", title: "Invite staff", icon: Users },
   { id: "review", title: "Google review link", icon: Star },
   { id: "payment", title: "Payment", icon: CreditCard },
   { id: "tax", title: "Tax", icon: Receipt },
@@ -110,13 +118,21 @@ export default function SetupWizardPage() {
   const [generating, setGenerating] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
-  // Hydrate from server
+  // Hydrate from server. Prefer the saved step *id* over the numeric index
+  // because the STEPS array can change between deploys (we add new steps);
+  // a saved numeric index would otherwise resume on the wrong screen.
   useEffect(() => {
     if (!data) return;
     setAnswers(data.answers ?? {});
     if (data.status === "done" && data.summary) setShowSummary(true);
-    if (typeof data.step === "number" && stepIdx === 0 && !showSummary) {
-      setStepIdx(Math.min(Math.max(0, data.step), STEPS.length - 1));
+    if (stepIdx === 0 && !showSummary) {
+      const savedId = (data as unknown as { stepId?: string }).stepId;
+      const byId = savedId ? STEPS.findIndex((s) => s.id === savedId) : -1;
+      if (byId >= 0) {
+        setStepIdx(byId);
+      } else if (typeof data.step === "number") {
+        setStepIdx(Math.min(Math.max(0, data.step), STEPS.length - 1));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.answers, data?.status]);
@@ -127,7 +143,7 @@ export default function SetupWizardPage() {
   }, [data?.onboardingCompletedAt, navigate]);
 
   const saveMut = useMutation({
-    mutationFn: (payload: { answers: Partial<WizardAnswers>; step?: number }) =>
+    mutationFn: (payload: { answers: Partial<WizardAnswers>; step?: number; stepId?: string }) =>
       apiPatch<WizardState>(`/restaurants/${restaurantId}/setup-wizard`, payload),
     onSuccess: (s) => qc.setQueryData(["setup-wizard", restaurantId], s),
   });
@@ -158,7 +174,7 @@ export default function SetupWizardPage() {
   function patch(p: Partial<WizardAnswers>) {
     setAnswers((prev) => {
       const next = { ...prev, ...p };
-      saveMut.mutate({ answers: p, step: stepIdx });
+      saveMut.mutate({ answers: p, step: stepIdx, stepId: STEPS[stepIdx]?.id });
       return next;
     });
   }
@@ -166,7 +182,7 @@ export default function SetupWizardPage() {
   function next() {
     const newStep = Math.min(stepIdx + 1, STEPS.length - 1);
     setStepIdx(newStep);
-    saveMut.mutate({ answers: {}, step: newStep });
+    saveMut.mutate({ answers: {}, step: newStep, stepId: STEPS[newStep]?.id });
   }
   function prev() { setStepIdx((s) => Math.max(0, s - 1)); }
 
@@ -261,10 +277,14 @@ export default function SetupWizardPage() {
 
 function stepDescription(id: typeof STEPS[number]["id"]): string {
   switch (id) {
+    case "profile": return "Your restaurant's name, phone, address and currency.";
     case "type": return "Pick the option that best describes your restaurant.";
     case "cuisines": return "Select all the cuisines you serve.";
     case "outlets": return "List your outlets — you can add more later.";
+    case "kitchen": return "Where orders will be routed for prep — most places start with one.";
     case "menu": return "Optional. Upload your menu now to auto-import dishes.";
+    case "tables": return "Bulk-add tables with auto-numbered names. Edit later from Tables.";
+    case "staff": return "Optional. Invite waiters, kitchen staff or managers.";
     case "review": return "Optional. Paste your Google review link for happy guests.";
     case "payment": return "Which payment methods will you accept?";
     case "tax": return "We'll set this as the default tax rate on bills.";
@@ -374,6 +394,18 @@ function MenuUploadStep({ answers, patch }: { answers: WizardAnswers; patch: (p:
 }
 
 function StepBody({ stepId, answers, patch }: { stepId: typeof STEPS[number]["id"]; answers: WizardAnswers; patch: (p: Partial<WizardAnswers>) => void }) {
+  if (stepId === "profile") {
+    return <ProfileStep />;
+  }
+  if (stepId === "kitchen") {
+    return <KitchenStep />;
+  }
+  if (stepId === "tables") {
+    return <TablesStep />;
+  }
+  if (stepId === "staff") {
+    return <StaffStep />;
+  }
   if (stepId === "type") {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -508,6 +540,271 @@ function StepBody({ stepId, answers, patch }: { stepId: typeof STEPS[number]["id
     );
   }
   return null;
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}{required && <span className="text-destructive ml-0.5">*</span>}</Label>
+      {children}
+    </div>
+  );
+}
+
+function ProfileStep() {
+  const restaurantId = useRestaurantId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: restaurant } = useQuery<{ name: string; phone: string | null; address: string | null; city: string | null; currency: string | null; description: string | null; timezone: string | null; logoUrl: string | null }>({
+    queryKey: ["restaurant", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}`),
+    enabled: !!restaurantId,
+  });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", city: "", description: "", currency: "INR", timezone: "Asia/Kolkata", logoUrl: "" });
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (restaurant && !hydrated) {
+      setForm({
+        name: restaurant.name ?? "",
+        phone: restaurant.phone ?? "",
+        address: restaurant.address ?? "",
+        city: restaurant.city ?? "",
+        description: restaurant.description ?? "",
+        currency: restaurant.currency ?? "INR",
+        timezone: restaurant.timezone ?? "Asia/Kolkata",
+        logoUrl: restaurant.logoUrl ?? "",
+      });
+      setHydrated(true);
+    }
+  }, [restaurant, hydrated]);
+  const mut = useMutation({
+    mutationFn: (data: typeof form) => apiPatch(`/restaurants/${restaurantId}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["restaurant", restaurantId] });
+      toast({ title: "Profile saved" });
+    },
+    onError: (e) => toast({ title: "Save failed", description: e instanceof Error ? e.message : "", variant: "destructive" }),
+  });
+  return (
+    <div className="space-y-4">
+      <Field label="Restaurant name" required>
+        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Khana Lagao Cafe" />
+      </Field>
+      <Field label="Phone number" required>
+        <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="9876543210" />
+      </Field>
+      <Field label="Street address" required>
+        <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="MG Road, near City Mall" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="City" required>
+          <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Bengaluru" />
+        </Field>
+        <Field label="Currency">
+          <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="INR">INR (₹)</option>
+            <option value="USD">USD ($)</option>
+            <option value="AED">AED (د.إ)</option>
+            <option value="GBP">GBP (£)</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Timezone">
+        <select value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}
+          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+          <option value="Asia/Dubai">Asia/Dubai</option>
+          <option value="Asia/Singapore">Asia/Singapore</option>
+          <option value="Europe/London">Europe/London</option>
+          <option value="America/New_York">America/New_York</option>
+        </select>
+      </Field>
+      <ImageUploadField
+        label="Logo (optional)"
+        value={form.logoUrl}
+        onChange={(v) => setForm({ ...form, logoUrl: v })}
+      />
+      <Field label="Short description (optional)">
+        <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Family-style North Indian, dine-in & takeaway." rows={2} />
+      </Field>
+      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name || !form.phone || !form.address || !form.city}>
+        {mut.isPending ? "Saving…" : "Save profile"}
+      </Button>
+    </div>
+  );
+}
+
+function KitchenStep() {
+  const restaurantId = useRestaurantId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: kitchens = [] } = useQuery<{ id: number; name: string; isDefault: boolean }[]>({
+    queryKey: ["kitchens", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/kitchens`),
+    enabled: !!restaurantId,
+  });
+  const [name, setName] = useState("");
+  const mut = useMutation({
+    mutationFn: (n: string) => apiPost(`/restaurants/${restaurantId}/kitchens`, { name: n }),
+    onSuccess: () => {
+      setName("");
+      qc.invalidateQueries({ queryKey: ["kitchens", restaurantId] });
+      toast({ title: "Kitchen added" });
+    },
+    onError: (e) => toast({ title: "Save failed", description: e instanceof Error ? e.message : "", variant: "destructive" }),
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Kitchens are where orders are routed for prep. Most places start with one (e.g. "Main Kitchen"). You can add a "Bar" or "Tandoor" later.</p>
+      {kitchens.length > 0 && (
+        <div className="space-y-1.5">
+          {kitchens.map(k => (
+            <div key={k.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
+              <Check className="w-4 h-4 text-emerald-500" />
+              <span className="font-medium">{k.name}</span>
+              {k.isDefault && <span className="text-xs text-muted-foreground">(default)</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Main Kitchen" />
+        <Button onClick={() => mut.mutate(name)} disabled={mut.isPending || !name.trim()}>
+          <Plus className="w-4 h-4 mr-1" /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TablesStep() {
+  const restaurantId = useRestaurantId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: tables = [] } = useQuery<{ id: number; tableNumber: string; capacity: number }[]>({
+    queryKey: ["wizard-tables", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/tables`),
+    enabled: !!restaurantId,
+  });
+  const [bulk, setBulk] = useState({ count: "5", prefix: "T", capacity: "4" });
+  const parsedCount = Number.parseInt(bulk.count, 10);
+  const validCount = Number.isFinite(parsedCount) && parsedCount >= 1 && parsedCount <= 50;
+  const mut = useMutation({
+    mutationFn: async () => {
+      const count = Math.min(50, parsedCount);
+      const start = tables.length + 1;
+      const created: unknown[] = [];
+      for (let i = 0; i < count; i++) {
+        try {
+          const t = await apiPost(`/restaurants/${restaurantId}/tables`, {
+            tableNumber: `${bulk.prefix}${start + i}`,
+            capacity: Number(bulk.capacity) || 4,
+          });
+          created.push(t);
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 402) {
+            throw new Error(`Added ${created.length}. ${e.message}`);
+          }
+          throw e;
+        }
+      }
+      return created;
+    },
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ["wizard-tables", restaurantId] });
+      toast({ title: `Added ${(created as unknown[]).length} tables` });
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: ["wizard-tables", restaurantId] });
+      toast({ title: "Add stopped", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    },
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Bulk-add tables with auto-numbered names. Edit, rename, or assign sections later from the Tables page.</p>
+      {tables.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+          {tables.map(t => (
+            <span key={t.id} className="inline-flex items-center gap-1 text-xs rounded-md bg-muted/60 px-2 py-1">
+              <Check className="w-3 h-3 text-emerald-500" />{t.tableNumber} · {t.capacity} seats
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="How many">
+          <Input type="number" min={1} max={50} value={bulk.count} onChange={e => setBulk({ ...bulk, count: e.target.value })} />
+        </Field>
+        <Field label="Name prefix">
+          <Input value={bulk.prefix} onChange={e => setBulk({ ...bulk, prefix: e.target.value })} />
+        </Field>
+        <Field label="Seats each">
+          <Input type="number" min={1} value={bulk.capacity} onChange={e => setBulk({ ...bulk, capacity: e.target.value })} />
+        </Field>
+      </div>
+      <Button onClick={() => mut.mutate()} disabled={mut.isPending || !validCount}>
+        {mut.isPending ? "Adding…" : validCount ? `Add ${parsedCount} tables` : "Enter 1–50 tables"}
+      </Button>
+    </div>
+  );
+}
+
+function StaffStep() {
+  const restaurantId = useRestaurantId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: staff = [] } = useQuery<{ id: number; name: string; role: string }[]>({
+    queryKey: ["wizard-staff", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/staff`),
+    enabled: !!restaurantId,
+  });
+  const [form, setForm] = useState({ name: "", email: "", role: "waiter", password: "" });
+  const mut = useMutation({
+    mutationFn: (data: typeof form) => apiPost(`/users`, { ...data, restaurantId }),
+    onSuccess: () => {
+      setForm({ name: "", email: "", role: "waiter", password: "" });
+      qc.invalidateQueries({ queryKey: ["wizard-staff", restaurantId] });
+      toast({ title: "Team member added" });
+    },
+    onError: (e) => {
+      const msg = e instanceof ApiError && e.status === 402
+        ? `${e.message} You can upgrade in Settings → Subscription.`
+        : e instanceof Error ? e.message : "Save failed";
+      toast({ title: "Could not add", description: msg, variant: "destructive" });
+    },
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Invite waiters, kitchen staff, or managers. They'll get a login to use the POS, KDS or back office. Optional — you can do this later.</p>
+      {staff.length > 1 && (
+        <div className="space-y-1.5">
+          {staff.map(s => (
+            <div key={s.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium">{s.name}</span>
+              <span className="text-xs text-muted-foreground capitalize">{s.role}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Name"><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ramesh Kumar" /></Field>
+        <Field label="Email"><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="ramesh@example.com" /></Field>
+        <Field label="Role">
+          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="waiter">Waiter</option>
+            <option value="kitchen">Kitchen</option>
+            <option value="manager">Manager</option>
+          </select>
+        </Field>
+        <Field label="Temporary password"><Input type="text" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="At least 6 chars" /></Field>
+      </div>
+      <Button onClick={() => mut.mutate(form)} disabled={mut.isPending || !form.name.trim() || !form.email.trim() || form.password.length < 6}>
+        <Plus className="w-4 h-4 mr-1" /> Add team member
+      </Button>
+    </div>
+  );
 }
 
 function GeneratingView() {
