@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable } from "../lib/db";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable, inventoryItemBatchesTable } from "../lib/db";
+import { asc, gt } from "drizzle-orm";
 import { runAutoReorderForRestaurant } from "../lib/autoReorder";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -90,25 +91,107 @@ async function triggerLowStockNotification(item: { id: number; name: string; cur
 }
 
 router.post("/restaurants/:restaurantId/inventory/:id/adjust", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
-  const { type, quantity, notes } = req.body;
+  const { type, quantity, notes, batchNumber, expiryDate } = req.body as {
+    type: string; quantity: string | number; notes?: string;
+    batchNumber?: string | null; expiryDate?: string | null;
+  };
   const id = Number(req.params.id);
   const restaurantId = Number(req.params.restaurantId);
 
   const [item] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, id), eq(inventoryItemsTable.restaurantId, restaurantId)));
   if (!item) return void res.status(404).json({ error: "Not found" });
 
+  const qtyNum = Number(quantity);
   let newStock = Number(item.currentStock);
-  if (type === "add" || type === "receive") newStock += Number(quantity);
-  else if (type === "remove" || type === "use" || type === "waste") newStock -= Number(quantity);
-  else newStock = Number(quantity);
-
+  if (type === "add" || type === "receive") newStock += qtyNum;
+  else if (type === "remove" || type === "use" || type === "waste") newStock -= qtyNum;
+  else newStock = qtyNum;
   const finalStock = Math.max(0, newStock);
-  const [updated] = await db.update(inventoryItemsTable).set({ currentStock: finalStock.toFixed(3), updatedAt: new Date() }).where(and(eq(inventoryItemsTable.id, id), eq(inventoryItemsTable.restaurantId, restaurantId))).returning();
-  await db.insert(inventoryTransactionsTable).values({ itemId: id, restaurantId, type, quantity, notes });
 
+  await db.transaction(async (tx) => {
+    await tx.update(inventoryItemsTable).set({ currentStock: finalStock.toFixed(3), updatedAt: new Date() })
+      .where(and(eq(inventoryItemsTable.id, id), eq(inventoryItemsTable.restaurantId, restaurantId)));
+    await tx.insert(inventoryTransactionsTable).values({ itemId: id, restaurantId, type, quantity: String(quantity), notes });
+
+    // On inflows, optionally capture a batch with expiry.
+    if ((type === "add" || type === "receive") && qtyNum > 0 && (expiryDate || batchNumber)) {
+      const expiryTs = expiryDate ? new Date(expiryDate) : null;
+      if (!expiryDate || (expiryTs && !Number.isNaN(expiryTs.getTime()))) {
+        await tx.insert(inventoryItemBatchesTable).values({
+          restaurantId, inventoryItemId: id,
+          batchNumber: batchNumber ?? null,
+          quantityReceived: qtyNum.toFixed(3),
+          quantityRemaining: qtyNum.toFixed(3),
+          expiryDate: expiryTs,
+          notes: notes ?? null,
+        });
+      }
+    }
+
+    // On outflows, FIFO-decrement earliest-expiring batches.
+    if ((type === "remove" || type === "use" || type === "waste") && qtyNum > 0) {
+      let toConsume = qtyNum;
+      const batches = await tx.select().from(inventoryItemBatchesTable)
+        .where(and(
+          eq(inventoryItemBatchesTable.inventoryItemId, id),
+          gt(inventoryItemBatchesTable.quantityRemaining, "0"),
+        ))
+        .orderBy(asc(inventoryItemBatchesTable.expiryDate), asc(inventoryItemBatchesTable.receivedAt));
+      for (const b of batches) {
+        if (toConsume <= 0) break;
+        const remain = Number(b.quantityRemaining);
+        const take = Math.min(remain, toConsume);
+        toConsume -= take;
+        await tx.update(inventoryItemBatchesTable)
+          .set({ quantityRemaining: (remain - take).toFixed(3), updatedAt: new Date() })
+          .where(eq(inventoryItemBatchesTable.id, b.id));
+      }
+    }
+  });
+
+  const [updated] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
   await triggerLowStockNotification({ ...updated!, currentStock: finalStock.toFixed(3) }, restaurantId);
 
   res.json({ ...updated!, isLowStock: finalStock <= Number(updated!.minStockLevel) });
+});
+
+// List batches for an inventory item (oldest-expiring first). Optionally filter remaining > 0.
+router.get("/restaurants/:restaurantId/inventory/:id/batches", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const onlyOpen = String(req.query.onlyOpen ?? "true") === "true";
+  const conds = [
+    eq(inventoryItemBatchesTable.inventoryItemId, id),
+    eq(inventoryItemBatchesTable.restaurantId, restaurantId),
+  ];
+  if (onlyOpen) conds.push(gt(inventoryItemBatchesTable.quantityRemaining, "0"));
+  const rows = await db.select().from(inventoryItemBatchesTable)
+    .where(and(...conds))
+    .orderBy(asc(inventoryItemBatchesTable.expiryDate), asc(inventoryItemBatchesTable.receivedAt));
+  res.json(rows);
+});
+
+// Manually delete a batch (e.g. recorded in error). Decrements item stock by remaining qty.
+router.delete("/restaurants/:restaurantId/inventory/batches/:batchId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const batchId = Number(req.params.batchId);
+  await db.transaction(async (tx) => {
+    const [batch] = await tx.select().from(inventoryItemBatchesTable)
+      .where(and(eq(inventoryItemBatchesTable.id, batchId), eq(inventoryItemBatchesTable.restaurantId, restaurantId)));
+    if (!batch) return;
+    const remain = Number(batch.quantityRemaining);
+    if (remain > 0) {
+      await tx.update(inventoryItemsTable)
+        .set({ currentStock: sql`greatest(0, ${inventoryItemsTable.currentStock} - ${remain})`, updatedAt: new Date() })
+        .where(eq(inventoryItemsTable.id, batch.inventoryItemId));
+      await tx.insert(inventoryTransactionsTable).values({
+        itemId: batch.inventoryItemId, restaurantId, type: "remove",
+        quantity: remain.toFixed(3), notes: `Batch ${batch.batchNumber ?? "#" + batch.id} removed`,
+      });
+    }
+    await tx.delete(inventoryItemBatchesTable).where(eq(inventoryItemBatchesTable.id, batchId));
+  });
+  res.status(204).send();
 });
 
 router.get("/restaurants/:restaurantId/inventory/:id/transactions", async (req, res) => {
@@ -233,8 +316,9 @@ router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "
 });
 
 router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { status, notes, totalAmount, paymentMethod } = req.body as {
+  const { status, notes, totalAmount, paymentMethod, batches } = req.body as {
     status?: string; notes?: string; totalAmount?: string; paymentMethod?: string;
+    batches?: Array<{ purchaseOrderItemId: number; batchNumber?: string | null; expiryDate?: string | null; quantity?: string | number }>;
   };
   const restaurantId = Number(req.params.restaurantId);
   const poId = Number(req.params.id);
@@ -259,6 +343,12 @@ router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owne
         // Increment inventory stock from PO line items (idempotent: only when transitioning into received)
         const lineItems = await tx.select().from(purchaseOrderItemsTable)
           .where(eq(purchaseOrderItemsTable.purchaseOrderId, poId));
+        const batchByLine = new Map<number, { batchNumber?: string | null; expiryDate?: string | null; quantity?: string | number }>();
+        for (const b of (batches ?? [])) {
+          if (b && Number.isFinite(Number(b.purchaseOrderItemId))) {
+            batchByLine.set(Number(b.purchaseOrderItemId), b);
+          }
+        }
         for (const li of lineItems) {
           if (li.inventoryItemId === null) continue;
           const qty = Number(li.quantity);
@@ -282,6 +372,24 @@ router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owne
             referenceId: poId,
             referenceType: "purchase_order",
           });
+          // Capture batch row (with optional expiry) for the received quantity.
+          const b = batchByLine.get(li.id);
+          const batchQty = b?.quantity != null ? Number(b.quantity) : qty;
+          const expiryTs = b?.expiryDate ? new Date(b.expiryDate) : null;
+          if (batchQty > 0 && (!expiryTs || !Number.isNaN(expiryTs.getTime()))) {
+            await tx.insert(inventoryItemBatchesTable).values({
+              restaurantId,
+              inventoryItemId: li.inventoryItemId,
+              batchNumber: b?.batchNumber ?? null,
+              quantityReceived: batchQty.toFixed(3),
+              quantityRemaining: batchQty.toFixed(3),
+              expiryDate: expiryTs,
+              receivedAt: new Date(),
+              purchaseOrderId: poId,
+              purchaseOrderItemId: li.id,
+              notes: null,
+            });
+          }
         }
 
         const total = Number(u.totalAmount);

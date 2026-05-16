@@ -13,7 +13,7 @@
  * deep-links into the existing Inventory PO module.
  */
 import { Router, type Request, type Response } from "express";
-import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, inArray, asc, gt, isNotNull } from "drizzle-orm";
 import crypto from "crypto";
 import {
   db,
@@ -36,6 +36,8 @@ import {
   customerFeedbackTable,
   payrollItemsTable,
   usersTable,
+  inventoryItemBatchesTable,
+  restaurantAiSettingsTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -92,11 +94,14 @@ interface InventorySuggestionItem {
   suggestedQuantity: number;
   suggestedSupplierId: number | null;
   suggestedSupplierName: string | null;
+  supplierRationale: string | null;
   estCostPerUnit: number;
   estLineCost: number;
   reason: string;
   urgency: "low" | "medium" | "high";
   riskType: InventoryRiskType;
+  earliestExpiryDate: string | null;
+  atRiskQuantity: number;
 }
 
 interface InventorySuggestionPayload {
@@ -104,6 +109,7 @@ interface InventorySuggestionPayload {
   items: InventorySuggestionItem[];
   totalEstimatedCost: number;
   windowDays: number;
+  expiryWindowDays: number;
 }
 
 router.post(
@@ -115,8 +121,9 @@ router.post(
 
     try {
       const since = new Date(Date.now() - 30 * 86_400_000);
+      const supplierHistorySince = new Date(Date.now() - 180 * 86_400_000);
 
-      const [items, suppliers, usage] = await Promise.all([
+      const [items, suppliers, usage, supplierHistoryRows, openBatches, settingsRow] = await Promise.all([
         db.select().from(inventoryItemsTable).where(and(
           eq(inventoryItemsTable.restaurantId, restaurantId),
           eq(inventoryItemsTable.isActive, true),
@@ -142,7 +149,88 @@ router.post(
             inArray(ordersTable.status, ["completed", "served", "delivered", "ready"]),
           ))
           .groupBy(recipeMappingsTable.inventoryItemId),
+        // Per-(item,supplier) PO history over last 180d for received POs.
+        db
+          .select({
+            inventoryItemId: purchaseOrderItemsTable.inventoryItemId,
+            supplierId: purchaseOrdersTable.supplierId,
+            poCount: sql<string>`count(distinct ${purchaseOrdersTable.id})`,
+            totalQty: sql<string>`coalesce(sum(${purchaseOrderItemsTable.quantity}), 0)`,
+            avgCost: sql<string>`coalesce(avg(${purchaseOrderItemsTable.costPerUnit}), 0)`,
+            lastReceivedAt: sql<string>`max(${purchaseOrdersTable.receivedAt})`,
+          })
+          .from(purchaseOrderItemsTable)
+          .innerJoin(purchaseOrdersTable, eq(purchaseOrdersTable.id, purchaseOrderItemsTable.purchaseOrderId))
+          .where(and(
+            eq(purchaseOrdersTable.restaurantId, restaurantId),
+            eq(purchaseOrdersTable.status, "received"),
+            isNotNull(purchaseOrderItemsTable.inventoryItemId),
+            isNotNull(purchaseOrdersTable.supplierId),
+            gte(purchaseOrdersTable.receivedAt, supplierHistorySince),
+          ))
+          .groupBy(purchaseOrderItemsTable.inventoryItemId, purchaseOrdersTable.supplierId),
+        // Earliest-expiring open batch per item.
+        db
+          .select()
+          .from(inventoryItemBatchesTable)
+          .where(and(
+            eq(inventoryItemBatchesTable.restaurantId, restaurantId),
+            gt(inventoryItemBatchesTable.quantityRemaining, "0"),
+            isNotNull(inventoryItemBatchesTable.expiryDate),
+          ))
+          .orderBy(asc(inventoryItemBatchesTable.expiryDate)),
+        db.select().from(restaurantAiSettingsTable)
+          .where(eq(restaurantAiSettingsTable.restaurantId, restaurantId))
+          .limit(1),
       ]);
+      const expiryWindowDays = Math.max(1, Math.min(60, settingsRow[0]?.expiryWindowDays ?? 7));
+
+      // Build supplier history map: itemId → ranked suppliers
+      type SupHist = { supplierId: number; supplierName: string; poCount: number; totalQty: number; avgCost: number; lastReceivedAt: Date | null };
+      const histByItem = new Map<number, SupHist[]>();
+      const supplierName = new Map<number, string>(suppliers.map((s) => [s.id, s.name]));
+      for (const r of supplierHistoryRows) {
+        if (r.inventoryItemId == null || r.supplierId == null) continue;
+        const arr = histByItem.get(r.inventoryItemId) ?? [];
+        arr.push({
+          supplierId: r.supplierId,
+          supplierName: supplierName.get(r.supplierId) ?? `Supplier #${r.supplierId}`,
+          poCount: Number(r.poCount) || 0,
+          totalQty: Number(r.totalQty) || 0,
+          avgCost: Number(r.avgCost) || 0,
+          lastReceivedAt: r.lastReceivedAt ? new Date(r.lastReceivedAt) : null,
+        });
+        histByItem.set(r.inventoryItemId, arr);
+      }
+      // Rank by recency (last 60d weighted) then PO count then avg cost.
+      const now = Date.now();
+      for (const [k, arr] of histByItem) {
+        arr.sort((a, b) => {
+          const aRecent = a.lastReceivedAt ? Math.max(0, 60 - (now - a.lastReceivedAt.getTime()) / 86_400_000) : 0;
+          const bRecent = b.lastReceivedAt ? Math.max(0, 60 - (now - b.lastReceivedAt.getTime()) / 86_400_000) : 0;
+          if (Math.abs(aRecent - bRecent) > 5) return bRecent - aRecent;
+          if (a.poCount !== b.poCount) return b.poCount - a.poCount;
+          return a.avgCost - b.avgCost;
+        });
+        histByItem.set(k, arr.slice(0, 3));
+      }
+
+      // Earliest-expiring open batch per item, plus total at-risk qty within window.
+      const expiryWindowMs = expiryWindowDays * 86_400_000;
+      const earliestBatchByItem = new Map<number, { expiryDate: Date; atRiskQty: number }>();
+      for (const b of openBatches) {
+        if (!b.expiryDate) continue;
+        const exp = new Date(b.expiryDate);
+        const cur = earliestBatchByItem.get(b.inventoryItemId);
+        const within = exp.getTime() - now <= expiryWindowMs;
+        const remain = Number(b.quantityRemaining) || 0;
+        if (!cur) {
+          earliestBatchByItem.set(b.inventoryItemId, { expiryDate: exp, atRiskQty: within ? remain : 0 });
+        } else {
+          if (exp < cur.expiryDate) cur.expiryDate = exp;
+          if (within) cur.atRiskQty += remain;
+        }
+      }
 
       const usageById = new Map(usage.map((u) => [u.inventoryItemId, Number(u.qty) || 0]));
       const inputs = items.map((it) => {
@@ -170,20 +258,28 @@ router.post(
         const par = i.parLevel ?? Math.max(i.minStockLevel * 2, i.dailyUsage30d * 14);
         const isOverstock = par > 0 && i.currentStock > par * 1.5 && daysOfStock > 30;
         const isWastage = i.dailyUsage30d === 0 && i.currentStock > i.minStockLevel * 2 && i.currentStock > 0;
-        const flag = isLow ? "LOW" : isOverstock ? "OVERSTOCK" : isWastage ? "WASTAGE" : "OK";
-        return { ...i, daysOfStock: Number.isFinite(daysOfStock) ? Number(daysOfStock.toFixed(1)) : null, flag };
+        const exp = earliestBatchByItem.get(i.id);
+        const isExpiring = !!exp && exp.atRiskQty > 0;
+        // Expiring takes precedence (perishables we already have); then low.
+        const flag = isExpiring ? "EXPIRING" : isLow ? "LOW" : isOverstock ? "OVERSTOCK" : isWastage ? "WASTAGE" : "OK";
+        return { ...i, daysOfStock: Number.isFinite(daysOfStock) ? Number(daysOfStock.toFixed(1)) : null, flag, exp };
       });
       const flagged = candidates.filter((c) => c.flag !== "OK").slice(0, 40);
-      const itemLines = flagged.map((i) =>
-        `  - id=${i.id} flag=${i.flag} name="${i.name}" unit=${i.unit} stock=${i.currentStock} min=${i.minStockLevel} par=${i.parLevel ?? "null"} reorderQty=${i.reorderQuantity ?? "null"} cost=${i.costPerUnit} cat=${i.category} supplier=${i.supplierId ?? "null"} dailyUsage30d=${i.dailyUsage30d} daysOfStock=${i.daysOfStock ?? "∞"}`,
-      ).join("\n") || "  (no items needing attention)";
+      const itemLines = flagged.map((i) => {
+        const hist = histByItem.get(i.id) ?? [];
+        const histStr = hist.length > 0
+          ? hist.map((h) => `${h.supplierId}:${h.supplierName.replace(/"/g, "'")}(${h.poCount}pos,avg₹${h.avgCost.toFixed(2)}${h.lastReceivedAt ? ",last=" + h.lastReceivedAt.toISOString().slice(0, 10) : ""})`).join("|")
+          : "(none)";
+        const expStr = i.exp ? `expiry=${i.exp.expiryDate.toISOString().slice(0, 10)} atRisk=${i.exp.atRiskQty.toFixed(2)}` : "expiry=none";
+        return `  - id=${i.id} flag=${i.flag} name="${i.name}" unit=${i.unit} stock=${i.currentStock} min=${i.minStockLevel} par=${i.parLevel ?? "null"} reorderQty=${i.reorderQuantity ?? "null"} cost=${i.costPerUnit} cat=${i.category} supplier=${i.supplierId ?? "null"} dailyUsage30d=${i.dailyUsage30d} daysOfStock=${i.daysOfStock ?? "∞"} suppliers=[${histStr}] ${expStr}`;
+      }).join("\n") || "  (no items needing attention)";
 
-      const prompt = `You are a restaurant inventory analyst. Surface ingredients that need attention: low stock, overstock, expiry/wastage risk.
+      const prompt = `You are a restaurant inventory analyst. Surface ingredients that need attention: low stock, overstock, expiring soon, or wastage risk.
 
-Suppliers:
+Suppliers (master list):
 ${supplierLines}
 
-Items needing attention (already pre-flagged LOW / OVERSTOCK / WASTAGE):
+Items needing attention (already pre-flagged LOW / OVERSTOCK / WASTAGE / EXPIRING). The "suppliers=[...]" field is the recent PO history for that item, ranked best-first as id:Name(poCount,avgCost,lastReceived). The "expiry=..." field is the earliest open batch and the qty at risk within ${expiryWindowDays} days:
 ${itemLines}
 
 Return ONLY a JSON object:
@@ -195,9 +291,10 @@ Return ONLY a JSON object:
       "name": "<item name>",
       "unit": "<unit>",
       "riskType": "low_stock" | "overstock" | "wastage" | "expiring",
-      "suggestedQuantity": <number — for low_stock: reorder qty in the item's unit; for overstock/wastage: 0>,
-      "suggestedSupplierId": <id or null>,
-      "estCostPerUnit": <number>,
+      "suggestedQuantity": <number — for low_stock: reorder qty in the item's unit; for overstock/wastage/expiring: 0>,
+      "suggestedSupplierId": <id or null — MUST be from the item's suppliers=[...] history if any, else from the master supplier list, else null>,
+      "supplierRationale": "<one short sentence: why this supplier (e.g. 'Used 4× in last 60d, lowest avg cost ₹120')>",
+      "estCostPerUnit": <number — prefer history avgCost if available, else item costPerUnit>,
       "reason": "<short why incl. recommended action: reorder, hold, run-as-special, donate, etc.>",
       "urgency": "low" | "medium" | "high"
     }
@@ -206,8 +303,8 @@ Return ONLY a JSON object:
 
 Rules:
 - For LOW items: suggestedQuantity should bring stock to par (or to ~14 days of usage if no par); urgency "high" if stock < minStockLevel today.
-- For OVERSTOCK / WASTAGE items: set suggestedQuantity=0, suggest using up via combos / specials, urgency "low" or "medium".
-- Prefer existing supplierId; otherwise pick a plausible supplier (or null).
+- For OVERSTOCK / WASTAGE / EXPIRING items: set suggestedQuantity=0; for EXPIRING include "use within X days" or "run as special / donate" in the reason; urgency "high" if expiry within 2 days, else "medium".
+- Pick suggestedSupplierId strictly from the item's suppliers=[...] PO history when present (top-ranked first); only fall back to a master-list supplier when there is no history.
 - Cap at 25 items.
 - JSON only, no markdown.`;
 
@@ -238,15 +335,35 @@ Rules:
           if (!inv) return null;
           const qty = Math.max(0, Number(r.suggestedQuantity) || 0);
           const rt = String(r.riskType ?? "low_stock").toLowerCase();
-          const riskType: InventoryRiskType =
+          let riskType: InventoryRiskType =
             rt === "overstock" || rt === "wastage" || rt === "expiring" ? rt : "low_stock";
-          // Skip empty low_stock rows; keep zero-qty overstock/wastage rows so owner sees the risk.
+          // Skip empty low_stock rows; keep zero-qty overstock/wastage/expiring rows so owner sees the risk.
           if (qty <= 0 && riskType === "low_stock") return null;
+          const expInfo = earliestBatchByItem.get(inv.id);
+          // Force-classify expiring when batches indicate at-risk and model didn't.
+          if (expInfo && expInfo.atRiskQty > 0 && riskType === "low_stock") riskType = "expiring";
           const cost = Number(r.estCostPerUnit) || Number(inv.costPerUnit) || 0;
-          const supplierId = typeof r.suggestedSupplierId === "number"
-            ? r.suggestedSupplierId
-            : (inv.supplierId ?? null);
+          // Resolve supplier: prefer model pick if it appears in history or master list, else top-history, else item default.
+          const hist = histByItem.get(inv.id) ?? [];
+          let supplierId: number | null = null;
+          let supplierRationale: string | null = null;
+          const modelSup = typeof r.suggestedSupplierId === "number" ? r.suggestedSupplierId : null;
+          if (modelSup != null && (hist.find((h) => h.supplierId === modelSup) || supplierById.has(modelSup))) {
+            supplierId = modelSup;
+            const fromHist = hist.find((h) => h.supplierId === modelSup);
+            const modelRationale = typeof r.supplierRationale === "string" ? r.supplierRationale.trim() : "";
+            supplierRationale = modelRationale.slice(0, 200) || (fromHist
+              ? `Used ${fromHist.poCount}× in last 180d, avg ₹${fromHist.avgCost.toFixed(2)}`
+              : "Default supplier from master list");
+          } else if (hist[0]) {
+            supplierId = hist[0].supplierId;
+            supplierRationale = `Used ${hist[0].poCount}× in last 180d, avg ₹${hist[0].avgCost.toFixed(2)}`;
+          } else if (inv.supplierId != null) {
+            supplierId = inv.supplierId;
+            supplierRationale = "Default supplier on the item record";
+          }
           const sup = supplierId != null ? supplierById.get(supplierId) ?? null : null;
+          if (!sup) { supplierId = null; supplierRationale = supplierRationale ?? null; }
           const urg = String(r.urgency ?? "medium").toLowerCase();
           const urgency: "low" | "medium" | "high" = urg === "low" || urg === "high" ? urg : "medium";
           return {
@@ -259,11 +376,14 @@ Rules:
             suggestedQuantity: qty,
             suggestedSupplierId: sup?.id ?? null,
             suggestedSupplierName: sup?.name ?? null,
+            supplierRationale: sup ? supplierRationale : null,
             estCostPerUnit: cost,
             estLineCost: Number((qty * cost).toFixed(2)),
             reason: String(r.reason ?? "").slice(0, 240),
             urgency,
             riskType,
+            earliestExpiryDate: expInfo?.expiryDate.toISOString() ?? null,
+            atRiskQuantity: expInfo ? Number(expInfo.atRiskQty.toFixed(3)) : 0,
           };
         })
         .filter((x): x is InventorySuggestionItem => x !== null)
@@ -275,6 +395,7 @@ Rules:
         items: cleanedItems,
         totalEstimatedCost,
         windowDays: 30,
+        expiryWindowDays,
       };
 
       const [row] = await db.insert(aiInventorySuggestionsTable).values({
@@ -344,10 +465,12 @@ router.patch("/restaurants/:restaurantId/ai-ops/inventory/suggestions/:id", asyn
 router.post("/restaurants/:restaurantId/ai-ops/inventory/suggestions/:id/draft-po", async (req: Request, res: Response) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
-  const body = (req.body ?? {}) as { selectedInventoryItemIds?: unknown };
+  const body = (req.body ?? {}) as { selectedInventoryItemIds?: unknown; groupBySupplier?: boolean };
   const selected = Array.isArray(body.selectedInventoryItemIds)
     ? body.selectedInventoryItemIds.map((x) => Number(x)).filter((x) => Number.isFinite(x))
     : null;
+  // Default to grouping multi-supplier picks into one PO per supplier.
+  const groupBySupplier = body.groupBySupplier !== false;
 
   const [sug] = await db.select().from(aiInventorySuggestionsTable).where(and(
     eq(aiInventorySuggestionsTable.id, id),
@@ -356,51 +479,91 @@ router.post("/restaurants/:restaurantId/ai-ops/inventory/suggestions/:id/draft-p
   if (!sug) return void res.status(404).json({ error: "Suggestion not found" });
   const payload = sug.payload as unknown as InventorySuggestionPayload;
   let items = Array.isArray(payload?.items) ? payload.items : [];
-  // Reorderable items only — exclude overstock/wastage entries which carry qty=0.
-  items = items.filter((i) => i.suggestedQuantity > 0 && i.riskType !== "overstock" && i.riskType !== "wastage");
+  // Reorderable items only — exclude overstock/wastage/expiring entries which carry qty=0.
+  items = items.filter((i) => i.suggestedQuantity > 0 && i.riskType === "low_stock");
   if (selected && selected.length > 0) {
     const sel = new Set(selected);
     items = items.filter((i) => i.inventoryItemId != null && sel.has(i.inventoryItemId));
   }
   if (items.length === 0) return void res.status(400).json({ error: "No reorderable items selected" });
 
-  const supplierIds = Array.from(new Set(items.map((i) => i.suggestedSupplierId).filter((x): x is number => x != null)));
-  const primarySupplierId = supplierIds.length === 1 ? supplierIds[0] : null;
-  const total = items.reduce((s, i) => s + i.estLineCost, 0);
-
-  const [po] = await db.insert(purchaseOrdersTable).values({
-    restaurantId,
-    supplierId: primarySupplierId,
-    status: "pending",
-    totalAmount: String(total.toFixed(2)),
-    isAutoDrafted: true,
-    draftedAt: new Date(),
-    notes: `Drafted by Khana AI Inventory Assistant (suggestion #${sug.id})`,
-  }).returning();
-
-  if (items.length > 0) {
-    await db.insert(purchaseOrderItemsTable).values(items.map((i) => ({
-      purchaseOrderId: po.id,
-      inventoryItemId: i.inventoryItemId,
-      name: i.name,
-      unit: i.unit,
-      quantity: String(i.suggestedQuantity),
-      costPerUnit: String(i.estCostPerUnit.toFixed(2)),
-    })));
+  // Group items by supplier (null/unknown supplier becomes a single "unassigned" PO).
+  const groups = new Map<string, { supplierId: number | null; items: InventorySuggestionItem[] }>();
+  for (const it of items) {
+    const key = groupBySupplier ? String(it.suggestedSupplierId ?? "none") : "single";
+    const existing = groups.get(key);
+    if (existing) existing.items.push(it);
+    else groups.set(key, { supplierId: groupBySupplier ? (it.suggestedSupplierId ?? null) : null, items: [it] });
+  }
+  // If user wanted single PO and items span multiple suppliers, supplier becomes null.
+  if (!groupBySupplier) {
+    const onlyKey = "single";
+    const supplierIds = Array.from(new Set(items.map((i) => i.suggestedSupplierId).filter((x): x is number => x != null)));
+    const grp = groups.get(onlyKey)!;
+    grp.supplierId = supplierIds.length === 1 ? supplierIds[0] : null;
   }
 
-  await db.update(aiInventorySuggestionsTable).set({
-    status: "saved",
-    purchaseOrderId: po.id,
-    updatedAt: new Date(),
-  }).where(eq(aiInventorySuggestionsTable.id, sug.id));
+  const created: Array<{ id: number; supplierId: number | null; itemCount: number; total: number }> = [];
+  await db.transaction(async (tx) => {
+    for (const grp of groups.values()) {
+      const total = grp.items.reduce((s, i) => s + i.estLineCost, 0);
+      const [po] = await tx.insert(purchaseOrdersTable).values({
+        restaurantId,
+        supplierId: grp.supplierId,
+        status: "pending",
+        totalAmount: String(total.toFixed(2)),
+        isAutoDrafted: true,
+        draftedAt: new Date(),
+        notes: `Drafted by Khana AI Inventory Assistant (suggestion #${sug.id})`,
+      }).returning();
+      await tx.insert(purchaseOrderItemsTable).values(grp.items.map((i) => ({
+        purchaseOrderId: po.id,
+        inventoryItemId: i.inventoryItemId,
+        name: i.name,
+        unit: i.unit,
+        quantity: String(i.suggestedQuantity),
+        costPerUnit: String(i.estCostPerUnit.toFixed(2)),
+      })));
+      created.push({ id: po.id, supplierId: grp.supplierId, itemCount: grp.items.length, total });
+    }
+    await tx.update(aiInventorySuggestionsTable).set({
+      status: "saved",
+      // Link first PO for the existing single-PO link; full list returned in response.
+      purchaseOrderId: created[0]?.id ?? null,
+      updatedAt: new Date(),
+    }).where(eq(aiInventorySuggestionsTable.id, sug.id));
+  });
 
   await recordAuditLog({
     req, module: "khana_ai", action: "po.draft_from_suggestion",
-    entity: "purchase_order", entityId: po.id,
-    newValue: { suggestionId: sug.id, itemCount: items.length, total },
+    entity: "purchase_order", entityId: created[0]?.id ?? 0,
+    newValue: { suggestionId: sug.id, poCount: created.length, items: created.reduce((s, c) => s + c.itemCount, 0) },
   });
-  res.json({ purchaseOrder: po, suggestionId: sug.id });
+  // Backwards-compatible single-PO field plus full list of created POs.
+  res.json({
+    purchaseOrder: created[0] ? { id: created[0].id, supplierId: created[0].supplierId } : null,
+    purchaseOrders: created,
+    suggestionId: sug.id,
+  });
+});
+
+// Read-only endpoint: latest active forecast's raw-material needs (top N).
+// Used by the AI Inventory page to surface forecast-grounded restock priorities
+// without spending another credit.
+router.get("/restaurants/:restaurantId/ai-ops/inventory/forecast-needs", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const limit = Math.max(1, Math.min(20, Number(req.query.limit ?? 10)));
+  const [latest] = await db.select().from(aiForecastsTable).where(and(
+    eq(aiForecastsTable.restaurantId, restaurantId),
+    eq(aiForecastsTable.status, "active"),
+  )).orderBy(desc(aiForecastsTable.generatedAt)).limit(1);
+  if (!latest) return void res.json({ forecast: null, needs: [] });
+  const payload = latest.payload as unknown as { rawMaterialNeeds?: Array<Record<string, unknown>>; horizonDays?: number };
+  const needs = Array.isArray(payload?.rawMaterialNeeds) ? payload.rawMaterialNeeds.slice(0, limit) : [];
+  res.json({
+    forecast: { id: latest.id, generatedAt: latest.generatedAt, horizonDays: latest.horizonDays },
+    needs,
+  });
 });
 
 // ────────────────────────── Demand Forecasting ──────────────────────────

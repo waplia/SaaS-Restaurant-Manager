@@ -3,7 +3,7 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem,
-  useAdjustInventory, useInventoryTransactions, useWasteLog,
+  useAdjustInventory, useInventoryTransactions, useInventoryItemBatches, useDeleteInventoryBatch, useWasteLog,
   useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useUpdatePurchaseOrderItems, useDeletePurchaseOrder,
   useRestaurantInfo, useUpdateRestaurant, useRunAutoReorder,
@@ -19,6 +19,7 @@ import {
   Plus, AlertTriangle, Search, Pencil, Trash2, X,
   Package, Truck, ClipboardList, ArrowUpCircle, ArrowDownCircle,
   Building2, Phone, Mail, MapPin, RefreshCw, Flame, Sparkles, Settings, Zap,
+  Layers, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -82,9 +83,11 @@ function StockTab() {
   const { toast } = useToast();
 
   const [form, setForm] = useState({ name: "", unit: "kg", currentStock: "0", minStockLevel: "1", costPerUnit: "0", category: "general", supplierId: "", parLevel: "", reorderQuantity: "", autoReorderEnabled: true });
-  const [adjustForm, setAdjustForm] = useState({ type: "add", quantity: "", notes: "" });
+  const [adjustForm, setAdjustForm] = useState({ type: "add", quantity: "", notes: "", batchNumber: "", expiryDate: "" });
 
   const { data: transactions = [] } = useInventoryTransactions(historyItem?.id ?? null);
+  const { data: batches = [] } = useInventoryItemBatches(historyItem?.id ?? null, { onlyOpen: true });
+  const deleteBatch = useDeleteInventoryBatch();
 
   const lowStockCount = items.filter((i: InventoryItem) => i.isLowStock).length;
 
@@ -147,8 +150,16 @@ function StockTab() {
 
   const handleAdjust = async () => {
     if (!adjustItem || !adjustForm.quantity) return;
+    const isInflow = adjustForm.type === "add" || adjustForm.type === "receive";
     try {
-      await adjustInventory.mutateAsync({ id: adjustItem.id, ...adjustForm });
+      await adjustInventory.mutateAsync({
+        id: adjustItem.id,
+        type: adjustForm.type,
+        quantity: adjustForm.quantity,
+        notes: adjustForm.notes,
+        batchNumber: isInflow ? (adjustForm.batchNumber || null) : null,
+        expiryDate: isInflow && adjustForm.expiryDate ? adjustForm.expiryDate : null,
+      });
       toast({ title: "Stock adjusted!" });
       setAdjustItem(null);
     } catch {
@@ -367,6 +378,18 @@ function StockTab() {
                 </div>
               </div>
               <div><Label>Quantity ({adjustItem.unit})</Label><Input type="number" min="0" step="0.001" value={adjustForm.quantity} onChange={e => setAdjustForm(p => ({ ...p, quantity: e.target.value }))} placeholder="0" /></div>
+              {adjustForm.type === "add" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Batch # (optional)</Label>
+                    <Input value={adjustForm.batchNumber} onChange={e => setAdjustForm(p => ({ ...p, batchNumber: e.target.value }))} placeholder="e.g. LOT-2026-A" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Expiry date</Label>
+                    <Input type="date" value={adjustForm.expiryDate} onChange={e => setAdjustForm(p => ({ ...p, expiryDate: e.target.value }))} />
+                  </div>
+                </div>
+              )}
               <div><Label>Notes (optional)</Label><Input value={adjustForm.notes} onChange={e => setAdjustForm(p => ({ ...p, notes: e.target.value }))} placeholder="Reason for adjustment" /></div>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setAdjustItem(null)}>Cancel</Button>
@@ -379,7 +402,7 @@ function StockTab() {
 
       {historyItem && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold">Stock History</h2>
@@ -387,6 +410,46 @@ function StockTab() {
               </div>
               <button onClick={() => setHistoryItem(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
+            {batches.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Open batches (oldest expiry first)</h3>
+                </div>
+                <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                  {batches.map((b) => {
+                    const exp = b.expiryDate ? new Date(b.expiryDate) : null;
+                    const days = exp ? Math.ceil((exp.getTime() - Date.now()) / 86_400_000) : null;
+                    const expired = days != null && days < 0;
+                    const soon = days != null && days >= 0 && days <= 7;
+                    return (
+                      <div key={b.id} className={cn("flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs", expired ? "border-rose-300 bg-rose-50 dark:bg-rose-950/20" : soon ? "border-amber-300 bg-amber-50 dark:bg-amber-950/20" : "border-border bg-muted/30")}>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">
+                            {b.batchNumber ?? `Batch #${b.id}`}
+                            <span className="ml-1 text-muted-foreground font-normal">· {Number(b.quantityRemaining).toFixed(2)} {historyItem.unit}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground inline-flex items-center gap-1 mt-0.5">
+                            <CalendarClock className="w-3 h-3" />
+                            {exp
+                              ? `${expired ? "Expired" : "Expires"} ${exp.toLocaleDateString()}${days != null && !expired ? ` (in ${days}d)` : ""}`
+                              : "No expiry"}
+                            {b.purchaseOrderId && <span className="ml-1">· PO #{b.purchaseOrderId}</span>}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => { if (confirm("Remove this batch and decrement remaining stock?")) deleteBatch.mutate(b.id); }}
+                          className="text-muted-foreground hover:text-rose-600 p-1 rounded"
+                          title="Remove batch"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="overflow-y-auto flex-1 space-y-2">
               {(transactions as InventoryTransaction[]).length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No transactions yet</p>
@@ -584,6 +647,8 @@ function PurchaseOrdersTab() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editingPoId, setEditingPoId] = useState<number | null>(null);
   const [editLines, setEditLines] = useState<Array<{ inventoryItemId: number | null; name: string; unit: string; quantity: string; costPerUnit: string }>>([]);
+  const [receivePo, setReceivePo] = useState<PurchaseOrder | null>(null);
+  const [receiveBatches, setReceiveBatches] = useState<Record<number, { batchNumber: string; expiryDate: string }>>({});
 
   const beginEdit = (po: PurchaseOrder) => {
     setEditingPoId(po.id);
@@ -637,6 +702,36 @@ function PurchaseOrdersTab() {
       toast({ title: `Order marked as ${newStatus}` });
     } catch {
       toast({ title: "Failed to update status", variant: "destructive" });
+    }
+  };
+
+  const beginReceive = (po: PurchaseOrder) => {
+    setReceivePo(po);
+    const init: Record<number, { batchNumber: string; expiryDate: string }> = {};
+    for (const li of (po.items ?? [])) init[li.id] = { batchNumber: "", expiryDate: "" };
+    setReceiveBatches(init);
+  };
+
+  const confirmReceive = async () => {
+    if (!receivePo) return;
+    const batches = (receivePo.items ?? [])
+      .map((li) => {
+        const r = receiveBatches[li.id];
+        if (!r) return null;
+        if (!r.batchNumber && !r.expiryDate) return null;
+        return {
+          purchaseOrderItemId: li.id,
+          batchNumber: r.batchNumber || null,
+          expiryDate: r.expiryDate || null,
+        };
+      })
+      .filter((b): b is { purchaseOrderItemId: number; batchNumber: string | null; expiryDate: string | null } => b !== null);
+    try {
+      await updatePO.mutateAsync({ id: receivePo.id, status: "received", batches: batches.length > 0 ? batches : undefined });
+      toast({ title: "Order marked as received" });
+      setReceivePo(null);
+    } catch {
+      toast({ title: "Failed to receive order", variant: "destructive" });
     }
   };
 
@@ -737,7 +832,7 @@ function PurchaseOrdersTab() {
                           <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handleStatusChange(po, "ordered")}>{po.isAutoDrafted ? "Send" : "Mark Ordered"}</Button>
                         )}
                         {po.status === "ordered" && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleStatusChange(po, "received")}>Mark Received</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-600 border-green-200 hover:bg-green-50" onClick={() => beginReceive(po)}>Mark Received</Button>
                         )}
                         {(po.status === "pending" || po.status === "ordered") && (
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground" onClick={() => handleStatusChange(po, "cancelled")}>Cancel</Button>
@@ -845,6 +940,58 @@ function PurchaseOrdersTab() {
               <div className="flex gap-3 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setShowAdd(false)}>Cancel</Button>
                 <Button className="flex-1" onClick={handleCreate} disabled={createPO.isPending}>Create Order</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {receivePo && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-semibold">Receive Order #{String(receivePo.id).padStart(4, "0")}</h2>
+              <button onClick={() => setReceivePo(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">Capture batch numbers and expiry dates so the system can track FIFO usage and warn before items expire. Both fields are optional per line.</p>
+            <div className="space-y-3">
+              {(receivePo.items ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">This order has no line items.</p>
+              ) : (
+                (receivePo.items ?? []).map((li) => (
+                  <div key={li.id} className="border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-medium text-sm">{li.name}</p>
+                        <p className="text-xs text-muted-foreground">{Number(li.quantity)} {li.unit} @ ₹{Number(li.costPerUnit).toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Batch # (optional)</Label>
+                        <Input
+                          value={receiveBatches[li.id]?.batchNumber ?? ""}
+                          onChange={(e) => setReceiveBatches((p) => ({ ...p, [li.id]: { ...(p[li.id] ?? { batchNumber: "", expiryDate: "" }), batchNumber: e.target.value } }))}
+                          placeholder="e.g. LOT-2026-A"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Expiry date</Label>
+                        <Input
+                          type="date"
+                          value={receiveBatches[li.id]?.expiryDate ?? ""}
+                          onChange={(e) => setReceiveBatches((p) => ({ ...p, [li.id]: { ...(p[li.id] ?? { batchNumber: "", expiryDate: "" }), expiryDate: e.target.value } }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setReceivePo(null)}>Cancel</Button>
+                <Button className="flex-1" onClick={confirmReceive} disabled={updatePO.isPending}>
+                  {updatePO.isPending ? "Receiving…" : "Confirm Receipt"}
+                </Button>
               </div>
             </div>
           </div>

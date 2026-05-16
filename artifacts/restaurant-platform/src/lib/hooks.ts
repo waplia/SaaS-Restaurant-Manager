@@ -1473,6 +1473,29 @@ export function useInventoryTransactions(itemId: number | null) {
   });
 }
 
+export function useInventoryItemBatches(itemId: number | null, opts?: { onlyOpen?: boolean }) {
+  const rid = useInventoryRestaurantId();
+  const onlyOpen = opts?.onlyOpen ?? true;
+  return useQuery({
+    queryKey: ["inventory", "batches", rid, itemId, onlyOpen],
+    queryFn: () => apiGet<import("./types").InventoryItemBatch[]>(
+      `/restaurants/${rid}/inventory/${itemId}/batches?onlyOpen=${onlyOpen}`,
+    ),
+    enabled: itemId !== null,
+  });
+}
+
+export function useDeleteInventoryBatch() {
+  const rid = useInventoryRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: number) => apiDelete(`/restaurants/${rid}/inventory/batches/${batchId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+    },
+  });
+}
+
 export function useCreateSupplier() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
@@ -1521,9 +1544,15 @@ export function useUpdatePurchaseOrder() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number; status?: string; notes?: string; totalAmount?: string }) =>
+    mutationFn: ({ id, ...data }: {
+      id: number; status?: string; notes?: string; totalAmount?: string; paymentMethod?: string;
+      batches?: Array<{ purchaseOrderItemId: number; batchNumber?: string | null; expiryDate?: string | null; quantity?: string | number }>;
+    }) =>
       apiPatch(`/restaurants/${RESTAURANT_ID}/purchase-orders/${id}`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-orders"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+    },
   });
 }
 

@@ -99,6 +99,13 @@
       "when": 1779100000000,
       "tag": "0013_setup_wizard_google_review",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1779200000000,
+      "tag": "0014_inventory_batches_expiry",
+      "breakpoints": true
     }
   ]
 }

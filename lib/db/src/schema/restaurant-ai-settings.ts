@@ -11,6 +11,7 @@ export const restaurantAiSettingsTable = pgTable(
     defaultLength: text("default_length").notNull().default("short"),
     requireApprovalForDescriptions: boolean("require_approval_for_descriptions").notNull().default(false),
     requireApprovalForImages: boolean("require_approval_for_images").notNull().default(true),
+    expiryWindowDays: integer("expiry_window_days").notNull().default(7),
     featureToggles: jsonb("feature_toggles").$type<Record<string, boolean>>().notNull().default({}),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

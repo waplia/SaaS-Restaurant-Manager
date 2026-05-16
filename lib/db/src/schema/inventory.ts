@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -121,3 +121,36 @@ export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
 export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItemsTable).omit({ id: true, createdAt: true });
 export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
 export type PurchaseOrderItem = typeof purchaseOrderItemsTable.$inferSelect;
+
+/**
+ * Per-batch tracking for inventory items. Captured on PO receive or manual
+ * stock adjustments so the AI Inventory Assistant can flag items expiring
+ * within a configurable window. `quantityRemaining` decrements FIFO from
+ * earliest-expiring batch when stock is consumed/wasted.
+ */
+export const inventoryItemBatchesTable = pgTable(
+  "inventory_item_batches",
+  {
+    id: serial("id").primaryKey(),
+    restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+    inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
+    batchNumber: text("batch_number"),
+    quantityReceived: decimal("quantity_received", { precision: 10, scale: 3 }).notNull().default("0.000"),
+    quantityRemaining: decimal("quantity_remaining", { precision: 10, scale: 3 }).notNull().default("0.000"),
+    expiryDate: timestamp("expiry_date"),
+    receivedAt: timestamp("received_at").notNull().defaultNow(),
+    purchaseOrderId: integer("purchase_order_id").references(() => purchaseOrdersTable.id, { onDelete: "set null" }),
+    purchaseOrderItemId: integer("purchase_order_item_id").references(() => purchaseOrderItemsTable.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("inventory_batches_item_expiry_idx").on(t.inventoryItemId, t.expiryDate),
+    index("inventory_batches_rest_idx").on(t.restaurantId, t.expiryDate),
+  ],
+);
+
+export const insertInventoryItemBatchSchema = createInsertSchema(inventoryItemBatchesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertInventoryItemBatch = z.infer<typeof insertInventoryItemBatchSchema>;
+export type InventoryItemBatch = typeof inventoryItemBatchesTable.$inferSelect;

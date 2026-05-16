@@ -662,6 +662,22 @@ export interface AdjustInventoryInput {
   type: string;
   quantity: string;
   notes: string;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
+}
+
+export interface InventoryItemBatch {
+  id: number;
+  restaurantId: number;
+  inventoryItemId: number;
+  batchNumber: string | null;
+  quantityReceived: string;
+  quantityRemaining: string;
+  expiryDate: string | null;
+  receivedAt: string;
+  purchaseOrderId: number | null;
+  purchaseOrderItemId: number | null;
+  notes: string | null;
 }
 
 export interface StaffMember {
