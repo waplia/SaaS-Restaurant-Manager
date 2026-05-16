@@ -518,6 +518,7 @@ export const ListRestaurantsResponseItem = zod.object({
   isActive: zod.boolean().optional(),
   openingTime: zod.string().optional(),
   closingTime: zod.string().optional(),
+  enableVoiceOrdering: zod.boolean().optional(),
   createdAt: zod.string().optional(),
 });
 export const ListRestaurantsResponse = zod.array(ListRestaurantsResponseItem);
@@ -560,6 +561,7 @@ export const GetRestaurantResponse = zod.object({
   isActive: zod.boolean().optional(),
   openingTime: zod.string().optional(),
   closingTime: zod.string().optional(),
+  enableVoiceOrdering: zod.boolean().optional(),
   createdAt: zod.string().optional(),
 });
 
@@ -577,6 +579,7 @@ export const UpdateRestaurantBody = zod.object({
   taxRate: zod.string().optional(),
   serviceCharge: zod.string().optional(),
   logoUrl: zod.string().optional(),
+  enableVoiceOrdering: zod.boolean().optional(),
   openingTime: zod.string().optional(),
   closingTime: zod.string().optional(),
 });
@@ -600,6 +603,7 @@ export const UpdateRestaurantResponse = zod.object({
   isActive: zod.boolean().optional(),
   openingTime: zod.string().optional(),
   closingTime: zod.string().optional(),
+  enableVoiceOrdering: zod.boolean().optional(),
   createdAt: zod.string().optional(),
 });
 

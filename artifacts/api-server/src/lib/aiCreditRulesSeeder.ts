@@ -109,6 +109,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "ai_voice_order",
+    featureLabel: "AI Voice Order Assistant",
+    description: "Parse a spoken Hindi/English/Hinglish order transcript into structured items + table for the POS / waiter app.",
+    creditsPerUnit: "1",
+    minCharge: 1,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

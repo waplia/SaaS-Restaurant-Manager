@@ -27,6 +27,7 @@ export const restaurantsTable = pgTable("restaurants", {
   closingTime: text("closing_time").default("22:00"),
   autoReorderEnabled: boolean("auto_reorder_enabled").notNull().default(true),
   autoReorderCron: text("auto_reorder_cron").default("0 6 * * *"),
+  enableVoiceOrdering: boolean("enable_voice_ordering").notNull().default(false),
   acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
   whatsappMonthlyLimitOverride: integer("whatsapp_monthly_limit_override"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

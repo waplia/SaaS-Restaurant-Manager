@@ -14,6 +14,7 @@ import {
   listMenuItems, getListMenuItemsQueryKey,
   listOrders, getListOrdersQueryKey,
   useCreateOrder,
+  getRestaurant, getGetRestaurantQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
 import * as SecureStore from "@/lib/secureStorage";
@@ -23,6 +24,7 @@ import { MenuItemCard } from "@/components/MenuItemCard";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNetworkStatus, useOfflineCache } from "@/hooks/useOfflineCache";
+import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
 
 interface CartItem {
   menuItemId: number;
@@ -54,6 +56,7 @@ export default function WaiterOrderScreen() {
   const [sendingToKitchen, setSendingToKitchen] = useState(false);
   const [offlineCategories, setOfflineCategories] = useState<MenuCategory[]>([]);
   const [offlineItems, setOfflineItems] = useState<MenuItem[]>([]);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   const catCacheKey = `menu_cats_${restaurantId}`;
   const itemsCacheKey = (catId: number) => `menu_items_${restaurantId}_${catId}`;
@@ -75,6 +78,22 @@ export default function WaiterOrderScreen() {
     enabled: isOnline && selectedCategoryId !== null,
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: restaurantInfo } = useQuery({
+    queryKey: getGetRestaurantQueryKey(restaurantId),
+    queryFn: () => getRestaurant(restaurantId),
+    enabled: isOnline,
+    staleTime: 5 * 60 * 1000,
+  });
+  const voiceOrderingEnabled = !!(restaurantInfo as { enableVoiceOrdering?: boolean } | undefined)?.enableVoiceOrdering;
+
+  const { data: allMenuItemsData } = useQuery({
+    queryKey: getListMenuItemsQueryKey(restaurantId, {}),
+    queryFn: () => listMenuItems(restaurantId, {}),
+    enabled: isOnline && voiceOrderingEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+  const allMenuItems = (Array.isArray(allMenuItemsData) ? allMenuItemsData : []) as MenuItem[];
 
   const ordersParams = { tableId: numTableId, status: "pending,in_progress", limit: 1 };
   const { data: ordersData } = useQuery({
@@ -258,6 +277,57 @@ export default function WaiterOrderScreen() {
           <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
           <Text style={styles.offlineBannerText}>Offline — showing cached menu. Orders will queue.</Text>
         </View>
+      )}
+
+      {voiceOrderingEnabled && (
+        <Pressable
+          onPress={() => {
+            if (!isOnline) {
+              Alert.alert("Voice order needs internet", "Connect to the internet to use AI voice ordering.");
+              return;
+            }
+            setShowVoiceModal(true);
+          }}
+          style={({ pressed }) => [{
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+            paddingVertical: 9, marginHorizontal: 12, marginTop: 10, borderRadius: 10,
+            backgroundColor: colors.primary + "15", borderWidth: 1, borderColor: colors.primary + "40",
+            opacity: pressed || !isOnline ? 0.5 : 1,
+          }]}
+        >
+          <Ionicons name="mic" size={16} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+            Voice order (AI)
+          </Text>
+        </Pressable>
+      )}
+
+      {voiceOrderingEnabled && (
+        <VoiceOrderModal
+          visible={showVoiceModal}
+          restaurantId={restaurantId}
+          tableId={numTableId}
+          menuItems={allMenuItems}
+          onClose={() => setShowVoiceModal(false)}
+          onConfirm={async (result: VoiceOrderResult) => {
+            if (!isOnline) {
+              Alert.alert("Offline", "Voice order requires an internet connection. Please reconnect and try again.");
+              return;
+            }
+            const cartItems: CartItem[] = result.items.map((it) => {
+              const menuItem = allMenuItems.find((m) => m.id === it.menuItemId)
+                ?? itemList.find((m) => m.id === it.menuItemId);
+              return {
+                menuItemId: it.menuItemId,
+                name: menuItem?.name ?? `Item #${it.menuItemId}`,
+                price: menuItem ? Number(menuItem.price) : 0,
+                quantity: it.quantity,
+              };
+            });
+            await submitOrderItems(cartItems, numTableId, activeOrder?.id);
+            Alert.alert("Sent!", `${cartItems.length} item${cartItems.length === 1 ? "" : "s"} sent to kitchen.`);
+          }}
+        />
       )}
 
       {activeOrder ? (

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { SettingsLayout, SETTINGS_GROUPS, type SectionKey } from "@/components/settings/SettingsLayout";
 import { SettingForm, Field, Row, Toggle, Select, ListEditor } from "@/components/settings/SettingForm";
-import { useRestaurantInfo, useSubscription, useRestaurantId } from "@/lib/hooks";
+import { useRestaurantInfo, useSubscription, useRestaurantId, useUpdateRestaurant } from "@/lib/hooks";
 import { Trash2, ExternalLink, Lock, FileDown } from "lucide-react";
 import { Link } from "wouter";
 
@@ -1556,11 +1556,20 @@ function AiSection() {
     menuSuggestions: false, demandForecasting: false, staffSchedulingAssistant: false,
     modelPreference: "auto", optInTraining: false,
   };
+  const { data: restaurant } = useRestaurantInfo();
+  const updateRestaurant = useUpdateRestaurant();
+  const voiceEnabled = !!restaurant?.enableVoiceOrdering;
   return (
     <SettingForm section="ai" defaults={defaults}
       description="AI-powered features. All inference uses the platform's managed AI integrations — no API keys to configure here.">
       {(s, set) => (
         <>
+          <Toggle
+            label="AI Voice Order Assistant"
+            hint="Show a push-to-talk mic in POS and the waiter app. Hindi/English/Hinglish speech is parsed into a confirmation modal — orders are only created after the user confirms. Charged 1 credit per parse."
+            checked={voiceEnabled}
+            onChange={(v) => updateRestaurant.mutate({ enableVoiceOrdering: v })}
+          />
           <Toggle label="AI menu suggestions" hint="Suggest combos, upsells, and seasonal items in POS." checked={s.menuSuggestions} onChange={v => set(p => ({ ...p, menuSuggestions: v }))} />
           <Toggle label="AI demand forecasting" hint="Predict tomorrow's covers and ingredient needs." checked={s.demandForecasting} onChange={v => set(p => ({ ...p, demandForecasting: v }))} />
           <Toggle label="AI staff scheduling assistant" hint="Recommend shifts based on historical demand." checked={s.staffSchedulingAssistant} onChange={v => set(p => ({ ...p, staffSchedulingAssistant: v }))} />

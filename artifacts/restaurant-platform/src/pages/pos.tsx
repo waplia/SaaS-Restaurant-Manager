@@ -24,8 +24,9 @@ import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check, Lock, Star, UserCheck, AlertCircle,
+  Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic,
 } from "lucide-react";
+import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
 
 interface CartModifier {
   name: string;
@@ -1034,6 +1035,9 @@ export default function PosPage() {
   const [showTableGrid, setShowTableGrid] = useState(true);
   const [placedOrder, setPlacedOrder] = useState<OrderDetail | null>(null);
   const [modPickerItem, setModPickerItem] = useState<MenuItem | null>(null);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const restaurantIdForVoice = useRestaurantId();
+  const { data: allMenuItems = [] } = useMenuItems({});
 
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
@@ -1265,6 +1269,29 @@ export default function PosPage() {
     }
   };
 
+  const handleVoiceOrderConfirm = async (payload: VoiceOrderConfirmation): Promise<void> => {
+    const order = await createOrder.mutateAsync({
+      tableId: payload.tableId ?? selectedTableId ?? undefined,
+      orderType: payload.tableId != null ? "dine_in" : orderType,
+      customerName: customerName || undefined,
+      customerId: linkedCustomerId ?? undefined,
+      notes: payload.notes,
+      items: payload.items,
+    }) as OrderDetail;
+    if (payload.tableId != null) setSelectedTableId(payload.tableId);
+    setPlacedOrder(order);
+    setCart(order.items.map(oi => ({
+      lineKey: String(oi.id),
+      menuItemId: oi.menuItemId,
+      name: oi.menuItemName,
+      basePrice: Number(oi.unitPrice),
+      modifiers: [],
+      unitPrice: Number(oi.unitPrice),
+      quantity: oi.quantity,
+    })));
+    toast({ title: `Order ${order.orderNumber} placed via voice`, description: "Kitchen has been notified." });
+  };
+
   const handlePayNow = async () => {
     if (cart.length === 0 && liveItems.length === 0) {
       toast({ title: "Cart is empty", variant: "destructive" });
@@ -1339,25 +1366,36 @@ export default function PosPage() {
 
           {/* Table grid */}
           <div className="border-b border-border flex-shrink-0">
-            <button
-              className="flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
-              onClick={() => setShowTableGrid(p => !p)}
-            >
-              <span className="flex items-center gap-2 text-foreground">
-                Tables
-                {selectedTable && (
-                  <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full leading-none">
-                    T{selectedTable.tableNumber}
-                  </span>
-                )}
-                {tableActiveOrder && !placedOrder && (
-                  <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full leading-none flex items-center gap-1">
-                    <AlertTriangle className="w-2.5 h-2.5" /> Active order
-                  </span>
-                )}
-              </span>
-              {showTableGrid ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-            </button>
+            <div className="flex items-center w-full">
+              <button
+                className="flex-1 flex items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
+                onClick={() => setShowTableGrid(p => !p)}
+              >
+                <span className="flex items-center gap-2 text-foreground">
+                  Tables
+                  {selectedTable && (
+                    <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full leading-none">
+                      T{selectedTable.tableNumber}
+                    </span>
+                  )}
+                  {tableActiveOrder && !placedOrder && (
+                    <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full leading-none flex items-center gap-1">
+                      <AlertTriangle className="w-2.5 h-2.5" /> Active order
+                    </span>
+                  )}
+                </span>
+                {showTableGrid ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {restaurant?.enableVoiceOrdering && (
+                <button
+                  onClick={() => setShowVoiceModal(true)}
+                  className="mr-2 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 text-xs font-semibold"
+                  title="AI voice order (push to talk)"
+                >
+                  <Mic className="w-3.5 h-3.5" /> Voice order
+                </button>
+              )}
+            </div>
 
             {showTableGrid && (
               <div className="px-4 pb-3">
@@ -1949,6 +1987,16 @@ export default function PosPage() {
           discounts={discountReceiptLines.length > 0 ? discountReceiptLines : undefined}
           onClose={() => setShowSplitModal(false)}
           onComplete={handleNewOrder}
+        />
+      )}
+      {showVoiceModal && restaurantIdForVoice && (
+        <VoiceOrderModal
+          restaurantId={restaurantIdForVoice}
+          defaultTableId={selectedTableId}
+          tables={tables as FloorTable[]}
+          menuItems={allMenuItems as MenuItem[]}
+          onClose={() => setShowVoiceModal(false)}
+          onConfirm={handleVoiceOrderConfirm}
         />
       )}
     </Layout>

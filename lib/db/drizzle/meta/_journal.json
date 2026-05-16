@@ -85,6 +85,13 @@
       "when": 1778921218827,
       "tag": "0011_ai_sales_insights",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779062400000,
+      "tag": "0012_enable_voice_ordering",
+      "breakpoints": true
     }
   ]
 }

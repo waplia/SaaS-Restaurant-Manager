@@ -248,6 +248,7 @@ export interface Restaurant {
   isActive?: boolean;
   openingTime?: string;
   closingTime?: string;
+  enableVoiceOrdering?: boolean;
   createdAt?: string;
 }
 
@@ -276,6 +277,7 @@ export interface RestaurantUpdate {
   taxRate?: string;
   serviceCharge?: string;
   logoUrl?: string;
+  enableVoiceOrdering?: boolean;
   openingTime?: string;
   closingTime?: string;
 }

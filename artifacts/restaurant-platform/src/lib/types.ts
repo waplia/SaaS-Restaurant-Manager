@@ -1112,6 +1112,7 @@ export interface RestaurantInfo {
   city?: string | null;
   phone?: string | null;
   email?: string | null;
+  enableVoiceOrdering?: boolean;
 }
 
 export interface PosModifier {

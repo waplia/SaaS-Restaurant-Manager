@@ -2787,6 +2787,7 @@ components:
         isActive: { type: boolean }
         openingTime: { type: string }
         closingTime: { type: string }
+        enableVoiceOrdering: { type: boolean }
         createdAt: { type: string }
 
     RestaurantInput:
@@ -2818,6 +2819,7 @@ components:
         taxRate: { type: string }
         serviceCharge: { type: string }
         logoUrl: { type: string }
+        enableVoiceOrdering: { type: boolean }
         openingTime: { type: string }
         closingTime: { type: string }
 
