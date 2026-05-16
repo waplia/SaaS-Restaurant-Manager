@@ -23,6 +23,7 @@ export interface ProviderRow {
   timeoutMs: number;
   maxTokens: number;
   apiKey: string | null;
+  config: Record<string, unknown> | null;
 }
 
 export interface CallContext {
@@ -83,6 +84,7 @@ async function loadProvider(id: number): Promise<ProviderRow | null> {
     timeoutMs: row.timeoutMs,
     maxTokens: row.maxTokens,
     apiKey,
+    config: (row.config ?? null) as Record<string, unknown> | null,
   };
 }
 
@@ -236,7 +238,7 @@ async function callAnthropic(
       apiKey: provider.apiKey,
       ...(provider.baseUrl ? { baseURL: provider.baseUrl } : {}),
     });
-  } else if ((provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy) {
+  } else if ((provider.config as { useReplitProxy?: boolean } | null)?.useReplitProxy) {
     client = anthropicProxy;
   } else {
     throw new Error(`Anthropic provider ${provider.slug} has no API key`);
@@ -263,7 +265,7 @@ async function callGemini(
   req: TextRequest,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const { GoogleGenAI } = await import("@google/genai");
-  const useProxy = (provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy;
+  const useProxy = (provider.config as { useReplitProxy?: boolean } | null)?.useReplitProxy;
   const apiKey = provider.apiKey ?? (useProxy ? process.env["AI_INTEGRATIONS_GEMINI_API_KEY"] : undefined);
   if (!apiKey) throw new Error(`Gemini provider ${provider.slug} has no API key`);
   const cfg: { apiKey: string; httpOptions?: { baseUrl: string } } = { apiKey };
@@ -574,9 +576,110 @@ export class AIProviderService {
   }
 
   static async generateVision(ctx: CallContext, req: TextRequest & { imageDataUrl: string }): Promise<TextResult> {
-    // Vision is currently routed through the same text path; callers embed image
-    // descriptions as text. Full multimodal payloads to be added when an
-    // assignment opts into vision in a follow-up task.
+    const safety = await loadSafety();
+    const storePrompt = safety?.storePrompt ?? true;
+    const storeResponse = safety?.storeResponse ?? true;
+    const joined = req.messages.map((m) => m.content).join("\n");
+    const safe = checkSafety(joined, safety);
+    if (!safe.ok) {
+      await logRequest({ ctx, providerSlug: null, providerId: null, model: null, modality: "vision",
+        status: "blocked", errorCode: "SAFETY_BLOCK", errorMessage: safe.reason ?? "blocked", storePrompt, storeResponse });
+      throw new Error(`AI vision request blocked: ${safe.reason}`);
+    }
+    const rl = await checkRateLimit(ctx, safety);
+    if (!rl.ok) {
+      await logRequest({ ctx, providerSlug: null, providerId: null, model: null, modality: "vision",
+        status: "blocked", errorCode: "RATE_LIMIT", errorMessage: rl.reason ?? "rate limited", storePrompt, storeResponse });
+      throw new Error(`AI vision blocked: ${rl.reason}`);
+    }
+    const assignment = await loadAssignment(ctx.featureSlug);
+    const primaryId = req.forceProviderId ?? assignment?.primaryProviderId ?? null;
+    const primaryModel = req.forceModel ?? assignment?.primaryModel ?? "gemini-2.5-flash";
+    const fallbackId = assignment?.fallbackProviderId ?? null;
+    const fallbackModel = assignment?.fallbackModel ?? null;
+
+    // Parse data URL → mime + base64
+    const m = req.imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) throw new Error("imageDataUrl must be a data URL with base64 payload");
+    const mimeType = m[1];
+    const b64 = m[2];
+
+    const callVision = async (provider: ProviderRow, model: string): Promise<{ text: string; inputTokens: number; outputTokens: number }> => {
+      if (provider.kind === "gemini") {
+        if (!provider.apiKey) throw new Error(`Gemini provider ${provider.slug} has no API key`);
+        const { GoogleGenAI } = await import("@google/genai");
+        const ai = new GoogleGenAI({ apiKey: provider.apiKey });
+        const out = await ai.models.generateContent({
+          model,
+          contents: [{ role: "user", parts: [
+            { text: req.systemPrompt ? `${req.systemPrompt}\n\n${joined}` : joined },
+            { inlineData: { mimeType, data: b64 } },
+          ] }],
+        });
+        const text = out.candidates?.[0]?.content?.parts?.map(p => "text" in p ? p.text : "").join("") ?? "";
+        const u = out.usageMetadata;
+        return { text, inputTokens: u?.promptTokenCount ?? 0, outputTokens: u?.candidatesTokenCount ?? 0 };
+      }
+      // OpenAI-compatible vision (image_url with data URL)
+      if (["openai", "openrouter", "groq", "mistral", "perplexity", "custom"].includes(provider.kind)) {
+        if (!provider.apiKey) throw new Error(`${provider.kind} provider ${provider.slug} has no API key`);
+        const baseUrl = provider.baseUrl ?? "https://api.openai.com/v1";
+        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model, max_tokens: req.maxTokens ?? provider.maxTokens, temperature: req.temperature ?? 0.4,
+            messages: [
+              ...(req.systemPrompt ? [{ role: "system", content: req.systemPrompt }] : []),
+              { role: "user", content: [
+                { type: "text", text: joined },
+                { type: "image_url", image_url: { url: req.imageDataUrl } },
+              ] },
+            ],
+          }),
+        });
+        if (!res.ok) throw new Error(`Vision HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+        const data = await res.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+        return { text: data.choices?.[0]?.message?.content ?? "", inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0 };
+      }
+      throw new Error(`Vision not supported for provider kind ${provider.kind}`);
+    };
+
+    const start = Date.now();
+    const tryOne = async (id: number | null, model: string, isFallback: boolean): Promise<TextResult> => {
+      if (!id) throw new Error("No vision provider configured");
+      const provider = await loadProvider(id);
+      if (!provider) throw new Error("Vision provider unavailable");
+      const out = await callVision(provider, model);
+      const latencyMs = Date.now() - start;
+      await logRequest({ ctx, providerSlug: provider.slug, providerId: provider.id, model, modality: "vision",
+        status: "success", inputTokens: out.inputTokens, outputTokens: out.outputTokens,
+        latencyMs, prompt: storePrompt ? joined : undefined,
+        response: storeResponse ? out.text : undefined, costUsd: 0, fallbackUsed: isFallback, storePrompt, storeResponse });
+      return { text: out.text, inputTokens: out.inputTokens, outputTokens: out.outputTokens,
+        providerSlug: provider.slug, model, fallbackUsed: isFallback, latencyMs };
+    };
+    try {
+      return await tryOne(primaryId, primaryModel, false);
+    } catch (err) {
+      if (fallbackId) {
+        try { return await tryOne(fallbackId, fallbackModel ?? primaryModel, true); }
+        catch (err2) {
+          await logRequest({ ctx, providerSlug: null, providerId: fallbackId, model: fallbackModel ?? undefined, modality: "vision",
+            status: "error", errorMessage: (err2 as Error).message, latencyMs: Date.now() - start,
+            prompt: storePrompt ? joined : undefined, storePrompt, storeResponse });
+          throw err2;
+        }
+      }
+      await logRequest({ ctx, providerSlug: null, providerId: primaryId, model: primaryModel, modality: "vision",
+        status: "error", errorMessage: (err as Error).message, latencyMs: Date.now() - start,
+        prompt: storePrompt ? joined : undefined, storePrompt, storeResponse });
+      throw err;
+    }
+  }
+
+  static async _legacyVisionShim(ctx: CallContext, req: TextRequest & { imageDataUrl: string }): Promise<TextResult> {
+    // Reserved: legacy callers that bundled image as text.
     return this.generateText(ctx, req);
   }
 
@@ -605,6 +708,8 @@ export class AIProviderService {
     const assignment = await loadAssignment(ctx.featureSlug);
     const primaryId = assignment?.primaryProviderId ?? null;
     const primaryModel = assignment?.primaryModel ?? "gemini-2.5-flash-image";
+    const fallbackId = assignment?.fallbackProviderId ?? null;
+    const fallbackModel = assignment?.fallbackModel ?? primaryModel;
     const start = Date.now();
     const runDefaultGemini = async () => {
       const { generateImage } = await import("@workspace/integrations-gemini-ai/image");
@@ -612,8 +717,7 @@ export class AIProviderService {
     };
     const runGeminiWithAdminKey = async (provider: ProviderRow, model: string): Promise<{ b64_json: string; mimeType: string }> => {
       if (!provider.apiKey) {
-        // No admin key — only fall through to env helper if explicitly opted in
-        if ((provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy) {
+        if ((provider.config as { useReplitProxy?: boolean } | null)?.useReplitProxy) {
           return runDefaultGemini();
         }
         throw new Error(`Gemini provider ${provider.slug} has no API key`);
@@ -631,45 +735,59 @@ export class AIProviderService {
       }
       return { b64_json: inline.inlineData.data ?? "", mimeType: inline.inlineData.mimeType ?? "image/png" };
     };
-    const callImage = async (provider: ProviderRow | null): Promise<{ b64_json: string; mimeType: string; providerSlug: string; model: string }> => {
+    const callImage = async (provider: ProviderRow | null, model: string): Promise<{ b64_json: string; mimeType: string; providerSlug: string; model: string }> => {
       if (!provider) {
         const out = await runDefaultGemini();
-        return { ...out, providerSlug: "gemini", model: primaryModel };
+        return { ...out, providerSlug: "gemini", model };
       }
       switch (provider.kind) {
         case "gemini": {
-          const out = await runGeminiWithAdminKey(provider, primaryModel);
-          return { ...out, providerSlug: provider.slug, model: primaryModel };
+          const out = await runGeminiWithAdminKey(provider, model);
+          return { ...out, providerSlug: provider.slug, model };
         }
         case "stability": {
           const out = await callStabilityImage(provider, req.prompt);
-          return { ...out, providerSlug: provider.slug, model: primaryModel };
+          return { ...out, providerSlug: provider.slug, model };
         }
         case "replicate": {
-          const out = await callReplicateImage(provider, primaryModel, req.prompt);
-          return { ...out, providerSlug: provider.slug, model: primaryModel };
+          const out = await callReplicateImage(provider, model, req.prompt);
+          return { ...out, providerSlug: provider.slug, model };
         }
         default:
           throw new Error(`Image generation not implemented for provider kind ${provider.kind}`);
       }
     };
-    try {
-      const provider = primaryId ? await loadProvider(primaryId) : null;
-      if (primaryId && !provider) throw new Error("Configured image provider unavailable");
-      const out = await callImage(provider);
+    const tryImageOnce = async (id: number | null, model: string, isFallback: boolean): Promise<ImageResult> => {
+      const provider = id ? await loadProvider(id) : null;
+      if (id && !provider) throw new Error("Configured image provider unavailable");
+      const out = await callImage(provider, model);
       const latencyMs = Date.now() - start;
       await logRequest({
         ctx, providerSlug: out.providerSlug, providerId: provider?.id ?? null, model: out.model, modality: "image",
         status: "success", latencyMs, prompt: req.prompt, storePrompt, storeResponse,
-        costUsd: 0.005,
+        costUsd: 0.005, fallbackUsed: isFallback,
       });
-      return { b64_json: out.b64_json, mimeType: out.mimeType, providerSlug: out.providerSlug, model: out.model, fallbackUsed: false, latencyMs };
+      return { b64_json: out.b64_json, mimeType: out.mimeType, providerSlug: out.providerSlug, model: out.model, fallbackUsed: isFallback, latencyMs };
+    };
+    try {
+      return await tryImageOnce(primaryId, primaryModel, false);
     } catch (err) {
+      if (fallbackId) {
+        try {
+          return await tryImageOnce(fallbackId, fallbackModel, true);
+        } catch (err2) {
+          await logRequest({
+            ctx, providerSlug: null, providerId: fallbackId, model: fallbackModel, modality: "image",
+            status: "error", errorMessage: (err2 as Error).message, latencyMs: Date.now() - start,
+            prompt: req.prompt, storePrompt, storeResponse,
+          });
+          throw err2;
+        }
+      }
       const latencyMs = Date.now() - start;
-      const msg = err instanceof Error ? err.message : String(err);
       await logRequest({
         ctx, providerSlug: null, providerId: primaryId, model: primaryModel, modality: "image",
-        status: "error", errorMessage: msg, latencyMs, prompt: req.prompt,
+        status: "error", errorMessage: (err as Error).message, latencyMs, prompt: req.prompt,
         storePrompt, storeResponse,
       });
       throw err;
