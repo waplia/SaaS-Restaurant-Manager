@@ -9,6 +9,7 @@ import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { emitWebhookEvent } from "../lib/webhookDispatcher";
 import { pushToStaff } from "../lib/pushNotify";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
+import { issueTokenForOrder, syncTokenWithTickets } from "../lib/tokens";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
@@ -305,7 +306,16 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
 
   const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
-  res.status(201).json({ ...order, items: createdItems });
+
+  const issuedToken = await issueTokenForOrder({
+    orderId: order.id,
+    restaurantId,
+    orderType: order.orderType,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+  }).catch(() => null);
+
+  res.status(201).json({ ...order, items: createdItems, token: issuedToken });
 });
 
 router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
@@ -1455,6 +1465,8 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   }
 
   broadcastEvent(restaurantId, "ticket:status", { id: updated.id, status: updated.status, orderId: updated.orderId });
+
+  await syncTokenWithTickets(updated.orderId, restaurantId).catch(() => {});
 
   if (status === "ready") {
     const [order] = await db.select({ customerId: ordersTable.customerId, orderNumber: ordersTable.orderNumber })

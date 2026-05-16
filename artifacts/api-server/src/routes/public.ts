@@ -41,6 +41,7 @@ async function checkRestaurantFeatureBySlug(
 }
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
+import { issueTokenForOrder } from "../lib/tokens";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
@@ -211,7 +212,14 @@ router.post("/public/orders", async (req, res) => {
   }
 
   const guestToken = generateGuestToken(order.id);
-  res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount, guestToken });
+  const issuedToken = await issueTokenForOrder({
+    orderId: order.id,
+    restaurantId,
+    orderType: order.orderType,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+  }).catch(() => null);
+  res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount, guestToken, token: issuedToken?.token ?? null });
 });
 
 router.get("/public/orders/verify-session", async (req, res) => {

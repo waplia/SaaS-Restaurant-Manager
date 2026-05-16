@@ -24,6 +24,10 @@ import SettingsPage from "@/pages/settings";
 import SettingsSectionPage from "@/pages/settings-section";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
+import SettingsTokenDisplayPage from "@/pages/settings-token-display";
+import TokensPage from "@/pages/tokens";
+import TokensHistoryPage from "@/pages/tokens-history";
+import DisplayTokenPage from "@/pages/display-token";
 import SubscriptionPage from "@/pages/subscription";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
@@ -188,6 +192,10 @@ function Router() {
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
+      <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
+      <Route path="/tokens" component={() => <RoleProtectedRoute component={TokensPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
+      <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
+      <Route path="/display/token/:outletId" component={DisplayTokenPage} />
       <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={WebhooksPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />

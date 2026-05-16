@@ -78,8 +78,28 @@ export function initSocketIO(httpServer: HTTPServer): Server {
       const orderId = typeof data === "number" ? data : typeof data === "object" && data !== null && "orderId" in data ? Number((data as { orderId: unknown }).orderId) : 0;
       if (orderId > 0) void socket.leave(`order:${orderId}`);
     });
+
+    // Public token display board: guests join a per-outlet room. No auth
+    // is required — the room only carries already-projected (masked) token
+    // payloads safe for public display.
+    socket.on("join:tokens", (data: unknown) => {
+      if (typeof data !== "object" || data === null) return;
+      const restaurantId = Number((data as { restaurantId?: unknown }).restaurantId);
+      const branchId = (data as { branchId?: unknown }).branchId;
+      if (!restaurantId || restaurantId <= 0) return;
+      if (branchId == null || branchId === "all") {
+        void socket.join(`tokens:${restaurantId}:all`);
+      } else {
+        const b = Number(branchId);
+        if (b > 0) void socket.join(`tokens:${restaurantId}:${b}`);
+      }
+    });
   });
 
+  return io;
+}
+
+export function getIO(): Server | null {
   return io;
 }
 

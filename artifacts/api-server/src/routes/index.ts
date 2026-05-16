@@ -67,6 +67,7 @@ import fintechRouter from "./fintech";
 import documentsRouter from "./documents";
 import devicesRouter from "./devices";
 import healthScoresRouter from "./health-scores";
+import tokensRouter from "./tokens";
 
 const router: IRouter = Router();
 
@@ -84,6 +85,7 @@ router.use(createStripeWebhookRouter());
 router.use(createCashfreeWebhookRouter());
 router.use(createRazorpayWebhookRouter());
 router.use(whatsappPublicRouter);
+router.use(tokensRouter);
 
 // Public API namespace (api-key authenticated). Mounted BEFORE the JWT
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.

@@ -9,7 +9,7 @@ import {
   Mail, Receipt, CreditCard, Palette, Shield, BadgeDollarSign,
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
-  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle,
+  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash,
 } from "lucide-react";
 
 export type SectionKey =
@@ -18,7 +18,7 @@ export type SectionKey =
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "refund-reasons"
-  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp"
+  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs";
 
 type IconType = typeof Building2;
@@ -47,6 +47,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "branch", label: "Branches", icon: GitBranch },
       { key: "kitchens", label: "Kitchens & Stations", icon: ChefHat, href: "/settings/kitchens" },
       { key: "devices", label: "Devices & Hardware", icon: Printer, href: "/settings/devices" },
+      { key: "token-display", label: "Token Display", icon: Hash, href: "/settings/token-display" },
       { key: "currencies", label: "Currencies", icon: Coins, ownerOnly: true },
       { key: "email", label: "Email", icon: Mail, ownerOnly: true },
       { key: "taxes", label: "Taxes", icon: Receipt, ownerOnly: true },
