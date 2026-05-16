@@ -189,6 +189,51 @@ export class ObjectStorageService {
 
 }
 
+/**
+ * Sweeps orphaned uploads in the private bucket under `uploads/` that are
+ * older than `maxAgeMs` and have no ACL custom-metadata policy attached.
+ * These represent presigned uploads where the client PUT a file but never
+ * called finalize (which is what attaches the ACL policy), so the object
+ * has no tenant owner and would otherwise sit forever.
+ *
+ * Returns counts so callers can log progress.
+ */
+export async function sweepOrphanUploads(
+  maxAgeMs: number = 24 * 60 * 60 * 1000,
+  now: Date = new Date(),
+): Promise<{ scanned: number; deleted: number; failed: number }> {
+  const svc = new ObjectStorageService();
+  let privateDir = svc.getPrivateObjectDir();
+  if (!privateDir.endsWith("/")) privateDir = `${privateDir}/`;
+  const uploadsRoot = `${privateDir}uploads/`;
+  const { bucketName, objectName: prefix } = parseObjectPath(uploadsRoot);
+  const bucket = objectStorageClient.bucket(bucketName);
+
+  const cutoff = now.getTime() - maxAgeMs;
+  let scanned = 0;
+  let deleted = 0;
+  let failed = 0;
+
+  const [files] = await bucket.getFiles({ prefix });
+  for (const file of files) {
+    scanned++;
+    try {
+      const [metadata] = await file.getMetadata();
+      const createdRaw = (metadata.timeCreated as string | undefined) ?? (metadata.updated as string | undefined);
+      const createdMs = createdRaw ? Date.parse(createdRaw) : NaN;
+      if (!Number.isFinite(createdMs) || createdMs > cutoff) continue;
+      const acl = await getObjectAclPolicy(file);
+      if (acl) continue;
+      await file.delete({ ignoreNotFound: true });
+      deleted++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { scanned, deleted, failed };
+}
+
 export function parseObjectPath(path: string): {
   bucketName: string;
   objectName: string;

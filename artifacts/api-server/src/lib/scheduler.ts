@@ -128,6 +128,15 @@ export function startScheduler(): void {
   registerCron("health-score-nightly", "0 3 * * *", "Computes nightly Restaurant Health Score (0–100) for all active restaurants at 03:00 IST");
   registerCron("compliance-reminders", "15 8 * * *", "Daily Compliance Manager reminders at 08:15 IST (60/30/15/7/1d before expiry, on day, weekly when overdue)");
   registerCron("gift-card-expiry", "0 1 * * *", "Daily 01:00 IST: marks gift cards whose expiresAt has passed as expired");
+  registerCron("orphan-upload-sweep", "0 4 * * *", "Daily 04:00 IST: deletes private-bucket uploads older than 24h with no ACL policy (abandoned presigned uploads)");
+
+  trackCron("orphan_upload_sweep", "0 4 * * *", async () => {
+    await runTrackedCron("orphan-upload-sweep", async () => {
+      const { sweepOrphanUploads } = await import("./objectStorage");
+      const r = await sweepOrphanUploads();
+      logger.info({ ...r }, "[uploads] orphan sweep complete");
+    }).catch(err => logger.error({ err }, "[uploads] orphan sweep failed"));
+  });
 
   trackCron("gift_card_expiry", "0 1 * * *", async () => {
     await runTrackedCron("gift-card-expiry", async () => {
