@@ -43,7 +43,7 @@ export default function Security() {
 
             <div className="prose prose-lg dark:prose-invert max-w-none">
               <h3>GDPR & Data Privacy</h3>
-              <p>We respect your privacy and that of your customers. Khana Lagao is fully compliant with GDPR and CCPA regulations, providing you with the tools to handle data requests effortlessly.</p>
+              <p>We respect your privacy and that of your customers. KhanaLagao is fully compliant with GDPR and CCPA regulations, providing you with the tools to handle data requests effortlessly.</p>
               
               <h3>Uptime Guarantee</h3>
               <p>We boast a 99.99% uptime SLA. Our offline mode ensures your POS continues to function even if your local internet connection fails.</p>

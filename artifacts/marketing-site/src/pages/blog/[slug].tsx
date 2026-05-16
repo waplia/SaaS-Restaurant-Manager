@@ -150,7 +150,7 @@ export default function BlogPost() {
               </ReactMarkdown>
 
               <div className="not-prose mt-12 p-8 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20">
-                <h3 className="font-serif text-2xl font-bold mb-2">See Khana Lagao in your kitchen</h3>
+                <h3 className="font-serif text-2xl font-bold mb-2">See KhanaLagao in your kitchen</h3>
                 <p className="text-muted-foreground mb-6">
                   Get a 20-minute walkthrough on real data from a venue like yours. No slides, no pressure.
                 </p>

@@ -5,7 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 export default function About() {
   useSeo({
     title: "About Us",
-    description: "The story behind Khana Lagao and our mission to empower restaurant owners.",
+    description: "The story behind KhanaLagao and our mission to empower restaurant owners.",
   });
 
   return (
@@ -22,7 +22,7 @@ export default function About() {
             </div>
             
             <div className="prose prose-lg dark:prose-invert max-w-none">
-              <p>Khana Lagao was born out of frustration. Our founders grew up in the restaurant industry, watching brilliant chefs struggle with clunky, outdated software that crashed during the rush and provided terrible insights.</p>
+              <p>KhanaLagao was born out of frustration. Our founders grew up in the restaurant industry, watching brilliant chefs struggle with clunky, outdated software that crashed during the rush and provided terrible insights.</p>
               <p>We decided to build something different. A system that respects the craft of hospitality. Fast, reliable, and beautiful.</p>
             </div>
 

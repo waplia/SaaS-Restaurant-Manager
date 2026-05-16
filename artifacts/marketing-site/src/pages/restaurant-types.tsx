@@ -96,7 +96,7 @@ export default function RestaurantTypes() {
   const data = TYPES[type];
 
   useSeo({
-    title: `Khana Lagao for ${data.title}`,
+    title: `KhanaLagao for ${data.title}`,
     description: data.desc,
   });
 
@@ -109,7 +109,7 @@ export default function RestaurantTypes() {
             <div className="text-center mb-16">
               <p className="text-sm uppercase tracking-widest text-primary font-semibold mb-3">Built for {data.title}</p>
               <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6" data-testid="text-type-title">
-                The Khana Lagao OS for {data.title}
+                The KhanaLagao OS for {data.title}
               </h1>
               <p className="text-xl text-muted-foreground">{data.desc}</p>
             </div>
@@ -127,7 +127,7 @@ export default function RestaurantTypes() {
 
             <div className="bg-card p-8 rounded-2xl border border-border shadow-lg mb-16">
               <h3 className="text-2xl font-bold font-serif mb-2 text-center">Talk to a {data.title.toLowerCase()} specialist</h3>
-              <p className="text-muted-foreground text-center mb-6">No slide deck. A working tour of Khana Lagao on real data from a venue like yours.</p>
+              <p className="text-muted-foreground text-center mb-6">No slide deck. A working tour of KhanaLagao on real data from a venue like yours.</p>
               <LeadForm source={`type_${type}`} showDetails />
             </div>
 

@@ -288,7 +288,7 @@ export default function ReportsPage() {
       : "Payments Report";
 
     doc.setFontSize(18);
-    doc.text(`Khana Lagao — ${sectionTitle}`, 14, 18);
+    doc.text(`KhanaLagao — ${sectionTitle}`, 14, 18);
     doc.setFontSize(10);
     doc.text(`Generated: ${dateStr}`, 14, 26);
 

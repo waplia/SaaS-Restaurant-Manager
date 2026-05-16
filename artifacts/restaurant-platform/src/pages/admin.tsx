@@ -1271,7 +1271,7 @@ function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow
         <div className="space-y-3">
           <div className="grid sm:grid-cols-2 gap-3">
             {field("bankName", "Bank name", { placeholder: "HDFC Bank" })}
-            {field("accountHolder", "Account holder", { placeholder: "Khana Lagao Pvt Ltd" })}
+            {field("accountHolder", "Account holder", { placeholder: "KhanaLagao Pvt Ltd" })}
             {field("accountNumber", "Account number", { placeholder: "1234567890" })}
             {field("ifsc", "IFSC code", { placeholder: "HDFC0001234" })}
             {field("branch", "Branch")}
@@ -1286,7 +1286,7 @@ function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow
       {row.provider === "upi" && (
         <div className="space-y-3">
           {field("upiId", "UPI ID (VPA)", { placeholder: "khanalagao@hdfcbank" })}
-          {field("payeeName", "Payee name", { placeholder: "Khana Lagao Pvt Ltd" })}
+          {field("payeeName", "Payee name", { placeholder: "KhanaLagao Pvt Ltd" })}
           <div className="space-y-1.5">
             <ImageUploadField
               label="UPI QR code (upload or paste URL)"

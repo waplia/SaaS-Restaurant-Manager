@@ -74,7 +74,7 @@ function QrModal({ table, restaurantName, onClose }: { table: FloorTable; restau
     }
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text("Powered by Khana Lagao", 105, 175, { align: "center" });
+    doc.text("Powered by KhanaLagao", 105, 175, { align: "center" });
     doc.save(`table-${table.tableNumber}-qr.pdf`);
   }
 

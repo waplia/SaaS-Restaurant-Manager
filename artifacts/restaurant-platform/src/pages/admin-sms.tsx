@@ -208,7 +208,7 @@ function ProviderDialog({ provider, onClose }: { provider: SmsProvider | null; o
 
 function ProviderTestDialog({ provider, onClose }: { provider: SmsProvider; onClose: () => void }) {
   const [to, setTo] = useState("");
-  const [message, setMessage] = useState("Khana Lagao SMS test from super-admin console.");
+  const [message, setMessage] = useState("KhanaLagao SMS test from super-admin console.");
   const sendMut = useMutation({
     mutationFn: () => apiAction(`/admin/sms/providers/${provider.id}/test`, "POST", { to, message }),
     onSuccess: (r: { ok: boolean; status: string; error?: string }) =>

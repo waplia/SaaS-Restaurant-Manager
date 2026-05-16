@@ -191,7 +191,7 @@ function ProviderEditor({ row, onClose }: { row: AdminEmailProvider | null; onCl
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>From name</Label><Input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Khana Lagao" /></div>
+            <div className="space-y-1.5"><Label>From name</Label><Input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="KhanaLagao" /></div>
             <div className="space-y-1.5"><Label>From email</Label><Input value={fromEmail} onChange={e => setFromEmail(e.target.value)} placeholder="hello@example.com" /></div>
           </div>
           <div className="space-y-1.5"><Label>Reply-to (optional)</Label><Input value={replyTo ?? ""} onChange={e => setReplyTo(e.target.value)} placeholder="support@example.com" /></div>

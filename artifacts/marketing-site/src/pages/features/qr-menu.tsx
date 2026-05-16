@@ -10,7 +10,7 @@ export default function QRMenu() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "Khana Lagao QR Menu",
+      "name": "KhanaLagao QR Menu",
       "description": "Contactless dining experience that increases average order value."
     }
   });

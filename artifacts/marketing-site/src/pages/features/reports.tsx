@@ -10,7 +10,7 @@ export default function Reports() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "Khana Lagao Reports",
+      "name": "KhanaLagao Reports",
       "description": "Actionable business insights to improve your bottom line."
     }
   });

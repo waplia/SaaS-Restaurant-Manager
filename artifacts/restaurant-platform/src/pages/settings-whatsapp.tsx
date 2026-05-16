@@ -106,7 +106,7 @@ function SettingsTab() {
             <input type="radio" checked={usePlatform} onChange={() => set("usePlatformAccount", true)} disabled={!data?.platformAvailable} className="mt-0.5" />
             <span>
               <span className="font-medium">Use platform account</span>
-              <span className="block text-xs text-muted-foreground">{data?.platformAvailable ? "Khana Lagao's WhatsApp Business is used. Subject to your plan's monthly limit." : "Platform account not configured by admin yet."}</span>
+              <span className="block text-xs text-muted-foreground">{data?.platformAvailable ? "KhanaLagao's WhatsApp Business is used. Subject to your plan's monthly limit." : "Platform account not configured by admin yet."}</span>
             </span>
           </label>
           <label className="flex items-start gap-2 cursor-pointer text-sm">

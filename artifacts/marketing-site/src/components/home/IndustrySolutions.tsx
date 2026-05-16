@@ -29,7 +29,7 @@ export function IndustrySolutions() {
             Built for every kind of kitchen.
           </h2>
           <p className="text-lg text-muted-foreground">
-            From a 30-cover cafe to a 200-outlet franchise — Khana Lagao is configured for the way your concept actually operates.
+            From a 30-cover cafe to a 200-outlet franchise — KhanaLagao is configured for the way your concept actually operates.
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

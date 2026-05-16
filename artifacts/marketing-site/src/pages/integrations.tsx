@@ -6,7 +6,7 @@ import { SiStripe, SiRazorpay, SiZomato, SiSwiggy, SiUbereats, SiDoordash, SiQui
 export default function Integrations() {
   useSeo({
     title: "Integrations",
-    description: "Khana Lagao integrates with the tools you already use. Payments, delivery, accounting, and more.",
+    description: "KhanaLagao integrates with the tools you already use. Payments, delivery, accounting, and more.",
   });
 
   const partners = [
@@ -27,7 +27,7 @@ export default function Integrations() {
         <div className="container mx-auto px-4 md:px-6">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">Plays well with others</h1>
-            <p className="text-xl text-muted-foreground">Connect Khana Lagao to your favorite tools for a seamless operational flow.</p>
+            <p className="text-xl text-muted-foreground">Connect KhanaLagao to your favorite tools for a seamless operational flow.</p>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">

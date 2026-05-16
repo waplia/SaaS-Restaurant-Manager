@@ -21,7 +21,7 @@ import { FinalCTA } from "@/components/home/FinalCTA";
 
 export default function Home() {
   useSeo({
-    title: "Khana Lagao | Run Your Restaurant Smarter with One Powerful Operating System",
+    title: "KhanaLagao | Run Your Restaurant Smarter with One Powerful Operating System",
     description:
       "POS, QR menu, KOT, tables, inventory, payroll, finance, growth and Khana AI — one connected operating system for restaurants, cafes, cloud kitchens, bakeries, bars, hotels and chains.",
   });

@@ -66,7 +66,7 @@ function SettingsTab() {
     queryFn: () => apiFetch("/admin/whatsapp/settings"),
   });
   const [form, setForm] = useState<Partial<WaSettings>>({});
-  const [test, setTest] = useState({ to: "", body: "Test message from Khana Lagao admin." });
+  const [test, setTest] = useState({ to: "", body: "Test message from KhanaLagao admin." });
 
   const merged = { ...(data?.settings ?? {}), ...form };
   const set = (k: keyof WaSettings, v: unknown) => setForm(p => ({ ...p, [k]: v }));

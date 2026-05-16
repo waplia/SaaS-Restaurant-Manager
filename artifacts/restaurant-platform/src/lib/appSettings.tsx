@@ -27,9 +27,9 @@ export interface PublicAppSettings {
 }
 
 const DEFAULTS: PublicAppSettings = {
-  appName: "Khana Lagao",
-  logoUrl: null,
-  faviconUrl: null,
+  appName: "KhanaLagao",
+  logoUrl: "/logo.png",
+  faviconUrl: "/favicon.png",
   primaryColor: "#f97316",
   secondaryColor: "#fb923c",
   supportEmail: "support@tabletrack.app",

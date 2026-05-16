@@ -100,7 +100,7 @@ function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | nul
     totalAmount: totalQty,
     splitTotal: totalQty,
     footer: `${ticket.kitchen?.name ?? "Kitchen"} · ${totalQty} item${totalQty !== 1 ? "s" : ""}`,
-    restaurant: { name: restaurantName ?? "Khana Lagao" },
+    restaurant: { name: restaurantName ?? "KhanaLagao" },
   });
 }
 

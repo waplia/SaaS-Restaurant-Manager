@@ -486,11 +486,11 @@ interface EmailCfg {
 }
 function EmailSection() {
   const defaults: EmailCfg = {
-    senderName: "Khana Lagao", replyTo: "",
+    senderName: "KhanaLagao", replyTo: "",
     templates: {
       orderConfirmation: { subject: "Your order #{order_number} is confirmed", body: "Hi {customer_name},\n\nThanks for ordering with us! Your order #{order_number} totalling {total} is confirmed and will be ready shortly.\n\n— {restaurant_name}" },
       receipt: { subject: "Receipt for order #{order_number}", body: "Thanks for dining with us. Your receipt is attached.\n\nTotal: {total}\nPayment: {payment_method}" },
-      staffInvite: { subject: "You've been invited to {restaurant_name}", body: "Hi {staff_name},\n\nYou've been invited to join {restaurant_name} on Khana Lagao. Click the link to set your password: {invite_link}" },
+      staffInvite: { subject: "You've been invited to {restaurant_name}", body: "Hi {staff_name},\n\nYou've been invited to join {restaurant_name} on KhanaLagao. Click the link to set your password: {invite_link}" },
       reservationConfirmation: { subject: "Reservation confirmed for {date} at {time}", body: "Hi {customer_name},\n\nYour reservation for {party_size} at {date} {time} is confirmed.\n\nSee you soon — {restaurant_name}" },
     },
   };

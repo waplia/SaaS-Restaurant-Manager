@@ -4,7 +4,7 @@ import {
 
 const FAQS = [
   { q: "How long does onboarding take?", a: "Most single outlets go live in under a week — menu setup, hardware configuration, staff training and live support on your first service are all included." },
-  { q: "Does Khana Lagao work offline?", a: "Yes. Billing, KOTs and prints keep working during internet outages and sync automatically once you're back online." },
+  { q: "Does KhanaLagao work offline?", a: "Yes. Billing, KOTs and prints keep working during internet outages and sync automatically once you're back online." },
   { q: "Can I run multiple outlets and a franchise?", a: "Absolutely. Higher plans support unlimited outlets with central menu, branch pricing, royalty calculation, brand compliance and roll-up reporting." },
   { q: "Do you support Zomato, Swiggy and my own ordering app?", a: "Yes. All aggregators land in one unified order inbox with menu sync, reconciliation and a single KDS workflow." },
   { q: "How does Khana AI work and is it included?", a: "Khana AI is built into the platform from day one. It learns from your sales, KOTs, reviews and inventory to suggest pricing, prep quantities, campaigns and review replies." },

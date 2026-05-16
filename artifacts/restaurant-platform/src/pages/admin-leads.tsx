@@ -590,7 +590,7 @@ function SendMessagePanel({
   disabled: boolean;
 }) {
   const [channel, setChannel] = useState<"email" | "sms" | "whatsapp">("email");
-  const [subject, setSubject] = useState("Following up from Khana Lagao");
+  const [subject, setSubject] = useState("Following up from KhanaLagao");
   const [body, setBody] = useState(`Hi ${lead.name.split(" ")[0]},\n\nThanks for reaching out. Happy to set up a quick call.\n\n— KhanaLagao team`);
 
   const channelEnabled = channels[channel];

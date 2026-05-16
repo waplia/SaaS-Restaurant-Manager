@@ -308,7 +308,7 @@ function CheckoutModal({
           key: order.keyId,
           amount: order.amount ?? 0,
           currency: order.currency ?? "INR",
-          name: "Khana Lagao",
+          name: "KhanaLagao",
           description: `${plan.name} subscription`,
           order_id: order.orderId,
           prefill: { name: user?.name ?? "", email: user?.email ?? undefined },
@@ -800,7 +800,7 @@ export default function SubscriptionPage() {
 
   return (
     <Layout>
-      <PageHeader title="Subscription & Billing" subtitle="Manage your Khana Lagao plan" />
+      <PageHeader title="Subscription & Billing" subtitle="Manage your KhanaLagao plan" />
 
       <div className="p-6 max-w-5xl space-y-8">
         {planStatus === "trial" && !isExpired && trialDaysLeft !== null && trialDaysLeft <= 7 && (
@@ -817,7 +817,7 @@ export default function SubscriptionPage() {
         {isExpired && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400 text-sm font-medium">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-            Your trial has expired. Please upgrade to continue using Khana Lagao.
+            Your trial has expired. Please upgrade to continue using KhanaLagao.
           </div>
         )}
 

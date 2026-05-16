@@ -10,7 +10,7 @@ export default function OnlineOrdering() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "Khana Lagao Online Ordering",
+      "name": "KhanaLagao Online Ordering",
       "description": "Direct delivery & takeout without the massive commission fees."
     }
   });

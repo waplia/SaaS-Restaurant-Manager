@@ -11,7 +11,7 @@ export function FinalCTA() {
           Ready to run your restaurant <span className="text-primary">smarter?</span>
         </h2>
         <p className="text-lg md:text-xl text-white/70 mb-10">
-          Join the restaurants, cafes, cloud kitchens and chains running their entire operation on Khana Lagao.
+          Join the restaurants, cafes, cloud kitchens and chains running their entire operation on KhanaLagao.
           14-day free trial. No credit card. Live human onboarding.
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-3">

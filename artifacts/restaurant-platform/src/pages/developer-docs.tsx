@@ -47,7 +47,7 @@ const REQ_SAMPLE = `curl https://your-domain.com/api/v1/orders \\
 
 export default function DeveloperDocsPage() {
   return (
-    <SettingsLayout activeKey="developer-docs" title="Developer Documentation" subtitle="Build integrations against the Khana Lagao API.">
+    <SettingsLayout activeKey="developer-docs" title="Developer Documentation" subtitle="Build integrations against the KhanaLagao API.">
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-8">
         <section>
           <h2 className="text-lg font-semibold">Authentication</h2>

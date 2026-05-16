@@ -37,7 +37,7 @@ const EMPTY: Partial<BlogPost> = {
   coverImage: "",
   category: "guides",
   tags: "",
-  author: "Khana Lagao Team",
+  author: "KhanaLagao Team",
   readMinutes: 5,
   published: true,
 };

@@ -225,7 +225,7 @@ export default function PublicFeedbackWallPage() {
 
         {!isEmbed && (
           <footer className="text-center mt-10 text-xs text-gray-400">
-            Powered by Khana Lagao
+            Powered by KhanaLagao
           </footer>
         )}
       </div>

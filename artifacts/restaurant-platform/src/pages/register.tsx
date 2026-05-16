@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
-import { Flame, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,10 +66,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-4xl grid md:grid-cols-2 gap-10 items-center">
         <div className="space-y-6 hidden md:block">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-foreground">Khana Lagao</span>
+            <img src="/logo.png" alt="KhanaLagao" className="h-10 w-10 object-contain" />
+            <span className="text-xl font-bold text-foreground">KhanaLagao</span>
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground leading-tight">
@@ -93,10 +91,8 @@ export default function RegisterPage() {
 
         <div className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-5">
           <div className="flex items-center gap-3 md:hidden">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-lg">Khana Lagao</span>
+            <img src="/logo.png" alt="KhanaLagao" className="h-9 w-9 object-contain" />
+            <span className="font-bold text-lg">KhanaLagao</span>
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">Create your account</h2>

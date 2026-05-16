@@ -10,7 +10,7 @@ export default function Payroll() {
     schema: {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "Khana Lagao Payroll",
+      "name": "KhanaLagao Payroll",
       "description": "Manage shifts, calculate wages, and track staff performance."
     }
   });
@@ -27,7 +27,7 @@ export default function Payroll() {
             </div>
             
             <div className="prose prose-lg dark:prose-invert max-w-none">
-              <p>Simplify scheduling and ensure accurate paychecks. Khana Lagao makes team management effortless.</p>
+              <p>Simplify scheduling and ensure accurate paychecks. KhanaLagao makes team management effortless.</p>
               
               <h3>Features</h3>
               <ul>

@@ -87,7 +87,7 @@ export default function OnboardingPage() {
     mutationFn: () => apiPost<{ completedAt: string }>("/onboarding/complete"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["onboarding-state"] });
-      toast({ title: "You're live!", description: "Welcome to Khana Lagao." });
+      toast({ title: "You're live!", description: "Welcome to KhanaLagao." });
       navigate("/dashboard");
     },
     onError: (err) => {
@@ -177,7 +177,7 @@ export default function OnboardingPage() {
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"><Flame className="w-4 h-4 text-white" /></div>
-            <span className="font-bold text-lg">Khana Lagao</span>
+            <span className="font-bold text-lg">KhanaLagao</span>
             <span className="text-xs text-muted-foreground border-l border-border pl-2.5 ml-1">Setup wizard</span>
           </div>
           <button onClick={() => navigate("/dashboard")} className="text-sm text-muted-foreground hover:text-foreground">Continue later →</button>
@@ -326,7 +326,7 @@ function ProfileStep({ restaurantId, onDone }: { restaurantId: number; onDone: (
   return (
     <StepShell>
       <Field label="Restaurant name" required>
-        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Khana Lagao Cafe" />
+        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="KhanaLagao Cafe" />
       </Field>
       <Field label="Phone number" required>
         <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="9876543210" />

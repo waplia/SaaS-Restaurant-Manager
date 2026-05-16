@@ -47,7 +47,7 @@ const FAQ_ITEMS = [
     a: "Yes — you can upgrade or downgrade at any time. Pro-rated billing handles the difference automatically.",
   },
   {
-    q: "Does Khana Lagao work offline?",
+    q: "Does KhanaLagao work offline?",
     a: "Yes. Billing and KOTs continue to print during internet outages and sync automatically once you're back online.",
   },
   {

@@ -20,7 +20,7 @@ export function WhyChooseUs() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-4">
-            Why Khana Lagao
+            Why KhanaLagao
           </div>
           <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5">
             Nine reasons restaurants switch — and stay.

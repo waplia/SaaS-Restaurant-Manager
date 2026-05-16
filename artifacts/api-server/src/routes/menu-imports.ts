@@ -178,7 +178,7 @@ async function safeFetchHtml(rawUrl: string): Promise<string> {
   let current = await validateUrlForFetch(rawUrl);
   for (let hop = 0; hop < 5; hop++) {
     const res = await fetch(current.toString(), {
-      headers: { "User-Agent": "TableTrack-MenuImport/1.0" },
+      headers: { "User-Agent": "KhanaLagao-MenuImport/1.0" },
       redirect: "manual",
       signal: AbortSignal.timeout(20_000),
     });

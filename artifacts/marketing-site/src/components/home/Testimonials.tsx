@@ -15,7 +15,7 @@ const TESTIMONIALS: Testimonial[] = [
     role: "Owner",
     brand: "Sutra Modern Indian, Mumbai",
     rating: 5,
-    quote: "We replaced three apps with Khana Lagao on day one. Food cost dropped 4% in the first month — and our manager actually leaves the floor before midnight now.",
+    quote: "We replaced three apps with KhanaLagao on day one. Food cost dropped 4% in the first month — and our manager actually leaves the floor before midnight now.",
     initial: "S",
   },
   {
@@ -72,7 +72,7 @@ export function Testimonials() {
             Loved by restaurants that care about the details.
           </h2>
           <p className="text-lg text-muted-foreground">
-            Independent cafes, multi-outlet chains, cloud kitchens and luxury hotels — all running on Khana Lagao.
+            Independent cafes, multi-outlet chains, cloud kitchens and luxury hotels — all running on KhanaLagao.
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">

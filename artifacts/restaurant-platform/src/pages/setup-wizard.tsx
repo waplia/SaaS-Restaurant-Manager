@@ -166,7 +166,7 @@ export default function SetupWizardPage() {
   const completeMut = useMutation({
     mutationFn: () => apiPost(`/restaurants/${restaurantId}/setup-wizard/complete`, {}),
     onSuccess: () => {
-      toast({ title: "You're live!", description: "Welcome to Khana Lagao." });
+      toast({ title: "You're live!", description: "Welcome to KhanaLagao." });
       navigate("/dashboard");
     },
   });
@@ -221,7 +221,7 @@ export default function SetupWizardPage() {
             <Flame className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="font-bold">Khana Lagao</div>
+            <div className="font-bold">KhanaLagao</div>
             <div className="text-xs text-muted-foreground">AI Setup Wizard</div>
           </div>
           <div className="ml-auto text-sm text-muted-foreground">Step {stepIdx + 1} of {STEPS.length}</div>
@@ -588,7 +588,7 @@ function ProfileStep() {
   return (
     <div className="space-y-4">
       <Field label="Restaurant name" required>
-        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Khana Lagao Cafe" />
+        <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="KhanaLagao Cafe" />
       </Field>
       <Field label="Phone number" required>
         <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="9876543210" />
