@@ -971,6 +971,17 @@ export default function CustomerMenuPage() {
                   <span className="text-sm font-semibold text-gray-800 w-16 text-right">{currSymbol}{(itemUnitPrice(item.basePrice, item.modifiers) * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
+              <QrUpsellStrip
+                restaurantId={menu?.restaurantId ?? 0}
+                cart={cart}
+                cartTotal={cartTotal}
+                currSymbol={currSymbol}
+                resolveImg={resolveImg}
+                onAdd={(it) => addToCart({
+                  id: it.id, name: it.name, price: it.price, imageUrl: it.imageUrl,
+                  isAvailable: true, modifierGroups: [],
+                } as unknown as PublicMenuItem)}
+              />
             </div>
             <div className="px-5 py-4 border-t border-gray-100">
               <div className="flex justify-between text-base font-bold text-gray-900 mb-4">
@@ -1246,6 +1257,88 @@ export default function CustomerMenuPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface QrUpsellItem { id: number; name: string; price: string; imageUrl: string | null }
+interface QrUpsellSuggestion { ruleId: number; ruleName: string; message: string | null; items: QrUpsellItem[] }
+
+function QrUpsellStrip({
+  restaurantId, cart, cartTotal, currSymbol, resolveImg, onAdd,
+}: {
+  restaurantId: number;
+  cart: CartItem[];
+  cartTotal: number;
+  currSymbol: string;
+  resolveImg: (u: string | null | undefined) => string;
+  onAdd: (item: QrUpsellItem) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<QrUpsellSuggestion[]>([]);
+  const loggedRef = useRef<Set<string>>(new Set());
+
+  const items = cart.map(c => ({
+    menuItemId: c.menuItemId, quantity: c.quantity, unitPrice: itemUnitPrice(c.basePrice, c.modifiers),
+  }));
+  const hash = `${items.length}|${cartTotal.toFixed(2)}|${items.map(i => `${i.menuItemId}x${i.quantity}`).join(",")}`;
+
+  useEffect(() => {
+    if (!restaurantId || items.length === 0) { setSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiPublicPost<{ suggestions: QrUpsellSuggestion[] }>(
+          `/public/restaurants/${restaurantId}/upsell/evaluate`,
+          { items, total: cartTotal },
+        );
+        setSuggestions(res.suggestions ?? []);
+        const events: Array<Record<string, unknown>> = [];
+        for (const s of res.suggestions ?? []) {
+          for (const it of s.items) {
+            const k = `${s.ruleId}:${it.id}:${hash}`;
+            if (!loggedRef.current.has(k)) {
+              loggedRef.current.add(k);
+              events.push({ eventType: "impression", channel: "qr", ruleId: s.ruleId, menuItemId: it.id });
+            }
+          }
+        }
+        if (events.length > 0) {
+          apiPublicPost(`/public/restaurants/${restaurantId}/upsell/events`, { events }).catch(() => {});
+        }
+      } catch { /* silent */ }
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hash, restaurantId]);
+
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-xl bg-orange-50 border border-orange-200 p-3">
+      <p className="text-xs font-bold text-orange-700 mb-2 flex items-center gap-1">
+        <Gift className="w-3.5 h-3.5" /> Recommended for you
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {suggestions.flatMap(s => s.items.map(it => (
+          <button
+            key={`${s.ruleId}-${it.id}`}
+            onClick={() => {
+              apiPublicPost(`/public/restaurants/${restaurantId}/upsell/events`, {
+                eventType: "accept", channel: "qr", ruleId: s.ruleId, menuItemId: it.id,
+                revenue: Number(it.price),
+              }).catch(() => {});
+              onAdd(it);
+            }}
+            className="flex-shrink-0 w-28 bg-white rounded-lg border border-orange-200 p-2 text-left active:scale-95 transition"
+          >
+            {it.imageUrl ? (
+              <img src={resolveImg(it.imageUrl)} alt="" className="w-full h-16 rounded-md object-cover mb-1.5" />
+            ) : (
+              <div className="w-full h-16 rounded-md bg-orange-100 mb-1.5" />
+            )}
+            <p className="text-xs font-semibold text-gray-800 truncate">{it.name}</p>
+            <p className="text-xs text-orange-500 font-bold">+{currSymbol}{Number(it.price).toFixed(0)}</p>
+          </button>
+        )))}
+      </div>
     </div>
   );
 }

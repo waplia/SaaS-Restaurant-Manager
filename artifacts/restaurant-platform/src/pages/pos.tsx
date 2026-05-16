@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
+import { apiPost } from "@/lib/api";
+import { useRestaurantId } from "@/lib/hooks";
+import { useBranchContext } from "@/lib/branch";
 import { printOrder } from "@/lib/printOrder";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
@@ -1002,6 +1005,7 @@ function PaymentModal({
 }
 
 export default function PosPage() {
+  const { selectedBranchId } = useBranchContext();
   const { data: restaurant } = useRestaurantInfo();
   const taxRate = Number(restaurant?.taxRate ?? 5) / 100;
   const serviceRate = Number(restaurant?.serviceCharge ?? 0) / 100;
@@ -1696,6 +1700,16 @@ export default function PosPage() {
                 </div>
               )}
 
+              <PosUpsellStrip
+                cart={cart}
+                liveItems={liveItems}
+                branchId={selectedBranchId}
+                onAdd={(item) => handleMenuItemClick({
+                  id: item.id, name: item.name, price: item.price,
+                  imageUrl: item.imageUrl, isAvailable: true,
+                } as unknown as MenuItem)}
+              />
+
               <div className="space-y-1">
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Subtotal ({(placedOrder ? liveItems : cart).reduce((s, c) => s + c.quantity, 0)} items)</span>
@@ -1938,5 +1952,87 @@ export default function PosPage() {
         />
       )}
     </Layout>
+  );
+}
+
+interface UpsellItem { id: number; name: string; price: string; imageUrl: string | null }
+interface UpsellSuggestion { ruleId: number; ruleName: string; message: string | null; items: UpsellItem[] }
+
+function PosUpsellStrip({
+  cart, liveItems, branchId, onAdd,
+}: {
+  cart: CartItem[];
+  liveItems: OrderItem[];
+  branchId: number | null;
+  onAdd: (item: UpsellItem) => void;
+}) {
+  const restaurantId = useRestaurantId();
+  const [suggestions, setSuggestions] = useState<UpsellSuggestion[]>([]);
+  const loggedRef = useRef<Set<string>>(new Set());
+
+  const items = useMemo(() => {
+    if (liveItems.length > 0) {
+      return liveItems.map(i => ({ menuItemId: i.menuItemId ?? 0, quantity: i.quantity, unitPrice: Number(i.unitPrice) }));
+    }
+    return cart.map(c => ({ menuItemId: c.menuItemId, quantity: c.quantity, unitPrice: c.unitPrice }));
+  }, [cart, liveItems]);
+  const total = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const hash = `${items.length}|${total.toFixed(2)}|${items.map(i => `${i.menuItemId}x${i.quantity}`).join(",")}`;
+
+  useEffect(() => {
+    if (!restaurantId || items.length === 0) { setSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiPost<{ suggestions: UpsellSuggestion[] }>(
+          `/restaurants/${restaurantId}/ai-ops/upsell/evaluate`,
+          { channel: "pos", items, total, branchId },
+        );
+        setSuggestions(res.suggestions ?? []);
+        for (const s of res.suggestions ?? []) {
+          for (const it of s.items) {
+            const k = `${s.ruleId}:${it.id}:${hash}`;
+            if (!loggedRef.current.has(k)) {
+              loggedRef.current.add(k);
+              apiPost(`/restaurants/${restaurantId}/ai-ops/upsell/events`, {
+                eventType: "impression", channel: "pos", ruleId: s.ruleId, menuItemId: it.id,
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch { /* silent */ }
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hash, restaurantId]);
+
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2">
+      <p className="text-xs font-semibold text-primary flex items-center gap-1">
+        <Plus className="w-3 h-3" /> Suggested add-ons
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {suggestions.flatMap(s => s.items.map(it => (
+          <button
+            key={`${s.ruleId}-${it.id}`}
+            onClick={() => {
+              apiPost(`/restaurants/${restaurantId}/ai-ops/upsell/events`, {
+                eventType: "accept", channel: "pos", ruleId: s.ruleId, menuItemId: it.id,
+                revenue: Number(it.price),
+              }).catch(() => {});
+              onAdd(it);
+            }}
+            className="flex-shrink-0 flex items-center gap-2 bg-background border border-border rounded-md px-2.5 py-1.5 hover:border-primary text-left min-w-0"
+          >
+            {it.imageUrl && <img src={resolveImageUrl(it.imageUrl) ?? ""} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0" />}
+            <div className="min-w-0">
+              <p className="text-xs font-medium truncate max-w-[120px]">{it.name}</p>
+              <p className="text-[10px] text-muted-foreground">+₹{Number(it.price).toFixed(0)} · {s.ruleName}</p>
+            </div>
+            <Plus className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+          </button>
+        )))}
+      </div>
+    </div>
   );
 }

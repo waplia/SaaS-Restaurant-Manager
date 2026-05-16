@@ -82,6 +82,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "ai_upsell_suggest",
+    featureLabel: "AI Upsell Engine",
+    description: "Generate batch of upsell rule suggestions (item bundles, low-cart nudges, time-of-day specials).",
+    creditsPerUnit: "3",
+    minCharge: 3,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",
