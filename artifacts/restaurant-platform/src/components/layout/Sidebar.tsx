@@ -18,7 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
-type PlanGate = "ai" | "ai_insights";
+type PlanGate = "ai" | "ai_insights" | "cloud_kitchen";
 type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate; requiresDocsAccess?: boolean; requiresBakeryMode?: boolean };
 type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: PlanGate };
 type NavEntry = LinkItem | GroupItem;
@@ -28,6 +28,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor },
   { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
   { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
+  { kind: "link", href: "/cloud-kitchen", label: "Cloud Kitchen", icon: ChefHat, roles: ["owner", "manager", "super_admin"], planGate: "cloud_kitchen" },
   { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
   { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
   { kind: "link", href: "/events", label: "Events & Catering", icon: PartyPopper, roles: ["owner", "manager", "waiter", "kitchen"] },
@@ -173,6 +174,15 @@ export function Sidebar() {
   const aiInsightsEnabled = aiWallet?.planKhanaAiInsightsEnabled ?? false;
 
   const restaurantId = user?.restaurantId;
+
+  // Plan-gate the Cloud Kitchen entry on plan featureFlags.cloud_kitchen
+  const { data: subscription } = useQuery<{ plan: { featureFlags: Record<string, boolean> | null } | null }>({
+    queryKey: ["subscription-features", restaurantId],
+    queryFn: () => apiFetch(`/restaurants/${restaurantId}/subscription`),
+    enabled: !!restaurantId && !!user && (user.isSuperAdmin || ["owner", "manager"].includes(user.role ?? "")),
+    staleTime: 60_000,
+  });
+  const cloudKitchenPlanEnabled = subscription?.plan?.featureFlags?.cloud_kitchen === true;
   const { data: docsAccess } = useQuery<{ hasAccess: boolean }>({
     queryKey: ["documents-has-access", restaurantId],
     queryFn: () => apiFetch(`/restaurants/${restaurantId}/documents/has-access`),
@@ -206,6 +216,7 @@ export function Sidebar() {
     if (user?.isSuperAdmin) return true;
     if (gate === "ai") return aiPlanEnabled;
     if (gate === "ai_insights") return aiPlanEnabled && aiInsightsEnabled;
+    if (gate === "cloud_kitchen") return cloudKitchenPlanEnabled;
     return true;
   };
 
@@ -225,7 +236,7 @@ export function Sidebar() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, docsHasAccess, bakeryModeOn]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, cloudKitchenPlanEnabled, docsHasAccess, bakeryModeOn]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
 

@@ -57,3 +57,4 @@ export * from "./hotel";
 export * from "./sustainability";
 export * from "./tiffin";
 export * from "./waste";
+export * from "./cloud-kitchen";

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -38,6 +38,13 @@ export const ordersTable = pgTable("orders", {
   // banquet hall. Both nullable so non-hotel outlets are unaffected.
   hotelStayId: integer("hotel_stay_id"),
   banquetEventId: integer("banquet_event_id"),
+  // Cloud Kitchen (Task #150): brand/channel/SLA/packaging metadata
+  brandId: integer("brand_id"),
+  channelKey: text("channel_key"),
+  channelExternalOrderId: text("channel_external_order_id"),
+  channelCommissionPct: decimal("channel_commission_pct", { precision: 5, scale: 2 }),
+  packagingSnapshot: jsonb("packaging_snapshot").$type<Array<{ packagingItemId: number; name: string; quantity: number; costPerUnit: string }>>(),
+  slaTargetAt: timestamp("sla_target_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -78,6 +85,9 @@ export const kitchenTicketsTable = pgTable("kitchen_tickets", {
   expectedReadyAt: timestamp("expected_ready_at"),
   delayAlertCount: integer("delay_alert_count").notNull().default(0),
   lastDelayAlertAt: timestamp("last_delay_alert_at"),
+  brandId: integer("brand_id"),
+  channelKey: text("channel_key"),
+  packagingNotes: text("packaging_notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -215,7 +215,97 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId, hotelStayId, banquetEventId } = req.body;
+  const {
+    tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId,
+    hotelStayId, banquetEventId,
+    brandId, channelKey, channelExternalOrderId,
+  } = req.body;
+
+  // ───── Cloud-kitchen pre-flight (only when brandId+channelKey present) ─────
+  let ckContext: null | {
+    brand: { id: number; name: string; branchId: number | null };
+    channelKey: string;
+    linkMap: Map<number, { priceOverride: string | null; taxRateOverride: string | null; isAvailable: boolean }>;
+    commissionPct: string | null;
+    slaTargetAt: Date | null;
+    packagingSnapshot: Array<{ packagingItemId: number; name: string; quantity: number; costPerUnit: string }>;
+    packagingDeductions: Array<{ packagingItemId: number; quantity: number }>;
+  } = null;
+
+  if (brandId != null && typeof channelKey === "string" && channelKey) {
+    const ck = await import("./cloud-kitchen");
+    const { brandsTable, branchesTable, brandMenuLinksTable, packagingItemsTable, itemPackagingRequirementsTable, brandSlaTargetsTable, ORDER_CHANNELS } = await import("../lib/db");
+    if (!ORDER_CHANNELS.includes(channelKey as typeof ORDER_CHANNELS[number])) {
+      return void res.status(400).json({ error: "invalid channelKey" });
+    }
+    const [brand] = await db.select().from(brandsTable).where(and(eq(brandsTable.id, Number(brandId)), eq(brandsTable.restaurantId, restaurantId)));
+    if (!brand) return void res.status(404).json({ error: "Brand not found" });
+    if (brand.branchId != null) {
+      const [b] = await db.select({ ck: branchesTable.cloudKitchenEnabled }).from(branchesTable).where(and(eq(branchesTable.id, brand.branchId), eq(branchesTable.restaurantId, restaurantId)));
+      if (!b || !b.ck) return void res.status(400).json({ error: "Cloud Kitchen mode is not enabled for this brand's branch." });
+    }
+    const throttle = await ck.checkThrottle(restaurantId, brand.id, channelKey);
+    if (!throttle.allowed) return void res.status(429).json({ error: throttle.reason ?? "Throttled" });
+
+    const itemIds = (items as Array<{ menuItemId: number }>).map(i => Number(i.menuItemId));
+    const linkRows = await db.select().from(brandMenuLinksTable).where(and(
+      eq(brandMenuLinksTable.brandId, brand.id),
+      eq(brandMenuLinksTable.restaurantId, restaurantId),
+      inArray(brandMenuLinksTable.menuItemId, itemIds),
+    ));
+    const linkMap = new Map(linkRows.map(l => [l.menuItemId, { priceOverride: l.priceOverride, taxRateOverride: l.taxRateOverride, isAvailable: l.isAvailable }]));
+    for (const id of itemIds) {
+      const link = linkMap.get(id);
+      if (!link || !link.isAvailable) {
+        return void res.status(400).json({ error: `Menu item ${id} isn't available for ${brand.name}` });
+      }
+    }
+
+    const reqs = await db.select().from(itemPackagingRequirementsTable).where(and(
+      eq(itemPackagingRequirementsTable.restaurantId, restaurantId),
+      inArray(itemPackagingRequirementsTable.menuItemId, itemIds),
+    ));
+    const pkgIds = Array.from(new Set(reqs.map(r => r.packagingItemId)));
+    const pkgs = pkgIds.length === 0 ? [] : await db.select().from(packagingItemsTable).where(and(
+      inArray(packagingItemsTable.id, pkgIds), eq(packagingItemsTable.restaurantId, restaurantId),
+    ));
+    const pkgMap = new Map(pkgs.map(p => [p.id, p]));
+    const pkgUsage = new Map<number, number>();
+    for (const r of reqs) {
+      const oi = (items as Array<{ menuItemId: number; quantity: number }>).find(i => Number(i.menuItemId) === r.menuItemId);
+      if (!oi) continue;
+      pkgUsage.set(r.packagingItemId, (pkgUsage.get(r.packagingItemId) ?? 0) + Number(r.quantity) * Number(oi.quantity));
+    }
+    const packagingSnapshot: Array<{ packagingItemId: number; name: string; quantity: number; costPerUnit: string }> = [];
+    const packagingDeductions: Array<{ packagingItemId: number; quantity: number }> = [];
+    for (const [pid, qty] of pkgUsage.entries()) {
+      const p = pkgMap.get(pid);
+      if (!p) continue;
+      packagingSnapshot.push({ packagingItemId: pid, name: p.name, quantity: qty, costPerUnit: p.costPerUnit ?? "0.00" });
+      packagingDeductions.push({ packagingItemId: pid, quantity: qty });
+    }
+
+    const [sla] = await db.select().from(brandSlaTargetsTable).where(and(
+      eq(brandSlaTargetsTable.brandId, brand.id), eq(brandSlaTargetsTable.channelKey, channelKey),
+    ));
+    const slaTargetAt = sla
+      ? new Date(Date.now() + (Number(sla.prepMinutes) + Number(sla.handoverMinutes)) * 60_000)
+      : null;
+    const commissionPct = (() => {
+      const cfg = (brand.channelConfig as Record<string, { commissionPct?: number }> | null)?.[channelKey];
+      return cfg?.commissionPct != null ? String(cfg.commissionPct) : null;
+    })();
+
+    ckContext = {
+      brand: { id: brand.id, name: brand.name, branchId: brand.branchId },
+      channelKey,
+      linkMap,
+      commissionPct,
+      slaTargetAt,
+      packagingSnapshot,
+      packagingDeductions,
+    };
+  }
 
   let subtotal = 0;
   const enrichedItems: Array<{
@@ -228,34 +318,50 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     appliedRule: { id: number; name: string; ruleType: string } | null;
   }> = [];
 
-  const channel = (orderType ?? "dine_in") as string;
+  const channel = (orderType ?? (ckContext ? "delivery" : "dine_in")) as string;
   const at = new Date();
 
   for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }>) {
     const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
     const modTotal = (item.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
-    const resolved = await resolveOrderItemUnitPrice({
-      menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
-      restaurantId,
-      branchId: branchId ?? null,
-      channel,
-      customerId: customerId ?? null,
-      modifierTotal: modTotal,
-      at,
-    });
-    subtotal += resolved.unitPrice * item.quantity;
-    enrichedItems.push({
-      menuItem: mi,
-      qty: item.quantity,
-      notes: item.notes,
-      modifiers: item.modifiers,
-      unitPrice: resolved.unitPrice,
-      originalPrice: resolved.originalPrice,
-      appliedRule: resolved.appliedRule
-        ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType }
-        : null,
-    });
+    // Cloud-kitchen brand pricing override takes precedence over pricing rules
+    const link = ckContext?.linkMap.get(mi.id);
+    if (link?.priceOverride != null) {
+      const unitPrice = Number(link.priceOverride) + modTotal;
+      subtotal += unitPrice * item.quantity;
+      enrichedItems.push({
+        menuItem: mi,
+        qty: item.quantity,
+        notes: item.notes,
+        modifiers: item.modifiers,
+        unitPrice,
+        originalPrice: Number(mi.price) + modTotal,
+        appliedRule: null,
+      });
+    } else {
+      const resolved = await resolveOrderItemUnitPrice({
+        menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
+        restaurantId,
+        branchId: branchId ?? null,
+        channel,
+        customerId: customerId ?? null,
+        modifierTotal: modTotal,
+        at,
+      });
+      subtotal += resolved.unitPrice * item.quantity;
+      enrichedItems.push({
+        menuItem: mi,
+        qty: item.quantity,
+        notes: item.notes,
+        modifiers: item.modifiers,
+        unitPrice: resolved.unitPrice,
+        originalPrice: resolved.originalPrice,
+        appliedRule: resolved.appliedRule
+          ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType }
+          : null,
+      });
+    }
   }
 
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
@@ -275,7 +381,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     restaurantId,
     tableId,
     orderNumber: generateOrderNumber(),
-    orderType: orderType ?? "dine_in",
+    orderType: orderType ?? (ckContext ? "delivery" : "dine_in"),
     notes,
     customerName,
     customerPhone,
@@ -288,7 +394,24 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     totalAmount: totalAmount.toFixed(2),
     hotelStayId: hotelStayId ? Number(hotelStayId) : null,
     banquetEventId: banquetEventId ? Number(banquetEventId) : null,
+    brandId: ckContext?.brand.id ?? null,
+    channelKey: ckContext?.channelKey ?? null,
+    channelExternalOrderId: ckContext && typeof channelExternalOrderId === "string" ? channelExternalOrderId : null,
+    channelCommissionPct: ckContext?.commissionPct ?? null,
+    packagingSnapshot: ckContext?.packagingSnapshot ?? null,
+    slaTargetAt: ckContext?.slaTargetAt ?? null,
   }).returning();
+
+  // Deduct packaging stock for cloud-kitchen orders
+  if (ckContext && ckContext.packagingDeductions.length > 0) {
+    const { packagingItemsTable } = await import("../lib/db");
+    const { sql } = await import("drizzle-orm");
+    for (const d of ckContext.packagingDeductions) {
+      await db.update(packagingItemsTable)
+        .set({ currentStock: sql`GREATEST(0, ${packagingItemsTable.currentStock} - ${d.quantity})`, updatedAt: new Date() })
+        .where(and(eq(packagingItemsTable.id, d.packagingItemId), eq(packagingItemsTable.restaurantId, restaurantId)));
+    }
+  }
 
   for (const ei of enrichedItems) {
     const [oi] = await db.insert(orderItemsTable).values({

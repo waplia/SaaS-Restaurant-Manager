@@ -50,6 +50,7 @@ export const branchesTable = pgTable("branches", {
   phone: text("phone"),
   isMain: boolean("is_main").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  cloudKitchenEnabled: boolean("cloud_kitchen_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
