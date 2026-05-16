@@ -18,6 +18,7 @@ import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./mainte
 import { runMonthlyAllocationSweep } from "./aiCredits";
 import { runFraudCronTick } from "./fraudDetection";
 import { runNightlyDemandForecastsForHour } from "./demandForecast";
+import { snapshotAllRestaurants } from "./healthScore";
 
 function trackCron(name: string, expr: string, fn: () => Promise<void>) {
   registerCronJob(name, expr);
@@ -119,6 +120,7 @@ export function startScheduler(): void {
   registerCron("fraud-detect-slow", "30 2 * * *", "Nightly slow fraud detectors at 02:30 IST (cash, attendance, inventory)");
   registerCron("nightly-demand-forecast", "0 * * * *", "Per-restaurant nightly tomorrow forecast: ticks hourly and runs whenever a restaurant's local time is 02:00 in its configured timezone (gated on plan, feature toggle, history, and credits)");
   registerCron("addon-lifecycle-sweep", "*/15 * * * *", "Expires add-on trials and ended billing periods every 15 min");
+  registerCron("health-score-nightly", "0 3 * * *", "Computes nightly Restaurant Health Score (0–100) for all active restaurants at 03:00 IST");
 
   trackCron("addon_lifecycle_sweep", "*/15 * * * *", async () => {
     try {
@@ -127,6 +129,13 @@ export function startScheduler(): void {
     } catch (err) {
       logger.error({ err }, "Add-on lifecycle sweep failed");
     }
+  });
+
+  trackCron("health_score_nightly", "0 3 * * *", async () => {
+    await runTrackedCron("health-score-nightly", async () => {
+      const r = await snapshotAllRestaurants();
+      logger.info({ ...r }, "[health-score] nightly snapshot complete");
+    }).catch(err => logger.error({ err }, "[health-score] nightly snapshot failed"));
   });
 
   trackCron("fraud_detect_fast", "5 * * * *", async () => {

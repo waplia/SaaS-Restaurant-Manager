@@ -83,6 +83,7 @@ import WalletsPage from "@/pages/wallets";
 import SettlementReconPage from "@/pages/settlement-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
 import AdminFintechPage from "@/pages/admin-fintech";
+import HealthScorePage from "@/pages/health-score";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -178,6 +179,7 @@ function Router() {
       <Route path="/admin/fintech" component={() => <SuperAdminRoute component={AdminFintechPage} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
       <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={FraudAlertsPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/reports/health-score" component={() => <RoleProtectedRoute component={HealthScorePage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />

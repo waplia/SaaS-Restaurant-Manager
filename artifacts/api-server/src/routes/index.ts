@@ -66,6 +66,7 @@ import adminAddonsRouter from "./admin-addons";
 import fintechRouter from "./fintech";
 import documentsRouter from "./documents";
 import devicesRouter from "./devices";
+import healthScoresRouter from "./health-scores";
 
 const router: IRouter = Router();
 
@@ -150,5 +151,6 @@ router.use(adminAddonsRouter);
 router.use(fintechRouter);
 router.use(documentsRouter);
 router.use(devicesRouter);
+router.use(healthScoresRouter);
 
 export default router;

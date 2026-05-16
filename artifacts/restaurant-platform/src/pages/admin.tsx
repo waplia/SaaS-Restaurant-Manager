@@ -8,7 +8,7 @@ import {
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
   Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare,
   MessageCircle, Activity, Wrench,
-  Tag, Copy, History, Calendar, Brain,
+  Tag, Copy, History, Calendar, Brain, Download,
 } from "lucide-react";
 import { Link } from "wouter";
 import AdminNotificationCenter from "./admin-notifications";
@@ -1041,7 +1041,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai" | "health">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -1128,6 +1128,7 @@ export default function AdminPage() {
             { id: "maintenance" as const, label: "System Maintenance", icon: Wrench },
             { id: "whatsapp" as const, label: "WhatsApp", icon: MessageCircle },
             { id: "ai" as const, label: "AI Control Center", icon: Brain },
+            { id: "health" as const, label: "Restaurant Health", icon: Activity },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -1149,6 +1150,7 @@ export default function AdminPage() {
         {tab === "maintenance" && <AdminMaintenance />}
         {tab === "whatsapp" && <AdminWhatsAppTab />}
         {tab === "ai" && <AdminAiTab />}
+        {tab === "health" && <AdminHealthScoreTab />}
       </main>
     </div>
   );
@@ -1803,6 +1805,167 @@ function CouponRedemptionsModal({ coupon, onClose }: { coupon: CouponRow; onClos
             </table>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Restaurant Health Score (super-admin)
+// ────────────────────────────────────────────────────────────────
+interface AdminHealthRow {
+  id: number;
+  restaurantId: number;
+  tenantId: number;
+  restaurantName: string;
+  tenantName: string;
+  tenantSlug: string;
+  snapshotDate: string;
+  overallScore: number;
+  band: string;
+  subScores: Record<string, number | null>;
+  suggestions: Array<{ key: string; title: string; detail: string }>;
+}
+interface AdminHealthResponse {
+  page: number;
+  pageSize: number;
+  total: number;
+  data: AdminHealthRow[];
+  factorLabels: Record<string, string>;
+  weights: Record<string, number>;
+}
+
+const HEALTH_BAND_COLORS: Record<string, string> = {
+  excellent: "hsl(142 72% 45%)",
+  good: "hsl(170 65% 40%)",
+  fair: "hsl(48 95% 53%)",
+  poor: "hsl(25 95% 55%)",
+  critical: "hsl(0 80% 55%)",
+};
+
+function AdminHealthScoreTab() {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [band, setBand] = useState("");
+  const [sort, setSort] = useState<"score_desc" | "score_asc" | "name_asc">("score_desc");
+
+  const { data, isLoading } = useQuery<AdminHealthResponse>({
+    queryKey: ["admin", "health-scores", page, search, band, sort],
+    queryFn: () => apiFetch(`/admin/health-scores?page=${page}&pageSize=25&search=${encodeURIComponent(search)}&band=${band}&sort=${sort}`),
+    placeholderData: keepPreviousData,
+  });
+
+  const recalcAll = useMutation({
+    mutationFn: () => apiAction("/admin/health-scores/recalculate-all", "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "health-scores"] }),
+  });
+
+  const rows = data?.data ?? [];
+
+  const handleCSV = () => {
+    const headers = ["Restaurant", "Tenant", "Score", "Band", "Snapshot"];
+    const csv = [headers, ...rows.map(r => [r.restaurantName, r.tenantName, String(r.overallScore), r.band, r.snapshotDate])]
+      .map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `restaurant-health-scores-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 25)));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-card border border-border rounded-xl p-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search restaurant or tenant"
+            value={search}
+            onChange={e => { setPage(1); setSearch(e.target.value); }}
+            className="pl-8 h-9"
+          />
+        </div>
+        <select value={band} onChange={e => { setPage(1); setBand(e.target.value); }}
+          className="h-9 border border-border rounded-md bg-background text-sm px-2">
+          <option value="">All bands</option>
+          <option value="excellent">Excellent</option>
+          <option value="good">Good</option>
+          <option value="fair">Fair</option>
+          <option value="poor">Poor</option>
+          <option value="critical">Critical</option>
+        </select>
+        <select value={sort} onChange={e => setSort(e.target.value as typeof sort)}
+          className="h-9 border border-border rounded-md bg-background text-sm px-2">
+          <option value="score_desc">Score: High to Low</option>
+          <option value="score_asc">Score: Low to High</option>
+          <option value="name_asc">Name A→Z</option>
+        </select>
+        <Button variant="outline" size="sm" onClick={handleCSV} disabled={!rows.length}>
+          <Download className="w-4 h-4 mr-1.5" />Export CSV
+        </Button>
+        <Button size="sm" onClick={() => recalcAll.mutate()} disabled={recalcAll.isPending}>
+          <RefreshCw className={`w-4 h-4 mr-1.5 ${recalcAll.isPending ? "animate-spin" : ""}`} />
+          Recalculate All
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
+            <tr>
+              <th className="px-4 py-2 text-left">#</th>
+              <th className="px-4 py-2 text-left">Restaurant</th>
+              <th className="px-4 py-2 text-left">Tenant</th>
+              <th className="px-4 py-2 text-right">Score</th>
+              <th className="px-4 py-2 text-left">Band</th>
+              <th className="px-4 py-2 text-left">Top Issues</th>
+              <th className="px-4 py-2 text-left">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">Loading…</td></tr>
+            )}
+            {!isLoading && rows.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">No health snapshots yet. Click "Recalculate All" to seed.</td></tr>
+            )}
+            {rows.map((r, i) => (
+              <tr key={r.id} className="border-t border-border">
+                <td className="px-4 py-2 text-muted-foreground text-xs">{(page - 1) * (data?.pageSize ?? 25) + i + 1}</td>
+                <td className="px-4 py-2 font-medium">{r.restaurantName}</td>
+                <td className="px-4 py-2 text-muted-foreground">{r.tenantName}</td>
+                <td className="px-4 py-2 text-right font-semibold">{Number(r.overallScore).toFixed(1)}</td>
+                <td className="px-4 py-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: `${HEALTH_BAND_COLORS[r.band]}20`, color: HEALTH_BAND_COLORS[r.band] }}>
+                    {r.band.charAt(0).toUpperCase() + r.band.slice(1)}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {r.suggestions.slice(0, 2).map(s => s.title).join(" · ") || "—"}
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {new Date(r.snapshotDate).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {totalPages > 1 && (
+          <div className="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <div>Page {page} of {totalPages} · {data?.total ?? 0} restaurants</div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+              <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

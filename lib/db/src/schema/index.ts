@@ -42,3 +42,4 @@ export * from "./addons";
 export * from "./fintech";
 export * from "./documents";
 export * from "./devices";
+export * from "./health-scores";
