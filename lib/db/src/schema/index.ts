@@ -54,3 +54,4 @@ export * from "./food-court";
 export * from "./bakery";
 export * from "./meal-plans";
 export * from "./hotel";
+export * from "./sustainability";

@@ -80,6 +80,7 @@ import foodCourtRouter from "./food-court";
 import bakeryRouter, { bakeryPublicRouter } from "./bakery";
 import mealPlansRouter from "./meal-plans";
 import hotelRouter from "./hotel";
+import sustainabilityRouter from "./sustainability";
 
 const router: IRouter = Router();
 
@@ -179,5 +180,6 @@ router.use(foodCourtRouter);
 router.use(bakeryRouter);
 router.use(mealPlansRouter);
 router.use(hotelRouter);
+router.use(sustainabilityRouter);
 
 export default router;

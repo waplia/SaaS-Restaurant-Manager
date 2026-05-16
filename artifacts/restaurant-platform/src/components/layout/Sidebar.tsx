@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake,
+  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -105,6 +105,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/reports/food-cost", label: "Food Cost", icon: Flame, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/fraud-alerts", label: "Fraud Alerts", icon: AlertTriangle, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/health-score", label: "Health Score", icon: TrendingUp, roles: ["owner", "manager", "super_admin"] },
+      { kind: "link", href: "/sustainability", label: "Sustainability", icon: Leaf, roles: ["owner", "manager", "super_admin"] },
     ],
   },
 ];

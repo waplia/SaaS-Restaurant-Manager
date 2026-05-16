@@ -96,6 +96,7 @@ import AggregatorReconPage from "@/pages/aggregator-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
 import AdminFintechPage from "@/pages/admin-fintech";
 import HealthScorePage from "@/pages/health-score";
+import SustainabilityPage from "@/pages/sustainability";
 import SopTrainingPage from "@/pages/sop-training";
 import MyTrainingPage from "@/pages/my-training";
 import FoodCourtsPage from "@/pages/food-courts";
@@ -209,6 +210,7 @@ function Router() {
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
       <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={FraudAlertsPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/health-score" component={() => <RoleProtectedRoute component={HealthScorePage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/sustainability" component={() => <RoleProtectedRoute component={SustainabilityPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
       <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />
