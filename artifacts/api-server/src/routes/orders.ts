@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
+import { verifyManagerDiscountOtp } from "../lib/managerOtp";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -13,7 +14,7 @@ import { issueTokenForOrder, syncTokenWithTickets } from "../lib/tokens";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
-import { loadDiscountsConfig, exceedsThreshold, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
+import { loadDiscountsConfig, exceedsThreshold, exceedsRoleCap, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
 import { resolveOrderItemUnitPrice } from "../lib/pricingRules";
 import { pricingRuleApplicationsTable } from "../lib/db";
 
@@ -578,8 +579,8 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
 router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { type, orderItemId, value, reason, managerPin } = req.body as {
-    type?: string; orderItemId?: number; value?: number; reason?: string; managerPin?: string;
+  const { type, orderItemId, value, reason, managerPin, managerOtp } = req.body as {
+    type?: string; orderItemId?: number; value?: number; reason?: string; managerPin?: string; managerOtp?: string;
   };
 
   const typeStr = String(type ?? "");
@@ -645,22 +646,58 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
   }
 
   const cfg = cfgEarly;
-  const needsApproval = exceedsThreshold(existingTotal + amount, subtotal, cfg);
+  const cumulative = existingTotal + amount;
+  // Approval is required if EITHER the global threshold is crossed OR the
+  // requesting user's role-cap is exceeded by the new line on its own.
+  const overThreshold = exceedsThreshold(cumulative, subtotal, cfg);
+  const overRoleCap = exceedsRoleCap(req.user?.role, !!req.user?.isSuperAdmin, amount, subtotal, cfg);
+  const needsApproval = overThreshold || overRoleCap;
+
   let approvedByUserId: number | null = null;
+  let approvalMethod: "auto" | "pin" | "otp" = "auto";
+  let otpIdUsed: number | null = null;
+
   if (needsApproval) {
-    if (!cfg.hasManagerPin) {
-      return void res.status(409).json({
-        error: "Manager PIN is required for this discount but no PIN is configured. Set one in Settings → Discounts.",
-        code: "MANAGER_PIN_NOT_CONFIGURED",
+    const pinOk = managerPin && cfg.hasManagerPin && await verifyManagerPin(String(managerPin), cfg);
+    if (pinOk) {
+      approvalMethod = "pin";
+    } else if (managerOtp) {
+      const v = await verifyManagerDiscountOtp({
+        restaurantId,
+        code: String(managerOtp),
+        consumedByUserId: req.user?.sub ?? null,
       });
-    }
-    if (!managerPin || !(await verifyManagerPin(String(managerPin), cfg))) {
+      if (!v.ok) {
+        return void res.status(402).json({
+          error: v.error ?? "OTP invalid",
+          code: "MANAGER_OTP_INVALID",
+          requiresApproval: true,
+          methods: cfg.otpEnabled ? (cfg.hasManagerPin ? ["pin", "otp"] : ["otp"]) : ["pin"],
+        });
+      }
+      approvalMethod = "otp";
+      otpIdUsed = v.otpId ?? null;
+    } else {
+      // No credential supplied — tell the client which methods are available.
+      const methods: string[] = [];
+      if (cfg.hasManagerPin) methods.push("pin");
+      if (cfg.otpEnabled) methods.push("otp");
+      if (methods.length === 0) {
+        return void res.status(409).json({
+          error: "This discount requires manager approval but no approval method is configured. Set a Manager PIN or enable OTP in Settings → Discounts.",
+          code: "MANAGER_APPROVAL_NOT_CONFIGURED",
+        });
+      }
       return void res.status(402).json({
-        error: "Manager PIN required to approve this discount",
-        code: "MANAGER_PIN_REQUIRED",
-        requiresPin: true,
+        error: "Manager approval required for this discount",
+        code: "MANAGER_APPROVAL_REQUIRED",
+        requiresPin: methods.includes("pin"),
+        requiresApproval: true,
+        methods,
         thresholdPercent: cfg.thresholdPercent,
         thresholdAmount: cfg.thresholdAmount,
+        roleCap: cfg.roleCaps[req.user?.role as keyof typeof cfg.roleCaps] ?? null,
+        reason: overRoleCap ? "ROLE_CAP_EXCEEDED" : "THRESHOLD_EXCEEDED",
       });
     }
     const role = req.user?.role;
@@ -669,7 +706,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
       : null;
   }
 
-  await db.insert(orderDiscountsTable).values({
+  const [insertedDiscount] = await db.insert(orderDiscountsTable).values({
     orderId,
     restaurantId,
     type: typeStr,
@@ -680,6 +717,24 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
     reason: reasonTrim,
     recordedByUserId: req.user?.sub ?? null,
     approvedByUserId,
+  }).returning({ id: orderDiscountsTable.id });
+
+  // Record an audit row for every discount, even auto-approved ones, so the
+  // discount insights report has a single source of truth for ROI / approval
+  // method breakdowns.
+  await db.insert(discountApprovalsTable).values({
+    restaurantId,
+    orderId,
+    discountId: insertedDiscount?.id ?? null,
+    type: typeStr,
+    amount: amount.toFixed(2),
+    subtotal: subtotal.toFixed(2),
+    reason: reasonTrim,
+    method: approvalMethod,
+    requestedByUserId: req.user?.sub ?? null,
+    requestedByRole: req.user?.role ?? null,
+    approvedByUserId,
+    otpId: otpIdUsed,
   });
 
   await recalculateOrderTotals(orderId, restaurantId);

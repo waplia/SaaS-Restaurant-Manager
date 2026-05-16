@@ -320,6 +320,29 @@ export function useRemoveDiscountLine() {
   });
 }
 
+export function useRequestManagerDiscountOtp() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: () => apiPost<{ ok: boolean; otpId: number; recipientMasked: string | null; expiresInSec: number }>(
+      `/restaurants/${RESTAURANT_ID}/manager-otp/discount-request`, {},
+    ),
+  });
+}
+
+export function useDiscountInsights(period: string, groupBy: string, custom?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = new URLSearchParams({ period, groupBy });
+  if (custom?.from) qs.set("from", custom.from);
+  if (custom?.to) qs.set("to", custom.to);
+  return useQuery({
+    queryKey: ["discount-insights", RESTAURANT_ID, period, groupBy, custom?.from ?? "", custom?.to ?? ""],
+    queryFn: () => apiGet<import("./types").DiscountInsightsResponse>(
+      `/restaurants/${RESTAURANT_ID}/reports/discount-insights?${qs.toString()}`,
+    ),
+    staleTime: 30_000,
+  });
+}
+
 export function useDiscountsConfig() {
   const RESTAURANT_ID = useRestaurantId();
   return useQuery({

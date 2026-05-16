@@ -243,11 +243,21 @@ export interface OrderDetail extends Order {
   paymentAmount?: string | null;
 }
 
+export interface RoleCap { percent: number; amount: number }
+export interface SuspiciousDiscountConfig {
+  perBillPercent: number;
+  perShiftAmount: number;
+  perCustomerMaxVisits: number;
+  perCustomerVisitDiscountPct: number;
+}
 export interface DiscountsConfig {
   presetReasons: string[];
   thresholdPercent: number;
   thresholdAmount: number;
   hasManagerPin: boolean;
+  otpEnabled?: boolean;
+  roleCaps?: Partial<Record<"cashier" | "waiter" | "manager", RoleCap>>;
+  suspicious?: SuspiciousDiscountConfig;
 }
 
 export interface ApplyDiscountLineInput {
@@ -257,6 +267,33 @@ export interface ApplyDiscountLineInput {
   reason: string;
   orderItemId?: number;
   managerPin?: string;
+  managerOtp?: string;
+}
+
+export interface DiscountInsightsRow {
+  key: string;
+  label: string;
+  discountCount: number;
+  totalDiscount: number;
+  ordersCount: number;
+  grossRevenue: number;
+  netRevenue: number;
+  roi: number | null;
+}
+export interface DiscountInsightsResponse {
+  period: string;
+  from: string;
+  to: string;
+  groupBy: string;
+  kpis: {
+    discountCount: number;
+    totalDiscount: number;
+    ordersCount: number;
+    grossRevenue: number;
+    netRevenue: number;
+    roi: number | null;
+  };
+  rows: DiscountInsightsRow[];
 }
 
 export interface DiscountsByCashierItem {

@@ -471,11 +471,122 @@ function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Coupon abuse: same coupon code redeemed by the same customer phone an
+// unusually high number of times within a window. Threshold = max redemptions
+// per (coupon_code, customer_phone) pair before alerting.
+async function detectCouponAbuse(restaurantId: number, threshold: number, config: Record<string, unknown>): Promise<AlertCandidate[]> {
+  const windowHours = Number(config.windowHours ?? 24 * 7); // default 7 days
+  const end = new Date();
+  const start = new Date(end.getTime() - windowHours * 3600_000);
+
+  const rows = await db
+    .select({
+      couponCode: orderDiscountsTable.couponCode,
+      customerPhone: ordersTable.customerPhone,
+      redemptions: sql<number>`count(*)::int`,
+      totalDiscount: sql<number>`coalesce(sum(${orderDiscountsTable.amount}), 0)::float`,
+    })
+    .from(orderDiscountsTable)
+    .innerJoin(ordersTable, eq(ordersTable.id, orderDiscountsTable.orderId))
+    .where(and(
+      eq(orderDiscountsTable.restaurantId, restaurantId),
+      eq(orderDiscountsTable.type, "coupon"),
+      gte(orderDiscountsTable.createdAt, start),
+      lte(orderDiscountsTable.createdAt, end),
+      isNotNull(orderDiscountsTable.couponCode),
+      isNotNull(ordersTable.customerPhone),
+    ))
+    .groupBy(orderDiscountsTable.couponCode, ordersTable.customerPhone);
+
+  const out: AlertCandidate[] = [];
+  for (const r of rows) {
+    if (!r.couponCode || !r.customerPhone) continue;
+    if (r.redemptions < threshold) continue;
+    out.push({
+      detector: "coupon_abuse",
+      severity: r.redemptions > threshold * 2 ? "high" : "medium",
+      subjectUserId: null,
+      subjectRole: null,
+      entityType: "coupon",
+      entityId: null,
+      windowStart: start,
+      windowEnd: end,
+      score: r.redemptions,
+      threshold,
+      observedValue: r.totalDiscount,
+      evidence: {
+        couponCode: r.couponCode,
+        customerPhone: r.customerPhone,
+        redemptions: r.redemptions,
+        totalDiscount: r.totalDiscount,
+        windowHours,
+      },
+      dedupeKey: `coupon_abuse:${r.couponCode}:${r.customerPhone}:${dayKey(end)}`,
+    });
+  }
+  return out;
+}
+
+// Suspicious discount: a single bill discounted by more than `threshold` % of
+// its subtotal. Captures the offending order so managers can review quickly.
+async function detectSuspiciousDiscount(restaurantId: number, threshold: number, config: Record<string, unknown>): Promise<AlertCandidate[]> {
+  const windowHours = Number(config.windowHours ?? 24);
+  const end = new Date();
+  const start = new Date(end.getTime() - windowHours * 3600_000);
+  const minSubtotal = Number(config.minSubtotal ?? 100);
+
+  const rows = await db
+    .select({
+      orderId: orderDiscountsTable.orderId,
+      cashierId: ordersTable.waiterId,
+      subtotal: sql<number>`coalesce(${ordersTable.subtotal}, 0)::float`,
+      totalDiscount: sql<number>`coalesce(sum(${orderDiscountsTable.amount}), 0)::float`,
+    })
+    .from(orderDiscountsTable)
+    .innerJoin(ordersTable, eq(ordersTable.id, orderDiscountsTable.orderId))
+    .where(and(
+      eq(orderDiscountsTable.restaurantId, restaurantId),
+      gte(orderDiscountsTable.createdAt, start),
+      lte(orderDiscountsTable.createdAt, end),
+    ))
+    .groupBy(orderDiscountsTable.orderId, ordersTable.waiterId, ordersTable.subtotal);
+
+  const out: AlertCandidate[] = [];
+  for (const r of rows) {
+    if (r.subtotal < minSubtotal) continue;
+    const pct = (r.totalDiscount / r.subtotal) * 100;
+    if (pct < threshold) continue;
+    const role = r.cashierId ? await getUserRole(r.cashierId) : null;
+    out.push({
+      detector: "suspicious_discount",
+      severity: pct > Math.max(threshold * 1.4, 80) ? "high" : "medium",
+      subjectUserId: r.cashierId,
+      subjectRole: role,
+      entityType: "order",
+      entityId: r.orderId,
+      windowStart: start,
+      windowEnd: end,
+      score: pct,
+      threshold,
+      observedValue: r.totalDiscount,
+      evidence: {
+        orderId: r.orderId,
+        subtotal: r.subtotal,
+        totalDiscount: r.totalDiscount,
+        discountPercent: Number(pct.toFixed(2)),
+        cashierId: r.cashierId,
+      },
+      dedupeKey: `suspicious_discount:${r.orderId}`,
+    });
+  }
+  return out;
+}
+
 // ──────────────── Engine ────────────────
 
 export type DetectorGroup = "fast" | "slow" | "all";
 
-const FAST: FraudDetector[] = ["excessive_discounts", "void_bills", "cancelled_kots", "refund_abuse", "unusual_free_items"];
+const FAST: FraudDetector[] = ["excessive_discounts", "void_bills", "cancelled_kots", "refund_abuse", "unusual_free_items", "coupon_abuse", "suspicious_discount"];
 const SLOW: FraudDetector[] = ["cash_mismatch", "manual_attendance_edits", "inventory_mismatch"];
 
 export async function runDetectorsForRestaurant(
@@ -502,6 +613,8 @@ export async function runDetectorsForRestaurant(
         case "manual_attendance_edits": arr = await detectManualAttendanceEdits(restaurantId, cfg.threshold, cfg.config); break;
         case "inventory_mismatch": arr = await detectInventoryMismatch(restaurantId, cfg.threshold); break;
         case "unusual_free_items": arr = await detectUnusualFreeItems(restaurantId, cfg.threshold, cfg.config); break;
+        case "coupon_abuse": arr = await detectCouponAbuse(restaurantId, cfg.threshold, cfg.config); break;
+        case "suspicious_discount": arr = await detectSuspiciousDiscount(restaurantId, cfg.threshold, cfg.config); break;
       }
       candidates.push(...arr);
     } catch (err) {

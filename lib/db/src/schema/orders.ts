@@ -137,3 +137,53 @@ export const orderDiscountsTable = pgTable("order_discounts", {
 export const insertOrderDiscountSchema = createInsertSchema(orderDiscountsTable).omit({ id: true, createdAt: true });
 export type InsertOrderDiscount = z.infer<typeof insertOrderDiscountSchema>;
 export type OrderDiscount = typeof orderDiscountsTable.$inferSelect;
+
+// Audit trail for every discount that required (or bypassed) manager approval.
+// `method` records HOW it was approved: 'auto' = under threshold/cap (no
+// approval needed), 'pin' = manager PIN, 'otp' = manager OTP delivered via SMS.
+// `requestedByRole` snapshots the cashier/waiter's role at request time so
+// reports can show approval rates per role even if the user is later edited.
+export const discountApprovalsTable = pgTable("discount_approvals", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  orderId: integer("order_id").notNull().references(() => ordersTable.id),
+  discountId: integer("discount_id").references(() => orderDiscountsTable.id),
+  type: text("type").notNull(), // mirrors order_discounts.type
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  method: text("method").notNull(), // 'auto' | 'pin' | 'otp'
+  requestedByUserId: integer("requested_by_user_id").references(() => usersTable.id),
+  requestedByRole: text("requested_by_role"),
+  approvedByUserId: integer("approved_by_user_id").references(() => usersTable.id),
+  otpId: integer("otp_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("discount_approvals_restaurant_created_idx").on(t.restaurantId, t.createdAt),
+  index("discount_approvals_order_idx").on(t.orderId),
+]);
+
+export type DiscountApproval = typeof discountApprovalsTable.$inferSelect;
+
+// Short-lived numeric OTPs for manager approval of high-value discounts.
+// `code` is stored hashed; expiry defaults to 5 minutes from issue.
+// `consumedAt` is set when the OTP successfully approves a discount, so the
+// same code can never be replayed.
+export const managerOtpsTable = pgTable("manager_otps", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  purpose: text("purpose").notNull().default("discount_approval"),
+  codeHash: text("code_hash").notNull(),
+  recipientPhone: text("recipient_phone"),
+  recipientUserId: integer("recipient_user_id").references(() => usersTable.id),
+  requestedByUserId: integer("requested_by_user_id").references(() => usersTable.id),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  consumedByUserId: integer("consumed_by_user_id").references(() => usersTable.id),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("manager_otps_restaurant_idx").on(t.restaurantId, t.createdAt),
+]);
+
+export type ManagerOtp = typeof managerOtpsTable.$inferSelect;

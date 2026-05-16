@@ -1660,6 +1660,18 @@ interface DiscountsSettingsCfg {
   thresholdAmount: number;
   hasManagerPin?: boolean;
   managerPin?: string;
+  otpEnabled?: boolean;
+  roleCaps?: {
+    cashier?: { percent: number; amount: number };
+    waiter?:  { percent: number; amount: number };
+    manager?: { percent: number; amount: number };
+  };
+  suspicious?: {
+    perBillPercent: number;
+    perShiftAmount: number;
+    perCustomerMaxVisits: number;
+    perCustomerVisitDiscountPct: number;
+  };
 }
 function DiscountsSection() {
   const defaults: DiscountsSettingsCfg = {
@@ -1670,6 +1682,18 @@ function DiscountsSection() {
     thresholdPercent: 15,
     thresholdAmount: 500,
     hasManagerPin: false,
+    otpEnabled: false,
+    roleCaps: {
+      cashier: { percent: 10, amount: 200 },
+      waiter:  { percent: 10, amount: 200 },
+      manager: { percent: 30, amount: 1000 },
+    },
+    suspicious: {
+      perBillPercent: 50,
+      perShiftAmount: 5000,
+      perCustomerMaxVisits: 5,
+      perCustomerVisitDiscountPct: 30,
+    },
   };
   return (
     <SettingForm section="discounts" defaults={defaults}
@@ -1684,6 +1708,51 @@ function DiscountsSection() {
             <Field label="Manager-PIN threshold (₹)" hint="When the order's cumulative discount reaches this rupee amount, manager PIN is required.">
               <Input type="number" min="0" step="1" value={s.thresholdAmount}
                 onChange={e => set(p => ({ ...p, thresholdAmount: Number(e.target.value) }))} />
+            </Field>
+          </Row>
+          <Toggle label="Allow manager OTP approval (SMS)"
+            checked={!!s.otpEnabled}
+            onChange={v => set(p => ({ ...p, otpEnabled: v }))} />
+          <p className="text-xs text-muted-foreground -mt-2">
+            When enabled, cashiers can request a 6-digit OTP sent to a manager's phone to approve high-value discounts (alongside or instead of the PIN).
+          </p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Per-role discount caps</p>
+          <p className="text-xs text-muted-foreground -mt-2">A discount that exceeds either the % or the ₹ cap for the requesting user's role triggers manager approval. Set 0 = unlimited. Owners always bypass.</p>
+          {(["cashier", "waiter", "manager"] as const).map(role => {
+            const cap = s.roleCaps?.[role] ?? { percent: 0, amount: 0 };
+            return (
+              <Row key={role}>
+                <Field label={`${role.charAt(0).toUpperCase() + role.slice(1)} cap (%)`}>
+                  <Input type="number" min="0" max="100" step="1" value={cap.percent}
+                    onChange={e => set(p => ({ ...p, roleCaps: { ...(p.roleCaps ?? {}), [role]: { ...cap, percent: Number(e.target.value) } } }))} />
+                </Field>
+                <Field label={`${role.charAt(0).toUpperCase() + role.slice(1)} cap (₹)`}>
+                  <Input type="number" min="0" step="1" value={cap.amount}
+                    onChange={e => set(p => ({ ...p, roleCaps: { ...(p.roleCaps ?? {}), [role]: { ...cap, amount: Number(e.target.value) } } }))} />
+                </Field>
+              </Row>
+            );
+          })}
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Suspicious-discount detector</p>
+          <p className="text-xs text-muted-foreground -mt-2">Tunes when the fraud engine flags discounts as suspicious.</p>
+          <Row>
+            <Field label="Per-bill % threshold" hint="Single bill discounted by more than this % is flagged.">
+              <Input type="number" min="0" max="100" step="1" value={s.suspicious?.perBillPercent ?? 50}
+                onChange={e => set(p => ({ ...p, suspicious: { ...(p.suspicious ?? defaults.suspicious!), perBillPercent: Number(e.target.value) } }))} />
+            </Field>
+            <Field label="Per-shift cashier ₹ cap" hint="Cumulative discount per cashier per shift before flagging.">
+              <Input type="number" min="0" step="1" value={s.suspicious?.perShiftAmount ?? 5000}
+                onChange={e => set(p => ({ ...p, suspicious: { ...(p.suspicious ?? defaults.suspicious!), perShiftAmount: Number(e.target.value) } }))} />
+            </Field>
+          </Row>
+          <Row>
+            <Field label="Per-customer max discounted visits" hint="If one phone number receives this many discounted visits in window, flag.">
+              <Input type="number" min="1" step="1" value={s.suspicious?.perCustomerMaxVisits ?? 5}
+                onChange={e => set(p => ({ ...p, suspicious: { ...(p.suspicious ?? defaults.suspicious!), perCustomerMaxVisits: Number(e.target.value) } }))} />
+            </Field>
+            <Field label="Min % to count toward visits" hint="Visits with discount below this % don't count.">
+              <Input type="number" min="0" max="100" step="1" value={s.suspicious?.perCustomerVisitDiscountPct ?? 30}
+                onChange={e => set(p => ({ ...p, suspicious: { ...(p.suspicious ?? defaults.suspicious!), perCustomerVisitDiscountPct: Number(e.target.value) } }))} />
             </Field>
           </Row>
           <Field label={s.hasManagerPin ? "Change manager PIN" : "Set manager PIN"}

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, type CompareBranchRow } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, type CompareBranchRow } from "@/lib/hooks";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
@@ -1003,6 +1004,7 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
+            <DiscountInsightsBlock period={useCustom ? "custom" : period} customFrom={customFrom} customTo={customTo} />
           </div>
         )}
 
@@ -1464,6 +1466,100 @@ function CashVarianceTab({ from, to }: { from?: string; to?: string }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function DiscountInsightsBlock({ period, customFrom, customTo }: { period: string; customFrom: string; customTo: string }) {
+  const [groupBy, setGroupBy] = useState<"type" | "reason" | "staff" | "customer" | "day">("type");
+  const restaurantId = useRestaurantId();
+  const auth = useAuth();
+  const insights = useDiscountInsights(period, groupBy, period === "custom" ? { from: customFrom, to: customTo } : undefined);
+  const data = insights.data;
+
+  const downloadCsv = async () => {
+    const qs = new URLSearchParams({ period, groupBy, format: "csv" });
+    if (period === "custom") { qs.set("from", customFrom); qs.set("to", customTo); }
+    const { getApiUrl } = await import("@/lib/api");
+    const url = getApiUrl(`/restaurants/${restaurantId}/reports/discount-insights?${qs.toString()}`);
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${auth.accessToken ?? ""}` } });
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `discount-insights-${period}-${groupBy}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Percent className="w-4 h-4 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground">Discount Insights — ROI</h3>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value as typeof groupBy)}
+            className="h-8 px-2 rounded-md border border-border bg-background text-xs">
+            <option value="type">By Type</option>
+            <option value="reason">By Reason</option>
+            <option value="staff">By Staff</option>
+            <option value="customer">By Customer</option>
+            <option value="day">By Day</option>
+          </select>
+          <Button size="sm" variant="outline" onClick={downloadCsv}>
+            <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
+          </Button>
+        </div>
+      </div>
+      {data && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-border">
+          {[
+            { label: "Discounts", val: data.kpis.discountCount.toLocaleString() },
+            { label: "Total ₹ off", val: `₹${data.kpis.totalDiscount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
+            { label: "Orders", val: data.kpis.ordersCount.toLocaleString() },
+            { label: "Net revenue", val: `₹${data.kpis.netRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
+            { label: "ROI (₹ rev / ₹ off)", val: data.kpis.roi != null ? `${data.kpis.roi.toFixed(2)}×` : "—" },
+          ].map(k => (
+            <div key={k.label} className="p-3 bg-card">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</div>
+              <div className="text-base font-semibold text-foreground">{k.val}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {insights.isLoading ? (
+        <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading…</div>
+      ) : (data?.rows.length ?? 0) === 0 ? (
+        <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">No data for this selection</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">{groupBy === "day" ? "Day" : groupBy === "staff" ? "Staff" : groupBy === "customer" ? "Customer" : groupBy === "type" ? "Type" : "Reason"}</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Count</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">₹ Discount</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Orders</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Net ₹</th>
+                <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">ROI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.rows ?? []).map(r => (
+                <tr key={r.key} className="border-t border-border hover:bg-muted/20">
+                  <td className="px-5 py-2.5 font-medium text-foreground">{r.label}</td>
+                  <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{r.discountCount}</td>
+                  <td className="px-5 py-2.5 text-right text-green-600 font-medium tabular-nums">₹{r.totalDiscount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</td>
+                  <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{r.ordersCount}</td>
+                  <td className="px-5 py-2.5 text-right text-foreground tabular-nums">₹{r.netRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</td>
+                  <td className="px-5 py-2.5 text-right text-foreground tabular-nums">{r.roi != null ? `${r.roi.toFixed(2)}×` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

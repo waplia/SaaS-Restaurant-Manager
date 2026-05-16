@@ -5,7 +5,7 @@ import {
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
   useRestaurantInfo, useItemModifierGroups, useSplitOrder,
   useOrderDetail, useAddOrderItem, useRemoveOrderItem,
-  useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig,
+  useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig, useRequestManagerDiscountOtp,
   useCreatePaymentIntent, useCreateRazorpayOrder,
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
   useCurrentCashRegister,
@@ -1057,7 +1057,11 @@ export default function PosPage() {
   const [dReason, setDReason] = useState("");
   const [dOrderItemId, setDOrderItemId] = useState<number | "">("");
   const [dManagerPin, setDManagerPin] = useState("");
+  const [dManagerOtp, setDManagerOtp] = useState("");
   const [dPinRequired, setDPinRequired] = useState(false);
+  const [dApprovalMethods, setDApprovalMethods] = useState<string[]>([]);
+  const [dOtpRecipient, setDOtpRecipient] = useState<string | null>(null);
+  const requestOtp = useRequestManagerDiscountOtp();
 
   // Phone-based customer lookup for loyalty linking
   const [phoneQuery, setPhoneQuery] = useState("");
@@ -1688,7 +1692,10 @@ export default function PosPage() {
                   setDReason(discountsCfg?.presetReasons?.[0] ?? "");
                   setDOrderItemId("");
                   setDManagerPin("");
+                  setDManagerOtp("");
                   setDPinRequired(false);
+                  setDApprovalMethods([]);
+                  setDOtpRecipient(null);
                   setShowDiscountDrawer(true);
                 }}
               >
@@ -1871,18 +1878,26 @@ export default function PosPage() {
               value: valNum,
               reason: dReason.trim(),
               orderItemId: dType === "item" ? Number(dOrderItemId) : undefined,
-              managerPin: dPinRequired ? dManagerPin : undefined,
+              managerPin: dPinRequired && dManagerPin ? dManagerPin : undefined,
+              managerOtp: dPinRequired && dManagerOtp ? dManagerOtp : undefined,
             },
             {
               onSuccess: () => {
                 toast({ title: "Discount applied" });
                 setShowDiscountDrawer(false);
               },
-              onError: (err: Error & { status?: number; data?: { requiresPin?: boolean; code?: string } | null }) => {
-                const reqPin = !!(err.data && (err.data.requiresPin || err.data.code === "MANAGER_PIN_REQUIRED"));
-                if (reqPin || err.status === 402) {
+              onError: (err: Error & { status?: number; data?: { requiresPin?: boolean; code?: string; methods?: string[]; reason?: string } | null }) => {
+                const d = err.data ?? {};
+                const needsApproval = !!(d.requiresPin || d.code === "MANAGER_PIN_REQUIRED" || d.code === "MANAGER_APPROVAL_REQUIRED" || d.code === "MANAGER_OTP_INVALID") || err.status === 402;
+                if (needsApproval) {
                   setDPinRequired(true);
-                  toast({ title: "Manager PIN required", description: "This discount exceeds the threshold.", variant: "destructive" });
+                  setDApprovalMethods(d.methods ?? (d.requiresPin ? ["pin"] : []));
+                  const why = d.reason === "ROLE_CAP_EXCEEDED" ? "exceeds your role's discount cap" : "exceeds the discount threshold";
+                  toast({
+                    title: d.code === "MANAGER_OTP_INVALID" ? "OTP invalid" : "Manager approval required",
+                    description: d.code === "MANAGER_OTP_INVALID" ? (err.message || "Try again or request a new OTP.") : `This discount ${why}. Enter manager PIN or request OTP.`,
+                    variant: "destructive",
+                  });
                 } else {
                   toast({ title: "Could not apply discount", description: err.message, variant: "destructive" });
                 }
@@ -1946,12 +1961,41 @@ export default function PosPage() {
                 )}
               </div>
               {dPinRequired && (
-                <div className="space-y-1.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
+                <div className="space-y-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
                   <label className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                    <Lock className="w-3.5 h-3.5" /> Manager PIN required
+                    <Lock className="w-3.5 h-3.5" /> Manager approval required
                   </label>
-                  <Input type="password" inputMode="numeric" autoComplete="off" placeholder="••••"
-                    value={dManagerPin} onChange={e => setDManagerPin(e.target.value)} />
+                  {(dApprovalMethods.length === 0 || dApprovalMethods.includes("pin") || discountsCfg?.hasManagerPin) && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Manager PIN</div>
+                      <Input type="password" inputMode="numeric" autoComplete="off" placeholder="••••"
+                        value={dManagerPin} onChange={e => setDManagerPin(e.target.value)} />
+                    </div>
+                  )}
+                  {(dApprovalMethods.includes("otp") || discountsCfg?.otpEnabled) && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Manager OTP (SMS)</div>
+                      <div className="flex items-center gap-2">
+                        <Input type="text" inputMode="numeric" autoComplete="off" placeholder="6-digit code"
+                          value={dManagerOtp} onChange={e => setDManagerOtp(e.target.value)} className="flex-1" />
+                        <Button type="button" size="sm" variant="outline" disabled={requestOtp.isPending}
+                          onClick={() => {
+                            requestOtp.mutate(undefined, {
+                              onSuccess: r => {
+                                setDOtpRecipient(r.recipientMasked ?? "manager");
+                                toast({ title: "OTP sent", description: r.recipientMasked ? `Sent to manager phone ${r.recipientMasked}. Expires in 5 minutes.` : "Sent to manager phone. Expires in 5 minutes." });
+                              },
+                              onError: (err: Error & { data?: { error?: string } | null }) => toast({ title: "Could not send OTP", description: err.data?.error ?? err.message, variant: "destructive" }),
+                            });
+                          }}>
+                          {requestOtp.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Send OTP"}
+                        </Button>
+                      </div>
+                      {dOtpRecipient && (
+                        <p className="text-[11px] text-muted-foreground">Sent to {dOtpRecipient} · valid 5 minutes</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex items-center justify-between text-sm">

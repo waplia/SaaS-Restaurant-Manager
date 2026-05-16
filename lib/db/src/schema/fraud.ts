@@ -64,6 +64,8 @@ export const FRAUD_DETECTORS = [
   "manual_attendance_edits",
   "inventory_mismatch",
   "unusual_free_items",
+  "coupon_abuse",
+  "suspicious_discount",
 ] as const;
 export type FraudDetector = typeof FRAUD_DETECTORS[number];
 
@@ -76,4 +78,9 @@ export const FRAUD_DETECTOR_DEFAULTS: Record<FraudDetector, { threshold: string;
   manual_attendance_edits: { threshold: "5", config: { windowDays: 7 } },
   inventory_mismatch: { threshold: "15", config: {} },
   unusual_free_items: { threshold: "3", config: { windowHours: 24 } },
+  // Same coupon redeemed by the same customer (phone) >= threshold times in window.
+  coupon_abuse: { threshold: "3", config: { windowDays: 7 } },
+  // Single bill discount % > threshold (default 50%); also fires when the same
+  // customer phone has reached the per-customer max-discount visit count.
+  suspicious_discount: { threshold: "50", config: { windowDays: 7, perCustomerMaxVisits: 5, perCustomerVisitDiscountPct: 30 } },
 };

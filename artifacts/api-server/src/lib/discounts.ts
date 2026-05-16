@@ -2,12 +2,39 @@ import { eq, and, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db, orderDiscountsTable, restaurantSettingsTable } from "./db";
 
+export type AppRoleKey = "owner" | "manager" | "cashier" | "waiter" | "kitchen" | "delivery_executive" | "accountant" | "staff";
+
+// Per-role discount cap. `percent` and `amount` are *both* applied as ceilings:
+// the discount must satisfy BOTH limits or it requires manager approval.
+// `0` (or null) means "no cap from this dimension".
+export interface RoleCap {
+  percent: number; // 0 = unlimited
+  amount: number;  // 0 = unlimited (rupees)
+}
+
+export interface SuspiciousDiscountConfig {
+  // % of single-bill discount that triggers a flag (covered by detector too).
+  perBillPercent: number;
+  // Rupee amount per cashier per shift that triggers a flag.
+  perShiftAmount: number;
+  // Per-customer: if a phone hits this many discounted visits in window, flag.
+  perCustomerMaxVisits: number;
+  // Min discount % counted toward perCustomerMaxVisits.
+  perCustomerVisitDiscountPct: number;
+}
+
 export interface DiscountsConfig {
   presetReasons: string[];
   thresholdPercent: number;
   thresholdAmount: number;
   hasManagerPin: boolean;
   managerPinHash: string | null;
+  // OTP fallback when PIN is unavailable (or as the sole approval method).
+  otpEnabled: boolean;
+  // Per-role caps. Cashier/waiter typically tighter than manager.
+  roleCaps: Partial<Record<AppRoleKey, RoleCap>>;
+  // Suspicious-discount detector tuning.
+  suspicious: SuspiciousDiscountConfig;
 }
 
 const DEFAULT_REASONS = [
@@ -19,11 +46,59 @@ const DEFAULT_REASONS = [
   "Staff meal",
 ];
 
+const DEFAULT_ROLE_CAPS: Partial<Record<AppRoleKey, RoleCap>> = {
+  cashier: { percent: 10, amount: 200 },
+  waiter:  { percent: 10, amount: 200 },
+  manager: { percent: 30, amount: 1000 },
+  // owner/super_admin have no cap by default — they bypass.
+};
+
+const DEFAULT_SUSPICIOUS: SuspiciousDiscountConfig = {
+  perBillPercent: 50,
+  perShiftAmount: 5000,
+  perCustomerMaxVisits: 5,
+  perCustomerVisitDiscountPct: 30,
+};
+
 interface RawDiscountsConfig {
   presetReasons?: unknown;
   thresholdPercent?: unknown;
   thresholdAmount?: unknown;
   managerPinHash?: unknown;
+  otpEnabled?: unknown;
+  roleCaps?: unknown;
+  suspicious?: unknown;
+}
+
+function num(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function parseRoleCaps(v: unknown): Partial<Record<AppRoleKey, RoleCap>> {
+  if (!v || typeof v !== "object") return DEFAULT_ROLE_CAPS;
+  const out: Partial<Record<AppRoleKey, RoleCap>> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as { percent?: unknown; amount?: unknown };
+    out[k as AppRoleKey] = { percent: num(r.percent, 0), amount: num(r.amount, 0) };
+  }
+  // Fill defaults for any role not configured.
+  for (const [k, def] of Object.entries(DEFAULT_ROLE_CAPS)) {
+    if (!(k in out)) out[k as AppRoleKey] = def!;
+  }
+  return out;
+}
+
+function parseSuspicious(v: unknown): SuspiciousDiscountConfig {
+  if (!v || typeof v !== "object") return DEFAULT_SUSPICIOUS;
+  const r = v as Partial<SuspiciousDiscountConfig>;
+  return {
+    perBillPercent: num(r.perBillPercent, DEFAULT_SUSPICIOUS.perBillPercent),
+    perShiftAmount: num(r.perShiftAmount, DEFAULT_SUSPICIOUS.perShiftAmount),
+    perCustomerMaxVisits: num(r.perCustomerMaxVisits, DEFAULT_SUSPICIOUS.perCustomerMaxVisits),
+    perCustomerVisitDiscountPct: num(r.perCustomerVisitDiscountPct, DEFAULT_SUSPICIOUS.perCustomerVisitDiscountPct),
+  };
 }
 
 export async function loadDiscountsConfig(restaurantId: number): Promise<DiscountsConfig> {
@@ -45,6 +120,9 @@ export async function loadDiscountsConfig(restaurantId: number): Promise<Discoun
     thresholdAmount: isFinite(thresholdAmount) && thresholdAmount > 0 ? thresholdAmount : 500,
     hasManagerPin: !!managerPinHash,
     managerPinHash,
+    otpEnabled: data.otpEnabled === true,
+    roleCaps: parseRoleCaps(data.roleCaps),
+    suspicious: parseSuspicious(data.suspicious),
   };
 }
 
@@ -52,6 +130,18 @@ export function exceedsThreshold(amount: number, subtotal: number, cfg: Discount
   if (subtotal <= 0) return amount > 0; // any discount on an empty order needs approval
   const pct = (amount / subtotal) * 100;
   return pct >= cfg.thresholdPercent || amount >= cfg.thresholdAmount;
+}
+
+// Returns true when the requested discount exceeds the role's cap and so
+// requires manager approval. owner/super_admin/manager (when manager has no
+// cap configured) bypass this check.
+export function exceedsRoleCap(role: string | undefined, isSuperAdmin: boolean, amount: number, subtotal: number, cfg: DiscountsConfig): boolean {
+  if (isSuperAdmin || role === "owner") return false;
+  const cap = cfg.roleCaps[role as AppRoleKey];
+  if (!cap) return false;
+  const pctCapHit = cap.percent > 0 && subtotal > 0 && (amount / subtotal) * 100 > cap.percent;
+  const amtCapHit = cap.amount > 0 && amount > cap.amount;
+  return pctCapHit || amtCapHit;
 }
 
 export async function verifyManagerPin(pin: string, cfg: DiscountsConfig): Promise<boolean> {
