@@ -564,9 +564,9 @@ function PlansTab() {
 }
 
 // ─── Tenants Tab ─────────────────────────────────────────────────
-type SortBy = "name" | "createdAt" | "trialEndsAt" | "planStatus";
+type SortBy = "name" | "createdAt" | "trialEndsAt" | "planStatus" | "plan";
 type SortDir = "asc" | "desc";
-const SORT_KEYS: SortBy[] = ["name", "createdAt", "trialEndsAt", "planStatus"];
+const SORT_KEYS: SortBy[] = ["name", "createdAt", "trialEndsAt", "planStatus", "plan"];
 const PAGE_SIZES = [20, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
 
@@ -761,7 +761,7 @@ function TenantsTab() {
     } else {
       setSortBy(col);
       // Sensible default direction per column: text/status asc, dates desc.
-      setSortDir(col === "name" || col === "planStatus" ? "asc" : "desc");
+      setSortDir(col === "name" || col === "planStatus" || col === "plan" ? "asc" : "desc");
     }
   }, [sortBy]);
 
@@ -845,7 +845,7 @@ function TenantsTab() {
               <tr className="border-b border-border bg-muted/30">
                 <SortableTh col="name" label="Tenant" />
                 <SortableTh col="planStatus" label="Status" />
-                <th className="px-6 py-3 text-left font-medium text-muted-foreground">Plan & Limits</th>
+                <SortableTh col="plan" label="Plan & Limits" />
                 <SortableTh col="trialEndsAt" label="Trial" />
                 <SortableTh col="createdAt" label="Joined" />
                 <th className="px-6 py-3 text-right font-medium text-muted-foreground">Actions</th>

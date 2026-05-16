@@ -135,6 +135,9 @@ const SORTABLE_TENANT_COLUMNS = {
   createdAt: tenantsTable.createdAt,
   trialEndsAt: tenantsTable.trialEndsAt,
   planStatus: tenantsTable.planStatus,
+  // "plan" sorts by the joined plan name; falls back to NULL-last via the
+  // secondary sort by id below.
+  plan: subscriptionPlansTable.name,
 } as const;
 type SortableTenantColumn = keyof typeof SORTABLE_TENANT_COLUMNS;
 
@@ -188,10 +191,26 @@ router.get("/tenants", requireSuperAdmin, async (req, res) => {
   // Stable secondary sort by id so paging is deterministic when the sort key has ties.
   const orderById = sortDir === "asc" ? asc(tenantsTable.id) : desc(tenantsTable.id);
 
-  const [rows, totalRows] = await Promise.all([
-    db.select().from(tenantsTable).where(where).orderBy(orderExpr, orderById).limit(limit).offset(offset),
+  // When sorting by plan name we need to LEFT JOIN subscription_plans;
+  // for other sorts we keep the simpler tenants-only query.
+  const needsPlanJoin = sortBy === "plan";
+  const listQuery = needsPlanJoin
+    ? db.select({ tenant: tenantsTable })
+        .from(tenantsTable)
+        .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+        .where(where)
+        .orderBy(orderExpr, orderById)
+        .limit(limit)
+        .offset(offset)
+    : db.select().from(tenantsTable).where(where).orderBy(orderExpr, orderById).limit(limit).offset(offset);
+
+  const [rowsRaw, totalRows] = await Promise.all([
+    listQuery,
     db.select({ count: count() }).from(tenantsTable).where(where),
   ]);
+  const rows = needsPlanJoin
+    ? (rowsRaw as Array<{ tenant: typeof tenantsTable.$inferSelect }>).map((r) => r.tenant)
+    : (rowsRaw as Array<typeof tenantsTable.$inferSelect>);
   res.json({ data: rows, tenants: rows, total: Number(totalRows[0]?.count ?? 0), page, limit, sortBy, sortDir });
 });
 
