@@ -27,8 +27,29 @@ import About from "@/pages/about";
 import Contact from "@/pages/contact";
 import BlogIndex from "@/pages/blog/index";
 import BlogPost from "@/pages/blog/[slug]";
-import ComingSoon, { ComingSoonPage } from "@/pages/coming-soon";
 import LegalIndex from "@/pages/legal-index";
+
+// New premium pages
+import PlatformOverview from "@/pages/platform";
+import SolutionsIndex from "@/pages/solutions-index";
+import KhanaAIIndex from "@/pages/khana-ai-index";
+import Resources from "@/pages/resources";
+import Partners from "@/pages/partners";
+import Careers from "@/pages/careers";
+import HelpCenter from "@/pages/help";
+import Guides from "@/pages/guides";
+import FAQ from "@/pages/faq";
+import Compare from "@/pages/compare";
+import CaseStudies from "@/pages/case-studies";
+import ThankYou from "@/pages/thank-you";
+
+// Legal
+import PrivacyPolicy from "@/pages/legal/privacy-policy";
+import Terms from "@/pages/legal/terms";
+import RefundPolicy from "@/pages/legal/refund-policy";
+import CookiePolicy from "@/pages/legal/cookie-policy";
+import DPA from "@/pages/legal/data-processing-agreement";
+import AUP from "@/pages/legal/acceptable-use-policy";
 
 const queryClient = new QueryClient();
 
@@ -69,7 +90,11 @@ function Router() {
       <Route path="/" component={HomeOrDisabled} />
       <Route path="/book-demo" component={BookDemoOrDisabled} />
       <Route path="/start-free-trial" component={BookDemoOrDisabled} />
+      <Route path="/thank-you" component={ThankYou} />
       <Route path="/pricing" component={Pricing} />
+
+      {/* Platform */}
+      <Route path="/platform" component={PlatformOverview} />
 
       {/* Features directory + existing dedicated feature pages */}
       <Route path="/features" component={FeaturesIndex} />
@@ -87,37 +112,15 @@ function Router() {
       <Route path="/features/payroll" component={Payroll} />
       <Route path="/features/reports" component={Reports} />
       <Route path="/features/multi-outlet" component={MultiOutlet} />
-      {/* Generic feature detail fallback (uses content/features.ts) */}
       <Route path="/features/:slug" component={FeatureBySlug} />
 
       {/* Solutions */}
-      <Route path="/solutions">
-        <ComingSoonPage
-          title="Solutions for every kind of restaurant"
-          description="Browse our full solutions directory — restaurants, cafes, cloud kitchens, bakeries, hotels and more."
-          eyebrow="Solutions"
-        />
-      </Route>
+      <Route path="/solutions" component={SolutionsIndex} />
       <Route path="/solutions/:slug" component={SolutionBySlug} />
 
       {/* Khana AI */}
-      <Route path="/khana-ai">
-        <ComingSoonPage
-          title="Khana AI — your AI co-pilot for restaurants"
-          description="AI menu import, review boosters, smart campaigns, sales insights, forecasting and an AI chat assistant."
-          eyebrow="Khana AI"
-        />
-      </Route>
+      <Route path="/khana-ai" component={KhanaAIIndex} />
       <Route path="/khana-ai/:slug" component={AIBySlug} />
-
-      {/* Platform overview placeholder */}
-      <Route path="/platform">
-        <ComingSoonPage
-          title="The complete KhanaLagao platform"
-          description="One restaurant OS that connects POS, kitchen, inventory, growth, staff, finance and Khana AI."
-          eyebrow="Platform"
-        />
-      </Route>
 
       <Route path="/integrations" component={Integrations} />
       <Route path="/security" component={Security} />
@@ -128,24 +131,24 @@ function Router() {
       <Route path="/blog" component={BlogIndex} />
       <Route path="/blog/:slug" component={BlogPost} />
 
-      {/* Resources / Company stubs — kept reachable to avoid broken header links */}
-      <Route path="/resources" component={ComingSoon} />
-      <Route path="/help" component={ComingSoon} />
-      <Route path="/guides" component={ComingSoon} />
-      <Route path="/faq" component={ComingSoon} />
-      <Route path="/compare" component={ComingSoon} />
-      <Route path="/case-studies" component={ComingSoon} />
-      <Route path="/partners" component={ComingSoon} />
-      <Route path="/careers" component={ComingSoon} />
+      {/* Resources & company hubs */}
+      <Route path="/resources" component={Resources} />
+      <Route path="/help" component={HelpCenter} />
+      <Route path="/guides" component={Guides} />
+      <Route path="/faq" component={FAQ} />
+      <Route path="/compare" component={Compare} />
+      <Route path="/case-studies" component={CaseStudies} />
+      <Route path="/partners" component={Partners} />
+      <Route path="/careers" component={Careers} />
 
       {/* Legal */}
       <Route path="/legal" component={LegalIndex} />
-      <Route path="/privacy-policy" component={ComingSoon} />
-      <Route path="/terms" component={ComingSoon} />
-      <Route path="/refund-policy" component={ComingSoon} />
-      <Route path="/cookie-policy" component={ComingSoon} />
-      <Route path="/data-processing-agreement" component={ComingSoon} />
-      <Route path="/acceptable-use-policy" component={ComingSoon} />
+      <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/refund-policy" component={RefundPolicy} />
+      <Route path="/cookie-policy" component={CookiePolicy} />
+      <Route path="/data-processing-agreement" component={DPA} />
+      <Route path="/acceptable-use-policy" component={AUP} />
 
       <Route component={NotFound} />
     </Switch>

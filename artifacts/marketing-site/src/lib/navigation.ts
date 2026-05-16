@@ -417,12 +417,4 @@ export const FOOTER_COLUMNS: { title: string; links: NavLink[] }[] = [
     { title: "Partners", href: "/partners" },
     { title: "Book Demo", href: "/book-demo" },
   ]},
-  { title: "Legal", links: [
-    { title: "Privacy Policy", href: "/privacy-policy" },
-    { title: "Terms & Conditions", href: "/terms" },
-    { title: "Refund Policy", href: "/refund-policy" },
-    { title: "Cookie Policy", href: "/cookie-policy" },
-    { title: "Data Processing", href: "/data-processing-agreement" },
-    { title: "Acceptable Use", href: "/acceptable-use-policy" },
-  ]},
 ];

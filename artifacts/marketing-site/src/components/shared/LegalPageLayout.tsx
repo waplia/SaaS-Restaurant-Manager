@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { useSeo } from "@/lib/seo";
+import { COMPANY } from "@/lib/company";
 
 export interface LegalSection { id: string; title: string; body: ReactNode }
 
@@ -45,9 +46,18 @@ export function LegalPageLayout({ title, intro, lastUpdated, sections, seoDescri
               </section>
             ))}
             <hr className="my-10 border-border" />
-            <p className="text-sm text-muted-foreground not-prose">
-              Questions? Email us at <a className="text-primary font-medium hover:underline" href="mailto:support@khanalagao.app">support@khanalagao.app</a>.
-            </p>
+            <div className="not-prose rounded-xl border border-border bg-muted/40 p-5 text-sm space-y-1.5">
+              <p className="font-semibold text-foreground">Contact — {COMPANY.legalName}</p>
+              <p className="text-muted-foreground">{COMPANY.fullAddress}</p>
+              <p className="text-muted-foreground">
+                Phone: <a className="text-primary font-medium hover:underline" href={COMPANY.phoneHref}>{COMPANY.phoneDisplay}</a>
+                {"  ·  "}
+                WhatsApp: <a className="text-primary font-medium hover:underline" href={COMPANY.whatsappUrl} target="_blank" rel="noreferrer">{COMPANY.phoneDisplay}</a>
+              </p>
+              <p className="text-muted-foreground">
+                Email: <a className="text-primary font-medium hover:underline" href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a>
+              </p>
+            </div>
           </article>
         </div>
       </section>
