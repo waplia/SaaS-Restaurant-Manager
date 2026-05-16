@@ -1,0 +1,159 @@
+Update only the existing Review QR / AI Review feature.
+
+Important:
+Do not add Google API.
+Do not add Google Business Profile API.
+Do not add complex Google connection.
+Do not rebuild the module.
+All features are already built. Just update the existing Review QR flow to work in this simple way.
+
+Goal:
+The Review QR should work automatically for restaurant customers after scanning QR.
+
+Customer flow:
+1. Customer scans restaurant Review QR.
+2. Open existing public review page.
+3. Customer selects rating from 1 to 5 stars.
+4. Customer selects quick feedback tags.
+5. Customer can optionally write feedback.
+6. AI generates a Google review draft based on customer rating, selected tags, and feedback.
+7. Show generated review text to customer in editable text box.
+8. Customer can edit the review.
+9. Customer can copy the review.
+10. Customer clicks “Open Google Review”.
+11. Redirect customer to the restaurant’s saved Google review link.
+12. Customer manually pastes and submits review on Google.
+
+Very important:
+- No Google API required.
+- No auto-posting to Google.
+- No Google login integration.
+- No Google review fetching.
+- No Google reply posting.
+- Only use the restaurant’s Google review URL saved in settings.
+- Keep it simple and working.
+- Do not create new separate complicated modules.
+- Do not break existing Review QR or Khana AI features.
+
+Admin side:
+Use the existing Review QR settings.
+Just make sure each Review QR has:
+- Google review link
+- Outlet/branch
+- QR title
+- Welcome message
+- Thank you message
+- AI review generation enabled yes/no
+- Theme color if already available
+
+Customer public page:
+Make it mobile-first and simple.
+
+Page steps:
+Step 1:
+Show:
+“How was your experience?”
+Star rating 1 to 5
+
+Step 2:
+Show feedback tags based on rating.
+
+For 4-5 stars:
+- Tasty food
+- Good service
+- Friendly staff
+- Clean place
+- Good ambience
+- Value for money
+- Fast service
+
+For 1-3 stars:
+- Slow service
+- Food quality issue
+- Staff behavior
+- Billing issue
+- Hygiene issue
+- Delivery delay
+- Price concern
+
+Step 3:
+Optional text:
+“Tell us more”
+
+Step 4:
+Button:
+“Generate Review”
+
+AI should generate review text using only customer selected rating, tags, and optional feedback.
+
+Example:
+Rating: 5
+Tags: Tasty food, Friendly staff
+AI review:
+“I had a great experience here. The food was tasty and the staff was very friendly. I would definitely visit again.”
+
+Example:
+Rating: 3
+Tags: Slow service, Good food
+AI review:
+“The food was good, but the service was a little slow. Overall, it was an okay experience and I hope the service improves next time.”
+
+Step 5:
+Show editable review box.
+
+Buttons:
+- Regenerate
+- Copy Review
+- Open Google Review
+
+After clicking “Open Google Review”:
+- Open the saved Google review link in new tab or redirect.
+- Show small instruction:
+“Paste your copied review on Google and submit.”
+
+Important behavior:
+- For low rating, do not block Google review link.
+- But also save private feedback internally so restaurant can improve.
+- Do not force only positive reviews.
+- Do not auto-submit anything.
+- Do not use Google API.
+
+Data saving:
+Save:
+- Rating
+- Selected tags
+- Optional feedback
+- AI generated review
+- Whether customer copied review
+- Whether customer clicked Google review link
+- QR code ID
+- Outlet ID
+- Created date/time
+
+AI credits:
+- Deduct AI credits only when “Generate Review” is clicked.
+- If AI credits are not available, show:
+“AI review generation is unavailable. You can write your review manually.”
+- Still allow customer to open Google review link.
+
+Admin analytics:
+Use existing analytics and add/update:
+- QR scans
+- Ratings received
+- Average rating
+- AI reviews generated
+- Copy review clicks
+- Google review link clicks
+- Positive/negative feedback count
+- Recent feedback list
+
+Do not add:
+- Google API
+- Google OAuth
+- Google Business Profile connection
+- Fetch Google reviews
+- Post Google replies
+- Complex integration
+
+Just make the existing Review QR feature work as:
+Scan QR → Rating → Tags → AI review draft → Copy → Open Google review link.
