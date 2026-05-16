@@ -5,8 +5,16 @@ import { requireRole, type AppRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { hashManagerPin } from "../lib/discounts";
 import { recordAuditLog } from "../lib/audit";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+// Accept either a raw section object, or { data: object } — both used by clients.
+const SettingsSectionBody = z.union([
+  z.object({ data: z.record(z.unknown()) }).passthrough(),
+  z.record(z.unknown()),
+]);
 
 // Allow-list of section keys with role gates and default value shapes.
 // Owner-only sections cover sensitive/financial/security configuration.
@@ -103,7 +111,7 @@ router.get("/restaurants/:restaurantId/settings/:section", async (req, res) => {
   res.json({ section, data: payload, updatedAt: row?.updatedAt ?? null });
 });
 
-router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter, async (req, res) => {
+router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter, validate({ body: SettingsSectionBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const section = String(req.params.section);
   if (!ALL_SECTIONS.has(section)) return void res.status(404).json({ error: "Unknown section" });

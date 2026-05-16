@@ -12,6 +12,19 @@ import {
 } from "../lib/auth";
 import { authenticate, invalidateTokenVersionCache } from "../middleware/authenticate";
 import { rateLimit } from "../middleware/rateLimit";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
+import {
+  RegisterBody,
+  LoginBody,
+  RefreshTokenBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
+} from "@workspace/api-zod";
+
+const RegisterBodyStrict = RegisterBody.extend({
+  phone: z.string().trim().min(1).optional(),
+});
 import { sql } from "drizzle-orm";
 import { sendByTemplateKey } from "../lib/emailSender";
 import { getAppSettings } from "../lib/appSettings";
@@ -45,33 +58,25 @@ const resetLimitByIp = rateLimit({ name: "auth.reset.ip", windowMs: 60 * 60 * 10
 
 const refreshLimitByIp = rateLimit({ name: "auth.refresh.ip", windowMs: 60 * 1000, max: 30 });
 
-router.post("/auth/register", registerLimitByIp, async (req, res) => {
+router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodyStrict }), async (req, res) => {
   const settings = await getAppSettings();
   if (!settings.signupEnabled) {
     res.status(403).json({ error: "Signups are currently disabled by the platform administrator." });
     return;
   }
   const { restaurantName, ownerName, email, password, phone } = req.body as {
-    restaurantName?: string;
-    ownerName?: string;
-    email?: string;
-    password?: string;
+    restaurantName: string;
+    ownerName: string;
+    email: string;
+    password: string;
     phone?: string;
   };
 
-  if (!restaurantName || !ownerName || !email || !password) {
-    res.status(400).json({ error: "restaurantName, ownerName, email and password are required" });
-    return;
-  }
   // Phone is optional but, if provided, must include the country code.
   // Stored as e.g. "+91 9876543210" — server stays format-agnostic, just ensures '+'.
   const normalisedPhone = phone?.trim() ? phone.trim() : null;
   if (normalisedPhone && !normalisedPhone.startsWith("+")) {
     res.status(400).json({ error: "Phone must include a country code, e.g. +91 9876543210" });
-    return;
-  }
-  if (password.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
     return;
   }
 
@@ -185,12 +190,8 @@ router.post("/auth/register", registerLimitByIp, async (req, res) => {
   });
 });
 
-router.post("/auth/login", loginLimitByIp, loginLimitByEmail, async (req, res) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) {
-    res.status(400).json({ error: "email and password are required" });
-    return;
-  }
+router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: LoginBody }), async (req, res) => {
+  const { email, password } = req.body as { email: string; password: string };
 
   const [user] = await db
     .select()
@@ -254,12 +255,8 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, async (req, res) =
   });
 });
 
-router.post("/auth/refresh", refreshLimitByIp, async (req, res) => {
-  const { refreshToken } = req.body as { refreshToken?: string };
-  if (!refreshToken) {
-    res.status(400).json({ error: "refreshToken is required" });
-    return;
-  }
+router.post("/auth/refresh", refreshLimitByIp, validate({ body: RefreshTokenBody }), async (req, res) => {
+  const { refreshToken } = req.body as { refreshToken: string };
   try {
     const payload = verifyToken(refreshToken);
     if (payload.type !== "refresh") {
@@ -321,16 +318,12 @@ router.post("/auth/logout", authenticate, async (req, res) => {
 // for this user — including the one used to make this request, before it
 // receives the new tokens below — is invalidated immediately.
 const changePasswordLimitByIp = rateLimit({ name: "auth.change.ip", windowMs: 15 * 60 * 1000, max: 10 });
-router.post("/auth/change-password", authenticate, changePasswordLimitByIp, async (req, res) => {
-  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
-  if (!currentPassword || !newPassword) {
-    res.status(400).json({ error: "currentPassword and newPassword are required" });
-    return;
-  }
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters" });
-    return;
-  }
+const ChangePasswordBody = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+router.post("/auth/change-password", authenticate, changePasswordLimitByIp, validate({ body: ChangePasswordBody }), async (req, res) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
   const userId = req.user!.sub;
   const [user] = await db
     .select()
@@ -385,12 +378,8 @@ router.post("/auth/change-password", authenticate, changePasswordLimitByIp, asyn
   });
 });
 
-router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, async (req, res) => {
-  const { email } = req.body as { email?: string };
-  if (!email) {
-    res.status(400).json({ error: "email is required" });
-    return;
-  }
+router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, validate({ body: ForgotPasswordBody }), async (req, res) => {
+  const { email } = req.body as { email: string };
   const [user] = await db
     .select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable)
@@ -415,16 +404,12 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, async 
   res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
 });
 
-router.post("/auth/reset-password", resetLimitByIp, async (req, res) => {
-  const { token, newPassword } = req.body as { token?: string; newPassword?: string };
-  if (!token || !newPassword) {
-    res.status(400).json({ error: "token and newPassword are required" });
-    return;
-  }
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
-    return;
-  }
+const ResetPasswordBodyStrict = ResetPasswordBody.extend({
+  newPassword: z.string().min(8),
+});
+
+router.post("/auth/reset-password", resetLimitByIp, validate({ body: ResetPasswordBodyStrict }), async (req, res) => {
+  const { token, newPassword } = req.body as { token: string; newPassword: string };
   try {
     const payload = verifyResetToken(token);
     if (payload.type !== "reset") {

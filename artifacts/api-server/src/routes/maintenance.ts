@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { authenticate } from "../middleware/authenticate";
 import { requireSuperAdmin } from "../middleware/authorize";
 import { db, auditLogsTable } from "../lib/db";
+import { validate } from "../middleware/validate";
 import {
   createBackup, deleteBackup, listBackups, getBackup, streamBackupForDownload,
   getOrCreateSchedule, updateSchedule,
@@ -41,19 +42,18 @@ const CreateBackupBody = z.object({
   type: z.enum(["db", "files", "full"]),
   destination: z.enum(["local", "s3", "dropbox", "gdrive"]).default("local"),
 });
-router.post("/admin/maintenance/backups", async (req, res) => {
-  const parsed = CreateBackupBody.safeParse(req.body);
-  if (!parsed.success) return void res.status(400).json({ error: "type and destination required" });
-  if (parsed.data.destination === "dropbox" || parsed.data.destination === "gdrive") {
-    return void res.status(400).json({ error: `${parsed.data.destination} destination is not yet enabled — coming soon` });
+router.post("/admin/maintenance/backups", validate({ body: CreateBackupBody }), async (req, res) => {
+  const data = req.body as z.infer<typeof CreateBackupBody>;
+  if (data.destination === "dropbox" || data.destination === "gdrive") {
+    return void res.status(400).json({ error: `${data.destination} destination is not yet enabled — coming soon` });
   }
   const row = await createBackup({
-    type: parsed.data.type,
-    destination: parsed.data.destination,
+    type: data.type,
+    destination: data.destination,
     userId: req.user?.sub ?? null,
     source: "manual",
   });
-  await audit(req, "backup.create", row.id, { type: parsed.data.type, destination: parsed.data.destination, status: row.status });
+  await audit(req, "backup.create", row.id, { type: data.type, destination: data.destination, status: row.status });
   res.json(row);
 });
 
@@ -82,7 +82,8 @@ router.delete("/admin/maintenance/backups/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post("/admin/maintenance/backups/:id/restore", async (req, res) => {
+const RestoreBody = z.object({ confirm: z.string().optional() });
+router.post("/admin/maintenance/backups/:id/restore", validate({ body: RestoreBody }), async (req, res) => {
   const id = Number(req.params.id);
   const confirm = String((req.body as { confirm?: string } | undefined)?.confirm ?? "");
   if (confirm !== "RESTORE") {
@@ -109,14 +110,13 @@ const ScheduleBody = z.object({
   includes: z.enum(["db", "files", "full"]).optional(),
   destination: z.enum(["local", "s3", "dropbox", "gdrive"]).optional(),
 });
-router.put("/admin/maintenance/schedule", async (req, res) => {
-  const parsed = ScheduleBody.safeParse(req.body);
-  if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
-  if (parsed.data.destination === "dropbox" || parsed.data.destination === "gdrive") {
-    return void res.status(400).json({ error: `${parsed.data.destination} destination is not yet enabled` });
+router.put("/admin/maintenance/schedule", validate({ body: ScheduleBody }), async (req, res) => {
+  const data = req.body as z.infer<typeof ScheduleBody>;
+  if (data.destination === "dropbox" || data.destination === "gdrive") {
+    return void res.status(400).json({ error: `${data.destination} destination is not yet enabled` });
   }
-  const updated = await updateSchedule({ ...parsed.data, updatedBy: req.user?.sub });
-  await audit(req, "backup.schedule_update", updated.id, parsed.data);
+  const updated = await updateSchedule({ ...data, updatedBy: req.user?.sub });
+  await audit(req, "backup.schedule_update", updated.id, data);
   res.json(updated);
 });
 
@@ -135,13 +135,12 @@ const S3Body = z.object({
   secretAccessKey: z.string().optional(),
   prefix: z.string().optional(),
 });
-router.put("/admin/maintenance/destinations/s3", async (req, res) => {
-  const parsed = S3Body.safeParse(req.body);
-  if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
+router.put("/admin/maintenance/destinations/s3", validate({ body: S3Body }), async (req, res) => {
+  const data = req.body as z.infer<typeof S3Body>;
   const current = await getS3Config();
-  const next = { ...DEFAULT_S3_CONFIG, ...current, ...parsed.data };
+  const next = { ...DEFAULT_S3_CONFIG, ...current, ...data };
   // Preserve existing secret if client posted the masked placeholder.
-  if (parsed.data.secretAccessKey === "********" || parsed.data.secretAccessKey === undefined) {
+  if (data.secretAccessKey === "********" || data.secretAccessKey === undefined) {
     next.secretAccessKey = current.secretAccessKey;
   }
   await setSystemSetting("s3_backup", next, req.user?.sub);
@@ -149,29 +148,31 @@ router.put("/admin/maintenance/destinations/s3", async (req, res) => {
   res.json({ ...next, secretAccessKey: next.secretAccessKey ? "********" : "" });
 });
 
-router.post("/admin/maintenance/destinations/s3/test", async (req, res) => {
-  const parsed = S3Body.safeParse(req.body ?? {});
+router.post("/admin/maintenance/destinations/s3/test", validate({ body: S3Body.partial() }), async (req, res) => {
+  const data = req.body as z.infer<typeof S3Body>;
   const current = await getS3Config();
   const merged = {
     ...DEFAULT_S3_CONFIG,
     ...current,
-    ...(parsed.success ? parsed.data : {}),
+    ...data,
   };
-  if (parsed.success && (parsed.data.secretAccessKey === "********" || parsed.data.secretAccessKey === undefined)) {
+  if (data.secretAccessKey === "********" || data.secretAccessKey === undefined) {
     merged.secretAccessKey = current.secretAccessKey;
   }
   const result = await testS3Connection(merged);
   res.json(result);
 });
 
+const EmptyBody = z.object({}).passthrough();
+
 // ─── Maintenance actions ──────────────────────────────────────────
-router.post("/admin/maintenance/cache/clear", async (req, res) => {
+router.post("/admin/maintenance/cache/clear", validate({ body: EmptyBody }), async (req, res) => {
   const cleared = cacheClearAll();
   await audit(req, "maintenance.cache_clear", null, { cleared });
   res.json({ ok: true, cleared });
 });
 
-router.post("/admin/maintenance/queue/retry-failed", async (req, res) => {
+router.post("/admin/maintenance/queue/retry-failed", validate({ body: EmptyBody }), async (req, res) => {
   const out = await retryFailedQueue();
   await audit(req, "maintenance.queue_retry", null, out);
   res.json(out);

@@ -6,8 +6,34 @@ import {
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const PaymentMethods = z.enum(["cash", "card", "upi", "stripe", "razorpay", "bank", "room_charge", "package_comp", "other"]);
+const SettleMethods = z.enum(["cash", "card", "upi", "stripe", "razorpay", "bank", "other"]);
+
+const RecordPaymentBody = z.object({
+  direction: z.enum(["in", "out"]),
+  method: PaymentMethods,
+  amount: z.union([z.number(), z.string()]).refine((v) => Number(v) > 0, "amount must be a positive number"),
+  partyType: z.enum(["customer", "supplier", "other"]).optional(),
+  partyId: z.coerce.number().int().positive().nullable().optional(),
+  partyName: z.string().max(256).nullable().optional(),
+  referenceType: z.enum(["order", "purchase_order", "manual"]).optional(),
+  referenceId: z.coerce.number().int().positive().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  paymentDate: z.string().optional(),
+});
+
+const SettlePaymentBody = z.object({
+  referenceType: z.enum(["order", "purchase_order"]),
+  referenceId: z.coerce.number().int().positive(),
+  amount: z.union([z.number(), z.string()]).refine((v) => Number(v) > 0, "amount must be a positive number"),
+  method: SettleMethods,
+  notes: z.string().max(2000).optional(),
+});
 
 router.use(
   "/restaurants/:restaurantId/payments",
@@ -181,6 +207,7 @@ router.get("/restaurants/:restaurantId/payments/summary", async (req, res) => {
 
 router.post(
   "/restaurants/:restaurantId/payments",
+  validate({ body: RecordPaymentBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const role = req.user?.role;
@@ -201,16 +228,7 @@ router.post(
       paymentDate?: string;
     };
 
-    if (!["in", "out"].includes(String(direction))) {
-      return void res.status(400).json({ error: "direction must be 'in' or 'out'" });
-    }
-    if (!["cash", "card", "upi", "stripe", "razorpay", "bank", "room_charge", "package_comp", "other"].includes(String(method))) {
-      return void res.status(400).json({ error: "Invalid payment method" });
-    }
     const amountNum = Number(amount);
-    if (!isFinite(amountNum) || amountNum <= 0) {
-      return void res.status(400).json({ error: "amount must be a positive number" });
-    }
 
     // Waiters can only record cash incoming payments
     if (!isSuper && role === "waiter") {
@@ -258,6 +276,7 @@ router.post(
 router.post(
   "/restaurants/:restaurantId/payments/settle",
   requireRole("owner", "manager", "super_admin"),
+  validate({ body: SettlePaymentBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const { referenceType, referenceId, amount, method, notes } = req.body as {
@@ -268,16 +287,7 @@ router.post(
       notes?: string;
     };
 
-    if (!["order", "purchase_order"].includes(referenceType)) {
-      return void res.status(400).json({ error: "referenceType must be 'order' or 'purchase_order'" });
-    }
     const amountNum = Number(amount);
-    if (!isFinite(amountNum) || amountNum <= 0) {
-      return void res.status(400).json({ error: "amount must be a positive number" });
-    }
-    if (!["cash", "card", "upi", "stripe", "razorpay", "bank", "other"].includes(String(method))) {
-      return void res.status(400).json({ error: "Invalid payment method" });
-    }
 
     const result = await db.transaction(async tx => {
       if (referenceType === "order") {

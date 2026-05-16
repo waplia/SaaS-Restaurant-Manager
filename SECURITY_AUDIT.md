@@ -27,7 +27,7 @@ Severity scale: **Critical** (exploitable, broad blast radius) · **High** (expl
 | 13 | RBAC — super-admin routes | Super-admin endpoints (`admin-*`, marketing admin) gate on `req.user.isSuperAdmin` and reject 403 otherwise (`routes/marketing.ts:148`). | — | — | Verified. | **OK** |
 | 14 | RBAC — impersonation | Impersonation tokens are read-only at middleware layer (`middleware/authenticate.ts:28`): any non-GET request returns 403. | — | — | Verified. | **OK** |
 | 15 | Inputs / SQL | All DB access via Drizzle ORM. Raw `sql`\`\` usages are tagged templates (parameterized). No string-built SQL found. | — | — | Verified. | **OK** |
-| 16 | Inputs / validation | New routes use zod (`storage.ts`). Older routes parse `req.body` manually with string casts and length caps. | Medium | Malformed payloads can produce 500s but not auth bypass (RBAC sits in front of them). | Deferred per scope — centralized zod refactor is a separate workstream. Audit-logged 500s feed `system_logs`. | **Accepted (deferred)** |
+| 16 | Inputs / validation | New routes use zod (`storage.ts`). Older routes parse `req.body` manually with string casts and length caps. | Medium | Malformed payloads can produce 500s but not auth bypass (RBAC sits in front of them). | Partially closed. Added `middleware/validate.ts` (single strict 400 shape) and `lib/api-zod/src/common.ts`. Converted 12 route files to `validate({ body })` so far: `auth.ts`, `kitchens.ts`, `manager-otp.ts`, `onboarding.ts`, `coupons.ts`, `payments.ts`, `users.ts`, `roles.ts`, `addons.ts`, `settings.ts`, `maintenance.ts`, `tables.ts` (~50 mutating routes of ~611 total). Remaining ~80 route files still hand-parse — tracked as follow-up. | **In progress** |
 | 17 | Public lead form | `POST /api/leads` already has honeypot (`website` field), per-IP 10 s throttle, length caps, source-page logging (`routes/marketing.ts:71`). | — | — | Verified. | **OK** |
 | 18 | Public ordering | `POST /api/public/orders` uses a per-table guest token (`lib/guestToken.ts`) and per-restaurant cooldowns on waiter requests. | — | — | Verified. | **OK** |
 | 19 | File uploads | Presigned-PUT flow validates name/size (≤10 MB)/contentType via zod, enforces tenant ACL on finalize, refuses to overwrite another tenant's object (`routes/storage.ts:76`). | — | — | Verified. | **OK** |
@@ -69,7 +69,7 @@ Severity scale: **Critical** (exploitable, broad blast radius) · **High** (expl
 ## Deferred / accepted (medium & low)
 
 - **Refresh-token rotation** — `tokenVersion` invalidates *all* prior tokens on logout/reset, but a single stolen refresh token between logouts is still replayable until its 7-day expiry. Rotate refresh tokens on every `/auth/refresh` call and bump `tokenVersion` on reuse-detection.
-- **Centralized zod validation** (#16) — convert the remaining ~80 routes to use `lib/api-zod` schemas.
+- **Centralized zod validation** (#16) — `middleware/validate.ts` is now in place and 12 route files migrated; ~80 route files still hand-parse `req.body` and should be converted to `validate({ body })`.
 - **Server-side image re-encoding** (#20) — pipe uploads through `sharp` and strip EXIF/scripts before persisting.
 - **Production response headers on Vite artifacts** (#30) — set at Replit deployment / CDN level rather than in `vite.config.ts`.
 

@@ -4,8 +4,43 @@ import { db, kitchensTable, menuItemsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { getDefaultKitchenId } from "../lib/kitchenRouting";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const PaperSize = z.enum(["thermal-58mm", "thermal-80mm", "a4", "a5"]);
+const PrinterTarget = z.enum(["browser", "network", "bluetooth", "usb"]);
+
+const CreateKitchenBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  sortOrder: z.number().int().min(0).optional(),
+  printerName: z.string().max(120).nullable().optional(),
+  paperSize: PaperSize.optional(),
+  autoPrint: z.boolean().optional(),
+  printerTarget: PrinterTarget.optional(),
+  isDefault: z.boolean().optional(),
+});
+
+const UpdateKitchenBody = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  printerName: z.string().max(120).nullable().optional(),
+  paperSize: PaperSize.optional(),
+  autoPrint: z.boolean().optional(),
+  printerTarget: PrinterTarget.optional(),
+  isDefault: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const ReorderKitchensBody = z.object({
+  order: z.array(z.coerce.number().int().positive()).min(1),
+});
+
+const BulkKitchenBody = z.object({
+  itemIds: z.array(z.coerce.number().int().positive()).min(1),
+  kitchenId: z.coerce.number().int().positive().nullable(),
+});
 
 router.use(
   "/restaurants/:restaurantId",
@@ -28,10 +63,10 @@ router.get("/restaurants/:restaurantId/kitchens", async (req, res) => {
 router.post(
   "/restaurants/:restaurantId/kitchens",
   requireRole("owner", "manager", "super_admin"),
+  validate({ body: CreateKitchenBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const { name, sortOrder, printerName, paperSize, autoPrint, printerTarget, isDefault } = req.body;
-    if (!name?.trim()) return void res.status(400).json({ error: "name is required" });
 
     if (isDefault) {
       await db
@@ -65,6 +100,7 @@ router.post(
 router.patch(
   "/restaurants/:restaurantId/kitchens/:id",
   requireRole("owner", "manager", "super_admin"),
+  validate({ body: UpdateKitchenBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const id = Number(req.params.id);
@@ -126,10 +162,10 @@ router.delete(
 router.post(
   "/restaurants/:restaurantId/kitchens/reorder",
   requireRole("owner", "manager", "super_admin"),
+  validate({ body: ReorderKitchensBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const { order } = req.body as { order: number[] };
-    if (!Array.isArray(order)) return void res.status(400).json({ error: "order must be an array of ids" });
     for (let i = 0; i < order.length; i++) {
       await db
         .update(kitchensTable)
@@ -143,12 +179,10 @@ router.post(
 router.post(
   "/restaurants/:restaurantId/items/bulk-kitchen",
   requireRole("owner", "manager", "super_admin"),
+  validate({ body: BulkKitchenBody }),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const { itemIds, kitchenId } = req.body as { itemIds: number[]; kitchenId: number | null };
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return void res.status(400).json({ error: "itemIds is required" });
-    }
     if (kitchenId != null) {
       const [k] = await db
         .select()

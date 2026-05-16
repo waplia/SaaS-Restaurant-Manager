@@ -13,8 +13,21 @@ import {
   usersTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const STEP_VALUES = [
+  "profile", "branch", "kitchen", "menu_categories", "menu_items",
+  "tables", "staff", "payment", "go_live",
+] as const;
+
+const SkipStepBody = z.object({ step: z.enum(STEP_VALUES) });
+const PatchOnboardingStateBody = z.object({
+  skip: z.enum(STEP_VALUES).optional(),
+  complete: z.boolean().optional(),
+});
 
 const STEPS = [
   "profile",
@@ -133,16 +146,16 @@ async function skipStep(tenantId: number, step: StepId) {
   return next;
 }
 
-router.post("/onboarding/skip", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/onboarding/skip", requireRole("owner", "manager", "super_admin"), validate({ body: SkipStepBody }), async (req, res) => {
   const user = req.user!;
   if (!user.tenantId) return void res.status(400).json({ error: "No tenant" });
-  const step = String(req.body?.step ?? "") as StepId;
+  const step = req.body.step as StepId;
   if (!SKIPPABLE.has(step)) return void res.status(400).json({ error: "Step is not skippable" });
   const next = await skipStep(user.tenantId, step);
   res.json({ ok: true, skippedSteps: next });
 });
 
-router.post("/onboarding/complete", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/onboarding/complete", requireRole("owner", "manager", "super_admin"), validate({ body: z.object({}).passthrough() }), async (req, res) => {
   const user = req.user!;
   if (!user.tenantId || !user.restaurantId) return void res.status(400).json({ error: "No tenant" });
 
@@ -165,7 +178,7 @@ router.post("/onboarding/complete", requireRole("owner", "manager", "super_admin
 // Unified PATCH /onboarding/state — accepts { skip?: StepId, complete?: true }
 // Mirrors the per-action endpoints above but matches the single-state contract
 // described in the task spec.
-router.patch("/onboarding/state", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.patch("/onboarding/state", requireRole("owner", "manager", "super_admin"), validate({ body: PatchOnboardingStateBody }), async (req, res) => {
   const user = req.user!;
   if (!user.tenantId || !user.restaurantId) return void res.status(400).json({ error: "No tenant" });
   const body = (req.body ?? {}) as { skip?: string; complete?: boolean };

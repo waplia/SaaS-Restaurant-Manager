@@ -10,8 +10,37 @@ import {
   COUPON_DISCOUNT_TYPES, normaliseCode, validateCoupon, effectiveStatus,
   recordRedemption, countPriorPayments, snapshotCoupon, type CouponDiscountType,
 } from "../lib/coupons";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const CouponPayloadBody = z.object({
+  code: z.string().trim().min(2).max(40).optional(),
+  discountType: z.enum(COUPON_DISCOUNT_TYPES as readonly [CouponDiscountType, ...CouponDiscountType[]]).optional(),
+  discountValue: z.union([z.number(), z.string()]).optional(),
+  maxUsage: z.union([z.number(), z.string(), z.null()]).optional(),
+  validFrom: z.union([z.string(), z.null()]).optional(),
+  validUntil: z.union([z.string(), z.null()]).optional(),
+  applicablePlanIds: z.array(z.coerce.number().int().positive()).optional(),
+  applicableTenantIds: z.array(z.coerce.number().int().positive()).optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+  notes: z.union([z.string(), z.null()]).optional(),
+});
+
+const ValidateCouponBody = z.object({
+  code: z.string().trim().min(1),
+  planId: z.coerce.number().int().positive().optional(),
+  tenantId: z.coerce.number().int().positive().optional(),
+  action: z.enum(["payment", "trial_extension"]).optional(),
+});
+
+const ExtendTrialBody = z.object({
+  code: z.string().trim().min(1).optional(),
+  days: z.coerce.number().int().min(0).optional(),
+}).refine((b) => b.code !== undefined || b.days !== undefined, {
+  message: "Provide either a coupon code or a days value",
+});
 
 function isDiscountType(s: unknown): s is CouponDiscountType {
   return typeof s === "string" && (COUPON_DISCOUNT_TYPES as readonly string[]).includes(s);
@@ -142,7 +171,7 @@ async function readPayload(body: Record<string, unknown>) {
   };
 }
 
-router.post("/admin/coupons", requireSuperAdmin, async (req, res) => {
+router.post("/admin/coupons", requireSuperAdmin, validate({ body: CouponPayloadBody }), async (req, res) => {
   let payload;
   try { payload = await readPayload(req.body ?? {}); } catch (e) { return void res.status((e as { status?: number }).status ?? 400).json({ error: (e as Error).message }); }
   if (!payload.code || !payload.discountType || payload.discountValue === undefined) {
@@ -176,7 +205,7 @@ router.post("/admin/coupons", requireSuperAdmin, async (req, res) => {
   res.status(201).json(serialise(created));
 });
 
-router.patch("/admin/coupons/:id", requireSuperAdmin, async (req, res) => {
+router.patch("/admin/coupons/:id", requireSuperAdmin, validate({ body: CouponPayloadBody }), async (req, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(subscriptionCouponsTable).where(eq(subscriptionCouponsTable.id, id));
   if (!existing) return void res.status(404).json({ error: "Coupon not found" });
@@ -212,7 +241,7 @@ router.patch("/admin/coupons/:id", requireSuperAdmin, async (req, res) => {
   res.json(serialise(updated));
 });
 
-router.post("/admin/coupons/:id/toggle", requireSuperAdmin, async (req, res) => {
+router.post("/admin/coupons/:id/toggle", requireSuperAdmin, validate({ body: z.object({}).passthrough() }), async (req, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(subscriptionCouponsTable).where(eq(subscriptionCouponsTable.id, id));
   if (!existing) return void res.status(404).json({ error: "Coupon not found" });
@@ -229,7 +258,7 @@ router.post("/admin/coupons/:id/toggle", requireSuperAdmin, async (req, res) => 
   res.json(serialise(updated));
 });
 
-router.post("/admin/coupons/:id/duplicate", requireSuperAdmin, async (req, res) => {
+router.post("/admin/coupons/:id/duplicate", requireSuperAdmin, validate({ body: z.object({}).passthrough() }), async (req, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(subscriptionCouponsTable).where(eq(subscriptionCouponsTable.id, id));
   if (!existing) return void res.status(404).json({ error: "Coupon not found" });
@@ -285,11 +314,10 @@ router.delete("/admin/coupons/:id", requireSuperAdmin, async (req, res) => {
 // ─── Tenant-facing: validate a code (does NOT redeem) ────────────
 // Reused both by the tenant checkout preview and the super-admin
 // manual-payment / extend-trial dialogs (super admins may pass tenantId).
-router.post("/coupons/validate", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { code, planId, tenantId: tenantIdRaw, action } = (req.body ?? {}) as {
-    code?: string; planId?: number; tenantId?: number; action?: "payment" | "trial_extension";
+router.post("/coupons/validate", requireRole("owner", "manager", "super_admin"), validate({ body: ValidateCouponBody }), async (req, res) => {
+  const { code, planId, tenantId: tenantIdRaw, action } = req.body as {
+    code: string; planId?: number; tenantId?: number; action?: "payment" | "trial_extension";
   };
-  if (!code) return void res.status(400).json({ error: "code is required" });
 
   let tenantId = req.user?.tenantId ?? null;
   if (req.user?.isSuperAdmin && tenantIdRaw) tenantId = Number(tenantIdRaw);
@@ -320,9 +348,9 @@ router.post("/coupons/validate", requireRole("owner", "manager", "super_admin"),
 });
 
 // ─── Super-admin: extend a tenant's trial via coupon ─────────────
-router.post("/admin/tenants/:tenantId/extend-trial", requireSuperAdmin, async (req, res) => {
+router.post("/admin/tenants/:tenantId/extend-trial", requireSuperAdmin, validate({ body: ExtendTrialBody }), async (req, res) => {
   const tenantId = Number(req.params.tenantId);
-  const { code, days: daysRaw } = (req.body ?? {}) as { code?: string; days?: number };
+  const { code, days: daysRaw } = req.body as { code?: string; days?: number };
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 

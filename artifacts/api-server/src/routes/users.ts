@@ -4,8 +4,45 @@ import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable,
 import { requireRole } from "../middleware/authorize";
 import { hashPassword } from "../lib/auth";
 import { recordAuditLog } from "../lib/audit";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const USER_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "super_admin"] as const;
+
+const CreateUserBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().toLowerCase().email().max(254),
+  password: z.string().min(6).max(256),
+  role: z.enum(USER_ROLES),
+  phone: z.string().max(40).nullable().optional(),
+  restaurantId: z.coerce.number().int().positive().nullable().optional(),
+  tenantId: z.coerce.number().int().positive().nullable().optional(),
+});
+
+const UpdateUserBody = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  phone: z.string().max(40).nullable().optional(),
+  role: z.enum(USER_ROLES).optional(),
+  isActive: z.boolean().optional(),
+  avatarUrl: z.string().url().max(2048).nullable().optional(),
+});
+
+const PushTokenBody = z.object({
+  token: z.string().min(1).max(512),
+  platform: z.string().max(40).optional(),
+});
+
+const DeletePushTokenBody = z.object({
+  token: z.string().max(512).optional(),
+});
+
+const NotificationPrefsBody = z.object({
+  waiter_call: z.boolean().optional(),
+  new_order: z.boolean().optional(),
+  reservation: z.boolean().optional(),
+});
 
 const userFields = {
   id: usersTable.id,
@@ -38,13 +75,9 @@ router.get("/users", requireRole("owner", "manager", "super_admin"), async (req,
   res.json(rows);
 });
 
-router.post("/users", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/users", requireRole("owner", "manager", "super_admin"), validate({ body: CreateUserBody }), async (req, res) => {
   const { name, email, password, role, phone, restaurantId } = req.body;
   const tenantId = req.user!.isSuperAdmin ? (req.body.tenantId as number) : req.user!.tenantId;
-
-  if (!password || typeof password !== "string" || password.length < 6) {
-    return void res.status(400).json({ error: "Password must be at least 6 characters" });
-  }
 
   const callerRole = req.user!.role;
   const ALLOWED_TARGET_ROLES: Record<string, string[]> = {
@@ -94,7 +127,7 @@ router.get("/users/:id", requireRole("owner", "manager", "super_admin"), async (
   res.json(user);
 });
 
-router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), validate({ body: UpdateUserBody }), async (req, res) => {
   const [existing] = await db.select({ id: usersTable.id, tenantId: usersTable.tenantId }).from(usersTable).where(eq(usersTable.id, Number(req.params.id)));
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (!req.user!.isSuperAdmin && existing.tenantId !== req.user!.tenantId) {
@@ -113,13 +146,12 @@ router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), async
   res.json(updated);
 });
 
-router.post("/users/:id/push-token", async (req, res) => {
+router.post("/users/:id/push-token", validate({ body: PushTokenBody }), async (req, res) => {
   const userId = Number(req.params.id);
   if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
     return void res.status(403).json({ error: "Access denied" });
   }
   const { token, platform } = req.body as { token: string; platform?: string };
-  if (!token) return void res.status(400).json({ error: "token required" });
 
   // Upsert into per-device table.
   const [existing] = await db.select().from(userDevicesTable).where(eq(userDevicesTable.token, token));
@@ -136,7 +168,7 @@ router.post("/users/:id/push-token", async (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete("/users/:id/push-token", async (req, res) => {
+router.delete("/users/:id/push-token", validate({ body: DeletePushTokenBody }), async (req, res) => {
   const userId = Number(req.params.id);
   if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
     return void res.status(403).json({ error: "Access denied" });
@@ -164,7 +196,7 @@ router.get("/users/:id/notification-prefs", async (req, res) => {
   });
 });
 
-router.patch("/users/:id/notification-prefs", async (req, res) => {
+router.patch("/users/:id/notification-prefs", validate({ body: NotificationPrefsBody }), async (req, res) => {
   const userId = Number(req.params.id);
   if (!req.user || (req.user.sub !== userId && !req.user.isSuperAdmin)) {
     return void res.status(403).json({ error: "Access denied" });

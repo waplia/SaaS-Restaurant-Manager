@@ -6,6 +6,8 @@ import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
 import { pushToStaff } from "../lib/pushNotify";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 // Allowed string enums (kept narrow on the wire to avoid bad data)
 const RESERVATION_STATUSES = ["pending", "confirmed", "seated", "completed", "cancelled", "no_show"] as const;
@@ -13,6 +15,105 @@ const DEPOSIT_STATUSES = ["none", "required", "pending", "paid", "refunded", "wa
 const SOURCE_CHANNELS = ["staff", "public", "walkin", "phone", "mobile"] as const;
 const OCCASIONS = ["birthday", "anniversary", "business", "date", "celebration", "other"] as const;
 const WAITLIST_STATUSES = ["waiting", "notified", "seated", "cancelled", "no_show"] as const;
+const TABLE_SHAPES = ["square", "rectangle", "round", "oval"] as const;
+const TABLE_STATUSES = ["free", "occupied", "reserved", "cleaning"] as const;
+
+const CreateTableBody = z.object({
+  tableNumber: z.union([z.string().trim().min(1).max(40), z.coerce.number()]).transform((v) => String(v)),
+  capacity: z.coerce.number().int().min(1).max(64),
+  positionX: z.coerce.number().optional(),
+  positionY: z.coerce.number().optional(),
+  shape: z.enum(TABLE_SHAPES).optional(),
+});
+
+const UpdateTableBody = z.object({
+  tableNumber: z.union([z.string().trim().min(1).max(40), z.coerce.number()]).transform((v) => String(v)).optional(),
+  capacity: z.coerce.number().int().min(1).max(64).optional(),
+  status: z.enum(TABLE_STATUSES).optional(),
+  positionX: z.coerce.number().optional(),
+  positionY: z.coerce.number().optional(),
+  shape: z.enum(TABLE_SHAPES).optional(),
+  isActive: z.boolean().optional(),
+});
+
+const MergeTablesBody = z.object({
+  sourceTableId: z.coerce.number().int().positive(),
+  targetTableId: z.coerce.number().int().positive(),
+});
+
+const SplitToTableBody = z.object({
+  targetTableId: z.coerce.number().int().positive(),
+  itemIds: z.array(z.coerce.number().int().positive()).min(1),
+});
+
+const ReservationBase = {
+  guestName: z.string().trim().min(1).max(200),
+  guestPhone: z.string().max(40).nullable().optional(),
+  guestEmail: z.string().email().max(254).nullable().optional(),
+  tableId: z.coerce.number().int().positive().nullable().optional(),
+  partySize: z.coerce.number().int().min(1).max(200),
+  scheduledAt: z.string().min(1),
+  durationMinutes: z.coerce.number().int().min(1).max(1440).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  status: z.enum(RESERVATION_STATUSES).optional(),
+  occasion: z.enum(OCCASIONS).nullable().optional(),
+  occasionNotes: z.string().max(500).nullable().optional(),
+  seatingNotes: z.string().max(500).nullable().optional(),
+  isVip: z.boolean().optional(),
+  depositAmount: z.union([z.number(), z.string(), z.null()]).optional(),
+  depositStatus: z.enum(DEPOSIT_STATUSES).optional(),
+  depositPaymentRef: z.string().max(120).nullable().optional(),
+  gracePeriodMinutes: z.coerce.number().int().min(0).max(360).optional(),
+  sourceChannel: z.enum(SOURCE_CHANNELS).optional(),
+  customerId: z.coerce.number().int().positive().nullable().optional(),
+  cleaningRequiredOnComplete: z.boolean().optional(),
+};
+
+const CreateReservationBody = z.object(ReservationBase);
+
+const UpdateReservationBody = z.object({
+  ...ReservationBase,
+  guestName: z.string().trim().min(1).max(200).optional(),
+  partySize: z.coerce.number().int().min(1).max(200).optional(),
+  scheduledAt: z.string().min(1).optional(),
+  walkInArrivedAt: z.string().nullable().optional(),
+  estimatedWaitMinutes: z.coerce.number().int().min(0).max(720).nullable().optional(),
+});
+
+const WalkinReservationBody = z.object({
+  guestName: z.string().trim().min(1).max(200),
+  guestPhone: z.string().max(40).nullable().optional(),
+  partySize: z.coerce.number().int().min(1).max(200).optional(),
+  tableId: z.coerce.number().int().positive().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  durationMinutes: z.coerce.number().int().min(1).max(1440).optional(),
+  isVip: z.boolean().optional(),
+});
+
+const WaitlistCreateBody = z.object({
+  guestName: z.string().trim().min(1).max(200),
+  guestPhone: z.string().max(40).nullable().optional(),
+  partySize: z.coerce.number().int().min(1).max(200).optional(),
+  estimatedWaitMinutes: z.coerce.number().int().min(0).max(720).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  occasion: z.enum(OCCASIONS).nullable().optional(),
+  isVip: z.boolean().optional(),
+  sourceChannel: z.enum(SOURCE_CHANNELS).optional(),
+  customerId: z.coerce.number().int().positive().nullable().optional(),
+});
+
+const WaitlistUpdateBody = z.object({
+  status: z.enum(WAITLIST_STATUSES).optional(),
+  estimatedWaitMinutes: z.coerce.number().int().min(0).max(720).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  partySize: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const WaitlistSeatBody = z.object({
+  tableId: z.coerce.number().int().positive(),
+});
+
+const EmptyTableBody = z.object({}).passthrough();
 
 const router = Router();
 
@@ -23,7 +124,7 @@ router.get("/restaurants/:restaurantId/tables", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/tables", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/tables", requireRole("owner", "manager", "super_admin"), validate({ body: CreateTableBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
 
   if (!req.user!.isSuperAdmin) {
@@ -48,7 +149,7 @@ router.post("/restaurants/:restaurantId/tables", requireRole("owner", "manager",
   res.status(201).json(table);
 });
 
-router.patch("/restaurants/:restaurantId/tables/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/tables/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: UpdateTableBody }), async (req, res) => {
   const { tableNumber, capacity, status, positionX, positionY, shape, isActive } = req.body;
   const [updated] = await db.update(floorTablesTable).set({ tableNumber, capacity, status, positionX, positionY, shape, isActive, updatedAt: new Date() }).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
@@ -82,10 +183,10 @@ router.get("/restaurants/:restaurantId/tables/:id/qr", requirePlanFeature("qr_or
   res.json({ qrUrl, tableNumber: table.tableNumber, svgData });
 });
 
-router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: MergeTablesBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { sourceTableId, targetTableId } = req.body as { sourceTableId: number; targetTableId: number };
-  if (!sourceTableId || !targetTableId || Number(sourceTableId) === Number(targetTableId)) {
+  if (Number(sourceTableId) === Number(targetTableId)) {
     return void res.status(400).json({ error: "sourceTableId and targetTableId must be different valid IDs" });
   }
 
@@ -135,14 +236,10 @@ router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "man
   res.json({ success: true, sourceTable: updatedSrc, targetTable: updatedTgt });
 });
 
-router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:orderId/split-to-table", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: SplitToTableBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.orderId);
   const { targetTableId, itemIds } = req.body as { targetTableId: number; itemIds: number[] };
-
-  if (!targetTableId || !Array.isArray(itemIds) || itemIds.length === 0) {
-    return void res.status(400).json({ error: "targetTableId and at least one itemId are required" });
-  }
 
   const [srcOrder] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!srcOrder) return void res.status(404).json({ error: "Source order not found" });
@@ -228,7 +325,7 @@ router.get("/restaurants/:restaurantId/reservations", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), async (req, res) => {
+router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), validate({ body: CreateReservationBody }), async (req, res) => {
   const {
     guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, durationMinutes, notes, status,
     occasion, occasionNotes, seatingNotes, isVip, depositAmount, depositStatus, depositPaymentRef,
@@ -313,7 +410,7 @@ router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "man
   }
 });
 
-router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: UpdateReservationBody }), async (req, res) => {
   const {
     guestName, guestPhone, guestEmail, tableId, partySize, scheduledAt, durationMinutes, status, notes,
     occasion, occasionNotes, seatingNotes, isVip, depositAmount, depositStatus, depositPaymentRef,
@@ -416,7 +513,7 @@ router.delete("/restaurants/:restaurantId/reservations/:id", requireRole("owner"
 });
 
 /* ---------- Walk-in seat-now (creates a seated reservation immediately) ---------- */
-router.post("/restaurants/:restaurantId/reservations/walkin", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), async (req, res) => {
+router.post("/restaurants/:restaurantId/reservations/walkin", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), validate({ body: WalkinReservationBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { guestName, guestPhone, partySize, tableId, notes, durationMinutes, isVip } = req.body;
   if (!guestName || !String(guestName).trim()) return void res.status(400).json({ error: "Guest name is required" });
@@ -454,7 +551,7 @@ router.post("/restaurants/:restaurantId/reservations/walkin", requireRole("owner
 });
 
 /* ---------- Floor table cleaning ---------- */
-router.post("/restaurants/:restaurantId/tables/:tableId/mark-clean", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/tables/:tableId/mark-clean", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: EmptyTableBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const tableId = Number(req.params.tableId);
   const [updated] = await db.update(floorTablesTable).set({
@@ -467,7 +564,7 @@ router.post("/restaurants/:restaurantId/tables/:tableId/mark-clean", requireRole
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/tables/:tableId/mark-dirty", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/tables/:tableId/mark-dirty", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: EmptyTableBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const tableId = Number(req.params.tableId);
   const [updated] = await db.update(floorTablesTable).set({
@@ -495,7 +592,7 @@ router.get("/restaurants/:restaurantId/waitlist", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/waitlist", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), async (req, res) => {
+router.post("/restaurants/:restaurantId/waitlist", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("reservations"), validate({ body: WaitlistCreateBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { guestName, guestPhone, partySize, estimatedWaitMinutes, notes, occasion, isVip, sourceChannel, customerId } = req.body;
   if (!guestName || !String(guestName).trim()) return void res.status(400).json({ error: "Guest name is required" });
@@ -529,7 +626,7 @@ router.post("/restaurants/:restaurantId/waitlist", requireRole("owner", "manager
   ).catch(() => {});
 });
 
-router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: WaitlistUpdateBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const { guestName, guestPhone, partySize, estimatedWaitMinutes, notes, occasion, isVip, status, seatedTableId } = req.body;
@@ -557,7 +654,7 @@ router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "ma
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/waitlist/:id/seat", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/waitlist/:id/seat", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: WaitlistSeatBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const tableId = req.body.tableId ? Number(req.body.tableId) : null;

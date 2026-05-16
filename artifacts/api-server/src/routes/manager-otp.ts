@@ -4,8 +4,12 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requestManagerDiscountOtp } from "../lib/managerOtp";
 import { loadDiscountsConfig } from "../lib/discounts";
 import { recordAuditLog } from "../lib/audit";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const DiscountOtpRequestBody = z.object({}).passthrough();
 
 router.use(
   "/restaurants/:restaurantId/manager-otp",
@@ -16,7 +20,7 @@ router.use(
 // Request a manager OTP for a high-value discount approval. Sent via SMS to
 // the first owner/manager with a phone number on file. Caller (cashier/waiter)
 // then enters the SMS-delivered code into the POS to authorize the discount.
-router.post("/restaurants/:restaurantId/manager-otp/discount-request", async (req, res) => {
+router.post("/restaurants/:restaurantId/manager-otp/discount-request", validate({ body: DiscountOtpRequestBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const cfg = await loadDiscountsConfig(restaurantId);
   if (!cfg.otpEnabled) {

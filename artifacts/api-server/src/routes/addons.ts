@@ -17,8 +17,17 @@ import {
 } from "../lib/addons";
 import { recordAuditLog } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const AddonEmptyBody = z.object({}).passthrough();
+const AddonUninstallBody = z.object({ immediate: z.boolean().optional() }).passthrough();
+const AddonConfirmPaymentBody = z.object({
+  billingCycle: z.enum(["monthly", "yearly", "one_off"]).optional(),
+  paymentRef: z.string().max(256).optional(),
+}).passthrough();
 
 function tenantId(req: any): number | null {
   return req.user?.tenantId ?? null;
@@ -83,12 +92,13 @@ router.get("/addons/:key", async (req, res) => {
   res.json({ ...state, usage });
 });
 
-router.post("/addons/:key/install", async (req, res) => {
+router.post("/addons/:key/install", validate({ body: AddonEmptyBody }), async (req, res) => {
   const tid = tenantId(req);
   if (!tid) { res.status(403).json({ error: "No tenant" }); return; }
+  const key = String(req.params.key);
   try {
-    const row = await installAddon({ tenantId: tid, addonKey: req.params.key, source: "self", actorUserId: req.user?.sub ?? null });
-    await recordAuditLog({ req, module: "addons", action: "install", entity: "addon", details: req.params.key });
+    const row = await installAddon({ tenantId: tid, addonKey: key, source: "self", actorUserId: req.user?.sub ?? null });
+    await recordAuditLog({ req, module: "addons", action: "install", entity: "addon", details: key });
     res.json({ install: row });
   } catch (err) {
     if (handleAddonError(res, err)) return;
@@ -97,12 +107,13 @@ router.post("/addons/:key/install", async (req, res) => {
   }
 });
 
-router.post("/addons/:key/start-trial", async (req, res) => {
+router.post("/addons/:key/start-trial", validate({ body: AddonEmptyBody }), async (req, res) => {
   const tid = tenantId(req);
   if (!tid) { res.status(403).json({ error: "No tenant" }); return; }
+  const key = String(req.params.key);
   try {
-    const row = await startTrial({ tenantId: tid, addonKey: req.params.key, source: "self", actorUserId: req.user?.sub ?? null });
-    await recordAuditLog({ req, module: "addons", action: "trial_start", entity: "addon", details: req.params.key });
+    const row = await startTrial({ tenantId: tid, addonKey: key, source: "self", actorUserId: req.user?.sub ?? null });
+    await recordAuditLog({ req, module: "addons", action: "trial_start", entity: "addon", details: key });
     res.json({ install: row });
   } catch (err) {
     if (handleAddonError(res, err)) return;
@@ -111,12 +122,13 @@ router.post("/addons/:key/start-trial", async (req, res) => {
   }
 });
 
-router.post("/addons/:key/uninstall", async (req, res) => {
+router.post("/addons/:key/uninstall", validate({ body: AddonUninstallBody }), async (req, res) => {
   const tid = tenantId(req);
   if (!tid) { res.status(403).json({ error: "No tenant" }); return; }
+  const key = String(req.params.key);
   try {
-    const row = await uninstallAddon({ tenantId: tid, addonKey: req.params.key, source: "self", actorUserId: req.user?.sub ?? null, immediate: !!req.body?.immediate });
-    await recordAuditLog({ req, module: "addons", action: "uninstall", entity: "addon", details: req.params.key });
+    const row = await uninstallAddon({ tenantId: tid, addonKey: key, source: "self", actorUserId: req.user?.sub ?? null, immediate: !!req.body?.immediate });
+    await recordAuditLog({ req, module: "addons", action: "uninstall", entity: "addon", details: key });
     res.json({ install: row });
   } catch (err) {
     if (handleAddonError(res, err)) return;
@@ -130,24 +142,25 @@ router.post("/addons/:key/uninstall", async (req, res) => {
  * would call activatePaidAddon directly. For now the tenant POSTs the cycle
  * & a fake paymentRef (e.g. "manual-<ts>") and we record a payment event.
  */
-router.post("/addons/:key/confirm-payment", async (req, res) => {
+router.post("/addons/:key/confirm-payment", validate({ body: AddonConfirmPaymentBody }), async (req, res) => {
   const tid = tenantId(req);
   if (!tid) { res.status(403).json({ error: "No tenant" }); return; }
   const cycle = req.body?.billingCycle === "yearly" ? "yearly" : req.body?.billingCycle === "one_off" ? "one_off" : "monthly";
   const paymentRef = String(req.body?.paymentRef ?? `manual-${Date.now()}`);
-  const state = await resolveAddonState(tid, req.params.key);
+  const key = String(req.params.key);
+  const state = await resolveAddonState(tid, key);
   if (!state) { res.status(404).json({ error: "Add-on not found" }); return; }
   const price = cycle === "yearly" ? state.addon.pricing.yearlyPrice ?? 0
     : cycle === "one_off" ? state.addon.pricing.oneOffPrice ?? 0
     : state.addon.pricing.monthlyPrice ?? 0;
   try {
     const row = await activatePaidAddon({
-      tenantId: tid, addonKey: req.params.key,
+      tenantId: tid, addonKey: key,
       billingCycle: cycle, amount: price,
       currency: state.addon.pricing.currency ?? "INR",
       paymentRef, source: "self", actorUserId: req.user?.sub ?? null,
     });
-    await recordAuditLog({ req, module: "addons", action: "payment", entity: "addon", details: `${req.params.key} ${cycle} ${price}` });
+    await recordAuditLog({ req, module: "addons", action: "payment", entity: "addon", details: `${key} ${cycle} ${price}` });
     res.json({ install: row });
   } catch (err) {
     if (handleAddonError(res, err)) return;

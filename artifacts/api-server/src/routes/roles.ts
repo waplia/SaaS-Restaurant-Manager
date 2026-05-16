@@ -2,8 +2,26 @@ import { Router } from "express";
 import { eq, and, or } from "drizzle-orm";
 import { db, rolesTable, permissionsTable, rolePermissionsTable } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
+import { validate } from "../middleware/validate";
+import { z } from "zod";
 
 const router = Router();
+
+const CreateRoleBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  slug: z.string().trim().regex(/^[a-z0-9_-]+$/, "slug must be lowercase letters, digits, _ or -").min(1).max(64),
+  description: z.string().max(500).nullable().optional(),
+  tenantId: z.coerce.number().int().positive().nullable().optional(),
+});
+
+const UpdateRoleBody = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().max(500).nullable().optional(),
+});
+
+const RolePermissionBody = z.object({
+  permissionId: z.coerce.number().int().positive(),
+});
 
 function tenantGuard(
   req: Express.Request,
@@ -27,7 +45,7 @@ router.get("/roles", requireRole("owner", "manager", "super_admin"), async (req,
   res.json(rows);
 });
 
-router.post("/roles", requireRole("owner", "super_admin"), async (req, res) => {
+router.post("/roles", requireRole("owner", "super_admin"), validate({ body: CreateRoleBody }), async (req, res) => {
   const { name, slug, description } = req.body;
   const tenantId = req.user!.isSuperAdmin ? (req.body.tenantId ?? null) : req.user!.tenantId;
   const [role] = await db.insert(rolesTable).values({ name, slug, description, tenantId }).returning();
@@ -46,7 +64,7 @@ router.get("/roles/:id", requireRole("owner", "manager", "super_admin"), async (
   res.json({ ...role, permissions: permRows.map(r => r.permission) });
 });
 
-router.patch("/roles/:id", requireRole("owner", "super_admin"), async (req, res) => {
+router.patch("/roles/:id", requireRole("owner", "super_admin"), validate({ body: UpdateRoleBody }), async (req, res) => {
   const [existing] = await db.select().from(rolesTable).where(eq(rolesTable.id, Number(req.params.id)));
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (existing.isSystem) return void res.status(403).json({ error: "Cannot modify system roles" });
@@ -83,7 +101,7 @@ router.get("/roles/:id/permissions", requireRole("owner", "manager", "super_admi
   res.json(permRows.map(r => r.permission));
 });
 
-router.post("/roles/:id/permissions", requireRole("owner", "super_admin"), async (req, res) => {
+router.post("/roles/:id/permissions", requireRole("owner", "super_admin"), validate({ body: RolePermissionBody }), async (req, res) => {
   const [role] = await db.select().from(rolesTable).where(eq(rolesTable.id, Number(req.params.id)));
   if (!role) return void res.status(404).json({ error: "Not found" });
   if (!tenantGuard(req, role.tenantId)) return void res.status(403).json({ error: "Access denied" });
