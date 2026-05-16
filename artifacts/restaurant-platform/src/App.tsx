@@ -154,7 +154,7 @@ function Router() {
       <Route path="/setup" component={() => <Redirect to="/setup-wizard" />} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
-      <Route path="/documents" component={() => <RoleProtectedRoute component={DocumentsPage} allow={["owner", "manager", "accountant", "super_admin"]} />} />
+      <Route path="/documents" component={() => <ProtectedRoute component={DocumentsPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />

@@ -108,6 +108,7 @@ export default function DocumentsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
+  const [view, setView] = useState<"folders" | "all" | "audit">("all");
   const [tab, setTab] = useState<"all" | "expiring" | "expired">("all");
   const [category, setCategory] = useState<string>("all");
   const [q, setQ] = useState("");
@@ -124,6 +125,12 @@ export default function DocumentsPage() {
     if (tab === "expired") p.set("expired", "1");
     return p.toString();
   }, [category, q, tab]);
+
+  const globalAuditQ = useQuery({
+    queryKey: ["documents-audit-global", rid],
+    queryFn: () => apiGet<AuditRow[]>(`/restaurants/${rid}/documents/audit-log`),
+    enabled: !!rid && view === "audit",
+  });
 
   const docsQ = useQuery({
     queryKey: ["documents", rid, filters],
@@ -153,6 +160,23 @@ export default function DocumentsPage() {
   function toggleAll() {
     if (allChecked) setSelected(new Set());
     else setSelected(new Set(allSelectable.map(d => d.id)));
+  }
+
+  async function bulkDelete() {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} document(s)? This cannot be undone from the UI.`)) return;
+    try {
+      const r = await apiPost<{ deleted: number; skipped: number }>(
+        `/restaurants/${rid}/documents/bulk-delete`,
+        { ids: Array.from(selected) },
+      );
+      toast({ title: `Deleted ${r.deleted}`, description: r.skipped ? `${r.skipped} skipped (no permission)` : undefined });
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["documents", rid] });
+      qc.invalidateQueries({ queryKey: ["documents-stats", rid] });
+    } catch (e) {
+      toast({ title: "Bulk delete failed", description: (e as Error).message, variant: "destructive" });
+    }
   }
 
   async function bulkDownload() {
@@ -195,6 +219,15 @@ export default function DocumentsPage() {
         </Button>
       </PageHeader>
 
+      {/* Top-level view tabs */}
+      <Tabs value={view} onValueChange={(v) => setView(v as typeof view)} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="folders" data-testid="tab-folders"><Folder className="w-4 h-4 mr-1" /> Folders</TabsTrigger>
+          <TabsTrigger value="all" data-testid="tab-all"><FileText className="w-4 h-4 mr-1" /> All Documents</TabsTrigger>
+          <TabsTrigger value="audit" data-testid="tab-audit"><HistoryIcon className="w-4 h-4 mr-1" /> Audit Log</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Stat tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
         <StatTile icon={FileText} label="Total documents" value={stats?.total ?? 0} />
@@ -203,6 +236,77 @@ export default function DocumentsPage() {
         <StatTile icon={Shield} label="Categories used" value={stats?.byCategory.length ?? 0} />
       </div>
 
+      {view === "folders" && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {CATEGORIES.map(c => {
+                const count = stats?.byCategory.find(b => b.category === c.value)?.count ?? 0;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => { setCategory(c.value); setView("all"); }}
+                    className="text-left border rounded-lg p-4 hover:bg-muted/30 transition flex items-center gap-3"
+                    data-testid={`folder-${c.value}`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <Folder className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">{c.label}</div>
+                      <div className="text-xs text-muted-foreground">{count} document{count === 1 ? "" : "s"}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {view === "audit" && (
+        <Card>
+          <CardContent className="pt-4">
+            {globalAuditQ.isLoading ? (
+              <div className="p-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div>
+            ) : globalAuditQ.isError ? (
+              <div className="p-8 text-center text-sm text-red-600 dark:text-red-400">
+                Failed to load audit log: {(globalAuditQ.error as Error)?.message ?? "unknown error"}
+              </div>
+            ) : (globalAuditQ.data?.length ?? 0) === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">No activity yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left">
+                    <tr>
+                      <th className="p-2">When</th>
+                      <th className="p-2">Actor</th>
+                      <th className="p-2">Action</th>
+                      <th className="p-2">Document</th>
+                      <th className="p-2">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {globalAuditQ.data?.map(r => (
+                      <tr key={r.id} className="border-t">
+                        <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{new Date(r.createdAt).toLocaleString("en-IN")}</td>
+                        <td className="p-2">{r.userDisplay ?? "System"}</td>
+                        <td className="p-2"><Badge variant="outline" className="capitalize">{r.action}</Badge></td>
+                        <td className="p-2">{r.documentId ?? "—"}</td>
+                        <td className="p-2 text-xs text-muted-foreground break-all max-w-[360px]">{r.details ? JSON.stringify(r.details) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {view === "all" && <>
       {/* Filters */}
       <Card className="mb-4">
         <CardContent className="pt-4">
@@ -226,9 +330,14 @@ export default function DocumentsPage() {
               </SelectContent>
             </Select>
             {selected.size > 0 && (
-              <Button variant="outline" onClick={bulkDownload} data-testid="button-bulk-download">
-                <Download className="w-4 h-4 mr-2" /> Download {selected.size} as ZIP
-              </Button>
+              <>
+                <Button variant="outline" onClick={bulkDownload} data-testid="button-bulk-download">
+                  <Download className="w-4 h-4 mr-2" /> Download {selected.size} as ZIP
+                </Button>
+                <Button variant="outline" onClick={bulkDelete} data-testid="button-bulk-delete">
+                  <Trash2 className="w-4 h-4 mr-2 text-red-500" /> Delete {selected.size}
+                </Button>
+              </>
             )}
           </div>
         </CardContent>
@@ -334,6 +443,7 @@ export default function DocumentsPage() {
           )}
         </CardContent>
       </Card>
+      </>}
 
       {uploadOpen && rid && <UploadDialog rid={rid} onClose={() => setUploadOpen(false)} onSaved={() => {
         qc.invalidateQueries({ queryKey: ["documents", rid] });

@@ -18,7 +18,7 @@ import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
 type PlanGate = "ai" | "ai_insights";
-type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate };
+type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate; requiresDocsAccess?: boolean };
 type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: PlanGate };
 type NavEntry = LinkItem | GroupItem;
 
@@ -32,7 +32,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },
-  { kind: "link", href: "/documents", label: "Documents", icon: Folder, roles: ["owner", "manager", "accountant", "super_admin"] },
+  { kind: "link", href: "/documents", label: "Documents", icon: Folder, requiresDocsAccess: true },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
   { kind: "link", href: "/customers", label: "Customers", icon: Users },
   { kind: "link", href: "/growth", label: "Growth Engine", icon: Megaphone, roles: ["owner", "manager"] },
@@ -141,11 +141,21 @@ export function Sidebar() {
   const aiPlanEnabled = aiWallet?.planAiEnabled ?? false;
   const aiInsightsEnabled = aiWallet?.planKhanaAiInsightsEnabled ?? false;
 
+  const restaurantId = user?.restaurantId;
+  const { data: docsAccess } = useQuery<{ hasAccess: boolean }>({
+    queryKey: ["documents-has-access", restaurantId],
+    queryFn: () => apiFetch(`/restaurants/${restaurantId}/documents/has-access`),
+    enabled: !!restaurantId && !!user,
+    staleTime: 5 * 60_000,
+  });
+  const docsHasAccess = docsAccess?.hasAccess ?? false;
+
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
   const canSee = (item: LinkItem) => {
+    if (item.requiresDocsAccess) return docsHasAccess;
     if (!item.roles) return true;
     if (user?.isSuperAdmin) return true;
     return user?.role ? item.roles.includes(user.role) : false;
@@ -175,7 +185,7 @@ export function Sidebar() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, docsHasAccess]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
 

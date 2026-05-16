@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
-import archiver from "archiver";
+import { createRequire as _docsCreateRequire } from "node:module";
+const archiver = _docsCreateRequire(import.meta.url)("archiver") as typeof import("archiver");
 import { z } from "zod";
 import { and, desc, eq, inArray, lt, lte, gte, sql, or, ilike } from "drizzle-orm";
 import {
@@ -153,7 +154,7 @@ const CreateDocBody = z.object({
   description: z.string().max(2000).optional().nullable(),
   fileName: z.string().min(1).max(256),
   mimeType: z.string().min(1).max(128),
-  sizeBytes: z.number().int().positive().max(50 * 1024 * 1024),
+  sizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
   objectPath: z.string().startsWith("/objects/"),
   branchId: z.number().int().positive().nullable().optional(),
   tags: z.array(z.string().max(60)).max(20).optional(),
@@ -177,6 +178,9 @@ router.post(
     }
     const restaurantId = Number(req.params.restaurantId);
     const data = parsed.data;
+
+    const typeErr = validateUpload(data.fileName, data.mimeType, data.sizeBytes);
+    if (typeErr) { res.status(400).json({ error: typeErr }); return; }
 
     // Claim ACL on the underlying object so the storage GET endpoint will serve
     // it. CRITICAL: refuse if the object is already claimed by another tenant —
@@ -249,19 +253,54 @@ router.post(
   },
 );
 
-async function loadDoc(req: Request, res: Response): Promise<typeof documentsTable.$inferSelect | null> {
+// When the `:id` segment isn't numeric, fall through to the next matching
+// route. This lets static paths like `/has-access`, `/audit-log`,
+// `/bulk-delete`, `/bulk-download`, `/category-defaults` coexist with the
+// generic `/documents/:id` family without strict ordering.
+function numericIdGuard(req: Request, _res: Response, next: (err?: unknown) => void) {
+  if (!/^\d+$/.test(req.params.id ?? "")) return next("route");
+  next();
+}
+
+async function loadDoc(
+  req: Request, res: Response, opts: { allowDeleted?: boolean } = {},
+): Promise<typeof documentsTable.$inferSelect | null> {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return null; }
   const [doc] = await db.select().from(documentsTable)
     .where(and(eq(documentsTable.id, id), eq(documentsTable.restaurantId, restaurantId)));
   if (!doc) { res.status(404).json({ error: "Document not found" }); return null; }
+  // Soft-deleted docs are invisible to all read/download/edit paths unless
+  // the caller explicitly opts in (e.g. a future restore endpoint).
+  if (!opts.allowDeleted && doc.status === "deleted") {
+    res.status(404).json({ error: "Document not found" });
+    return null;
+  }
   return doc;
+}
+
+// Allowed upload mime/extension allow-list (spec: PDF, JPG/PNG/WEBP, DOCX, XLSX).
+const ALLOWED_MIMES = new Set<string>([
+  "application/pdf",
+  "image/jpeg", "image/png", "image/webp",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword", "application/vnd.ms-excel",
+]);
+const ALLOWED_EXT = /\.(pdf|jpe?g|png|webp|docx?|xlsx?)$/i;
+function validateUpload(fileName: string, mimeType: string, sizeBytes: number): string | null {
+  const MAX = 25 * 1024 * 1024;
+  if (sizeBytes > MAX) return `File exceeds ${MAX / 1024 / 1024} MB limit`;
+  if (!ALLOWED_MIMES.has(mimeType)) return `Disallowed content type: ${mimeType}`;
+  if (!ALLOWED_EXT.test(fileName)) return `Disallowed file extension`;
+  return null;
 }
 
 // ─────────────────────── Get document (with versions + grants) ───────────────────────
 router.get(
   "/restaurants/:restaurantId/documents/:id",
+  numericIdGuard,
   requireRole("owner", "manager", "accountant", "super_admin", "staff"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -293,6 +332,7 @@ const UpdateDocBody = CreateDocBody.partial().omit({ objectPath: true, fileName:
 
 router.patch(
   "/restaurants/:restaurantId/documents/:id",
+  numericIdGuard,
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -331,13 +371,14 @@ router.patch(
 const ReplaceFileBody = z.object({
   fileName: z.string().min(1).max(256),
   mimeType: z.string().min(1).max(128),
-  sizeBytes: z.number().int().positive().max(50 * 1024 * 1024),
+  sizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
   objectPath: z.string().startsWith("/objects/"),
   note: z.string().max(500).optional(),
 });
 
 router.post(
   "/restaurants/:restaurantId/documents/:id/versions",
+  numericIdGuard,
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -348,6 +389,8 @@ router.post(
     const parsed = ReplaceFileBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Invalid version payload", issues: parsed.error.format() }); return; }
     const data = parsed.data;
+    const typeErr = validateUpload(data.fileName, data.mimeType, data.sizeBytes);
+    if (typeErr) { res.status(400).json({ error: typeErr }); return; }
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(data.objectPath);
       const existing = await getObjectAclPolicy(objectFile);
@@ -394,6 +437,7 @@ router.post(
 // ─────────────────────── Soft delete ───────────────────────
 router.delete(
   "/restaurants/:restaurantId/documents/:id",
+  numericIdGuard,
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -411,6 +455,7 @@ router.delete(
 // ─────────────────────── Download (single) ───────────────────────
 router.get(
   "/restaurants/:restaurantId/documents/:id/download",
+  numericIdGuard,
   requireRole("owner", "manager", "accountant", "super_admin", "staff"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -510,6 +555,7 @@ const GrantBody = z.object({
 
 router.post(
   "/restaurants/:restaurantId/documents/:id/grants",
+  numericIdGuard,
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -551,6 +597,7 @@ router.post(
 
 router.delete(
   "/restaurants/:restaurantId/documents/:id/grants/:grantId",
+  numericIdGuard,
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
@@ -618,6 +665,68 @@ router.put(
     }).returning();
     await logAudit(req, null, "category_default", { category, role, permissions: dedup });
     res.status(201).json(row);
+  },
+);
+
+// ─────────────────────── Has-access probe (sidebar gate) ───────────────────────
+// Returns { hasAccess: true } when the caller can see at least one document.
+// Used by the sidebar so non-default roles get the link only after they've
+// been granted at least one document.
+router.get(
+  "/restaurants/:restaurantId/documents/has-access",
+  validateRestaurantAccess,
+  async (req: Request, res: Response) => {
+    if (!req.user) { res.status(401).json({ hasAccess: false }); return; }
+    const ctx = ctxOf(req);
+    const role = ctx.role;
+    if (req.user.isSuperAdmin || ["owner", "manager", "accountant", "super_admin"].includes(role)) {
+      res.json({ hasAccess: true }); return;
+    }
+    const [grant] = await db.select({ id: documentPermissionsTable.id })
+      .from(documentPermissionsTable)
+      .where(and(
+        eq(documentPermissionsTable.restaurantId, ctx.restaurantId),
+        or(
+          and(eq(documentPermissionsTable.principalType, "role"), eq(documentPermissionsTable.principalRef, role)),
+          and(eq(documentPermissionsTable.principalType, "user"), eq(documentPermissionsTable.principalRef, String(ctx.userId))),
+        )!,
+      ))
+      .limit(1);
+    const [defaultRow] = await db.select({ id: documentCategoryDefaultsTable.id })
+      .from(documentCategoryDefaultsTable)
+      .where(and(
+        eq(documentCategoryDefaultsTable.restaurantId, ctx.restaurantId),
+        eq(documentCategoryDefaultsTable.role, role),
+      ))
+      .limit(1);
+    res.json({ hasAccess: !!grant || !!defaultRow });
+  },
+);
+
+// ─────────────────────── Bulk delete ───────────────────────
+const BulkDeleteBody = z.object({ ids: z.array(z.number().int().positive()).min(1).max(50) });
+router.post(
+  "/restaurants/:restaurantId/documents/bulk-delete",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req: Request, res: Response) => {
+    const ctx = ctxOf(req);
+    const parsed = BulkDeleteBody.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid ids", issues: parsed.error.format() }); return; }
+    const docs = await db.select().from(documentsTable).where(and(
+      eq(documentsTable.restaurantId, ctx.restaurantId),
+      eq(documentsTable.status, "active"),
+      inArray(documentsTable.id, parsed.data.ids),
+    ));
+    const perms = await bulkResolvePermissions(ctx, docs);
+    const allowed = docs.filter(d => perms.get(d.id)?.has("delete"));
+    const allowedIds = allowed.map(d => d.id);
+    if (allowedIds.length === 0) { res.status(403).json({ error: "No deletable documents" }); return; }
+    await db.update(documentsTable)
+      .set({ status: "deleted", updatedAt: new Date(), lastModifiedBy: ctx.userId })
+      .where(and(eq(documentsTable.restaurantId, ctx.restaurantId), inArray(documentsTable.id, allowedIds)));
+    for (const id of allowedIds) await logAudit(req, id, "delete", { bulk: true });
+    res.json({ ok: true, deleted: allowedIds.length, skipped: docs.length - allowedIds.length });
   },
 );
 
