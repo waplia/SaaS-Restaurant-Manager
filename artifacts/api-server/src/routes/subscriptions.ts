@@ -8,6 +8,8 @@ import {
   createCashfreeOrder, fetchCashfreeOrder, buildCheckoutUrl, verifyCashfreeWebhook,
 } from "../lib/cashfree";
 import { getEffectiveCashfreeConfig, getEffectiveRazorpayConfig } from "../lib/paymentSettings";
+import { activateForTenant } from "./billing";
+import { validateCoupon, countPriorPayments } from "../lib/coupons";
 import { logger } from "../lib/logger";
 import { recordSystemLog } from "../lib/systemLogs";
 import type { Request, Response } from "express";
@@ -132,7 +134,7 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
 
-  const { planId, successUrl } = req.body as { planId: number; successUrl: string };
+  const { planId, successUrl, couponCode } = req.body as { planId: number; successUrl: string; couponCode?: string };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
@@ -143,6 +145,17 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
     return void res.json({ url: null, mock: true, message: "Cashfree not configured — using mock checkout" });
   }
 
+  // Validate the coupon now so we charge the discounted amount through Cashfree.
+  let amountToCharge = Number(plan.price);
+  let appliedCouponCode: string | null = null;
+  if (couponCode) {
+    const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
+    amountToCharge = r.resolved.effectiveAmount;
+    appliedCouponCode = r.resolved.coupon.code;
+  }
+
   const [owner] = await db.select().from(usersTable)
     .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)))
     .limit(1);
@@ -150,17 +163,26 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
   const cfOrderId = `kl_${tenantId}_${planId}_${Date.now()}`;
   const customerIdStr = tenant.cashfreeCustomerId ?? `tenant_${tenantId}`;
 
+  // Coupon-zeroed payments skip Cashfree entirely and activate immediately.
+  if (amountToCharge <= 0) {
+    await activateForTenant(tenantId, planId, `coupon_free_${cfOrderId}`, {
+      provider: "cashfree", amount: "0.00", currency: (plan.currency ?? "INR").toUpperCase(),
+      couponCode: appliedCouponCode, redeemedBy: req.user?.id ?? null,
+    });
+    return void res.json({ url: null, freeActivation: true, couponCode: appliedCouponCode });
+  }
+
   try {
     const order = await createCashfreeOrder(config, {
       orderId: cfOrderId,
-      amount: Number(plan.price),
+      amount: amountToCharge,
       currency: (plan.currency ?? "INR").toUpperCase(),
       customerId: customerIdStr,
       customerName: owner?.name ?? tenant.name,
       customerEmail: owner?.email ?? `tenant${tenantId}@khanalagao.app`,
       customerPhone: owner?.phone ?? "9999999999",
       returnUrl: successUrl,
-      notes: { tenantId: String(tenantId), planId: String(planId) },
+      notes: { tenantId: String(tenantId), planId: String(planId), ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}) },
     });
 
     if (!tenant.cashfreeCustomerId) {
@@ -204,41 +226,29 @@ router.post("/restaurants/:restaurantId/subscription/mock-activate", requireRole
   }
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId } = req.body as { planId: number };
+  const { planId, couponCode } = req.body as { planId: number; couponCode?: string };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
-  const now = new Date();
-  const endsAt = new Date(now);
-  endsAt.setMonth(endsAt.getMonth() + 1);
-  await db.update(tenantsTable).set({
-    planId,
-    planStatus: "active",
-    subscriptionStartedAt: now,
-    subscriptionEndsAt: endsAt,
-    updatedAt: now,
-  }).where(eq(tenantsTable.id, tenantId));
+  // Reuse the canonical activation path so coupon redemption, billing-history
+  // rows, and lifecycle SMS all behave the same as a real provider.
+  await activateForTenant(tenantId, planId, `mock_${tenantId}_${planId}_${Date.now()}`, {
+    provider: "mock",
+    couponCode: couponCode ?? null,
+    redeemedBy: req.user?.id ?? null,
+  });
   res.json({ success: true, planStatus: "active" });
 });
 
-async function activateFromCashfreeOrder(cfOrderId: string): Promise<void> {
-  // Order id pattern: kl_<tenantId>_<planId>_<timestamp>
+async function activateFromCashfreeOrder(cfOrderId: string, couponCode?: string | null): Promise<void> {
+  // Order id pattern: kl_<tenantId>_<planId>_<timestamp>. Reuse the canonical
+  // activation path so coupon redemption + billing history rows behave
+  // consistently with Razorpay/manual flows.
   const m = /^kl_(\d+)_(\d+)_/.exec(cfOrderId);
   if (!m) return;
-  const tenantId = Number(m[1]);
-  const planId = Number(m[2]);
-  const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
-  const now = new Date();
-  const endsAt = new Date(now);
-  if (plan?.billingPeriod === "yearly") endsAt.setFullYear(endsAt.getFullYear() + 1);
-  else endsAt.setMonth(endsAt.getMonth() + 1);
-  await db.update(tenantsTable).set({
-    planId,
-    planStatus: "active",
-    cashfreeSubscriptionId: cfOrderId,
-    subscriptionStartedAt: now,
-    subscriptionEndsAt: endsAt,
-    updatedAt: now,
-  }).where(eq(tenantsTable.id, tenantId));
+  await activateForTenant(Number(m[1]), Number(m[2]), `cf_${cfOrderId}`, {
+    provider: "cashfree",
+    couponCode: couponCode ?? null,
+  });
 }
 
 export function createStripeWebhookRouter(): Router {
@@ -348,7 +358,17 @@ export function createCashfreeWebhookRouter(): Router {
         || paymentStatus === "SUCCESS"
         || paymentStatus === "PAID";
       if (orderId && isSuccess) {
-        await activateFromCashfreeOrder(orderId);
+        // Best-effort: re-fetch the order so we can recover any couponCode
+        // attached during create-order, then activate using the canonical path.
+        let couponFromOrder: string | null = null;
+        try {
+          const order = await fetchCashfreeOrder(config, orderId);
+          const notes = (order as { order_meta?: { notes?: Record<string, unknown> }; order_tags?: Record<string, unknown> }).order_meta?.notes
+            ?? (order as { order_tags?: Record<string, unknown> }).order_tags
+            ?? null;
+          if (notes && typeof notes.couponCode === "string") couponFromOrder = notes.couponCode;
+        } catch { /* fall through and activate without coupon */ }
+        await activateFromCashfreeOrder(orderId, couponFromOrder);
       }
     } catch (err) {
       logger.error({ err }, "Cashfree webhook processing error");
@@ -388,7 +408,13 @@ router.post("/restaurants/:restaurantId/subscription/cashfree-confirm", requireR
     const order = await fetchCashfreeOrder(config, orderId);
     const cfStatus = (order.order_status ?? "").toUpperCase();
     if (cfStatus === "PAID" || cfStatus === "SUCCESS") {
-      await activateFromCashfreeOrder(orderId);
+      // Recover any couponCode attached during create-order so the redemption
+      // is recorded on activation even if the webhook lost the race.
+      const notes = (order as { order_meta?: { notes?: Record<string, unknown> }; order_tags?: Record<string, unknown> }).order_meta?.notes
+        ?? (order as { order_tags?: Record<string, unknown> }).order_tags
+        ?? null;
+      const couponFromOrder = notes && typeof notes.couponCode === "string" ? notes.couponCode : null;
+      await activateFromCashfreeOrder(orderId, couponFromOrder);
       return void res.json({ activated: true });
     }
     res.json({ activated: false, status: order.order_status });

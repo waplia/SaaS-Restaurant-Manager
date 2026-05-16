@@ -1714,10 +1714,10 @@ export function useCreateCheckout() {
 
 export function useCreateCashfreeOrder() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId, successUrl }: { restaurantId: number; planId: number; successUrl: string }) =>
-      apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean }>(
+    mutationFn: ({ restaurantId, planId, successUrl, couponCode }: { restaurantId: number; planId: number; successUrl: string; couponCode?: string }) =>
+      apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean; activated?: boolean }>(
         `/restaurants/${restaurantId}/subscription/create-cashfree-order`,
-        { planId, successUrl },
+        { planId, successUrl, couponCode },
       ),
   });
 }
@@ -1764,9 +1764,9 @@ export function usePaymentMethods(restaurantId: number) {
 
 export function useCreateSubscriptionRazorpayOrder() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId }: { restaurantId: number; planId: number }) =>
-      apiPost<{ orderId: string; amount: number; currency: string; keyId: string; receipt: string }>(
-        `/restaurants/${restaurantId}/subscription/create-razorpay-order`, { planId },
+    mutationFn: ({ restaurantId, planId, couponCode }: { restaurantId: number; planId: number; couponCode?: string }) =>
+      apiPost<{ orderId?: string; amount?: number; currency?: string; keyId?: string; receipt?: string; activated?: boolean }>(
+        `/restaurants/${restaurantId}/subscription/create-razorpay-order`, { planId, couponCode },
       ),
   });
 }
@@ -1786,8 +1786,8 @@ export function useConfirmSubscriptionRazorpayOrder() {
 export function useSubmitManualPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ restaurantId, planId, method, reference, proofUrl, note, amount }: { restaurantId: number; planId: number; method: "bank" | "upi"; reference?: string; proofUrl?: string; note?: string; amount?: number }) =>
-      apiPost<{ id: number; status: string }>(`/restaurants/${restaurantId}/subscription/manual-payment`, { planId, method, reference, proofUrl, note, amount }),
+    mutationFn: ({ restaurantId, planId, method, reference, proofUrl, note, amount, couponCode }: { restaurantId: number; planId: number; method: "bank" | "upi"; reference?: string; proofUrl?: string; note?: string; amount?: number; couponCode?: string }) =>
+      apiPost<{ id: number; status: string }>(`/restaurants/${restaurantId}/subscription/manual-payment`, { planId, method, reference, proofUrl, note, amount, couponCode }),
     onSuccess: (_d, { restaurantId }) => {
       qc.invalidateQueries({ queryKey: ["billing", "methods", restaurantId] });
       qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
@@ -1861,11 +1861,32 @@ export function useRejectManualPayment() {
 export function useMockActivate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ restaurantId, planId }: { restaurantId: number; planId: number }) =>
-      apiPost(`/restaurants/${restaurantId}/subscription/mock-activate`, { planId }),
+    mutationFn: ({ restaurantId, planId, couponCode }: { restaurantId: number; planId: number; couponCode?: string }) =>
+      apiPost(`/restaurants/${restaurantId}/subscription/mock-activate`, { planId, couponCode }),
     onSuccess: (_data, { restaurantId }) => {
       qc.invalidateQueries({ queryKey: ["subscription", restaurantId] });
     },
+  });
+}
+
+export interface CouponValidationResult {
+  valid: boolean;
+  code?: string;
+  discountType?: "flat" | "percent" | "trial_extension" | "first_month" | "lifetime";
+  discountValue?: number;
+  discountApplied?: number;
+  trialDaysAdded?: number;
+  finalAmount?: number;
+  originalAmount?: number;
+  currency?: string;
+  message?: string;
+  reason?: string;
+}
+
+export function useValidateCoupon() {
+  return useMutation({
+    mutationFn: ({ code, planId, restaurantId, tenantId }: { code: string; planId: number; restaurantId?: number; tenantId?: number }) =>
+      apiPost<CouponValidationResult>(`/coupons/validate`, { code, planId, restaurantId, tenantId }),
   });
 }
 

@@ -10,6 +10,7 @@ import {
   useSubscription, useCreateCheckout, useMockActivate,
   useCreateCashfreeOrder, useConfirmCashfreeOrder,
   usePaymentMethods, useCreateSubscriptionRazorpayOrder, useConfirmSubscriptionRazorpayOrder, useSubmitManualPayment,
+  useValidateCoupon, type CouponValidationResult,
 } from "@/lib/hooks";
 import type { PaymentMethodsView } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
@@ -214,6 +215,30 @@ function CheckoutModal({
   const confirmRazorpay = useConfirmSubscriptionRazorpayOrder();
   const submitManual = useSubmitManualPayment();
   const mockActivate = useMockActivate();
+  const validateCoupon = useValidateCoupon();
+  const [couponCode, setCouponCode] = useState("");
+  const [couponResult, setCouponResult] = useState<CouponValidationResult | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  async function applyCoupon() {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponResult(null); setCouponError(null);
+      return;
+    }
+    try {
+      const r = await validateCoupon.mutateAsync({ code, planId: plan.id, restaurantId: RESTAURANT_ID });
+      if (r.valid) { setCouponResult(r); setCouponError(null); }
+      else { setCouponResult(null); setCouponError(r.message ?? "Coupon is not valid for this plan."); }
+    } catch (err) {
+      setCouponResult(null);
+      const e = err as { data?: { message?: string }; message?: string };
+      setCouponError(e.data?.message ?? e.message ?? "Could not validate coupon.");
+    }
+  }
+  function clearCoupon() {
+    setCouponCode(""); setCouponResult(null); setCouponError(null);
+  }
 
   // Build the list in the order tenants should see them, with the admin-configured
   // default online provider first.
@@ -246,11 +271,16 @@ function CheckoutModal({
       const successUrl = `${origin}${base}settings/subscription`;
       const cancelUrl = successUrl;
 
+      const cc = couponResult?.code;
       if (method === "cashfree") {
-        const r = await createCashfree.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl });
+        const r = await createCashfree.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, couponCode: cc });
+        if (r.activated) {
+          toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
+          onPaid(); return;
+        }
         if (r.url) { window.location.href = r.url; return; }
         if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id });
+          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
           toast({ title: "Plan activated (demo)", description: "Cashfree not configured — plan upgraded in demo mode." });
           onPaid(); return;
         }
@@ -258,17 +288,24 @@ function CheckoutModal({
         const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl });
         if (r.url) { window.location.href = r.url; return; }
         if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id });
+          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
           toast({ title: "Plan activated (demo)", description: "Stripe not configured — plan upgraded in demo mode." });
           onPaid(); return;
         }
       } else if (method === "razorpay") {
-        const order = await createRazorpay.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id });
+        const order = await createRazorpay.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc });
+        if (order.activated) {
+          toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
+          onPaid(); return;
+        }
+        if (!order.orderId || !order.keyId) {
+          throw new Error("Razorpay order could not be created.");
+        }
         const Razorpay = await loadRazorpay();
         const rzp = new Razorpay({
           key: order.keyId,
-          amount: order.amount,
-          currency: order.currency,
+          amount: order.amount ?? 0,
+          currency: order.currency ?? "INR",
           name: "Khana Lagao",
           description: `${plan.name} subscription`,
           order_id: order.orderId,
@@ -315,6 +352,7 @@ function CheckoutModal({
           proofUrl: proofUrl.trim() || undefined,
           note: note.trim() || undefined,
           amount: amt,
+          couponCode: cc,
         });
         toast({ title: "Submitted for review", description: "Our team will verify and activate your plan within one business day." });
         onPaid();
@@ -402,6 +440,49 @@ function CheckoutModal({
               Manual payments are reviewed by our team. Your plan will be activated once we've confirmed receipt — usually within one business day.
             </p>
           )}
+
+          <div className="border-t border-border pt-4 space-y-2">
+            <Label htmlFor="coupon" className="text-xs uppercase font-semibold tracking-wide text-muted-foreground">Promo code</Label>
+            <div className="flex gap-2">
+              <Input
+                id="coupon" value={couponCode}
+                onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponResult(null); setCouponError(null); }}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } }}
+                placeholder="Enter promo code"
+                className="font-mono uppercase"
+                disabled={!!couponResult}
+              />
+              {couponResult ? (
+                <Button type="button" variant="outline" onClick={clearCoupon}>Remove</Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={applyCoupon} disabled={validateCoupon.isPending || !couponCode.trim()}>
+                  {validateCoupon.isPending ? "Checking…" : "Apply"}
+                </Button>
+              )}
+            </div>
+            {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+            {couponResult && couponResult.valid && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{couponResult.code} applied</span>
+                  {couponResult.discountType === "trial_extension" ? (
+                    <span className="font-mono">+{couponResult.trialDaysAdded} day{couponResult.trialDaysAdded === 1 ? "" : "s"}</span>
+                  ) : (
+                    <span className="font-mono">−{sym}{Number(couponResult.discountApplied ?? 0).toLocaleString()}</span>
+                  )}
+                </div>
+                {couponResult.discountType !== "trial_extension" && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="opacity-80">{couponResult.discountType === "lifetime" ? "Lifetime discount — applied to every renewal" : couponResult.discountType === "first_month" ? "Applies to your first billing cycle only" : "Discount applied"}</span>
+                    <span>You pay <strong>{sym}{Number(couponResult.finalAmount ?? 0).toLocaleString()}</strong></span>
+                  </div>
+                )}
+                {couponResult.discountType === "trial_extension" && couponResult.message && (
+                  <p className="text-xs opacity-80">{couponResult.message}</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20">

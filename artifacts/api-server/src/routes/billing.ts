@@ -2,9 +2,12 @@ import { Router, type Request, type Response } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import {
   db, paymentMethodSettingsTable, manualPaymentRequestsTable, subscriptionPaymentsTable,
-  tenantsTable, subscriptionPlansTable, usersTable,
-  notificationsTable, restaurantsTable,
+  tenantsTable, subscriptionPlansTable, usersTable, auditLogsTable,
+  notificationsTable, restaurantsTable, subscriptionCouponsTable,
 } from "../lib/db";
+import {
+  validateCoupon, recordRedemption, snapshotCoupon, countPriorPayments, effectiveStatus,
+} from "../lib/coupons";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -134,7 +137,7 @@ router.get("/restaurants/:restaurantId/billing/methods", requireRole("owner", "m
 router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId } = req.body as { planId: number };
+  const { planId, couponCode } = req.body as { planId: number; couponCode?: string };
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
 
@@ -143,26 +146,47 @@ router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", req
     return void res.status(400).json({ error: "Razorpay is not configured" });
   }
 
+  // Resolve coupon (if any) so we charge the discounted amount.
+  let amountToCharge = Number(plan.price);
+  let appliedCouponCode: string | null = null;
+  if (couponCode) {
+    const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
+    amountToCharge = r.resolved.effectiveAmount;
+    appliedCouponCode = r.resolved.coupon.code;
+  }
+
+  // If a coupon zeros the price out, skip Razorpay entirely and activate now.
+  if (amountToCharge <= 0) {
+    const externalRef = `coupon_free_${tenantId}_${planId}_${Date.now()}`;
+    await activateForTenant(tenantId, planId, externalRef, {
+      provider: "razorpay", amount: "0.00", currency: (plan.currency ?? "INR").toUpperCase(),
+      couponCode: appliedCouponCode, redeemedBy: req.user?.id ?? null,
+    });
+    return void res.json({ orderId: null, activated: true, freeActivation: true, couponCode: appliedCouponCode });
+  }
+
   const receipt = `kl_${tenantId}_${planId}_${Date.now()}`;
   try {
     const order = await createRazorpayOrder(config, {
       receipt,
-      amount: Number(plan.price),
+      amount: amountToCharge,
       currency: (plan.currency ?? "INR").toUpperCase(),
-      notes: { tenantId: String(tenantId), planId: String(planId) },
+      notes: { tenantId: String(tenantId), planId: String(planId), ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}) },
     });
-    res.json({ orderId: order.id, receipt, amount: order.amount, currency: order.currency, keyId: config.keyId });
+    res.json({ orderId: order.id, receipt, amount: order.amount, currency: order.currency, keyId: config.keyId, couponCode: appliedCouponCode });
   } catch (err) {
     logger.error({ err }, "Failed to create Razorpay order");
     res.status(502).json({ error: "Failed to create Razorpay order. Please try again or use a different payment method." });
   }
 });
 
-async function activateForTenant(
+export async function activateForTenant(
   tenantId: number,
   planId: number,
   externalRef: string,
-  opts: { provider: "cashfree" | "razorpay" | "stripe" | "bank" | "upi" | "mock"; amount?: string; currency?: string; manualRequestId?: number } = { provider: "mock" },
+  opts: { provider: "cashfree" | "razorpay" | "stripe" | "bank" | "upi" | "mock"; amount?: string; currency?: string; manualRequestId?: number; couponCode?: string | null; redeemedBy?: number | null } = { provider: "mock" },
 ): Promise<void> {
   // Idempotency guard: webhooks retry, and confirm + webhook can both fire for
   // the same order. We dedupe by externalRef so a single payment never extends
@@ -177,6 +201,7 @@ async function activateForTenant(
     endsAt: tenantsTable.subscriptionEndsAt,
     currentPlanId: tenantsTable.planId,
     status: tenantsTable.planStatus,
+    lifetimeCouponId: tenantsTable.lifetimeCouponId,
   }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
 
   const now = new Date();
@@ -191,28 +216,89 @@ async function activateForTenant(
   if (plan?.billingPeriod === "yearly") endsAt.setFullYear(endsAt.getFullYear() + 1);
   else endsAt.setMonth(endsAt.getMonth() + 1);
 
+  // Resolve the coupon to apply, if any. Order of precedence:
+  //  1. Explicit code passed to this activation (one-shot codes, first-month, etc.)
+  //  2. Tenant's persisted lifetime coupon (auto-reapplied on every renewal)
+  let resolved: Awaited<ReturnType<typeof validateCoupon>> | null = null;
+  let couponApplied: { id: number; code: string; type: string; discountApplied: number } | null = null;
+  const isFirstCycle = plan ? (await countPriorPayments(tenantId, planId)) === 0 : true;
+  if (opts.couponCode && plan) {
+    const r = await validateCoupon({
+      code: opts.couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle,
+    });
+    if (r.ok) resolved = r;
+    else logger.warn({ tenantId, planId, code: opts.couponCode, reason: r.reason }, "coupon failed validation at activation");
+  } else if (existing?.lifetimeCouponId && plan) {
+    const [c] = await db.select().from(subscriptionCouponsTable).where(eq(subscriptionCouponsTable.id, existing.lifetimeCouponId));
+    if (c && c.discountType === "lifetime" && effectiveStatus(c) === "active") {
+      const r = await validateCoupon({
+        code: c.code, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle,
+      });
+      if (r.ok) resolved = r;
+    }
+  }
+
+  // Compute final amount: prefer the caller's amount (what was actually charged)
+  // but if not provided, derive from plan price minus discount.
+  const planCurrency = (opts.currency ?? plan?.currency ?? "INR").toUpperCase();
+  const baseAmount = opts.amount !== undefined ? Number(opts.amount) : Number(plan?.price ?? 0);
+  const discountAmount = resolved?.ok ? resolved.resolved.discountAmount : 0;
+  const finalAmount = (resolved?.ok && opts.amount === undefined)
+    ? resolved.resolved.effectiveAmount.toFixed(2)
+    : baseAmount.toFixed(2);
+
   await db.update(tenantsTable).set({
     planId,
     planStatus: "active",
     cashfreeSubscriptionId: externalRef,
     subscriptionStartedAt: sameActivePlan ? (existing!.endsAt ?? now) : now,
     subscriptionEndsAt: endsAt,
+    // Persist (or clear+set) the lifetime coupon so future renewals reapply it.
+    ...(resolved?.ok && resolved.resolved.persistOnTenant ? {
+      lifetimeCouponId: resolved.resolved.coupon.id,
+      lifetimeCouponSnapshot: snapshotCoupon(resolved.resolved.coupon) as unknown as Record<string, unknown>,
+    } : {}),
     updatedAt: now,
   }).where(eq(tenantsTable.id, tenantId));
 
   // Persist a payment record for billing history (mirrors what online success would write).
-  await db.insert(subscriptionPaymentsTable).values({
+  const [payment] = await db.insert(subscriptionPaymentsTable).values({
     tenantId,
     planId,
-    amount: opts.amount ?? String(plan?.price ?? "0"),
-    currency: (opts.currency ?? plan?.currency ?? "INR").toUpperCase(),
+    amount: finalAmount,
+    currency: planCurrency,
     provider: opts.provider,
     externalRef,
     manualRequestId: opts.manualRequestId ?? null,
     periodStart,
     periodEnd: endsAt,
     status: "succeeded",
-  });
+    couponId: resolved?.ok ? resolved.resolved.coupon.id : null,
+    discountApplied: resolved?.ok ? discountAmount.toFixed(2) : null,
+    couponSnapshot: resolved?.ok ? (snapshotCoupon(resolved.resolved.coupon) as unknown as Record<string, unknown>) : null,
+  }).returning({ id: subscriptionPaymentsTable.id });
+
+  if (resolved?.ok) {
+    await recordRedemption({
+      coupon: resolved.resolved.coupon,
+      tenantId,
+      planId,
+      paymentId: payment?.id ?? null,
+      manualRequestId: opts.manualRequestId ?? null,
+      discountApplied: discountAmount,
+      context: opts.manualRequestId ? "manual_admin" : "payment",
+      redeemedBy: opts.redeemedBy ?? null,
+      metadata: { provider: opts.provider, externalRef },
+    });
+    couponApplied = { id: resolved.resolved.coupon.id, code: resolved.resolved.coupon.code, type: resolved.resolved.coupon.discountType, discountApplied: discountAmount };
+    await db.insert(auditLogsTable).values({
+      userId: opts.redeemedBy ?? null,
+      action: "coupon.redeemed",
+      entity: "coupon",
+      entityId: resolved.resolved.coupon.id,
+      details: `tenant=${tenantId} plan=${planId} code=${couponApplied.code} discount=${discountAmount.toFixed(2)} ${planCurrency}`,
+    });
+  }
 
   // Lifecycle SMS — payment received + subscription activated. Best-effort.
   const amountStr = opts.amount ?? String(plan?.price ?? "0");
@@ -256,7 +342,7 @@ async function notifyTenant(tenantId: number, type: string, title: string, messa
 router.post("/restaurants/:restaurantId/subscription/razorpay-confirm", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { orderId, paymentId, signature } = req.body as { orderId: string; paymentId: string; signature: string };
+  const { orderId, paymentId, signature, couponCode } = req.body as { orderId: string; paymentId: string; signature: string; couponCode?: string };
   if (!orderId || !paymentId || !signature) return void res.status(400).json({ error: "orderId, paymentId, signature required" });
 
   const { config } = await getEffectiveRazorpayConfig();
@@ -280,10 +366,18 @@ router.post("/restaurants/:restaurantId/subscription/razorpay-confirm", requireR
   if (order.status !== "paid" && order.amount_paid < order.amount) {
     return void res.json({ activated: false, status: order.status });
   }
+  // Recover the coupon code from the order notes (set during create-order) if
+  // the client didn't echo it back. This makes the redemption resilient to
+  // page refreshes between checkout and confirm.
+  const orderCouponCode = couponCode
+    ?? (order.notes && typeof (order.notes as Record<string, unknown>).couponCode === "string"
+      ? String((order.notes as Record<string, unknown>).couponCode) : null);
   await activateForTenant(orderTenantId, orderPlanId, `rzp_${orderId}`, {
     provider: "razorpay",
     amount: typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : undefined,
     currency: typeof order.currency === "string" ? order.currency : undefined,
+    couponCode: orderCouponCode,
+    redeemedBy: req.user?.id ?? null,
   });
   res.json({ activated: true });
 });
@@ -360,8 +454,8 @@ export function createRazorpayWebhookRouter(): Router {
 router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const { planId, method, reference, proofUrl, note, amount } = req.body as {
-    planId: number; method: string; reference?: string; proofUrl?: string; note?: string; amount?: number | string;
+  const { planId, method, reference, proofUrl, note, amount, couponCode } = req.body as {
+    planId: number; method: string; reference?: string; proofUrl?: string; note?: string; amount?: number | string; couponCode?: string;
   };
   if (!planId || (method !== "bank" && method !== "upi")) {
     return void res.status(400).json({ error: "planId and method (bank|upi) are required" });
@@ -389,12 +483,25 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
     return void res.status(409).json({ error: "You already have a pending manual payment under review." });
   }
 
-  // Tenants may declare an amount they actually paid (must be > 0). It still
+  // If a coupon is supplied, validate it now and use the discounted price as
+  // the default amount the tenant should pay. They can still override with a
+  // declared amount, but the admin sees the coupon attached on review.
+  let normalisedCoupon: string | null = null;
+  let discountedPrice = Number(plan.price);
+  if (couponCode) {
+    const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(plan.price) }, action: "payment", isFirstCycle: isFirst });
+    if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
+    normalisedCoupon = r.resolved.coupon.code;
+    discountedPrice = r.resolved.effectiveAmount;
+  }
+
+  // Tenants may declare an amount they actually paid (must be >= 0). It still
   // gets reviewed; if it doesn't match plan price the admin can reject.
-  let finalAmount = String(plan.price);
+  let finalAmount = discountedPrice.toFixed(2);
   if (amount !== undefined && amount !== "") {
     const n = Number(amount);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!Number.isFinite(n) || n < 0) {
       return void res.status(400).json({ error: "Invalid amount" });
     }
     finalAmount = n.toFixed(2);
@@ -411,6 +518,7 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
     note: note ?? null,
     status: "pending",
     submittedBy: req.user?.id ?? null,
+    couponCode: normalisedCoupon,
   }).returning();
 
   await recordAuditLog({
@@ -478,6 +586,8 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     amount: String(reqRow.amount),
     currency: reqRow.currency,
     manualRequestId: reqRow.id,
+    couponCode: reqRow.couponCode ?? null,
+    redeemedBy: req.user?.id ?? null,
   });
   await db.update(manualPaymentRequestsTable).set({
     status: "approved",

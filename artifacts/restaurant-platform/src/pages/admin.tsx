@@ -6,7 +6,9 @@ import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
-  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, MessageCircle, Activity, Wrench,
+  Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare,
+  MessageCircle, Activity, Wrench,
+  Tag, Copy, History, Calendar,
 } from "lucide-react";
 import { Link } from "wouter";
 import AdminNotificationCenter from "./admin-notifications";
@@ -951,7 +953,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -1031,6 +1033,7 @@ export default function AdminPage() {
             { id: "plans" as const, label: "Plans", icon: Package },
             { id: "payment_methods" as const, label: "Payment Methods", icon: CreditCard },
             { id: "approvals" as const, label: "Approvals", icon: FileCheck2 },
+            { id: "coupons" as const, label: "Coupons", icon: Tag },
             { id: "notifications" as const, label: "Notifications", icon: Megaphone },
             { id: "sms" as const, label: "SMS", icon: MessageSquare },
             { id: "email" as const, label: "Email", icon: Mail },
@@ -1050,6 +1053,7 @@ export default function AdminPage() {
         {tab === "plans" && <PlansTab />}
         {tab === "payment_methods" && <PaymentMethodsTab />}
         {tab === "approvals" && <ApprovalsTab />}
+        {tab === "coupons" && <CouponsTab />}
         {tab === "notifications" && <AdminNotificationCenter />}
         {tab === "sms" && <AdminSmsTab />}
         {tab === "email" && <AdminEmail />}
@@ -1338,6 +1342,377 @@ function ApprovalsTab() {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Coupons / Promo codes (super-admin)
+// ────────────────────────────────────────────────────────────────
+const COUPON_TYPE_LABEL: Record<string, string> = {
+  flat: "Flat amount off",
+  percent: "Percent off",
+  trial_extension: "Trial extension (days)",
+  first_month: "First-month % off",
+  lifetime: "Lifetime % off",
+};
+
+interface CouponRow {
+  id: number;
+  code: string;
+  discountType: "flat" | "percent" | "trial_extension" | "first_month" | "lifetime";
+  discountValue: string;
+  maxUsage: number | null;
+  usedCount: number;
+  validFrom: string | null;
+  validUntil: string | null;
+  applicablePlanIds: number[];
+  applicableTenantIds: number[];
+  status: "active" | "inactive";
+  notes: string | null;
+  effectiveStatus: "active" | "inactive" | "expired" | "exhausted" | "scheduled" | "deleted";
+  createdAt: string;
+}
+
+interface CouponRedemption {
+  id: number;
+  couponId: number;
+  tenantId: number;
+  tenantName: string | null;
+  planId: number | null;
+  planName: string | null;
+  paymentId: number | null;
+  manualRequestId: number | null;
+  discountApplied: string;
+  trialDaysAdded: number | null;
+  context: string;
+  redeemedBy: number | null;
+  redeemedByName: string | null;
+  redeemedAt: string;
+}
+
+function formatCouponValue(c: Pick<CouponRow, "discountType" | "discountValue">): string {
+  const v = Number(c.discountValue);
+  switch (c.discountType) {
+    case "flat": return `${v.toLocaleString()} off`;
+    case "percent": return `${v}% off`;
+    case "trial_extension": return `+${v} day${v === 1 ? "" : "s"} trial`;
+    case "first_month": return `${v}% off (first cycle)`;
+    case "lifetime": return `${v}% off (lifetime)`;
+    default: return String(v);
+  }
+}
+
+function effectiveStatusBadge(s: CouponRow["effectiveStatus"]) {
+  switch (s) {
+    case "active": return <Badge className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">Active</Badge>;
+    case "inactive": return <Badge variant="outline">Inactive</Badge>;
+    case "scheduled": return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30">Scheduled</Badge>;
+    case "expired": return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">Expired</Badge>;
+    case "exhausted": return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">Exhausted</Badge>;
+    case "deleted": return <Badge className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30">Deleted</Badge>;
+  }
+}
+
+function CouponsTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | CouponRow["discountType"]>("all");
+  const [editing, setEditing] = useState<CouponRow | null | "new">(null);
+  const [redemptionsFor, setRedemptionsFor] = useState<CouponRow | null>(null);
+
+  const { data, isLoading } = useQuery<{ data: CouponRow[] }>({
+    queryKey: ["admin", "coupons", search, statusFilter, typeFilter],
+    queryFn: () => apiFetch(`/admin/coupons?search=${encodeURIComponent(search)}&status=${statusFilter}&discountType=${typeFilter}`),
+  });
+  const { data: plansData } = useQuery<{ plans?: Plan[]; data?: Plan[] }>({
+    queryKey: ["admin", "plans-list"],
+    queryFn: () => apiFetch("/admin/plans"),
+  });
+  const plans = (plansData?.plans ?? plansData?.data ?? []) as Plan[];
+
+  const toggle = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/coupons/${id}/toggle`, "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "coupons"] }),
+  });
+  const duplicate = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/coupons/${id}/duplicate`, "POST"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "coupons"] }); toast({ title: "Coupon duplicated", description: "A draft copy was created (inactive)." }); },
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/coupons/${id}`, "DELETE"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "coupons"] }); toast({ title: "Coupon deleted" }); },
+  });
+
+  const rows = data?.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search code or notes…" className="pl-9 w-64" />
+        </div>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="text-sm border border-border rounded-md px-2 py-1.5 bg-card">
+          <option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option>
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as typeof typeFilter)} className="text-sm border border-border rounded-md px-2 py-1.5 bg-card">
+          <option value="all">All types</option>
+          {(Object.keys(COUPON_TYPE_LABEL) as Array<keyof typeof COUPON_TYPE_LABEL>).map(k => (<option key={k} value={k}>{COUPON_TYPE_LABEL[k]}</option>))}
+        </select>
+        <Button className="ml-auto" onClick={() => setEditing("new")}><Plus className="w-4 h-4 mr-1" /> New coupon</Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading coupons…</div>
+        ) : rows.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground text-sm">No coupons match your filters. Click <strong>New coupon</strong> to create one.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
+              <tr>
+                <th className="px-5 py-3 text-left">Code</th>
+                <th className="px-5 py-3 text-left">Type / value</th>
+                <th className="px-5 py-3 text-left">Used</th>
+                <th className="px-5 py-3 text-left">Validity</th>
+                <th className="px-5 py-3 text-left">Restrictions</th>
+                <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(c => (
+                <tr key={c.id} className="border-t border-border align-top">
+                  <td className="px-5 py-3"><div className="font-mono font-semibold text-foreground">{c.code}</div>{c.notes && <div className="text-xs text-muted-foreground max-w-xs">{c.notes}</div>}</td>
+                  <td className="px-5 py-3">
+                    <div className="text-xs text-muted-foreground">{COUPON_TYPE_LABEL[c.discountType]}</div>
+                    <div className="font-medium">{formatCouponValue(c)}</div>
+                  </td>
+                  <td className="px-5 py-3 text-xs">{c.usedCount}{c.maxUsage != null ? ` / ${c.maxUsage}` : ""}</td>
+                  <td className="px-5 py-3 text-xs text-muted-foreground">
+                    {c.validFrom ? <div>From {new Date(c.validFrom).toLocaleDateString()}</div> : <div>From — anytime</div>}
+                    {c.validUntil ? <div>Until {new Date(c.validUntil).toLocaleDateString()}</div> : <div>No expiry</div>}
+                  </td>
+                  <td className="px-5 py-3 text-xs text-muted-foreground">
+                    <div>{c.applicablePlanIds.length === 0 ? "All plans" : `${c.applicablePlanIds.length} plan(s)`}</div>
+                    <div>{c.applicableTenantIds.length === 0 ? "All tenants" : `${c.applicableTenantIds.length} tenant(s)`}</div>
+                  </td>
+                  <td className="px-5 py-3">{effectiveStatusBadge(c.effectiveStatus)}</td>
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex flex-wrap gap-1.5 justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => setRedemptionsFor(c)} title="Redemption history"><History className="w-3.5 h-3.5" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(c)} title="Edit"><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => duplicate.mutate(c.id)} disabled={duplicate.isPending} title="Duplicate"><Copy className="w-3.5 h-3.5" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => toggle.mutate(c.id)} disabled={toggle.isPending} title={c.status === "active" ? "Deactivate" : "Activate"}>
+                        {c.status === "active" ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { if (confirm(`Delete coupon ${c.code}? This soft-deletes it; existing redemptions are preserved.`)) remove.mutate(c.id); }} title="Delete"><Trash2 className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editing && (
+        <CouponEditor
+          coupon={editing === "new" ? null : editing}
+          plans={plans}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["admin", "coupons"] }); }}
+        />
+      )}
+      {redemptionsFor && (
+        <CouponRedemptionsModal coupon={redemptionsFor} onClose={() => setRedemptionsFor(null)} />
+      )}
+    </div>
+  );
+}
+
+function CouponEditor({ coupon, plans, onClose, onSaved }: { coupon: CouponRow | null; plans: Plan[]; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!coupon;
+  const { toast } = useToast();
+  const [code, setCode] = useState(coupon?.code ?? "");
+  const [discountType, setDiscountType] = useState<CouponRow["discountType"]>(coupon?.discountType ?? "percent");
+  const [discountValue, setDiscountValue] = useState(coupon?.discountValue ?? "10");
+  const [maxUsage, setMaxUsage] = useState<string>(coupon?.maxUsage != null ? String(coupon.maxUsage) : "");
+  const [validFrom, setValidFrom] = useState(coupon?.validFrom ? coupon.validFrom.slice(0, 10) : "");
+  const [validUntil, setValidUntil] = useState(coupon?.validUntil ? coupon.validUntil.slice(0, 10) : "");
+  const [applicablePlanIds, setApplicablePlanIds] = useState<number[]>(coupon?.applicablePlanIds ?? []);
+  const [applicableTenantIds, setApplicableTenantIds] = useState<string>(
+    (coupon?.applicableTenantIds ?? []).join(", "),
+  );
+  const [status, setStatus] = useState<"active" | "inactive">(coupon?.status ?? "active");
+  const [notes, setNotes] = useState(coupon?.notes ?? "");
+  const [busy, setBusy] = useState(false);
+
+  function togglePlan(id: number) {
+    setApplicablePlanIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      const tenantIds = applicableTenantIds.split(",").map(s => Number(s.trim())).filter(n => Number.isInteger(n) && n > 0);
+      const body: Record<string, unknown> = {
+        code: code.trim().toUpperCase(),
+        discountType,
+        discountValue: Number(discountValue),
+        maxUsage: maxUsage.trim() === "" ? null : Number(maxUsage),
+        validFrom: validFrom || null,
+        validUntil: validUntil || null,
+        applicablePlanIds,
+        applicableTenantIds: tenantIds,
+        status,
+        notes: notes.trim() || null,
+      };
+      if (isEdit) {
+        await apiAction(`/admin/coupons/${coupon!.id}`, "PATCH", body);
+        toast({ title: "Coupon updated" });
+      } else {
+        await apiAction(`/admin/coupons`, "POST", body);
+        toast({ title: "Coupon created" });
+      }
+      onSaved();
+    } catch (e) {
+      toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="font-semibold text-lg">{isEdit ? `Edit ${coupon!.code}` : "New coupon"}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5 sm:col-span-1">
+            <Label>Code</Label>
+            <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="WELCOME10" className="font-mono uppercase" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <select value={discountType} onChange={e => setDiscountType(e.target.value as CouponRow["discountType"])} className="text-sm border border-border rounded-md px-2 py-2 bg-card w-full">
+              {(Object.keys(COUPON_TYPE_LABEL) as Array<keyof typeof COUPON_TYPE_LABEL>).map(k => (<option key={k} value={k}>{COUPON_TYPE_LABEL[k]}</option>))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{discountType === "trial_extension" ? "Days to add" : discountType === "flat" ? "Amount off" : "Percent off"}</Label>
+            <Input type="number" inputMode="decimal" min="0" step={discountType === "trial_extension" ? "1" : "0.01"} value={discountValue} onChange={e => setDiscountValue(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{discountType === "percent" || discountType === "first_month" || discountType === "lifetime" ? "Capped at 100." : discountType === "flat" ? "Amount in the plan's currency." : "Days added to the tenant's trial."}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Max usage</Label>
+            <Input type="number" inputMode="numeric" min="0" step="1" value={maxUsage} onChange={e => setMaxUsage(e.target.value)} placeholder="Unlimited" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Valid from</Label>
+            <Input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Valid until</Label>
+            <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Applicable plans</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {plans.length === 0 && <p className="text-xs text-muted-foreground">No plans available.</p>}
+              {plans.map(p => {
+                const sel = applicablePlanIds.includes(p.id);
+                return (
+                  <button key={p.id} type="button" onClick={() => togglePlan(p.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${sel ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:text-foreground"}`}>
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">Leave none selected to apply to <strong>all plans</strong>.</p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Restrict to tenants (IDs, comma-separated)</Label>
+            <Input value={applicableTenantIds} onChange={e => setApplicableTenantIds(e.target.value)} placeholder="e.g. 12, 34, 56 — leave blank for all tenants" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Status</Label>
+            <select value={status} onChange={e => setStatus(e.target.value as "active" | "inactive")} className="text-sm border border-border rounded-md px-2 py-2 bg-card w-full">
+              <option value="active">Active</option><option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Internal notes (not shown to tenants)</Label>
+            <Textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !code.trim()}>{busy ? "Saving…" : isEdit ? "Save changes" : "Create coupon"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CouponRedemptionsModal({ coupon, onClose }: { coupon: CouponRow; onClose: () => void }) {
+  const { data, isLoading } = useQuery<{ data: CouponRedemption[] }>({
+    queryKey: ["admin", "coupons", coupon.id, "redemptions"],
+    queryFn: () => apiFetch(`/admin/coupons/${coupon.id}/redemptions`),
+  });
+  const rows = data?.data ?? [];
+  return (
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-2xl shadow-xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="font-semibold text-lg">Redemptions for <span className="font-mono">{coupon.code}</span></h3>
+            <p className="text-xs text-muted-foreground">{coupon.usedCount} redemption{coupon.usedCount === 1 ? "" : "s"}{coupon.maxUsage != null ? ` of ${coupon.maxUsage}` : ""}</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6">
+          {isLoading ? (
+            <div className="p-6 text-sm text-muted-foreground text-center">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground text-center">This coupon hasn't been redeemed yet.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
+                <tr>
+                  <th className="px-3 py-2 text-left">Tenant</th>
+                  <th className="px-3 py-2 text-left">Plan</th>
+                  <th className="px-3 py-2 text-left">Discount</th>
+                  <th className="px-3 py-2 text-left">Context</th>
+                  <th className="px-3 py-2 text-left">Redeemed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-t border-border">
+                    <td className="px-3 py-2">{r.tenantName ?? `#${r.tenantId}`}</td>
+                    <td className="px-3 py-2">{r.planName ?? (r.planId ? `#${r.planId}` : "—")}</td>
+                    <td className="px-3 py-2">
+                      {r.trialDaysAdded ? `+${r.trialDaysAdded} day${r.trialDaysAdded === 1 ? "" : "s"}` : Number(r.discountApplied).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground capitalize">{r.context.replace("_", " ")}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                      <div>{new Date(r.redeemedAt).toLocaleString()}</div>
+                      {r.redeemedByName && <div className="text-[10px]">by {r.redeemedByName}</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

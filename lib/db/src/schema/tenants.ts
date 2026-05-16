@@ -47,6 +47,8 @@ export const tenantsTable = pgTable("tenants", {
   isSuspended: boolean("is_suspended").notNull().default(false),
   logoUrl: text("logo_url"),
   primaryColor: text("primary_color").default("#f97316"),
+  lifetimeCouponId: integer("lifetime_coupon_id"),
+  lifetimeCouponSnapshot: jsonb("lifetime_coupon_snapshot").$type<Record<string, unknown> | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
