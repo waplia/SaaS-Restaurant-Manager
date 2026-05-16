@@ -96,6 +96,14 @@ import AdminFintechPage from "@/pages/admin-fintech";
 import HealthScorePage from "@/pages/health-score";
 import SopTrainingPage from "@/pages/sop-training";
 import MyTrainingPage from "@/pages/my-training";
+import FoodCourtsPage from "@/pages/food-courts";
+import FoodCourtVendorsPage from "@/pages/food-court-vendors";
+import FoodCourtPosPage from "@/pages/food-court-pos";
+import FoodCourtOverviewPage from "@/pages/food-court-overview";
+import FoodCourtTokensPage from "@/pages/food-court-tokens";
+import FoodCourtSettlementsPage from "@/pages/food-court-settlements";
+import FoodCourtReportsPage from "@/pages/food-court-reports";
+import FoodCourtMyCounterPage from "@/pages/food-court-my-counter";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -237,6 +245,14 @@ function Router() {
       <Route path="/ai/review-qrs" component={() => <RoleProtectedRoute component={ReviewQrsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/review-replies" component={() => <RoleProtectedRoute component={AiReviewRepliesPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/feedback-recovery" component={() => <RoleProtectedRoute component={FeedbackRecoveryPage} allow={["owner", "manager"]} />} />
+      <Route path="/food-courts" component={() => <RoleProtectedRoute component={FoodCourtsPage} allow={["owner", "manager", "food_court_owner"]} />} />
+      <Route path="/food-court/:id/overview" component={() => <RoleProtectedRoute component={FoodCourtOverviewPage} allow={["owner", "manager", "food_court_owner"]} />} />
+      <Route path="/food-court/:id/vendors" component={() => <RoleProtectedRoute component={FoodCourtVendorsPage} allow={["owner", "manager", "food_court_owner"]} />} />
+      <Route path="/food-court/:id/pos" component={() => <RoleProtectedRoute component={FoodCourtPosPage} allow={["owner", "manager", "food_court_owner", "food_court_cashier", "cashier"]} />} />
+      <Route path="/food-court/:id/tokens" component={() => <RoleProtectedRoute component={FoodCourtTokensPage} allow={["owner", "manager", "food_court_owner", "food_court_cashier", "cashier", "kitchen", "waiter"]} />} />
+      <Route path="/food-court/:id/settlements" component={() => <RoleProtectedRoute component={FoodCourtSettlementsPage} allow={["owner", "manager", "food_court_owner"]} />} />
+      <Route path="/food-court/:id/reports" component={() => <RoleProtectedRoute component={FoodCourtReportsPage} allow={["owner", "manager", "food_court_owner"]} />} />
+      <Route path="/food-court/my-counter" component={() => <ProtectedRoute component={FoodCourtMyCounterPage} />} />
       <Route path="/site/:slug" component={PublicSitePage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />

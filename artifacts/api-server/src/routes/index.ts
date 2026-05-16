@@ -74,6 +74,7 @@ import complianceRouter from "./compliance";
 import eventsRouter from "./events";
 import aggregatorPayoutsRouter from "./aggregator-payouts";
 import accountingRouter from "./accounting";
+import foodCourtRouter from "./food-court";
 
 const router: IRouter = Router();
 
@@ -166,5 +167,6 @@ router.use(complianceRouter);
 router.use(eventsRouter);
 router.use(aggregatorPayoutsRouter);
 router.use(accountingRouter);
+router.use(foodCourtRouter);
 
 export default router;

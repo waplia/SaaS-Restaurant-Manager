@@ -49,6 +49,13 @@ const navConfig: NavEntry[] = [
     ],
   },
   {
+    kind: "group", key: "food_court", label: "Food Court", icon: UtensilsCrossed,
+    children: [
+      { kind: "link", href: "/food-courts", label: "Overview", icon: LayoutDashboard, roles: ["owner", "manager", "food_court_owner"] },
+      { kind: "link", href: "/food-court/my-counter", label: "My Counter", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "staff"] },
+    ],
+  },
+  {
     kind: "group", key: "finance", label: "Finance", icon: Coins,
     children: [
       { kind: "link", href: "/cash-register", label: "Cash Register", icon: Banknote, roles: ["owner", "manager", "waiter"] },
