@@ -159,13 +159,4 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   loginBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  hint: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-  },
-  hintText: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 1 },
 });

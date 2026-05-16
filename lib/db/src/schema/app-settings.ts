@@ -53,7 +53,7 @@ export type PublicAppSettings = Pick<
   | "defaultCurrency" | "defaultTimezone" | "dateFormat" | "timeFormat"
   | "footerText" | "socialLinks"
   | "maintenanceMode" | "maintenanceMessage"
-  | "signupEnabled" | "demoModeEnabled" | "landingPageEnabled"
+  | "signupEnabled" | "landingPageEnabled"
 >;
 
 export const SOCIAL_KEYS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;

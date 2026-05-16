@@ -55,7 +55,6 @@ const updateSchema = z.object({
   maintenanceMode: z.boolean().optional(),
   maintenanceMessage: z.string().trim().max(400).nullish(),
   signupEnabled: z.boolean().optional(),
-  demoModeEnabled: z.boolean().optional(),
   landingPageEnabled: z.boolean().optional(),
 
   footerText: z.string().trim().max(400).nullish(),

@@ -63,7 +63,6 @@ export function toPublicAppSettings(s: AppSettings): PublicAppSettings {
     maintenanceMode: s.maintenanceMode,
     maintenanceMessage: s.maintenanceMessage,
     signupEnabled: s.signupEnabled,
-    demoModeEnabled: s.demoModeEnabled,
     landingPageEnabled: s.landingPageEnabled,
   };
 }

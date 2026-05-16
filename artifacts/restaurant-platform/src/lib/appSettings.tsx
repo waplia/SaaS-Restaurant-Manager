@@ -22,7 +22,6 @@ export interface PublicAppSettings {
   maintenanceMode: boolean;
   maintenanceMessage: string | null;
   signupEnabled: boolean;
-  demoModeEnabled: boolean;
   landingPageEnabled: boolean;
 }
 
@@ -45,7 +44,6 @@ const DEFAULTS: PublicAppSettings = {
   maintenanceMode: false,
   maintenanceMessage: null,
   signupEnabled: true,
-  demoModeEnabled: false,
   landingPageEnabled: true,
 };
 

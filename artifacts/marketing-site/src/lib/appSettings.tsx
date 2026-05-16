@@ -21,7 +21,6 @@ export interface PublicAppSettings {
   maintenanceMode: boolean;
   maintenanceMessage: string | null;
   signupEnabled: boolean;
-  demoModeEnabled: boolean;
   landingPageEnabled: boolean;
 }
 
@@ -39,7 +38,7 @@ const DEFAULTS: PublicAppSettings = {
   dateFormat: "DD/MM/YYYY", timeFormat: "12h",
   footerText: null, socialLinks: {},
   maintenanceMode: false, maintenanceMessage: null,
-  signupEnabled: true, demoModeEnabled: false, landingPageEnabled: true,
+  signupEnabled: true, landingPageEnabled: true,
 };
 
 const Ctx = createContext<PublicAppSettings>(DEFAULTS);

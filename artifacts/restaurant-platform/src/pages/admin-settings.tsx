@@ -29,7 +29,6 @@ type Settings = {
   maintenanceMode: boolean;
   maintenanceMessage: string | null;
   signupEnabled: boolean;
-  demoModeEnabled: boolean;
   landingPageEnabled: boolean;
   footerText: string | null;
   socialLinks: Record<string, string>;
