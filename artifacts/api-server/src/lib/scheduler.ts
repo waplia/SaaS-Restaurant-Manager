@@ -121,6 +121,7 @@ export function startScheduler(): void {
   registerCron("nightly-demand-forecast", "0 * * * *", "Per-restaurant nightly tomorrow forecast: ticks hourly and runs whenever a restaurant's local time is 02:00 in its configured timezone (gated on plan, feature toggle, history, and credits)");
   registerCron("addon-lifecycle-sweep", "*/15 * * * *", "Expires add-on trials and ended billing periods every 15 min");
   registerCron("health-score-nightly", "0 3 * * *", "Computes nightly Restaurant Health Score (0–100) for all active restaurants at 03:00 IST");
+  registerCron("compliance-reminders", "15 8 * * *", "Daily Compliance Manager reminders at 08:15 IST (60/30/15/7/1d before expiry, on day, weekly when overdue)");
 
   trackCron("addon_lifecycle_sweep", "*/15 * * * *", async () => {
     try {
@@ -136,6 +137,16 @@ export function startScheduler(): void {
       const r = await snapshotAllRestaurants();
       logger.info({ ...r }, "[health-score] nightly snapshot complete");
     }).catch(err => logger.error({ err }, "[health-score] nightly snapshot failed"));
+  });
+
+  trackCron("compliance_reminders", "15 8 * * *", async () => {
+    try {
+      const { runComplianceReminderTick } = await import("../routes/compliance");
+      const r = await runComplianceReminderTick(new Date());
+      logger.info({ ...r }, "[compliance] reminder sweep complete");
+    } catch (err) {
+      logger.error({ err }, "[compliance] reminder sweep failed");
+    }
   });
 
   trackCron("fraud_detect_fast", "5 * * * *", async () => {

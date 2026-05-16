@@ -17,6 +17,7 @@ import InventoryPage from "@/pages/inventory";
 import StaffPage from "@/pages/staff";
 import CustomersPage from "@/pages/customers";
 import ExpensesPage from "@/pages/expenses";
+import CompliancePage from "@/pages/compliance";
 import PayrollPage from "@/pages/payroll";
 import ReportsPage from "@/pages/reports";
 import NotificationsPage from "@/pages/notifications";
@@ -180,6 +181,7 @@ function Router() {
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
+      <Route path="/compliance" component={() => <RoleProtectedRoute component={CompliancePage} allow={["owner", "manager"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
       <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />

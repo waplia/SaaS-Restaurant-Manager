@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap,
+  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
+      { kind: "link", href: "/compliance", label: "Compliance", icon: ScrollText, roles: ["owner", "manager"] },
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
       { kind: "link", href: "/wallets", label: "Wallet & Gift Cards", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/settlements", label: "Settlements & Recon", icon: TrendingUp, roles: ["owner", "manager", "cashier"] },
