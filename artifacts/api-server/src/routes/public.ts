@@ -684,6 +684,25 @@ function hashIp(ip: string | null): string | null {
   return createHash("sha256").update(ip + "|reviewqr").digest("hex").slice(0, 32);
 }
 
+// Resolves a staff-task QR token into a minimal "what restaurant + area is
+// this" payload. Staff are then expected to log in via the regular flow and
+// hit the authenticated submit endpoint.
+router.get("/public/staff-task/:qrToken", async (req, res) => {
+  const { staffTaskAreasTable } = await import("../lib/db");
+  const [area] = await db.select().from(staffTaskAreasTable)
+    .where(eq(staffTaskAreasTable.qrToken, req.params.qrToken));
+  if (!area || !area.isActive) return void res.status(404).json({ error: "Not found" });
+  const [restaurant] = await db.select({
+    id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug,
+    logoUrl: restaurantsTable.logoUrl,
+  }).from(restaurantsTable).where(eq(restaurantsTable.id, area.restaurantId));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+  res.json({
+    restaurant,
+    area: { id: area.id, name: area.name, description: area.description, qrToken: area.qrToken },
+  });
+});
+
 router.get("/public/review-qr/:qrCode", async (req, res) => {
   const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
   if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });

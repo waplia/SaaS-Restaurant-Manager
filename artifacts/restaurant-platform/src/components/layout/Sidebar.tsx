@@ -41,6 +41,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/waste", label: "Waste", icon: Trash2, roles: ["owner", "manager", "kitchen", "waiter", "cashier"] },
   { kind: "link", href: "/documents", label: "Documents", icon: Folder, requiresDocsAccess: true },
   { kind: "link", href: "/staff", label: "Staff", icon: UserCheck },
+  { kind: "link", href: "/staff-tasks", label: "Staff Tasks", icon: UserCheck, roles: ["owner", "manager"] },
   { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"] },
   { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"] },
   { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },

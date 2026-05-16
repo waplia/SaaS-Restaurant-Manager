@@ -456,6 +456,17 @@ export function startScheduler(): void {
     }
   });
 
+  registerCron("staff_task_missed_sweep", "*/5 * * * *", "Detects staff-task scheduled windows that closed without an on-time submission (every 5 min)");
+  trackCron("staff_task_missed_sweep", "*/5 * * * *", async () => {
+    try {
+      const { runStaffTaskMissedSweep } = await import("../routes/staff-tasks");
+      const r = await runStaffTaskMissedSweep(new Date());
+      if (r.missed > 0) logger.info({ missed: r.missed, checked: r.checked }, "Staff task missed-window sweep");
+    } catch (err) {
+      logger.error({ err }, "Staff task missed sweep failed");
+    }
+  });
+
   registerCron("sop_training_expiry", "0 2 * * *", "Daily SOP & Training certificate expiry sweep at 02:00 IST");
   trackCron("sop_training_expiry", "0 2 * * *", async () => {
     try {
