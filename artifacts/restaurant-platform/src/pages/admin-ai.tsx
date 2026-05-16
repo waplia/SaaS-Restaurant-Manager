@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Activity, Brain, Cpu, FileText, ShieldAlert, ScrollText, BarChart3,
@@ -523,7 +523,7 @@ function PromptModal({ template, onClose, onSaved }: { template: AiPromptTemplat
   const [testResult, setTestResult] = useState<string>("");
 
   // Hydrate from active version once loaded
-  useMemo(() => {
+  useEffect(() => {
     if (activeVer && template) {
       setForm(f => ({ ...f, systemPrompt: activeVer.systemPrompt ?? "", userTemplate: activeVer.userTemplate }));
     }
@@ -679,7 +679,7 @@ function SafetySubTab() {
   const { toast } = useToast();
   const { data, isLoading } = useQuery<AiSafety>({ queryKey: ["admin-ai", "safety"], queryFn: () => apiFetch("/admin/ai/safety") });
   const [form, setForm] = useState<AiSafety | null>(null);
-  useMemo(() => { if (data && !form) setForm(data); }, [data, form]);
+  useEffect(() => { if (data && !form) setForm(data); }, [data, form]);
   const mut = useMutation({
     mutationFn: (body: Partial<AiSafety>) => apiAction("/admin/ai/safety", "PATCH", body),
     onSuccess: () => { toast({ title: "Safety settings saved" }); void qc.invalidateQueries({ queryKey: ["admin-ai", "safety"] }); },
@@ -726,7 +726,7 @@ function SafetySubTab() {
 
 // ─── Logs ────────────────────────────────────────────────────────────────────
 function LogsSubTab() {
-  const [filters, setFilters] = useState({ featureSlug: "", providerSlug: "", model: "", status: "", restaurantId: "", from: "", to: "" });
+  const [filters, setFilters] = useState({ featureSlug: "", providerSlug: "", model: "", status: "", restaurantId: "", userId: "", from: "", to: "" });
   const [page, setPage] = useState(0);
   const limit = 50;
   const params = useMemo(() => {
@@ -742,7 +742,7 @@ function LogsSubTab() {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
         <input className={inputCls} placeholder="Feature slug" value={filters.featureSlug} onChange={e => setFilters({ ...filters, featureSlug: e.target.value })} />
         <input className={inputCls} placeholder="Provider slug" value={filters.providerSlug} onChange={e => setFilters({ ...filters, providerSlug: e.target.value })} />
         <input className={inputCls} placeholder="Model" value={filters.model} onChange={e => setFilters({ ...filters, model: e.target.value })} />
@@ -750,6 +750,7 @@ function LogsSubTab() {
           <option value="">All status</option><option value="success">Success</option><option value="error">Error</option><option value="blocked">Blocked</option>
         </select>
         <input className={inputCls} placeholder="Restaurant ID" value={filters.restaurantId} onChange={e => setFilters({ ...filters, restaurantId: e.target.value })} />
+        <input className={inputCls} placeholder="User ID" value={filters.userId} onChange={e => setFilters({ ...filters, userId: e.target.value })} />
         <input className={inputCls} type="datetime-local" value={filters.from} onChange={e => setFilters({ ...filters, from: e.target.value })} />
         <input className={inputCls} type="datetime-local" value={filters.to} onChange={e => setFilters({ ...filters, to: e.target.value })} />
       </div>
@@ -804,7 +805,23 @@ function LogsSubTab() {
       </div>
       {detail && (
         <Modal title={`Log #${detail.id}`} onClose={() => setDetail(null)} wide>
-          <pre className="text-xs whitespace-pre-wrap bg-muted/40 p-3 rounded">{JSON.stringify(detail, null, 2)}</pre>
+          <div className="space-y-3">
+            <pre className="text-xs whitespace-pre-wrap bg-muted/40 p-3 rounded max-h-96 overflow-auto">{JSON.stringify(detail, null, 2)}</pre>
+            {detail.status !== "blocked" && detail.featureSlug === "prompt_test" && detail.metadata && typeof detail.metadata === "object" && "promptTemplateId" in (detail.metadata as Record<string, unknown>) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const tplId = (detail.metadata as Record<string, unknown>)["promptTemplateId"];
+                    await apiAction(`/admin/ai/prompts/${tplId}/test`, "POST", { variables: {} });
+                    toast({ title: "Retry submitted" });
+                    refetch();
+                  } catch (err) { toast({ title: "Retry failed", description: (err as Error).message, variant: "destructive" }); }
+                }}
+              >Retry safe (prompt test re-run)</Button>
+            )}
+          </div>
         </Modal>
       )}
     </div>
@@ -816,10 +833,12 @@ function CostReportsSubTab() {
   const [days, setDays] = useState(30);
   const { data, isLoading } = useQuery<{
     days: number;
-    byProvider: Array<{ providerSlug: string | null; requests: number; tokens: number; costUsd: string; failed: number }>;
+    byProvider: Array<{ providerSlug: string | null; requests: number; tokens: number; costUsd: string; failed: number; failedCostUsd: string }>;
     byFeature: Array<{ featureSlug: string; requests: number; tokens: number; costUsd: string }>;
     byRestaurant: Array<{ restaurantId: number | null; requests: number; tokens: number; costUsd: string }>;
     byDay: Array<{ day: string; requests: number; costUsd: string }>;
+    byMonth: Array<{ month: string; requests: number; tokens: number; costUsd: string; imageCostUsd: string; failedCostUsd: string }>;
+    byModality: Array<{ modality: string; requests: number; costUsd: string; failed: number; failedCostUsd: string }>;
   }>({
     queryKey: ["admin-ai", "cost", days],
     queryFn: () => apiFetch(`/admin/ai/reports/cost?days=${days}`),
@@ -859,6 +878,41 @@ function CostReportsSubTab() {
               </table>
             </div>
           ))}
+          <div className="bg-card border border-border rounded-lg p-4">
+            <p className="text-sm font-semibold mb-2">By Modality (image vs text — failed cost shown)</p>
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground"><tr><th className="text-left">Modality</th><th className="text-right">Requests</th><th className="text-right">Total cost</th><th className="text-right">Failed cost</th></tr></thead>
+              <tbody>
+                {data.byModality.map(r => (
+                  <tr key={r.modality} className="border-t border-border/50">
+                    <td className="py-1">{r.modality}</td>
+                    <td className="text-right tabular-nums">{r.requests}</td>
+                    <td className="text-right tabular-nums">${Number(r.costUsd).toFixed(6)}</td>
+                    <td className="text-right tabular-nums text-destructive">${Number(r.failedCostUsd).toFixed(6)}</td>
+                  </tr>
+                ))}
+                {data.byModality.length === 0 && <tr><td colSpan={4} className="text-center p-2 text-muted-foreground">—</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-card border border-border rounded-lg p-4">
+            <p className="text-sm font-semibold mb-2">Monthly cost (image-gen + failed breakdown)</p>
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground"><tr><th className="text-left">Month</th><th className="text-right">Requests</th><th className="text-right">Total</th><th className="text-right">Image</th><th className="text-right">Failed</th></tr></thead>
+              <tbody>
+                {data.byMonth.map(m => (
+                  <tr key={m.month} className="border-t border-border/50">
+                    <td className="py-1">{m.month}</td>
+                    <td className="text-right tabular-nums">{m.requests}</td>
+                    <td className="text-right tabular-nums">${Number(m.costUsd).toFixed(4)}</td>
+                    <td className="text-right tabular-nums">${Number(m.imageCostUsd).toFixed(4)}</td>
+                    <td className="text-right tabular-nums text-destructive">${Number(m.failedCostUsd).toFixed(4)}</td>
+                  </tr>
+                ))}
+                {data.byMonth.length === 0 && <tr><td colSpan={5} className="text-center p-2 text-muted-foreground">—</td></tr>}
+              </tbody>
+            </table>
+          </div>
           <div className="bg-card border border-border rounded-lg p-4">
             <p className="text-sm font-semibold mb-2">Daily cost</p>
             <table className="w-full text-xs">

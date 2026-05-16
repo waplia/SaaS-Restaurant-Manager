@@ -432,9 +432,32 @@ router.get("/admin/ai/reports/cost", async (req: Request, res: Response) => {
     tokens: sql<number>`coalesce(sum(${aiRequestLogsTable.totalTokens}), 0)::int`,
     costUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}), 0)::text`,
     failed: sql<number>`count(*) filter (where ${aiRequestLogsTable.status} <> 'success')::int`,
+    failedCostUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}) filter (where ${aiRequestLogsTable.status} <> 'success'), 0)::text`,
   }).from(aiRequestLogsTable)
     .where(gte(aiRequestLogsTable.createdAt, since))
     .groupBy(aiRequestLogsTable.providerSlug);
+
+  const byModality = await db.select({
+    modality: aiRequestLogsTable.modality,
+    requests: sql<number>`count(*)::int`,
+    costUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}), 0)::text`,
+    failed: sql<number>`count(*) filter (where ${aiRequestLogsTable.status} <> 'success')::int`,
+    failedCostUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}) filter (where ${aiRequestLogsTable.status} <> 'success'), 0)::text`,
+  }).from(aiRequestLogsTable)
+    .where(gte(aiRequestLogsTable.createdAt, since))
+    .groupBy(aiRequestLogsTable.modality);
+
+  const byMonth = await db.select({
+    month: sql<string>`to_char(date_trunc('month', ${aiRequestLogsTable.createdAt}), 'YYYY-MM')`,
+    requests: sql<number>`count(*)::int`,
+    tokens: sql<number>`coalesce(sum(${aiRequestLogsTable.totalTokens}), 0)::int`,
+    costUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}), 0)::text`,
+    imageCostUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}) filter (where ${aiRequestLogsTable.modality} = 'image'), 0)::text`,
+    failedCostUsd: sql<string>`coalesce(sum(${aiRequestLogsTable.costUsd}) filter (where ${aiRequestLogsTable.status} <> 'success'), 0)::text`,
+  }).from(aiRequestLogsTable)
+    .where(gte(aiRequestLogsTable.createdAt, since))
+    .groupBy(sql`date_trunc('month', ${aiRequestLogsTable.createdAt})`)
+    .orderBy(sql`date_trunc('month', ${aiRequestLogsTable.createdAt})`);
 
   const byFeature = await db.select({
     featureSlug: aiRequestLogsTable.featureSlug,
@@ -465,7 +488,7 @@ router.get("/admin/ai/reports/cost", async (req: Request, res: Response) => {
     .groupBy(sql`date_trunc('day', ${aiRequestLogsTable.createdAt})`)
     .orderBy(sql`date_trunc('day', ${aiRequestLogsTable.createdAt})`);
 
-  res.json({ days, byProvider, byFeature, byRestaurant, byDay });
+  res.json({ days, byProvider, byFeature, byRestaurant, byDay, byMonth, byModality });
 });
 
 // ─── Dashboard Summary ───────────────────────────────────────────────────────

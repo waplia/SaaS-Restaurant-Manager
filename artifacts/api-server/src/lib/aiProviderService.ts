@@ -610,6 +610,27 @@ export class AIProviderService {
       const { generateImage } = await import("@workspace/integrations-gemini-ai/image");
       return generateImage(req.prompt);
     };
+    const runGeminiWithAdminKey = async (provider: ProviderRow, model: string): Promise<{ b64_json: string; mimeType: string }> => {
+      if (!provider.apiKey) {
+        // No admin key — only fall through to env helper if explicitly opted in
+        if ((provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy) {
+          return runDefaultGemini();
+        }
+        throw new Error(`Gemini provider ${provider.slug} has no API key`);
+      }
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey: provider.apiKey });
+      const result = await ai.models.generateContent({
+        model: model || "gemini-2.5-flash-image",
+        contents: [{ role: "user", parts: [{ text: req.prompt }] }],
+      });
+      const parts = result.candidates?.[0]?.content?.parts ?? [];
+      const inline = parts.find((p) => "inlineData" in p && p.inlineData);
+      if (!inline || !("inlineData" in inline) || !inline.inlineData) {
+        throw new Error("Gemini returned no image data");
+      }
+      return { b64_json: inline.inlineData.data ?? "", mimeType: inline.inlineData.mimeType ?? "image/png" };
+    };
     const callImage = async (provider: ProviderRow | null): Promise<{ b64_json: string; mimeType: string; providerSlug: string; model: string }> => {
       if (!provider) {
         const out = await runDefaultGemini();
@@ -617,7 +638,7 @@ export class AIProviderService {
       }
       switch (provider.kind) {
         case "gemini": {
-          const out = await runDefaultGemini();
+          const out = await runGeminiWithAdminKey(provider, primaryModel);
           return { ...out, providerSlug: provider.slug, model: primaryModel };
         }
         case "stability": {
