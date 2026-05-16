@@ -59,6 +59,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
       { kind: "link", href: "/wallets", label: "Wallet & Gift Cards", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/settlements", label: "Settlements & Recon", icon: TrendingUp, roles: ["owner", "manager", "cashier"] },
+      { kind: "link", href: "/aggregator-payouts", label: "Aggregator Payouts", icon: Truck, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/capital", label: "Capital & Insurance", icon: Banknote, roles: ["owner", "manager"] },
     ],
   },

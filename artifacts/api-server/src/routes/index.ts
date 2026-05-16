@@ -71,6 +71,7 @@ import tokensRouter from "./tokens";
 import sopTrainingRouter from "./sop-training";
 import complianceRouter from "./compliance";
 import eventsRouter from "./events";
+import aggregatorPayoutsRouter from "./aggregator-payouts";
 
 const router: IRouter = Router();
 
@@ -160,5 +161,6 @@ router.use(healthScoresRouter);
 router.use(sopTrainingRouter);
 router.use(complianceRouter);
 router.use(eventsRouter);
+router.use(aggregatorPayoutsRouter);
 
 export default router;

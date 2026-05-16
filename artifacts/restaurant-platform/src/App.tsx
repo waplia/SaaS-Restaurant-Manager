@@ -87,6 +87,7 @@ import GrowthEnginePage from "@/pages/growth-engine";
 import DocumentsPage from "@/pages/documents";
 import WalletsPage from "@/pages/wallets";
 import SettlementReconPage from "@/pages/settlement-recon";
+import AggregatorReconPage from "@/pages/aggregator-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
 import AdminFintechPage from "@/pages/admin-fintech";
 import HealthScorePage from "@/pages/health-score";
@@ -186,6 +187,7 @@ function Router() {
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
       <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />
+      <Route path="/aggregator-payouts" component={() => <RoleProtectedRoute component={AggregatorReconPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/capital" component={() => <RoleProtectedRoute component={CapitalInsurancePage} allow={["owner", "manager"]} />} />
       <Route path="/admin/fintech" component={() => <SuperAdminRoute component={AdminFintechPage} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />

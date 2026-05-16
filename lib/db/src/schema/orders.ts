@@ -30,6 +30,10 @@ export const ordersTable = pgTable("orders", {
   stripePaymentId: text("stripe_payment_id"),
   couponCode: text("coupon_code"),
   loyaltyPointsRedeemed: integer("loyalty_points_redeemed").notNull().default(0),
+  // Delivery aggregator tagging (Task #148): which aggregator the order
+  // came through and the external id we'll match payout-sheet rows on.
+  aggregatorName: text("aggregator_name"),
+  aggregatorOrderId: text("aggregator_order_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
