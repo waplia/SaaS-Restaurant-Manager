@@ -88,6 +88,8 @@ import SettlementReconPage from "@/pages/settlement-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
 import AdminFintechPage from "@/pages/admin-fintech";
 import HealthScorePage from "@/pages/health-score";
+import SopTrainingPage from "@/pages/sop-training";
+import MyTrainingPage from "@/pages/my-training";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -151,6 +153,8 @@ function Router() {
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
+      <Route path="/sop-training" component={() => <RoleProtectedRoute component={SopTrainingPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/my-training" component={() => <ProtectedRoute component={MyTrainingPage} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
       <Route path="/admin/addons" component={() => <SuperAdminRoute component={AdminAddonsPage} />} />

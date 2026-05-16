@@ -68,6 +68,7 @@ import documentsRouter from "./documents";
 import devicesRouter from "./devices";
 import healthScoresRouter from "./health-scores";
 import tokensRouter from "./tokens";
+import sopTrainingRouter from "./sop-training";
 
 const router: IRouter = Router();
 
@@ -154,5 +155,6 @@ router.use(fintechRouter);
 router.use(documentsRouter);
 router.use(devicesRouter);
 router.use(healthScoresRouter);
+router.use(sopTrainingRouter);
 
 export default router;

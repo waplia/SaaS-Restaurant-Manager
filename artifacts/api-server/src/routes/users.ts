@@ -73,6 +73,10 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), async (req
 
   const passwordHash = await hashPassword(password);
   const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning(userFields);
+  if (tenantId) {
+    const { autoAssignTrainingForNewStaff } = await import("./sop-training");
+    autoAssignTrainingForNewStaff({ tenantId, userId: user.id, role: user.role }).catch(() => {});
+  }
   await recordAuditLog({
     req, module: "users", action: "user.create", entity: "user", entityId: user.id,
     targetRestaurantId: restaurantId ?? null,

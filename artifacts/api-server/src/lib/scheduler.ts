@@ -423,6 +423,16 @@ export function startScheduler(): void {
     }
   });
 
+  registerCron("sop_training_expiry", "0 2 * * *", "Daily SOP & Training certificate expiry sweep at 02:00 IST");
+  trackCron("sop_training_expiry", "0 2 * * *", async () => {
+    try {
+      const { runSopTrainingExpiryTick } = await import("../routes/sop-training");
+      await runSopTrainingExpiryTick();
+    } catch (err) {
+      logger.error({ err }, "SOP & Training expiry tick failed");
+    }
+  });
+
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
 }
 
