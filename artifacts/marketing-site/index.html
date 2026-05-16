@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
     <title>KhanaLagao — Restaurant OS by Waplia Digital Solutions</title>
     <meta name="description" content="KhanaLagao is the complete restaurant operating system by Waplia Digital Solutions — POS, QR menu, kitchen display, inventory, staff, finance, growth and Khana AI in one platform. Built for restaurants, cafes, cloud kitchens, hotels and chains." />
-    <meta name="robots" content="index, follow" />
+    <meta id="robots-meta" name="robots" content="index, follow" />
+    <script>
+      (function () {
+        try {
+          var h = (location.hostname || "").toLowerCase();
+          if (/(^|\.)replit\.(app|dev)$/.test(h) || /(^|\.)repl\.co$/.test(h)) {
+            var m = document.getElementById("robots-meta");
+            if (m) m.setAttribute("content", "noindex, nofollow, noarchive");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="theme-color" content="#FF6B1A" />
     <meta name="author" content="Waplia Digital Solutions" />
     <meta property="og:title" content="KhanaLagao — Restaurant OS by Waplia Digital Solutions" />
