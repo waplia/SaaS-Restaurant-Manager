@@ -49,6 +49,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "discounts_promotions",  label: "Discounts & promotions",      description: "Coupon codes, happy-hour pricing, and combo offers.",       category: "growth",     defaultValue: false },
   { key: "ai_menu_drafts",        label: "AI menu drafts",              description: "Generate menu descriptions and translations with AI.",      category: "growth",     defaultValue: false },
   { key: "khana_ai_enabled",      label: "Khana AI module",             description: "Unlocks the full Khana AI module (descriptions, food photos, usage dashboard).", category: "growth", defaultValue: false },
+  { key: "khana_ai_insights_enabled", label: "AI Sales Insights",       description: "Daily AI-generated insights about sales trends, best-sellers, low-margin items and offer ideas.", category: "growth", defaultValue: false },
   { key: "advanced_reports",      label: "Advanced reports",            description: "Custom date ranges, exports, and per-staff analytics.",     category: "growth",     defaultValue: false },
   { key: "custom_domain",         label: "Custom domain",               description: "Run the customer ordering page on your own domain.",        category: "platform",   defaultValue: false },
   { key: "api_access",            label: "API access",                  description: "Programmatic access to your data via REST API.",            category: "platform",   defaultValue: false },
@@ -108,3 +109,45 @@ export function formatQuantity(
 }
 
 export const PLAN_BOOLEAN_FEATURE_KEYS: readonly string[] = PLAN_BOOLEAN_FEATURES.map((f) => f.key);
+
+/**
+ * Numeric settings catalogue. Stored alongside boolean flags inside
+ * `subscription_plans.feature_flags` (jsonb). Used for per-plan numeric tunables
+ * that don't deserve their own column (e.g. daily free quotas).
+ */
+export interface PlanNumericFeature {
+  key: string;
+  label: string;
+  description: string;
+  category: PlanFeatureCategory;
+  defaultValue: number;
+  min: number;
+  max: number;
+  unit: string;
+}
+
+export const PLAN_NUMERIC_FEATURES: PlanNumericFeature[] = [
+  {
+    key: "khana_ai_insights_free_daily",
+    label: "Free AI Sales Insights / day",
+    description: "How many AI Sales Insight generations are free per day before credits are used.",
+    category: "growth",
+    defaultValue: 1,
+    min: 0,
+    max: 50,
+    unit: "per day",
+  },
+];
+
+/** Read a numeric setting from a plan's stored featureFlags map. */
+export function getFeatureNumber(
+  flags: Record<string, unknown> | null | undefined,
+  key: string,
+): number {
+  const def = PLAN_NUMERIC_FEATURES.find((f) => f.key === key)?.defaultValue ?? 0;
+  if (!flags || typeof flags !== "object") return def;
+  const v = (flags as Record<string, unknown>)[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
+  return def;
+}

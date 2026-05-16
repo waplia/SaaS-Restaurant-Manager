@@ -100,6 +100,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "ai_sales_insights",
+    featureLabel: "AI Sales Insights",
+    description: "Generate a fresh batch of daily sales insights (trends, best-sellers, low-margin items, peak times, suggested offers, retention).",
+    creditsPerUnit: "5",
+    minCharge: 5,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

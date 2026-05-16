@@ -34,3 +34,4 @@ export * from "./restaurant-ai-settings";
 export * from "./reviews";
 export * from "./ai-khana-ops";
 export * from "./ai-upsell";
+export * from "./ai-sales-insights";

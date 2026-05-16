@@ -57,6 +57,7 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
   // feature flag — same key the backend routes enforce — so the sidebar
   // and pages have a single, consistent source of truth.
   const planKhanaAiEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "khana_ai_enabled");
+  const planKhanaAiInsightsEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "khana_ai_insights_enabled");
   const wallet = await getOrCreateWallet(tenantId);
   const b = summarizeWallet(wallet);
   const transactions = await listTransactions(wallet.id, 25);
@@ -72,6 +73,7 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
     purchasedExpiresAt: b.purchasedExpiresAt,
     planAiEnabled: planKhanaAiEnabled,
     planKhanaAiEnabled,
+    planKhanaAiInsightsEnabled,
     planMonthlyIncluded: tenant?.planMonthlyIncluded ?? 0,
     transactions,
   });

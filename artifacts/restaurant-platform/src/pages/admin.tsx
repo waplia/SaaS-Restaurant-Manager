@@ -33,7 +33,8 @@ import {
 import { ImageUploadField } from "@/components/ImageUploadField";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES, PLAN_FEATURE_CATEGORIES,
-  defaultFeatureFlags, isFeatureEnabled,
+  PLAN_NUMERIC_FEATURES,
+  defaultFeatureFlags, isFeatureEnabled, getFeatureNumber,
 } from "@workspace/db/planFeatures";
 
 interface Tenant {
@@ -354,11 +355,16 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
   const [featuresText, setFeaturesText] = useState((plan?.features ?? []).join("\n"));
   // Boolean feature flags — initialise from existing plan, falling back to the
   // catalogue defaults so plans that pre-date a flag still render sensibly.
-  const [flags, setFlags] = useState<Record<string, boolean>>(() => {
+  const [flags, setFlags] = useState<Record<string, boolean | number>>(() => {
     const seed = plan?.featureFlags && typeof plan.featureFlags === "object" ? plan.featureFlags : {};
-    const out: Record<string, boolean> = { ...defaultFeatureFlags() };
+    const out: Record<string, boolean | number> = { ...defaultFeatureFlags() };
     for (const k of Object.keys(seed)) {
-      if (typeof (seed as Record<string, unknown>)[k] === "boolean") out[k] = Boolean((seed as Record<string, unknown>)[k]);
+      const v = (seed as Record<string, unknown>)[k];
+      if (typeof v === "boolean" || typeof v === "number") out[k] = v;
+    }
+    // Seed numeric defaults for any missing numeric features.
+    for (const nf of PLAN_NUMERIC_FEATURES) {
+      if (typeof out[nf.key] !== "number") out[nf.key] = getFeatureNumber(seed as Record<string, unknown>, nf.key);
     }
     return out;
   });
@@ -366,6 +372,7 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
   const isEdit = !!plan;
 
   const setFlag = (key: string, val: boolean) => setFlags(prev => ({ ...prev, [key]: val }));
+  const setNumericFlag = (key: string, val: number) => setFlags(prev => ({ ...prev, [key]: val }));
   const setQty = (key: keyof Plan, val: number) =>
     setForm(prev => ({ ...prev, [key]: val }) as typeof prev);
 
@@ -473,7 +480,7 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
                       <input
                         type="checkbox"
                         className="mt-0.5 h-4 w-4 accent-primary"
-                        checked={flags[feat.key] ?? false}
+                        checked={Boolean(flags[feat.key])}
                         onChange={e => setFlag(feat.key, e.target.checked)}
                       />
                       <span>
@@ -488,6 +495,30 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
           })}
         </div>
       </div>
+
+      {/* ─── Numeric feature settings ──────────────────────────────── */}
+      {PLAN_NUMERIC_FEATURES.length > 0 && (
+        <div className="mt-5 rounded-md border border-border/60 bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Feature limits</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PLAN_NUMERIC_FEATURES.map(nf => (
+              <Field key={nf.key} label={nf.label} hint={nf.description}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={nf.min}
+                    max={nf.max}
+                    className={inputCls}
+                    value={Number(flags[nf.key] ?? nf.defaultValue)}
+                    onChange={e => setNumericFlag(nf.key, Math.max(nf.min, Math.min(nf.max, Number(e.target.value) || 0)))}
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{nf.unit}</span>
+                </div>
+              </Field>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ─── Khana AI ────────────────────────────────────────────── */}
       <div className="mt-5 rounded-md border border-border/60 bg-muted/20 p-3">

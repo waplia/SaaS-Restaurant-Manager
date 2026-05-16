@@ -17,8 +17,9 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
-type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: "ai" };
-type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: "ai" };
+type PlanGate = "ai" | "ai_insights";
+type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: PlanGate };
+type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: PlanGate };
 type NavEntry = LinkItem | GroupItem;
 
 const navConfig: NavEntry[] = [
@@ -63,6 +64,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/ai/review-replies", label: "AI Review Replies", icon: FileText, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/feedback-recovery", label: "Feedback Recovery", icon: AlertTriangle, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/upsell", label: "Upsell Engine", icon: TrendingUp, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/insights", label: "AI Sales Insights", icon: TrendingUp, roles: ["owner", "manager"], planGate: "ai_insights" },
       { kind: "link", href: "/ai/usage", label: "AI Usage & Credits", icon: Coins, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/settings", label: "AI Settings", icon: Settings, roles: ["owner", "manager"] },
     ],
@@ -121,13 +123,14 @@ export function Sidebar() {
   const newLeadsCount = leadStats?.byStatus.find(s => s.status === "new")?.count ?? 0;
 
   // Plan-gate the Khana AI group on plan.aiEnabled (exposed via /ai/wallet).
-  const { data: aiWallet } = useQuery<{ planAiEnabled: boolean }>({
+  const { data: aiWallet } = useQuery<{ planAiEnabled: boolean; planKhanaAiInsightsEnabled?: boolean }>({
     queryKey: ["ai-wallet"],
     queryFn: () => apiFetch("/ai/wallet"),
     enabled: !!user && (user.isSuperAdmin || ["owner", "manager"].includes(user.role ?? "")),
     staleTime: 60_000,
   });
   const aiPlanEnabled = aiWallet?.planAiEnabled ?? false;
+  const aiInsightsEnabled = aiWallet?.planKhanaAiInsightsEnabled ?? false;
 
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
@@ -139,22 +142,31 @@ export function Sidebar() {
     return user?.role ? item.roles.includes(user.role) : false;
   };
 
-  // Filter children inside groups by role; drop groups that have no visible children.
+  const passesPlanGate = (gate: PlanGate | undefined) => {
+    if (!gate) return true;
+    if (user?.isSuperAdmin) return true;
+    if (gate === "ai") return aiPlanEnabled;
+    if (gate === "ai_insights") return aiPlanEnabled && aiInsightsEnabled;
+    return true;
+  };
+
+  // Filter children inside groups by role + plan-gate; drop groups that have no
+  // visible children.
   const visibleEntries: NavEntry[] = useMemo(() => {
     const out: NavEntry[] = [];
     for (const e of navConfig) {
       if (e.kind === "link") {
-        if (e.planGate === "ai" && !aiPlanEnabled && !user?.isSuperAdmin) continue;
+        if (!passesPlanGate(e.planGate)) continue;
         if (canSee(e)) out.push(e);
       } else {
-        if (e.planGate === "ai" && !aiPlanEnabled && !user?.isSuperAdmin) continue;
-        const visibleChildren = e.children.filter(canSee);
+        if (!passesPlanGate(e.planGate)) continue;
+        const visibleChildren = e.children.filter((c) => canSee(c) && passesPlanGate(c.planGate));
         if (visibleChildren.length > 0) out.push({ ...e, children: visibleChildren });
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
 

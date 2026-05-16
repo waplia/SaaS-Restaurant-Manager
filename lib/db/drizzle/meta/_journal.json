@@ -78,6 +78,13 @@
       "when": 1778920000000,
       "tag": "0010_review_qr_session_token",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778921218827,
+      "tag": "0011_ai_sales_insights",
+      "breakpoints": true
     }
   ]
 }
