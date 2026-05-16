@@ -11,8 +11,8 @@ function NativeOwnerTabs() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Dashboard</Label>
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="orders">
         <Icon sf={{ default: "list.bullet.rectangle", selected: "list.bullet.rectangle.fill" }} />
@@ -22,13 +22,13 @@ function NativeOwnerTabs() {
         <Icon sf={{ default: "flame", selected: "flame.fill" }} />
         <Label>Kitchen</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="expenses">
-        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
-        <Label>Expenses</Label>
+      <NativeTabs.Trigger name="alerts">
+        <Icon sf={{ default: "bell", selected: "bell.fill" }} />
+        <Label>Alerts</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
-        <Label>Profile</Label>
+      <NativeTabs.Trigger name="more">
+        <Icon sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -63,46 +63,35 @@ function ClassicOwnerTabs() {
           ) : null,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="chart.bar.fill" tintColor={color} size={22} /> : <Feather name="bar-chart-2" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          title: "Orders",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="list.bullet.rectangle.fill" tintColor={color} size={22} /> : <Feather name="list" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="kitchen"
-        options={{
-          title: "Kitchen",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="flame.fill" tintColor={color} size={22} /> : <Feather name="activity" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="expenses"
-        options={{
-          title: "Expenses",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="creditcard.fill" tintColor={color} size={22} /> : <Feather name="credit-card" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="person.circle.fill" tintColor={color} size={22} /> : <Feather name="user" size={22} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: ({ color }) => isIOS ? <SymbolView name="house.fill" tintColor={color} size={22} /> : <Feather name="home" size={22} color={color} /> }} />
+      <Tabs.Screen name="orders" options={{ title: "Orders", tabBarIcon: ({ color }) => isIOS ? <SymbolView name="list.bullet.rectangle.fill" tintColor={color} size={22} /> : <Feather name="list" size={22} color={color} /> }} />
+      <Tabs.Screen name="kitchen" options={{ title: "Kitchen", tabBarIcon: ({ color }) => isIOS ? <SymbolView name="flame.fill" tintColor={color} size={22} /> : <Feather name="activity" size={22} color={color} /> }} />
+      <Tabs.Screen name="alerts" options={{ title: "Alerts", tabBarIcon: ({ color }) => isIOS ? <SymbolView name="bell.fill" tintColor={color} size={22} /> : <Feather name="bell" size={22} color={color} /> }} />
+      <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: ({ color }) => isIOS ? <SymbolView name="ellipsis.circle.fill" tintColor={color} size={22} /> : <Feather name="more-horizontal" size={22} color={color} /> }} />
+
+      {/* Module screens accessible via the More menu — hidden from the tab bar. */}
+      <Tabs.Screen name="expenses" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="approvals" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
+      <Tabs.Screen name="outlets" options={{ href: null }} />
+      <Tabs.Screen name="tables" options={{ href: null }} />
+      <Tabs.Screen name="reservations" options={{ href: null }} />
+      <Tabs.Screen name="waiter-requests" options={{ href: null }} />
+      <Tabs.Screen name="delivery" options={{ href: null }} />
+      <Tabs.Screen name="inventory" options={{ href: null }} />
+      <Tabs.Screen name="menu" options={{ href: null }} />
+      <Tabs.Screen name="staff" options={{ href: null }} />
+      <Tabs.Screen name="attendance" options={{ href: null }} />
+      <Tabs.Screen name="customers" options={{ href: null }} />
+      <Tabs.Screen name="feedback" options={{ href: null }} />
+      <Tabs.Screen name="growth" options={{ href: null }} />
+      <Tabs.Screen name="khana-ai" options={{ href: null }} />
+      <Tabs.Screen name="khana-ai-chat" options={{ href: null }} />
+      <Tabs.Screen name="finance" options={{ href: null }} />
+      <Tabs.Screen name="reports" options={{ href: null }} />
+      <Tabs.Screen name="support" options={{ href: null }} />
     </Tabs>
   );
 }
