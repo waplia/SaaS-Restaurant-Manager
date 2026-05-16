@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { CheckCircle2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -31,8 +32,9 @@ const formSchema = z.object({
 
 type LeadFormValues = z.infer<typeof formSchema>;
 
-export function LeadForm({ source, buttonText = "Submit", showMessage = false, showDetails = false }: { source: string, buttonText?: string, showMessage?: boolean, showDetails?: boolean }) {
+export function LeadForm({ source, buttonText = "Submit", showMessage = false, showDetails = false, redirectTo = "/thank-you" }: { source: string, buttonText?: string, showMessage?: boolean, showDetails?: boolean, redirectTo?: string | null }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isSuccess, setIsSuccess] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
@@ -74,12 +76,15 @@ export function LeadForm({ source, buttonText = "Submit", showMessage = false, s
       });
 
       if (!response.ok) throw new Error("Failed to submit");
-      
+
       setIsSuccess(true);
       toast({
-        title: "Success",
-        description: "We've received your information and will be in touch shortly.",
+        title: "Thanks — we got it!",
+        description: "We've received your details and will be in touch shortly.",
       });
+      if (redirectTo) {
+        setTimeout(() => setLocation(redirectTo), 350);
+      }
     } catch (error) {
       toast({
         title: "Error",

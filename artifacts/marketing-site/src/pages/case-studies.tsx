@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { CTASection } from "@/components/shared/CTASection";
 import { useSeo } from "@/lib/seo";
-import { Award, ArrowRight, TrendingUp, Coffee, ChefHat, Hotel, Cake, Building2, Sparkles } from "lucide-react";
+import { ArrowRight, TrendingUp, Coffee, ChefHat, Hotel, Cake, Building2, Sparkles } from "lucide-react";
 
 const STORIES = [
   {
@@ -48,8 +48,6 @@ const STORIES = [
     metrics: [{ k: "2×", v: "repeat visits" }, { k: "+1.2", v: "Google rating delta" }, { k: "92%", v: "feedback response" }],
   },
 ];
-
-const ICONS = [Award, Coffee, ChefHat, Hotel, Cake, Building2, TrendingUp];
 
 export default function CaseStudies() {
   useSeo({

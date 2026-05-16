@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { COMPANY } from "@/lib/company";
 
 export interface PublicAppSettings {
   appName: string;
@@ -25,15 +26,15 @@ export interface PublicAppSettings {
 }
 
 const DEFAULTS: PublicAppSettings = {
-  appName: "KhanaLagao",
+  appName: COMPANY.product,
   logoUrl: "/logo.png",
   faviconUrl: "/favicon.png",
   primaryColor: "#FF6B1A",
   secondaryColor: "#E85A0C",
-  supportEmail: "support@khanalagao.com",
-  supportPhone: "+91 8306020200",
-  supportWhatsapp: "918306020200",
-  companyAddress: "Malviya Nagar, Jaipur, Rajasthan, India",
+  supportEmail: COMPANY.supportEmail,
+  supportPhone: COMPANY.phoneDisplay,
+  supportWhatsapp: COMPANY.whatsappNumber,
+  companyAddress: COMPANY.fullAddress,
   defaultCurrency: "INR", defaultTimezone: "Asia/Kolkata",
   dateFormat: "DD/MM/YYYY", timeFormat: "12h",
   footerText: null, socialLinks: {},

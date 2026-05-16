@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAppSettings } from "@/lib/appSettings";
 import { FOOTER_COLUMNS } from "@/lib/navigation";
 import { COMPANY, LEGAL_LINKS } from "@/lib/company";
@@ -17,6 +17,7 @@ export function Footer() {
   const socialEntries = Object.entries(settings.socialLinks ?? {}).filter(([, v]) => !!v);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [, setLocation] = useLocation();
 
   const subscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +37,7 @@ export function Footer() {
       });
       if (!res.ok) throw new Error("failed");
       setStatus("ok"); setEmail("");
+      setTimeout(() => setLocation("/thank-you"), 350);
     } catch {
       setStatus("err");
     }

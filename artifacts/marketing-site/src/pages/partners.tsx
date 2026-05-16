@@ -3,26 +3,44 @@ import { LeadForm } from "@/components/LeadForm";
 import { CTASection } from "@/components/shared/CTASection";
 import { useSeo } from "@/lib/seo";
 import { COMPANY } from "@/lib/company";
-import { Handshake, Plug, BookOpen, Users, IndianRupee, Award, Sparkles, ArrowRight } from "lucide-react";
+import { Handshake, Plug, BookOpen, Users, IndianRupee, Award, Sparkles, ArrowRight, Cpu, Megaphone, GraduationCap } from "lucide-react";
 
 const TRACKS = [
   {
     icon: Handshake,
-    title: "Resellers & Implementation",
-    body: "Sell, onboard and support KhanaLagao in your city. Earn recurring commissions and unlock co-marketing.",
-    perks: ["Recurring revenue share", "Dedicated onboarding support", "Co-branded marketing assets", "Lead routing in your region"],
+    title: "Reseller Partners",
+    body: "Sell KhanaLagao in your city or region. Own the customer relationship and earn recurring commissions for the lifetime of the account.",
+    perks: ["Lifetime recurring revenue share", "Protected territory leads", "Co-branded sales decks", "Dedicated partner manager"],
+  },
+  {
+    icon: GraduationCap,
+    title: "Implementation Partners",
+    body: "Get certified on KhanaLagao and run onboarding, training and migration for new and existing customers.",
+    perks: ["Free certification program", "Implementation playbooks", "Customer hand-off from our sales team", "Hourly + per-outlet payouts"],
   },
   {
     icon: Plug,
-    title: "Integration Partners",
-    body: "Build on the KhanaLagao Marketplace — aggregators, payments, accounting, hardware, loyalty and more.",
-    perks: ["Public marketplace listing", "Stable APIs & webhooks", "Joint go-to-market", "Customer co-selling"],
+    title: "Technology / Integration Partners",
+    body: "Build on the KhanaLagao Marketplace — aggregators, payments, accounting, hardware, loyalty, BI and more.",
+    perks: ["Public marketplace listing", "Stable APIs, webhooks & sandbox", "Joint go-to-market campaigns", "Customer co-selling"],
+  },
+  {
+    icon: Cpu,
+    title: "Hardware Partners",
+    body: "Certify your POS terminals, printers, scanners, KDS screens and IoT devices as KhanaLagao-Ready and reach our entire customer base.",
+    perks: ["KhanaLagao-Ready certification", "Listing on marketplace", "Bulk order pipelines", "Engineering support for drivers"],
   },
   {
     icon: Award,
     title: "Hospitality Consultants",
     body: "Refer KhanaLagao to your clients and add a modern restaurant OS to your consulting toolkit.",
     perks: ["Referral commissions", "Priority demo slots", "Free sandbox accounts", "Direct line to product team"],
+  },
+  {
+    icon: Megaphone,
+    title: "Affiliates & Influencers",
+    body: "Operators, content creators and community leaders — share KhanaLagao with your audience and earn per qualified signup.",
+    perks: ["Trackable referral links", "One-time + recurring payouts", "Ready-made creative kit", "Performance dashboard"],
   },
 ];
 
@@ -56,7 +74,7 @@ export default function Partners() {
 
       <section className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {TRACKS.map((t) => (
               <div key={t.title} className="rounded-2xl border border-border bg-card p-7 flex flex-col">
                 <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">
