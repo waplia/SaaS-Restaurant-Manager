@@ -26,6 +26,10 @@ export interface JwtPayload {
   tenantId: number | null;
   restaurantId: number | null;
   isSuperAdmin: boolean;
+  /** Token-version stamp at issue time. Re-checked in `authenticate` so the
+   * server can invalidate every existing JWT for a user by bumping
+   * `users.tokenVersion` (logout-everywhere / password change / force revoke). */
+  tv?: number;
   type: "access" | "refresh";
   impersonated?: boolean;
 }

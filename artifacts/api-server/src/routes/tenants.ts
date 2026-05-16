@@ -415,6 +415,11 @@ router.post("/tenants/:id/impersonate", requireSuperAdmin, async (req, res) => {
   const token = signImpersonationToken({
     sub: owner.id, email: owner.email, role: owner.role,
     tenantId: owner.tenantId, restaurantId: owner.restaurantId, isSuperAdmin: false,
+    // Must carry the owner's current tokenVersion so the authenticate
+    // middleware (post-task-#279) accepts the impersonation session and
+    // so a tenant who logs everyone out also kicks any active super-admin
+    // impersonation session for their tenant.
+    tv: owner.tokenVersion,
   });
   logger.warn({ superAdminId: req.user?.sub, tenantId, ownerId: owner.id }, "super_admin.impersonate");
   await recordAuditLog({

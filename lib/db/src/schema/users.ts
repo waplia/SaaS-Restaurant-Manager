@@ -17,6 +17,11 @@ export const usersTable = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
+  // Bumped whenever the user logs out everywhere, changes/reset their
+  // password, or the platform force-revokes sessions. The current value is
+  // embedded in every issued JWT and re-checked in the auth middleware so
+  // old tokens stop working immediately when this number changes.
+  tokenVersion: integer("token_version").notNull().default(0),
   pushToken: text("push_token"),
   kitchenId: integer("kitchen_id"),
   notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
