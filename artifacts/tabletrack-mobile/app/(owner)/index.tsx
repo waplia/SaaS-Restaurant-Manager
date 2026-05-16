@@ -1,102 +1,666 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Platform,
+  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform, Alert, Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  customFetch,
   getDashboardSummary, getGetDashboardSummaryQueryKey,
-  listOrders, getListOrdersQueryKey,
+  getRevenueTrend, getGetRevenueTrendQueryKey,
+  listOrders,
+  listInventoryItems, getListInventoryItemsQueryKey,
+  listAttendance, getListAttendanceQueryKey,
+} from "@workspace/api-client-react";
+import type {
+  DashboardSummary, Order, InventoryItem, AttendanceRecord,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
-import { StatCard } from "@/components/StatCard";
-import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
-import type { DashboardSummary, Order } from "@workspace/api-client-react";
+import { MetricCard, PlaceholderCard } from "@/components/MetricCard";
+import { MiniBarChart } from "@/components/MiniBarChart";
+
+type CashSession = {
+  session: { id: number; status: string; openingFloat?: string; openedByName?: string | null } | null;
+  totals: { expectedCash?: string; countedCash?: string; variance?: string } | null;
+};
+type FraudAlertItem = { id: number; severity?: "high" | "medium" | "low"; status?: string };
+type FraudListResp = FraudAlertItem[] | { alerts?: FraudAlertItem[]; data?: FraudAlertItem[] };
+type ReviewItem = { id: number; rating?: number; createdAt?: string };
+type ReviewsResp = ReviewItem[] | { reviews?: ReviewItem[]; data?: ReviewItem[] };
+type Ticket = { id: number; status?: string; createdAt?: string };
+type TicketsResp = Ticket[] | { tickets?: Ticket[]; data?: Ticket[] };
+type TenantBranch = { id: number; name: string; city?: string | null; isActive?: boolean };
+type CompareBranchRow = {
+  restaurantId: number; name: string;
+  revenue: string; orders: number; avgOrderValue: string;
+  expenses?: string | null; netProfit?: string | null;
+  deltaPct?: number;
+};
+type CompareResp = { branches: CompareBranchRow[] };
+
+// Owner/manager dashboard. super_admin is also routed here by app/index.tsx
+// (they fall through to the owner stack), so include them here to avoid a
+// redirect loop between "/" and "/(owner)".
+const ALLOWED_ROLES = new Set(["owner", "manager", "super_admin"]);
+type SortKey = "revenue" | "orders" | "name";
 
 export default function OwnerDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const { restaurantId } = useAuth();
+  const { user, restaurantId, tenantId } = useAuth();
 
-  const { data: dashboard, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: getGetDashboardSummaryQueryKey(restaurantId),
-    queryFn: () => getDashboardSummary(restaurantId),
+  const isOwner = user?.role === "owner";
+  // Owners can switch between "all outlets" and a specific outlet; managers
+  // are locked to the outlet they're assigned to (enforced server-side too).
+  const canSwitchScope = isOwner && tenantId != null;
+
+  // ---- Tenant outlet list (drives the scope selector + comparison)
+  const tenantBranchesQ = useQuery({
+    queryKey: ["tenant-branches", tenantId],
+    queryFn: () => customFetch<TenantBranch[]>(`/tenants/${tenantId}/branches`),
+    enabled: tenantId != null,
+  });
+  const tenantBranches = (tenantBranchesQ.data ?? []) as TenantBranch[];
+  const hasMultipleOutlets = tenantBranches.length > 1;
+
+  // Scope: null = all outlets (tenant-wide), number = specific restaurant id.
+  const [scopeOutletId, setScopeOutletId] = useState<number | null>(null);
+  const [outletSort, setOutletSort] = useState<SortKey>("revenue");
+
+  // For non-owners we always pin scope to the user's own restaurant.
+  const effectiveScope: number | null = canSwitchScope ? scopeOutletId : restaurantId;
+  const isAllOutlets = effectiveScope == null;
+  const restaurantScopeId = effectiveScope ?? restaurantId;
+
+  // ---- Today's KPIs — tenant or restaurant scoped depending on selection.
+  const summaryQ = useQuery({
+    queryKey: isAllOutlets
+      ? ["tenant-summary", tenantId]
+      : getGetDashboardSummaryQueryKey(restaurantScopeId),
+    queryFn: () =>
+      isAllOutlets
+        ? customFetch<DashboardSummary>(`/tenants/${tenantId}/dashboard/summary`)
+        : getDashboardSummary(restaurantScopeId),
+    enabled: !isAllOutlets || tenantId != null,
   });
 
-  const { data: ordersData } = useQuery({
-    queryKey: [...getListOrdersQueryKey(restaurantId, { status: "in_progress", limit: 5 })],
-    queryFn: () => listOrders(restaurantId, { status: "in_progress", limit: 5 }),
+  // ---- Live orders (open + in-kitchen + ready) — restaurant-scoped only.
+  // Skipped in "All outlets" mode because there is no tenant-wide live orders
+  // endpoint; we surface a placeholder card instead.
+  const liveOrdersQ = useQuery({
+    queryKey: ["live-orders", restaurantScopeId],
+    queryFn: async () => {
+      const statuses = ["pending", "in_progress", "ready"] as const;
+      const results = await Promise.all(
+        statuses.map((s) => listOrders(restaurantScopeId, { status: s, limit: 50 })),
+      );
+      const counts: Record<string, number> = { pending: 0, in_progress: 0, ready: 0 };
+      let all: Order[] = [];
+      results.forEach((r, i) => {
+        const list = (r as { data?: Order[]; total?: number });
+        const arr = list.data ?? [];
+        counts[statuses[i]] = list.total ?? arr.length;
+        all = all.concat(arr);
+      });
+      return { counts, orders: all };
+    },
+    enabled: !isAllOutlets,
+    refetchInterval: 30_000,
   });
 
-  if (isLoading) {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: 100 }} />
-      </View>
+  // ---- Revenue trend
+  const trendQ = useQuery({
+    queryKey: isAllOutlets
+      ? ["tenant-trend", tenantId]
+      : getGetRevenueTrendQueryKey(restaurantScopeId, { period: "7d" }),
+    queryFn: () =>
+      isAllOutlets
+        ? customFetch<Array<{ date: string; revenue: string }>>(
+            `/tenants/${tenantId}/dashboard/revenue-trend?period=7d`,
+          )
+        : getRevenueTrend(restaurantScopeId, { period: "7d" }),
+    enabled: !isAllOutlets || tenantId != null,
+  });
+
+  // ---- The remaining cards are restaurant-scoped (no tenant aggregate API).
+  const stockQ = useQuery({
+    queryKey: getListInventoryItemsQueryKey(restaurantScopeId, { lowStock: true }),
+    queryFn: () => listInventoryItems(restaurantScopeId, { lowStock: true }),
+    enabled: !isAllOutlets,
+  });
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const attendanceQ = useQuery({
+    queryKey: getListAttendanceQueryKey(restaurantScopeId, { date: todayStr }),
+    queryFn: () => listAttendance(restaurantScopeId, { date: todayStr }),
+    enabled: !isAllOutlets,
+  });
+
+  const cashQ = useQuery({
+    queryKey: ["cash-register-current", restaurantScopeId],
+    queryFn: () => customFetch<CashSession>(`/restaurants/${restaurantScopeId}/cash-register/current`),
+    enabled: !isAllOutlets,
+  });
+
+  const fraudQ = useQuery({
+    queryKey: ["fraud-alerts", restaurantScopeId],
+    queryFn: () => customFetch<FraudListResp>(`/restaurants/${restaurantScopeId}/fraud-alerts?status=open`),
+    enabled: !isAllOutlets,
+    refetchInterval: 30_000,
+  });
+
+  const reviewsQ = useQuery({
+    queryKey: ["reviews-feedback", restaurantScopeId],
+    queryFn: () => customFetch<ReviewsResp>(`/restaurants/${restaurantScopeId}/reviews/feedback?limit=50`),
+    enabled: !isAllOutlets,
+  });
+
+  const ticketsQ = useQuery({
+    queryKey: ["support-tickets-open", restaurantScopeId],
+    queryFn: () => customFetch<TicketsResp>(`/support/tickets?status=open&limit=50`),
+    enabled: !isAllOutlets,
+  });
+
+  // ---- Approvals: the task spec calls for pending discount/void/refund
+  // manager approvals, but the API server does not yet expose a list
+  // endpoint for those (only the per-order POST path that records into
+  // discountApprovalsTable). Per the task definition we render a clearly
+  // labeled "Not available yet" placeholder until that endpoint lands.
+
+  // ---- Outlet comparison (multi-outlet owners) — fetches today and yesterday
+  // in parallel so we can render a per-outlet day-over-day delta.
+  const compareQ = useQuery({
+    queryKey: ["compare-branches", tenantId],
+    queryFn: async () => {
+      const today = new Date();
+      const yest = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const qs = (from: Date, to: Date) =>
+        `from=${fmt(from)}T00:00:00.000Z&to=${fmt(to)}T23:59:59.999Z`;
+      const [todayResp, yestResp] = await Promise.all([
+        customFetch<CompareResp>(`/tenants/${tenantId}/dashboard/compare-branches?${qs(today, today)}`),
+        customFetch<CompareResp>(`/tenants/${tenantId}/dashboard/compare-branches?${qs(yest, yest)}`),
+      ]);
+      const yMap = new Map<number, CompareBranchRow>();
+      (yestResp.branches ?? []).forEach((r) => yMap.set(r.restaurantId, r));
+      const merged = (todayResp.branches ?? []).map((r) => {
+        const y = yMap.get(r.restaurantId);
+        const yRev = Number(y?.revenue ?? 0);
+        const tRev = Number(r.revenue ?? 0);
+        const delta = yRev > 0 ? ((tRev - yRev) / yRev) * 100 : tRev > 0 ? 100 : 0;
+        return { ...r, deltaPct: delta };
+      });
+      return { branches: merged };
+    },
+    enabled: canSwitchScope && hasMultipleOutlets,
+  });
+
+  const refreshAll = () => {
+    summaryQ.refetch(); trendQ.refetch();
+    if (!isAllOutlets) {
+      liveOrdersQ.refetch(); stockQ.refetch(); attendanceQ.refetch();
+      cashQ.refetch(); fraudQ.refetch(); reviewsQ.refetch(); ticketsQ.refetch();
+    }
+    if (tenantId != null) tenantBranchesQ.refetch();
+    if (canSwitchScope && hasMultipleOutlets) compareQ.refetch();
+  };
+
+  const isRefreshing =
+    summaryQ.isRefetching || trendQ.isRefetching || ticketsQ.isRefetching ||
+    tenantBranchesQ.isRefetching || compareQ.isRefetching ||
+    liveOrdersQ.isRefetching || stockQ.isRefetching || attendanceQ.isRefetching ||
+    cashQ.isRefetching || fraudQ.isRefetching || reviewsQ.isRefetching;
+
+  // Role gate: redirect anyone not owner/manager away.
+  React.useEffect(() => {
+    if (!user) return;
+    if (!ALLOWED_ROLES.has(user.role)) {
+      router.replace("/");
+    }
+  }, [user]);
+
+  // Tap-through helpers. Where a dedicated mobile screen exists, navigate;
+  // otherwise deep-link into the web admin app via Linking (the established
+  // pattern used throughout this app for features that aren't yet on mobile).
+  const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : "";
+  const openWeb = (path: string, label: string) => () => {
+    if (!webBaseUrl) {
+      Alert.alert(label, `${label} isn't available on mobile yet.`);
+      return;
+    }
+    Linking.openURL(`${webBaseUrl}${path}`).catch(() => {
+      Alert.alert(label, `Couldn't open ${label.toLowerCase()} on the web.`);
+    });
+  };
+  const openOrders = () => router.push("/(owner)/orders" as never);
+  const openKitchen = () => router.push("/(owner)/kitchen" as never);
+  const openExpenses = () => router.push("/(owner)/expenses" as never);
+  const openCashRegister = openWeb("/cash-register", "Cash register");
+  const openAttendance = openWeb("/staff", "Attendance");
+  const openLowStock = openWeb("/inventory", "Inventory");
+  const openApprovals = () => {
+    Alert.alert(
+      "Approvals",
+      "Discount/void/refund approvals aren't available yet — this is coming soon.",
     );
-  }
+  };
+  const openFraud = openWeb("/fraud-alerts", "Fraud alerts");
+  const openComplaints = openWeb("/review-qrs", "Complaints & reviews");
 
-  if (!dashboard) {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <EmptyState icon="alert-circle-outline" title="Could not load dashboard" message="Check your connection and try again." actionLabel="Retry" onAction={refetch} />
-      </View>
-    );
-  }
+  // ---------- Derived values ----------
+  const ds = summaryQ.data as DashboardSummary | undefined;
+  const todayRevenue = ds ? `₹${Number(ds.todayRevenue ?? 0).toLocaleString("en-IN")}` : null;
+  const revGrowth = ds ? Number(ds.revenueGrowth ?? 0) : 0;
+  const revGrowthLabel = ds
+    ? `${revGrowth >= 0 ? "▲" : "▼"} ${Math.abs(revGrowth).toFixed(1)}% vs yesterday`
+    : null;
 
-  const ds = dashboard as DashboardSummary;
-  const revenue = Number(ds.todayRevenue ?? 0).toLocaleString("en-IN");
-  const orders = ds.todayOrders ?? 0;
-  const activeTables = ds.activeTables ?? 0;
-  const pendingKitchen = ds.pendingTickets ?? 0;
+  const liveOrders = useMemo(() => {
+    const d = liveOrdersQ.data as { counts?: Record<string, number>; orders?: Order[] } | undefined;
+    const counts = d?.counts ?? { pending: 0, in_progress: 0, ready: 0 };
+    return {
+      open: counts.pending ?? 0,
+      inKitchen: counts.in_progress ?? 0,
+      ready: counts.ready ?? 0,
+      total: (counts.pending ?? 0) + (counts.in_progress ?? 0) + (counts.ready ?? 0),
+    };
+  }, [liveOrdersQ.data]);
 
-  const orderList = ((ordersData as { orders?: Order[] } | null)?.orders ?? (Array.isArray(ordersData) ? ordersData : [])) as Order[];
+  const trend = useMemo(() => {
+    const t = trendQ.data as Array<{ date: string; revenue: string }> | undefined;
+    return (t ?? []).slice(-7).map((p) => ({
+      label: new Date(p.date).toLocaleDateString(undefined, { weekday: "narrow" }),
+      value: Number(p.revenue ?? 0),
+    }));
+  }, [trendQ.data]);
+
+  const stockItems = useMemo(() => {
+    const items = (stockQ.data as { items?: InventoryItem[] } | InventoryItem[] | undefined);
+    const arr = Array.isArray(items) ? items : items?.items ?? [];
+    const low = arr.filter((i) => Number(i.currentStock ?? 0) <= Number(i.minStockLevel ?? 0));
+    const out = low.filter((i) => Number(i.currentStock ?? 0) <= 0);
+    return { all: arr, low, out };
+  }, [stockQ.data]);
+
+  const attendance = useMemo(() => {
+    const arr = (attendanceQ.data as AttendanceRecord[] | { records?: AttendanceRecord[] } | undefined);
+    const records = Array.isArray(arr) ? arr : arr?.records ?? [];
+    const present = records.filter((r) => (r as { status?: string }).status === "present" || (r as { clockIn?: string }).clockIn).length;
+    const onLeave = records.filter((r) => (r as { status?: string }).status === "on_leave").length;
+    const absent = records.filter((r) => (r as { status?: string }).status === "absent").length;
+    return { present, onLeave, absent, total: records.length };
+  }, [attendanceQ.data]);
+
+  const cash = cashQ.data as CashSession | undefined;
+  const cashOpen = !!cash?.session && cash.session.status === "open";
+
+  const fraudAlerts = useMemo(() => {
+    const d = fraudQ.data as FraudListResp | undefined;
+    const list = Array.isArray(d) ? d : (d?.alerts ?? d?.data ?? []);
+    const open = list.filter((a) => (a.status ?? "open") !== "resolved" && (a.status ?? "open") !== "dismissed");
+    return {
+      high: open.filter((a) => a.severity === "high").length,
+      medium: open.filter((a) => a.severity === "medium").length,
+      low: open.filter((a) => a.severity === "low").length,
+      total: open.length,
+    };
+  }, [fraudQ.data]);
+
+  const complaints = useMemo(() => {
+    const r = reviewsQ.data as ReviewsResp | undefined;
+    const reviews = Array.isArray(r) ? r : (r?.reviews ?? r?.data ?? []);
+    const negative = reviews.filter((x) => Number(x.rating ?? 5) <= 2).length;
+    const t = ticketsQ.data as TicketsResp | undefined;
+    const tickets = Array.isArray(t) ? t : (t?.tickets ?? t?.data ?? []);
+    const openTickets = tickets.filter((x) => (x.status ?? "open") !== "closed" && (x.status ?? "open") !== "resolved").length;
+    return { negative, openTickets };
+  }, [reviewsQ.data, ticketsQ.data]);
+
+  const outletRows = useMemo(() => {
+    const rows = (compareQ.data?.branches ?? []) as CompareBranchRow[];
+    const copy = [...rows];
+    if (outletSort === "revenue") copy.sort((a, b) => Number(b.revenue) - Number(a.revenue));
+    else if (outletSort === "orders") copy.sort((a, b) => b.orders - a.orders);
+    else copy.sort((a, b) => a.name.localeCompare(b.name));
+    return copy;
+  }, [compareQ.data, outletSort]);
+
+  const scopeLabel = isAllOutlets
+    ? "All outlets"
+    : (tenantBranches.find((b) => b.id === restaurantScopeId)?.name ?? "Outlet");
 
   return (
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: isWeb ? 67 + 16 : insets.top + 16, paddingBottom: isWeb ? 34 + 90 : insets.bottom + 90 },
+        { paddingTop: isWeb ? 67 + 12 : insets.top + 12, paddingBottom: isWeb ? 34 + 90 : insets.bottom + 90 },
       ]}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshAll} tintColor={colors.primary} />}
     >
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.mutedForeground }]}>Good {getTimeOfDay()}</Text>
-        <Text style={[styles.title, { color: colors.foreground }]}>Overview</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.greeting, { color: colors.mutedForeground }]}>
+            Good {getTimeOfDay()}{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+          </Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Today · {scopeLabel}</Text>
+        </View>
       </View>
 
-      <View style={styles.statsGrid}>
-        <StatCard label="Today's Revenue" value={`₹${revenue}`} icon={<Ionicons name="cash-outline" size={18} color={colors.primary} />} />
-        <StatCard label="Orders Today" value={String(orders)} icon={<Ionicons name="receipt-outline" size={18} color={colors.primary} />} />
-      </View>
-      <View style={styles.statsGrid}>
-        <StatCard label="Active Tables" value={String(activeTables)} icon={<Ionicons name="grid-outline" size={18} color={colors.primary} />} />
-        <StatCard label="Kitchen Queue" value={String(pendingKitchen)} sub={pendingKitchen > 5 ? "High load" : undefined} icon={<Ionicons name="flame-outline" size={18} color={colors.primary} />} />
-      </View>
-
-      {orderList.length > 0 ? (
-        <View style={[styles.section, { borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>In Progress</Text>
-          {orderList.map((o) => (
-            <View key={o.id} style={[styles.orderRow, { borderBottomColor: colors.border }]}>
-              <View>
-                <Text style={[styles.orderNum, { color: colors.foreground }]}>#{o.orderNumber}</Text>
-                <Text style={[styles.orderMeta, { color: colors.mutedForeground }]}>
-                  {((o as { items?: unknown[] }).items?.length ?? 0)} item{((o as { items?: unknown[] }).items?.length ?? 0) !== 1 ? "s" : ""}
-                </Text>
-              </View>
-              <Text style={[styles.orderTotal, { color: colors.primary }]}>
-                ₹{Number(o.totalAmount ?? 0).toLocaleString()}
-              </Text>
-            </View>
+      {/* Outlet scope selector — owners with multiple outlets only */}
+      {canSwitchScope && hasMultipleOutlets ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scopePills}
+        >
+          <ScopePill
+            label="All outlets"
+            active={scopeOutletId == null}
+            onPress={() => setScopeOutletId(null)}
+          />
+          {tenantBranches.map((b) => (
+            <ScopePill
+              key={b.id}
+              label={b.name}
+              active={scopeOutletId === b.id}
+              onPress={() => setScopeOutletId(b.id)}
+            />
           ))}
+        </ScrollView>
+      ) : null}
+
+      {/* Quick actions */}
+      <View style={styles.quickGrid}>
+        <QuickAction icon="add-circle" label="New Order" onPress={openOrders} />
+        <QuickAction icon="cash" label={cashOpen ? "Close Cash" : "Open Cash"} onPress={openCashRegister} />
+        <QuickAction icon="time" label="Attendance" onPress={openAttendance} />
+        <QuickAction icon="cube" label="Low Stock" onPress={openLowStock} />
+        <QuickAction icon="checkmark-done" label="Approvals" onPress={openApprovals} />
+        <QuickAction icon="shield" label="Fraud" onPress={openFraud} />
+      </View>
+
+      {/* Today's sales + Live orders */}
+      <View style={styles.row2}>
+        <View style={{ flex: 1 }}>
+          <MetricCard
+            title="Today's Sales"
+            icon="cash-outline"
+            value={todayRevenue ?? undefined}
+            sub={revGrowthLabel ?? undefined}
+            badge={ds ? { text: `${ds.todayOrders ?? 0} orders`, tone: "info" } : undefined}
+            isLoading={summaryQ.isLoading}
+            isError={summaryQ.isError}
+            onRetry={() => summaryQ.refetch()}
+            onPress={openOrders}
+            actionLabel="View orders"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard
+              title="Live Orders"
+              icon="flame-outline"
+              message="Pick an outlet to see live kitchen orders"
+            />
+          ) : (
+            <MetricCard
+              title="Live Orders"
+              icon="flame-outline"
+              value={liveOrdersQ.isLoading ? undefined : String(liveOrders.total)}
+              sub={
+                liveOrders.total > 0
+                  ? `${liveOrders.open} open · ${liveOrders.inKitchen} kitchen · ${liveOrders.ready} ready`
+                  : "All clear"
+              }
+              isLoading={liveOrdersQ.isLoading}
+              isError={liveOrdersQ.isError}
+              onRetry={() => liveOrdersQ.refetch()}
+              onPress={openKitchen}
+              actionLabel="View kitchen"
+              badge={liveOrders.total > 0 ? { text: "Live", tone: "warn" } : undefined}
+            />
+          )}
+        </View>
+      </View>
+
+      {/* Revenue chart */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <Ionicons name="trending-up-outline" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>Revenue · last 7 days</Text>
+          </View>
+        </View>
+        {trendQ.isLoading ? (
+          <View style={{ height: 110, justifyContent: "center" }}>
+            <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.muted, width: "60%" }} />
+          </View>
+        ) : trendQ.isError ? (
+          <Pressable onPress={() => trendQ.refetch()} style={{ paddingVertical: 24, alignItems: "center" }}>
+            <Text style={{ color: colors.mutedForeground }}>Couldn't load chart. Tap to retry.</Text>
+          </Pressable>
+        ) : trend.length === 0 ? (
+          <Text style={{ color: colors.mutedForeground, paddingVertical: 24, textAlign: "center" }}>
+            No revenue yet.
+          </Text>
+        ) : (
+          <MiniBarChart data={trend} />
+        )}
+      </View>
+
+      {/* Staff attendance + Cash closing — restaurant-scoped */}
+      <View style={styles.row2}>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard title="Staff Today" icon="people-outline" message="Pick an outlet to see attendance" />
+          ) : (
+            <MetricCard
+              title="Staff Today"
+              icon="people-outline"
+              value={attendanceQ.isLoading ? undefined : String(attendance.present)}
+              sub={`${attendance.absent} absent · ${attendance.onLeave} on leave`}
+              isLoading={attendanceQ.isLoading}
+              isError={attendanceQ.isError}
+              onRetry={() => attendanceQ.refetch()}
+              onPress={openAttendance}
+              actionLabel="View attendance"
+            />
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard title="Cash Register" icon="wallet-outline" message="Pick an outlet to see register" />
+          ) : (
+            <MetricCard
+              title="Cash Register"
+              icon="wallet-outline"
+              value={cashQ.isLoading ? undefined : (cashOpen ? "Open" : "Closed")}
+              sub={
+                cashOpen
+                  ? cash?.totals?.expectedCash != null
+                    ? `Expected ₹${Number(cash.totals.expectedCash).toLocaleString("en-IN")}`
+                    : "Session in progress"
+                  : cash?.totals?.variance != null
+                    ? `Variance ₹${Number(cash.totals.variance).toLocaleString("en-IN")}`
+                    : "No active session"
+              }
+              isLoading={cashQ.isLoading}
+              isError={cashQ.isError}
+              onRetry={() => cashQ.refetch()}
+              onPress={openCashRegister}
+              actionLabel="View register"
+              badge={cashOpen ? { text: "Open", tone: "ok" } : undefined}
+            />
+          )}
+        </View>
+      </View>
+
+      {/* Stock alerts */}
+      {isAllOutlets ? (
+        <PlaceholderCard title="Stock Alerts" icon="cube-outline" message="Pick an outlet to see stock alerts" />
+      ) : (
+        <MetricCard
+          title="Stock Alerts"
+          icon="cube-outline"
+          value={stockQ.isLoading ? undefined : `${stockItems.low.length} low · ${stockItems.out.length} out`}
+          list={stockItems.low.slice(0, 3).map((i) => ({
+            key: String(i.id),
+            label: i.name ?? `Item #${i.id}`,
+            value: `${i.currentStock ?? 0} ${i.unit ?? ""}`.trim(),
+          }))}
+          emptyText="All items are stocked"
+          isLoading={stockQ.isLoading}
+          isError={stockQ.isError}
+          onRetry={() => stockQ.refetch()}
+          onPress={openLowStock}
+          actionLabel="View inventory"
+          badge={stockItems.out.length > 0 ? { text: `${stockItems.out.length} out`, tone: "danger" } : stockItems.low.length > 0 ? { text: "Low", tone: "warn" } : undefined}
+        />
+      )}
+
+      {/* Customer complaints + Fraud alerts */}
+      <View style={styles.row2}>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard title="Complaints" icon="chatbubble-ellipses-outline" message="Pick an outlet for reviews" />
+          ) : (
+            <MetricCard
+              title="Complaints (open now)"
+              icon="chatbubble-ellipses-outline"
+              value={
+                reviewsQ.isLoading || ticketsQ.isLoading
+                  ? undefined
+                  : String(complaints.negative + complaints.openTickets)
+              }
+              sub={`${complaints.negative} negative reviews · ${complaints.openTickets} open tickets`}
+              emptyText="No open complaints"
+              isLoading={reviewsQ.isLoading || ticketsQ.isLoading}
+              isError={reviewsQ.isError || ticketsQ.isError}
+              onRetry={() => { reviewsQ.refetch(); ticketsQ.refetch(); }}
+              onPress={openComplaints}
+              actionLabel="View complaints"
+            />
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard title="Fraud Alerts" icon="shield-outline" message="Pick an outlet for fraud signals" />
+          ) : (
+            <MetricCard
+              title="Fraud Alerts"
+              icon="shield-outline"
+              value={fraudQ.isLoading ? undefined : String(fraudAlerts.total)}
+              sub={
+                fraudAlerts.total > 0
+                  ? `${fraudAlerts.high} high · ${fraudAlerts.medium} med · ${fraudAlerts.low} low`
+                  : "No unresolved alerts"
+              }
+              emptyText="No unresolved alerts"
+              isLoading={fraudQ.isLoading}
+              isError={fraudQ.isError}
+              onRetry={() => fraudQ.refetch()}
+              onPress={openFraud}
+              actionLabel="View alerts"
+              badge={fraudAlerts.high > 0 ? { text: "High", tone: "danger" } : fraudAlerts.total > 0 ? { text: "Open", tone: "warn" } : undefined}
+            />
+          )}
+        </View>
+      </View>
+
+      {/* Manager approvals (discount/void/refund) — no list endpoint yet. */}
+      <PlaceholderCard
+        title="Approvals"
+        icon="checkmark-done-outline"
+        message="Discount/void/refund approvals not available yet — coming soon"
+      />
+
+      {/* Outlet comparison — sortable list backed by compare-branches */}
+      {canSwitchScope && hasMultipleOutlets ? (
+        <View style={{ gap: 8 }}>
+          <View style={styles.outletSortRow}>
+            <Text style={[styles.outletSortLabel, { color: colors.mutedForeground }]}>Sort by</Text>
+            <View style={styles.outletSortPills}>
+              <ScopePill label="Revenue" active={outletSort === "revenue"} onPress={() => setOutletSort("revenue")} />
+              <ScopePill label="Orders" active={outletSort === "orders"} onPress={() => setOutletSort("orders")} />
+              <ScopePill label="Name" active={outletSort === "name"} onPress={() => setOutletSort("name")} />
+            </View>
+          </View>
+          <MetricCard
+            title="Outlets · today"
+            icon="business-outline"
+            list={outletRows.slice(0, 8).map((o) => {
+              const d = o.deltaPct ?? 0;
+              const arrow = d >= 0 ? "▲" : "▼";
+              const deltaTxt = `${arrow} ${Math.abs(d).toFixed(1)}% vs yest`;
+              return {
+                key: String(o.restaurantId),
+                label: o.name,
+                value: `₹${Number(o.revenue).toLocaleString("en-IN")} · ${o.orders} ord · ${deltaTxt}`,
+              };
+            })}
+            emptyText="No outlet activity today"
+            isLoading={compareQ.isLoading}
+            isError={compareQ.isError}
+            onRetry={() => compareQ.refetch()}
+          />
         </View>
       ) : null}
     </ScrollView>
+  );
+}
+
+function ScopePill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.scopePill,
+        {
+          borderColor: active ? colors.primary : colors.border,
+          backgroundColor: active ? colors.primary : colors.card,
+        },
+      ]}
+    >
+      <Text
+        style={[styles.scopePillText, { color: active ? "#fff" : colors.foreground }]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function QuickAction({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.quickAction,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}
+    >
+      <View style={[styles.quickIconWrap, { backgroundColor: colors.accent }]}>
+        <Ionicons name={icon} size={20} color={colors.primary} />
+      </View>
+      <Text style={[styles.quickLabel, { color: colors.foreground }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -109,15 +673,31 @@ function getTimeOfDay() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 16, gap: 16 },
-  header: { gap: 2 },
+  content: { paddingHorizontal: 14, gap: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   greeting: { fontSize: 13, fontFamily: "Inter_400Regular" },
   title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  statsGrid: { flexDirection: "row", gap: 12 },
-  section: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  sectionTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", padding: 14, paddingBottom: 10 },
-  orderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  orderNum: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  orderMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  orderTotal: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  scopePills: { gap: 8, paddingVertical: 2 },
+  scopePill: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: 1, maxWidth: 200,
+  },
+  scopePillText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  outletSortRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  outletSortLabel: { fontSize: 12, fontWeight: "500" },
+  outletSortPills: { flexDirection: "row", gap: 6, flex: 1, flexWrap: "wrap" },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickAction: {
+    flexBasis: "23%", flexGrow: 1, minWidth: 76, minHeight: 76,
+    alignItems: "center", justifyContent: "center", gap: 6,
+    borderRadius: 14, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 6,
+  },
+  quickIconWrap: {
+    width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center",
+  },
+  quickLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  row2: { flexDirection: "row", gap: 10 },
+  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10 },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  cardTitle: { fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "uppercase", letterSpacing: 0.4 },
 });

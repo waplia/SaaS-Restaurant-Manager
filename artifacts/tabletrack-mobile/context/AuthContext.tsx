@@ -30,6 +30,7 @@ interface AuthContextType {
   accessToken: string | null;
   isLoading: boolean;
   restaurantId: number;
+  tenantId: number | null;
   login: (token: string, refreshToken: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -184,9 +185,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   const restaurantId = user?.restaurantId ?? 1;
+  const tenantId = user?.tenantId ?? null;
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, login, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
