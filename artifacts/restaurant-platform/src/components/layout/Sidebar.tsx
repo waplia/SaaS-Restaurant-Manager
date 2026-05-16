@@ -241,8 +241,27 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 const STORAGE_KEY = "tt_sidebar_groups_open_v2";
 
+function collectAllHrefs(): string[] {
+  const out: string[] = [];
+  for (const e of navConfig) {
+    if (e.kind === "link") out.push(e.href);
+    else for (const c of e.children) out.push(c.href);
+  }
+  return out;
+}
+const ALL_HREFS = collectAllHrefs();
+
 function isActiveHref(location: string, href: string) {
-  return href === "/" ? location === "/" : location.startsWith(href);
+  if (href === "/") return location === "/";
+  if (location !== href && !location.startsWith(href + "/")) return false;
+  // Only the most-specific (longest) registered href that matches should win,
+  // so /menu doesn't stay active when you navigate to /menu/pricing-rules.
+  for (const other of ALL_HREFS) {
+    if (other === href) continue;
+    if (other.length <= href.length) continue;
+    if (location === other || location.startsWith(other + "/")) return false;
+  }
+  return true;
 }
 
 function loadOpenState(): Record<string, boolean> {
