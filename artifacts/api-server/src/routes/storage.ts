@@ -3,7 +3,11 @@ import { Readable } from "stream";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
-import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
+import {
+  sanitizeStoredUpload,
+  UploadValidationError,
+  assertAllowedContentType,
+} from "../lib/uploadSanitizer";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requireRole } from "../middleware/authorize";
 
@@ -33,6 +37,18 @@ router.post(
     }
     try {
       const { name, size, contentType } = parsed.data;
+      // Restaurant-scoped uploads currently cover receipts/invoices/menu photos.
+      // Reject anything outside images + PDFs before we even mint a PUT URL so
+      // a caller can't waste bandwidth uploading 10 MB of HTML.
+      try {
+        assertAllowedContentType(contentType, ["image", "pdf"]);
+      } catch (err) {
+        if (err instanceof UploadValidationError) {
+          res.status(err.statusCode).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
       const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
       // Note: ACL is written by the matching POST /finalize call AFTER the

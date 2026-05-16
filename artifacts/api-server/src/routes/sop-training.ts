@@ -28,7 +28,8 @@ import { requireRole } from "../middleware/authorize";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
+import { sanitizeStoredUpload, UploadValidationError, assertAllowedContentType } from "../lib/uploadSanitizer";
+import { z } from "zod";
 import { setObjectAclPolicy } from "../lib/objectAcl";
 
 const router = Router();
@@ -650,7 +651,23 @@ router.get("/sop-training/progress", requireRole(...AUTHOR_ROLES), planFlagGate,
 // ───────────────────────────────────────────────────────────
 // Uploads (videos, attachments, documents)
 // ───────────────────────────────────────────────────────────
+const SopUploadRequestBody = z.object({
+  name: z.string().min(1).max(256).optional(),
+  size: z.number().int().positive().max(500 * 1024 * 1024).optional(),
+  contentType: z.string().min(1).max(128),
+});
+
 router.post("/sop-training/uploads/request-url", requireRole(...AUTHOR_ROLES), planFlagGate, async (req, res) => {
+  const parsed = SopUploadRequestBody.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "contentType is required" });
+  // SOP / training assets are images, PDFs, or training videos. Reject other
+  // claimed content types before issuing a PUT URL.
+  try {
+    assertAllowedContentType(parsed.data.contentType, ["image", "pdf", "video"]);
+  } catch (err) {
+    if (err instanceof UploadValidationError) return void res.status(err.statusCode).json({ error: err.message });
+    throw err;
+  }
   try {
     const uploadURL = await objectStorage.getObjectEntityUploadURL();
     const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);

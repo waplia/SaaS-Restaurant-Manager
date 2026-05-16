@@ -23,6 +23,60 @@ export interface SniffResult {
   kind: AllowedKind;
 }
 
+/**
+ * Per-kind allowlist of client-declared Content-Type values. We accept this set
+ * at the presigned-URL request step so a caller who lies about their type is
+ * rejected BEFORE they get to push bytes to object storage. The final source
+ * of truth is still magic-byte sniffing in `sanitizeStoredUpload`.
+ */
+export const CONTENT_TYPE_BY_KIND: Record<AllowedKind, readonly string[]> = {
+  image: [
+    "image/jpeg",
+    "image/jpg",
+    "image/pjpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/bmp",
+    "image/tiff",
+    "image/x-tiff",
+  ],
+  pdf: ["application/pdf", "application/x-pdf"],
+  video: ["video/mp4", "video/webm", "video/quicktime"],
+};
+
+function normalizeContentType(contentType: string): string {
+  return contentType.toLowerCase().split(";")[0].trim();
+}
+
+export function isContentTypeAllowed(
+  contentType: string,
+  kinds: ReadonlyArray<AllowedKind>,
+): boolean {
+  const ct = normalizeContentType(contentType);
+  return kinds.some((k) => CONTENT_TYPE_BY_KIND[k].includes(ct));
+}
+
+/**
+ * Throws an UploadValidationError(415) if `contentType` is not in the
+ * allowlist for any of the given `kinds`. Use this at the presigned-URL
+ * request step so unsafe types never make it to object storage.
+ */
+export function assertAllowedContentType(
+  contentType: string,
+  kinds: ReadonlyArray<AllowedKind>,
+): void {
+  if (!isContentTypeAllowed(contentType, kinds)) {
+    const allowed = Array.from(new Set(kinds.flatMap((k) => CONTENT_TYPE_BY_KIND[k]))).join(", ");
+    throw new UploadValidationError(
+      `File type "${contentType}" is not allowed. Allowed types: ${allowed}.`,
+      415,
+    );
+  }
+}
+
 const MAGIC_SIGNATURES: ReadonlyArray<{
   mime: string;
   kind: AllowedKind;
@@ -62,6 +116,13 @@ export interface SanitizeOptions {
   maxBytes: number;
   /** Cap re-encoded image dimensions (defense against decompression bombs). */
   maxImagePixels?: number;
+  /**
+   * For objects whose stored size exceeds this threshold, sniff only the first
+   * few KB (via byte-range read) before pulling down the full object. Lets us
+   * reject a 500 MB HTML payload labelled `video/mp4` after a 4 KB read.
+   * Defaults to 1 MiB.
+   */
+  partialSniffThresholdBytes?: number;
 }
 
 export interface SanitizeResult {
@@ -73,6 +134,29 @@ export interface SanitizeResult {
 async function downloadBuffer(file: File): Promise<Buffer> {
   const [buf] = await file.download();
   return buf;
+}
+
+async function downloadRange(file: File, start: number, end: number): Promise<Buffer> {
+  return await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const stream = file.createReadStream({ start, end });
+    stream.on("data", (chunk: string | Buffer) => {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
+async function getStoredSize(file: File): Promise<number | null> {
+  try {
+    const [meta] = await file.getMetadata();
+    if (meta.size == null) return null;
+    const n = Number(meta.size);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -87,6 +171,38 @@ export async function sanitizeStoredUpload(
 ): Promise<SanitizeResult> {
   const maxBytes = opts.maxBytes;
   const maxPixels = opts.maxImagePixels ?? 24_000_000; // ~24 MP — enough for 6000×4000.
+  const partialThreshold = opts.partialSniffThresholdBytes ?? 1024 * 1024;
+
+  // Cheap pre-checks against the stored object's metadata first so we can fail
+  // fast on oversize or obviously-wrong-typed payloads BEFORE downloading the
+  // whole object back over the wire.
+  const storedSize = await getStoredSize(file);
+  if (storedSize != null) {
+    if (storedSize === 0) {
+      await file.delete().catch(() => undefined);
+      throw new UploadValidationError("Uploaded file is empty", 400);
+    }
+    if (storedSize > maxBytes) {
+      await file.delete().catch(() => undefined);
+      throw new UploadValidationError(`File too large. Max ${maxBytes} bytes.`, 413);
+    }
+    if (storedSize > partialThreshold) {
+      let head: Buffer;
+      try {
+        head = await downloadRange(file, 0, Math.min(4095, storedSize - 1));
+      } catch {
+        throw new UploadValidationError("Failed to read uploaded bytes", 500);
+      }
+      const headSniff = sniffBytes(head);
+      if (!headSniff || !opts.allowedKinds.includes(headSniff.kind)) {
+        await file.delete().catch(() => undefined);
+        throw new UploadValidationError(
+          `Unsupported or unrecognised file type. Allowed: ${opts.allowedKinds.join(", ")}.`,
+          415,
+        );
+      }
+    }
+  }
 
   let bytes: Buffer;
   try {

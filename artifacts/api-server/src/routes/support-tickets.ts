@@ -19,7 +19,7 @@ import {
   type TicketEventType,
 } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
-import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
+import { sanitizeStoredUpload, UploadValidationError, assertAllowedContentType } from "../lib/uploadSanitizer";
 import {
   computeSlaInfo,
   getCategoryById,
@@ -418,6 +418,15 @@ router.post("/support/tickets/uploads/request-url", requireRole("owner", "manage
   const settings = await getSlaSettings();
   if (parsed.data.size > settings.maxAttachmentMb * 1024 * 1024) {
     return void res.status(413).json({ error: `File exceeds the ${settings.maxAttachmentMb} MB limit` });
+  }
+  // Support attachments are limited to images and PDFs. Reject other claimed
+  // content types up-front rather than burning bandwidth on an upload that
+  // would only be deleted at finalize-time anyway.
+  try {
+    assertAllowedContentType(parsed.data.contentType, ["image", "pdf"]);
+  } catch (err) {
+    if (err instanceof UploadValidationError) return void res.status(err.statusCode).json({ error: err.message });
+    throw err;
   }
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
