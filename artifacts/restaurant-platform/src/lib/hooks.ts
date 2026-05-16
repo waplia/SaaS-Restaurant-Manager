@@ -1833,6 +1833,28 @@ export function useFoodCostReport(threshold: number = 65) {
   });
 }
 
+export function useMenuEngineeringReport(opts: {
+  period?: string;
+  custom?: { from: string; to: string };
+  marginThreshold?: number | null;
+  popularityThreshold?: number | null;
+}) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = new URLSearchParams();
+  if (opts.custom) {
+    qs.set("from", opts.custom.from);
+    qs.set("to", opts.custom.to);
+  } else {
+    qs.set("period", opts.period ?? "30d");
+  }
+  if (opts.marginThreshold != null) qs.set("marginThreshold", String(opts.marginThreshold));
+  if (opts.popularityThreshold != null) qs.set("popularityThreshold", String(opts.popularityThreshold));
+  return useQuery({
+    queryKey: ["menu-engineering", RESTAURANT_ID, opts.period ?? null, opts.custom ?? null, opts.marginThreshold ?? null, opts.popularityThreshold ?? null],
+    queryFn: () => apiGet<import("./types").MenuEngineeringReport>(`/restaurants/${RESTAURANT_ID}/menu-engineering?${qs.toString()}`),
+  });
+}
+
 export function useCustomerAddresses(customerId: number | null) {
   const RESTAURANT_ID = useRestaurantId();
   return useQuery({
@@ -3549,4 +3571,3 @@ export function useCloseBanquetEvent() {
       qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] });
     },
   });
-}

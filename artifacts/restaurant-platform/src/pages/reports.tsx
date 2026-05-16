@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, type CompareBranchRow } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, useMenuEngineeringReport, type CompareBranchRow } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
+import { MenuEngineeringTab } from "@/components/MenuEngineeringTab";
 import { cn } from "@/lib/utils";
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
@@ -49,10 +50,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -440,7 +441,7 @@ export default function ReportsPage() {
               <Button size="sm" variant="outline" onClick={handleExportCompareCSV} disabled={compareRows.length === 0}>
                 <Download className="w-4 h-4 mr-1.5" /> CSV
               </Button>
-            ) : (
+            ) : tab === "menu-engineering" ? null : (
               <>
                 <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!reports}>
                   <Download className="w-4 h-4 mr-1.5" /> CSV
@@ -580,6 +581,7 @@ export default function ReportsPage() {
             { label: "Food Cost", val: "food-cost" as Tab },
             { label: "Cash Variance", val: "cash-variance" as Tab },
             { label: "Kitchen Performance", val: "kitchen-performance" as Tab },
+            { label: "Menu Engineering", val: "menu-engineering" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -1188,6 +1190,13 @@ export default function ReportsPage() {
 
         {tab === "kitchen-performance" && (
           <KitchenPerformanceTab from={useCustom ? customFrom : undefined} to={useCustom ? customTo : undefined} />
+        )}
+
+        {tab === "menu-engineering" && (
+          <MenuEngineeringTab
+            period={period}
+            custom={useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : undefined}
+          />
         )}
       </div>
     </Layout>

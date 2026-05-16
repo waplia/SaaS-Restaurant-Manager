@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
-import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable, inventoryItemBatchesTable } from "../lib/db";
-import { asc, gt } from "drizzle-orm";
+import { db, inventoryItemsTable, suppliersTable, inventoryTransactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, recipeMappingsTable, notificationsTable, paymentsTable, menuItemsTable, menuCategoriesTable, restaurantsTable, inventoryItemBatchesTable, ordersTable, orderItemsTable } from "../lib/db";
+import { asc, gt, gte, lte } from "drizzle-orm";
+import { classifyMenuItems, type MenuEngineeringInput } from "../lib/menuEngineering";
 import { runAutoReorderForRestaurant } from "../lib/autoReorder";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -548,6 +549,130 @@ router.get("/restaurants/:restaurantId/food-cost", requireRole("owner", "manager
   });
 
   res.json({ threshold, items: result });
+});
+
+router.get("/restaurants/:restaurantId/menu-engineering", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const { period, from: fromStr, to: toStr } = req.query;
+
+  let from = new Date();
+  let to = new Date();
+  if (fromStr && toStr) {
+    from = new Date(String(fromStr));
+    to = new Date(String(toStr));
+    to.setHours(23, 59, 59, 999);
+  } else {
+    const p = String(period ?? "30d");
+    if (p === "1y") from.setFullYear(from.getFullYear() - 1);
+    else if (p === "90d") from.setDate(from.getDate() - 90);
+    else if (p === "7d") from.setDate(from.getDate() - 7);
+    else if (p === "1m" || p === "30d") from.setMonth(from.getMonth() - 1);
+    else from.setMonth(from.getMonth() - 1);
+  }
+  from.setHours(0, 0, 0, 0);
+
+  const marginQ = req.query.marginThreshold;
+  const popularityQ = req.query.popularityThreshold;
+  const marginOverride = marginQ != null && marginQ !== "" && Number.isFinite(Number(marginQ)) ? Number(marginQ) : null;
+  const popularityOverride = popularityQ != null && popularityQ !== "" && Number.isFinite(Number(popularityQ)) ? Number(popularityQ) : null;
+
+  const items = await db.select({
+    id: menuItemsTable.id,
+    name: menuItemsTable.name,
+    price: menuItemsTable.price,
+    categoryId: menuItemsTable.categoryId,
+    categoryName: menuCategoriesTable.name,
+  }).from(menuItemsTable)
+    .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
+    .where(eq(menuItemsTable.restaurantId, restaurantId));
+
+  const mappings = await db.select({
+    menuItemId: recipeMappingsTable.menuItemId,
+    quantity: recipeMappingsTable.quantity,
+    costPerUnit: inventoryItemsTable.costPerUnit,
+  }).from(recipeMappingsTable)
+    .leftJoin(inventoryItemsTable, eq(recipeMappingsTable.inventoryItemId, inventoryItemsTable.id))
+    .where(eq(recipeMappingsTable.restaurantId, restaurantId));
+
+  const cogsByItem = new Map<number, { cogs: number; count: number }>();
+  for (const m of mappings) {
+    const e = cogsByItem.get(m.menuItemId) ?? { cogs: 0, count: 0 };
+    e.cogs += Number(m.quantity) * Number(m.costPerUnit ?? 0);
+    e.count += 1;
+    cogsByItem.set(m.menuItemId, e);
+  }
+
+  const sales = await db.select({
+    menuItemId: orderItemsTable.menuItemId,
+    units: sql<number>`cast(coalesce(sum(${orderItemsTable.quantity}), 0) as int)`,
+    revenue: sql<string>`cast(coalesce(sum(${orderItemsTable.totalPrice}), 0) as text)`,
+  }).from(orderItemsTable)
+    .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+    .where(and(
+      eq(ordersTable.restaurantId, restaurantId),
+      gte(ordersTable.createdAt, from),
+      lte(ordersTable.createdAt, to),
+    ))
+    .groupBy(orderItemsTable.menuItemId);
+
+  const salesByItem = new Map<number, { units: number; revenue: number }>();
+  for (const s of sales) {
+    salesByItem.set(s.menuItemId, { units: Number(s.units), revenue: Number(s.revenue) });
+  }
+
+  const inputs: MenuEngineeringInput[] = items.map(it => {
+    const sold = salesByItem.get(it.id) ?? { units: 0, revenue: 0 };
+    const cogs = cogsByItem.get(it.id);
+    return {
+      id: it.id,
+      name: it.name,
+      categoryId: it.categoryId ?? null,
+      categoryName: it.categoryName ?? null,
+      price: Number(it.price),
+      unitsSold: sold.units,
+      revenue: sold.revenue,
+      unitCost: cogs ? cogs.cogs : 0,
+      hasRecipe: !!cogs && cogs.count > 0,
+      ingredientCount: cogs?.count ?? 0,
+    };
+  });
+
+  const result = classifyMenuItems(inputs, {
+    marginThreshold: marginOverride,
+    popularityThreshold: popularityOverride,
+  });
+
+  const quadrantSummary: Record<string, { count: number; revenue: number }> = {
+    star: { count: 0, revenue: 0 },
+    plowhorse: { count: 0, revenue: 0 },
+    puzzle: { count: 0, revenue: 0 },
+    dog: { count: 0, revenue: 0 },
+  };
+  for (const it of result.items) {
+    if (it.quadrant) {
+      quadrantSummary[it.quadrant].count++;
+      quadrantSummary[it.quadrant].revenue += it.revenue;
+    }
+  }
+
+  res.json({
+    from: from.toISOString(),
+    to: to.toISOString(),
+    marginThreshold: result.marginThreshold,
+    popularityThreshold: result.popularityThreshold,
+    overrides: { marginThreshold: marginOverride, popularityThreshold: popularityOverride },
+    totals: {
+      itemCount: items.length,
+      classifiedCount: result.classifiedCount,
+      noSalesCount: result.noSalesCount,
+      noRecipeCount: result.noRecipeCount,
+      units: result.totalUnits,
+      revenue: result.totalRevenue,
+      profit: result.totalProfit,
+    },
+    quadrantSummary,
+    items: result.items,
+  });
 });
 
 router.post("/restaurants/:restaurantId/recipe-mappings", requireRole("owner", "manager", "super_admin"), async (req, res) => {

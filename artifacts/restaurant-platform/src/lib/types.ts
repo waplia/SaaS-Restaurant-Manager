@@ -696,6 +696,48 @@ export interface FoodCostReport {
   items: FoodCostItem[];
 }
 
+export type MenuEngineeringQuadrant = "star" | "plowhorse" | "puzzle" | "dog";
+export type MenuEngineeringStatus = "classified" | "no_sales" | "no_recipe";
+
+export interface MenuEngineeringItem {
+  id: number;
+  name: string;
+  categoryId: number | null;
+  categoryName: string | null;
+  price: number;
+  unitsSold: number;
+  revenue: number;
+  unitCost: number;
+  unitProfit: number;
+  totalProfit: number;
+  margin: number;
+  popularity: number;
+  hasRecipe: boolean;
+  ingredientCount: number;
+  quadrant: MenuEngineeringQuadrant | null;
+  suggestions: string[];
+  status: MenuEngineeringStatus;
+}
+
+export interface MenuEngineeringReport {
+  from: string;
+  to: string;
+  marginThreshold: number;
+  popularityThreshold: number;
+  overrides: { marginThreshold: number | null; popularityThreshold: number | null };
+  totals: {
+    itemCount: number;
+    classifiedCount: number;
+    noSalesCount: number;
+    noRecipeCount: number;
+    units: number;
+    revenue: number;
+    profit: number;
+  };
+  quadrantSummary: Record<MenuEngineeringQuadrant, { count: number; revenue: number }>;
+  items: MenuEngineeringItem[];
+}
+
 export interface AdjustInventoryInput {
   id: number;
   type: string;
