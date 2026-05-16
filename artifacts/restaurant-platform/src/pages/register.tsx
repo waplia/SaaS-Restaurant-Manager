@@ -32,7 +32,7 @@ export default function RegisterPage() {
             New restaurant signups are currently disabled. Please contact{" "}
             <a className="text-primary underline" href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> to get access.
           </p>
-          <a href="/login" className="inline-block text-sm text-primary underline">Back to sign in</a>
+          <a href="/app/login" className="inline-block text-sm text-primary underline">Back to sign in</a>
         </div>
       </div>
     );
@@ -47,6 +47,11 @@ export default function RegisterPage() {
     e.preventDefault();
     if (form.password.length < 8) {
       setError("Password must be at least 8 characters");
+      return;
+    }
+    const trimmedPhone = form.phone.trim();
+    if (trimmedPhone && !trimmedPhone.startsWith("+")) {
+      setError("Phone must include a country code, e.g. +91 9876543210");
       return;
     }
     setError("");
@@ -168,7 +173,7 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <a href="/login" className="text-primary font-medium hover:underline">
+            <a href="/app/login" className="text-primary font-medium hover:underline">
               Sign in
             </a>
           </p>

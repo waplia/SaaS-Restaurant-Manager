@@ -135,7 +135,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
           <p className="text-xs text-muted-foreground">
             Super admins can still sign in to manage settings.
           </p>
-          <a href="/login" className="inline-block text-sm text-primary underline">Sign in</a>
+          <a href="/app/login" className="inline-block text-sm text-primary underline">Sign in</a>
         </div>
       </div>
     );

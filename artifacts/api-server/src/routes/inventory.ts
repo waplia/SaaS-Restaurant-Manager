@@ -10,7 +10,16 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "kitchen", "super_admin"), validateRestaurantAccess, requirePlanFeature("inventory_management"));
+const inventoryScopes = [
+  "/restaurants/:restaurantId/inventory",
+  "/restaurants/:restaurantId/purchase-orders",
+  "/restaurants/:restaurantId/auto-reorder",
+  "/restaurants/:restaurantId/suppliers",
+  "/restaurants/:restaurantId/recipe-mappings",
+  "/restaurants/:restaurantId/food-cost",
+  "/restaurants/:restaurantId/menu-engineering",
+];
+router.use(inventoryScopes, requireRole("owner", "manager", "kitchen", "super_admin"), validateRestaurantAccess, requirePlanFeature("inventory_management"));
 
 router.get("/restaurants/:restaurantId/inventory", async (req, res) => {
   const { lowStock, search } = req.query;

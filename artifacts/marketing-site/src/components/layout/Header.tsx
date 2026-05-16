@@ -104,9 +104,9 @@ export function Header() {
           <Link href="/book-demo">
             <Button variant="outline" size="sm" data-testid="btn-book-demo">Book Demo</Button>
           </Link>
-          <Link href="/start-free-trial">
+          <a href="/app/register">
             <Button size="sm" data-testid="btn-start-trial">Start Free Trial</Button>
-          </Link>
+          </a>
         </div>
 
         <button
@@ -358,9 +358,9 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
           <Link href="/book-demo" onClick={onClose}>
             <Button variant="outline" className="w-full justify-center">Book Demo</Button>
           </Link>
-          <Link href="/start-free-trial" onClick={onClose}>
+          <a href="/app/register" onClick={onClose}>
             <Button className="w-full justify-center">Start Free Trial</Button>
-          </Link>
+          </a>
         </div>
       </div>
     </motion.div>

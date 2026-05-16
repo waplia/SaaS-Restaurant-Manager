@@ -42,7 +42,16 @@ async function assertReceiptUrlOwnership(
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, requirePlanFeature("expense_tracking"));
+router.use(
+  [
+    "/restaurants/:restaurantId/expense-categories",
+    "/restaurants/:restaurantId/expenses",
+    "/restaurants/:restaurantId/recurring-expenses",
+  ],
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  requirePlanFeature("expense_tracking"),
+);
 
 const DEFAULT_CATEGORIES: Array<{ name: string; color: string; icon: string; categoryKind: ExpenseCategoryKind }> = [
   { name: "Rent",        color: "#ef4444", icon: "building", categoryKind: "fixed" },

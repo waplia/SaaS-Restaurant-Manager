@@ -10,12 +10,18 @@ interface Props {
   secondary?: { label: string; href: string };
 }
 
+// Links that cross artifacts (e.g. into the /app/ platform) must use a full
+// browser navigation, not wouter's client-side Link.
+function isCrossArtifact(href: string) {
+  return href.startsWith("/app/") || /^https?:\/\//.test(href);
+}
+
 export function CTASection({
   eyebrow = "Get started",
   title,
   subtitle = "Join hundreds of restaurants running smarter with KhanaLagao.",
   primary = { label: "Book a free demo", href: "/book-demo" },
-  secondary = { label: "Start free trial", href: "/start-free-trial" },
+  secondary = { label: "Start free trial", href: "/app/register" },
 }: Props) {
   return (
     <section className="py-20 md:py-28">
@@ -30,17 +36,33 @@ export function CTASection({
             <h2 className="font-serif text-3xl md:text-5xl font-bold tracking-tight mb-4 max-w-2xl mx-auto">{title}</h2>
             <p className="text-background/75 text-lg max-w-xl mx-auto mb-8">{subtitle}</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href={primary.href}>
-                <Button size="lg" className="h-12 px-7 text-base w-full sm:w-auto">
-                  {primary.label} <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              {secondary && (
-                <Link href={secondary.href}>
-                  <Button size="lg" variant="outline" className="h-12 px-7 text-base bg-transparent border-background/30 text-background hover:bg-background hover:text-foreground w-full sm:w-auto">
-                    {secondary.label}
+              {isCrossArtifact(primary.href) ? (
+                <a href={primary.href}>
+                  <Button size="lg" className="h-12 px-7 text-base w-full sm:w-auto">
+                    {primary.label} <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </a>
+              ) : (
+                <Link href={primary.href}>
+                  <Button size="lg" className="h-12 px-7 text-base w-full sm:w-auto">
+                    {primary.label} <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
+              )}
+              {secondary && (
+                isCrossArtifact(secondary.href) ? (
+                  <a href={secondary.href}>
+                    <Button size="lg" variant="outline" className="h-12 px-7 text-base bg-transparent border-background/30 text-background hover:bg-background hover:text-foreground w-full sm:w-auto">
+                      {secondary.label}
+                    </Button>
+                  </a>
+                ) : (
+                  <Link href={secondary.href}>
+                    <Button size="lg" variant="outline" className="h-12 px-7 text-base bg-transparent border-background/30 text-background hover:bg-background hover:text-foreground w-full sm:w-auto">
+                      {secondary.label}
+                    </Button>
+                  </Link>
+                )
               )}
             </div>
           </div>

@@ -100,41 +100,61 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
   const baseSlug = restaurantName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const uniqueSuffix = Date.now();
 
-  const [tenant] = await db.insert(tenantsTable).values({
-    name: restaurantName,
-    slug: `${baseSlug}-${uniqueSuffix}`,
-    planId: trialPlan?.id ?? null,
-    planStatus: "trial",
-    trialEndsAt,
-    isActive: true,
-  }).returning();
-
-  const [restaurant] = await db.insert(restaurantsTable).values({
-    tenantId: tenant.id,
-    name: restaurantName,
-    slug: `${baseSlug}-r-${uniqueSuffix}`,
-  }).returning();
-
-  // Auto-create a default "Main" branch so trial/starter owners can run a
-  // single-location restaurant without ever opening the multi-branch step.
-  await db.insert(branchesTable).values({
-    restaurantId: restaurant.id,
-    name: "Main",
-    isMain: true,
-    isActive: true,
-  });
-
   const passwordHash = await hashPassword(password);
-  const [user] = await db.insert(usersTable).values({
-    name: ownerName,
-    email: email.toLowerCase(),
-    passwordHash,
-    phone: normalisedPhone,
-    role: "owner",
-    tenantId: tenant.id,
-    restaurantId: restaurant.id,
-    isActive: true,
-  }).returning();
+
+  let tenant: typeof tenantsTable.$inferSelect;
+  let restaurant: typeof restaurantsTable.$inferSelect;
+  let user: typeof usersTable.$inferSelect;
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [t] = await tx.insert(tenantsTable).values({
+        name: restaurantName,
+        slug: `${baseSlug}-${uniqueSuffix}`,
+        planId: trialPlan?.id ?? null,
+        planStatus: "trial",
+        trialEndsAt,
+        isActive: true,
+      }).returning();
+
+      const [r] = await tx.insert(restaurantsTable).values({
+        tenantId: t.id,
+        name: restaurantName,
+        slug: `${baseSlug}-r-${uniqueSuffix}`,
+      }).returning();
+
+      // Auto-create a default "Main" branch so trial/starter owners can run a
+      // single-location restaurant without ever opening the multi-branch step.
+      await tx.insert(branchesTable).values({
+        restaurantId: r.id,
+        name: "Main",
+        isMain: true,
+        isActive: true,
+      });
+
+      const [u] = await tx.insert(usersTable).values({
+        name: ownerName,
+        email: email.toLowerCase(),
+        passwordHash,
+        phone: normalisedPhone,
+        role: "owner",
+        tenantId: t.id,
+        restaurantId: r.id,
+        isActive: true,
+      }).returning();
+
+      return { t, r, u };
+    });
+    tenant = result.t;
+    restaurant = result.r;
+    user = result.u;
+  } catch (err) {
+    const message = (err as Error)?.message ?? "";
+    if (/duplicate key|unique constraint|users_email_unique/i.test(message)) {
+      res.status(409).json({ error: "Email already registered" });
+      return;
+    }
+    throw err;
+  }
 
   const session = await createSession({ userId: user.id, req });
   const tokenPayload = {

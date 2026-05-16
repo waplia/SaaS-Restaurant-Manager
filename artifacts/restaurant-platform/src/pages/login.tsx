@@ -96,7 +96,7 @@ export default function LoginPage() {
 
           <div className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <a href="/register" className="text-primary font-medium hover:underline">
+            <a href="/app/register" className="text-primary font-medium hover:underline">
               Start free trial
             </a>
           </div>

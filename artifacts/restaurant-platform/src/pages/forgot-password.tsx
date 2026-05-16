@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
                   If an account with <strong>{email}</strong> exists, a reset link has been sent.
                 </p>
               </div>
-              <a href="/login" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
+              <a href="/app/login" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
                 <ArrowLeft className="w-4 h-4" /> Back to sign in
               </a>
             </div>
@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
               </Button>
 
               <div className="text-center">
-                <a href="/login" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <a href="/app/login" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
                 </a>
               </div>

@@ -68,12 +68,19 @@ function BookDemoOrDisabled() {
   return <BookDemo />;
 }
 
+function StartFreeTrialRedirect() {
+  if (typeof window !== "undefined") {
+    window.location.replace("/app/register");
+  }
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomeOrDisabled} />
       <Route path="/book-demo" component={BookDemoOrDisabled} />
-      <Route path="/start-free-trial" component={BookDemoOrDisabled} />
+      <Route path="/start-free-trial" component={StartFreeTrialRedirect} />
       <Route path="/thank-you" component={ThankYou} />
       <Route path="/pricing" component={Pricing} />
 

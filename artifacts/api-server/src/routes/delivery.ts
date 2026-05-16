@@ -18,7 +18,7 @@ import { sendPush } from "../lib/notifications";
 const router = Router();
 
 router.use(
-  "/restaurants/:restaurantId",
+  "/restaurants/:restaurantId/delivery",
   requireRole("owner", "manager", "cashier", "waiter", "kitchen", "delivery_executive", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("delivery_module"),
