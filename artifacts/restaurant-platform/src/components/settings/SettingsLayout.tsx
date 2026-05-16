@@ -9,7 +9,7 @@ import {
   Mail, Receipt, CreditCard, Palette, Shield, BadgeDollarSign,
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
-  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash,
+  Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash, Calculator,
 } from "lucide-react";
 
 export type SectionKey =
@@ -19,7 +19,8 @@ export type SectionKey =
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "refund-reasons"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
-  | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs";
+  | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs"
+  | "accounting";
 
 type IconType = typeof Building2;
 
@@ -89,6 +90,12 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "kiosk", label: "Kiosk", icon: Tablet },
       { key: "loyalty", label: "Loyalty Program", icon: Heart, ownerOnly: true },
       { key: "discounts", label: "Discounts & Coupons", icon: BadgeDollarSign, ownerOnly: true },
+    ],
+  },
+  {
+    label: "Finance & accounting",
+    items: [
+      { key: "accounting", label: "Accounting integrations", icon: Calculator, href: "/settings/accounting" },
     ],
   },
   {

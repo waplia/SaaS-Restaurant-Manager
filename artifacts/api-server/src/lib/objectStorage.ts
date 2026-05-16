@@ -189,7 +189,7 @@ export class ObjectStorageService {
 
 }
 
-function parseObjectPath(path: string): {
+export function parseObjectPath(path: string): {
   bucketName: string;
   objectName: string;
 } {

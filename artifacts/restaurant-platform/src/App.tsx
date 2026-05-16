@@ -47,6 +47,8 @@ import SupportPage from "@/pages/support";
 import SystemHealthPage from "@/pages/system-health";
 import AdminApiSettingsPage from "@/pages/admin-api-settings";
 import ApiKeysPage from "@/pages/api-keys";
+import AccountingLandingPage from "@/pages/settings-accounting";
+import AccountingTargetPage from "@/pages/settings-accounting-target";
 import WebhooksPage from "@/pages/webhooks";
 import WebhookLogsPage from "@/pages/webhook-logs";
 import ApiLogsPage from "@/pages/api-logs";
@@ -208,6 +210,8 @@ function Router() {
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/display/token/:outletId" component={DisplayTokenPage} />
       <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/accounting" component={() => <RoleProtectedRoute component={AccountingLandingPage} allow={["owner", "manager", "accountant"]} />} />
+      <Route path="/settings/accounting/:target" component={() => <RoleProtectedRoute component={AccountingTargetPage} allow={["owner", "manager", "accountant"]} />} />
       <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={WebhooksPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={ApiLogsPage} allow={["owner", "manager"]} />} />

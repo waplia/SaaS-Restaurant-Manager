@@ -59,6 +59,12 @@ Kitchen ticket priority: O, M, K.
 
 ### `storage.ts` — O, M only.
 
+### `accounting.ts` — parent gate: O, M, Accountant, Super Admin
+- `GET /restaurants/:id/accounting/targets`, `GET .../targets/:target`, `GET .../targets/:target/mappings`, `GET .../targets/:target/exports` — O, M, Accountant, SA
+- `PUT .../targets/:target/connection`, `POST .../targets/:target/test`, `PUT .../targets/:target/mappings/:kind` — O, M, SA only
+- `POST .../targets/:target/exports` (run export) — O, M, Accountant, SA
+- All routes pass through `validateRestaurantAccess` (tenant/restaurant scoped) and emit `audit_logs` entries under module `accounting`. File outputs are written to object-storage via the per-restaurant scoped client.
+
 ## Frontend route gates (`artifacts/restaurant-platform/src/App.tsx`)
 Already role-gated via `RoleProtectedRoute`:
 - `/cash-register` → owner, manager, waiter
