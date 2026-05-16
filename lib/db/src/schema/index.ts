@@ -37,3 +37,4 @@ export * from "./ai-upsell";
 export * from "./ai-sales-insights";
 export * from "./fraud";
 export * from "./menu-pricing";
+export * from "./ai-chat";

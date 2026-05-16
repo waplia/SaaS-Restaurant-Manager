@@ -145,6 +145,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "dashboard_chat_assistant",
+    featureLabel: "Dashboard AI Chat Assistant",
+    description: "Chat with the dashboard assistant — answers questions, runs data lookups (top sellers, low stock, inactive customers, etc.) and drafts copy. Charged per assistant turn.",
+    creditsPerUnit: "2",
+    minCharge: 2,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

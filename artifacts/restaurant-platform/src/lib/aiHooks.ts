@@ -19,6 +19,7 @@ export interface AiWalletSummary {
   planAiEnabled: boolean;
   planKhanaAiEnabled: boolean;
   planKhanaAiInsightsEnabled?: boolean;
+  planDashboardChatEnabled?: boolean;
   planMonthlyIncluded: number;
   transactions: Array<{
     id: number;

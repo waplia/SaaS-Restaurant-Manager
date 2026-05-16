@@ -58,6 +58,7 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
   // and pages have a single, consistent source of truth.
   const planKhanaAiEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "khana_ai_enabled");
   const planKhanaAiInsightsEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "khana_ai_insights_enabled");
+  const planDashboardChatEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "dashboard_chat_enabled");
   const wallet = await getOrCreateWallet(tenantId);
   const b = summarizeWallet(wallet);
   const transactions = await listTransactions(wallet.id, 25);
@@ -74,6 +75,7 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
     planAiEnabled: planKhanaAiEnabled,
     planKhanaAiEnabled,
     planKhanaAiInsightsEnabled,
+    planDashboardChatEnabled,
     planMonthlyIncluded: tenant?.planMonthlyIncluded ?? 0,
     transactions,
   });

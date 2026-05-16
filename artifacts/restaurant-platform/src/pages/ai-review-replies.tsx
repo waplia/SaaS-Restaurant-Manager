@@ -10,7 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Sparkles, Plus, Copy, Send, Loader2, Star } from "lucide-react";
+import { Sparkles, Plus, Copy, Send, Loader2, Star, MessageSquare } from "lucide-react";
+import { AI_CHAT_OPEN_EVENT } from "@/components/ai/AiChatAssistant";
 import { useRestaurantId } from "@/lib/hooks";
 import { useAiWallet } from "@/lib/aiHooks";
 import { CreditsPill } from "@/components/ai/CreditsPill";
@@ -174,15 +175,30 @@ export default function AiReviewRepliesPage() {
                       </div>
                       <p className="text-sm mt-1 whitespace-pre-wrap">{rv.body}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => generate(rv)}
-                      disabled={generatingId === rv.id}
-                      data-testid={`button-generate-${rv.id}`}
-                    >
-                      {generatingId === rv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-                      AI Reply
-                    </Button>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        size="sm"
+                        onClick={() => generate(rv)}
+                        disabled={generatingId === rv.id}
+                        data-testid={`button-generate-${rv.id}`}
+                      >
+                        {generatingId === rv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+                        AI Reply
+                      </Button>
+                      {wallet.data?.planDashboardChatEnabled && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.dispatchEvent(new CustomEvent(AI_CHAT_OPEN_EVENT, {
+                            detail: { prompt: `Draft a ${tone} reply to review #${rv.id} (${rv.rating ?? "?"}★ from ${rv.authorName ?? "Anonymous"}): "${rv.body}"` },
+                          }))}
+                          data-testid={`button-chat-draft-${rv.id}`}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                          Draft with AI chat
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {drafts.map((d) => (

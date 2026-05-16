@@ -59,6 +59,7 @@ import adminAiCreditsRouter from "./admin-ai-credits";
 import aiRechargeRouter from "./ai-recharge";
 import fraudAlertsRouter from "./fraud-alerts";
 import menuPricingRouter from "./menu-pricing";
+import dashboardChatRouter from "./dashboard-chat";
 
 const router: IRouter = Router();
 
@@ -93,6 +94,7 @@ router.use(tablesRouter);
 router.use(menuRouter);
 router.use(menuAiRouter);
 router.use(khanaAiRouter);
+router.use(dashboardChatRouter);
 router.use(khanaAiOpsRouter);
 router.use(khanaAiUpsellRouter);
 router.use(aiSalesInsightsRouter);

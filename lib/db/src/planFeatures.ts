@@ -50,6 +50,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "ai_menu_drafts",        label: "AI menu drafts",              description: "Generate menu descriptions and translations with AI.",      category: "growth",     defaultValue: false },
   { key: "khana_ai_enabled",      label: "Khana AI module",             description: "Unlocks the full Khana AI module (descriptions, food photos, usage dashboard).", category: "growth", defaultValue: false },
   { key: "khana_ai_insights_enabled", label: "AI Sales Insights",       description: "Daily AI-generated insights about sales trends, best-sellers, low-margin items and offer ideas.", category: "growth", defaultValue: false },
+  { key: "dashboard_chat_enabled",    label: "Dashboard AI chat",          description: "Persistent in-dashboard chat assistant that can answer questions and draft copy using your data.", category: "growth", defaultValue: false },
   { key: "advanced_reports",      label: "Advanced reports",            description: "Custom date ranges, exports, and per-staff analytics.",     category: "growth",     defaultValue: false },
   { key: "custom_domain",         label: "Custom domain",               description: "Run the customer ordering page on your own domain.",        category: "platform",   defaultValue: false },
   { key: "api_access",            label: "API access",                  description: "Programmatic access to your data via REST API.",            category: "platform",   defaultValue: false },

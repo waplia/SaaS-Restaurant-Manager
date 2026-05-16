@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { TrialBanner, TrialPaywall } from "./TrialBanner";
 import { OnboardingBanner } from "./OnboardingBanner";
+import { AiChatAssistant } from "@/components/ai/AiChatAssistant";
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <OnboardingBanner />
         <main className="flex-1">{children}</main>
       </div>
+      <AiChatAssistant />
     </div>
   );
 }
