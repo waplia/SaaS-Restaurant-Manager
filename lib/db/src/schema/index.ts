@@ -63,3 +63,4 @@ export * from "./bar";
 export * from "./mystery-audits";
 export * from "./staff-tasks";
 export * from "./competitor-tracker";
+export * from "./corporate";

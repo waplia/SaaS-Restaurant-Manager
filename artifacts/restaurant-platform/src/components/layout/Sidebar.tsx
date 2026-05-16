@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf,
-  Soup, Wine, ClipboardCheck, Eye,
+  Soup, Wine, ClipboardCheck, Eye, Building2,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,17 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/food-courts", label: "Overview", icon: LayoutDashboard, roles: ["owner", "manager", "food_court_owner"] },
       { kind: "link", href: "/food-court/my-counter", label: "My Counter", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "staff"] },
+    ],
+  },
+  {
+    kind: "group", key: "corporate", label: "Corporate", icon: Building2,
+    children: [
+      { kind: "link", href: "/corporate", label: "Dashboard", icon: LayoutDashboard, roles: ["owner", "manager"] },
+      { kind: "link", href: "/corporate/companies", label: "Companies", icon: Building2, roles: ["owner", "manager"] },
+      { kind: "link", href: "/corporate/approvals", label: "Approvals", icon: Inbox, roles: ["owner", "manager"] },
+      { kind: "link", href: "/corporate/bulk-orders", label: "Bulk & Catering", icon: PartyPopper, roles: ["owner", "manager"] },
+      { kind: "link", href: "/corporate/scheduled", label: "Scheduled", icon: CalendarDays, roles: ["owner", "manager"] },
+      { kind: "link", href: "/corporate/invoices", label: "Invoices", icon: Receipt, roles: ["owner", "manager"] },
     ],
   },
   {

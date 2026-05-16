@@ -92,6 +92,7 @@ import barRouter from "./bar";
 import mysteryAuditsRouter from "./mystery-audits";
 import adminMetricsRouter from "./admin-metrics";
 import competitorTrackerRouter from "./competitor-tracker";
+import corporateRouter from "./corporate";
 
 const router: IRouter = Router();
 
@@ -203,5 +204,6 @@ router.use(portalRouter);
 router.use(barRouter);
 router.use(mysteryAuditsRouter);
 router.use(competitorTrackerRouter);
+router.use(corporateRouter);
 
 export default router;

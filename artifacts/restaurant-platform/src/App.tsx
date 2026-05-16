@@ -130,6 +130,14 @@ import FoodCourtSettlementsPage from "@/pages/food-court-settlements";
 import FoodCourtReportsPage from "@/pages/food-court-reports";
 import FoodCourtMyCounterPage from "@/pages/food-court-my-counter";
 import MembershipsPage from "@/pages/memberships";
+import CorporateDashboardPage from "@/pages/corporate-dashboard";
+import CorporateCompaniesPage from "@/pages/corporate-companies";
+import CorporateCompanyDetailPage from "@/pages/corporate-company-detail";
+import CorporateApprovalsPage from "@/pages/corporate-approvals";
+import CorporateBulkOrdersPage from "@/pages/corporate-bulk-orders";
+import CorporateScheduledPage from "@/pages/corporate-scheduled";
+import CorporateInvoicesPage from "@/pages/corporate-invoices";
+import CorporateInvoiceDetailPage from "@/pages/corporate-invoice-detail";
 import TiffinPlansPage from "@/pages/tiffin-plans";
 import TiffinSubscriptionsPage from "@/pages/tiffin-subscriptions";
 import TiffinDeliveriesPage from "@/pages/tiffin-deliveries";
@@ -278,6 +286,14 @@ function Router() {
       <Route path="/sustainability" component={() => <RoleProtectedRoute component={SustainabilityPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
       <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate" component={() => <RoleProtectedRoute component={CorporateDashboardPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/companies" component={() => <RoleProtectedRoute component={CorporateCompaniesPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/companies/:id" component={() => <RoleProtectedRoute component={CorporateCompanyDetailPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/approvals" component={() => <RoleProtectedRoute component={CorporateApprovalsPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/bulk-orders" component={() => <RoleProtectedRoute component={CorporateBulkOrdersPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/scheduled" component={() => <RoleProtectedRoute component={CorporateScheduledPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/invoices" component={() => <RoleProtectedRoute component={CorporateInvoicesPage} allow={["owner", "manager"]} />} />
+      <Route path="/corporate/invoices/:id" component={() => <RoleProtectedRoute component={CorporateInvoiceDetailPage} allow={["owner", "manager"]} />} />
       <Route path="/tiffin/plans" component={() => <RoleProtectedRoute component={TiffinPlansPage} allow={["owner", "manager"]} />} />
       <Route path="/tiffin/subscriptions" component={() => <RoleProtectedRoute component={TiffinSubscriptionsPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/tiffin/deliveries" component={() => <RoleProtectedRoute component={TiffinDeliveriesPage} allow={["owner", "manager", "delivery_executive"]} />} />
