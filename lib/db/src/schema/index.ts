@@ -56,3 +56,4 @@ export * from "./meal-plans";
 export * from "./hotel";
 export * from "./sustainability";
 export * from "./tiffin";
+export * from "./waste";

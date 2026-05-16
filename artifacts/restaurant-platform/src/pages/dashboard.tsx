@@ -10,7 +10,8 @@ import {
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users, Trash2 } from "lucide-react";
+import { useWasteDashboardTile } from "@/lib/hooks";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -107,6 +108,7 @@ export default function DashboardPage() {
   // make sense rolled up.
   const { data: kitchenData } = useLiveKitchen();
   const { data: activityData = [] } = useStaffActivity();
+  const { data: wasteTile } = useWasteDashboardTile();
 
   const s = summary as (DashboardSummary & { branchCount?: number }) | undefined;
   const selectedBranchName = selectedBranchId == null
@@ -188,6 +190,31 @@ export default function DashboardPage() {
                 </div>
               </div>
               <span className="text-sm text-primary font-medium">Manage →</span>
+            </div>
+          </Link>
+        )}
+
+        {wasteTile && (
+          <Link
+            href="/waste"
+            className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Waste (last 7 days)</p>
+                  <p className="text-2xl font-bold text-foreground mt-0.5">
+                    ₹{Number(wasteTile.totalCost ?? 0).toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {wasteTile.pendingCount} pending · ₹{Number(wasteTile.donatedCost ?? 0).toLocaleString("en-IN")} donated
+                  </p>
+                </div>
+              </div>
+              <span className="text-sm text-primary font-medium">View →</span>
             </div>
           </Link>
         )}

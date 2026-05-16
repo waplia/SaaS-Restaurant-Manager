@@ -3571,3 +3571,177 @@ export function useCloseBanquetEvent() {
       qc.invalidateQueries({ queryKey: ["hotel-stays", RESTAURANT_ID] });
     },
   });
+}
+
+// ---------------------- Waste Management ----------------------
+export function useWasteReasons() {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: ["waste-reasons", rid],
+    queryFn: () => apiGet<import("./types").WasteReason[]>(`/restaurants/${rid}/waste/reasons`),
+  });
+}
+
+export function useCreateWasteReason() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { label: string; sortOrder?: number }) =>
+      apiPost(`/restaurants/${rid}/waste/reasons`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waste-reasons"] }),
+  });
+}
+
+export function useUpdateWasteReason() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; label?: string; isActive?: boolean; sortOrder?: number }) =>
+      apiPatch(`/restaurants/${rid}/waste/reasons/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waste-reasons"] }),
+  });
+}
+
+export function useWasteSettings() {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: ["waste-settings", rid],
+    queryFn: () => apiGet<import("./types").WasteSettings>(`/restaurants/${rid}/waste/settings`),
+  });
+}
+
+export function useUpdateWasteSettings() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { approvalThreshold?: string | number; autoApproveBelowThreshold?: boolean }) =>
+      apiPatch(`/restaurants/${rid}/waste/settings`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["waste-settings"] }),
+  });
+}
+
+export function useWasteEntries(params?: { status?: string; from?: string; to?: string; itemId?: number; wasteType?: string }) {
+  const rid = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.itemId) q.set("itemId", String(params.itemId));
+  if (params?.wasteType) q.set("wasteType", params.wasteType);
+  return useQuery({
+    queryKey: ["waste-entries", rid, params],
+    queryFn: () => apiGet<import("./types").WasteEntry[]>(`/restaurants/${rid}/waste/entries?${q}`),
+  });
+}
+
+function invalidateAllWaste(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["waste-entries"] });
+  qc.invalidateQueries({ queryKey: ["waste-summary"] });
+  qc.invalidateQueries({ queryKey: ["waste-by-reason"] });
+  qc.invalidateQueries({ queryKey: ["waste-by-staff"] });
+  qc.invalidateQueries({ queryKey: ["waste-by-item"] });
+  qc.invalidateQueries({ queryKey: ["waste-dashboard-tile"] });
+  qc.invalidateQueries({ queryKey: ["inventory"] });
+}
+
+export function useCreateWasteEntry() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import("./types").CreateWasteEntryInput) =>
+      apiPost<import("./types").WasteEntry>(`/restaurants/${rid}/waste/entries`, data),
+    onSuccess: () => invalidateAllWaste(qc),
+  });
+}
+
+export function useUpdateWasteEntry() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<import("./types").CreateWasteEntryInput>) =>
+      apiPatch<import("./types").WasteEntry>(`/restaurants/${rid}/waste/entries/${id}`, data),
+    onSuccess: () => invalidateAllWaste(qc),
+  });
+}
+
+export function useApproveWasteEntry() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${rid}/waste/entries/${id}/approve`, {}),
+    onSuccess: () => invalidateAllWaste(qc),
+  });
+}
+
+export function useRejectWasteEntry() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rejectionNote }: { id: number; rejectionNote?: string }) =>
+      apiPost(`/restaurants/${rid}/waste/entries/${id}/reject`, { rejectionNote }),
+    onSuccess: () => invalidateAllWaste(qc),
+  });
+}
+
+export function useDonateWasteEntry() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; donationRecipient: string; donationPickupAt?: string; donationNote?: string }) =>
+      apiPost(`/restaurants/${rid}/waste/entries/${id}/donate`, data),
+    onSuccess: () => invalidateAllWaste(qc),
+  });
+}
+
+export function useWasteSummary(params?: { from?: string; to?: string }) {
+  const rid = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["waste-summary", rid, params],
+    queryFn: () => apiGet<import("./types").WasteReportSummary>(`/restaurants/${rid}/waste/reports/summary?${q}`),
+  });
+}
+
+export function useWasteByReason(params?: { from?: string; to?: string }) {
+  const rid = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["waste-by-reason", rid, params],
+    queryFn: () => apiGet<import("./types").WasteByReason[]>(`/restaurants/${rid}/waste/reports/by-reason?${q}`),
+  });
+}
+
+export function useWasteByStaff(params?: { from?: string; to?: string }) {
+  const rid = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["waste-by-staff", rid, params],
+    queryFn: () => apiGet<import("./types").WasteByStaff[]>(`/restaurants/${rid}/waste/reports/by-staff?${q}`),
+  });
+}
+
+export function useWasteByItem(params?: { from?: string; to?: string }) {
+  const rid = useRestaurantId();
+  const q = new URLSearchParams();
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["waste-by-item", rid, params],
+    queryFn: () => apiGet<import("./types").WasteByItem[]>(`/restaurants/${rid}/waste/reports/by-item?${q}`),
+  });
+}
+
+export function useWasteDashboardTile() {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: ["waste-dashboard-tile", rid],
+    queryFn: () => apiGet<import("./types").WasteDashboardTile>(`/restaurants/${rid}/waste/dashboard-tile`),
+    refetchInterval: 60_000,
+  });
+}

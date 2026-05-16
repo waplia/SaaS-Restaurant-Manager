@@ -2130,3 +2130,86 @@ export interface CreateEventBookingInput {
   taxAmount?: string;
   discountAmount?: string;
 }
+
+// ---------------------- Waste Management ----------------------
+export type WasteEntryStatus = "pending" | "approved" | "rejected" | "donated";
+export type WasteType = "wastage" | "spoilage" | "expired" | "overproduction" | "leftover";
+
+export interface WasteReason {
+  id: number;
+  restaurantId: number;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WasteSettings {
+  restaurantId: number;
+  approvalThreshold: string;
+  autoApproveBelowThreshold: boolean;
+  updatedAt: string;
+}
+
+export interface WasteEntry {
+  id: number;
+  restaurantId: number;
+  inventoryItemId: number;
+  quantity: string;
+  unit: string;
+  wasteType: WasteType;
+  reasonId: number | null;
+  reasonText: string | null;
+  station: string | null;
+  status: WasteEntryStatus;
+  recordedByUserId: number | null;
+  approvedByUserId: number | null;
+  approvedAt: string | null;
+  rejectionNote: string | null;
+  costAtEntry: string;
+  totalCost: string;
+  donationRecipient: string | null;
+  donationPickupAt: string | null;
+  donationNote: string | null;
+  photoUrl: string | null;
+  note: string | null;
+  inventoryTransactionId: number | null;
+  createdAt: string;
+  updatedAt: string;
+  // Joined fields
+  itemName?: string | null;
+  itemUnit?: string | null;
+  reasonLabel?: string | null;
+  recordedByName?: string | null;
+}
+
+export interface CreateWasteEntryInput {
+  inventoryItemId: number;
+  quantity: number | string;
+  wasteType?: WasteType;
+  reasonId?: number | null;
+  reasonText?: string | null;
+  station?: string | null;
+  note?: string | null;
+  photoUrl?: string | null;
+}
+
+export interface WasteReportSummary {
+  totals: {
+    totalEntries: number;
+    totalCost: string;
+    pendingCount: number;
+    approvedCount: number;
+    donatedCount: number;
+    donatedCost: string;
+    approvedCost: string;
+  };
+  byType: { wasteType: string; count: number; cost: string }[];
+  trend: { day: string; cost: string; count: number }[];
+}
+
+export interface WasteByReason { reasonId: number | null; reasonLabel: string | null; reasonText: string | null; count: number; cost: string }
+export interface WasteByStaff { userId: number | null; userName: string | null; count: number; approvedCount: number; rejectedCount: number; cost: string }
+export interface WasteByItem { itemId: number; itemName: string | null; itemUnit: string | null; qty: string; cost: string; count: number }
+export interface WasteDashboardTile { totalCost: string; pendingCount: number; donatedCost: string }
