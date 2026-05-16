@@ -14,6 +14,9 @@ export const kitchensTable = pgTable("kitchens", {
   autoPrint: boolean("auto_print").notNull().default(false),
   printerTarget: text("printer_target").notNull().default("browser"),
   isActive: boolean("is_active").notNull().default(true),
+  // When true, this station is a Bar (BOT — Bar Order Ticket) instead of a
+  // food kitchen (KOT). Tickets routed here render in the bar queue.
+  isBar: boolean("is_bar").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

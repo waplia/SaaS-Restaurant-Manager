@@ -71,6 +71,7 @@ import WaiterRequestsPage from "@/pages/waiter-requests";
 import ReservationsPage from "@/pages/reservations";
 const EventsPage = lazy(() => import("@/pages/events"));
 import BakeryPage from "@/pages/bakery";
+import BarPage from "@/pages/bar";
 import PublicBookingPage from "@/pages/public-booking";
 import PublicSitePage from "@/pages/public-site";
 import AiDashboardPage from "@/pages/ai-dashboard";
@@ -293,6 +294,7 @@ function Router() {
       <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />
       <Route path="/events" component={() => <Suspense fallback={null}><RoleProtectedRoute component={EventsPage} allow={["owner", "manager", "waiter", "kitchen"]} /></Suspense>} />
       <Route path="/bakery" component={() => <RoleProtectedRoute component={BakeryPage} allow={["owner", "manager", "waiter", "kitchen", "cashier"]} />} />
+      <Route path="/bar" component={() => <RoleProtectedRoute component={BarPage} allow={["owner", "manager", "waiter", "kitchen", "cashier"]} />} />
       <Route path="/ai" component={() => <RoleProtectedRoute component={AiDashboardPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/descriptions" component={() => <RoleProtectedRoute component={AiDescriptionsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/images" component={() => <RoleProtectedRoute component={AiImagesPage} allow={["owner", "manager"]} />} />

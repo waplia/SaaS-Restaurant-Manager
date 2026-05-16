@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
 import { verifyManagerDiscountOtp } from "../lib/managerOtp";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -10,6 +10,7 @@ import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { emitWebhookEvent } from "../lib/webhookDispatcher";
 import { pushToStaff } from "../lib/pushNotify";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
+import { recordVariantPour } from "./bar";
 import { issueTokenForOrder, syncTokenWithTickets } from "../lib/tokens";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
@@ -316,29 +317,41 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     unitPrice: number;
     originalPrice: number;
     appliedRule: { id: number; name: string; ruleType: string } | null;
+    variantId?: number;
   }> = [];
 
   const channel = (orderType ?? (ckContext ? "delivery" : "dine_in")) as string;
   const at = new Date();
 
-  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }>) {
+  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }>; variantId?: number }>) {
     const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
     const modTotal = (item.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
-    // Cloud-kitchen brand pricing override takes precedence over pricing rules
+    // Cloud-kitchen brand pricing override takes precedence, 
+    // followed by bar peg/bottle variants, and finally standard pricing rules.
+    let unitPrice: number;
+    let originalPrice: number;
+    let appliedRule: { id: number; name: string; ruleType: string } | null = null;
+
     const link = ckContext?.linkMap.get(mi.id);
     if (link?.priceOverride != null) {
-      const unitPrice = Number(link.priceOverride) + modTotal;
-      subtotal += unitPrice * item.quantity;
-      enrichedItems.push({
-        menuItem: mi,
-        qty: item.quantity,
-        notes: item.notes,
-        modifiers: item.modifiers,
-        unitPrice,
-        originalPrice: Number(mi.price) + modTotal,
-        appliedRule: null,
-      });
+      unitPrice = Number(link.priceOverride) + modTotal;
+      originalPrice = Number(mi.price) + modTotal;
+    } else if (item.variantId) {
+      const [variant] = await db.select().from(menuItemVariantsTable)
+        .where(and(eq(menuItemVariantsTable.id, item.variantId), eq(menuItemVariantsTable.restaurantId, restaurantId), eq(menuItemVariantsTable.menuItemId, mi.id)));
+      if (variant) {
+        unitPrice = Number(variant.price) + modTotal;
+        originalPrice = Number(variant.price);
+      } else {
+        // Unknown variant — fall back to base pricing.
+        const resolved = await resolveOrderItemUnitPrice({
+          menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
+          restaurantId, branchId: branchId ?? null, channel, customerId: customerId ?? null, modifierTotal: modTotal, at,
+        });
+        unitPrice = resolved.unitPrice; originalPrice = resolved.originalPrice;
+        appliedRule = resolved.appliedRule ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType } : null;
+      }
     } else {
       const resolved = await resolveOrderItemUnitPrice({
         menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
@@ -349,19 +362,23 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
         modifierTotal: modTotal,
         at,
       });
-      subtotal += resolved.unitPrice * item.quantity;
-      enrichedItems.push({
-        menuItem: mi,
-        qty: item.quantity,
-        notes: item.notes,
-        modifiers: item.modifiers,
-        unitPrice: resolved.unitPrice,
-        originalPrice: resolved.originalPrice,
-        appliedRule: resolved.appliedRule
-          ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType }
-          : null,
-      });
+      unitPrice = resolved.unitPrice; originalPrice = resolved.originalPrice;
+      appliedRule = resolved.appliedRule
+        ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType }
+        : null;
     }
+
+    subtotal += unitPrice * item.quantity;
+    enrichedItems.push({
+      menuItem: mi,
+      qty: item.quantity,
+      notes: item.notes,
+      modifiers: item.modifiers,
+      unitPrice,
+      originalPrice,
+      appliedRule,
+      variantId: item.variantId,
+    });
   }
 
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
@@ -423,6 +440,13 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
       totalPrice: (ei.unitPrice * ei.qty).toFixed(2),
       notes: ei.notes,
     }).returning();
+
+    if (ei.variantId) {
+      await recordVariantPour({
+        restaurantId, orderId: order.id, orderItemId: oi.id,
+        variantId: ei.variantId, qty: ei.qty, unitPrice: ei.unitPrice,
+      }).catch(err => { console.error("[bar] recordVariantPour failed:", err); });
+    }
 
     for (const mod of ei.modifiers ?? []) {
       await db.insert(orderItemModifiersTable).values({ orderItemId: oi.id, modifierName: mod.name, price: mod.price });
@@ -549,7 +573,10 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
 router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { menuItemId, quantity, notes, modifiers } = req.body;
+  const { menuItemId, quantity, notes, modifiers, variantId } = req.body as {
+    menuItemId: number; quantity: number; notes?: string;
+    modifiers?: Array<{ name: string; price: string }>; variantId?: number;
+  };
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
@@ -567,15 +594,27 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     ? (modifiers as { name: string; price: string }[]).reduce((sum, m) => sum + Number(m.price ?? 0), 0)
     : 0;
 
-  const resolved = await resolveOrderItemUnitPrice({
-    menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
-    restaurantId,
-    branchId: req.body?.branchId ?? null,
-    channel: order.orderType ?? "dine_in",
-    customerId: order.customerId ?? null,
-    modifierTotal: modifierAdditional,
-  });
-  const unitPrice = resolved.unitPrice;
+  let unitPrice: number;
+  let resolved: Awaited<ReturnType<typeof resolveOrderItemUnitPrice>> | null = null;
+  let resolvedVariant: typeof menuItemVariantsTable.$inferSelect | null = null;
+  if (variantId) {
+    const [v] = await db.select().from(menuItemVariantsTable)
+      .where(and(eq(menuItemVariantsTable.id, variantId), eq(menuItemVariantsTable.restaurantId, restaurantId), eq(menuItemVariantsTable.menuItemId, mi.id)));
+    resolvedVariant = v ?? null;
+  }
+  if (resolvedVariant) {
+    unitPrice = Number(resolvedVariant.price) + modifierAdditional;
+  } else {
+    resolved = await resolveOrderItemUnitPrice({
+      menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
+      restaurantId,
+      branchId: req.body?.branchId ?? null,
+      channel: order.orderType ?? "dine_in",
+      customerId: order.customerId ?? null,
+      modifierTotal: modifierAdditional,
+    });
+    unitPrice = resolved.unitPrice;
+  }
 
   let newItemId: number | undefined;
 
@@ -637,7 +676,7 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     }
   }
 
-  if (newItemId && resolved.appliedRule) {
+  if (newItemId && resolved?.appliedRule) {
     const existing = await db.select().from(pricingRuleApplicationsTable).where(eq(pricingRuleApplicationsTable.orderItemId, newItemId));
     if (existing.length === 0) {
       await db.insert(pricingRuleApplicationsTable).values({
@@ -649,6 +688,13 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
         adjustedUnitPrice: unitPrice.toFixed(2),
       }).catch(() => {});
     }
+  }
+
+  if (newItemId && resolvedVariant) {
+    await recordVariantPour({
+      restaurantId, orderId, orderItemId: newItemId,
+      variantId: resolvedVariant.id, qty, unitPrice,
+    }).catch(err => { console.error("[bar] recordVariantPour failed:", err); });
   }
 
   const newTicket = await ensureTicketForAddedItem({ orderId, restaurantId, menuItemId: mi.id });

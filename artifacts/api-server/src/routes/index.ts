@@ -86,6 +86,7 @@ import sustainabilityRouter from "./sustainability";
 import tiffinRouter from "./tiffin";
 import cloudKitchenRouter from "./cloud-kitchen";
 import portalRouter from "./portal";
+import barRouter from "./bar";
 
 const router: IRouter = Router();
 
@@ -191,5 +192,6 @@ router.use(sustainabilityRouter);
 router.use(tiffinRouter);
 router.use(cloudKitchenRouter);
 router.use(portalRouter);
+router.use(barRouter);
 
 export default router;

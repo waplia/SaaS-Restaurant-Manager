@@ -63,6 +63,9 @@ export const menuItemsTable = pgTable("menu_items", {
   expiryAlertHours: integer("expiry_alert_hours"),
   isCake: boolean("is_cake").notNull().default(false),
   isCustomizable: boolean("is_customizable").notNull().default(false),
+  // Marks bar/pub items (liquor, cocktails). POS uses this to surface peg /
+  // bottle quick-pick UI; reports group sales by this flag.
+  isBarItem: boolean("is_bar_item").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

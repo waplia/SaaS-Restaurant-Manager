@@ -38,6 +38,12 @@ export const restaurantsTable = pgTable("restaurants", {
   // When true, this outlet runs in "Hotel Restaurant Mode" — POS exposes
   // room/guest pickers, room-charge settlement, and folio rollups.
   isHotelMode: boolean("is_hotel_mode").notNull().default(false),
+  // Bar / Pub mode — gates liquor SKUs, peg/bottle variants, bartender
+  // settlement, bar KOTs, and the liquor report.
+  //   'restaurant' — default food-service mode; bar features hidden.
+  //   'bar'        — bar-only outlet; food workflows still available.
+  //   'hybrid'     — restaurant + bar (kitchen + bar stations).
+  serviceMode: text("service_mode").notNull().default("restaurant"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
