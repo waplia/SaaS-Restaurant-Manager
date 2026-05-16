@@ -25,8 +25,8 @@ export default function ReportsScreen() {
     queryKey: ["popular-items-7d", restaurantId],
     queryFn: () => customFetch<Popular[]>(`/restaurants/${restaurantId}/dashboard/popular-items?days=7`).catch(() => []),
   });
-  const trend = trendQ.data ?? [];
-  const popular = popularQ.data ?? [];
+  const trend = Array.isArray(trendQ.data) ? trendQ.data : [];
+  const popular = Array.isArray(popularQ.data) ? popularQ.data : [];
   const total = trend.reduce((s, t) => s + (t.revenue ?? 0), 0);
 
   const reports: Array<{ key: string; label: string; desc: string; icon: keyof typeof Ionicons.glyphMap; tone: string }> = [

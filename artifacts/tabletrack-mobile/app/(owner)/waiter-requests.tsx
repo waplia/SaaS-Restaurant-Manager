@@ -36,7 +36,7 @@ export default function WaiterRequestsScreen() {
     queryFn: () => customFetch<Request[]>(`/restaurants/${restaurantId}/waiter-requests?status=pending,acknowledged`).catch(() => []),
     refetchInterval: 10_000,
   });
-  const list = q.data ?? [];
+  const list = Array.isArray(q.data) ? q.data : [];
 
   const resolve = useMutation({
     mutationFn: (id: number) => customFetch(`/restaurants/${restaurantId}/waiter-requests/${id}/resolve`, { method: "POST" }),

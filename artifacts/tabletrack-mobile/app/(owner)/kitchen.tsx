@@ -85,7 +85,7 @@ export default function KitchenScreen() {
                 ticketId={t.id}
                 orderNumber={tx.orderNumber ?? String(t.id)}
                 tableLabel={tx.tableLabel}
-                items={(t.items ?? []).map((i) => ({ name: (i as unknown as { menuItemName?: string }).menuItemName ?? "", quantity: i.quantity ?? 1, notes: (i as unknown as { notes?: string | null }).notes ?? null }))}
+                items={(Array.isArray(t.items) ? t.items : []).map((i) => ({ name: (i as unknown as { menuItemName?: string }).menuItemName ?? "", quantity: i.quantity ?? 1, notes: (i as unknown as { notes?: string | null }).notes ?? null }))}
                 status={t.status ?? "pending"}
                 createdAt={t.createdAt ?? new Date().toISOString()}
                 onMarkReady={handleMarkReady}

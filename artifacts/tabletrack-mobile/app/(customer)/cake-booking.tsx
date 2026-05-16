@@ -88,7 +88,7 @@ export default function CakeBookingScreen() {
 
       <Text style={[styles.h2, { color: colors.foreground }]}>Choose a cake</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
-        {(cakesQ.data?.items ?? []).map(c => {
+        {(Array.isArray(cakesQ.data?.items) ? cakesQ.data!.items : []).map(c => {
           const isSel = selected?.id === c.id;
           return (
             <Pressable
@@ -102,7 +102,7 @@ export default function CakeBookingScreen() {
             </Pressable>
           );
         })}
-        {(cakesQ.data?.items ?? []).length === 0 && (
+        {(Array.isArray(cakesQ.data?.items) ? cakesQ.data!.items : []).length === 0 && (
           <Text style={{ color: colors.mutedForeground }}>No cakes listed yet.</Text>
         )}
       </ScrollView>

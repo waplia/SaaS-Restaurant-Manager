@@ -72,28 +72,28 @@ export default function AlertsScreen() {
   const isRefetching = ordersQ.isRefetching || inventoryQ.isRefetching;
 
   const rows: AlertRow[] = [];
-  const pendingOrders = (ordersQ.data?.orders ?? []).length;
+  const pendingOrders = (Array.isArray(ordersQ.data?.orders) ? ordersQ.data!.orders : []).length;
   if (pendingOrders > 0) rows.push({
     id: "pending-orders", severity: "high", icon: "alert-circle",
     title: `${pendingOrders} pending order${pendingOrders > 1 ? "s" : ""}`,
     body: "Orders waiting to be accepted",
     href: "/(owner)/orders",
   });
-  const lowStock = (inventoryQ.data ?? []).length;
+  const lowStock = (Array.isArray(inventoryQ.data) ? inventoryQ.data : []).length;
   if (lowStock > 0) rows.push({
     id: "low-stock", severity: lowStock > 5 ? "critical" : "high", icon: "warning",
     title: `${lowStock} item${lowStock > 1 ? "s" : ""} below reorder point`,
     body: "Tap to view stock and place a purchase order",
     href: "/(owner)/inventory",
   });
-  const delays = (kdsQ.data ?? []).length;
+  const delays = (Array.isArray(kdsQ.data) ? kdsQ.data : []).length;
   if (delays > 0) rows.push({
     id: "kds-delays", severity: "critical", icon: "flame",
     title: `${delays} kitchen ticket${delays > 1 ? "s" : ""} delayed`,
     body: "Kitchen is running behind on these orders",
     href: "/(owner)/kitchen",
   });
-  for (const a of fraudQ.data?.alerts ?? []) {
+  for (const a of (Array.isArray(fraudQ.data?.alerts) ? fraudQ.data!.alerts : [])) {
     rows.push({
       id: `fraud-${a.id}`, severity: (a.severity as Severity) ?? "medium",
       icon: "shield-checkmark", title: "Suspicious staff activity",

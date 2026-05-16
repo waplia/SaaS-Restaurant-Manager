@@ -50,7 +50,7 @@ export default function ApprovalsScreen() {
 
   const items: ApprovalItem[] = useMemo(() => {
     const out: ApprovalItem[] = [];
-    for (const e of expensesQ.data?.data ?? []) {
+    for (const e of (Array.isArray(expensesQ.data?.data) ? expensesQ.data!.data : [])) {
       out.push({
         kind: "expense", id: e.id,
         title: e.payee ?? "Expense",
@@ -58,14 +58,14 @@ export default function ApprovalsScreen() {
         amount: `₹${e.amount}`,
       });
     }
-    for (const l of leavesQ.data ?? []) {
+    for (const l of (Array.isArray(leavesQ.data) ? leavesQ.data : [])) {
       out.push({
         kind: "leave", id: l.id,
         title: l.userName ?? `Leave #${l.id}`,
         subtitle: `${new Date(l.startDate).toLocaleDateString()} – ${new Date(l.endDate).toLocaleDateString()}`,
       });
     }
-    for (const p of posQ.data ?? []) {
+    for (const p of (Array.isArray(posQ.data) ? posQ.data : [])) {
       out.push({
         kind: "purchase_order", id: p.id,
         title: p.supplierName ?? `PO #${p.id}`,

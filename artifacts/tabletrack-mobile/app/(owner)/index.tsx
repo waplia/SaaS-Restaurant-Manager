@@ -64,7 +64,9 @@ export default function OwnerDashboard() {
     queryFn: () => customFetch<TenantBranch[]>(`/tenants/${tenantId}/branches`),
     enabled: tenantId != null,
   });
-  const tenantBranches = (tenantBranchesQ.data ?? []) as TenantBranch[];
+  const tenantBranches: TenantBranch[] = Array.isArray(tenantBranchesQ.data)
+    ? (tenantBranchesQ.data as TenantBranch[])
+    : [];
   const hasMultipleOutlets = tenantBranches.length > 1;
 
   // Scope: null = all outlets (tenant-wide), number = specific restaurant id.
@@ -186,8 +188,10 @@ export default function OwnerDashboard() {
         customFetch<CompareResp>(`/tenants/${tenantId}/dashboard/compare-branches?${qs(yest, yest)}`),
       ]);
       const yMap = new Map<number, CompareBranchRow>();
-      (yestResp.branches ?? []).forEach((r) => yMap.set(r.restaurantId, r));
-      const merged = (todayResp.branches ?? []).map((r) => {
+      const yBranches: CompareBranchRow[] = Array.isArray(yestResp?.branches) ? yestResp.branches : [];
+      const tBranches: CompareBranchRow[] = Array.isArray(todayResp?.branches) ? todayResp.branches : [];
+      yBranches.forEach((r) => yMap.set(r.restaurantId, r));
+      const merged = tBranches.map((r) => {
         const y = yMap.get(r.restaurantId);
         const yRev = Number(y?.revenue ?? 0);
         const tRev = Number(r.revenue ?? 0);

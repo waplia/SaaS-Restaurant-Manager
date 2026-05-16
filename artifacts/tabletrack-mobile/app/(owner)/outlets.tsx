@@ -27,7 +27,7 @@ export default function OutletsScreen() {
     queryFn: () => customFetch<Branch[]>(`/tenants/${tenantId}/branches`).catch(() => []),
     enabled: tenantId != null,
   });
-  const list = q.data ?? [];
+  const list = Array.isArray(q.data) ? q.data : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

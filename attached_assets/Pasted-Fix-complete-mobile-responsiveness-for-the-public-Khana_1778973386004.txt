@@ -1,0 +1,456 @@
+Fix complete mobile responsiveness for the public KhanaLagao website.
+
+Current issue:
+The website looks good on desktop, but on mobile many sections become too long because every card/feature appears one by one in a single column. This makes pages very large to scroll. I want all pages to be fully mobile-friendly, compact, fast, and responsive.
+
+Important:
+- Work only on the public website pages.
+- Do not break desktop design.
+- Do not break admin/dashboard/mobile app.
+- Keep the premium KhanaLagao design.
+- Make every page responsive: homepage, feature pages, solution pages, Khana AI pages, pricing, blog, legal pages, contact/demo pages.
+- Mobile layout should be compact, readable, and easy to scroll.
+- Do not hide important content completely, but restructure it smartly for mobile.
+
+Brand:
+KhanaLagao
+
+Goal:
+Make the website feel like a premium mobile-first SaaS website.
+
+====================================================
+1. MOBILE LAYOUT RULES
+====================================================
+
+For mobile screens:
+- Avoid huge vertical scrolling.
+- Do not show 20+ cards one by one in a long column.
+- Use horizontal scroll carousels where suitable.
+- Use 2-column compact grids for small cards where readable.
+- Use accordions for long feature lists.
+- Use tabs/category filters for large sections.
+- Use collapsible sections for detailed content.
+- Use sliders for testimonials, solution cards, feature cards, and screenshots.
+- Reduce hero height.
+- Reduce padding/margins.
+- Reduce large image/mockup sizes.
+- Keep CTA buttons visible and easy to tap.
+- Use sticky bottom CTA where useful.
+- Keep font sizes balanced for mobile.
+- Prevent text overflow.
+- Prevent cards from becoming too tall.
+- Make all images responsive.
+- Ensure no horizontal page overflow.
+
+====================================================
+2. RESPONSIVE BREAKPOINTS
+====================================================
+
+Use proper responsive breakpoints.
+
+Suggested:
+- Mobile: 320px to 767px
+- Tablet: 768px to 1023px
+- Desktop: 1024px+
+
+Mobile:
+- Hero: compact layout
+- Cards: 2-column grid for small cards OR carousel
+- Feature lists: accordion/tabs
+- Large mockups: full-width but shorter
+- Pricing: stacked cards or horizontal swipe
+- Tables: mobile cards or horizontal scroll
+
+Tablet:
+- 2-column grids
+- Compact navigation
+- Proper spacing
+
+Desktop:
+- Keep existing premium layout.
+
+====================================================
+3. MOBILE HEADER
+====================================================
+
+Fix mobile header:
+- Logo should fit properly.
+- Hamburger menu should work smoothly.
+- Menu should not cover or break page.
+- Mobile menu should use collapsible groups:
+  Platform
+  Features
+  Solutions
+  Khana AI
+  Resources
+  Company
+- CTA buttons should be visible:
+  Book Demo
+  Start Free Trial
+- Header should not overlap content.
+- Header should not be too tall.
+- Sticky header should work smoothly.
+- Mega menu hover should only apply on desktop.
+- Mobile should use tap/click accordion behavior only.
+
+====================================================
+4. MOBILE HERO SECTIONS
+====================================================
+
+On mobile, hero sections should be compact.
+
+Homepage hero:
+- Reduce headline size.
+- Reduce hero padding.
+- Keep headline readable.
+- CTA buttons should stack or fit nicely.
+- Move dashboard mockup below text.
+- Floating cards should not overlap badly.
+- Hide some floating cards or convert them into a compact carousel.
+- Show only 3-4 most important metric cards on mobile:
+  Today Sales
+  Live Orders
+  Khana AI
+  Stock Alert
+- Avoid hero taking the full long screen unnecessarily.
+
+Feature page hero:
+- Shorter hero
+- One clear headline
+- Short subtitle
+- 2 CTA buttons
+- One compact visual/mockup
+- Breadcrumb should not take too much space.
+
+====================================================
+5. FEATURE CARD SECTIONS
+====================================================
+
+For sections with many feature cards:
+
+Desktop:
+- Keep grid layout.
+
+Mobile:
+Use one of these depending on section size:
+
+For 4-6 cards:
+- Use 2-column compact grid.
+
+For 7+ cards:
+- Use horizontal swipe carousel OR category accordion.
+
+For full feature directory page:
+- Use category tabs:
+  Sell, Menu, Inventory, Customers, Growth, AI, Staff, Finance, Operations, Marketplace
+- On mobile, show one category at a time.
+- Feature cards inside selected category can be 2-column compact cards.
+- Add “View More” button if too many cards.
+
+Do not show all 60+ feature cards vertically one by one on mobile.
+
+====================================================
+6. LARGE SECTIONS SHOULD BECOME ACCORDIONS
+====================================================
+
+On mobile, convert long sections into accordions where suitable:
+
+- Full feature breakdown
+- FAQ
+- Use cases
+- Related modules
+- Internal features
+- Legal page table of contents
+- Solution pain points
+- Pricing comparison table
+- Reports list
+- Integration list
+
+Example:
+Instead of showing 12 feature cards vertically, show:
+- 4 highlighted cards
+- “Show all features” accordion/button
+
+====================================================
+7. PLATFORM MODULES SECTION
+====================================================
+
+Homepage platform modules section currently may become very long.
+
+Mobile behavior:
+- Show category tabs:
+  Sell
+  Menu
+  Inventory
+  Customers
+  Growth
+  AI
+  Staff
+  Finance
+- Show only selected category cards.
+- Or use horizontal carousel with snap scroll.
+- Add clear swipe hint.
+- Keep cards compact.
+
+====================================================
+8. SOLUTIONS SECTION
+====================================================
+
+For solution/business type cards:
+
+Desktop:
+- Grid.
+
+Mobile:
+- Use horizontal carousel or 2-column compact grid.
+- Keep card height small.
+- Use short descriptions.
+- Add “View All Solutions” button.
+- Do not show 12 large cards vertically.
+
+Solutions pages:
+- Use compact sections.
+- Recommended modules can be shown as chips or carousel.
+- Pain points can be accordions.
+- Workflow can be step cards in horizontal scroll.
+
+====================================================
+9. KHANA AI SECTIONS
+====================================================
+
+Khana AI pages should remain premium but compact.
+
+Mobile:
+- AI feature cards should be horizontal carousel or 2-column compact.
+- AI workflow steps should be vertical but short.
+- AI dashboard/mockup should fit within screen.
+- AI credit explanation should use accordion.
+- Avoid huge purple/orange sections taking too much height.
+- Keep “AI Powered” badge visible.
+
+====================================================
+10. PRICING PAGE MOBILE
+====================================================
+
+Pricing page must be mobile-friendly.
+
+Mobile:
+- Pricing cards should be swipe carousel or stacked with compact spacing.
+- Monthly/yearly toggle should be sticky or near top.
+- Feature comparison table should not be huge.
+- Convert comparison table to:
+  - Accordion by feature category, or
+  - Horizontal scroll table, or
+  - Plan-wise cards
+- Add sticky bottom CTA:
+  “Book Demo” / “Start Free Trial”
+
+====================================================
+11. COMPARISON TABLES MOBILE
+====================================================
+
+Do not show wide desktop tables directly on mobile.
+
+For mobile:
+- Use horizontal scroll with visible hint, OR
+- Convert rows into cards, OR
+- Use accordion categories.
+
+Apply this to:
+- Pricing comparison
+- Feature comparison
+- Reports lists
+- Platform comparison
+- Plan limits
+- Add-ons
+
+====================================================
+12. LEGAL PAGES MOBILE
+====================================================
+
+Legal pages should be readable on mobile.
+
+Mobile:
+- Narrow content width
+- Proper line height
+- Table of contents collapsible
+- Headings clear
+- No tiny text
+- No horizontal overflow
+- Good spacing but not excessive
+
+====================================================
+13. BLOG MOBILE
+====================================================
+
+Blog listing:
+- Use compact cards.
+- Category filter should be horizontally scrollable chips.
+- Search should fit.
+- Blog cards should not be huge.
+- Featured image should be optimized.
+
+Blog detail:
+- Table of contents collapsible.
+- Related blogs carousel.
+- CTA box compact.
+- Good reading line height.
+
+====================================================
+14. CONTACT / DEMO FORMS MOBILE
+====================================================
+
+Forms must be mobile friendly.
+
+- Inputs full-width.
+- Labels readable.
+- Buttons full-width.
+- Reduce unnecessary side content.
+- Side benefit cards can become accordion or appear below form.
+- Sticky CTA not needed on form pages.
+- Avoid keyboard overlap issues.
+
+====================================================
+15. IMAGES / MOCKUPS MOBILE
+====================================================
+
+Fix all visuals:
+- Images should scale within viewport.
+- No overflow outside screen.
+- Floating cards should not overlap text.
+- Use max-width: 100%.
+- Use responsive aspect ratio.
+- Use lazy loading.
+- Use smaller mobile mockups.
+- Hide decorative elements that create overflow.
+- Replace complex desktop dashboard with simplified mobile dashboard visual if needed.
+
+====================================================
+16. SPACING / TYPOGRAPHY MOBILE
+====================================================
+
+Mobile typography:
+- Hero H1 around 34px to 42px max depending design.
+- Page H1 around 32px to 40px.
+- Section headings around 24px to 32px.
+- Body text around 15px to 17px.
+- Buttons minimum 44px height.
+- Cards should have compact padding.
+- Section vertical padding should be reduced on mobile.
+
+Avoid:
+- Huge 80px desktop spacing on mobile.
+- Very large headings wrapping into 5 lines.
+- Very tall cards.
+- Tiny unreadable text.
+
+====================================================
+17. STICKY MOBILE CTA
+====================================================
+
+Add sticky bottom CTA on marketing pages if it does not hurt UX.
+
+Mobile sticky CTA:
+- Book Demo
+- Start Free Trial
+
+Show it on:
+- Homepage
+- Feature pages
+- Solution pages
+- Khana AI pages
+- Pricing page
+
+Do not show on:
+- Contact form page
+- Book demo form page
+- Legal pages
+- Blog detail page if intrusive
+
+====================================================
+18. PERFORMANCE MOBILE
+====================================================
+
+Improve mobile performance:
+- Lazy load below-the-fold images.
+- Compress images.
+- Avoid heavy animations on mobile.
+- Disable complex hover animations on mobile.
+- Use CSS transitions only where needed.
+- Do not load unnecessary desktop-only visuals on mobile.
+- Reduce DOM height by using tabs/accordions/carousels.
+- Avoid layout shift.
+
+====================================================
+19. TEST EVERY PUBLIC PAGE
+====================================================
+
+Test responsive design for:
+- /
+- /platform
+- /features
+- /pricing
+- /book-demo
+- /contact
+- /about
+- /security
+- /compare
+- /faq
+- all /features/* pages
+- all /khana-ai/* pages
+- all /solutions/* pages
+- /blog
+- /blog detail
+- legal pages
+
+Test at:
+- 360px width
+- 390px width
+- 430px width
+- 768px width
+- desktop
+
+Check:
+- No horizontal scroll
+- Header works
+- Mobile menu works
+- Buttons fit
+- Cards not too tall
+- Sections not unnecessarily long
+- Carousels/accordions work
+- Forms work
+- Images fit
+- Footer readable
+- SEO unaffected
+
+====================================================
+20. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Mobile homepage looks premium and compact.
+- Every feature page is mobile friendly.
+- Every solution page is mobile friendly.
+- Feature sections no longer show all cards one by one endlessly.
+- Large card grids become carousel/tabs/accordions on mobile.
+- Pricing comparison is mobile-friendly.
+- Header mobile menu works.
+- No horizontal overflow.
+- No broken layout.
+- No text overflow.
+- No oversized mockups.
+- No giant unnecessary scroll sections.
+- CTAs are easy to tap.
+- Design remains premium.
+- Desktop design remains good.
+
+First audit current mobile layouts and list:
+1. Pages with too much vertical scrolling
+2. Sections showing too many one-by-one cards
+3. Overflow issues
+4. Header/mobile menu issues
+5. Large image/mockup issues
+6. Table/comparison issues
+
+Then fix all responsive issues across the website.

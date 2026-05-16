@@ -31,7 +31,7 @@ export default function InventoryScreen() {
     queryFn: () => customFetch<Item[]>(`/restaurants/${restaurantId}/inventory`).catch(() => []),
   });
 
-  const items = (q.data ?? []).filter(it => {
+  const items = (Array.isArray(q.data) ? q.data : []).filter(it => {
     const qty = Number(it.quantity ?? 0);
     const rp = Number(it.reorderPoint ?? 0);
     if (filter === "low" && qty > rp) return false;

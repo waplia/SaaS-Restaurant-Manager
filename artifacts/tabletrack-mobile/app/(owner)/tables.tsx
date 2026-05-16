@@ -34,7 +34,7 @@ export default function TablesScreen() {
     queryKey: ["tables", restaurantId],
     queryFn: () => customFetch<Table[]>(`/restaurants/${restaurantId}/tables`).catch(() => []),
   });
-  const tables = q.data ?? [];
+  const tables = Array.isArray(q.data) ? q.data : [];
 
   const byFloor: Record<string, Table[]> = {};
   for (const t of tables) (byFloor[t.floor ?? "Main"] ??= []).push(t);

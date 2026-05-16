@@ -113,11 +113,12 @@ export default function MobileExpensesScreen() {
     });
   };
 
-  const totalToday = (recent?.data ?? [])
+  const recentList = Array.isArray(recent?.data) ? recent!.data : [];
+  const totalToday = recentList
     .filter(e => e.expenseDate === new Date().toISOString().slice(0, 10))
     .reduce((s, e) => s + Number(e.amount), 0);
 
-  const catMap = new Map(cats.map(c => [c.id, c]));
+  const catMap = new Map((Array.isArray(cats) ? cats : []).map(c => [c.id, c]));
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -254,7 +255,7 @@ export default function MobileExpensesScreen() {
 
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent</Text>
-          {(recent?.data ?? []).slice(0, 10).map(e => {
+          {recentList.slice(0, 10).map(e => {
             const cat = catMap.get(e.categoryId);
             return (
               <View key={e.id} style={[styles.expenseRow, { borderBottomColor: colors.border }]}>
@@ -273,7 +274,7 @@ export default function MobileExpensesScreen() {
               </View>
             );
           })}
-          {(recent?.data ?? []).length === 0 && (
+          {recentList.length === 0 && (
             <Text style={[styles.empty, { color: colors.mutedForeground }]}>No expenses yet</Text>
           )}
         </View>
