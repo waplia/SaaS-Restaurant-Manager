@@ -45,6 +45,11 @@ export default function FAQ() {
   useSeo({
     title: "FAQ — KhanaLagao",
     description: "Frequently asked questions about KhanaLagao — pricing, product, integrations, data, security and support.",
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Resources", href: "/resources" },
+      { label: "FAQ" },
+    ],
     schema: FAQ_SCHEMA,
   });
   return (

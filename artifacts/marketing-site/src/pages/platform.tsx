@@ -67,6 +67,21 @@ export default function PlatformOverview() {
   useSeo({
     title: "The KhanaLagao Platform — Restaurant OS, Growth, Finance & AI",
     description: "The complete restaurant operating system: POS, QR menu, kitchen, inventory, staff, finance, growth and Khana AI — one connected platform.",
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Platform" },
+    ],
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "KhanaLagao Restaurant OS",
+      description: "Restaurant operating system covering POS, QR menu, kitchen display, inventory, staff, finance, growth and Khana AI.",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web, iOS, Android, Windows",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+      brand: { "@type": "Brand", name: "KhanaLagao" },
+      publisher: { "@type": "Organization", name: "Waplia Digital Solutions" },
+    },
   });
 
   return (

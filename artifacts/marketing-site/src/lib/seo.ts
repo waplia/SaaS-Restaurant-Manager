@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 import { COMPANY, ORG_JSON_LD } from "@/lib/company";
 
+export interface BreadcrumbCrumb {
+  label: string;
+  /** Absolute or root-relative path. Leave undefined for the current page (last crumb). */
+  href?: string;
+}
+
 interface SeoProps {
   title: string;
   description: string;
@@ -8,12 +14,37 @@ interface SeoProps {
   ogType?: "website" | "article" | "product";
   /** Absolute or path URL for canonical + og:url. If omitted, derived from window.location.pathname. */
   url?: string;
-  /** Optional page-specific JSON-LD schema. Organization schema is always emitted alongside. */
+  /** Optional page-specific JSON-LD schema. Organization + WebSite always emit alongside. */
   schema?: Record<string, any> | Record<string, any>[];
+  /** Optional breadcrumb trail. Renders a BreadcrumbList JSON-LD alongside the page schema. */
+  breadcrumbs?: BreadcrumbCrumb[];
+  /** Set to true on pages that should not be indexed (e.g. thank-you, 404). */
+  noindex?: boolean;
 }
 
 const SCRIPT_ID_PAGE = "ld-json-page";
 const SCRIPT_ID_ORG = "ld-json-org";
+const SCRIPT_ID_SITE = "ld-json-site";
+const SCRIPT_ID_BREADCRUMB = "ld-json-breadcrumb";
+
+const WEBSITE_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: COMPANY.product,
+  url: COMPANY.siteUrl,
+  publisher: { "@type": "Organization", name: COMPANY.legalName },
+  potentialAction: {
+    "@type": "SearchAction",
+    target: `${COMPANY.siteUrl}/blog?q={search_term_string}`,
+    "query-input": "required name=search_term_string",
+  },
+};
+
+function absolutize(path: string): string {
+  if (!path) return COMPANY.siteUrl;
+  if (path.startsWith("http")) return path;
+  return `${COMPANY.siteUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 function upsertScript(id: string, payload: unknown) {
   let el = document.getElementById(id) as HTMLScriptElement | null;
@@ -24,6 +55,11 @@ function upsertScript(id: string, payload: unknown) {
     document.head.appendChild(el);
   }
   el.textContent = JSON.stringify(payload);
+}
+
+function removeScript(id: string) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 
 function upsertLinkRel(rel: string, href: string) {
@@ -53,6 +89,8 @@ export function useSeo({
   ogType = "website",
   url,
   schema,
+  breadcrumbs,
+  noindex = false,
 }: SeoProps) {
   useEffect(() => {
     // Title (avoid double-suffix)
@@ -60,21 +98,22 @@ export function useSeo({
 
     // Canonical URL — required for SEO. Absolute, derived from siteUrl + path.
     const path = url ?? (typeof window !== "undefined" ? window.location.pathname : "/");
-    const canonicalUrl = path.startsWith("http")
-      ? path
-      : `${COMPANY.siteUrl}${path.startsWith("/") ? path : `/${path}`}`;
+    const canonicalUrl = absolutize(path);
     upsertLinkRel("canonical", canonicalUrl);
 
     // Standard meta
     upsertMeta("name", "description", description);
+    upsertMeta("name", "robots", noindex ? "noindex, nofollow" : "index, follow");
 
     // Open Graph
     upsertMeta("property", "og:title", title);
     upsertMeta("property", "og:description", description);
     upsertMeta("property", "og:image", ogImage);
+    upsertMeta("property", "og:image:alt", `${COMPANY.product} — ${title}`);
     upsertMeta("property", "og:type", ogType);
     upsertMeta("property", "og:url", canonicalUrl);
     upsertMeta("property", "og:site_name", COMPANY.product);
+    upsertMeta("property", "og:locale", "en_IN");
 
     // Twitter
     upsertMeta("name", "twitter:card", "summary_large_image");
@@ -82,14 +121,30 @@ export function useSeo({
     upsertMeta("name", "twitter:description", description);
     upsertMeta("name", "twitter:image", ogImage);
 
-    // JSON-LD — Organization always emitted; page-specific schema(s) layered on top.
+    // JSON-LD — Organization + WebSite always emitted; page-specific schema(s) layered on top.
     upsertScript(SCRIPT_ID_ORG, ORG_JSON_LD);
+    upsertScript(SCRIPT_ID_SITE, WEBSITE_JSON_LD);
+
     if (schema) {
       upsertScript(SCRIPT_ID_PAGE, schema);
     } else {
-      // Clear stale page schema from previous route
-      const el = document.getElementById(SCRIPT_ID_PAGE);
-      if (el) el.remove();
+      removeScript(SCRIPT_ID_PAGE);
     }
-  }, [title, description, ogImage, ogType, url, schema]);
+
+    if (breadcrumbs && breadcrumbs.length > 0) {
+      const items = breadcrumbs.map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: c.label,
+        ...(c.href ? { item: absolutize(c.href) } : {}),
+      }));
+      upsertScript(SCRIPT_ID_BREADCRUMB, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: items,
+      });
+    } else {
+      removeScript(SCRIPT_ID_BREADCRUMB);
+    }
+  }, [title, description, ogImage, ogType, url, schema, breadcrumbs, noindex]);
 }

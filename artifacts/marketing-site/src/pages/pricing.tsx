@@ -71,17 +71,37 @@ function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
 
 export default function Pricing() {
   useSeo({
-    title: "Pricing",
-    description: "Simple, transparent pricing for restaurants of all sizes.",
-    schema: {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: FAQ_ITEMS.map((f) => ({
-        "@type": "Question",
-        name: f.q,
-        acceptedAnswer: { "@type": "Answer", text: f.a },
-      })),
-    },
+    title: "Pricing — KhanaLagao Restaurant OS plans",
+    description: "Simple, transparent monthly pricing for restaurants, cafes, cloud kitchens and chains. No setup fee, no lock-in. 14-day free trial on every plan.",
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Pricing" },
+    ],
+    schema: [
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: FAQ_ITEMS.map((f) => ({
+          "@type": "Question",
+          name: f.q,
+          acceptedAnswer: { "@type": "Answer", text: f.a },
+        })),
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: "KhanaLagao Restaurant OS",
+        description: "Complete restaurant operating system: POS, QR menu, KDS, inventory, staff, finance, growth and Khana AI.",
+        brand: { "@type": "Brand", name: "KhanaLagao" },
+        offers: {
+          "@type": "AggregateOffer",
+          priceCurrency: "INR",
+          lowPrice: "0",
+          offerCount: "4",
+          availability: "https://schema.org/InStock",
+        },
+      },
+    ],
   });
 
   const { plans, getDisplayPlans, hasDerivedYearly, isLoading, error } = usePublicPlans();

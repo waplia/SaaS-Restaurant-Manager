@@ -1,5 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /app/
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /thank-you
 
-Sitemap: /sitemap.xml
+Sitemap: https://khanalagao.com/sitemap.xml

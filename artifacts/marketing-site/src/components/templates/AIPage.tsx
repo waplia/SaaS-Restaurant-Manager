@@ -26,6 +26,36 @@ export function AIPage({ content }: { content: AIPageContent }) {
   useSeo({
     title: content.seoTitle ?? `${content.title} | Khana AI`,
     description: content.seoDesc ?? content.tagline,
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Khana AI", href: "/khana-ai" },
+      { label: content.shortName },
+    ],
+    schema: [
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: `Khana AI — ${content.shortName}`,
+        description: content.tagline,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web, iOS, Android",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+        brand: { "@type": "Brand", name: "KhanaLagao" },
+      },
+      ...(content.faqs && content.faqs.length > 0
+        ? [
+            {
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: content.faqs.map((f) => ({
+                "@type": "Question",
+                name: f.q,
+                acceptedAnswer: { "@type": "Answer", text: f.a },
+              })),
+            },
+          ]
+        : []),
+    ],
   });
   return (
     <SiteLayout>

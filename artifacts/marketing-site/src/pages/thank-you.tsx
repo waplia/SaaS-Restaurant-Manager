@@ -15,6 +15,7 @@ export default function ThankYou() {
   useSeo({
     title: "Thank you — we'll be in touch",
     description: `Thanks for reaching out to ${COMPANY.product}. Our team in ${COMPANY.city} will get back within one business day.`,
+    noindex: true,
   });
 
   return (

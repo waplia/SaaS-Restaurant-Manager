@@ -16,7 +16,15 @@ interface Props {
 }
 
 export function LegalPageLayout({ title, intro, lastUpdated, sections, seoDescription }: Props) {
-  useSeo({ title, description: seoDescription });
+  useSeo({
+    title,
+    description: seoDescription,
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Legal", href: "/legal" },
+      { label: title },
+    ],
+  });
   return (
     <SiteLayout>
       <section className="border-b border-border bg-muted/30">

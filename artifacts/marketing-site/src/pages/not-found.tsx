@@ -15,7 +15,7 @@ const QUICK_LINKS = [
 ];
 
 export default function NotFound() {
-  useSeo({ title: "Page not found", description: "The page you're looking for doesn't exist. Try one of the quick links below." });
+  useSeo({ title: "Page not found", description: "The page you're looking for doesn't exist. Try one of the quick links below.", noindex: true });
   return (
     <SiteLayout>
       <section className="py-20 md:py-28">

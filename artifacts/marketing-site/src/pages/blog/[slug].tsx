@@ -68,15 +68,40 @@ export default function BlogPost() {
 
   useSeo({
     title: post?.title || "Blog",
-    description: post?.excerpt || "",
+    description: post?.excerpt || "Insights, news, and guides for modern restaurant operations from the KhanaLagao team.",
     ogType: "article",
+    ogImage: post?.coverImage || undefined,
+    breadcrumbs: post
+      ? [
+          { label: "Home", href: "/" },
+          { label: "Blog", href: "/blog" },
+          { label: post.title },
+        ]
+      : undefined,
     schema: post
       ? {
           "@context": "https://schema.org",
-          "@type": "Article",
+          "@type": "BlogPosting",
           headline: post.title,
+          description: post.excerpt || undefined,
+          image: post.coverImage || undefined,
           author: { "@type": "Person", name: post.author },
           datePublished: post.publishedAt,
+          dateModified: post.publishedAt,
+          mainEntityOfPage: {
+            "@type": "WebPage",
+            "@id": `https://khanalagao.com/blog/${post.slug}`,
+          },
+          publisher: {
+            "@type": "Organization",
+            name: "Waplia Digital Solutions",
+            logo: {
+              "@type": "ImageObject",
+              url: "https://khanalagao.com/logo.png",
+            },
+          },
+          articleSection: post.category,
+          keywords: post.tags || undefined,
         }
       : undefined,
   });
@@ -127,7 +152,15 @@ export default function BlogPost() {
 
           {post.coverImage && (
             <div className="mb-12 aspect-[21/9] rounded-2xl overflow-hidden bg-muted max-w-4xl mx-auto">
-              <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+              <img
+                src={post.coverImage}
+                alt={post.title}
+                width={1680}
+                height={720}
+                loading="eager"
+                fetchPriority="high"
+                className="w-full h-full object-cover"
+              />
             </div>
           )}
 

@@ -30,6 +30,22 @@ export function SolutionPage({ content }: { content: SolutionPageContent }) {
   useSeo({
     title: content.seoTitle ?? `KhanaLagao for ${content.industryLabel}`,
     description: content.seoDesc ?? content.hero.tagline,
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Solutions", href: "/solutions" },
+      { label: content.industryLabel },
+    ],
+    schema: content.faqs && content.faqs.length > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: content.faqs.map((f) => ({
+            "@type": "Question",
+            name: f.q,
+            acceptedAnswer: { "@type": "Answer", text: f.a },
+          })),
+        }
+      : undefined,
   });
   return (
     <SiteLayout>

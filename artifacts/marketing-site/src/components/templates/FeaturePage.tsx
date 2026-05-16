@@ -36,13 +36,36 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
   useSeo({
     title: content.seoTitle ?? `${content.title} | KhanaLagao`,
     description: content.seoDesc ?? content.description,
-    schema: {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": `KhanaLagao ${content.title}`,
-      "description": content.description,
-      "brand": { "@type": "Brand", "name": "KhanaLagao" },
-    },
+    breadcrumbs: [
+      { label: "Home", href: "/" },
+      { label: "Features", href: "/features" },
+      { label: content.title },
+    ],
+    schema: [
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: `KhanaLagao ${content.title}`,
+        description: content.description,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web, iOS, Android, Windows",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+        brand: { "@type": "Brand", name: "KhanaLagao" },
+      },
+      ...(content.faqs && content.faqs.length > 0
+        ? [
+            {
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: content.faqs.map((f) => ({
+                "@type": "Question",
+                name: f.q,
+                acceptedAnswer: { "@type": "Answer", text: f.a },
+              })),
+            },
+          ]
+        : []),
+    ],
   });
 
   return (
