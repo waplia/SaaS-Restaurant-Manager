@@ -8,7 +8,7 @@ import {
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
   Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare,
   MessageCircle, Activity, Wrench,
-  Tag, Copy, History, Calendar,
+  Tag, Copy, History, Calendar, Brain,
 } from "lucide-react";
 import { Link } from "wouter";
 import AdminNotificationCenter from "./admin-notifications";
@@ -16,6 +16,7 @@ import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
 import AdminMaintenance from "./admin-maintenance";
 import AdminWhatsAppTab from "./admin-whatsapp";
+import AdminAiTab from "./admin-ai";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -953,7 +954,7 @@ function TenantsTab() {
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp">("tenants");
+  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai">("tenants");
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -1039,6 +1040,7 @@ export default function AdminPage() {
             { id: "email" as const, label: "Email", icon: Mail },
             { id: "maintenance" as const, label: "System Maintenance", icon: Wrench },
             { id: "whatsapp" as const, label: "WhatsApp", icon: MessageCircle },
+            { id: "ai" as const, label: "AI Control Center", icon: Brain },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
@@ -1059,6 +1061,7 @@ export default function AdminPage() {
         {tab === "email" && <AdminEmail />}
         {tab === "maintenance" && <AdminMaintenance />}
         {tab === "whatsapp" && <AdminWhatsAppTab />}
+        {tab === "ai" && <AdminAiTab />}
       </main>
     </div>
   );

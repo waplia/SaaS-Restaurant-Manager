@@ -46,6 +46,7 @@ import adminSettingsRouter, { publicAppSettingsRouter } from "./admin-settings";
 import { maintenanceMode, maintenanceGate } from "../middleware/maintenanceMode";
 import whatsappRouter, { whatsappPublicRouter } from "./whatsapp";
 import auditLogsRouter from "./audit-logs";
+import adminAiRouter from "./admin-ai";
 
 const router: IRouter = Router();
 
@@ -109,5 +110,6 @@ router.use(adminEmailRouter);
 router.use(maintenanceRouter);
 router.use(whatsappRouter);
 router.use(auditLogsRouter);
+router.use(adminAiRouter);
 
 export default router;
