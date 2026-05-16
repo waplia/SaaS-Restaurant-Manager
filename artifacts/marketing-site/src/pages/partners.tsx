@@ -99,7 +99,7 @@ export default function Partners() {
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Why partner with us</p>
             <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-5">A real product. Real revenue. Real support.</h2>
             <p className="text-muted-foreground leading-relaxed mb-6">
-              {COMPANY.legalName} is a homegrown product company — not a reseller of someone else's software.
+              {COMPANY.legalName} is a homegrown product company — not a reseller of someone else's software. {COMPANY.proudlyBuiltLine}
               That means stable APIs, direct support, and a roadmap you can actually influence.
             </p>
             <div className="grid sm:grid-cols-2 gap-3">

@@ -30,10 +30,22 @@ const DATA: FAQ[] = [
   { q: "What happens if I leave?", a: "You can export your data at any time. On termination we delete or return your data per our DPA, subject to legal retention requirements." },
 ];
 
+const ALL_FAQS: FAQ[] = [...GENERAL, ...PRICING, ...PRODUCT, ...DATA];
+const FAQ_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: ALL_FAQS.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+
 export default function FAQ() {
   useSeo({
     title: "FAQ — KhanaLagao",
     description: "Frequently asked questions about KhanaLagao — pricing, product, integrations, data, security and support.",
+    schema: FAQ_SCHEMA,
   });
   return (
     <SiteLayout>

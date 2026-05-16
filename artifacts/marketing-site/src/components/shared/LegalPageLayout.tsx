@@ -4,6 +4,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { useSeo } from "@/lib/seo";
 import { COMPANY } from "@/lib/company";
 
+
 export interface LegalSection { id: string; title: string; body: ReactNode }
 
 interface Props {
@@ -57,6 +58,7 @@ export function LegalPageLayout({ title, intro, lastUpdated, sections, seoDescri
               <p className="text-muted-foreground">
                 Email: <a className="text-primary font-medium hover:underline" href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a>
               </p>
+              <p className="text-muted-foreground italic pt-1">{COMPANY.proudlyBuiltLine}</p>
             </div>
           </article>
         </div>

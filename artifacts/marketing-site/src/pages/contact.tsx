@@ -107,6 +107,7 @@ export default function Contact() {
                   <div>
                     <p className="font-semibold text-base text-foreground">{COMPANY.legalName}</p>
                     <p className="text-muted-foreground mt-0.5">{COMPANY.fullAddress}</p>
+                    <p className="text-muted-foreground mt-2 text-xs italic">{COMPANY.proudlyBuiltLine}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">

@@ -87,6 +87,7 @@ export default function Security() {
             {COMPANY.product} is built by {COMPANY.legalName} to the same security bar as the systems your bank and aggregators use.
             Here is exactly how we keep your data — and your customers' data — safe.
           </p>
+          <p className="mt-4 text-sm text-muted-foreground italic">{COMPANY.proudlyBuiltLine}</p>
         </div>
       </section>
 

@@ -1,88 +1,95 @@
 import { useEffect } from "react";
+import { COMPANY, ORG_JSON_LD } from "@/lib/company";
 
 interface SeoProps {
   title: string;
   description: string;
   ogImage?: string;
   ogType?: "website" | "article" | "product";
+  /** Absolute or path URL for canonical + og:url. If omitted, derived from window.location.pathname. */
   url?: string;
-  schema?: Record<string, any>;
+  /** Optional page-specific JSON-LD schema. Organization schema is always emitted alongside. */
+  schema?: Record<string, any> | Record<string, any>[];
+}
+
+const SCRIPT_ID_PAGE = "ld-json-page";
+const SCRIPT_ID_ORG = "ld-json-org";
+
+function upsertScript(id: string, payload: unknown) {
+  let el = document.getElementById(id) as HTMLScriptElement | null;
+  if (!el) {
+    el = document.createElement("script");
+    el.id = id;
+    el.type = "application/ld+json";
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(payload);
+}
+
+function upsertLinkRel(rel: string, href: string) {
+  let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
+  if (!el) {
+    el = document.createElement("link");
+    el.setAttribute("rel", rel);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("href", href);
+}
+
+function upsertMeta(attr: "name" | "property", key: string, content: string) {
+  let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+  if (!el) {
+    el = document.createElement("meta");
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", content);
 }
 
 export function useSeo({
   title,
   description,
-  ogImage = "https://khanalagao.com/opengraph.jpg",
+  ogImage = `${COMPANY.siteUrl}/opengraph.jpg`,
   ogType = "website",
   url,
   schema,
 }: SeoProps) {
   useEffect(() => {
-    // Update title
-    document.title = title.includes("KhanaLagao") ? title : `${title} | KhanaLagao`;
+    // Title (avoid double-suffix)
+    document.title = title.includes(COMPANY.product) ? title : `${title} | ${COMPANY.product}`;
 
-    // Update meta description
-    let metaDesc = document.querySelector('meta[name="description"]');
-    if (!metaDesc) {
-      metaDesc = document.createElement("meta");
-      metaDesc.setAttribute("name", "description");
-      document.head.appendChild(metaDesc);
-    }
-    metaDesc.setAttribute("content", description);
+    // Canonical URL — required for SEO. Absolute, derived from siteUrl + path.
+    const path = url ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+    const canonicalUrl = path.startsWith("http")
+      ? path
+      : `${COMPANY.siteUrl}${path.startsWith("/") ? path : `/${path}`}`;
+    upsertLinkRel("canonical", canonicalUrl);
 
-    // Update Open Graph tags
-    const updateOgTag = (property: string, content: string) => {
-      let tag = document.querySelector(`meta[property="${property}"]`);
-      if (!tag) {
-        tag = document.createElement("meta");
-        tag.setAttribute("property", property);
-        document.head.appendChild(tag);
-      }
-      tag.setAttribute("content", content);
-    };
+    // Standard meta
+    upsertMeta("name", "description", description);
 
-    updateOgTag("og:title", title);
-    updateOgTag("og:description", description);
-    updateOgTag("og:image", ogImage);
-    updateOgTag("og:type", ogType);
-    if (url) {
-      updateOgTag("og:url", url);
-    }
+    // Open Graph
+    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:description", description);
+    upsertMeta("property", "og:image", ogImage);
+    upsertMeta("property", "og:type", ogType);
+    upsertMeta("property", "og:url", canonicalUrl);
+    upsertMeta("property", "og:site_name", COMPANY.product);
 
-    // Twitter tags
-    const updateTwitterTag = (name: string, content: string) => {
-      let tag = document.querySelector(`meta[name="${name}"]`);
-      if (!tag) {
-        tag = document.createElement("meta");
-        tag.setAttribute("name", name);
-        document.head.appendChild(tag);
-      }
-      tag.setAttribute("content", content);
-    };
+    // Twitter
+    upsertMeta("name", "twitter:card", "summary_large_image");
+    upsertMeta("name", "twitter:title", title);
+    upsertMeta("name", "twitter:description", description);
+    upsertMeta("name", "twitter:image", ogImage);
 
-    updateTwitterTag("twitter:card", "summary_large_image");
-    updateTwitterTag("twitter:title", title);
-    updateTwitterTag("twitter:description", description);
-    updateTwitterTag("twitter:image", ogImage);
-
-    // JSON-LD Schema
+    // JSON-LD — Organization always emitted; page-specific schema(s) layered on top.
+    upsertScript(SCRIPT_ID_ORG, ORG_JSON_LD);
     if (schema) {
-      let scriptTag = document.querySelector('script[type="application/ld+json"]');
-      if (!scriptTag) {
-        scriptTag = document.createElement("script");
-        scriptTag.setAttribute("type", "application/ld+json");
-        document.head.appendChild(scriptTag);
-      }
-      scriptTag.textContent = JSON.stringify(schema);
+      upsertScript(SCRIPT_ID_PAGE, schema);
+    } else {
+      // Clear stale page schema from previous route
+      const el = document.getElementById(SCRIPT_ID_PAGE);
+      if (el) el.remove();
     }
-
-    return () => {
-      if (schema) {
-        const scriptTag = document.querySelector('script[type="application/ld+json"]');
-        if (scriptTag) {
-          scriptTag.remove();
-        }
-      }
-    };
   }, [title, description, ogImage, ogType, url, schema]);
 }
