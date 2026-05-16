@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import {
   db,
   aiProvidersTable,
@@ -102,12 +102,59 @@ async function loadSafety() {
   return row ?? null;
 }
 
-function checkSafety(text: string, banned: string[] | undefined): { ok: boolean; reason?: string } {
-  if (!banned || banned.length === 0) return { ok: true };
+// Built-in policy patterns enforced when the corresponding safety toggle is on.
+const POLICY_PATTERNS = {
+  abuse: [/\b(kill|murder|rape|terror(?:ist)?)\b/i, /\b(slur|n[i1]gger|f[a@]gg[o0]t)\b/i],
+  health: [/\bcure[sd]?\s+(cancer|diabetes|covid|aids|hiv)\b/i, /\bguarantee[sd]?\s+(weight\s*loss|cure)\b/i],
+  defamation: [/\b(is\s+a\s+)?(fraud|scammer|criminal|thief|liar)\b/i],
+} as const;
+
+function checkSafety(
+  text: string,
+  safety: { bannedPhrases: string[]; blockAbuse: boolean; blockHealthClaims: boolean; blockDefamation: boolean } | null,
+): { ok: boolean; reason?: string } {
+  if (!safety) return { ok: true };
   const lower = text.toLowerCase();
-  for (const phrase of banned) {
+  for (const phrase of safety.bannedPhrases ?? []) {
     if (phrase && lower.includes(phrase.toLowerCase())) {
       return { ok: false, reason: `banned phrase: ${phrase}` };
+    }
+  }
+  if (safety.blockAbuse) {
+    for (const re of POLICY_PATTERNS.abuse) if (re.test(text)) return { ok: false, reason: "abuse policy" };
+  }
+  if (safety.blockHealthClaims) {
+    for (const re of POLICY_PATTERNS.health) if (re.test(text)) return { ok: false, reason: "health-claim policy" };
+  }
+  if (safety.blockDefamation) {
+    for (const re of POLICY_PATTERNS.defamation) if (re.test(text)) return { ok: false, reason: "defamation policy" };
+  }
+  return { ok: true };
+}
+
+// Rate-limit pre-check based on safety settings (per-minute global, per-day per-restaurant).
+async function checkRateLimit(
+  ctx: CallContext,
+  safety: { rateLimitPerMinute: number; rateLimitPerDayPerRestaurant: number } | null,
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!safety) return { ok: true };
+  const oneMinAgo = new Date(Date.now() - 60_000);
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` })
+    .from(aiRequestLogsTable)
+    .where(gte(aiRequestLogsTable.createdAt, oneMinAgo));
+  if (Number(n) >= safety.rateLimitPerMinute) {
+    return { ok: false, reason: `global rate limit (${safety.rateLimitPerMinute}/min) exceeded` };
+  }
+  if (ctx.restaurantId) {
+    const oneDayAgo = new Date(Date.now() - 86_400_000);
+    const [{ n: rn }] = await db.select({ n: sql<number>`count(*)::int` })
+      .from(aiRequestLogsTable)
+      .where(and(
+        gte(aiRequestLogsTable.createdAt, oneDayAgo),
+        eq(aiRequestLogsTable.restaurantId, ctx.restaurantId),
+      ));
+    if (Number(rn) >= safety.rateLimitPerDayPerRestaurant) {
+      return { ok: false, reason: `daily rate limit per restaurant (${safety.rateLimitPerDayPerRestaurant}) exceeded` };
     }
   }
   return { ok: true };
@@ -181,7 +228,7 @@ async function callAnthropic(
   model: string,
   req: TextRequest,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
-  // If no key set, fall through to env-based proxy client (Replit AI Integrations)
+  // Use admin-configured key. Allow Replit env-proxy fallback only when explicitly opted in via config.
   let client;
   if (provider.apiKey) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
@@ -189,8 +236,10 @@ async function callAnthropic(
       apiKey: provider.apiKey,
       ...(provider.baseUrl ? { baseURL: provider.baseUrl } : {}),
     });
-  } else {
+  } else if ((provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy) {
     client = anthropicProxy;
+  } else {
+    throw new Error(`Anthropic provider ${provider.slug} has no API key`);
   }
   const message = await client.messages.create({
     model,
@@ -214,10 +263,11 @@ async function callGemini(
   req: TextRequest,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const { GoogleGenAI } = await import("@google/genai");
-  const apiKey = provider.apiKey ?? process.env["AI_INTEGRATIONS_GEMINI_API_KEY"];
-  if (!apiKey) throw new Error("Gemini provider has no API key");
+  const useProxy = (provider as ProviderRow & { config?: { useReplitProxy?: boolean } }).config?.useReplitProxy;
+  const apiKey = provider.apiKey ?? (useProxy ? process.env["AI_INTEGRATIONS_GEMINI_API_KEY"] : undefined);
+  if (!apiKey) throw new Error(`Gemini provider ${provider.slug} has no API key`);
   const cfg: { apiKey: string; httpOptions?: { baseUrl: string } } = { apiKey };
-  const baseUrl = provider.baseUrl ?? process.env["AI_INTEGRATIONS_GEMINI_BASE_URL"];
+  const baseUrl = provider.baseUrl ?? (useProxy ? process.env["AI_INTEGRATIONS_GEMINI_BASE_URL"] : undefined);
   if (baseUrl) cfg.httpOptions = { baseUrl };
   const ai = new GoogleGenAI(cfg);
 
@@ -242,6 +292,69 @@ async function callGemini(
   };
 }
 
+// ---------- Adapter: Replicate (text via prediction polling) ----------
+async function callReplicate(
+  provider: ProviderRow,
+  model: string,
+  req: TextRequest,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+  if (!provider.apiKey) throw new Error(`Replicate provider ${provider.slug} has no API key`);
+  const baseUrl = provider.baseUrl ?? "https://api.replicate.com/v1";
+  const prompt = (req.systemPrompt ? `${req.systemPrompt}\n\n` : "") + req.messages.map(m => m.content).join("\n");
+  const startRes = await fetch(`${baseUrl}/models/${model}/predictions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json", Prefer: "wait" },
+    body: JSON.stringify({ input: { prompt, max_new_tokens: req.maxTokens ?? provider.maxTokens, temperature: req.temperature ?? 0.7 } }),
+  });
+  if (!startRes.ok) throw new Error(`Replicate HTTP ${startRes.status}: ${(await startRes.text()).slice(0, 300)}`);
+  const data = await startRes.json() as { status?: string; output?: unknown; error?: string };
+  if (data.status === "failed" || data.error) throw new Error(`Replicate failed: ${data.error ?? "unknown"}`);
+  const output = Array.isArray(data.output) ? data.output.join("") : String(data.output ?? "");
+  return { text: output, inputTokens: 0, outputTokens: 0 };
+}
+
+// ---------- Adapter: Stability (image only — text not supported) ----------
+async function callStabilityImage(
+  provider: ProviderRow,
+  prompt: string,
+): Promise<{ b64_json: string; mimeType: string }> {
+  if (!provider.apiKey) throw new Error(`Stability provider ${provider.slug} has no API key`);
+  const baseUrl = provider.baseUrl ?? "https://api.stability.ai/v2beta";
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("output_format", "png");
+  const res = await fetch(`${baseUrl}/stable-image/generate/core`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${provider.apiKey}`, Accept: "image/*" },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Stability HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return { b64_json: buf.toString("base64"), mimeType: "image/png" };
+}
+
+async function callReplicateImage(
+  provider: ProviderRow,
+  model: string,
+  prompt: string,
+): Promise<{ b64_json: string; mimeType: string }> {
+  if (!provider.apiKey) throw new Error(`Replicate provider ${provider.slug} has no API key`);
+  const baseUrl = provider.baseUrl ?? "https://api.replicate.com/v1";
+  const startRes = await fetch(`${baseUrl}/models/${model}/predictions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json", Prefer: "wait" },
+    body: JSON.stringify({ input: { prompt } }),
+  });
+  if (!startRes.ok) throw new Error(`Replicate HTTP ${startRes.status}: ${(await startRes.text()).slice(0, 300)}`);
+  const data = await startRes.json() as { output?: string | string[]; error?: string };
+  const url = Array.isArray(data.output) ? data.output[0] : data.output;
+  if (!url) throw new Error(`Replicate image failed: ${data.error ?? "no output"}`);
+  const imgRes = await fetch(url);
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  const mimeType = imgRes.headers.get("content-type") ?? "image/png";
+  return { b64_json: buf.toString("base64"), mimeType };
+}
+
 async function callTextOnce(
   provider: ProviderRow,
   model: string,
@@ -252,6 +365,10 @@ async function callTextOnce(
       return callAnthropic(provider, model, req);
     case "gemini":
       return callGemini(provider, model, req);
+    case "replicate":
+      return callReplicate(provider, model, req);
+    case "stability":
+      throw new Error("Stability provider supports image generation only, not text");
     case "openai":
     case "groq":
     case "mistral":
@@ -335,11 +452,10 @@ export class AIProviderService {
     const storePrompt = safety?.storePrompt ?? true;
     const storeResponse = safety?.storeResponse ?? true;
     const maxRetries = safety?.maxRetries ?? 2;
-    const banned = safety?.bannedPhrases ?? [];
 
-    // Pre-check user input for banned phrases
+    // Pre-check user input against full safety policy
     const joined = req.messages.map((m) => m.content).join("\n");
-    const safe = checkSafety(joined, banned);
+    const safe = checkSafety(joined, safety);
     if (!safe.ok) {
       await logRequest({
         ctx, providerSlug: null, providerId: null, model: null, modality: "text",
@@ -347,6 +463,15 @@ export class AIProviderService {
         storePrompt, storeResponse,
       });
       throw new Error(`AI request blocked by safety policy: ${safe.reason}`);
+    }
+    const rl = await checkRateLimit(ctx, safety);
+    if (!rl.ok) {
+      await logRequest({
+        ctx, providerSlug: null, providerId: null, model: null, modality: "text",
+        status: "blocked", errorCode: "RATE_LIMIT", errorMessage: rl.reason ?? "rate limited",
+        storePrompt, storeResponse,
+      });
+      throw new Error(`AI request blocked: ${rl.reason}`);
     }
 
     // Resolve provider/model
@@ -459,8 +584,7 @@ export class AIProviderService {
     const safety = await loadSafety();
     const storePrompt = safety?.storePrompt ?? true;
     const storeResponse = safety?.storeResponse ?? true;
-    const banned = safety?.bannedPhrases ?? [];
-    const safe = checkSafety(req.prompt, banned);
+    const safe = checkSafety(req.prompt, safety);
     if (!safe.ok) {
       await logRequest({
         ctx, providerSlug: null, providerId: null, model: null, modality: "image",
@@ -469,36 +593,66 @@ export class AIProviderService {
       });
       throw new Error(`AI image blocked: ${safe.reason}`);
     }
+    const rl = await checkRateLimit(ctx, safety);
+    if (!rl.ok) {
+      await logRequest({
+        ctx, providerSlug: null, providerId: null, model: null, modality: "image",
+        status: "blocked", errorCode: "RATE_LIMIT", errorMessage: rl.reason ?? "rate limited",
+        storePrompt, storeResponse,
+      });
+      throw new Error(`AI image blocked: ${rl.reason}`);
+    }
     const assignment = await loadAssignment(ctx.featureSlug);
     const primaryId = assignment?.primaryProviderId ?? null;
     const primaryModel = assignment?.primaryModel ?? "gemini-2.5-flash-image";
-    if (!primaryId) {
-      const start = Date.now();
-      const { generateImage } = await import("@workspace/integrations-gemini-ai/image");
-      const out = await generateImage(req.prompt);
-      const latencyMs = Date.now() - start;
-      await logRequest({
-        ctx, providerSlug: "gemini", providerId: null, model: primaryModel, modality: "image",
-        status: "success", latencyMs, prompt: req.prompt, storePrompt, storeResponse,
-        costUsd: 0.005,
-      });
-      return { ...out, providerSlug: "gemini", model: primaryModel, fallbackUsed: false, latencyMs };
-    }
-    const provider = await loadProvider(primaryId);
-    if (!provider) throw new Error("Provider unavailable");
     const start = Date.now();
-    if (provider.kind === "gemini") {
+    const runDefaultGemini = async () => {
       const { generateImage } = await import("@workspace/integrations-gemini-ai/image");
-      const out = await generateImage(req.prompt);
+      return generateImage(req.prompt);
+    };
+    const callImage = async (provider: ProviderRow | null): Promise<{ b64_json: string; mimeType: string; providerSlug: string; model: string }> => {
+      if (!provider) {
+        const out = await runDefaultGemini();
+        return { ...out, providerSlug: "gemini", model: primaryModel };
+      }
+      switch (provider.kind) {
+        case "gemini": {
+          const out = await runDefaultGemini();
+          return { ...out, providerSlug: provider.slug, model: primaryModel };
+        }
+        case "stability": {
+          const out = await callStabilityImage(provider, req.prompt);
+          return { ...out, providerSlug: provider.slug, model: primaryModel };
+        }
+        case "replicate": {
+          const out = await callReplicateImage(provider, primaryModel, req.prompt);
+          return { ...out, providerSlug: provider.slug, model: primaryModel };
+        }
+        default:
+          throw new Error(`Image generation not implemented for provider kind ${provider.kind}`);
+      }
+    };
+    try {
+      const provider = primaryId ? await loadProvider(primaryId) : null;
+      if (primaryId && !provider) throw new Error("Configured image provider unavailable");
+      const out = await callImage(provider);
       const latencyMs = Date.now() - start;
       await logRequest({
-        ctx, providerSlug: provider.slug, providerId: provider.id, model: primaryModel, modality: "image",
+        ctx, providerSlug: out.providerSlug, providerId: provider?.id ?? null, model: out.model, modality: "image",
         status: "success", latencyMs, prompt: req.prompt, storePrompt, storeResponse,
         costUsd: 0.005,
       });
-      return { ...out, providerSlug: provider.slug, model: primaryModel, fallbackUsed: false, latencyMs };
+      return { b64_json: out.b64_json, mimeType: out.mimeType, providerSlug: out.providerSlug, model: out.model, fallbackUsed: false, latencyMs };
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      const msg = err instanceof Error ? err.message : String(err);
+      await logRequest({
+        ctx, providerSlug: null, providerId: primaryId, model: primaryModel, modality: "image",
+        status: "error", errorMessage: msg, latencyMs, prompt: req.prompt,
+        storePrompt, storeResponse,
+      });
+      throw err;
     }
-    throw new Error(`Image generation not implemented for provider kind ${provider.kind}`);
   }
 
   static async pingProvider(providerId: number): Promise<{ ok: boolean; latencyMs: number; error?: string; model?: string }> {
@@ -514,13 +668,19 @@ export class AIProviderService {
     if (!model) return { ok: false, latencyMs: 0, error: "No default model configured" };
     const start = Date.now();
     try {
-      const out = await callTextOnce(provider, model, {
-        messages: [{ role: "user", content: "ping" }],
-        maxTokens: 16,
-        temperature: 0,
-      });
-      const latencyMs = Date.now() - start;
-      return { ok: true, latencyMs, model: model + (out.text ? "" : "") };
+      if (provider.kind === "stability") {
+        // Image-only provider: ping by generating a tiny prompt
+        await callStabilityImage(provider, "test ping");
+      } else if (provider.kind === "replicate") {
+        await callReplicate(provider, model, { messages: [{ role: "user", content: "ping" }], maxTokens: 8, temperature: 0 });
+      } else {
+        await callTextOnce(provider, model, {
+          messages: [{ role: "user", content: "ping" }],
+          maxTokens: 16,
+          temperature: 0,
+        });
+      }
+      return { ok: true, latencyMs: Date.now() - start, model };
     } catch (err) {
       return { ok: false, latencyMs: Date.now() - start, error: err instanceof Error ? err.message : String(err) };
     }
