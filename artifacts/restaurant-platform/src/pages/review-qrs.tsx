@@ -38,8 +38,19 @@ interface ReviewQR {
 }
 
 interface QrAnalytics {
-  totals: { scans: number; rated: number; googleRedirects: number; negativeFeedback: number; avgRating: number };
+  totals: {
+    scans: number;
+    rated: number;
+    googleRedirects: number;
+    negativeFeedback: number;
+    aiDraftsGenerated: number;
+    copyClicks: number;
+    positiveCount: number;
+    negativeCount: number;
+    avgRating: number;
+  };
   byDay: Array<{ day: string; event: string; rating: number | null; count: number }>;
+  tagDistribution: Array<{ tag: string; count: number }>;
 }
 
 const empty = {
@@ -164,13 +175,16 @@ export default function ReviewQrsPage() {
       />
 
       {/* Aggregate analytics */}
-      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-4">
         {[
           { label: "Scans (30d)", value: analytics.data?.totals.scans ?? 0 },
           { label: "Ratings", value: analytics.data?.totals.rated ?? 0 },
           { label: "Avg ★", value: analytics.data?.totals.avgRating ?? 0 },
-          { label: "Google redirects", value: analytics.data?.totals.googleRedirects ?? 0 },
-          { label: "Private feedback", value: analytics.data?.totals.negativeFeedback ?? 0 },
+          { label: "Positive (4-5★)", value: analytics.data?.totals.positiveCount ?? 0 },
+          { label: "Negative (1-3★)", value: analytics.data?.totals.negativeCount ?? 0 },
+          { label: "AI drafts", value: analytics.data?.totals.aiDraftsGenerated ?? 0 },
+          { label: "Copy clicks", value: analytics.data?.totals.copyClicks ?? 0 },
+          { label: "Google clicks", value: analytics.data?.totals.googleRedirects ?? 0 },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -180,6 +194,21 @@ export default function ReviewQrsPage() {
           </Card>
         ))}
       </div>
+
+      {(analytics.data?.tagDistribution?.length ?? 0) > 0 && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="text-sm font-medium mb-2">Top guest tags</div>
+            <div className="flex flex-wrap gap-2">
+              {analytics.data!.tagDistribution.map((t) => (
+                <Badge key={t.tag} variant="secondary" data-testid={`tag-stat-${t.tag.replace(/\s+/g, "-").toLowerCase()}`}>
+                  {t.tag} <span className="ml-1 text-muted-foreground">· {t.count}</span>
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-4">
         <CardContent className="p-4">

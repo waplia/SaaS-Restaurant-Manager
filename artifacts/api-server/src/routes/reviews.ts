@@ -171,18 +171,62 @@ router.get("/restaurants/:restaurantId/review-qrs/analytics", async (req: Reques
     .where(and(...conds))
     .groupBy(sql`1`, reviewQrScansTable.event, reviewQrScansTable.rating);
 
-  const totals = { scans: 0, rated: 0, googleRedirects: 0, negativeFeedback: 0, sumRating: 0, ratedWithStars: 0 };
+  // Determine the positive-rating threshold for splitting positive vs negative
+  // ratings. When filtering to one QR we use that QR's setting; otherwise we
+  // fall back to the conventional 4★.
+  let positiveThreshold = 4;
+  if (qrIdParam) {
+    const [qr] = await db.select({ pt: reviewQrsTable.positiveThreshold }).from(reviewQrsTable).where(eq(reviewQrsTable.id, qrIdParam));
+    if (qr) positiveThreshold = qr.pt;
+  }
+
+  const totals = {
+    scans: 0,
+    rated: 0,
+    googleRedirects: 0,
+    negativeFeedback: 0,
+    aiDraftsGenerated: 0,
+    copyClicks: 0,
+    positiveCount: 0,
+    negativeCount: 0,
+    sumRating: 0,
+    ratedWithStars: 0,
+  };
   for (const r of rows) {
     if (r.event === "scan") totals.scans += r.count;
     if (r.event === "rated") {
       totals.rated += r.count;
-      if (r.rating) { totals.sumRating += r.rating * r.count; totals.ratedWithStars += r.count; }
+      if (r.rating) {
+        totals.sumRating += r.rating * r.count;
+        totals.ratedWithStars += r.count;
+        if (r.rating >= positiveThreshold) totals.positiveCount += r.count;
+        else totals.negativeCount += r.count;
+      }
     }
     if (r.event === "google_redirect") totals.googleRedirects += r.count;
     if (r.event === "submitted_negative") totals.negativeFeedback += r.count;
+    if (r.event === "draft_generated") totals.aiDraftsGenerated += r.count;
+    if (r.event === "draft_copied") totals.copyClicks += r.count;
   }
   const avgRating = totals.ratedWithStars ? +(totals.sumRating / totals.ratedWithStars).toFixed(2) : 0;
-  res.json({ totals: { ...totals, avgRating }, byDay: rows });
+
+  // Tag distribution: unnest selectedTags JSON array on customer_feedback rows
+  // for this restaurant in the same time window. Top 12.
+  const tagConds = [eq(customerFeedbackTable.restaurantId, restaurantId), gte(customerFeedbackTable.createdAt, since)];
+  if (qrIdParam) tagConds.push(eq(customerFeedbackTable.qrId, qrIdParam));
+  const tagRows = await db.execute<{ tag: string; count: number }>(sql`
+    SELECT tag::text AS tag, count(*)::int AS count
+    FROM ${customerFeedbackTable},
+      jsonb_array_elements_text(coalesce(${customerFeedbackTable.selectedTags}, '[]'::jsonb)) AS tag
+    WHERE ${and(...tagConds)}
+    GROUP BY tag
+    ORDER BY count DESC
+    LIMIT 12
+  `);
+  const tagDistribution = (Array.isArray(tagRows) ? tagRows : (tagRows as { rows?: Array<{ tag: string; count: number }> }).rows ?? [])
+    .map((r) => ({ tag: r.tag, count: Number(r.count) }));
+
+  res.json({ totals: { ...totals, avgRating }, byDay: rows, tagDistribution });
 });
 
 // ─── Customer feedback (private 1–3★) ─────────────────────────────────────────

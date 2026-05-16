@@ -720,27 +720,22 @@ function checkDraftCooldown(ip: string): { ok: true } | { ok: false; retryAfterM
 router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
   const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
   if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
-  if (!qr.aiAssistEnabled) return void res.json({ available: false, reason: "ai_assist_disabled" });
-  // Don't burn AI credits when there's nowhere to send the resulting draft.
-  if (!qr.googleReviewUrl) return void res.json({ available: false, reason: "no_google_url" });
-  const ipForLimit = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-  const cooldown = checkDraftCooldown(ipForLimit);
-  if (!cooldown.ok) {
-    return void res.status(429).json({ available: false, reason: "rate_limited", retryAfterMs: cooldown.retryAfterMs });
-  }
   const b = (req.body ?? {}) as Record<string, unknown>;
   const rating = Math.min(5, Math.max(1, Number(b.rating)));
-  if (!rating || rating < qr.positiveThreshold) return void res.status(400).json({ error: "Rating must be positive" });
+  if (!rating) return void res.status(400).json({ error: "Rating required" });
   const tagsRaw = Array.isArray(b.tags) ? (b.tags as unknown[]) : [];
   const tags = tagsRaw.filter((t): t is string => typeof t === "string").slice(0, 8).map((t) => t.slice(0, 40));
   const comment = typeof b.comment === "string" ? b.comment.slice(0, 600) : "";
   const customerName = typeof b.customerName === "string" ? b.customerName.slice(0, 200) : null;
+  const customerPhone = typeof b.customerPhone === "string" ? b.customerPhone.slice(0, 50) : null;
+  const isPositive = rating >= qr.positiveThreshold;
 
   const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, tenantId: restaurantsTable.tenantId })
     .from(restaurantsTable).where(eq(restaurantsTable.id, qr.restaurantId));
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
-  // Pre-create the feedback row so we can attach the draft + later events.
+  // Always persist the feedback first so analytics + recovery queue see it
+  // regardless of whether AI generation succeeds.
   const [fb] = await db.insert(customerFeedbackTable).values({
     restaurantId: qr.restaurantId,
     branchId: qr.branchId,
@@ -748,9 +743,42 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
     rating,
     comment: comment || null,
     customerName,
+    customerPhone,
     selectedTags: tags,
     source: "qr",
   }).returning();
+  await db.insert(reviewQrScansTable).values({
+    qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
+    metadata: { feedbackId: fb.id, tagCount: tags.length, hasComment: !!comment },
+  });
+  // Low-rating: feed the existing recovery queue so a manager follows up,
+  // even though the customer continues through the same draft flow.
+  if (!isPositive) {
+    await db.insert(feedbackRecoveryTasksTable).values({
+      restaurantId: qr.restaurantId,
+      feedbackId: fb.id,
+      sentiment: rating <= 2 ? "negative" : "neutral",
+      status: "new",
+    });
+    await db.insert(notificationsTable).values({
+      restaurantId: qr.restaurantId,
+      type: "feedback",
+      title: `New ${rating}★ private feedback`,
+      message: (comment || tags.join(", ") || "Customer left private feedback").slice(0, 200),
+    });
+    broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+  }
+
+  const baseResponse = { feedbackId: fb.id, googleReviewUrl: qr.googleReviewUrl };
+
+  if (!qr.aiAssistEnabled) return void res.json({ ...baseResponse, available: false, reason: "ai_assist_disabled" });
+  if (!qr.googleReviewUrl) return void res.json({ ...baseResponse, available: false, reason: "no_google_url" });
+
+  const ipForLimit = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  const cooldown = checkDraftCooldown(ipForLimit);
+  if (!cooldown.ok) {
+    return void res.status(429).json({ ...baseResponse, available: false, reason: "rate_limited", retryAfterMs: cooldown.retryAfterMs });
+  }
 
   // Reserve credits ourselves (public route — no req.user). Degrade gracefully
   // if the wallet is empty/blocked so the customer can still leave a manual
@@ -767,7 +795,7 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
     });
   } catch (err) {
     const e = err as { code?: string };
-    return void res.json({ available: false, reason: e.code ?? "wallet_error", feedbackId: fb.id });
+    return void res.json({ ...baseResponse, available: false, reason: e.code ?? "wallet_error" });
   }
 
   const systemPrompt = `You write short, warm, authentic-sounding Google reviews from the guest's point of view. Keep it 2-4 sentences, first-person, mention 1-2 specific things they liked. Never invent details that weren't provided. No emojis, no hashtags, no quotation marks. Plain text only.`;
