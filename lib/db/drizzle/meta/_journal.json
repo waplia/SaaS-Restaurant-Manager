@@ -71,6 +71,13 @@
       "when": 1778910440971,
       "tag": "0009_review_qr_ai_draft",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778920000000,
+      "tag": "0010_review_qr_session_token",
+      "breakpoints": true
     }
   ]
 }

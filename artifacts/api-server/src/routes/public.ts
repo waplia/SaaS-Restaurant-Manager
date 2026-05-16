@@ -671,15 +671,47 @@ router.get("/public/review-qr/:qrCode", async (req, res) => {
 router.post("/public/review-qr/:qrCode/rate", async (req, res) => {
   const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
   if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
-  const rating = Math.min(5, Math.max(1, Number((req.body ?? {}).rating)));
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const rating = Math.min(5, Math.max(1, Number(b.rating)));
   if (!rating) return void res.status(400).json({ error: "Rating required" });
-  await db.insert(reviewQrScansTable).values({
-    qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
-  });
+  const sessionToken = typeof b.sessionToken === "string" ? b.sessionToken.slice(0, 80) : "";
+  if (!sessionToken) return void res.status(400).json({ error: "sessionToken required" });
+
+  // Upsert one feedback row per (qrId, sessionToken). New rows emit a single
+  // `rated` scan event; subsequent rating changes within the same session
+  // update the row in place without inflating analytics.
+  const existing = await db.update(customerFeedbackTable)
+    .set({ rating })
+    .where(and(eq(customerFeedbackTable.qrId, qr.id), eq(customerFeedbackTable.sessionToken, sessionToken)))
+    .returning({ id: customerFeedbackTable.id });
+  let feedbackId: number;
+  let isNew = false;
+  if (existing.length > 0) {
+    feedbackId = existing[0]!.id;
+  } else {
+    const [fb] = await db.insert(customerFeedbackTable).values({
+      restaurantId: qr.restaurantId,
+      branchId: qr.branchId,
+      qrId: qr.id,
+      rating,
+      sessionToken,
+      source: "qr",
+    }).returning({ id: customerFeedbackTable.id });
+    feedbackId = fb!.id;
+    isNew = true;
+  }
+  if (isNew) {
+    await db.insert(reviewQrScansTable).values({
+      qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
+      metadata: { feedbackId },
+    });
+  }
   res.json({
     ok: true,
+    feedbackId,
     positive: rating >= qr.positiveThreshold,
     aiAssistEnabled: qr.aiAssistEnabled && !!qr.googleReviewUrl,
+    googleReviewUrl: qr.googleReviewUrl,
   });
 });
 
@@ -723,6 +755,8 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const rating = Math.min(5, Math.max(1, Number(b.rating)));
   if (!rating) return void res.status(400).json({ error: "Rating required" });
+  const sessionToken = typeof b.sessionToken === "string" ? b.sessionToken.slice(0, 80) : "";
+  if (!sessionToken) return void res.status(400).json({ error: "sessionToken required" });
   const tagsRaw = Array.isArray(b.tags) ? (b.tags as unknown[]) : [];
   const tags = tagsRaw.filter((t): t is string => typeof t === "string").slice(0, 8).map((t) => t.slice(0, 40));
   const comment = typeof b.comment === "string" ? b.comment.slice(0, 600) : "";
@@ -734,39 +768,56 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
     .from(restaurantsTable).where(eq(restaurantsTable.id, qr.restaurantId));
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
-  // Always persist the feedback first so analytics + recovery queue see it
-  // regardless of whether AI generation succeeds.
-  const [fb] = await db.insert(customerFeedbackTable).values({
-    restaurantId: qr.restaurantId,
-    branchId: qr.branchId,
-    qrId: qr.id,
-    rating,
-    comment: comment || null,
-    customerName,
-    customerPhone,
-    selectedTags: tags,
-    source: "qr",
-  }).returning();
-  await db.insert(reviewQrScansTable).values({
-    qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
-    metadata: { feedbackId: fb.id, tagCount: tags.length, hasComment: !!comment },
-  });
-  // Low-rating: feed the existing recovery queue so a manager follows up,
-  // even though the customer continues through the same draft flow.
+  // Upsert the per-session feedback row. /rate may have already created it;
+  // if not, this is the first call for this scan session.
+  const updated = await db.update(customerFeedbackTable).set({
+    rating, comment: comment || null, customerName, customerPhone, selectedTags: tags,
+  }).where(and(eq(customerFeedbackTable.qrId, qr.id), eq(customerFeedbackTable.sessionToken, sessionToken))).returning();
+  let fb: typeof customerFeedbackTable.$inferSelect;
+  if (updated.length > 0) {
+    fb = updated[0]!;
+  } else {
+    const [created] = await db.insert(customerFeedbackTable).values({
+      restaurantId: qr.restaurantId,
+      branchId: qr.branchId,
+      qrId: qr.id,
+      rating,
+      comment: comment || null,
+      customerName,
+      customerPhone,
+      selectedTags: tags,
+      sessionToken,
+      source: "qr",
+    }).returning();
+    fb = created!;
+    // Couldn't have been a /rate scan event, so backfill it once here.
+    await db.insert(reviewQrScansTable).values({
+      qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
+      metadata: { feedbackId: fb.id },
+    });
+  }
+
+  // Low-rating: feed the existing recovery queue. Dedup so regenerate / repeated
+  // calls within the same scan session don't spam recovery tasks or notifications.
   if (!isPositive) {
-    await db.insert(feedbackRecoveryTasksTable).values({
-      restaurantId: qr.restaurantId,
-      feedbackId: fb.id,
-      sentiment: rating <= 2 ? "negative" : "neutral",
-      status: "new",
-    });
-    await db.insert(notificationsTable).values({
-      restaurantId: qr.restaurantId,
-      type: "feedback",
-      title: `New ${rating}★ private feedback`,
-      message: (comment || tags.join(", ") || "Customer left private feedback").slice(0, 200),
-    });
-    broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+    const [existingTask] = await db.select({ id: feedbackRecoveryTasksTable.id })
+      .from(feedbackRecoveryTasksTable)
+      .where(eq(feedbackRecoveryTasksTable.feedbackId, fb.id));
+    if (!existingTask) {
+      await db.insert(feedbackRecoveryTasksTable).values({
+        restaurantId: qr.restaurantId,
+        feedbackId: fb.id,
+        sentiment: rating <= 2 ? "negative" : "neutral",
+        status: "new",
+      });
+      await db.insert(notificationsTable).values({
+        restaurantId: qr.restaurantId,
+        type: "feedback",
+        title: `New ${rating}★ private feedback`,
+        message: (comment || tags.join(", ") || "Customer left private feedback").slice(0, 200),
+      });
+      broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+    }
   }
 
   const baseResponse = { feedbackId: fb.id, googleReviewUrl: qr.googleReviewUrl };
@@ -823,22 +874,35 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
       metadata: { feedbackId: fb.id, tagCount: tags.length, hasComment: !!comment },
     });
     await commitReservation({ reservation, requestLogId: result.requestLogId });
-    res.json({ available: true, feedbackId: fb.id, draft, googleReviewUrl: qr.googleReviewUrl });
+    res.json({ ...baseResponse, available: true, draft });
   } catch (err) {
     await refundReservation(reservation, "ai_review_draft generation failed").catch(() => undefined);
     logger.warn({ err, qrId: qr.id }, "ai_review_draft generation failed");
-    res.json({ available: false, reason: "generation_failed", feedbackId: fb.id });
+    res.json({ ...baseResponse, available: false, reason: "generation_failed" });
   }
 });
+
+// Resolve the active feedback row for a scan session — used by copy / redirect
+// trackers so we don't trust client-supplied IDs.
+async function resolveSessionFeedback(qrId: number, body: Record<string, unknown>) {
+  const sessionToken = typeof body.sessionToken === "string" ? body.sessionToken.slice(0, 80) : "";
+  if (sessionToken) {
+    const [row] = await db.select({ id: customerFeedbackTable.id })
+      .from(customerFeedbackTable)
+      .where(and(eq(customerFeedbackTable.qrId, qrId), eq(customerFeedbackTable.sessionToken, sessionToken)));
+    if (row) return row.id;
+  }
+  return null;
+}
 
 router.post("/public/review-qr/:qrCode/draft-copied", async (req, res) => {
   const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
   if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
-  const feedbackId = Number((req.body ?? {}).feedbackId);
+  const feedbackId = await resolveSessionFeedback(qr.id, (req.body ?? {}) as Record<string, unknown>);
   if (feedbackId) {
     await db.update(customerFeedbackTable)
       .set({ copiedDraft: true })
-      .where(and(eq(customerFeedbackTable.id, feedbackId), eq(customerFeedbackTable.qrId, qr.id)));
+      .where(eq(customerFeedbackTable.id, feedbackId));
   }
   await db.insert(reviewQrScansTable).values({
     qrId: qr.id, restaurantId: qr.restaurantId, event: "draft_copied",
@@ -850,11 +914,11 @@ router.post("/public/review-qr/:qrCode/draft-copied", async (req, res) => {
 router.post("/public/review-qr/:qrCode/google-redirect", async (req, res) => {
   const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
   if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
-  const feedbackId = Number((req.body ?? {}).feedbackId);
+  const feedbackId = await resolveSessionFeedback(qr.id, (req.body ?? {}) as Record<string, unknown>);
   if (feedbackId) {
     await db.update(customerFeedbackTable)
       .set({ googleRedirected: true })
-      .where(and(eq(customerFeedbackTable.id, feedbackId), eq(customerFeedbackTable.qrId, qr.id)));
+      .where(eq(customerFeedbackTable.id, feedbackId));
   }
   await db.insert(reviewQrScansTable).values({
     qrId: qr.id, restaurantId: qr.restaurantId, event: "google_redirect",

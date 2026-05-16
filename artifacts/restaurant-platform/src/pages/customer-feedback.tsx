@@ -40,25 +40,34 @@ const CRITICAL_TAGS = [
 
 type Phase = "rate" | "tags" | "draft" | "done";
 
+function newSessionToken() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function CustomerFeedbackPage() {
   const [, params] = useRoute<{ qrCode: string }>("/review/:qrCode");
   const qrCode = params?.qrCode ?? "";
   const [config, setConfig] = useState<QrConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionToken] = useState<string>(() => newSessionToken());
   const [rating, setRating] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("rate");
+  // aiAssistAvailable comes from /rate (QR config + Google URL). When false the
+  // UI never offers Generate/Regenerate; it goes straight to a manual draft.
+  const [aiAssistAvailable, setAiAssistAvailable] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [comment, setComment] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [generating, setGenerating] = useState(false);
   const [draftEdited, setDraftEdited] = useState("");
-  const [feedbackId, setFeedbackId] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiDelivered, setAiDelivered] = useState(false);
   const [aiUnavailableReason, setAiUnavailableReason] = useState<string | null>(null);
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
 
   useEffect(() => {
     if (!qrCode) return;
@@ -75,26 +84,54 @@ export default function CustomerFeedbackPage() {
 
   const tagOptions = isPositive ? POSITIVE_TAGS : CRITICAL_TAGS;
 
-  function pickRating(stars: number) {
+  async function pickRating(stars: number) {
     setRating(stars);
     setTags([]);
     setComment("");
     setDraftEdited("");
-    setFeedbackId(null);
-    setCopied(false);
-    setAiAvailable(false);
+    setAiDelivered(false);
     setAiUnavailableReason(null);
-    // Fire-and-forget scan event for analytics — independent of draft flow.
-    fetch(`/api/public/review-qr/${qrCode}/rate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating: stars }),
-    }).catch(() => undefined);
+    setCopied(false);
+    try {
+      const res = await fetch(`/api/public/review-qr/${qrCode}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: stars, sessionToken }),
+      });
+      const data = await res.json();
+      setAiAssistAvailable(!!data.aiAssistEnabled);
+      if (typeof data.googleReviewUrl === "string") setGoogleReviewUrl(data.googleReviewUrl);
+    } catch {
+      setAiAssistAvailable(false);
+    }
     setPhase("tags");
   }
 
   function toggleTag(tag: string) {
     setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag].slice(0, 5));
+  }
+
+  // Persist tags + comment + name + phone without spending AI credits. Used
+  // when ai_assist is off — keeps the feedback row in sync with what the
+  // customer typed even though we won't ask the model for a draft.
+  async function saveTagsAndContinue() {
+    if (!rating) return;
+    setSavingManual(true);
+    try {
+      // Re-call /rate with same rating just to ensure the row exists before
+      // generate-draft (no double counting — server only emits a scan event
+      // once per session for new rows).
+      // Then call /generate-draft which will short-circuit with ai_assist_disabled
+      // / no_google_url but still persist tags+comment+name+phone in the row.
+      await fetch(`/api/public/review-qr/${qrCode}/generate-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, sessionToken, tags, comment, customerName, customerPhone }),
+      }).catch(() => undefined);
+    } finally {
+      setSavingManual(false);
+    }
+    setPhase("draft");
   }
 
   async function generateDraft() {
@@ -104,23 +141,21 @@ export default function CustomerFeedbackPage() {
       const res = await fetch(`/api/public/review-qr/${qrCode}/generate-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, tags, comment, customerName, customerPhone }),
+        body: JSON.stringify({ rating, sessionToken, tags, comment, customerName, customerPhone }),
       });
       const data = await res.json();
-      if (data.feedbackId) setFeedbackId(data.feedbackId);
       if (typeof data.googleReviewUrl === "string") setGoogleReviewUrl(data.googleReviewUrl);
       if (data.available && typeof data.draft === "string" && data.draft.trim()) {
-        setAiAvailable(true);
+        setAiDelivered(true);
         setAiUnavailableReason(null);
         setDraftEdited(data.draft);
       } else {
-        setAiAvailable(false);
+        setAiDelivered(false);
         setAiUnavailableReason(data.reason ?? "unavailable");
-        if (!draftEdited) setDraftEdited("");
       }
       setPhase("draft");
     } catch {
-      setAiAvailable(false);
+      setAiDelivered(false);
       setAiUnavailableReason("network");
       setPhase("draft");
     } finally {
@@ -137,7 +172,7 @@ export default function CustomerFeedbackPage() {
       fetch(`/api/public/review-qr/${qrCode}/draft-copied`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedbackId }),
+        body: JSON.stringify({ sessionToken }),
       }).catch(() => undefined);
       setTimeout(() => setCopied(false), 2500);
     } catch { /* clipboard blocked */ }
@@ -147,7 +182,7 @@ export default function CustomerFeedbackPage() {
     fetch(`/api/public/review-qr/${qrCode}/google-redirect`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feedbackId }),
+      body: JSON.stringify({ sessionToken }),
     }).catch(() => undefined);
     if (googleReviewUrl) {
       window.open(googleReviewUrl, "_blank", "noopener");
@@ -176,6 +211,7 @@ export default function CustomerFeedbackPage() {
 
   const accent = { backgroundColor: config.accentColor, color: "white" };
   const hasGoogleUrl = !!googleReviewUrl;
+  const showGenerate = aiAssistAvailable && hasGoogleUrl;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -265,33 +301,48 @@ export default function CustomerFeedbackPage() {
                   </div>
                 )}
               </div>
-              <Button
-                className="w-full"
-                style={accent}
-                onClick={generateDraft}
-                disabled={generating}
-                data-testid="button-generate-review"
-              >
-                {generating ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Writing your draft…</>
-                ) : (
-                  <><Sparkles className="h-4 w-4 mr-2" /> Generate Review</>
-                )}
-              </Button>
+              {showGenerate ? (
+                <Button
+                  className="w-full"
+                  style={accent}
+                  onClick={generateDraft}
+                  disabled={generating}
+                  data-testid="button-generate-review"
+                >
+                  {generating ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Writing your draft…</>
+                  ) : (
+                    <><Sparkles className="h-4 w-4 mr-2" /> Generate Review</>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  className="w-full"
+                  style={accent}
+                  onClick={saveTagsAndContinue}
+                  disabled={savingManual}
+                  data-testid="button-continue-manual"
+                >
+                  {savingManual ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Continue
+                </Button>
+              )}
             </div>
           )}
 
           {phase === "draft" && (
             <div className="space-y-3">
               {!isPositive && (
-                <p className="text-xs text-muted-foreground italic">{config.negativeFeedbackMessage} A manager will follow up on your feedback.</p>
+                <p className="text-xs text-muted-foreground italic">
+                  {config.negativeFeedbackMessage} A manager will follow up on your feedback.
+                </p>
               )}
               <div className="flex items-center justify-between">
                 <Label className="text-sm flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4" style={{ color: config.accentColor }} />
-                  {aiAvailable ? "Your AI-written draft" : "Write your review"}
+                  {aiDelivered ? "Your AI-written draft" : "Write your review"}
                 </Label>
-                {aiAvailable && (
+                {showGenerate && aiDelivered && (
                   <button
                     type="button"
                     onClick={generateDraft}
@@ -303,7 +354,12 @@ export default function CustomerFeedbackPage() {
                   </button>
                 )}
               </div>
-              {!aiAvailable && (
+              {!aiDelivered && showGenerate && aiUnavailableReason && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  We couldn't generate a draft this time. You can write your review manually below.
+                </p>
+              )}
+              {!showGenerate && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
                   AI review generation is unavailable. You can write your review manually.
                 </p>
@@ -312,7 +368,7 @@ export default function CustomerFeedbackPage() {
                 rows={6}
                 value={draftEdited}
                 onChange={(e) => { setDraftEdited(e.target.value); setCopied(false); }}
-                placeholder={aiAvailable ? "" : "Write a short review you'd like to post on Google…"}
+                placeholder={aiDelivered ? "" : "Write a short review you'd like to post on Google…"}
                 className="text-sm"
                 data-testid="textarea-draft"
               />

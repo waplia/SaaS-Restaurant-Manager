@@ -56,10 +56,12 @@ export const customerFeedbackTable = pgTable("customer_feedback", {
   aiDraftRequestLogId: integer("ai_draft_request_log_id"),
   copiedDraft: boolean("copied_draft").notNull().default(false),
   googleRedirected: boolean("google_redirected").notNull().default(false),
+  sessionToken: text("session_token"), // public scan-session id; one feedback row per (qrId, sessionToken)
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   restIdx: index("customer_feedback_restaurant_idx").on(t.restaurantId, t.createdAt),
   ratingIdx: index("customer_feedback_rating_idx").on(t.restaurantId, t.rating),
+  sessionIdx: uniqueIndex("customer_feedback_qr_session_idx").on(t.qrId, t.sessionToken),
 }));
 
 // Reviews fetched from Google Business Profile or pasted manually for AI reply.
