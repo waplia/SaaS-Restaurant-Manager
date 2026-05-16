@@ -14,6 +14,8 @@ import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifica
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
 import { loadDiscountsConfig, exceedsThreshold, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
+import { resolveOrderItemUnitPrice } from "../lib/pricingRules";
+import { pricingRuleApplicationsTable } from "../lib/db";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
@@ -212,17 +214,47 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
 
 router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items } = req.body;
+  const { tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId } = req.body;
 
   let subtotal = 0;
-  const enrichedItems: Array<{ menuItem: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }> = [];
+  const enrichedItems: Array<{
+    menuItem: typeof menuItemsTable.$inferSelect;
+    qty: number;
+    notes?: string;
+    modifiers?: Array<{ name: string; price: string }>;
+    unitPrice: number;
+    originalPrice: number;
+    appliedRule: { id: number; name: string; ruleType: string } | null;
+  }> = [];
+
+  const channel = (orderType ?? "dine_in") as string;
+  const at = new Date();
 
   for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }> }>) {
     const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
     const modTotal = (item.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
-    subtotal += (Number(mi.price) + modTotal) * item.quantity;
-    enrichedItems.push({ menuItem: mi, qty: item.quantity, notes: item.notes, modifiers: item.modifiers });
+    const resolved = await resolveOrderItemUnitPrice({
+      menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
+      restaurantId,
+      branchId: branchId ?? null,
+      channel,
+      customerId: customerId ?? null,
+      modifierTotal: modTotal,
+      at,
+    });
+    subtotal += resolved.unitPrice * item.quantity;
+    enrichedItems.push({
+      menuItem: mi,
+      qty: item.quantity,
+      notes: item.notes,
+      modifiers: item.modifiers,
+      unitPrice: resolved.unitPrice,
+      originalPrice: resolved.originalPrice,
+      appliedRule: resolved.appliedRule
+        ? { id: resolved.appliedRule.id, name: resolved.appliedRule.name, ruleType: resolved.appliedRule.ruleType }
+        : null,
+    });
   }
 
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
@@ -256,20 +288,29 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   }).returning();
 
   for (const ei of enrichedItems) {
-    const modTotal = (ei.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
-    const unitPrice = Number(ei.menuItem.price) + modTotal;
     const [oi] = await db.insert(orderItemsTable).values({
       orderId: order.id,
       menuItemId: ei.menuItem.id,
       menuItemName: ei.menuItem.name,
       quantity: ei.qty,
-      unitPrice: unitPrice.toFixed(2),
-      totalPrice: (unitPrice * ei.qty).toFixed(2),
+      unitPrice: ei.unitPrice.toFixed(2),
+      totalPrice: (ei.unitPrice * ei.qty).toFixed(2),
       notes: ei.notes,
     }).returning();
 
     for (const mod of ei.modifiers ?? []) {
       await db.insert(orderItemModifiersTable).values({ orderItemId: oi.id, modifierName: mod.name, price: mod.price });
+    }
+
+    if (ei.appliedRule) {
+      await db.insert(pricingRuleApplicationsTable).values({
+        orderItemId: oi.id,
+        pricingRuleId: ei.appliedRule.id,
+        ruleName: ei.appliedRule.name,
+        ruleType: ei.appliedRule.ruleType,
+        originalUnitPrice: ei.originalPrice.toFixed(2),
+        adjustedUnitPrice: ei.unitPrice.toFixed(2),
+      }).catch(() => {});
     }
   }
 
@@ -322,7 +363,27 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Not found" });
-  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  const itemsRaw = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  const itemIds = itemsRaw.map((i) => i.id);
+  const applications = itemIds.length > 0
+    ? await db.select().from(pricingRuleApplicationsTable).where(inArray(pricingRuleApplicationsTable.orderItemId, itemIds))
+    : [];
+  const appByItem = new Map(applications.map((a) => [a.orderItemId, a]));
+  const items = itemsRaw.map((it) => {
+    const app = appByItem.get(it.id);
+    return {
+      ...it,
+      appliedRule: app
+        ? {
+            id: app.pricingRuleId,
+            name: app.ruleName,
+            ruleType: app.ruleType,
+            originalUnitPrice: app.originalUnitPrice,
+            adjustedUnitPrice: app.adjustedUnitPrice,
+          }
+        : null,
+    };
+  });
   const [latestPayment] = await db
     .select({ method: paymentsTable.method, amount: paymentsTable.amount })
     .from(paymentsTable)
@@ -376,12 +437,19 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   const qty = Number(quantity) || 1;
   const hasModifiers = Array.isArray(modifiers) && modifiers.length > 0;
 
-  let modifierAdditional = 0;
-  if (hasModifiers) {
-    modifierAdditional = (modifiers as { name: string; price: string }[])
-      .reduce((sum, m) => sum + Number(m.price ?? 0), 0);
-  }
-  const unitPrice = Number(mi.price) + modifierAdditional;
+  const modifierAdditional = hasModifiers
+    ? (modifiers as { name: string; price: string }[]).reduce((sum, m) => sum + Number(m.price ?? 0), 0)
+    : 0;
+
+  const resolved = await resolveOrderItemUnitPrice({
+    menuItem: { id: mi.id, price: mi.price, categoryId: mi.categoryId },
+    restaurantId,
+    branchId: req.body?.branchId ?? null,
+    channel: order.orderType ?? "dine_in",
+    customerId: order.customerId ?? null,
+    modifierTotal: modifierAdditional,
+  });
+  const unitPrice = resolved.unitPrice;
 
   let newItemId: number | undefined;
 
@@ -406,33 +474,54 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     );
   } else {
     // No modifiers: coalesce only with an existing modifier-free line for this menuItemId
+    // *and* an existing line whose persisted unit price still matches the
+    // current rule-resolved price — otherwise pricing-rule history would be
+    // overwritten on the existing line.
     const existingItems = await db.select().from(orderItemsTable)
       .where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
 
-    // Find a line that has no modifiers attached (modifier-free lines only)
     let targetLine: typeof existingItems[0] | null = null;
     for (const ex of existingItems) {
       const mods = await db.select().from(orderItemModifiersTable)
         .where(eq(orderItemModifiersTable.orderItemId, ex.id));
-      if (mods.length === 0) { targetLine = ex; break; }
+      if (mods.length === 0 && Math.abs(Number(ex.unitPrice) - unitPrice) < 0.005) {
+        targetLine = ex;
+        break;
+      }
     }
 
     if (targetLine) {
       const newQty = targetLine.quantity + qty;
       await db.update(orderItemsTable).set({
         quantity: newQty,
-        totalPrice: (Number(mi.price) * newQty).toFixed(2),
+        totalPrice: (unitPrice * newQty).toFixed(2),
       }).where(eq(orderItemsTable.id, targetLine.id));
+      newItemId = targetLine.id;
     } else {
-      await db.insert(orderItemsTable).values({
+      const [created] = await db.insert(orderItemsTable).values({
         orderId,
         menuItemId: mi.id,
         menuItemName: mi.name,
         quantity: qty,
-        unitPrice: Number(mi.price).toFixed(2),
-        totalPrice: (Number(mi.price) * qty).toFixed(2),
+        unitPrice: unitPrice.toFixed(2),
+        totalPrice: (unitPrice * qty).toFixed(2),
         notes,
-      });
+      }).returning();
+      newItemId = created.id;
+    }
+  }
+
+  if (newItemId && resolved.appliedRule) {
+    const existing = await db.select().from(pricingRuleApplicationsTable).where(eq(pricingRuleApplicationsTable.orderItemId, newItemId));
+    if (existing.length === 0) {
+      await db.insert(pricingRuleApplicationsTable).values({
+        orderItemId: newItemId,
+        pricingRuleId: resolved.appliedRule.id,
+        ruleName: resolved.appliedRule.name,
+        ruleType: resolved.appliedRule.ruleType,
+        originalUnitPrice: resolved.originalPrice.toFixed(2),
+        adjustedUnitPrice: unitPrice.toFixed(2),
+      }).catch(() => {});
     }
   }
 

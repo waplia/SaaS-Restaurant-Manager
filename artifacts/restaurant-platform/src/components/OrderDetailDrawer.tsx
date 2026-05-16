@@ -231,15 +231,23 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
               <div>
                 <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Items</h4>
                 <div className="space-y-2">
-                  {order.items?.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between text-sm gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-foreground font-medium">{item.menuItemName} <span className="text-muted-foreground font-normal">×{item.quantity}</span></p>
-                        {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                  {order.items?.map((item) => {
+                    const rule = (item as { appliedRule?: { name: string; ruleType: string; originalUnitPrice: string; adjustedUnitPrice: string } | null }).appliedRule;
+                    return (
+                      <div key={item.id} className="flex items-start justify-between text-sm gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-foreground font-medium">{item.menuItemName} <span className="text-muted-foreground font-normal">×{item.quantity}</span></p>
+                          {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                          {rule && (
+                            <p className="text-[11px] text-emerald-600 mt-0.5">
+                              {rule.name} · was ₹{Number(rule.originalUnitPrice).toFixed(2)} → ₹{Number(rule.adjustedUnitPrice).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-foreground tabular-nums">₹{Number(item.totalPrice).toLocaleString()}</p>
                       </div>
-                      <p className="text-foreground tabular-nums">₹{Number(item.totalPrice).toLocaleString()}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {(!order.items || order.items.length === 0) && (
                     <p className="text-sm text-muted-foreground">No items</p>
                   )}

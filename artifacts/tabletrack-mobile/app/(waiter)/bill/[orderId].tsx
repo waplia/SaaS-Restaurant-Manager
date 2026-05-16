@@ -111,7 +111,7 @@ export default function BillScreen() {
   }
 
   const isPaid = (order as { paymentStatus?: string }).paymentStatus === "paid";
-  type BillItem = { id: number; menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string; notes?: string | null };
+  type BillItem = { id: number; menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string; notes?: string | null; appliedRule?: { id: number; name: string; ruleType: string; originalUnitPrice: string; adjustedUnitPrice: string } | null };
   const items = (order.items ?? []) as BillItem[];
   const subtotal = Number(order.subtotal ?? order.totalAmount);
   const taxAmount = Number((order as { taxAmount?: string }).taxAmount ?? 0);
@@ -148,6 +148,11 @@ export default function BillScreen() {
               <View style={styles.itemRow}>
                 <View style={styles.itemInfo}>
                   <Text style={[styles.itemName, { color: colors.foreground }]}>{item.menuItemName}</Text>
+                  {item.appliedRule ? (
+                    <Text style={[styles.itemNote, { color: "#10b981" }]} numberOfLines={1}>
+                      {item.appliedRule.name} · ₹{Number(item.appliedRule.originalUnitPrice).toFixed(2)} → ₹{Number(item.appliedRule.adjustedUnitPrice).toFixed(2)}
+                    </Text>
+                  ) : null}
                   {item.notes ? (
                     <Text style={[styles.itemNote, { color: colors.mutedForeground }]}>{item.notes}</Text>
                   ) : null}
