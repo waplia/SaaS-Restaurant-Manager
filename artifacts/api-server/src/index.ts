@@ -10,6 +10,7 @@ import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { backfillCustomerCrm } from "./lib/customerBackfill";
 import { getAppSettings } from "./lib/appSettings";
 import { ensureSearchIndexes } from "./lib/searchIndexes";
+import { runBootstrapPasswordReset } from "./lib/bootstrapReset";
 
 const rawPort = process.env["PORT"];
 
@@ -32,6 +33,7 @@ startBroadcastScheduler();
 seedDefaultTemplates().catch(err => console.error("Failed to seed default templates", err));
 seedDefaultAiCreditRules().catch(err => console.error("Failed to seed default AI credit rules", err));
 seedAddonCatalogue().catch(err => console.error("Failed to seed add-on catalogue", err));
+runBootstrapPasswordReset().catch(err => console.error("Bootstrap password reset failed", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {

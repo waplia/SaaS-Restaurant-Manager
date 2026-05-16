@@ -102,3 +102,5 @@ NODE_ENV = "development"
 
 [userenv.production]
 ALLOWED_ORIGINS = "https://khanalagao.com,https://www.khanalagao.com"
+BOOTSTRAP_RESET_EMAIL = "admin@tabletrack.io"
+BOOTSTRAP_RESET_PASSWORD = "PVmMihQsnZPfdrGk"
