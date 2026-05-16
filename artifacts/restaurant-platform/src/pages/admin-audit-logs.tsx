@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Activity, Search, X } from "lucide-react";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useAdminAuditLogs, useAdminAuditLogDetail } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -66,15 +67,8 @@ export default function AdminAuditLogsPage() {
   const { data: detail } = useAdminAuditLogDetail(selectedId);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <h1 className="text-lg font-bold flex items-center gap-2"><Activity className="w-5 h-5" /> Audit Logs</h1>
-          <p className="text-xs text-muted-foreground">Platform-wide event history across auth, restaurants, billing, settings, and more.</p>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+    <AdminLayout title="Audit Logs" subtitle="Platform-wide event history across auth, restaurants, billing, settings, and more.">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <div className="bg-card border border-border rounded-xl p-4 flex flex-wrap gap-2">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -134,7 +128,7 @@ export default function AdminAuditLogsPage() {
           <span className="text-xs text-muted-foreground">Page {page} of {totalPages} · {total} events</span>
           <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
         </div>
-      </main>
+      </div>
 
       {selectedId && (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelectedId(null)}>
@@ -175,7 +169,7 @@ export default function AdminAuditLogsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }
 

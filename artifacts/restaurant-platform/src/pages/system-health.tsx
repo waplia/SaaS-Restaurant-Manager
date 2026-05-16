@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, apiAction } from "@/lib/api";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 
 type Overall = "operational" | "degraded" | "outage";
 type CronEntry = {
@@ -196,27 +197,16 @@ export default function SystemHealthPage() {
   const pageCount = logs.data ? Math.max(1, Math.ceil(logs.data.total / pageSize)) : 1;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Activity className="w-6 h-6 text-primary" />
-            <div>
-              <h1 className="font-bold text-lg text-foreground">System Health & Logs</h1>
-              <p className="text-xs text-muted-foreground">Real-time platform diagnostics</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/admin"><Button variant="outline" size="sm" className="gap-1"><ArrowLeft className="w-4 h-4" />Admin</Button></Link>
-            <Button variant="outline" size="sm" onClick={() => { void overview.refetch(); void stats.refetch(); void logs.refetch(); }} className="gap-1">
-              <RefreshCw className={`w-4 h-4 ${overview.isFetching ? "animate-spin" : ""}`} />Refresh
-            </Button>
-            <Button variant="ghost" size="sm" onClick={logout}>Sign out</Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+    <AdminLayout
+      title="System Health & Logs"
+      subtitle="Real-time platform diagnostics"
+      actions={
+        <Button variant="outline" size="sm" onClick={() => { void overview.refetch(); void stats.refetch(); void logs.refetch(); }} className="gap-1">
+          <RefreshCw className={`w-4 h-4 ${overview.isFetching ? "animate-spin" : ""}`} />Refresh
+        </Button>
+      }
+    >
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Overall banner */}
         {ov && (
           <div className={`rounded-xl border p-4 flex items-center justify-between ${
@@ -413,7 +403,7 @@ export default function SystemHealthPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
 
       {/* Detail drawer */}
       {selected && (
@@ -465,7 +455,7 @@ export default function SystemHealthPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }
 

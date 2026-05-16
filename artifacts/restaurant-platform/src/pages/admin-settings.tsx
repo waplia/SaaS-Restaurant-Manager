@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ArrowLeft, Save, Upload, Loader2 } from "lucide-react";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -132,24 +133,17 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/admin" className="text-muted-foreground hover:text-foreground"><ArrowLeft className="h-5 w-5" /></Link>
-            <div>
-              <h1 className="text-xl font-semibold">App Settings</h1>
-              <p className="text-xs text-muted-foreground">Platform-wide branding, support, localization & toggles</p>
-            </div>
-          </div>
-          <Button onClick={handleSave} disabled={update.isPending}>
-            {update.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save changes
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+    <AdminLayout
+      title="App Settings"
+      subtitle="Platform-wide branding, support, localization & toggles"
+      actions={
+        <Button onClick={handleSave} disabled={update.isPending}>
+          {update.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          Save changes
+        </Button>
+      }
+    >
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         <Section title="Branding" description="Application name and visual identity used across all surfaces.">
           <div>
             <Label>App name</Label>
@@ -260,8 +254,8 @@ export default function AdminSettingsPage() {
             Save changes
           </Button>
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 

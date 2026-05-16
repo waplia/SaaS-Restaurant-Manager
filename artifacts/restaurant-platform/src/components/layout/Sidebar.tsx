@@ -644,41 +644,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           Settings
         </Link>
         {user?.isSuperAdmin && (
-          <>
-            <Link href="/admin" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <ShieldCheck className="w-4 h-4" />
-              Admin Panel
-            </Link>
-            <Link href="/admin/leads" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <Inbox className="w-4 h-4" />
-              <span className="flex-1">Marketing Leads</span>
-              {newLeadsCount > 0 && (
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center bg-orange-500 text-white" data-testid="badge-new-leads">
-                  {newLeadsCount}
-                </span>
-              )}
-            </Link>
-            <Link href="/admin/blog" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <FileText className="w-4 h-4" />
-              Blog Posts
-            </Link>
-            <Link href="/admin/support" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <LifeBuoy className="w-4 h-4" />
-              Support Tickets
-            </Link>
-            <Link href="/admin/api-settings" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <Settings className="w-4 h-4" />
-              API & Webhooks
-            </Link>
-            <Link href="/admin/settings" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <Settings className="w-4 h-4" />
-              App Settings
-            </Link>
-            <Link href="/admin/addons" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all">
-              <Package className="w-4 h-4" />
-              Add-on Marketplace
-            </Link>
-          </>
+          <Link href="/admin" onClick={onNavigate} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all" data-testid="link-admin-panel">
+            <ShieldCheck className="w-4 h-4" />
+            <span className="flex-1">Admin Panel</span>
+            {newLeadsCount > 0 && (
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center bg-orange-500 text-white" data-testid="badge-new-leads">
+                {newLeadsCount}
+              </span>
+            )}
+          </Link>
         )}
 
         <div className="mt-2 pt-3 border-t border-sidebar-border">

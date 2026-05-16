@@ -228,6 +228,19 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/tenants" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/plans" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/payment-methods" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/approvals" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/coupons" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/notifications" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/sms" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/email" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/maintenance" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/whatsapp" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/ai" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/health" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/metrics" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
       <Route path="/admin/audit-logs" component={() => <SuperAdminRoute component={AdminAuditLogsPage} />} />
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />

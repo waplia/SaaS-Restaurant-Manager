@@ -11,6 +11,7 @@ import {
   Tag, Copy, History, Calendar, Brain, Download,
 } from "lucide-react";
 import { Link } from "wouter";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import AdminNotificationCenter from "./admin-notifications";
 import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
@@ -568,7 +569,7 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
 }
 
 // ─── Plans Manager Tab ───────────────────────────────────────────
-function PlansTab() {
+export function PlansTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: plans = [], isLoading } = useQuery<Plan[]>({
@@ -697,7 +698,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-function TenantsTab() {
+export function TenantsTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
@@ -1040,122 +1041,97 @@ function TenantsTab() {
   );
 }
 
+type AdminSection =
+  | "tenants" | "plans" | "payment-methods" | "approvals" | "coupons"
+  | "notifications" | "sms" | "email" | "maintenance" | "whatsapp"
+  | "ai" | "health" | "metrics";
+
+const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> = {
+  "tenants": { title: "Tenants", subtitle: "Manage restaurant accounts, plans, and trial windows" },
+  "plans": { title: "Subscription Plans", subtitle: "Pricing tiers, limits, and feature flags" },
+  "payment-methods": { title: "Payment Methods", subtitle: "Online providers and manual payment options" },
+  "approvals": { title: "Manual Payment Approvals", subtitle: "Review pending bank/UPI submissions" },
+  "coupons": { title: "Coupons", subtitle: "Discounts, promo codes, and redemptions" },
+  "notifications": { title: "Notifications", subtitle: "Send announcements and broadcast messages" },
+  "sms": { title: "SMS", subtitle: "SMS provider, templates, and delivery logs" },
+  "email": { title: "Email", subtitle: "Email provider, templates, and delivery logs" },
+  "maintenance": { title: "System Maintenance", subtitle: "Maintenance windows and platform-wide notices" },
+  "whatsapp": { title: "WhatsApp", subtitle: "WhatsApp Business config and templates" },
+  "ai": { title: "AI Control Center", subtitle: "AI providers, prompts, and feature configuration" },
+  "health": { title: "Restaurant Health", subtitle: "Operational health scores per tenant" },
+  "metrics": { title: "Investor Metrics", subtitle: "MRR, ARR, retention, and growth KPIs" },
+};
+
+function parseSection(path: string): AdminSection {
+  const m = path.match(/^\/admin\/([a-z-]+)\/?$/i);
+  const raw = m?.[1] ?? "";
+  if (raw in SECTION_TITLES) return raw as AdminSection;
+  return "tenants";
+}
+
 export default function AdminPage() {
-  const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"tenants" | "plans" | "payment_methods" | "approvals" | "coupons" | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "ai" | "health" | "metrics">("tenants");
+  const [location, navigate] = useLocation();
+  const { user } = useAuth();
+
+  // Default /admin → /admin/tenants
+  useEffect(() => {
+    if (location === "/admin" || location === "/admin/") {
+      navigate("/admin/tenants", { replace: true });
+    }
+  }, [location, navigate]);
+
+  const section = parseSection(location);
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
     queryFn: () => apiFetch("/admin/stats"),
     refetchInterval: 30000,
+    enabled: !!user?.isSuperAdmin,
   });
 
-  if (!user?.isSuperAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-3">
-          <ShieldCheck className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h2 className="text-xl font-semibold">Super Admin Access Only</h2>
-          <p className="text-muted-foreground text-sm">You do not have permission to view this page.</p>
-          <Button variant="outline" onClick={() => window.history.back()}>Go back</Button>
-        </div>
-      </div>
-    );
-  }
+  const titleInfo = SECTION_TITLES[section];
 
   const statCards = [
-    { label: "Total Tenants", value: stats?.totalTenants ?? "—", icon: Building2, color: "text-primary" },
+    { label: "Tenants", value: stats?.totalTenants ?? "—", icon: Building2, color: "text-primary" },
     { label: "Active", value: stats?.activeTenants ?? "—", icon: CheckCircle, color: "text-green-600" },
-    { label: "On Trial", value: stats?.trialTenants ?? "—", icon: Clock, color: "text-amber-600" },
+    { label: "Trial", value: stats?.trialTenants ?? "—", icon: Clock, color: "text-amber-600" },
     { label: "Suspended", value: stats?.suspendedTenants ?? "—", icon: Ban, color: "text-destructive" },
     { label: "Restaurants", value: stats?.totalRestaurants ?? "—", icon: Building2, color: "text-primary" },
-    { label: "Total Orders", value: stats?.totalOrders ?? "—", icon: TrendingUp, color: "text-primary" },
+    { label: "Orders", value: stats?.totalOrders ?? "—", icon: TrendingUp, color: "text-primary" },
   ];
 
+  const showStats = section === "tenants" || section === "metrics";
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-6 h-6 text-primary" />
-            <div>
-              <h1 className="font-bold text-lg text-foreground">Khana Lagao Admin</h1>
-              <p className="text-xs text-muted-foreground">Super Admin Dashboard</p>
-            </div>
+    <AdminLayout title={titleInfo.title} subtitle={titleInfo.subtitle}>
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {showStats && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {statCards.map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="bg-card border border-border rounded-xl p-3 space-y-1.5">
+                <Icon className={`w-4 h-4 ${color}`} />
+                <p className="text-xl font-bold text-foreground">{value}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-3">
-            <a href="/admin/system-health">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Activity className="w-4 h-4" /> System Health
-              </Button>
-            </a>
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-foreground">{user.name}</p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end"><Mail className="w-3 h-3" />{user.email}</p>
-            </div>
-            <Link href="/admin/audit-logs">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Activity className="w-4 h-4" /> Audit Logs
-              </Button>
-            </Link>
-            <Button variant="outline" size="sm" onClick={logout} className="gap-2">
-              <LogOut className="w-4 h-4" /> Sign out
-            </Button>
-          </div>
-        </div>
-      </header>
+        )}
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {statCards.map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-card border border-border rounded-xl p-4 space-y-2">
-              <Icon className={`w-5 h-5 ${color}`} />
-              <p className="text-2xl font-bold text-foreground">{value}</p>
-              <p className="text-xs text-muted-foreground">{label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="border-b border-border flex gap-1">
-          {[
-            { id: "tenants" as const, label: "Tenants", icon: Users },
-            { id: "plans" as const, label: "Plans", icon: Package },
-            { id: "payment_methods" as const, label: "Payment Methods", icon: CreditCard },
-            { id: "approvals" as const, label: "Approvals", icon: FileCheck2 },
-            { id: "coupons" as const, label: "Coupons", icon: Tag },
-            { id: "notifications" as const, label: "Notifications", icon: Megaphone },
-            { id: "sms" as const, label: "SMS", icon: MessageSquare },
-            { id: "email" as const, label: "Email", icon: Mail },
-            { id: "maintenance" as const, label: "System Maintenance", icon: Wrench },
-            { id: "whatsapp" as const, label: "WhatsApp", icon: MessageCircle },
-            { id: "ai" as const, label: "AI Control Center", icon: Brain },
-            { id: "health" as const, label: "Restaurant Health", icon: Activity },
-            { id: "metrics" as const, label: "Investor Metrics", icon: TrendingUp },
-          ].map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
-                tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}>
-              <t.icon className="w-4 h-4" />{t.label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "tenants" && <TenantsTab />}
-        {tab === "plans" && <PlansTab />}
-        {tab === "payment_methods" && <PaymentMethodsTab />}
-        {tab === "approvals" && <ApprovalsTab />}
-        {tab === "coupons" && <CouponsTab />}
-        {tab === "notifications" && <AdminNotificationCenter />}
-        {tab === "sms" && <AdminSmsTab />}
-        {tab === "email" && <AdminEmail />}
-        {tab === "maintenance" && <AdminMaintenance />}
-        {tab === "whatsapp" && <AdminWhatsAppTab />}
-        {tab === "ai" && <AdminAiTab />}
-        {tab === "health" && <AdminHealthScoreTab />}
-        {tab === "metrics" && <AdminMetricsTab />}
-      </main>
-    </div>
+        {section === "tenants" && <TenantsTab />}
+        {section === "plans" && <PlansTab />}
+        {section === "payment-methods" && <PaymentMethodsTab />}
+        {section === "approvals" && <ApprovalsTab />}
+        {section === "coupons" && <CouponsTab />}
+        {section === "notifications" && <AdminNotificationCenter />}
+        {section === "sms" && <AdminSmsTab />}
+        {section === "email" && <AdminEmail />}
+        {section === "maintenance" && <AdminMaintenance />}
+        {section === "whatsapp" && <AdminWhatsAppTab />}
+        {section === "ai" && <AdminAiTab />}
+        {section === "health" && <AdminHealthScoreTab />}
+        {section === "metrics" && <AdminMetricsTab />}
+      </div>
+    </AdminLayout>
   );
 }
 
@@ -1169,7 +1145,7 @@ const PROVIDER_LABEL: Record<string, { title: string; subtitle: string; icon: ty
   upi:      { title: "UPI",       subtitle: "Manual — tenant pays to your UPI ID and submits reference", icon: Smartphone },
 };
 
-function PaymentMethodsTab() {
+export function PaymentMethodsTab() {
   const { data, isLoading } = useAdminPaymentMethods();
   if (isLoading || !data) return <div className="p-8 text-center text-muted-foreground text-sm">Loading payment methods…</div>;
   return (
@@ -1340,7 +1316,7 @@ function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow
 // ────────────────────────────────────────────────────────────────
 // Manual payment approvals (super-admin)
 // ────────────────────────────────────────────────────────────────
-function ApprovalsTab() {
+export function ApprovalsTab() {
   const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const { data, isLoading, refetch } = useAdminManualPayments(status);
   const approve = useApproveManualPayment();
@@ -1510,7 +1486,7 @@ function effectiveStatusBadge(s: CouponRow["effectiveStatus"]) {
   }
 }
 
-function CouponsTab() {
+export function CouponsTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -1846,7 +1822,7 @@ const HEALTH_BAND_COLORS: Record<string, string> = {
   critical: "hsl(0 80% 55%)",
 };
 
-function AdminHealthScoreTab() {
+export function AdminHealthScoreTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
