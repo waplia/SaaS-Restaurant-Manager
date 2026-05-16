@@ -84,6 +84,7 @@ import hotelRouter from "./hotel";
 import sustainabilityRouter from "./sustainability";
 import tiffinRouter from "./tiffin";
 import cloudKitchenRouter from "./cloud-kitchen";
+import portalRouter from "./portal";
 
 const router: IRouter = Router();
 
@@ -187,5 +188,6 @@ router.use(hotelRouter);
 router.use(sustainabilityRouter);
 router.use(tiffinRouter);
 router.use(cloudKitchenRouter);
+router.use(portalRouter);
 
 export default router;

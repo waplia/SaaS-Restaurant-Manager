@@ -104,6 +104,18 @@ import HealthScorePage from "@/pages/health-score";
 import SustainabilityPage from "@/pages/sustainability";
 import SopTrainingPage from "@/pages/sop-training";
 import MyTrainingPage from "@/pages/my-training";
+import PortalHomePage from "@/pages/portal";
+import PortalAttendancePage from "@/pages/portal/attendance";
+import PortalShiftsPage from "@/pages/portal/shifts";
+import PortalLeavesPage from "@/pages/portal/leaves";
+import PortalPayrollPage from "@/pages/portal/payroll";
+import PortalTasksPage from "@/pages/portal/tasks";
+import PortalAnnouncementsPage from "@/pages/portal/announcements";
+import PortalScorecardPage from "@/pages/portal/scorecard";
+import PortalIncentivesPage from "@/pages/portal/incentives";
+import PortalDocumentsPage from "@/pages/portal/documents";
+import PortalHelpPage from "@/pages/portal/help";
+import PortalTrainingPage from "@/pages/portal/training";
 import FoodCourtsPage from "@/pages/food-courts";
 import FoodCourtVendorsPage from "@/pages/food-court-vendors";
 import FoodCourtPosPage from "@/pages/food-court-pos";
@@ -151,14 +163,28 @@ function SuperAdminRoute({ component: Component }: { component: React.ComponentT
   return <Component />;
 }
 
+// Roles whose default landing page is the staff portal rather than the
+// admin dashboard. Owner/manager keep going to /dashboard.
+const PORTAL_ROLES = ["waiter", "kitchen", "cashier", "delivery_executive"];
+
 function PublicOnlyRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) return null;
   if (isAuthenticated) {
     if (user?.isSuperAdmin) return <Redirect to="/admin" />;
+    if (user?.role && PORTAL_ROLES.includes(user.role)) return <Redirect to="/portal" />;
     return <Redirect to="/dashboard" />;
   }
   return <Component />;
+}
+
+function RootRedirect() {
+  const { user, isLoading, isAuthenticated } = useAuth();
+  if (isLoading) return null;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  if (user?.isSuperAdmin) return <Redirect to="/admin" />;
+  if (user?.role && PORTAL_ROLES.includes(user.role)) return <Redirect to="/portal" />;
+  return <Redirect to="/dashboard" />;
 }
 
 function SocketMount() {
@@ -190,7 +216,19 @@ function Router() {
       <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
       <Route path="/setup-wizard" component={() => <ProtectedRoute component={SetupWizardPage} />} />
       <Route path="/setup" component={() => <Redirect to="/setup-wizard" />} />
-      <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/" component={RootRedirect} />
+      <Route path="/portal" component={() => <ProtectedRoute component={PortalHomePage} />} />
+      <Route path="/portal/attendance" component={() => <ProtectedRoute component={PortalAttendancePage} />} />
+      <Route path="/portal/shifts" component={() => <ProtectedRoute component={PortalShiftsPage} />} />
+      <Route path="/portal/leaves" component={() => <ProtectedRoute component={PortalLeavesPage} />} />
+      <Route path="/portal/payroll" component={() => <ProtectedRoute component={PortalPayrollPage} />} />
+      <Route path="/portal/tasks" component={() => <ProtectedRoute component={PortalTasksPage} />} />
+      <Route path="/portal/training" component={() => <ProtectedRoute component={PortalTrainingPage} />} />
+      <Route path="/portal/announcements" component={() => <ProtectedRoute component={PortalAnnouncementsPage} />} />
+      <Route path="/portal/scorecard" component={() => <ProtectedRoute component={PortalScorecardPage} />} />
+      <Route path="/portal/incentives" component={() => <ProtectedRoute component={PortalIncentivesPage} />} />
+      <Route path="/portal/documents" component={() => <ProtectedRoute component={PortalDocumentsPage} />} />
+      <Route path="/portal/help" component={() => <ProtectedRoute component={PortalHelpPage} />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/documents" component={() => <ProtectedRoute component={DocumentsPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
