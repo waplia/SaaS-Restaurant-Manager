@@ -114,7 +114,7 @@ const navConfig: NavEntry[] = [
 
   // 7. Khana AI
   {
-    kind: "group", key: "khana_ai", label: "Khana AI", icon: Sparkles, badge: "ai", planGate: "ai",
+    kind: "group", key: "khana_ai", label: "Khana AI", icon: Sparkles, badge: "ai",
     children: [
       { kind: "link", href: "/ai", label: "Dashboard", icon: LayoutDashboard, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/menu-import", label: "AI Menu Import", icon: Upload, roles: ["owner", "manager"] },
