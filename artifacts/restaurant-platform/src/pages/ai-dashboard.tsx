@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sparkles, ImageIcon, FileText, BarChart3, Settings, ArrowRight, Coins, Zap,
-  AlertTriangle, AlertCircle, TrendingUp, IndianRupee, Trophy,
+  AlertTriangle, AlertCircle, TrendingUp, IndianRupee, Trophy, Package, ChefHat,
 } from "lucide-react";
 import { useAiWallet, useAiUsageSummary, useAiRecentGenerations } from "@/lib/aiHooks";
 import { AiGeneratedBadge } from "@/components/ai/AiGeneratedBadge";
@@ -294,6 +294,9 @@ export default function AiDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <ActionTile href="/ai/descriptions" title="AI Item Descriptions" blurb="Write appetising menu copy in seconds." icon={FileText} cost={1} />
           <ActionTile href="/ai/images" title="AI Food Images" blurb="Generate professional dish photos." icon={ImageIcon} cost={10} />
+          <ActionTile href="/ai/inventory" title="AI Inventory Assistant" blurb="Reorder suggestions from your usage history." icon={Package} cost={5} />
+          <ActionTile href="/ai/forecast" title="AI Demand Forecasting" blurb="Predict next-week unit sales by item." icon={TrendingUp} cost={5} />
+          <ActionTile href="/menu" title="AI Recipe Optimizer" blurb="Open any dish → Recipe tab → Optimize." icon={ChefHat} cost={1} />
           <ActionTile href="/ai/usage" title="Usage & Credits" blurb="See spend and recharge your wallet." icon={BarChart3} />
           <ActionTile href="/ai/settings" title="AI Settings" blurb="Tone, language and approval flow." icon={Settings} />
         </div>

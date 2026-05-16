@@ -254,6 +254,21 @@ function ModifierGroupRow({ group, isExpanded, onToggle }: { group: ModifierGrou
   );
 }
 
+type RecipeOptimizerSnapshot = {
+  id: number;
+  payload: {
+    summary: string;
+    currentCogs: number;
+    currentPrice: number;
+    currentMargin: number;
+    suggestedPrice: number | null;
+    suggestedPortionChange: string | null;
+    substitutions: Array<{ inventoryItemId: number; name: string; suggestedReplacement: string; estSavingPerUnit: number; rationale: string }>;
+    riskNote: string | null;
+  };
+  generatedAt: string;
+};
+
 function RecipePanel({ itemId, itemPrice }: { itemId: number; itemPrice: string }) {
   const { data: recipe = [] } = useRecipeMappings({ menuItemId: itemId });
   const { data: inventory = [] } = useInventory();
@@ -261,8 +276,33 @@ function RecipePanel({ itemId, itemPrice }: { itemId: number; itemPrice: string 
   const updateMapping = useUpdateRecipeMapping();
   const deleteMapping = useDeleteRecipeMapping();
   const { toast } = useToast();
+  const restaurantId = useRestaurantId();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ inventoryItemId: "", quantity: "", unit: "" });
+  const [optimizing, setOptimizing] = useState(false);
+  const [snapshot, setSnapshot] = useState<RecipeOptimizerSnapshot | null>(null);
+  const [competitorPrice, setCompetitorPrice] = useState("");
+
+  const runOptimize = async () => {
+    if (recipe.length === 0) {
+      toast({ title: "Add ingredients first, then run the optimizer", variant: "destructive" });
+      return;
+    }
+    setOptimizing(true);
+    try {
+      const cp = competitorPrice.trim() ? Number(competitorPrice) : null;
+      const res = await apiPost<{ snapshot: RecipeOptimizerSnapshot }>(
+        `/restaurants/${restaurantId}/items/${itemId}/ai-recipe-optimize`,
+        cp != null && Number.isFinite(cp) && cp > 0 ? { competitorPrice: cp } : {},
+      );
+      setSnapshot(res.snapshot);
+      toast({ title: "Recipe analysed — review suggestions below" });
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "Optimizer failed", variant: "destructive" });
+    } finally {
+      setOptimizing(false);
+    }
+  };
 
   const totalCogs = recipe.reduce((s: number, r: RecipeMapping) => s + Number(r.quantity) * Number(r.costPerUnit ?? 0), 0);
   const price = Number(itemPrice);
@@ -391,6 +431,76 @@ function RecipePanel({ itemId, itemPrice }: { itemId: number; itemPrice: string 
       <p className="text-[10px] text-muted-foreground">
         COGS auto-recalculates when an inventory item's purchase price changes.
       </p>
+
+      <div className="border border-violet-200 dark:border-violet-900 bg-violet-50/50 dark:bg-violet-950/20 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-violet-600" /> AI Recipe Optimizer
+            </p>
+            <p className="text-[10px] text-muted-foreground">Suggests cheaper substitutions and an optional price tweak. Costs 1 credit.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <label className="text-[10px] text-muted-foreground whitespace-nowrap">Competitor ₹</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={competitorPrice}
+                onChange={(e) => setCompetitorPrice(e.target.value)}
+                placeholder="optional"
+                className="h-7 w-24 text-xs"
+              />
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={runOptimize} disabled={optimizing || recipe.length === 0}>
+              {optimizing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+              {snapshot ? "Re-run" : "Optimize"}
+            </Button>
+          </div>
+        </div>
+
+        {snapshot && (
+          <div className="bg-card border border-border rounded-md p-3 space-y-2 text-xs">
+            {snapshot.payload.summary && (
+              <p className="text-muted-foreground italic">{snapshot.payload.summary}</p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[10px] uppercase text-muted-foreground">COGS</p>
+                <p className="font-semibold">₹{snapshot.payload.currentCogs.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-muted-foreground">Margin</p>
+                <p className="font-semibold">{snapshot.payload.currentMargin.toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-muted-foreground">Suggested price</p>
+                <p className="font-semibold">{snapshot.payload.suggestedPrice != null ? `₹${snapshot.payload.suggestedPrice.toFixed(2)}` : "—"}</p>
+              </div>
+            </div>
+            {snapshot.payload.suggestedPortionChange && (
+              <p className="text-muted-foreground"><span className="font-medium text-foreground">Portion:</span> {snapshot.payload.suggestedPortionChange}</p>
+            )}
+            {snapshot.payload.substitutions.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase font-semibold text-muted-foreground">Substitutions</p>
+                {snapshot.payload.substitutions.map((s, i) => (
+                  <div key={i} className="border border-border rounded-md px-2 py-1.5">
+                    <p className="font-medium">{s.name} → {s.suggestedReplacement}</p>
+                    <p className="text-[10px] text-muted-foreground">Saves ~₹{s.estSavingPerUnit.toFixed(2)}/unit · {s.rationale}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {snapshot.payload.riskNote && (
+              <p className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded px-2 py-1">
+                <span className="font-semibold">Note:</span> {snapshot.payload.riskNote}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -32,3 +32,4 @@ export * from "./ai-control";
 export * from "./ai-credits";
 export * from "./restaurant-ai-settings";
 export * from "./reviews";
+export * from "./ai-khana-ops";
