@@ -21,6 +21,7 @@ import {
   aiCreditRechargesTable,
   subscriptionPlansTable,
   tenantsTable,
+  isFeatureEnabled,
 } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
 import { getEffectiveRazorpayConfig, getEffectiveCashfreeConfig, getEnabledManualMethods } from "../lib/paymentSettings";
@@ -48,9 +49,14 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
     planId: tenantsTable.planId,
     planAiEnabled: subscriptionPlansTable.aiEnabled,
     planMonthlyIncluded: subscriptionPlansTable.aiMonthlyIncludedCredits,
+    planFeatureFlags: subscriptionPlansTable.featureFlags,
   }).from(tenantsTable)
     .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, tenantsTable.planId))
     .where(eq(tenantsTable.id, tenantId));
+  // Khana AI module access is gated on the new `khana_ai_enabled` plan
+  // feature flag — same key the backend routes enforce — so the sidebar
+  // and pages have a single, consistent source of truth.
+  const planKhanaAiEnabled = isFeatureEnabled(tenant?.planFeatureFlags ?? null, "khana_ai_enabled");
   const wallet = await getOrCreateWallet(tenantId);
   const b = summarizeWallet(wallet);
   const transactions = await listTransactions(wallet.id, 25);
@@ -64,7 +70,8 @@ router.get("/ai/wallet", async (req: Request, res: Response) => {
     lifetimeCreditsUsed: b.used,
     isBlocked: b.isBlocked,
     purchasedExpiresAt: b.purchasedExpiresAt,
-    planAiEnabled: !!tenant?.planAiEnabled,
+    planAiEnabled: planKhanaAiEnabled,
+    planKhanaAiEnabled,
     planMonthlyIncluded: tenant?.planMonthlyIncluded ?? 0,
     transactions,
   });

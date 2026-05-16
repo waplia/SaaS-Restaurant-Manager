@@ -53,6 +53,7 @@ export interface TextResult {
   model: string;
   fallbackUsed: boolean;
   latencyMs: number;
+  requestLogId: number | null;
 }
 
 export interface ImageRequest {
@@ -66,6 +67,7 @@ export interface ImageResult {
   model: string;
   fallbackUsed: boolean;
   latencyMs: number;
+  requestLogId: number | null;
 }
 
 async function loadProvider(id: number): Promise<ProviderRow | null> {
@@ -418,7 +420,7 @@ async function logRequest(params: {
   try {
     const inputTokens = params.inputTokens ?? 0;
     const outputTokens = params.outputTokens ?? 0;
-    await db.insert(aiRequestLogsTable).values({
+    const [row] = await db.insert(aiRequestLogsTable).values({
       featureSlug: params.ctx.featureSlug,
       providerId: params.providerId,
       providerSlug: params.providerSlug,
@@ -441,9 +443,11 @@ async function logRequest(params: {
       promptSnapshot: params.storePrompt && params.prompt ? params.prompt.slice(0, 8000) : null,
       responseSnapshot: params.storeResponse && params.response ? params.response.slice(0, 8000) : null,
       metadata: params.ctx.metadata ?? {},
-    });
+    }).returning({ id: aiRequestLogsTable.id });
+    return row?.id ?? null;
   } catch (err) {
     logger.warn({ err }, "ai request log write failed");
+    return null;
   }
 }
 
@@ -520,7 +524,7 @@ export class AIProviderService {
           });
           const latencyMs = Date.now() - start;
           const cost = estimateCost(provider, model, out.inputTokens, out.outputTokens);
-          await logRequest({
+          const requestLogId = await logRequest({
             ctx, providerSlug: provider.slug, providerId: provider.id, model, modality: jsonMode ? "json" : "text",
             status: "success", inputTokens: out.inputTokens, outputTokens: out.outputTokens,
             latencyMs, retries, fallbackUsed, costUsd: cost,
@@ -535,6 +539,7 @@ export class AIProviderService {
             model,
             fallbackUsed,
             latencyMs,
+            requestLogId,
           };
         } catch (err) {
           lastErr = err;
@@ -652,12 +657,12 @@ export class AIProviderService {
       if (!provider) throw new Error("Vision provider unavailable");
       const out = await callVision(provider, model);
       const latencyMs = Date.now() - start;
-      await logRequest({ ctx, providerSlug: provider.slug, providerId: provider.id, model, modality: "vision",
+      const requestLogId = await logRequest({ ctx, providerSlug: provider.slug, providerId: provider.id, model, modality: "vision",
         status: "success", inputTokens: out.inputTokens, outputTokens: out.outputTokens,
         latencyMs, prompt: storePrompt ? joined : undefined,
         response: storeResponse ? out.text : undefined, costUsd: 0, fallbackUsed: isFallback, storePrompt, storeResponse });
       return { text: out.text, inputTokens: out.inputTokens, outputTokens: out.outputTokens,
-        providerSlug: provider.slug, model, fallbackUsed: isFallback, latencyMs };
+        providerSlug: provider.slug, model, fallbackUsed: isFallback, latencyMs, requestLogId };
     };
     try {
       return await tryOne(primaryId, primaryModel, false);
@@ -762,12 +767,12 @@ export class AIProviderService {
       if (id && !provider) throw new Error("Configured image provider unavailable");
       const out = await callImage(provider, model);
       const latencyMs = Date.now() - start;
-      await logRequest({
+      const requestLogId = await logRequest({
         ctx, providerSlug: out.providerSlug, providerId: provider?.id ?? null, model: out.model, modality: "image",
         status: "success", latencyMs, prompt: req.prompt, storePrompt, storeResponse,
         costUsd: 0.005, fallbackUsed: isFallback,
       });
-      return { b64_json: out.b64_json, mimeType: out.mimeType, providerSlug: out.providerSlug, model: out.model, fallbackUsed: isFallback, latencyMs };
+      return { b64_json: out.b64_json, mimeType: out.mimeType, providerSlug: out.providerSlug, model: out.model, fallbackUsed: isFallback, latencyMs, requestLogId };
     };
     try {
       return await tryImageOnce(primaryId, primaryModel, false);

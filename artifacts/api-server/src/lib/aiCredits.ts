@@ -22,6 +22,7 @@ import {
   subscriptionPlansTable,
   aiRequestLogsTable,
   aiRechargePackagesTable,
+  isFeatureEnabled,
   type AiCreditWallet,
   type AiFeatureCreditRule,
 } from "./db";
@@ -267,6 +268,13 @@ export async function commitReservation(opts: CommitOptions): Promise<void> {
           ...(overrun > 0 ? { overrunCredits: overrun, overrun: true } : {}),
         },
       });
+      // Mirror the actual debit onto the request log so usage analytics
+      // (which group by ai_request_logs.creditsUsed) reflect real spend.
+      if (opts.requestLogId) {
+        await tx.update(aiRequestLogsTable)
+          .set({ creditsUsed: charge })
+          .where(eq(aiRequestLogsTable.id, opts.requestLogId));
+      }
     }
   });
 }
@@ -678,15 +686,26 @@ export function requireAiCredits(featureSlug: string, estimator: CreditEstimator
       if (!tenant) { res.status(403).json({ error: "Tenant not found" }); return; }
       if (tenant.isSuspended) { res.status(403).json({ error: "Account suspended" }); return; }
 
-      // Plan-level AI gating
+      // Plan-level AI gating.
+      //
+      // Source of truth is the `khana_ai_enabled` boolean inside
+      // `subscription_plans.feature_flags` (the same flag the route
+      // middlewares and sidebar gate on). The legacy
+      // `subscription_plans.ai_enabled` column is kept as a back-compat
+      // fallback so plans seeded before the flag existed still work.
       if (tenant.planId) {
         const [plan] = await db.select({
           aiEnabled: subscriptionPlansTable.aiEnabled,
           aiFeatureToggles: subscriptionPlansTable.aiFeatureToggles,
+          featureFlags: subscriptionPlansTable.featureFlags,
         }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
-        if (plan && !plan.aiEnabled) {
-          res.status(402).json({ error: "Khana AI is not included in your plan — upgrade in Settings → Subscription.", code: "AI_NOT_IN_PLAN" });
-          return;
+        if (plan) {
+          const khanaFlag = isFeatureEnabled(plan.featureFlags ?? null, "khana_ai_enabled");
+          const planAllowsAi = khanaFlag || !!plan.aiEnabled;
+          if (!planAllowsAi) {
+            res.status(402).json({ error: "Khana AI is not included in your plan — upgrade in Settings → Subscription.", code: "AI_NOT_IN_PLAN" });
+            return;
+          }
         }
         const toggles = plan?.aiFeatureToggles as Record<string, boolean> | null;
         if (toggles && featureSlug in toggles && toggles[featureSlug] === false) {

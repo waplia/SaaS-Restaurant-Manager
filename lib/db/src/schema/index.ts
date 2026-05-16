@@ -29,3 +29,4 @@ export * from "./app-settings";
 export * from "./whatsapp";
 export * from "./ai-control";
 export * from "./ai-credits";
+export * from "./restaurant-ai-settings";

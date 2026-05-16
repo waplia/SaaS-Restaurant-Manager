@@ -29,6 +29,13 @@
       "when": 1778896200863,
       "tag": "0003_supreme_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778898215234,
+      "tag": "0004_khana_ai_settings",
+      "breakpoints": true
     }
   ]
 }

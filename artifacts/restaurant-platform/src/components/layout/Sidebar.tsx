@@ -5,6 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
+  Sparkles, ImageIcon,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -16,8 +17,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
-type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[] };
-type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[] };
+type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; roles?: string[]; planGate?: "ai" };
+type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[]; badge?: "ai"; planGate?: "ai" };
 type NavEntry = LinkItem | GroupItem;
 
 const navConfig: NavEntry[] = [
@@ -48,6 +49,16 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
+    ],
+  },
+  {
+    kind: "group", key: "khana_ai", label: "Khana AI", icon: Sparkles, badge: "ai", planGate: "ai",
+    children: [
+      { kind: "link", href: "/ai", label: "Dashboard", icon: LayoutDashboard, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/descriptions", label: "AI Item Descriptions", icon: FileText, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/images", label: "AI Food Images", icon: ImageIcon, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/usage", label: "AI Usage & Credits", icon: Coins, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/settings", label: "AI Settings", icon: Settings, roles: ["owner", "manager"] },
     ],
   },
   {
@@ -103,6 +114,15 @@ export function Sidebar() {
   });
   const newLeadsCount = leadStats?.byStatus.find(s => s.status === "new")?.count ?? 0;
 
+  // Plan-gate the Khana AI group on plan.aiEnabled (exposed via /ai/wallet).
+  const { data: aiWallet } = useQuery<{ planAiEnabled: boolean }>({
+    queryKey: ["ai-wallet"],
+    queryFn: () => apiFetch("/ai/wallet"),
+    enabled: !!user && (user.isSuperAdmin || ["owner", "manager"].includes(user.role ?? "")),
+    staleTime: 60_000,
+  });
+  const aiPlanEnabled = aiWallet?.planAiEnabled ?? false;
+
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
     : "?";
@@ -118,15 +138,17 @@ export function Sidebar() {
     const out: NavEntry[] = [];
     for (const e of navConfig) {
       if (e.kind === "link") {
+        if (e.planGate === "ai" && !aiPlanEnabled && !user?.isSuperAdmin) continue;
         if (canSee(e)) out.push(e);
       } else {
+        if (e.planGate === "ai" && !aiPlanEnabled && !user?.isSuperAdmin) continue;
         const visibleChildren = e.children.filter(canSee);
         if (visibleChildren.length > 0) out.push({ ...e, children: visibleChildren });
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
 
@@ -227,8 +249,13 @@ export function Sidebar() {
                     : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
-                <Icon className="w-4 h-4 flex-shrink-0" />
+                <Icon className={cn("w-4 h-4 flex-shrink-0", entry.badge === "ai" && "text-violet-500")} />
                 <span className="flex-1 text-left">{entry.label}</span>
+                {entry.badge === "ai" && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white tracking-wide uppercase">
+                    AI Powered
+                  </span>
+                )}
                 <ChevronDown className={cn("w-4 h-4 transition-transform duration-300 ease-out", isOpen ? "rotate-0" : "-rotate-90")} />
               </button>
               <div
