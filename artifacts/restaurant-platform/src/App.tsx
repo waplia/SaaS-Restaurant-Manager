@@ -85,6 +85,8 @@ import AiSettingsPage from "@/pages/ai-settings";
 import ReviewQrsPage from "@/pages/review-qrs";
 import AiReviewRepliesPage from "@/pages/ai-review-replies";
 import FeedbackRecoveryPage from "@/pages/feedback-recovery";
+import FeedbackWallPage from "@/pages/feedback-wall";
+import PublicFeedbackWallPage from "@/pages/public-feedback-wall";
 import CustomerFeedbackPage from "@/pages/customer-feedback";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
@@ -263,6 +265,8 @@ function Router() {
       <Route path="/ai/review-qrs" component={() => <RoleProtectedRoute component={ReviewQrsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/review-replies" component={() => <RoleProtectedRoute component={AiReviewRepliesPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/feedback-recovery" component={() => <RoleProtectedRoute component={FeedbackRecoveryPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/feedback-wall" component={() => <RoleProtectedRoute component={FeedbackWallPage} allow={["owner", "manager"]} />} />
+      <Route path="/wall/:slug" component={PublicFeedbackWallPage} />
       <Route path="/food-courts" component={() => <RoleProtectedRoute component={FoodCourtsPage} allow={["owner", "manager", "food_court_owner"]} />} />
       <Route path="/food-court/:id/overview" component={() => <RoleProtectedRoute component={FoodCourtOverviewPage} allow={["owner", "manager", "food_court_owner"]} />} />
       <Route path="/food-court/:id/vendors" component={() => <RoleProtectedRoute component={FoodCourtVendorsPage} allow={["owner", "manager", "food_court_owner"]} />} />

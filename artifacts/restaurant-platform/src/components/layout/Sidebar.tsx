@@ -95,6 +95,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/ai/review-qrs", label: "Review QRs", icon: Sparkles, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/review-replies", label: "AI Review Replies", icon: FileText, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/feedback-recovery", label: "Feedback Recovery", icon: AlertTriangle, roles: ["owner", "manager"] },
+      { kind: "link", href: "/ai/feedback-wall", label: "Feedback Wall", icon: Sparkles, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/upsell", label: "Upsell Engine", icon: TrendingUp, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/insights", label: "AI Sales Insights", icon: TrendingUp, roles: ["owner", "manager"], planGate: "ai_insights" },
       { kind: "link", href: "/menu/pricing-optimizer", label: "Cost & Price Optimizer", icon: Flame, roles: ["owner", "manager"] },

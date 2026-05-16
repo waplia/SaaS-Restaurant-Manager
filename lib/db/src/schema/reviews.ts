@@ -125,8 +125,37 @@ export const feedbackRecoveryTasksTable = pgTable("feedback_recovery_tasks", {
   restIdx: index("feedback_recovery_tasks_restaurant_idx").on(t.restaurantId, t.status),
 }));
 
+// Curated public-facing feedback wall. Each row references either a
+// customer_feedback row (private QR feedback) or an external_reviews row, never
+// both. Owners approve / feature / hide; super-admins can opt items into the
+// cross-tenant marketing testimonial highlights.
+export const feedbackWallItemsTable = pgTable("feedback_wall_items", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
+  feedbackId: integer("feedback_id").references(() => customerFeedbackTable.id, { onDelete: "cascade" }),
+  externalReviewId: integer("external_review_id").references(() => externalReviewsTable.id, { onDelete: "cascade" }),
+  source: text("source").notNull(), // qr | google | manual
+  isApproved: boolean("is_approved").notNull().default(false),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  isHidden: boolean("is_hidden").notNull().default(false),
+  shareOnMarketing: boolean("share_on_marketing").notNull().default(false),
+  displayNameOverride: text("display_name_override"),
+  approvedBy: integer("approved_by").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  restIdx: index("feedback_wall_items_restaurant_idx").on(t.restaurantId, t.isApproved),
+  feedbackIdx: uniqueIndex("feedback_wall_items_feedback_idx").on(t.feedbackId),
+  externalIdx: uniqueIndex("feedback_wall_items_external_idx").on(t.externalReviewId),
+  marketingIdx: index("feedback_wall_items_marketing_idx").on(t.shareOnMarketing, t.isApproved),
+}));
+
 export type ReviewQr = typeof reviewQrsTable.$inferSelect;
 export type CustomerFeedback = typeof customerFeedbackTable.$inferSelect;
 export type ExternalReview = typeof externalReviewsTable.$inferSelect;
 export type ReviewReply = typeof reviewRepliesTable.$inferSelect;
 export type FeedbackRecoveryTask = typeof feedbackRecoveryTasksTable.$inferSelect;
+export type FeedbackWallItem = typeof feedbackWallItemsTable.$inferSelect;

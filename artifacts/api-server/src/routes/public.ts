@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable } from "../lib/db";
 import { reserveCredits, commitReservation, refundReservation, resolveCreditRule, priceCredits, gatePublicAiCall, type AiCreditReservation } from "../lib/aiCredits";
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
@@ -1024,6 +1024,188 @@ router.post("/public/feedback", async (req, res) => {
     await db.insert(notificationsTable).values({ restaurantId: order.restaurantId, type: "feedback", title: `${rating}/5 Rating`, message: comment ?? `Customer gave ${rating} stars for order ${order.orderNumber}` });
   }
   res.status(201).json({ success: true });
+});
+
+// ─── Public Feedback Wall (per-restaurant) ────────────────────────────────────
+
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+router.get("/public/feedback-wall/:slug", async (req, res) => {
+  const slug = String(req.params.slug);
+  let branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  const branchSlug = req.query.branch ? String(req.query.branch) : undefined;
+  const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 24));
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const offset = (page - 1) * limit;
+  const [restaurant] = await db
+    .select({ id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug, logoUrl: restaurantsTable.logoUrl, currency: restaurantsTable.currency })
+    .from(restaurantsTable)
+    .where(eq(restaurantsTable.slug, slug));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  // Resolve branch-slug (?branch=outlet-name) to a branchId, scoped to this
+  // restaurant. branchId remains the backward-compatible canonical filter.
+  if (branchSlug && !branchId) {
+    const restaurantBranches = await db
+      .select({ id: branchesTable.id, name: branchesTable.name })
+      .from(branchesTable)
+      .where(eq(branchesTable.restaurantId, restaurant.id));
+    const match = restaurantBranches.find(b => slugify(b.name) === branchSlug);
+    if (match) branchId = match.id;
+  }
+
+  const baseWhere = and(
+    eq(feedbackWallItemsTable.restaurantId, restaurant.id),
+    eq(feedbackWallItemsTable.isApproved, true),
+    eq(feedbackWallItemsTable.isHidden, false),
+    branchId ? eq(feedbackWallItemsTable.branchId, branchId) : sql`true`,
+  );
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(feedbackWallItemsTable)
+    .where(baseWhere);
+
+  const items = await db
+    .select({
+      id: feedbackWallItemsTable.id,
+      branchId: feedbackWallItemsTable.branchId,
+      feedbackId: feedbackWallItemsTable.feedbackId,
+      externalReviewId: feedbackWallItemsTable.externalReviewId,
+      source: feedbackWallItemsTable.source,
+      isFeatured: feedbackWallItemsTable.isFeatured,
+      displayNameOverride: feedbackWallItemsTable.displayNameOverride,
+      createdAt: feedbackWallItemsTable.createdAt,
+      branchName: branchesTable.name,
+    })
+    .from(feedbackWallItemsTable)
+    .leftJoin(branchesTable, eq(branchesTable.id, feedbackWallItemsTable.branchId))
+    .where(baseWhere)
+    .orderBy(desc(feedbackWallItemsTable.isFeatured), desc(feedbackWallItemsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const fbIds = items.map(i => i.feedbackId).filter((x): x is number => !!x);
+  const exIds = items.map(i => i.externalReviewId).filter((x): x is number => !!x);
+  const fbRows = fbIds.length ? await db.select().from(customerFeedbackTable).where(inArray(customerFeedbackTable.id, fbIds)) : [];
+  const exRows = exIds.length ? await db.select().from(externalReviewsTable).where(inArray(externalReviewsTable.id, exIds)) : [];
+  const fbMap = new Map(fbRows.map(r => [r.id, r]));
+  const exMap = new Map(exRows.map(r => [r.id, r]));
+
+  const branches = await db
+    .select({ id: branchesTable.id, name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.restaurantId, restaurant.id));
+
+  const enriched = items.map(item => {
+    const fb = item.feedbackId ? fbMap.get(item.feedbackId) : null;
+    const ex = item.externalReviewId ? exMap.get(item.externalReviewId) : null;
+    const rawName = item.displayNameOverride ?? fb?.customerName ?? ex?.authorName ?? "Guest";
+    // Anonymize: first name + last initial only when no override is set.
+    const safeName = item.displayNameOverride ? rawName : (() => {
+      const parts = rawName.trim().split(/\s+/);
+      if (parts.length <= 1) return parts[0] || "Guest";
+      return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+    })();
+    return {
+      id: item.id,
+      branchId: item.branchId,
+      branchName: item.branchName,
+      source: item.source,
+      isFeatured: item.isFeatured,
+      rating: fb?.rating ?? ex?.rating ?? null,
+      comment: fb?.comment ?? ex?.reviewText ?? null,
+      authorName: safeName,
+      externalUrl: ex?.reviewUrl ?? null,
+      occurredAt: fb?.createdAt ?? ex?.publishedAt ?? item.createdAt,
+    };
+  });
+
+  const ratings = enriched.map(e => e.rating).filter((x): x is number => typeof x === "number");
+  const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+
+  res.set("Cache-Control", "public, max-age=60");
+  res.json({
+    restaurant: {
+      id: restaurant.id,
+      name: restaurant.name,
+      slug: restaurant.slug,
+      logoUrl: restaurant.logoUrl,
+    },
+    branches,
+    items: enriched,
+    pagination: {
+      page,
+      limit,
+      total,
+      hasMore: offset + enriched.length < total,
+    },
+    summary: {
+      total,
+      avgRating: avgRating != null ? Math.round(avgRating * 10) / 10 : null,
+    },
+  });
+});
+
+// Cross-tenant marketing testimonials (highlights opted-in by owners).
+router.get("/marketing/testimonials", async (_req, res) => {
+  const items = await db
+    .select({
+      id: feedbackWallItemsTable.id,
+      restaurantId: feedbackWallItemsTable.restaurantId,
+      feedbackId: feedbackWallItemsTable.feedbackId,
+      externalReviewId: feedbackWallItemsTable.externalReviewId,
+      source: feedbackWallItemsTable.source,
+      displayNameOverride: feedbackWallItemsTable.displayNameOverride,
+      createdAt: feedbackWallItemsTable.createdAt,
+      restaurantName: restaurantsTable.name,
+      restaurantSlug: restaurantsTable.slug,
+      restaurantLogo: restaurantsTable.logoUrl,
+    })
+    .from(feedbackWallItemsTable)
+    .innerJoin(restaurantsTable, eq(restaurantsTable.id, feedbackWallItemsTable.restaurantId))
+    .where(and(
+      eq(feedbackWallItemsTable.shareOnMarketing, true),
+      eq(feedbackWallItemsTable.isApproved, true),
+      eq(feedbackWallItemsTable.isHidden, false),
+    ))
+    .orderBy(desc(feedbackWallItemsTable.isFeatured), desc(feedbackWallItemsTable.createdAt))
+    .limit(24);
+
+  const fbIds = items.map(i => i.feedbackId).filter((x): x is number => !!x);
+  const exIds = items.map(i => i.externalReviewId).filter((x): x is number => !!x);
+  const fbRows = fbIds.length ? await db.select().from(customerFeedbackTable).where(inArray(customerFeedbackTable.id, fbIds)) : [];
+  const exRows = exIds.length ? await db.select().from(externalReviewsTable).where(inArray(externalReviewsTable.id, exIds)) : [];
+  const fbMap = new Map(fbRows.map(r => [r.id, r]));
+  const exMap = new Map(exRows.map(r => [r.id, r]));
+
+  const enriched = items
+    .map(item => {
+      const fb = item.feedbackId ? fbMap.get(item.feedbackId) : null;
+      const ex = item.externalReviewId ? exMap.get(item.externalReviewId) : null;
+      const rawName = item.displayNameOverride ?? fb?.customerName ?? ex?.authorName ?? "Guest";
+      const parts = rawName.trim().split(/\s+/);
+      const safeName = item.displayNameOverride ? rawName
+        : parts.length <= 1 ? (parts[0] || "Guest")
+        : `${parts[0]} ${parts[parts.length - 1][0]}.`;
+      return {
+        id: item.id,
+        source: item.source,
+        rating: fb?.rating ?? ex?.rating ?? null,
+        comment: fb?.comment ?? ex?.reviewText ?? null,
+        authorName: safeName,
+        restaurantName: item.restaurantName,
+        restaurantSlug: item.restaurantSlug,
+        restaurantLogo: item.restaurantLogo,
+        externalUrl: ex?.reviewUrl ?? null,
+      };
+    })
+    .filter(t => t.comment && (t.comment.length ?? 0) > 10);
+
+  res.set("Cache-Control", "public, max-age=300");
+  res.json(enriched);
 });
 
 export default router;

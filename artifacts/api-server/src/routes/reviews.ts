@@ -15,8 +15,10 @@ import {
   externalReviewsTable,
   reviewRepliesTable,
   feedbackRecoveryTasksTable,
+  feedbackWallItemsTable,
   branchesTable,
   usersTable,
+  restaurantsTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -581,6 +583,263 @@ router.patch("/restaurants/:restaurantId/reviews/recovery/:taskId", async (req: 
     oldValue: { status: existing.status }, newValue: update,
   });
   res.json(row);
+});
+
+// ─── Feedback Wall (curation) ─────────────────────────────────────────────────
+
+router.use(
+  "/restaurants/:restaurantId/feedback-wall/:rest",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+);
+
+router.get("/restaurants/:restaurantId/feedback-wall/list", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  const status = String(req.query.status ?? "all"); // all | pending | approved | featured
+  const sourceFilter = req.query.source ? String(req.query.source) : undefined; // qr | google | manual
+
+  const items = await db
+    .select({
+      id: feedbackWallItemsTable.id,
+      restaurantId: feedbackWallItemsTable.restaurantId,
+      branchId: feedbackWallItemsTable.branchId,
+      feedbackId: feedbackWallItemsTable.feedbackId,
+      externalReviewId: feedbackWallItemsTable.externalReviewId,
+      source: feedbackWallItemsTable.source,
+      isApproved: feedbackWallItemsTable.isApproved,
+      isFeatured: feedbackWallItemsTable.isFeatured,
+      isHidden: feedbackWallItemsTable.isHidden,
+      shareOnMarketing: feedbackWallItemsTable.shareOnMarketing,
+      displayNameOverride: feedbackWallItemsTable.displayNameOverride,
+      sortOrder: feedbackWallItemsTable.sortOrder,
+      approvedAt: feedbackWallItemsTable.approvedAt,
+      createdAt: feedbackWallItemsTable.createdAt,
+      branchName: branchesTable.name,
+    })
+    .from(feedbackWallItemsTable)
+    .leftJoin(branchesTable, eq(branchesTable.id, feedbackWallItemsTable.branchId))
+    .where(and(
+      eq(feedbackWallItemsTable.restaurantId, restaurantId),
+      branchId ? eq(feedbackWallItemsTable.branchId, branchId) : sql`true`,
+      sourceFilter ? eq(feedbackWallItemsTable.source, sourceFilter) : sql`true`,
+      status === "approved" ? eq(feedbackWallItemsTable.isApproved, true)
+        : status === "pending" ? eq(feedbackWallItemsTable.isApproved, false)
+        : status === "featured" ? eq(feedbackWallItemsTable.isFeatured, true)
+        : sql`true`,
+    ))
+    .orderBy(desc(feedbackWallItemsTable.isFeatured), desc(feedbackWallItemsTable.createdAt));
+
+  const fbIds = items.map(i => i.feedbackId).filter((x): x is number => !!x);
+  const exIds = items.map(i => i.externalReviewId).filter((x): x is number => !!x);
+
+  const fbRows = fbIds.length
+    ? await db.select().from(customerFeedbackTable).where(inArray(customerFeedbackTable.id, fbIds))
+    : [];
+  const exRows = exIds.length
+    ? await db.select().from(externalReviewsTable).where(inArray(externalReviewsTable.id, exIds))
+    : [];
+  const fbMap = new Map(fbRows.map(r => [r.id, r]));
+  const exMap = new Map(exRows.map(r => [r.id, r]));
+
+  const enriched = items.map(item => {
+    const fb = item.feedbackId ? fbMap.get(item.feedbackId) : null;
+    const ex = item.externalReviewId ? exMap.get(item.externalReviewId) : null;
+    return {
+      ...item,
+      rating: fb?.rating ?? ex?.rating ?? null,
+      comment: fb?.comment ?? ex?.reviewText ?? null,
+      authorName: item.displayNameOverride ?? fb?.customerName ?? ex?.authorName ?? "Guest",
+      sourceLabel: item.source === "google" ? "Google" : item.source === "qr" ? "QR feedback" : "Manual",
+      externalUrl: ex?.reviewUrl ?? null,
+      occurredAt: fb?.createdAt ?? ex?.publishedAt ?? item.createdAt,
+    };
+  });
+
+  res.json(enriched);
+});
+
+// Candidates the owner can promote onto the wall. QR feedback rows include
+// items collected by the AI Feedback Recovery flow (those flows write into
+// `customer_feedback` first; the recovery task is a follow-up handle), so
+// AI-recovered positive feedback surfaces here automatically alongside
+// regular QR submissions and Google reviews.
+router.get("/restaurants/:restaurantId/feedback-wall/candidates", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  const minRating = Math.max(1, Math.min(5, Number(req.query.minRating) || 4));
+
+  // QR feedback candidates not yet on the wall
+  const existingFb = await db
+    .select({ id: feedbackWallItemsTable.feedbackId })
+    .from(feedbackWallItemsTable)
+    .where(eq(feedbackWallItemsTable.restaurantId, restaurantId));
+  const existingFbIds = new Set(existingFb.map(r => r.id).filter((x): x is number => !!x));
+
+  const fb = await db
+    .select()
+    .from(customerFeedbackTable)
+    .where(and(
+      eq(customerFeedbackTable.restaurantId, restaurantId),
+      gte(customerFeedbackTable.rating, minRating),
+      branchId ? eq(customerFeedbackTable.branchId, branchId) : sql`true`,
+    ))
+    .orderBy(desc(customerFeedbackTable.createdAt))
+    .limit(100);
+
+  const existingEx = await db
+    .select({ id: feedbackWallItemsTable.externalReviewId })
+    .from(feedbackWallItemsTable)
+    .where(eq(feedbackWallItemsTable.restaurantId, restaurantId));
+  const existingExIds = new Set(existingEx.map(r => r.id).filter((x): x is number => !!x));
+
+  const ex = await db
+    .select()
+    .from(externalReviewsTable)
+    .where(and(
+      eq(externalReviewsTable.restaurantId, restaurantId),
+      gte(externalReviewsTable.rating, minRating),
+    ))
+    .orderBy(desc(externalReviewsTable.publishedAt))
+    .limit(100);
+
+  res.json({
+    qrFeedback: fb.filter(r => !existingFbIds.has(r.id)).map(r => ({
+      id: r.id, branchId: r.branchId, rating: r.rating, comment: r.comment,
+      customerName: r.customerName, createdAt: r.createdAt,
+    })),
+    externalReviews: ex.filter(r => !existingExIds.has(r.id)).map(r => ({
+      id: r.id, source: r.source, rating: r.rating, reviewText: r.reviewText,
+      authorName: r.authorName, publishedAt: r.publishedAt, reviewUrl: r.reviewUrl,
+    })),
+  });
+});
+
+router.post("/restaurants/:restaurantId/feedback-wall/list", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const feedbackId = b.feedbackId != null ? Number(b.feedbackId) : null;
+  const externalReviewId = b.externalReviewId != null ? Number(b.externalReviewId) : null;
+  if (!feedbackId && !externalReviewId) {
+    return void res.status(400).json({ error: "feedbackId or externalReviewId required" });
+  }
+  if (feedbackId && externalReviewId) {
+    return void res.status(400).json({ error: "Provide only one of feedbackId or externalReviewId, not both." });
+  }
+  let branchId: number | null = null;
+  let source = "manual";
+  if (feedbackId) {
+    const [fb] = await db.select().from(customerFeedbackTable).where(eq(customerFeedbackTable.id, feedbackId));
+    if (!fb || fb.restaurantId !== restaurantId) return void res.status(404).json({ error: "Feedback not found" });
+    branchId = fb.branchId;
+    source = "qr";
+  } else if (externalReviewId) {
+    const [ex] = await db.select().from(externalReviewsTable).where(eq(externalReviewsTable.id, externalReviewId));
+    if (!ex || ex.restaurantId !== restaurantId) return void res.status(404).json({ error: "External review not found" });
+    source = ex.source ?? "google";
+  }
+  // Marketing opt-in is reserved for restaurant owners and super admins.
+  // Reject the create call if a manager attempts to set it to true so the
+  // field cannot be set via the create endpoint as a privilege escalation.
+  const canMarketing = !!(req.user?.isSuperAdmin || req.user?.role === "owner");
+  if (b.shareOnMarketing && !canMarketing) {
+    return void res.status(403).json({ error: "Only the owner can publish to the marketing site." });
+  }
+  const isApproved = b.isApproved === true;
+  let row;
+  try {
+    [row] = await db.insert(feedbackWallItemsTable).values({
+      restaurantId,
+      branchId,
+      feedbackId,
+      externalReviewId,
+      source,
+      isApproved,
+      isFeatured: !!b.isFeatured,
+      shareOnMarketing: canMarketing && !!b.shareOnMarketing,
+      displayNameOverride: typeof b.displayNameOverride === "string" ? b.displayNameOverride.slice(0, 200) : null,
+      approvedBy: isApproved ? (req.user?.sub ?? null) : null,
+      approvedAt: isApproved ? new Date() : null,
+    }).returning();
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    if (code === "23505") {
+      return void res.status(409).json({ error: "This feedback is already on the wall." });
+    }
+    throw err;
+  }
+  await recordAuditLog({
+    req, module: "khana_ai", action: "feedback_wall.add",
+    entity: "feedback_wall_item", entityId: row.id,
+    restaurantId, targetRestaurantId: restaurantId, newValue: row,
+  });
+  res.status(201).json(row);
+});
+
+router.patch("/restaurants/:restaurantId/feedback-wall/:itemId", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const itemId = Number(req.params.itemId);
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const [existing] = await db.select().from(feedbackWallItemsTable)
+    .where(and(eq(feedbackWallItemsTable.id, itemId), eq(feedbackWallItemsTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  if (typeof b.isApproved === "boolean") {
+    update.isApproved = b.isApproved;
+    update.approvedAt = b.isApproved ? new Date() : null;
+    update.approvedBy = b.isApproved ? (req.user?.sub ?? null) : null;
+  }
+  if (typeof b.isFeatured === "boolean") update.isFeatured = b.isFeatured;
+  if (typeof b.isHidden === "boolean") update.isHidden = b.isHidden;
+  if (typeof b.shareOnMarketing === "boolean") {
+    // Marketing opt-in is reserved for restaurant owners and super admins.
+    if (!req.user?.isSuperAdmin && req.user?.role !== "owner") {
+      return void res.status(403).json({ error: "Only the owner can change marketing visibility." });
+    }
+    update.shareOnMarketing = b.shareOnMarketing;
+  }
+  if (typeof b.displayNameOverride === "string") update.displayNameOverride = b.displayNameOverride.slice(0, 200);
+  if (b.displayNameOverride === null) update.displayNameOverride = null;
+  if (typeof b.sortOrder === "number") update.sortOrder = b.sortOrder;
+  const [row] = await db.update(feedbackWallItemsTable).set(update)
+    .where(eq(feedbackWallItemsTable.id, itemId)).returning();
+  await recordAuditLog({
+    req, module: "khana_ai", action: "feedback_wall.update",
+    entity: "feedback_wall_item", entityId: itemId,
+    restaurantId, targetRestaurantId: restaurantId,
+    oldValue: existing, newValue: update,
+  });
+  res.json(row);
+});
+
+router.delete("/restaurants/:restaurantId/feedback-wall/:itemId", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const itemId = Number(req.params.itemId);
+  const [existing] = await db.select().from(feedbackWallItemsTable)
+    .where(and(eq(feedbackWallItemsTable.id, itemId), eq(feedbackWallItemsTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+  await db.delete(feedbackWallItemsTable).where(eq(feedbackWallItemsTable.id, itemId));
+  await recordAuditLog({
+    req, module: "khana_ai", action: "feedback_wall.remove",
+    entity: "feedback_wall_item", entityId: itemId,
+    restaurantId, targetRestaurantId: restaurantId, oldValue: existing,
+  });
+  res.json({ success: true });
+});
+
+router.get("/restaurants/:restaurantId/feedback-wall/embed-snippet", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [r] = await db.select({ slug: restaurantsTable.slug }).from(restaurantsTable)
+    .where(eq(restaurantsTable.id, restaurantId));
+  if (!r) return void res.status(404).json({ error: "Not found" });
+  // Honor configured public app base URL (which may already include `/app`),
+  // otherwise fall back to the request host + `/app` prefix used by the
+  // restaurant-platform artifact.
+  const configured = (process.env.PUBLIC_APP_URL ?? process.env.APP_URL ?? "").replace(/\/$/, "");
+  const base = configured || `${req.protocol}://${req.get("host")}/app`;
+  const url = `${base}/wall/${r.slug}?embed=1`;
+  const snippet = `<iframe src="${url}" style="width:100%;height:600px;border:0;" loading="lazy" title="Customer Feedback Wall"></iframe>`;
+  res.json({ slug: r.slug, url, snippet });
 });
 
 export default router;

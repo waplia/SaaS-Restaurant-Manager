@@ -1,10 +1,78 @@
+import { useEffect, useState } from "react";
 import { useSeo } from "@/lib/seo";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle2, BarChart3, ChefHat, Smartphone, Store } from "lucide-react";
+import { ArrowRight, CheckCircle2, BarChart3, ChefHat, Smartphone, Store, Star, Quote } from "lucide-react";
+
+interface Testimonial {
+  id: number;
+  source: string;
+  rating: number | null;
+  comment: string | null;
+  authorName: string;
+  restaurantName: string;
+  restaurantSlug: string;
+  restaurantLogo: string | null;
+  externalUrl: string | null;
+}
+
+function TestimonialsSection() {
+  const [items, setItems] = useState<Testimonial[] | null>(null);
+  useEffect(() => {
+    fetch("/api/marketing/testimonials")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Testimonial[]) => setItems(data))
+      .catch(() => setItems([]));
+  }, []);
+
+  if (!items) return null;
+  const top = items.slice(0, 6);
+
+  return (
+    <section className="py-24 bg-background">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <h2 className="font-serif text-4xl md:text-5xl font-bold mb-4">Loved by restaurants across India</h2>
+          <p className="text-lg text-muted-foreground">Real feedback from guests of restaurants running on Khana Lagao.</p>
+        </div>
+        {top.length === 0 && (
+          <div className="text-center text-muted-foreground py-10">
+            Highlighted guest reviews will appear here as restaurants opt in to share them.
+          </div>
+        )}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {top.map(t => (
+            <article key={t.id} className="rounded-xl border border-border bg-card p-6 flex flex-col">
+              <Quote className="h-6 w-6 text-primary/40 mb-3" />
+              {t.rating != null && (
+                <div className="flex items-center gap-0.5 mb-3">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star key={i} className={`h-4 w-4 ${i <= (t.rating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`} />
+                  ))}
+                </div>
+              )}
+              {t.comment && <p className="text-sm leading-relaxed text-foreground/90 line-clamp-6 flex-1">{t.comment}</p>}
+              <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
+                {t.restaurantLogo
+                  ? <img src={t.restaurantLogo} alt="" className="h-9 w-9 rounded-full object-cover" />
+                  : <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">{t.restaurantName.slice(0, 1)}</div>}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{t.authorName}</div>
+                  <a href={`/app/wall/${t.restaurantSlug}`} className="text-xs text-muted-foreground hover:text-primary truncate block">
+                    {t.restaurantName}
+                  </a>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   useSeo({
@@ -126,6 +194,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <TestimonialsSection />
 
         {/* CTA Section */}
         <section className="py-32 relative overflow-hidden bg-foreground text-background">
