@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, unique, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -105,14 +105,23 @@ export const attendanceTable = pgTable("attendance", {
 export const auditLogsTable = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   restaurantId: integer("restaurant_id").references(() => restaurantsTable.id),
+  targetRestaurantId: integer("target_restaurant_id").references(() => restaurantsTable.id),
   userId: integer("user_id").references(() => usersTable.id),
+  userDisplay: text("user_display"),
+  role: text("role"),
+  module: text("module"),
   action: text("action").notNull(),
   entity: text("entity").notNull(),
   entityId: integer("entity_id"),
   details: text("details"),
+  oldValue: jsonb("old_value"),
+  newValue: jsonb("new_value"),
   ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  moduleActionCreatedAtIdx: index("audit_logs_module_action_created_idx").on(t.module, t.action, t.createdAt),
+}));
 
 export const insertStaffSchema = createInsertSchema(staffTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertStaff = z.infer<typeof insertStaffSchema>;

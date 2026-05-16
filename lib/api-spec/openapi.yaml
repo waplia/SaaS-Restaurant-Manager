@@ -1667,7 +1667,13 @@ paths:
       parameters:
         - { name: restaurantId, in: path, required: true, schema: { type: integer } }
         - { name: userId, in: query, schema: { type: integer } }
+        - { name: role, in: query, schema: { type: string } }
+        - { name: module, in: query, schema: { type: string } }
         - { name: action, in: query, schema: { type: string } }
+        - { name: ip, in: query, schema: { type: string } }
+        - { name: dateFrom, in: query, schema: { type: string } }
+        - { name: dateTo, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
         - { name: page, in: query, schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
@@ -1676,9 +1682,60 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditLog"
+                $ref: "#/components/schemas/AuditLogList"
+
+  /restaurants/{restaurantId}/audit-logs/{id}:
+    get:
+      operationId: getAuditLog
+      tags: [staff]
+      parameters:
+        - { name: restaurantId, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Audit log detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+
+  /admin/audit-logs:
+    get:
+      operationId: listAdminAuditLogs
+      tags: [admin]
+      parameters:
+        - { name: userId, in: query, schema: { type: integer } }
+        - { name: role, in: query, schema: { type: string } }
+        - { name: module, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: restaurantId, in: query, schema: { type: integer } }
+        - { name: ip, in: query, schema: { type: string } }
+        - { name: dateFrom, in: query, schema: { type: string } }
+        - { name: dateTo, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: Platform-wide audit logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogList"
+
+  /admin/audit-logs/{id}:
+    get:
+      operationId: getAdminAuditLog
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Audit log detail with restaurant + user context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogDetail"
 
   # ─── Customers ────────────────────────────────────────────────
   /restaurants/{restaurantId}/customers:
@@ -3414,15 +3471,44 @@ components:
 
     AuditLog:
       type: object
-      required: [id, action, entity, createdAt]
+      required: [id, action, entity, module, createdAt]
       properties:
         id: { type: integer }
+        restaurantId: { type: ["integer", "null"] }
+        targetRestaurantId: { type: ["integer", "null"] }
         userId: { type: ["integer", "null"] }
+        userDisplay: { type: ["string", "null"] }
+        role: { type: ["string", "null"] }
+        module: { type: string }
         action: { type: string }
         entity: { type: string }
         entityId: { type: ["integer", "null"] }
         details: { type: ["string", "null"] }
+        oldValue: { nullable: true }
+        newValue: { nullable: true }
+        ipAddress: { type: ["string", "null"] }
+        userAgent: { type: ["string", "null"] }
         createdAt: { type: string }
+
+    AuditLogList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    AuditLogDetail:
+      allOf:
+        - $ref: "#/components/schemas/AuditLog"
+        - type: object
+          properties:
+            restaurantName: { type: ["string", "null"] }
+            userEmail: { type: ["string", "null"] }
 
     # ── Customers ──
     Customer:

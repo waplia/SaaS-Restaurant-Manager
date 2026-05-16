@@ -17,6 +17,7 @@ import { sendSmsMessage } from "../lib/smsSender";
 import { hashPassword } from "../lib/auth";
 import { sendEmail, sendSms, sendWhatsApp } from "../lib/notifications";
 import { logger } from "../lib/logger";
+import { recordAuditLog } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -446,11 +447,24 @@ adminRouter.patch("/admin/leads/:id", async (req, res) => {
     }
   }
   if (typeof notes === "string") update.notes = notes.slice(0, 4000);
+  const [before] = await db.select().from(leadsTable).where(eq(leadsTable.id, id));
   const [row] = await db.update(leadsTable).set(update).where(eq(leadsTable.id, id)).returning();
   if (status && status !== current.status) {
     await logActivity(id, req.user!.sub, "status_changed", { from: current.status, to: status });
     logger.info({ leadId: id, by: req.user!.sub, from: current.status, to: status }, "lead.status_changed");
   }
+
+  await recordAuditLog({
+    req,
+    module: "marketing",
+    action: "lead.update",
+    entity: "lead",
+    entityId: id,
+    oldValue: before ? { status: before.status, notes: before.notes } : null,
+    newValue: { status: row.status, notes: row.notes },
+    details: status ? `Status → ${status}` : "Notes updated",
+  });
+
   res.json(row);
 });
 
@@ -544,6 +558,15 @@ adminRouter.post("/admin/leads/:id/follow-up", async (req, res) => {
     return;
   }
   await logActivity(id, req.user!.sub, when ? "follow_up_scheduled" : "follow_up_cleared", { at: when?.toISOString() ?? null, note: note ?? null });
+  await recordAuditLog(req, {
+    module: "marketing",
+    action: "lead.update",
+    entity: "lead",
+    entityId: id,
+    oldValue: null, // Note: 'before' was not defined in this scope in the original conflict block
+    newValue: { followUpAt: row.followUpAt, followUpNote: row.followUpNote },
+    details: when ? "Follow-up scheduled" : "Follow-up cleared",
+  });
   res.json(row);
 });
 
@@ -574,6 +597,15 @@ adminRouter.post("/admin/leads/:id/status", async (req, res) => {
     .where(eq(leadsTable.id, id))
     .returning();
   await logActivity(id, req.user!.sub, "status_changed", { from: current.status, to: status });
+  await recordAuditLog(req, {
+    module: "marketing",
+    action: "lead.update",
+    entity: "lead",
+    entityId: id,
+    oldValue: { status: current.status },
+    newValue: { status: row.status },
+    details: `Status → ${status}`,
+  });
   res.json(row);
 });
 
@@ -778,6 +810,14 @@ adminRouter.post("/admin/blog/posts", async (req, res) => {
         published: body.published !== false,
       })
       .returning();
+    await recordAuditLog(req, {
+      module: "marketing",
+      action: "blog_post.create",
+      entity: "blog_post",
+      entityId: row.id,
+      newValue: { slug: row.slug, title: row.title, published: row.published },
+      details: row.title,
+    });
     res.status(201).json(row);
   } catch {
     res.status(409).json({ error: "Slug already exists" });
@@ -801,11 +841,21 @@ adminRouter.patch("/admin/blog/posts/:id", async (req, res) => {
   if (body.author) update.author = String(body.author).slice(0, 120);
   if (body.readMinutes != null) update.readMinutes = Number(body.readMinutes) || 5;
   if (typeof body.published === "boolean") update.published = body.published;
+  const [before] = await db.select().from(blogPostsTable).where(eq(blogPostsTable.id, id));
   const [row] = await db.update(blogPostsTable).set(update).where(eq(blogPostsTable.id, id)).returning();
   if (!row) {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  await recordAuditLog(req, {
+    module: "marketing",
+    action: "blog_post.update",
+    entity: "blog_post",
+    entityId: id,
+    oldValue: before ? { title: before.title, published: before.published, category: before.category } : null,
+    newValue: { title: row.title, published: row.published, category: row.category },
+    details: row.title,
+  });
   res.json(row);
 });
 
@@ -815,7 +865,16 @@ adminRouter.delete("/admin/blog/posts/:id", async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
+  const [before] = await db.select().from(blogPostsTable).where(eq(blogPostsTable.id, id));
   await db.delete(blogPostsTable).where(eq(blogPostsTable.id, id));
+  await recordAuditLog(req, {
+    module: "marketing",
+    action: "blog_post.delete",
+    entity: "blog_post",
+    entityId: id,
+    oldValue: before ? { slug: before.slug, title: before.title } : null,
+    details: before?.title ?? `#${id}`,
+  });
   res.status(204).end();
 });
 

@@ -8,6 +8,7 @@ import {
   Plus, Pencil, Trash2, X, Mail, Eye, CreditCard, FileCheck2,
   Landmark, Smartphone, ExternalLink, Megaphone, MessageSquare, MessageCircle, Activity, Wrench,
 } from "lucide-react";
+import { Link } from "wouter";
 import AdminNotificationCenter from "./admin-notifications";
 import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
@@ -1001,6 +1002,11 @@ export default function AdminPage() {
               <p className="text-sm font-medium text-foreground">{user.name}</p>
               <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end"><Mail className="w-3 h-3" />{user.email}</p>
             </div>
+            <Link href="/admin/audit-logs">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Activity className="w-4 h-4" /> Audit Logs
+              </Button>
+            </Link>
             <Button variant="outline" size="sm" onClick={logout} className="gap-2">
               <LogOut className="w-4 h-4" /> Sign out
             </Button>

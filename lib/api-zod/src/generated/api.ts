@@ -2056,21 +2056,136 @@ export const ListAuditLogsParams = zod.object({
 
 export const ListAuditLogsQueryParams = zod.object({
   userId: zod.coerce.number().optional(),
+  role: zod.coerce.string().optional(),
+  module: zod.coerce.string().optional(),
   action: zod.coerce.string().optional(),
+  ip: zod.coerce.string().optional(),
+  dateFrom: zod.coerce.string().optional(),
+  dateTo: zod.coerce.string().optional(),
+  q: zod.coerce.string().optional(),
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional(),
 });
 
-export const ListAuditLogsResponseItem = zod.object({
+export const ListAuditLogsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      restaurantId: zod.number().nullish(),
+      targetRestaurantId: zod.number().nullish(),
+      userId: zod.number().nullish(),
+      userDisplay: zod.string().nullish(),
+      role: zod.string().nullish(),
+      module: zod.string(),
+      action: zod.string(),
+      entity: zod.string(),
+      entityId: zod.number().nullish(),
+      details: zod.string().nullish(),
+      oldValue: zod.unknown().nullish(),
+      newValue: zod.unknown().nullish(),
+      ipAddress: zod.string().nullish(),
+      userAgent: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+export const GetAuditLogParams = zod.object({
+  restaurantId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const GetAuditLogResponse = zod.object({
   id: zod.number(),
+  restaurantId: zod.number().nullish(),
+  targetRestaurantId: zod.number().nullish(),
   userId: zod.number().nullish(),
+  userDisplay: zod.string().nullish(),
+  role: zod.string().nullish(),
+  module: zod.string(),
   action: zod.string(),
   entity: zod.string(),
   entityId: zod.number().nullish(),
   details: zod.string().nullish(),
+  oldValue: zod.unknown().nullish(),
+  newValue: zod.unknown().nullish(),
+  ipAddress: zod.string().nullish(),
+  userAgent: zod.string().nullish(),
   createdAt: zod.string(),
 });
-export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem);
+
+export const ListAdminAuditLogsQueryParams = zod.object({
+  userId: zod.coerce.number().optional(),
+  role: zod.coerce.string().optional(),
+  module: zod.coerce.string().optional(),
+  action: zod.coerce.string().optional(),
+  restaurantId: zod.coerce.number().optional(),
+  ip: zod.coerce.string().optional(),
+  dateFrom: zod.coerce.string().optional(),
+  dateTo: zod.coerce.string().optional(),
+  q: zod.coerce.string().optional(),
+  page: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const ListAdminAuditLogsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      restaurantId: zod.number().nullish(),
+      targetRestaurantId: zod.number().nullish(),
+      userId: zod.number().nullish(),
+      userDisplay: zod.string().nullish(),
+      role: zod.string().nullish(),
+      module: zod.string(),
+      action: zod.string(),
+      entity: zod.string(),
+      entityId: zod.number().nullish(),
+      details: zod.string().nullish(),
+      oldValue: zod.unknown().nullish(),
+      newValue: zod.unknown().nullish(),
+      ipAddress: zod.string().nullish(),
+      userAgent: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+export const GetAdminAuditLogParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetAdminAuditLogResponse = zod
+  .object({
+    id: zod.number(),
+    restaurantId: zod.number().nullish(),
+    targetRestaurantId: zod.number().nullish(),
+    userId: zod.number().nullish(),
+    userDisplay: zod.string().nullish(),
+    role: zod.string().nullish(),
+    module: zod.string(),
+    action: zod.string(),
+    entity: zod.string(),
+    entityId: zod.number().nullish(),
+    details: zod.string().nullish(),
+    oldValue: zod.unknown().nullish(),
+    newValue: zod.unknown().nullish(),
+    ipAddress: zod.string().nullish(),
+    userAgent: zod.string().nullish(),
+    createdAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      restaurantName: zod.string().nullish(),
+      userEmail: zod.string().nullish(),
+    }),
+  );
 
 export const ListCustomersParams = zod.object({
   restaurantId: zod.coerce.number(),

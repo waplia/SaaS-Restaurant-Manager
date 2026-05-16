@@ -5,7 +5,6 @@ import {
   notificationBroadcastsTable,
   notificationDeliveriesTable,
   notificationTemplatesTable,
-  auditLogsTable,
   type AudienceFilter,
   type BroadcastChannel,
   type BroadcastPriority,
@@ -20,6 +19,7 @@ import {
   getChannelCapabilities,
 } from "../lib/notificationCenter";
 import { logger } from "../lib/logger";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -87,6 +87,10 @@ router.post("/admin/notification-templates", requireSuperAdmin, async (req, res)
       variables: Array.isArray(variables) ? variables : [],
       createdBy: req.user?.id ?? null,
     }).returning();
+    await recordAuditLog({
+      req, module: "broadcasts", action: "template.create", entity: "notification_template",
+      entityId: created.id, newValue: { name, slug, channel: created.channel },
+    });
     res.status(201).json(created);
   } catch (err) {
     if ((err as { code?: string }).code === "23505") {
@@ -113,6 +117,10 @@ router.put("/admin/notification-templates/:id", requireSuperAdmin, async (req, r
   if (variables !== undefined) patch.variables = Array.isArray(variables) ? variables : [];
   const [updated] = await db.update(notificationTemplatesTable).set(patch).where(eq(notificationTemplatesTable.id, id)).returning();
   if (!updated) return void res.status(404).json({ error: "Template not found" });
+  await recordAuditLog({
+    req, module: "broadcasts", action: "template.update", entity: "notification_template",
+    entityId: id, newValue: patch,
+  });
   res.json(updated);
 });
 
@@ -120,6 +128,9 @@ router.delete("/admin/notification-templates/:id", requireSuperAdmin, async (req
   const id = parseId(req.params.id);
   if (!id) return void res.status(400).json({ error: "Invalid id" });
   await db.delete(notificationTemplatesTable).where(eq(notificationTemplatesTable.id, id));
+  await recordAuditLog({
+    req, module: "broadcasts", action: "template.delete", entity: "notification_template", entityId: id,
+  });
   res.json({ ok: true });
 });
 
@@ -279,11 +290,10 @@ router.post("/admin/broadcasts", requireSuperAdmin, async (req, res) => {
     }
   }
 
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "broadcast.created",
-    entity: "notification_broadcast",
+  await recordAuditLog({
+    req, module: "broadcasts", action: "broadcast.create", entity: "notification_broadcast",
     entityId: created.id,
+    newValue: { title, channels: ch, status, priority: created.priority, audience: parsedAudience },
     details: `channels=${ch.join(",")} status=${status} priority=${created.priority}`,
   });
 
@@ -341,11 +351,9 @@ router.put("/admin/broadcasts/:id", requireSuperAdmin, async (req, res) => {
     .returning();
   if (!updated) return void res.status(409).json({ error: "Broadcast state changed; reload and retry" });
 
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "broadcast.edited",
-    entity: "notification_broadcast",
-    entityId: id,
+  await recordAuditLog({
+    req, module: "broadcasts", action: "broadcast.edit", entity: "notification_broadcast",
+    entityId: id, oldValue: existing, newValue: patch,
   });
   res.json(updated);
 });
@@ -358,11 +366,8 @@ router.post("/admin/broadcasts/:id/send", requireSuperAdmin, async (req, res) =>
   if (bc.status !== "draft" && bc.status !== "scheduled") {
     return void res.status(400).json({ error: `Cannot send a ${bc.status} broadcast` });
   }
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "broadcast.sent_manually",
-    entity: "notification_broadcast",
-    entityId: id,
+  await recordAuditLog({
+    req, module: "broadcasts", action: "broadcast.send", entity: "notification_broadcast", entityId: id,
   });
   dispatchBroadcast(id).catch(err => logger.error({ err, broadcastId: id }, "Manual dispatch failed"));
   res.json({ ok: true });
@@ -379,11 +384,8 @@ router.post("/admin/broadcasts/:id/cancel", requireSuperAdmin, async (req, res) 
   await db.update(notificationBroadcastsTable)
     .set({ status: "cancelled", updatedAt: new Date() })
     .where(eq(notificationBroadcastsTable.id, id));
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "broadcast.cancelled",
-    entity: "notification_broadcast",
-    entityId: id,
+  await recordAuditLog({
+    req, module: "broadcasts", action: "broadcast.cancel", entity: "notification_broadcast", entityId: id,
   });
   res.json({ ok: true });
 });
@@ -393,11 +395,9 @@ router.post("/admin/broadcasts/:id/resend-failed", requireSuperAdmin, async (req
   if (!id) return void res.status(400).json({ error: "Invalid id" });
   try {
     const result = await resendFailedDeliveries(id);
-    await db.insert(auditLogsTable).values({
-      userId: req.user?.id ?? null,
-      action: "broadcast.resend_failed",
-      entity: "notification_broadcast",
-      entityId: id,
+    await recordAuditLog({
+      req, module: "broadcasts", action: "broadcast.resend_failed", entity: "notification_broadcast",
+      entityId: id, newValue: result,
       details: `retried=${result.retried} succeeded=${result.succeeded}`,
     });
     res.json(result);

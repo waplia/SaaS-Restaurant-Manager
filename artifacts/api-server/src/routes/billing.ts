@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import {
   db, paymentMethodSettingsTable, manualPaymentRequestsTable, subscriptionPaymentsTable,
-  tenantsTable, subscriptionPlansTable, usersTable, auditLogsTable,
+  tenantsTable, subscriptionPlansTable, usersTable,
   notificationsTable, restaurantsTable,
 } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
@@ -17,6 +17,7 @@ import {
 } from "../lib/razorpay";
 import { logger } from "../lib/logger";
 import { sendByTemplateKey } from "../lib/emailSender";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -51,6 +52,10 @@ router.put("/admin/payment-methods/:provider", requireSuperAdmin, async (req, re
     return void res.status(400).json({ error: "Manual methods cannot be marked default" });
   }
   const row = await upsertProvider(provider, { isEnabled, isDefault, config }, req.user?.id);
+  await recordAuditLog({
+    req, module: "billing", action: "payment_method.update", entity: "payment_method",
+    entityId: row.id, newValue: { provider, isEnabled, isDefault, config },
+  });
   res.json({
     provider: row.provider,
     isEnabled: row.isEnabled,
@@ -408,11 +413,10 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
     submittedBy: req.user?.id ?? null,
   }).returning();
 
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "manual_payment.submitted",
-    entity: "manual_payment_request",
-    entityId: created.id,
+  await recordAuditLog({
+    req, module: "billing", action: "manual_payment.submit", entity: "manual_payment_request",
+    entityId: created.id, restaurantId: Number(req.params.restaurantId),
+    newValue: { tenantId, planId, method, reference: reference ?? null },
     details: `tenant=${tenantId} plan=${planId} method=${method}`,
   });
 
@@ -482,11 +486,9 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     reviewedAt: new Date(),
   }).where(eq(manualPaymentRequestsTable.id, id));
 
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "manual_payment.approved",
-    entity: "manual_payment_request",
-    entityId: id,
+  await recordAuditLog({
+    req, module: "billing", action: "manual_payment.approve", entity: "manual_payment_request",
+    entityId: id, newValue: { tenantId: reqRow.tenantId, planId: reqRow.planId, method: reqRow.method, note },
     details: `tenant=${reqRow.tenantId} plan=${reqRow.planId} method=${reqRow.method}`,
   });
 
@@ -538,11 +540,9 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
     reviewedAt: new Date(),
   }).where(eq(manualPaymentRequestsTable.id, id));
 
-  await db.insert(auditLogsTable).values({
-    userId: req.user?.id ?? null,
-    action: "manual_payment.rejected",
-    entity: "manual_payment_request",
-    entityId: id,
+  await recordAuditLog({
+    req, module: "billing", action: "manual_payment.reject", entity: "manual_payment_request",
+    entityId: id, newValue: { tenantId: reqRow.tenantId, reason },
     details: `tenant=${reqRow.tenantId} reason=${reason}`,
   });
 

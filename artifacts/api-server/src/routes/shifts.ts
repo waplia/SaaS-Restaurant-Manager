@@ -703,19 +703,8 @@ router.get("/restaurants/:restaurantId/attendance/my-active", async (req, res) =
   });
 });
 
-router.get("/restaurants/:restaurantId/audit-logs", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { userId, action, page, limit } = req.query;
-  const pg = Number(page) || 1;
-  const lim = Number(limit) || 50;
-  const offset = (pg - 1) * lim;
-  const restaurantId = Number(req.params.restaurantId);
-
-  const conditions = [eq(auditLogsTable.restaurantId, restaurantId)];
-  if (userId) conditions.push(eq(auditLogsTable.userId, Number(userId)));
-  if (action) conditions.push(eq(auditLogsTable.action, String(action)));
-
-  const rows = await db.select().from(auditLogsTable).where(and(...conditions)).orderBy(desc(auditLogsTable.createdAt)).limit(lim).offset(offset);
-  res.json(rows);
-});
+// Restaurant-scoped audit-log endpoints have moved to `routes/audit-logs.ts`
+// where they share the new filter, pagination, and detail logic with the
+// super-admin global viewer. This router no longer registers a duplicate.
 
 export default router;

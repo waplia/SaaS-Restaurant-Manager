@@ -13,8 +13,8 @@ import {
 import { authenticate } from "../middleware/authenticate";
 import { sendByTemplateKey } from "../lib/emailSender";
 import { getAppSettings } from "../lib/appSettings";
-
 import { sendLifecycleSms } from "../lib/smsSender";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -169,17 +169,34 @@ router.post("/auth/login", async (req, res) => {
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
   if (!user || !user.isActive) {
+    await recordAuditLog({
+      req, module: "auth", action: "login.failed", entity: "auth",
+      userId: null, userDisplay: email, role: null,
+      newValue: { email, reason: !user ? "user_not_found" : "user_inactive" },
+    });
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
   const valid = await comparePassword(password, user.passwordHash);
   if (!valid) {
+    await recordAuditLog({
+      req, module: "auth", action: "login.failed", entity: "auth",
+      userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
+      restaurantId: user.restaurantId ?? null,
+      newValue: { email, reason: "bad_password" },
+    });
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
   await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
+  await recordAuditLog({
+    req, module: "auth", action: "login.success", entity: "auth",
+    userId: user.id, userDisplay: user.name ?? user.email,
+    role: user.isSuperAdmin ? "super_admin" : user.role,
+    restaurantId: user.restaurantId ?? null,
+  });
 
   const tokenPayload = {
     sub: user.id,
@@ -242,7 +259,8 @@ router.post("/auth/refresh", async (req, res) => {
   }
 });
 
-router.post("/auth/logout", (_req, res) => {
+router.post("/auth/logout", authenticate, async (req, res) => {
+  await recordAuditLog({ req, module: "auth", action: "logout", entity: "auth" });
   res.json({ success: true });
 });
 

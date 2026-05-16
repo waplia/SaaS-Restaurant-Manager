@@ -1189,13 +1189,46 @@ export interface AttendanceRecord {
 export interface AuditLog {
   id: number;
   restaurantId: number | null;
+  targetRestaurantId?: number | null;
   userId: number | null;
+  userDisplay?: string | null;
+  role?: string | null;
+  module?: string;
   action: string;
   entity: string;
   entityId: number | null;
   details: string | null;
+  oldValue?: unknown;
+  newValue?: unknown;
   ipAddress: string | null;
+  userAgent?: string | null;
   createdAt: string;
+}
+
+export interface AuditLogList {
+  data: AuditLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AuditLogDetail extends AuditLog {
+  restaurantName?: string | null;
+  userEmail?: string | null;
+}
+
+export interface AuditLogFilters {
+  userId?: number;
+  role?: string;
+  module?: string;
+  action?: string;
+  ip?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  restaurantId?: number;
+  page?: number;
+  limit?: number;
 }
 
 export interface LeavePolicy {

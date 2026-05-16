@@ -4,6 +4,7 @@ import { db, restaurantSettingsTable } from "../lib/db";
 import { requireRole, type AppRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { hashManagerPin } from "../lib/discounts";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -142,6 +143,10 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
     }
   }
 
+  const [previous] = await db.select().from(restaurantSettingsTable).where(and(
+    eq(restaurantSettingsTable.restaurantId, restaurantId),
+    eq(restaurantSettingsTable.section, section),
+  ));
   const [row] = await db
     .insert(restaurantSettingsTable)
     .values({ restaurantId, section, data, updatedBy: req.user!.sub })
@@ -150,6 +155,11 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
       set: { data, updatedBy: req.user!.sub, updatedAt: new Date() },
     })
     .returning();
+  await recordAuditLog({
+    req, module: "settings", action: `settings.${section}.update`, entity: "settings",
+    entityId: row.id, restaurantId, targetRestaurantId: restaurantId,
+    oldValue: previous?.data ?? null, newValue: data,
+  });
   let respData: unknown = row.data;
   if (section === "discounts") {
     const src = (row.data ?? {}) as Record<string, unknown>;

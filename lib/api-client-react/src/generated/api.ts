@@ -24,6 +24,8 @@ import type {
   AssignStaffShiftInput,
   AttendanceRecord,
   AuditLog,
+  AuditLogDetail,
+  AuditLogList,
   AuthResult,
   AuthUser,
   BlogPost,
@@ -77,6 +79,7 @@ import type {
   LeadInput,
   LeadSubmitResult,
   LeadUpdateInput,
+  ListAdminAuditLogsParams,
   ListAttendanceParams,
   ListAuditLogsParams,
   ListCustomersParams,
@@ -7841,8 +7844,8 @@ export const listAuditLogs = async (
   restaurantId: number,
   params?: ListAuditLogsParams,
   options?: RequestInit,
-): Promise<AuditLog[]> => {
-  return customFetch<AuditLog[]>(getListAuditLogsUrl(restaurantId, params), {
+): Promise<AuditLogList> => {
+  return customFetch<AuditLogList>(getListAuditLogsUrl(restaurantId, params), {
     ...options,
     method: "GET",
   });
@@ -7919,6 +7922,260 @@ export function useListAuditLogs<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetAuditLogUrl = (restaurantId: number, id: number) => {
+  return `/api/restaurants/${restaurantId}/audit-logs/${id}`;
+};
+
+export const getAuditLog = async (
+  restaurantId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<AuditLog> => {
+  return customFetch<AuditLog>(getGetAuditLogUrl(restaurantId, id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuditLogQueryKey = (restaurantId: number, id: number) => {
+  return [`/api/restaurants/${restaurantId}/audit-logs/${id}`] as const;
+};
+
+export const getGetAuditLogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuditLog>>,
+  TError = ErrorType<unknown>,
+>(
+  restaurantId: number,
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAuditLogQueryKey(restaurantId, id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuditLog>>> = ({
+    signal,
+  }) => getAuditLog(restaurantId, id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(restaurantId && id),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuditLog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuditLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuditLog>>
+>;
+export type GetAuditLogQueryError = ErrorType<unknown>;
+
+export function useGetAuditLog<
+  TData = Awaited<ReturnType<typeof getAuditLog>>,
+  TError = ErrorType<unknown>,
+>(
+  restaurantId: number,
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuditLogQueryOptions(restaurantId, id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getListAdminAuditLogsUrl = (params?: ListAdminAuditLogsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/audit-logs?${stringifiedParams}`
+    : `/api/admin/audit-logs`;
+};
+
+export const listAdminAuditLogs = async (
+  params?: ListAdminAuditLogsParams,
+  options?: RequestInit,
+): Promise<AuditLogList> => {
+  return customFetch<AuditLogList>(getListAdminAuditLogsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminAuditLogsQueryKey = (
+  params?: ListAdminAuditLogsParams,
+) => {
+  return [`/api/admin/audit-logs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminAuditLogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminAuditLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminAuditLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminAuditLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminAuditLogsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminAuditLogs>>
+  > = ({ signal }) => listAdminAuditLogs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminAuditLogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminAuditLogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminAuditLogs>>
+>;
+export type ListAdminAuditLogsQueryError = ErrorType<unknown>;
+
+export function useListAdminAuditLogs<
+  TData = Awaited<ReturnType<typeof listAdminAuditLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminAuditLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminAuditLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminAuditLogsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetAdminAuditLogUrl = (id: number) => {
+  return `/api/admin/audit-logs/${id}`;
+};
+
+export const getAdminAuditLog = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AuditLogDetail> => {
+  return customFetch<AuditLogDetail>(getGetAdminAuditLogUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminAuditLogQueryKey = (id: number) => {
+  return [`/api/admin/audit-logs/${id}`] as const;
+};
+
+export const getGetAdminAuditLogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminAuditLog>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminAuditLogQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminAuditLog>>
+  > = ({ signal }) => getAdminAuditLog(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminAuditLog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminAuditLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminAuditLog>>
+>;
+export type GetAdminAuditLogQueryError = ErrorType<unknown>;
+
+export function useGetAdminAuditLog<
+  TData = Awaited<ReturnType<typeof getAdminAuditLog>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminAuditLogQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

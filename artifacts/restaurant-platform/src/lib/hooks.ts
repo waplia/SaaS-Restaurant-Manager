@@ -13,7 +13,7 @@ import type {
   InventoryItem, CreateInventoryItemInput, AdjustInventoryInput, UpdateInventoryItemInput,
   InventoryTransaction, PurchaseOrder, CreatePurchaseOrderInput,
   StaffMember, CreateUserInput,
-  Shift, StaffShift, AttendanceRecord, AuditLog,
+  Shift, StaffShift, AttendanceRecord, AuditLog, AuditLogList, AuditLogDetail, AuditLogFilters,
   CreateShiftInput, CreateStaffShiftInput, ClockInInput, MarkAttendanceInput, PatchAttendanceInput,
   Customer, CustomersResponse, CreateCustomerInput, UpdateCustomerInput,
   LoyaltyAccount, LoyaltyTransaction,
@@ -1255,15 +1255,45 @@ export function useCancelLeaveRequest() {
   });
 }
 
-export function useAuditLogs(params?: { userId?: number; action?: string; page?: number }) {
-  const RESTAURANT_ID = useRestaurantId();
+function buildAuditQuery(params?: AuditLogFilters): string {
   const q = new URLSearchParams();
-  if (params?.userId) q.set("userId", String(params.userId));
-  if (params?.action) q.set("action", params.action);
-  if (params?.page) q.set("page", String(params.page));
+  if (!params) return q.toString();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === "") continue;
+    q.set(k, String(v));
+  }
+  return q.toString();
+}
+
+export function useAuditLogs(params?: AuditLogFilters) {
+  const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["audit-logs", RESTAURANT_ID, params],
-    queryFn: () => apiGet<AuditLog[]>(`/restaurants/${RESTAURANT_ID}/audit-logs?${q}`),
+    queryFn: () => apiGet<AuditLogList>(`/restaurants/${RESTAURANT_ID}/audit-logs?${buildAuditQuery(params)}`),
+  });
+}
+
+export function useAuditLogDetail(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["audit-log-detail", RESTAURANT_ID, id],
+    queryFn: () => apiGet<AuditLog>(`/restaurants/${RESTAURANT_ID}/audit-logs/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useAdminAuditLogs(params?: AuditLogFilters) {
+  return useQuery({
+    queryKey: ["admin-audit-logs", params],
+    queryFn: () => apiGet<AuditLogList>(`/admin/audit-logs?${buildAuditQuery(params)}`),
+  });
+}
+
+export function useAdminAuditLogDetail(id: number | null) {
+  return useQuery({
+    queryKey: ["admin-audit-log-detail", id],
+    queryFn: () => apiGet<AuditLogDetail>(`/admin/audit-logs/${id}`),
+    enabled: !!id,
   });
 }
 

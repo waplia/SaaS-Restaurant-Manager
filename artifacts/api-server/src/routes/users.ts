@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable, userDevicesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { hashPassword } from "../lib/auth";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -72,6 +73,11 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), async (req
 
   const passwordHash = await hashPassword(password);
   const [user] = await db.insert(usersTable).values({ name, email, passwordHash, role, phone, restaurantId, tenantId }).returning(userFields);
+  await recordAuditLog({
+    req, module: "users", action: "user.create", entity: "user", entityId: user.id,
+    targetRestaurantId: restaurantId ?? null,
+    newValue: { name: user.name, email: user.email, role: user.role, restaurantId, tenantId },
+  });
   res.status(201).json(user);
 });
 
@@ -95,6 +101,11 @@ router.patch("/users/:id", requireRole("owner", "manager", "super_admin"), async
     .set({ name, phone, role, isActive, avatarUrl, updatedAt: new Date() })
     .where(eq(usersTable.id, Number(req.params.id)))
     .returning(userFields);
+  await recordAuditLog({
+    req, module: "users", action: "user.update", entity: "user", entityId: updated.id,
+    targetRestaurantId: updated.restaurantId ?? null,
+    newValue: { name, phone, role, isActive, avatarUrl },
+  });
   res.json(updated);
 });
 
@@ -175,6 +186,10 @@ router.delete("/users/:id", requireRole("owner", "manager", "super_admin"), asyn
     return void res.status(403).json({ error: "Access denied" });
   }
   await db.update(usersTable).set({ isActive: false }).where(eq(usersTable.id, Number(req.params.id)));
+  await recordAuditLog({
+    req, module: "users", action: "user.deactivate", entity: "user",
+    entityId: Number(req.params.id),
+  });
   res.status(204).send();
 });
 

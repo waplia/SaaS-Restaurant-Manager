@@ -8,6 +8,7 @@ import { hashPassword, signResetToken, signImpersonationToken } from "../lib/aut
 import { sendEmail } from "../lib/notifications";
 import { sendByTemplateKey } from "../lib/emailSender";
 import { logger } from "../lib/logger";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -86,6 +87,10 @@ router.post("/subscription-plans", requireSuperAdmin, async (req, res) => {
   const [existing] = await db.select({ id: subscriptionPlansTable.id }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, String(v.data.slug)));
   if (existing) return void res.status(409).json({ error: "A plan with this slug already exists" });
   const [plan] = await db.insert(subscriptionPlansTable).values(v.data as typeof subscriptionPlansTable.$inferInsert).returning();
+  await recordAuditLog({
+    req, module: "billing", action: "plan.create", entity: "subscription_plan",
+    entityId: plan.id, newValue: { name: plan.name, slug: plan.slug, price: plan.price },
+  });
   res.status(201).json(plan);
 });
 
@@ -104,6 +109,10 @@ router.patch("/subscription-plans/:id", requireSuperAdmin, async (req, res) => {
     .where(eq(subscriptionPlansTable.id, id))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  await recordAuditLog({
+    req, module: "billing", action: "plan.update", entity: "subscription_plan",
+    entityId: id, newValue: v.data,
+  });
   res.json(updated);
 });
 
@@ -115,6 +124,10 @@ router.post("/subscription-plans/:id/toggle-active", requireSuperAdmin, async (r
     .set({ isActive: !plan.isActive, updatedAt: new Date() })
     .where(eq(subscriptionPlansTable.id, id))
     .returning();
+  await recordAuditLog({
+    req, module: "billing", action: "plan.toggle_active", entity: "subscription_plan",
+    entityId: id, oldValue: { isActive: plan.isActive }, newValue: { isActive: updated.isActive },
+  });
   res.json(updated);
 });
 
@@ -126,6 +139,7 @@ router.delete("/subscription-plans/:id", requireSuperAdmin, async (req, res) => 
   }
   const [removed] = await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id)).returning();
   if (!removed) return void res.status(404).json({ error: "Not found" });
+  await recordAuditLog({ req, module: "billing", action: "plan.delete", entity: "subscription_plan", entityId: id });
   res.status(204).end();
 });
 
@@ -268,6 +282,10 @@ router.post("/tenants", requireSuperAdmin, async (req, res) => {
     }
   }
 
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.create", entity: "tenant", entityId: tenant.id,
+    newValue: { name: tenant.name, slug: tenant.slug, planId: tenant.planId, ownerEmail: ownerEmail ?? null, ownerInviteStatus },
+  });
   res.status(201).json({ ...tenant, ownerInviteStatus });
 });
 
@@ -279,6 +297,9 @@ router.get("/tenants/:id", requireSuperAdmin, async (req, res) => {
 
 router.patch("/tenants/:id", requireSuperAdmin, async (req, res) => {
   const tenantId = Number(req.params.id);
+  const [existing] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+
   const { name, planId, planStatus, isActive, logoUrl, primaryColor } = req.body;
   const [before] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   if (!before) return void res.status(404).json({ error: "Not found" });
@@ -314,6 +335,12 @@ router.patch("/tenants/:id", requireSuperAdmin, async (req, res) => {
       }
     } catch (err) { logger.error({ err, tenantId }, "Plan change email failed"); }
   }
+
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.update", entity: "tenant", entityId: tenantId,
+    oldValue: { name: existing.name, planId: existing.planId, planStatus: existing.planStatus, isActive: existing.isActive, primaryColor: existing.primaryColor },
+    newValue: { name, planId, planStatus, isActive, logoUrl, primaryColor },
+  });
   res.json(updated);
 });
 
@@ -332,7 +359,21 @@ router.post("/tenants/:id/impersonate", requireSuperAdmin, async (req, res) => {
     tenantId: owner.tenantId, restaurantId: owner.restaurantId, isSuperAdmin: false,
   });
   logger.warn({ superAdminId: req.user?.sub, tenantId, ownerId: owner.id }, "super_admin.impersonate");
+  await recordAuditLog({
+    req, module: "impersonation", action: "impersonate.start", entity: "tenant", entityId: tenantId,
+    newValue: { tenantId, impersonatedUserId: owner.id, impersonatedEmail: owner.email },
+    details: `Super admin impersonating owner of tenant ${tenant.name}`,
+  });
   res.json({ token, expiresIn: 900, owner: { id: owner.id, email: owner.email, name: owner.name } });
+});
+
+// Optional explicit "end impersonation" event so audit trail captures the bracket.
+router.post("/impersonate/end", async (req, res) => {
+  await recordAuditLog({
+    req, module: "impersonation", action: "impersonate.end", entity: "session",
+    details: "Impersonation ended",
+  });
+  res.json({ ok: true });
 });
 
 router.delete("/tenants/:id", requireSuperAdmin, async (req, res) => {
@@ -348,6 +389,10 @@ router.delete("/tenants/:id", requireSuperAdmin, async (req, res) => {
   } catch (err) {
     return void res.status(409).json({ error: `Cannot delete: this tenant has related data (restaurants, users, etc.). Suspend it instead. (${(err as Error).message})` });
   }
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.delete", entity: "tenant", entityId: id,
+    oldValue: { name: tenant.name, slug: tenant.slug },
+  });
   res.status(204).end();
 });
 
@@ -359,6 +404,7 @@ router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
     .where(eq(tenantsTable.id, tenantId))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
   if (tenantBefore && !tenantBefore.isSuspended) {
     void sendLifecycleSms({
       tenantId,
@@ -380,15 +426,25 @@ router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
       }
     } catch (err) { logger.error({ err, tenantId }, "Suspension email failed"); }
   }
+
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.suspend", entity: "tenant", entityId: tenantId,
+    newValue: { isSuspended: true },
+  });
   res.json(updated);
 });
 
 router.post("/tenants/:id/activate", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
   const [updated] = await db.update(tenantsTable)
     .set({ isSuspended: false, isActive: true, updatedAt: new Date() })
-    .where(eq(tenantsTable.id, Number(req.params.id)))
+    .where(eq(tenantsTable.id, id))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.activate", entity: "tenant", entityId: id,
+    newValue: { isSuspended: false, isActive: true },
+  });
   res.json(updated);
 });
 

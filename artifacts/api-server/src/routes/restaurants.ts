@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, restaurantsTable, branchesTable, subscriptionPlansTable, tenantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { seedDefaultExpenseCategories } from "./expenses";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -48,6 +49,11 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
   const [restaurant] = await db.insert(restaurantsTable).values({ tenantId, name, slug, description, phone, email, address, city, country, taxRate, openingTime, closingTime }).returning();
   // Seed default expense categories for the new restaurant so owners can record expenses immediately.
   await seedDefaultExpenseCategories(restaurant.id);
+  await recordAuditLog({
+    req, module: "restaurants", action: "restaurant.create", entity: "restaurant",
+    entityId: restaurant.id, restaurantId: restaurant.id, targetRestaurantId: restaurant.id,
+    newValue: { name: restaurant.name, slug: restaurant.slug, tenantId: restaurant.tenantId },
+  });
   res.status(201).json(restaurant);
 });
 
@@ -89,6 +95,11 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
     .set(updates)
     .where(eq(restaurantsTable.id, Number(req.params.id)))
     .returning();
+  await recordAuditLog({
+    req, module: "restaurants", action: "restaurant.update", entity: "restaurant",
+    entityId: updated.id, restaurantId: updated.id, targetRestaurantId: updated.id,
+    oldValue: { ...existing }, newValue: updates,
+  });
   res.json(updated);
 });
 
@@ -122,6 +133,11 @@ router.post("/restaurants/:restaurantId/branches", requireRole("owner", "manager
 
   const { name, address, phone, isMain } = req.body;
   const [branch] = await db.insert(branchesTable).values({ restaurantId, name, address, phone, isMain }).returning();
+  await recordAuditLog({
+    req, module: "restaurants", action: "branch.create", entity: "branch",
+    entityId: branch.id, restaurantId, targetRestaurantId: restaurantId,
+    newValue: { name: branch.name, address: branch.address, isMain: branch.isMain },
+  });
   res.status(201).json(branch);
 });
 

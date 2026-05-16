@@ -2047,9 +2047,24 @@ function MarkAttendanceDrawer({ staff, initial, existing, onClose, onDelete }: {
 
 function ActivityTab() {
   const [filterAction, setFilterAction] = useState("");
+  const [filterModule, setFilterModule] = useState("");
+  const [filterQ, setFilterQ] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const { data: logs = [] } = useAuditLogs({ action: filterAction || undefined, page });
-  const total = logs.length;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const limit = 50;
+  const { data } = useAuditLogs({
+    action: filterAction || undefined,
+    module: filterModule || undefined,
+    q: filterQ || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+    page, limit,
+  });
+  const logs = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const ACTION_COLORS: Record<string, string> = {
     create: "bg-green-100 text-green-700",
@@ -2058,49 +2073,62 @@ function ActivityTab() {
     login: "bg-purple-100 text-purple-700",
     logout: "bg-gray-100 text-gray-600",
   };
+  function actionColor(a: string) {
+    const head = a.split(".")[0] ?? a;
+    return ACTION_COLORS[head] ?? "bg-muted text-muted-foreground";
+  }
+
+  const selected = logs.find(l => l.id === selectedId) ?? null;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Filter by action…" value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(1); }} className="pl-9 h-8 w-52 text-sm" />
+          <Input placeholder="Search action, entity, user…" value={filterQ} onChange={e => { setFilterQ(e.target.value); setPage(1); }} className="pl-9 h-8 w-64 text-sm" />
         </div>
-        <span className="text-xs text-muted-foreground">{total} total events</span>
+        <Input placeholder="Action" value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(1); }} className="h-8 w-40 text-sm" />
+        <Input placeholder="Module" value={filterModule} onChange={e => { setFilterModule(e.target.value); setPage(1); }} className="h-8 w-32 text-sm" />
+        <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="h-8 w-36 text-sm" />
+        <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="h-8 w-36 text-sm" />
+        <span className="text-xs text-muted-foreground ml-auto">{total} total events</span>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border bg-muted/30">
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">When</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">User</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Module</th>
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Action</th>
               <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Entity</th>
-              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 hidden md:table-cell">Details</th>
-              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Time</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 hidden lg:table-cell">IP</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log: AuditLog) => (
-              <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/10">
+              <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/10 cursor-pointer" onClick={() => setSelectedId(log.id)}>
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
                 <td className="px-4 py-3">
-                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full capitalize", ACTION_COLORS[log.action] ?? "bg-muted text-muted-foreground")}>
+                  <p className="text-sm">{log.userDisplay ?? (log.userId ? `#${log.userId}` : "—")}</p>
+                  {log.role && <p className="text-xs text-muted-foreground">{log.role}</p>}
+                </td>
+                <td className="px-4 py-3 text-xs text-muted-foreground">{log.module ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", actionColor(log.action))}>
                     {log.action}
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium capitalize">{log.entity}</p>
-                    {log.entityId && <p className="text-xs text-muted-foreground">#{log.entityId}</p>}
-                  </div>
+                  <p className="text-sm capitalize">{log.entity}</p>
+                  {log.entityId && <p className="text-xs text-muted-foreground">#{log.entityId}</p>}
                 </td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <p className="text-xs text-muted-foreground truncate max-w-48">{log.details ?? "—"}</p>
-                </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</td>
+                <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">{log.ipAddress ?? "—"}</td>
               </tr>
             ))}
             {logs.length === 0 && (
-              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
+              <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">
                 <Activity className="w-10 h-10 mx-auto mb-3 opacity-20" />
                 No activity logs found
               </td></tr>
@@ -2109,13 +2137,56 @@ function ActivityTab() {
         </table>
       </div>
 
-      {total > 50 && (
-        <div className="flex items-center justify-between">
-          <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-          <span className="text-xs text-muted-foreground">Page {page} · {total} events</span>
-          <Button size="sm" variant="outline" disabled={logs.length < 50} onClick={() => setPage(p => p + 1)}>Next</Button>
+      <div className="flex items-center justify-between">
+        <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+        <span className="text-xs text-muted-foreground">Page {page} of {totalPages} · {total} events</span>
+        <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+      </div>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelectedId(null)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="relative w-full max-w-xl bg-card h-full overflow-y-auto p-6 border-l border-border" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-lg">{selected.action}</h3>
+                <p className="text-xs text-muted-foreground">{formatDateTime(selected.createdAt)}</p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>×</Button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <DetailRow label="Module" value={selected.module} />
+              <DetailRow label="Entity" value={`${selected.entity}${selected.entityId ? ` #${selected.entityId}` : ""}`} />
+              <DetailRow label="User" value={selected.userDisplay ?? (selected.userId ? `#${selected.userId}` : "—")} />
+              <DetailRow label="Role" value={selected.role} />
+              <DetailRow label="IP address" value={selected.ipAddress} />
+              <DetailRow label="User agent" value={selected.userAgent} mono />
+              {selected.details && <DetailRow label="Details" value={selected.details} />}
+              {selected.oldValue !== null && selected.oldValue !== undefined && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Old value</p>
+                  <pre className="text-xs bg-muted/40 p-2 rounded overflow-auto max-h-48">{JSON.stringify(selected.oldValue, null, 2)}</pre>
+                </div>
+              )}
+              {selected.newValue !== null && selected.newValue !== undefined && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">New value</p>
+                  <pre className="text-xs bg-muted/40 p-2 rounded overflow-auto max-h-48">{JSON.stringify(selected.newValue, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div className="flex gap-3">
+      <span className="text-xs font-medium text-muted-foreground w-24 shrink-0">{label}</span>
+      <span className={cn("text-xs break-all", mono && "font-mono")}>{value || "—"}</span>
     </div>
   );
 }

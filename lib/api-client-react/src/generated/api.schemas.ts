@@ -930,15 +930,44 @@ export interface ClockOutInput {
 export interface AuditLog {
   id: number;
   /** @nullable */
+  restaurantId?: number | null;
+  /** @nullable */
+  targetRestaurantId?: number | null;
+  /** @nullable */
   userId?: number | null;
+  /** @nullable */
+  userDisplay?: string | null;
+  /** @nullable */
+  role?: string | null;
+  module: string;
   action: string;
   entity: string;
   /** @nullable */
   entityId?: number | null;
   /** @nullable */
   details?: string | null;
+  oldValue?: unknown | null;
+  newValue?: unknown | null;
+  /** @nullable */
+  ipAddress?: string | null;
+  /** @nullable */
+  userAgent?: string | null;
   createdAt: string;
 }
+
+export interface AuditLogList {
+  data: AuditLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type AuditLogDetail = AuditLog & {
+  /** @nullable */
+  restaurantName?: string | null;
+  /** @nullable */
+  userEmail?: string | null;
+};
 
 export interface Customer {
   id: number;
@@ -1703,7 +1732,27 @@ export type ListAttendanceParams = {
 
 export type ListAuditLogsParams = {
   userId?: number;
+  role?: string;
+  module?: string;
   action?: string;
+  ip?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type ListAdminAuditLogsParams = {
+  userId?: number;
+  role?: string;
+  module?: string;
+  action?: string;
+  restaurantId?: number;
+  ip?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
   page?: number;
   limit?: number;
 };
