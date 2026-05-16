@@ -8,6 +8,27 @@
       "when": 1778891702370,
       "tag": "0000_ai_control_center",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778893456341,
+      "tag": "0001_shocking_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778894193592,
+      "tag": "0002_nappy_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778896200863,
+      "tag": "0003_supreme_paladin",
+      "breakpoints": true
     }
   ]
 }

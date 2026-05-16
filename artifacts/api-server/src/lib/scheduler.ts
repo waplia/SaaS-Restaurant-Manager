@@ -13,6 +13,7 @@ import { subscriptionPlansTable } from "../lib/db";
 import { registerCron, runTrackedCron } from "./systemLogs";
 import { processPendingWebhookDeliveries } from "./webhookDispatcher";
 import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./maintenance";
+import { runMonthlyAllocationSweep } from "./aiCredits";
 
 function trackCron(name: string, expr: string, fn: () => Promise<void>) {
   registerCronJob(name, expr);
@@ -109,6 +110,14 @@ export function startScheduler(): void {
   registerCron("trial-expiry", "0 0 * * *", "Notifies tenants whose trial has expired at 00:00 IST");
   registerCron("loyalty-expiry", "30 0 * * *", "Expires due loyalty points at 00:30 IST");
   registerCron("auto-reorder", "* * * * *", "Per-restaurant auto-reorder evaluator (IST)");
+  registerCron("ai-monthly-allocation", "0 1 * * *", "Credits each tenant's Khana AI monthly allowance on their renewal-cycle anniversary day at 01:00 IST (idempotent per cycle)");
+
+  trackCron("ai_monthly_allocation", "0 1 * * *", async () => {
+    await runTrackedCron("ai-monthly-allocation", async () => {
+      const r = await runMonthlyAllocationSweep();
+      logger.info({ allocated: r.allocated, total: r.total }, "[ai-credits] monthly allocation sweep complete");
+    }).catch(err => logger.error({ err }, "[ai-credits] monthly allocation sweep failed"));
+  });
 
   trackCron("daily_sales_summary", "0 23 * * *", async () => {
     logger.info("Running daily sales summary job");

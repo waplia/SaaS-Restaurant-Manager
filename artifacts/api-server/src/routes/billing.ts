@@ -315,6 +315,18 @@ export async function activateForTenant(
     eventKey: "subscription_activated",
     variables: { plan: planName, endsAt: endsAtStr, amount: amountStr, currency },
   });
+
+  // Khana AI — credit the monthly allowance for the new subscription period.
+  // Idempotent: skipped if this period was already allocated.
+  try {
+    const { creditMonthlyAllocation } = await import("../lib/aiCredits");
+    // On plan activation, today is the start of the new renewal cycle —
+    // creditMonthlyAllocation is idempotent on (tenantId, periodStart) so
+    // calling it without `force` is safe and won't double-grant.
+    await creditMonthlyAllocation(tenantId);
+  } catch (err) {
+    logger.warn({ err, tenantId }, "[ai-credits] failed to allocate monthly credits on activation");
+  }
 }
 
 /**

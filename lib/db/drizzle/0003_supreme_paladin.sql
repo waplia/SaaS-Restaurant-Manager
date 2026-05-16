@@ -1,0 +1,1 @@
+ALTER TABLE "ai_credit_recharges" ADD COLUMN "notes" text;

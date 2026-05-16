@@ -28,3 +28,4 @@ export * from "./maintenance";
 export * from "./app-settings";
 export * from "./whatsapp";
 export * from "./ai-control";
+export * from "./ai-credits";

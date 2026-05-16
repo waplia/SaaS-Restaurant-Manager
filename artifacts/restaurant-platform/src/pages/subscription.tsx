@@ -19,8 +19,10 @@ import { cn } from "@/lib/utils";
 import {
   Check, Crown, Zap, Building, Users, Table2, UtensilsCrossed,
   AlertTriangle, ExternalLink, RefreshCw, CreditCard, Minus,
-  Landmark, Smartphone, Clock, X,
+  Landmark, Smartphone, Clock, X, Wallet, Sparkles, Loader2,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch, apiAction } from "@/lib/api";
 import type { SubscriptionPlan } from "@/lib/types";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
@@ -497,6 +499,245 @@ function CheckoutModal({
   );
 }
 
+interface AiWalletSummary {
+  walletId: number | null;
+  balance: number; monthlyBalance: number; purchasedBalance: number; bonusBalance: number;
+  reservedCredits: number; lifetimeCreditsUsed: number;
+  isBlocked: boolean; planAiEnabled: boolean; planMonthlyIncluded: number;
+}
+interface PublicRechargePackage {
+  id: number; slug: string; name: string; description: string | null;
+  credits: number; bonusCredits: number; price: string; currency: string;
+  validityDays: number | null; isFeatured: boolean;
+}
+
+type CashfreeSdk = { checkout: (opts: { paymentSessionId: string; returnUrl?: string; redirectTarget?: "_self" | "_blank" | "_modal" }) => void };
+type CashfreeFactory = (opts: { mode: "sandbox" | "production" }) => CashfreeSdk;
+async function loadCashfreeSdk(mode: "sandbox" | "production" = "sandbox"): Promise<CashfreeSdk> {
+  const getFactory = (): CashfreeFactory | undefined =>
+    (window as unknown as { Cashfree?: CashfreeFactory }).Cashfree;
+  let factory = getFactory();
+  if (!factory) {
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load Cashfree SDK"));
+      document.head.appendChild(s);
+    });
+    factory = getFactory();
+  }
+  if (!factory) throw new Error("Cashfree SDK unavailable");
+  return factory({ mode });
+}
+
+const PENDING_AI_RECHARGE_KEY = "khana.pendingAiRecharge";
+
+function KhanaAiWalletSection({ isOwner }: { isOwner: boolean }) {
+  const { toast } = useToast();
+  const { data: wallet, refetch: refetchWallet } = useQuery<AiWalletSummary>({
+    queryKey: ["ai-wallet"], queryFn: () => apiFetch("/ai/wallet"),
+  });
+  const { data: packages = [] } = useQuery<PublicRechargePackage[]>({
+    queryKey: ["ai-recharge-packages"], queryFn: () => apiFetch("/ai/recharge-packages"),
+  });
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  // After Cashfree returns to this page, finalize any pending AI recharge.
+  useEffect(() => {
+    const raw = window.localStorage.getItem(PENDING_AI_RECHARGE_KEY);
+    if (!raw) return;
+    let pending: { rechargeId: number; orderId: string } | null = null;
+    try { pending = JSON.parse(raw); } catch { /* ignore */ }
+    window.localStorage.removeItem(PENDING_AI_RECHARGE_KEY);
+    if (!pending?.rechargeId || !pending?.orderId) return;
+    apiAction("/ai/recharge/cashfree-confirm", "POST", { rechargeId: pending.rechargeId, orderId: pending.orderId })
+      .then(() => { toast({ title: "Credits added", description: "Your Cashfree payment was confirmed." }); void refetchWallet(); })
+      .catch((err: Error) => toast({ title: "Could not confirm AI recharge", description: err.message, variant: "destructive" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buyCashfree = async (pkg: PublicRechargePackage) => {
+    if (!isOwner) return;
+    setBusyId(pkg.id);
+    try {
+      const origin = window.location.origin;
+      const base = import.meta.env.BASE_URL ?? "/";
+      const returnUrl = `${origin}${base}settings/subscription`;
+      const order = await apiAction("/ai/recharge/create-cashfree-order", "POST", { packageId: pkg.id, returnUrl }) as
+        | { mock: true; activated: true }
+        | { mock?: false; rechargeId: number; orderId: string; paymentSessionId: string; mode?: "sandbox" | "production" };
+      if ("mock" in order && order.mock) {
+        toast({ title: "Credits added", description: `${pkg.credits + pkg.bonusCredits} credits added (mock).` });
+        await refetchWallet();
+        setBusyId(null);
+        return;
+      }
+      const real = order as { rechargeId: number; orderId: string; paymentSessionId: string; mode?: "sandbox" | "production" };
+      window.localStorage.setItem(PENDING_AI_RECHARGE_KEY, JSON.stringify({ rechargeId: real.rechargeId, orderId: real.orderId }));
+      const cashfree = await loadCashfreeSdk(real.mode ?? "sandbox");
+      cashfree.checkout({ paymentSessionId: real.paymentSessionId, returnUrl, redirectTarget: "_self" });
+    } catch (err) {
+      window.localStorage.removeItem(PENDING_AI_RECHARGE_KEY);
+      toast({ title: "Recharge failed", description: (err as Error).message, variant: "destructive" });
+      setBusyId(null);
+    }
+  };
+
+  const buy = async (pkg: PublicRechargePackage) => {
+    if (!isOwner) return;
+    setBusyId(pkg.id);
+    try {
+      const order = await apiAction("/ai/recharge/create-razorpay-order", "POST", { packageId: pkg.id }) as
+        { mock: true; activated: true } | { mock?: false; key: string; orderId: string; amount: number; currency: string; rechargeId: number };
+      if ("mock" in order && order.mock) {
+        toast({ title: "Credits added", description: `${pkg.credits + pkg.bonusCredits} credits added (mock).` });
+        await refetchWallet();
+        return;
+      }
+      const Razorpay = await loadRazorpay();
+      const realOrder = order as { key: string; orderId: string; amount: number; currency: string; rechargeId: number };
+      const rzp = new Razorpay({
+        key: realOrder.key, amount: realOrder.amount, currency: realOrder.currency,
+        name: "Khana AI credits", description: pkg.name, order_id: realOrder.orderId,
+        handler: (resp) => {
+          void apiAction("/ai/recharge/razorpay-confirm", "POST", {
+            rechargeId: realOrder.rechargeId,
+            orderId: resp.razorpay_order_id, paymentId: resp.razorpay_payment_id, signature: resp.razorpay_signature,
+          })
+            .then(() => { toast({ title: "Credits added", description: `${pkg.credits + pkg.bonusCredits} credits added.` }); void refetchWallet(); })
+            .catch((err: Error) => toast({ title: "Confirmation failed", description: err.message, variant: "destructive" }))
+            .finally(() => setBusyId(null));
+        },
+        modal: { ondismiss: () => setBusyId(null) },
+        theme: { color: "#16a34a" },
+      });
+      rzp.open();
+    } catch (err) {
+      toast({ title: "Recharge failed", description: (err as Error).message, variant: "destructive" });
+      setBusyId(null);
+    }
+  };
+
+  if (!wallet) return null;
+  if (!wallet.planAiEnabled && wallet.balance === 0 && packages.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="font-semibold text-foreground flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Khana AI credits</h3>
+        {wallet.isBlocked && <span className="text-xs font-medium px-2 py-1 rounded-full bg-destructive/10 text-destructive">Wallet blocked</span>}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-muted/30 rounded-xl p-3"><p className="text-[11px] text-muted-foreground">Available</p><p className="text-2xl font-bold text-primary tabular-nums">{wallet.balance.toLocaleString()}</p></div>
+        <div className="bg-muted/30 rounded-xl p-3"><p className="text-[11px] text-muted-foreground">Monthly included</p><p className="text-2xl font-bold tabular-nums">{wallet.monthlyBalance.toLocaleString()}</p></div>
+        <div className="bg-muted/30 rounded-xl p-3"><p className="text-[11px] text-muted-foreground">Purchased</p><p className="text-2xl font-bold text-green-600 tabular-nums">{wallet.purchasedBalance.toLocaleString()}</p></div>
+        <div className="bg-muted/30 rounded-xl p-3"><p className="text-[11px] text-muted-foreground">Bonus</p><p className="text-2xl font-bold text-amber-600 tabular-nums">{wallet.bonusBalance.toLocaleString()}</p></div>
+      </div>
+      <p className="text-xs text-muted-foreground">Used so far: <span className="font-semibold text-foreground">{wallet.lifetimeCreditsUsed.toLocaleString()}</span> credits · Plan includes <span className="font-semibold text-foreground">{wallet.planMonthlyIncluded.toLocaleString()}</span>/month</p>
+      {packages.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" /> Top up</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {packages.map(pkg => (
+              <div key={pkg.id} className={cn("border rounded-xl p-4 space-y-2", pkg.isFeatured ? "border-primary bg-primary/5" : "border-border")}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-foreground">{pkg.name}</p>
+                    {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
+                  </div>
+                  {pkg.isFeatured && <span className="text-[10px] uppercase font-bold text-primary">Best value</span>}
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl font-bold tabular-nums">{pkg.credits.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">credits</span>
+                  {pkg.bonusCredits > 0 && <span className="text-xs text-amber-600 font-medium ml-1">+{pkg.bonusCredits} bonus</span>}
+                </div>
+                <p className="text-sm font-medium">{pkg.currency} {pkg.price}{pkg.validityDays ? <span className="text-xs text-muted-foreground"> · {pkg.validityDays}d validity</span> : null}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" disabled={!isOwner || busyId === pkg.id || wallet.isBlocked} onClick={() => void buy(pkg)}>
+                    {busyId === pkg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Razorpay"}
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={!isOwner || busyId === pkg.id || wallet.isBlocked} onClick={() => void buyCashfree(pkg)}>
+                    {busyId === pkg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cashfree"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!isOwner && <p className="text-xs text-muted-foreground">Only owners can purchase AI credits.</p>}
+          <ManualAiRechargePanel packages={packages} isOwner={isOwner} blocked={wallet.isBlocked} onSubmitted={() => void refetchWallet()} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ManualAiRecharge {
+  id: number; packageId: number; amount: string; currency: string;
+  status: string; failureReason: string | null; notes: string | null; createdAt: string;
+}
+function ManualAiRechargePanel({ packages, isOwner, blocked, onSubmitted }: {
+  packages: PublicRechargePackage[]; isOwner: boolean; blocked: boolean; onSubmitted: () => void;
+}) {
+  const { toast } = useToast();
+  const { data: methods } = usePaymentMethods(RESTAURANT_ID);
+  const { data: list, refetch: refetchList } = useQuery<{ data: ManualAiRecharge[] }>({
+    queryKey: ["ai-manual-recharges"], queryFn: () => apiFetch("/ai/recharge/manual"),
+  });
+  const bankEnabled = !!methods?.manual?.bank?.enabled;
+  const upiEnabled = !!methods?.manual?.upi?.enabled;
+  const anyEnabled = bankEnabled || upiEnabled;
+  const inrPackages = packages.filter(p => (p.currency ?? "INR").toUpperCase() === "INR");
+  const [pkgId, setPkgId] = useState<number | "">(inrPackages[0]?.id ?? "");
+  const [method, setMethod] = useState<"bank" | "upi">(bankEnabled ? "bank" : "upi");
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!anyEnabled || inrPackages.length === 0) return null;
+  const pendingCount = (list?.data ?? []).filter(r => r.status === "pending").length;
+  const submit = async () => {
+    if (!isOwner || !pkgId) return;
+    setBusy(true);
+    try {
+      await apiAction("/ai/recharge/manual", "POST", { packageId: pkgId, method, reference, note });
+      toast({ title: "Manual recharge submitted", description: "A super-admin will review and approve it shortly." });
+      setReference(""); setNote("");
+      await refetchList();
+      onSubmitted();
+    } catch (err) {
+      toast({ title: "Submission failed", description: (err as Error).message, variant: "destructive" });
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="border border-border rounded-xl p-4 mt-4 space-y-3 bg-muted/20">
+      <p className="text-sm font-semibold">Pay manually (bank transfer / UPI)</p>
+      <p className="text-xs text-muted-foreground">
+        Pay offline and submit your reference. A super-admin will verify and credit your wallet.
+        {pendingCount > 0 && <span className="ml-1 text-amber-600 font-medium">{pendingCount} pending review.</span>}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <select className="border border-border rounded-md px-2 py-1.5 text-sm bg-background" value={pkgId} onChange={e => setPkgId(e.target.value ? Number(e.target.value) : "")}>
+          {inrPackages.map(p => <option key={p.id} value={p.id}>{p.name} — {p.currency} {p.price}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-2 py-1.5 text-sm bg-background" value={method} onChange={e => setMethod(e.target.value as "bank" | "upi")}>
+          {bankEnabled && <option value="bank">Bank transfer</option>}
+          {upiEnabled && <option value="upi">UPI</option>}
+        </select>
+        <input className="border border-border rounded-md px-2 py-1.5 text-sm bg-background sm:col-span-2" placeholder="Payment reference / UTR / transaction id" value={reference} onChange={e => setReference(e.target.value)} />
+        <textarea className="border border-border rounded-md px-2 py-1.5 text-sm bg-background sm:col-span-2 min-h-12" placeholder="Optional note for the reviewer" value={note} onChange={e => setNote(e.target.value)} />
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" disabled={!isOwner || blocked || busy || !pkgId || pendingCount > 0} onClick={() => void submit()}>
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+          {pendingCount > 0 ? "Awaiting review" : "Submit for review"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function SubscriptionPage() {
   const { data, isLoading, refetch } = useSubscription(RESTAURANT_ID);
   const { data: methods } = usePaymentMethods(RESTAURANT_ID);
@@ -512,7 +753,7 @@ export default function SubscriptionPage() {
     plans?: (SubscriptionPlan & { currency?: string })[];
     usage?: { staffCount: number; tableCount: number; menuItemCount: number };
   };
-  const isOwner = user?.role === "owner" || user?.isSuperAdmin;
+  const isOwner = !!(user?.role === "owner" || user?.isSuperAdmin);
 
   // If we returned from Cashfree (?cashfree_order_id=...), confirm it.
   useEffect(() => {
@@ -677,6 +918,8 @@ export default function SubscriptionPage() {
             </div>
           </div>
         )}
+
+        <KhanaAiWalletSection isOwner={isOwner} />
 
         {isOwner && (
           <div>

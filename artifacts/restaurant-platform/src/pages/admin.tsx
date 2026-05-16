@@ -82,6 +82,11 @@ interface Plan {
   features: string[];
   featureFlags: Record<string, boolean> | null;
   isActive: boolean;
+  aiEnabled?: boolean;
+  aiMonthlyIncludedCredits?: number;
+  aiDailyRequestCap?: number;
+  aiPerFeatureMonthlyCaps?: Record<string, number> | null;
+  aiFeatureToggles?: Record<string, boolean> | null;
 }
 
 interface TenantUsage {
@@ -336,7 +341,16 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
     whatsappMonthlyLimit: (plan as Plan & { whatsappMonthlyLimit?: number })?.whatsappMonthlyLimit ?? 0,
     features: plan?.features ?? [],
     isActive: plan?.isActive ?? true,
+    aiEnabled: plan?.aiEnabled ?? false,
+    aiMonthlyIncludedCredits: plan?.aiMonthlyIncludedCredits ?? 0,
+    aiDailyRequestCap: plan?.aiDailyRequestCap ?? 0,
+    aiPerFeatureMonthlyCaps: plan?.aiPerFeatureMonthlyCaps ?? {},
+    aiFeatureToggles: plan?.aiFeatureToggles ?? {},
   });
+  const [aiCapsText, setAiCapsText] = useState(() =>
+    Object.entries(plan?.aiPerFeatureMonthlyCaps ?? {}).map(([k, v]) => `${k}=${v}`).join("\n"));
+  const [aiTogglesText, setAiTogglesText] = useState(() =>
+    Object.entries(plan?.aiFeatureToggles ?? {}).map(([k, v]) => `${k}=${v ? "on" : "off"}`).join("\n"));
   const [featuresText, setFeaturesText] = useState((plan?.features ?? []).join("\n"));
   // Boolean feature flags — initialise from existing plan, falling back to the
   // catalogue defaults so plans that pre-date a flag still render sensibly.
@@ -358,11 +372,23 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
   const save = async () => {
     setBusy(true);
     try {
+      const aiPerFeatureMonthlyCaps: Record<string, number> = {};
+      for (const line of aiCapsText.split("\n")) {
+        const [k, v] = line.split("=").map(s => s?.trim());
+        if (k && v && !Number.isNaN(Number(v))) aiPerFeatureMonthlyCaps[k] = Number(v);
+      }
+      const aiFeatureToggles: Record<string, boolean> = {};
+      for (const line of aiTogglesText.split("\n")) {
+        const [k, v] = line.split("=").map(s => s?.trim());
+        if (k && v) aiFeatureToggles[k] = /^(on|true|yes|1)$/i.test(v);
+      }
       const payload = {
         ...form,
         price: String(form.price),
         features: featuresText.split("\n").map(s => s.trim()).filter(Boolean),
         featureFlags: flags,
+        aiPerFeatureMonthlyCaps,
+        aiFeatureToggles,
       };
       if (isEdit) {
         await apiAction(`/subscription-plans/${plan.id}`, "PATCH", payload);
@@ -460,6 +486,36 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ─── Khana AI ────────────────────────────────────────────── */}
+      <div className="mt-5 rounded-md border border-border/60 bg-muted/20 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Khana AI</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Field label="AI enabled">
+            <select className={inputCls} value={String(form.aiEnabled ?? false)} onChange={e => setForm({ ...form, aiEnabled: e.target.value === "true" })}>
+              <option value="false">No</option><option value="true">Yes</option>
+            </select>
+          </Field>
+          <Field label="Monthly included credits" hint="0 = none">
+            <input type="number" min="0" className={inputCls} value={form.aiMonthlyIncludedCredits ?? 0}
+              onChange={e => setForm({ ...form, aiMonthlyIncludedCredits: Number(e.target.value) })} />
+          </Field>
+          <Field label="Daily request cap" hint="0 = unlimited">
+            <input type="number" min="0" className={inputCls} value={form.aiDailyRequestCap ?? 0}
+              onChange={e => setForm({ ...form, aiDailyRequestCap: Number(e.target.value) })} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <Field label="Per-feature monthly caps" hint="One per line: feature-slug=cap">
+            <textarea className={inputCls + " min-h-20 font-mono text-xs"} value={aiCapsText}
+              onChange={e => setAiCapsText(e.target.value)} placeholder={"menu-suggestions=500\nreport-summaries=200"} />
+          </Field>
+          <Field label="Feature toggles" hint="One per line: feature-slug=on|off">
+            <textarea className={inputCls + " min-h-20 font-mono text-xs"} value={aiTogglesText}
+              onChange={e => setAiTogglesText(e.target.value)} placeholder={"menu-suggestions=on\nreport-summaries=off"} />
+          </Field>
         </div>
       </div>
 

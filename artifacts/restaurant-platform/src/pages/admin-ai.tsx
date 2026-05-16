@@ -3,13 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Activity, Brain, Cpu, FileText, ShieldAlert, ScrollText, BarChart3,
   Plus, Pencil, Trash2, X, RefreshCw, CheckCircle, AlertTriangle, Zap, Loader2,
+  Wallet, Coins, Package, Ban, Search, ArrowDownToLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch, apiAction } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-type SubTab = "dashboard" | "providers" | "models" | "prompts" | "safety" | "logs" | "costs";
+type SubTab = "dashboard" | "providers" | "models" | "prompts" | "safety" | "logs" | "costs" | "credit-rules" | "recharge-packages" | "wallets" | "ledger";
 
 interface AiProvider {
   id: number; slug: string; name: string; kind: string; isEnabled: boolean;
@@ -937,6 +938,476 @@ function CostReportsSubTab() {
   );
 }
 
+// ─── Credit Rules ────────────────────────────────────────────────────────────
+interface CreditRule {
+  id: number; featureSlug: string; label: string; description: string | null;
+  unitType: string; creditsPerUnit: string; minimumCredits: number;
+  freeAllowancePerMonth: number; isActive: boolean;
+  scopeType?: "global" | "plan" | "restaurant"; scopeId?: number | null;
+}
+function CreditRuleModal({ rule, onClose, onSaved }: { rule: CreditRule | null; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    featureSlug: rule?.featureSlug ?? "",
+    label: rule?.label ?? "",
+    description: rule?.description ?? "",
+    unitType: rule?.unitType ?? "request",
+    creditsPerUnit: rule?.creditsPerUnit ?? "1",
+    minimumCredits: rule?.minimumCredits ?? 1,
+    freeAllowancePerMonth: rule?.freeAllowancePerMonth ?? 0,
+    isActive: rule?.isActive ?? true,
+    scopeType: rule?.scopeType ?? "global",
+    scopeId: rule?.scopeId ?? null,
+  });
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (rule) await apiAction(`/admin/ai/credit-rules/${rule.id}`, "PATCH", form);
+      else await apiAction(`/admin/ai/credit-rules`, "POST", form);
+      toast({ title: rule ? "Rule updated" : "Rule created" });
+      onSaved(); onClose();
+    } catch (err) { toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={rule ? `Edit rule: ${rule.featureSlug}` : "New credit rule"} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Feature slug"><input className={inputCls} value={form.featureSlug} onChange={e => setForm({ ...form, featureSlug: e.target.value })} /></Field>
+        <Field label="Label"><input className={inputCls} value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} /></Field>
+        <Field label="Unit type">
+          <select className={inputCls} value={form.unitType} onChange={e => setForm({ ...form, unitType: e.target.value })}>
+            <option value="request">Request</option>
+            <option value="token">Token</option>
+            <option value="image">Image</option>
+            <option value="minute">Minute</option>
+          </select>
+        </Field>
+        <Field label="Credits per unit"><input className={inputCls} value={form.creditsPerUnit} onChange={e => setForm({ ...form, creditsPerUnit: e.target.value })} /></Field>
+        <Field label="Minimum credits"><input type="number" className={inputCls} value={form.minimumCredits} onChange={e => setForm({ ...form, minimumCredits: Number(e.target.value) })} /></Field>
+        <Field label="Free allowance / month"><input type="number" className={inputCls} value={form.freeAllowancePerMonth} onChange={e => setForm({ ...form, freeAllowancePerMonth: Number(e.target.value) })} /></Field>
+        <Field label="Scope">
+          <select
+            className={inputCls}
+            value={form.scopeType}
+            onChange={e => {
+              const next = e.target.value as "global" | "plan" | "restaurant";
+              setForm({ ...form, scopeType: next, scopeId: next === "global" ? null : form.scopeId });
+            }}
+          >
+            <option value="global">Global (all tenants)</option>
+            <option value="plan">Plan override</option>
+            <option value="restaurant">Restaurant override</option>
+          </select>
+        </Field>
+        <Field label={form.scopeType === "plan" ? "Plan ID" : form.scopeType === "restaurant" ? "Restaurant (tenant) ID" : "Scope ID"}>
+          <input
+            type="number"
+            className={inputCls}
+            disabled={form.scopeType === "global"}
+            value={form.scopeId ?? ""}
+            placeholder={form.scopeType === "global" ? "—" : "e.g. 12"}
+            onChange={e => setForm({ ...form, scopeId: e.target.value ? Number(e.target.value) : null })}
+          />
+        </Field>
+        <Field label="Active">
+          <select className={inputCls} value={String(form.isActive)} onChange={e => setForm({ ...form, isActive: e.target.value === "true" })}>
+            <option value="true">Yes</option><option value="false">No</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Description">
+        <textarea className={inputCls + " min-h-16"} value={form.description ?? ""} onChange={e => setForm({ ...form, description: e.target.value })} />
+      </Field>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={save} disabled={busy || !form.featureSlug || !form.label}>{rule ? "Save" : "Create"}</Button>
+      </div>
+    </Modal>
+  );
+}
+function CreditRulesSubTab() {
+  const qc = useQueryClient(); const { toast } = useToast();
+  const { data = [], isLoading } = useQuery<CreditRule[]>({ queryKey: ["admin-ai", "credit-rules"], queryFn: () => apiFetch("/admin/ai/credit-rules") });
+  const [editing, setEditing] = useState<CreditRule | null>(null);
+  const [creating, setCreating] = useState(false);
+  const remove = async (r: CreditRule) => {
+    if (!confirm(`Delete rule "${r.featureSlug}"?`)) return;
+    try { await apiAction(`/admin/ai/credit-rules/${r.id}`, "DELETE"); void qc.invalidateQueries({ queryKey: ["admin-ai", "credit-rules"] }); toast({ title: "Deleted" }); }
+    catch (err) { toast({ title: "Delete failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <p className="font-semibold text-sm flex items-center gap-2"><Coins className="w-4 h-4 text-primary" />Credit rules <span className="text-xs text-muted-foreground">({data.length})</span></p>
+        <Button size="sm" onClick={() => setCreating(true)} className="gap-1"><Plus className="w-3.5 h-3.5" />New rule</Button>
+      </div>
+      {isLoading ? <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div> : (
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 text-xs text-muted-foreground"><tr>
+            <th className="px-3 py-2 text-left">Feature</th><th className="px-3 py-2 text-left">Label</th>
+            <th className="px-3 py-2 text-right">Credits/unit</th><th className="px-3 py-2 text-right">Min</th>
+            <th className="px-3 py-2 text-right">Free/mo</th><th className="px-3 py-2 text-left">Status</th>
+            <th className="px-3 py-2 text-right">Actions</th>
+          </tr></thead>
+          <tbody className="divide-y divide-border">
+            {data.map(r => (
+              <tr key={r.id} className="hover:bg-muted/20">
+                <td className="px-3 py-2 font-mono text-xs">{r.featureSlug}</td>
+                <td className="px-3 py-2">{r.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.creditsPerUnit} / {r.unitType}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.minimumCredits}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.freeAllowancePerMonth}</td>
+                <td className="px-3 py-2">{r.isActive ? <Badge>Active</Badge> : <Badge variant="outline">Off</Badge>}</td>
+                <td className="px-3 py-2 text-right space-x-1">
+                  <Button size="sm" variant="outline" onClick={() => setEditing(r)} className="gap-1"><Pencil className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="outline" onClick={() => void remove(r)} className="gap-1 text-destructive"><Trash2 className="w-3 h-3" /></Button>
+                </td>
+              </tr>
+            ))}
+            {data.length === 0 && <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground text-xs">No rules yet.</td></tr>}
+          </tbody>
+        </table>
+      )}
+      {creating && <CreditRuleModal rule={null} onClose={() => setCreating(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "credit-rules"] })} />}
+      {editing && <CreditRuleModal rule={editing} onClose={() => setEditing(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "credit-rules"] })} />}
+    </div>
+  );
+}
+
+// ─── Recharge Packages ───────────────────────────────────────────────────────
+interface RechargePackage {
+  id: number; slug: string; name: string; description: string | null;
+  credits: number; bonusCredits: number; price: string; currency: string;
+  validityDays: number | null; sortOrder: number; isActive: boolean; isFeatured: boolean;
+  showToRestaurants?: boolean;
+}
+function RechargePackageModal({ pkg, onClose, onSaved }: { pkg: RechargePackage | null; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    slug: pkg?.slug ?? "", name: pkg?.name ?? "", description: pkg?.description ?? "",
+    credits: pkg?.credits ?? 1000, bonusCredits: pkg?.bonusCredits ?? 0,
+    price: pkg?.price ?? "499", currency: pkg?.currency ?? "INR",
+    validityDays: pkg?.validityDays ?? null, sortOrder: pkg?.sortOrder ?? 0,
+    isActive: pkg?.isActive ?? true, isFeatured: pkg?.isFeatured ?? false,
+    showToRestaurants: pkg?.showToRestaurants ?? true,
+  });
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (pkg) await apiAction(`/admin/ai/recharge-packages/${pkg.id}`, "PATCH", form);
+      else await apiAction(`/admin/ai/recharge-packages`, "POST", form);
+      toast({ title: pkg ? "Package updated" : "Package created" });
+      onSaved(); onClose();
+    } catch (err) { toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={pkg ? `Edit package: ${pkg.name}` : "New recharge package"} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Slug"><input className={inputCls} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} /></Field>
+        <Field label="Name"><input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
+        <Field label="Credits"><input type="number" className={inputCls} value={form.credits} onChange={e => setForm({ ...form, credits: Number(e.target.value) })} /></Field>
+        <Field label="Bonus credits"><input type="number" className={inputCls} value={form.bonusCredits} onChange={e => setForm({ ...form, bonusCredits: Number(e.target.value) })} /></Field>
+        <Field label="Price"><input className={inputCls} value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></Field>
+        <Field label="Currency">
+          <select className={inputCls} value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}>
+            <option value="INR">INR</option><option value="USD">USD</option>
+          </select>
+        </Field>
+        <Field label="Validity (days, optional)"><input type="number" className={inputCls} value={form.validityDays ?? ""} onChange={e => setForm({ ...form, validityDays: e.target.value ? Number(e.target.value) : null })} /></Field>
+        <Field label="Sort order"><input type="number" className={inputCls} value={form.sortOrder} onChange={e => setForm({ ...form, sortOrder: Number(e.target.value) })} /></Field>
+        <Field label="Active">
+          <select className={inputCls} value={String(form.isActive)} onChange={e => setForm({ ...form, isActive: e.target.value === "true" })}>
+            <option value="true">Yes</option><option value="false">No</option>
+          </select>
+        </Field>
+        <Field label="Featured">
+          <select className={inputCls} value={String(form.isFeatured)} onChange={e => setForm({ ...form, isFeatured: e.target.value === "true" })}>
+            <option value="false">No</option><option value="true">Yes</option>
+          </select>
+        </Field>
+        <Field label="Show to restaurants">
+          <select className={inputCls} value={String(form.showToRestaurants)} onChange={e => setForm({ ...form, showToRestaurants: e.target.value === "true" })}>
+            <option value="true">Yes — visible in subscription page</option>
+            <option value="false">No — hidden (super-admin only)</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Description"><textarea className={inputCls + " min-h-16"} value={form.description ?? ""} onChange={e => setForm({ ...form, description: e.target.value })} /></Field>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={save} disabled={busy || !form.slug || !form.name}>{pkg ? "Save" : "Create"}</Button>
+      </div>
+    </Modal>
+  );
+}
+function RechargePackagesSubTab() {
+  const qc = useQueryClient(); const { toast } = useToast();
+  const { data = [], isLoading } = useQuery<RechargePackage[]>({ queryKey: ["admin-ai", "recharge-packages"], queryFn: () => apiFetch("/admin/ai/recharge-packages") });
+  const [editing, setEditing] = useState<RechargePackage | null>(null);
+  const [creating, setCreating] = useState(false);
+  const remove = async (p: RechargePackage) => {
+    if (!confirm(`Delete package "${p.name}"?`)) return;
+    try { await apiAction(`/admin/ai/recharge-packages/${p.id}`, "DELETE"); void qc.invalidateQueries({ queryKey: ["admin-ai", "recharge-packages"] }); toast({ title: "Deleted" }); }
+    catch (err) { toast({ title: "Delete failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <p className="font-semibold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-primary" />Recharge packages <span className="text-xs text-muted-foreground">({data.length})</span></p>
+        <Button size="sm" onClick={() => setCreating(true)} className="gap-1"><Plus className="w-3.5 h-3.5" />New package</Button>
+      </div>
+      {isLoading ? <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div> : (
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 text-xs text-muted-foreground"><tr>
+            <th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2 text-right">Credits</th>
+            <th className="px-3 py-2 text-right">Bonus</th><th className="px-3 py-2 text-right">Price</th>
+            <th className="px-3 py-2 text-right">Validity</th><th className="px-3 py-2 text-left">Status</th>
+            <th className="px-3 py-2 text-right">Actions</th>
+          </tr></thead>
+          <tbody className="divide-y divide-border">
+            {data.map(p => (
+              <tr key={p.id} className="hover:bg-muted/20">
+                <td className="px-3 py-2"><p className="font-medium">{p.name}</p><p className="text-xs text-muted-foreground">{p.slug}</p></td>
+                <td className="px-3 py-2 text-right tabular-nums">{p.credits.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">+{p.bonusCredits.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{p.currency} {p.price}</td>
+                <td className="px-3 py-2 text-right text-xs">{p.validityDays ? `${p.validityDays}d` : "—"}</td>
+                <td className="px-3 py-2 space-x-1">
+                  {p.isActive ? <Badge>Active</Badge> : <Badge variant="outline">Off</Badge>}
+                  {p.isFeatured && <Badge variant="secondary">★</Badge>}
+                </td>
+                <td className="px-3 py-2 text-right space-x-1">
+                  <Button size="sm" variant="outline" onClick={() => setEditing(p)} className="gap-1"><Pencil className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="outline" onClick={() => void remove(p)} className="gap-1 text-destructive"><Trash2 className="w-3 h-3" /></Button>
+                </td>
+              </tr>
+            ))}
+            {data.length === 0 && <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground text-xs">No packages yet.</td></tr>}
+          </tbody>
+        </table>
+      )}
+      {creating && <RechargePackageModal pkg={null} onClose={() => setCreating(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "recharge-packages"] })} />}
+      {editing && <RechargePackageModal pkg={editing} onClose={() => setEditing(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "recharge-packages"] })} />}
+    </div>
+  );
+}
+
+// ─── Wallets ─────────────────────────────────────────────────────────────────
+interface WalletRow {
+  walletId: number | null; tenantId: number; tenantName: string;
+  balance: number; monthlyBalance: number; purchasedBalance: number; bonusBalance: number;
+  reservedCredits: number; lifetimeCreditsUsed: number; lifetimeCreditsPurchased: number;
+  isBlocked: boolean; betaFeatures: string[];
+}
+function WalletDetailModal({ tenantId, onClose }: { tenantId: number; onClose: () => void }) {
+  const qc = useQueryClient(); const { toast } = useToast();
+  const { data, refetch } = useQuery<{ wallet: WalletRow; recentTransactions: Array<{ id: number; createdAt: string; type: string; featureSlug: string | null; creditsDelta: string; description: string | null }>; rechargePackages: RechargePackage[] }>({
+    queryKey: ["admin-ai", "wallet", tenantId],
+    queryFn: () => apiFetch(`/admin/ai/wallets/${tenantId}`),
+  });
+  const [adjust, setAdjust] = useState({ credits: 0, bucket: "monthly", description: "" });
+  const [recharge, setRecharge] = useState<{ packageId: number | null; reference: string }>({ packageId: null, reference: "" });
+  const [betaInput, setBetaInput] = useState("");
+  const refresh = () => { void refetch(); void qc.invalidateQueries({ queryKey: ["admin-ai", "wallets"] }); };
+  if (!data) return <Modal title="Wallet" onClose={onClose}><div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div></Modal>;
+  const w = data.wallet;
+  const doAdjust = async () => {
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/adjust`, "POST", adjust); toast({ title: "Adjusted" }); setAdjust({ credits: 0, bucket: "monthly", description: "" }); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const doBlock = async () => {
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/block`, "POST", { isBlocked: !w.isBlocked }); toast({ title: w.isBlocked ? "Unblocked" : "Blocked" }); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const doRecharge = async () => {
+    if (!recharge.packageId) return;
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/recharge`, "POST", recharge); toast({ title: "Recharged" }); setRecharge({ packageId: null, reference: "" }); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const doAllocate = async () => {
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/allocate-monthly`, "POST"); toast({ title: "Allocated" }); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const addBeta = async () => {
+    const beta = [...new Set([...w.betaFeatures, betaInput.trim()].filter(Boolean))];
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/beta-features`, "POST", { betaFeatures: beta }); setBetaInput(""); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  const removeBeta = async (slug: string) => {
+    const beta = w.betaFeatures.filter(s => s !== slug);
+    try { await apiAction(`/admin/ai/wallets/${tenantId}/beta-features`, "POST", { betaFeatures: beta }); refresh(); }
+    catch (err) { toast({ title: "Failed", description: (err as Error).message, variant: "destructive" }); }
+  };
+  return (
+    <Modal title={`Wallet: ${w.tenantName}`} onClose={onClose} wide>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {[
+          { label: "Balance", value: w.balance, color: "text-primary" },
+          { label: "Monthly", value: w.monthlyBalance, color: "text-foreground" },
+          { label: "Purchased", value: w.purchasedBalance, color: "text-green-600" },
+          { label: "Bonus", value: w.bonusBalance, color: "text-amber-600" },
+          { label: "Reserved", value: w.reservedCredits, color: "text-muted-foreground" },
+          { label: "Lifetime used", value: w.lifetimeCreditsUsed, color: "text-muted-foreground" },
+          { label: "Lifetime bought", value: w.lifetimeCreditsPurchased, color: "text-muted-foreground" },
+          { label: "Status", value: w.isBlocked ? "Blocked" : "OK", color: w.isBlocked ? "text-destructive" : "text-green-600" },
+        ].map(c => (
+          <div key={c.label} className="bg-muted/20 rounded p-2"><p className="text-[11px] text-muted-foreground">{c.label}</p><p className={`text-base font-bold ${c.color} tabular-nums`}>{typeof c.value === "number" ? c.value.toLocaleString() : c.value}</p></div>
+        ))}
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="border border-border rounded-lg p-3 space-y-2">
+          <p className="text-sm font-semibold">Adjust balance</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Credits (+/-)"><input type="number" className={inputCls} value={adjust.credits} onChange={e => setAdjust({ ...adjust, credits: Number(e.target.value) })} /></Field>
+            <Field label="Bucket">
+              <select className={inputCls} value={adjust.bucket} onChange={e => setAdjust({ ...adjust, bucket: e.target.value })}>
+                <option value="monthly">Monthly</option><option value="purchased">Purchased</option><option value="bonus">Bonus</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Description"><input className={inputCls} value={adjust.description} onChange={e => setAdjust({ ...adjust, description: e.target.value })} /></Field>
+          <Button size="sm" onClick={doAdjust} disabled={adjust.credits === 0}>Apply</Button>
+        </div>
+        <div className="border border-border rounded-lg p-3 space-y-2">
+          <p className="text-sm font-semibold">Recharge (free)</p>
+          <Field label="Package">
+            <select className={inputCls} value={recharge.packageId ?? ""} onChange={e => setRecharge({ ...recharge, packageId: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">Select package…</option>
+              {data.rechargePackages.map(p => <option key={p.id} value={p.id}>{p.name} — {p.credits}+{p.bonusCredits} cr</option>)}
+            </select>
+          </Field>
+          <Field label="Reference"><input className={inputCls} value={recharge.reference} onChange={e => setRecharge({ ...recharge, reference: e.target.value })} /></Field>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={doRecharge} disabled={!recharge.packageId}>Recharge</Button>
+            <Button size="sm" variant="outline" onClick={doAllocate} className="gap-1"><RefreshCw className="w-3 h-3" />Allocate monthly</Button>
+            <Button size="sm" variant="outline" onClick={doBlock} className={`gap-1 ${w.isBlocked ? "text-green-600" : "text-destructive"}`}><Ban className="w-3 h-3" />{w.isBlocked ? "Unblock" : "Block"}</Button>
+          </div>
+        </div>
+        <div className="border border-border rounded-lg p-3 space-y-2 md:col-span-2">
+          <p className="text-sm font-semibold">Beta features</p>
+          <div className="flex flex-wrap gap-1">
+            {w.betaFeatures.map(slug => (
+              <span key={slug} className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-full">{slug}<button onClick={() => void removeBeta(slug)}><X className="w-3 h-3" /></button></span>
+            ))}
+            {w.betaFeatures.length === 0 && <span className="text-xs text-muted-foreground">None</span>}
+          </div>
+          <div className="flex gap-2">
+            <input className={inputCls + " flex-1"} placeholder="feature-slug" value={betaInput} onChange={e => setBetaInput(e.target.value)} />
+            <Button size="sm" onClick={addBeta} disabled={!betaInput.trim()}>Add</Button>
+          </div>
+        </div>
+        <div className="border border-border rounded-lg p-3 md:col-span-2">
+          <p className="text-sm font-semibold mb-2">Recent transactions</p>
+          <div className="max-h-64 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground"><tr><th className="text-left py-1">Time</th><th className="text-left">Type</th><th className="text-left">Feature</th><th className="text-right">Δ</th><th className="text-left">Note</th></tr></thead>
+              <tbody>
+                {data.recentTransactions.map(t => (
+                  <tr key={t.id} className="border-t border-border/50"><td className="py-1">{new Date(t.createdAt).toLocaleString()}</td><td>{t.type}</td><td className="font-mono">{t.featureSlug ?? "—"}</td><td className="text-right tabular-nums">{t.creditsDelta}</td><td className="truncate max-w-xs">{t.description ?? "—"}</td></tr>
+                ))}
+                {data.recentTransactions.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No transactions.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end pt-3"><Button variant="outline" onClick={onClose}>Close</Button></div>
+    </Modal>
+  );
+}
+function WalletsSubTab() {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState<number | null>(null);
+  const { data = [], isLoading } = useQuery<WalletRow[]>({ queryKey: ["admin-ai", "wallets", search], queryFn: () => apiFetch(`/admin/ai/wallets?search=${encodeURIComponent(search)}`) });
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+        <p className="font-semibold text-sm flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" />Tenant wallets <span className="text-xs text-muted-foreground">({data.length})</span></p>
+        <div className="relative"><Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className={inputCls + " pl-7 w-64"} placeholder="Search tenants…" value={search} onChange={e => setSearch(e.target.value)} /></div>
+      </div>
+      {isLoading ? <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div> : (
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 text-xs text-muted-foreground"><tr>
+            <th className="px-3 py-2 text-left">Tenant</th><th className="px-3 py-2 text-right">Balance</th>
+            <th className="px-3 py-2 text-right">Monthly</th><th className="px-3 py-2 text-right">Purchased</th>
+            <th className="px-3 py-2 text-right">Bonus</th><th className="px-3 py-2 text-right">Used</th>
+            <th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Actions</th>
+          </tr></thead>
+          <tbody className="divide-y divide-border">
+            {data.map(w => (
+              <tr key={w.tenantId} className="hover:bg-muted/20">
+                <td className="px-3 py-2"><p className="font-medium">{w.tenantName}</p><p className="text-xs text-muted-foreground">#{w.tenantId}</p></td>
+                <td className="px-3 py-2 text-right font-bold tabular-nums">{w.balance.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{w.monthlyBalance.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{w.purchasedBalance.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{w.bonusBalance.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{w.lifetimeCreditsUsed.toLocaleString()}</td>
+                <td className="px-3 py-2">{w.isBlocked ? <Badge variant="destructive">Blocked</Badge> : <Badge>OK</Badge>}</td>
+                <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setOpen(w.tenantId)} className="gap-1"><Wallet className="w-3 h-3" />Manage</Button></td>
+              </tr>
+            ))}
+            {data.length === 0 && <tr><td colSpan={8} className="px-3 py-10 text-center text-muted-foreground text-xs">No tenants found.</td></tr>}
+          </tbody>
+        </table>
+      )}
+      {open !== null && <WalletDetailModal tenantId={open} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+// ─── Ledger ──────────────────────────────────────────────────────────────────
+function LedgerSubTab() {
+  const [filter, setFilter] = useState({ tenantId: "", type: "", featureSlug: "" });
+  const { data = [], isLoading } = useQuery<Array<{ id: number; tenantId: number; tenantName: string | null; createdAt: string; type: string; featureSlug: string | null; creditsDelta: string; pricePaid: string | null; description: string | null }>>({
+    queryKey: ["admin-ai", "ledger", filter],
+    queryFn: () => apiFetch(`/admin/ai/ledger?${new URLSearchParams(Object.fromEntries(Object.entries(filter).filter(([, v]) => v))).toString()}`),
+  });
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+        <p className="font-semibold text-sm flex items-center gap-2"><ArrowDownToLine className="w-4 h-4 text-primary" />Credit ledger <span className="text-xs text-muted-foreground">({data.length})</span></p>
+        <div className="flex gap-2">
+          <input className={inputCls + " w-32"} placeholder="Tenant ID" value={filter.tenantId} onChange={e => setFilter({ ...filter, tenantId: e.target.value })} />
+          <select className={inputCls + " w-36"} value={filter.type} onChange={e => setFilter({ ...filter, type: e.target.value })}>
+            <option value="">All types</option><option value="usage">Usage</option><option value="recharge">Recharge</option>
+            <option value="monthly_allocation">Monthly</option><option value="adjustment">Adjustment</option><option value="refund">Refund</option>
+          </select>
+          <input className={inputCls + " w-40"} placeholder="Feature slug" value={filter.featureSlug} onChange={e => setFilter({ ...filter, featureSlug: e.target.value })} />
+        </div>
+      </div>
+      {isLoading ? <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div> : (
+        <div className="overflow-x-auto max-h-[60vh]">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/30 text-muted-foreground sticky top-0"><tr>
+              <th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Tenant</th>
+              <th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Feature</th>
+              <th className="px-3 py-2 text-right">Credits</th><th className="px-3 py-2 text-right">Paid</th>
+              <th className="px-3 py-2 text-left">Note</th>
+            </tr></thead>
+            <tbody className="divide-y divide-border">
+              {data.map(t => (
+                <tr key={t.id} className="hover:bg-muted/20">
+                  <td className="px-3 py-2 whitespace-nowrap">{new Date(t.createdAt).toLocaleString()}</td>
+                  <td className="px-3 py-2">{t.tenantName ?? `#${t.tenantId}`}</td>
+                  <td className="px-3 py-2">{t.type}</td>
+                  <td className="px-3 py-2 font-mono">{t.featureSlug ?? "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{t.creditsDelta}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{t.pricePaid ?? "—"}</td>
+                  <td className="px-3 py-2 truncate max-w-xs">{t.description ?? "—"}</td>
+                </tr>
+              ))}
+              {data.length === 0 && <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">No transactions.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Tab Container ──────────────────────────────────────────────────────
 export default function AdminAiTab() {
   const [sub, setSub] = useState<SubTab>("dashboard");
@@ -946,6 +1417,10 @@ export default function AdminAiTab() {
     { id: "models", label: "Model Settings", icon: Cpu },
     { id: "prompts", label: "Prompt Templates", icon: FileText },
     { id: "safety", label: "Safety Settings", icon: ShieldAlert },
+    { id: "credit-rules", label: "Credit Rules", icon: Coins },
+    { id: "recharge-packages", label: "Recharge Packages", icon: Package },
+    { id: "wallets", label: "Wallets", icon: Wallet },
+    { id: "ledger", label: "Ledger", icon: ArrowDownToLine },
     { id: "logs", label: "AI Logs", icon: ScrollText },
     { id: "costs", label: "Cost Reports", icon: BarChart3 },
   ];
@@ -966,6 +1441,10 @@ export default function AdminAiTab() {
       {sub === "models" && <ModelSettingsSubTab />}
       {sub === "prompts" && <PromptsSubTab />}
       {sub === "safety" && <SafetySubTab />}
+      {sub === "credit-rules" && <CreditRulesSubTab />}
+      {sub === "recharge-packages" && <RechargePackagesSubTab />}
+      {sub === "wallets" && <WalletsSubTab />}
+      {sub === "ledger" && <LedgerSubTab />}
       {sub === "logs" && <LogsSubTab />}
       {sub === "costs" && <CostReportsSubTab />}
     </div>

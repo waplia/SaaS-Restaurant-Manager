@@ -78,6 +78,44 @@ function validatePlanInput(body: Record<string, unknown>, partial = false): { er
     out.featureFlags = defaultFeatureFlags();
   }
   if (body.isActive !== undefined) out.isActive = Boolean(body.isActive);
+
+  // ─── Khana AI plan settings ────────────────────────────────────────────────
+  if (body.aiEnabled !== undefined) out.aiEnabled = Boolean(body.aiEnabled);
+  if (body.aiMonthlyIncludedCredits !== undefined) {
+    const n = Number(body.aiMonthlyIncludedCredits);
+    if (!Number.isInteger(n) || n < 0) return { error: "aiMonthlyIncludedCredits must be a non-negative integer" };
+    out.aiMonthlyIncludedCredits = n;
+  }
+  if (body.aiDailyRequestCap !== undefined) {
+    const n = Number(body.aiDailyRequestCap ?? 0);
+    if (!Number.isInteger(n) || n < 0) return { error: "aiDailyRequestCap must be a non-negative integer (0 = unlimited)" };
+    out.aiDailyRequestCap = n;
+  }
+  if (body.aiPerFeatureMonthlyCaps !== undefined) {
+    const v = body.aiPerFeatureMonthlyCaps ?? {};
+    if (typeof v !== "object" || Array.isArray(v)) {
+      return { error: "aiPerFeatureMonthlyCaps must be an object of { [featureSlug]: number }" };
+    }
+    const cleaned: Record<string, number> = {};
+    for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) return { error: `aiPerFeatureMonthlyCaps.${k} must be a non-negative integer` };
+      cleaned[String(k)] = n;
+    }
+    out.aiPerFeatureMonthlyCaps = cleaned;
+  }
+  if (body.aiFeatureToggles !== undefined) {
+    const v = body.aiFeatureToggles ?? {};
+    if (typeof v !== "object" || Array.isArray(v)) {
+      return { error: "aiFeatureToggles must be an object of { [featureSlug]: boolean }" };
+    }
+    const cleaned: Record<string, boolean> = {};
+    for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof raw !== "boolean") return { error: `aiFeatureToggles.${k} must be boolean` };
+      cleaned[String(k)] = raw;
+    }
+    out.aiFeatureToggles = cleaned;
+  }
   return { data: out };
 }
 

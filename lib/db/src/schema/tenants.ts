@@ -20,6 +20,12 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
   featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),
+  // Khana AI add-on (Task #62) — opt-in per plan, with credit allowance and caps.
+  aiEnabled: boolean("ai_enabled").notNull().default(false),
+  aiMonthlyIncludedCredits: integer("ai_monthly_included_credits").notNull().default(0),
+  aiDailyRequestCap: integer("ai_daily_request_cap").notNull().default(0),
+  aiPerFeatureMonthlyCaps: jsonb("ai_per_feature_monthly_caps").$type<Record<string, number>>().notNull().default({}),
+  aiFeatureToggles: jsonb("ai_feature_toggles").$type<Record<string, boolean>>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
