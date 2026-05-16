@@ -1,6 +1,6 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { eq, desc, count, and, or, ilike, sql } from "drizzle-orm";
+import { eq, desc, asc, count, and, or, ilike, sql, type SQL } from "drizzle-orm";
 import { db, subscriptionPlansTable, tenantsTable, usersTable, PLAN_BOOLEAN_FEATURE_KEYS, defaultFeatureFlags } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
 import { sendLifecycleSms } from "../lib/smsSender";
@@ -130,6 +130,14 @@ router.delete("/subscription-plans/:id", requireSuperAdmin, async (req, res) => 
 });
 
 // ─── Tenants ──────────────────────────────────────────────────────
+const SORTABLE_TENANT_COLUMNS = {
+  name: tenantsTable.name,
+  createdAt: tenantsTable.createdAt,
+  trialEndsAt: tenantsTable.trialEndsAt,
+  planStatus: tenantsTable.planStatus,
+} as const;
+type SortableTenantColumn = keyof typeof SORTABLE_TENANT_COLUMNS;
+
 router.get("/tenants", requireSuperAdmin, async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
@@ -137,10 +145,28 @@ router.get("/tenants", requireSuperAdmin, async (req, res) => {
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   const status = typeof req.query.status === "string" ? req.query.status : "";
   const planIdRaw = req.query.planId;
+  const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "createdAt";
+  const sortDirRaw = typeof req.query.sortDir === "string" ? req.query.sortDir.toLowerCase() : "desc";
+  const sortBy: SortableTenantColumn = (sortByRaw in SORTABLE_TENANT_COLUMNS)
+    ? (sortByRaw as SortableTenantColumn) : "createdAt";
+  const sortDir = sortDirRaw === "asc" ? "asc" : "desc";
 
-  const conds: Parameters<typeof and>[number][] = [];
+  const conds: SQL[] = [];
   if (search) {
-    conds.push(or(ilike(tenantsTable.name, `%${search}%`), ilike(tenantsTable.slug, `%${search}%`)));
+    const term = `%${search}%`;
+    // Match across tenant name/slug AND owner name/email/phone.
+    // Use a correlated EXISTS so we don't have to GROUP/DISTINCT the outer query.
+    conds.push(
+      or(
+        ilike(tenantsTable.name, term),
+        ilike(tenantsTable.slug, term),
+        sql`EXISTS (
+          SELECT 1 FROM ${usersTable} u
+          WHERE u.tenant_id = ${tenantsTable.id}
+            AND (u.name ILIKE ${term} OR u.email ILIKE ${term} OR u.phone ILIKE ${term})
+        )`,
+      )!,
+    );
   }
   if (status === "trial" || status === "active" || status === "expired" || status === "cancelled") {
     conds.push(eq(tenantsTable.planStatus, status));
@@ -157,12 +183,16 @@ router.get("/tenants", requireSuperAdmin, async (req, res) => {
   }
 
   const where = conds.length ? and(...conds) : undefined;
+  const sortCol = SORTABLE_TENANT_COLUMNS[sortBy];
+  const orderExpr = sortDir === "asc" ? asc(sortCol) : desc(sortCol);
+  // Stable secondary sort by id so paging is deterministic when the sort key has ties.
+  const orderById = sortDir === "asc" ? asc(tenantsTable.id) : desc(tenantsTable.id);
 
   const [rows, totalRows] = await Promise.all([
-    db.select().from(tenantsTable).where(where).orderBy(desc(tenantsTable.createdAt)).limit(limit).offset(offset),
+    db.select().from(tenantsTable).where(where).orderBy(orderExpr, orderById).limit(limit).offset(offset),
     db.select({ count: count() }).from(tenantsTable).where(where),
   ]);
-  res.json({ data: rows, tenants: rows, total: Number(totalRows[0]?.count ?? 0), page, limit });
+  res.json({ data: rows, tenants: rows, total: Number(totalRows[0]?.count ?? 0), page, limit, sortBy, sortDir });
 });
 
 router.post("/tenants", requireSuperAdmin, async (req, res) => {
@@ -343,7 +373,15 @@ router.post("/tenants/:id/activate", requireSuperAdmin, async (req, res) => {
   res.json(updated);
 });
 
-router.get("/admin/tenant-usage", requireSuperAdmin, async (_req, res) => {
+router.get("/admin/tenant-usage", requireSuperAdmin, async (req, res) => {
+  // Optional `ids=1,2,3` filter so the admin UI can fetch usage only for the
+  // current page of tenants rather than every tenant in the system.
+  const idsParam = typeof req.query.ids === "string" ? req.query.ids : "";
+  const ids = idsParam
+    ? idsParam.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const idFilter = ids.length ? sql`WHERE t.id = ANY(${sql.raw(`ARRAY[${ids.join(",")}]::int[]`)})` : sql``;
+
   const usageRows = await db.execute<{
     tenant_id: number;
     staff_count: string;
@@ -362,6 +400,7 @@ router.get("/admin/tenant-usage", requireSuperAdmin, async (_req, res) => {
     LEFT JOIN restaurants r ON r.tenant_id = t.id
     LEFT JOIN floor_tables ft ON ft.restaurant_id = r.id
     LEFT JOIN menu_items mi ON mi.restaurant_id = r.id
+    ${idFilter}
     GROUP BY t.id
   `);
 

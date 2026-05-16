@@ -6,6 +6,7 @@ import { startBroadcastScheduler, seedDefaultTemplates } from "./lib/notificatio
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { getAppSettings } from "./lib/appSettings";
+import { ensureSearchIndexes } from "./lib/searchIndexes";
 
 const rawPort = process.env["PORT"];
 
@@ -46,6 +47,9 @@ httpServer.listen(port, () => {
   getAppSettings(true)
     .then(() => logger.info("App settings singleton ensured"))
     .catch((e) => logger.error({ err: e }, "App settings singleton seed failed"));
+
+  ensureSearchIndexes()
+    .catch((e) => logger.error({ err: e }, "Failed to ensure tenant search indexes"));
 });
 
 function shutdown(signal: string) {

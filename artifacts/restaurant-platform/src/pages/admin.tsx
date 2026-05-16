@@ -1,5 +1,7 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
+import { ArrowUp, ArrowDown, ArrowUpDown, Loader2 } from "lucide-react";
 import {
   Building2, Users, ShieldCheck, AlertTriangle, CheckCircle,
   Clock, TrendingUp, Ban, RefreshCw, LogOut, Package, Search,
@@ -562,29 +564,135 @@ function PlansTab() {
 }
 
 // ─── Tenants Tab ─────────────────────────────────────────────────
+type SortBy = "name" | "createdAt" | "trialEndsAt" | "planStatus";
+type SortDir = "asc" | "desc";
+const SORT_KEYS: SortBy[] = ["name", "createdAt", "trialEndsAt", "planStatus"];
+const PAGE_SIZES = [20, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
+
+interface TenantsUrlState {
+  page: number;
+  pageSize: PageSize;
+  search: string;
+  status: string;
+  planId: string;
+  sortBy: SortBy;
+  sortDir: SortDir;
+}
+
+function readUrlState(searchStr: string): TenantsUrlState {
+  const sp = new URLSearchParams(searchStr);
+  const sortByRaw = sp.get("sortBy") ?? "createdAt";
+  const sortDirRaw = sp.get("sortDir") ?? "desc";
+  const pageSizeRaw = Number(sp.get("pageSize"));
+  return {
+    page: Math.max(1, Number(sp.get("page")) || 1),
+    pageSize: (PAGE_SIZES.includes(pageSizeRaw as PageSize) ? pageSizeRaw : 20) as PageSize,
+    search: sp.get("search") ?? "",
+    status: sp.get("status") ?? "",
+    planId: sp.get("planId") ?? "",
+    sortBy: (SORT_KEYS.includes(sortByRaw as SortBy) ? sortByRaw : "createdAt") as SortBy,
+    sortDir: sortDirRaw === "asc" ? "asc" : "desc",
+  };
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function TenantsTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [status, setStatus] = useState("");
-  const [planId, setPlanId] = useState("");
+  const [location, navigate] = useLocation();
+  const searchStr = useSearch();
+  const initial = useMemo(() => readUrlState(searchStr), []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [page, setPage] = useState<number>(initial.page);
+  const [pageSize, setPageSize] = useState<PageSize>(initial.pageSize);
+  const [searchInput, setSearchInput] = useState<string>(initial.search);
+  const [status, setStatus] = useState<string>(initial.status);
+  const [planId, setPlanId] = useState<string>(initial.planId);
+  const [sortBy, setSortBy] = useState<SortBy>(initial.sortBy);
+  const [sortDir, setSortDir] = useState<SortDir>(initial.sortDir);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [deleting, setDeleting] = useState<Tenant | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
+
+  // Reset to page 1 whenever a filter (other than page itself) changes.
+  useEffect(() => { setPage(1); }, [debouncedSearch, status, planId, pageSize, sortBy, sortDir]);
+
+  // Serialize the current state into a canonical query string. Used by both
+  // the state→URL effect (push) and the URL→state effect (compare/skip).
+  const serializeState = useCallback((s: TenantsUrlState): string => {
+    const sp = new URLSearchParams();
+    if (s.page !== 1) sp.set("page", String(s.page));
+    if (s.pageSize !== 20) sp.set("pageSize", String(s.pageSize));
+    if (s.search) sp.set("search", s.search);
+    if (s.status) sp.set("status", s.status);
+    if (s.planId) sp.set("planId", s.planId);
+    if (s.sortBy !== "createdAt") sp.set("sortBy", s.sortBy);
+    if (s.sortDir !== "desc") sp.set("sortDir", s.sortDir);
+    return sp.toString();
+  }, []);
+
+  // Push: persist state to the URL so refresh and shared links restore the view.
+  useEffect(() => {
+    const target = serializeState({ page, pageSize, search: debouncedSearch, status, planId, sortBy, sortDir });
+    if (target !== searchStr) navigate(location + (target ? `?${target}` : ""), { replace: true });
+  }, [page, pageSize, debouncedSearch, status, planId, sortBy, sortDir, location, searchStr, navigate, serializeState]);
+
+  // Pull: when the URL changes externally (back/forward, deep-link, manual edit),
+  // re-hydrate component state. The serialize-and-compare guard prevents the
+  // push effect above from racing with this one and creating a feedback loop.
+  useEffect(() => {
+    const next = readUrlState(searchStr);
+    const current: TenantsUrlState = { page, pageSize, search: debouncedSearch, status, planId, sortBy, sortDir };
+    if (serializeState(next) === serializeState(current)) return;
+    if (next.page !== page) setPage(next.page);
+    if (next.pageSize !== pageSize) setPageSize(next.pageSize);
+    if (next.search !== searchInput) setSearchInput(next.search);
+    if (next.status !== status) setStatus(next.status);
+    if (next.planId !== planId) setPlanId(next.planId);
+    if (next.sortBy !== sortBy) setSortBy(next.sortBy);
+    if (next.sortDir !== sortDir) setSortDir(next.sortDir);
+    // We intentionally only depend on `searchStr` so this fires on URL changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchStr]);
+
+  // Keyboard shortcuts: `/` focuses search, `Esc` clears it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === "Escape" && document.activeElement === searchRef.current) {
+        setSearchInput("");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const queryString = useMemo(() => {
-    const sp = new URLSearchParams({ page: String(page), limit: "20" });
-    if (search) sp.set("search", search);
+    const sp = new URLSearchParams({ page: String(page), limit: String(pageSize), sortBy, sortDir });
+    if (debouncedSearch) sp.set("search", debouncedSearch);
     if (status) sp.set("status", status);
     if (planId) sp.set("planId", planId);
     return sp.toString();
-  }, [page, search, status, planId]);
+  }, [page, pageSize, debouncedSearch, status, planId, sortBy, sortDir]);
 
-  const { data: tenantData, isLoading } = useQuery<TenantList>({
+  const { data: tenantData, isLoading, isFetching, isPlaceholderData } = useQuery<TenantList>({
     queryKey: ["admin", "tenants", queryString],
     queryFn: () => apiFetch(`/tenants?${queryString}`),
+    placeholderData: keepPreviousData,
   });
 
   const { data: plans = [] } = useQuery<Plan[]>({
@@ -592,9 +700,15 @@ function TenantsTab() {
     queryFn: () => apiFetch("/subscription-plans"),
   });
 
+  const tenantsList: Tenant[] = tenantData?.tenants ?? tenantData?.data ?? [];
+  const visibleIds = useMemo(() => tenantsList.map((t) => t.id), [tenantsList]);
+  const usageKey = visibleIds.slice().sort((a, b) => a - b).join(",");
+
   const { data: usageMap = {} } = useQuery<Record<number, TenantUsage>>({
-    queryKey: ["admin", "tenant-usage"],
-    queryFn: () => apiFetch("/admin/tenant-usage"),
+    queryKey: ["admin", "tenant-usage", usageKey],
+    queryFn: () => apiFetch(`/admin/tenant-usage?ids=${usageKey}`),
+    enabled: visibleIds.length > 0,
+    placeholderData: keepPreviousData,
   });
 
   const suspendMutation = useMutation({
@@ -627,11 +741,47 @@ function TenantsTab() {
     },
   });
 
-  const tenants = tenantData?.tenants ?? tenantData?.data ?? [];
+  const tenants = tenantsList;
   const total = tenantData?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / 20));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const showingFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingTo = Math.min(total, page * pageSize);
+  const hasFilters = !!(debouncedSearch || status || planId);
+  const isBackgroundFetching = isFetching && isPlaceholderData;
 
-  const submitSearch = (e: React.FormEvent) => { e.preventDefault(); setSearch(searchInput); setPage(1); };
+  const clearFilters = useCallback(() => {
+    setSearchInput("");
+    setStatus("");
+    setPlanId("");
+  }, []);
+
+  const toggleSort = useCallback((col: SortBy) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(col);
+      // Sensible default direction per column: text/status asc, dates desc.
+      setSortDir(col === "name" || col === "planStatus" ? "asc" : "desc");
+    }
+  }, [sortBy]);
+
+  const sortIcon = (col: SortBy) => {
+    if (sortBy !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  };
+
+  const SortableTh = ({ col, label, align = "left" }: { col: SortBy; label: string; align?: "left" | "right" }) => (
+    <th className={`px-6 py-3 font-medium text-muted-foreground text-${align}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${sortBy === col ? "text-foreground" : ""}`}
+        aria-sort={sortBy === col ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      >
+        {label}{sortIcon(col)}
+      </button>
+    </th>
+  );
 
   return (
     <div className="bg-card border border-border rounded-xl">
@@ -639,50 +789,69 @@ function TenantsTab() {
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5 text-primary" />
           <h2 className="font-semibold text-foreground">All Tenants</h2>
-          <span className="text-xs text-muted-foreground">({total} total)</span>
+          <span className="text-xs text-muted-foreground">({total.toLocaleString()} total)</span>
+          {isBackgroundFetching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" aria-label="Refreshing" />}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <form onSubmit={submitSearch} className="flex items-center gap-1">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input className={inputCls + " pl-7 w-44 py-1.5"} placeholder="Search name or slug…"
-                value={searchInput} onChange={e => setSearchInput(e.target.value)} />
-            </div>
-            <Button type="submit" size="sm" variant="outline">Search</Button>
-          </form>
-          <select className={inputCls + " py-1.5 w-32"} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={searchRef}
+              className={inputCls + " pl-7 pr-7 w-56 py-1.5"}
+              placeholder="Search name, slug, owner email…"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              aria-label="Search tenants"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <select className={inputCls + " py-1.5 w-32"} value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">All status</option>
             <option value="trial">Trial</option><option value="active">Active</option>
             <option value="expired">Expired</option><option value="cancelled">Cancelled</option>
             <option value="suspended">Suspended</option>
           </select>
-          <select className={inputCls + " py-1.5 w-36"} value={planId} onChange={e => { setPlanId(e.target.value); setPage(1); }}>
+          <select className={inputCls + " py-1.5 w-36"} value={planId} onChange={e => setPlanId(e.target.value)}>
             <option value="">All plans</option>
             {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <Button size="sm" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["admin"] })} className="gap-1">
+          {hasFilters && (
+            <Button size="sm" variant="ghost" onClick={clearFilters} className="gap-1 text-xs">
+              <X className="w-3 h-3" />Clear filters
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["admin"] })} className="gap-1" title="Refresh">
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1"><Plus className="w-3.5 h-3.5" />New tenant</Button>
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading && tenants.length === 0 ? (
         <div className="p-12 text-center text-muted-foreground">Loading tenants…</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th className="px-6 py-3 text-left font-medium text-muted-foreground">Tenant</th>
-                <th className="px-6 py-3 text-left font-medium text-muted-foreground">Status</th>
+                <SortableTh col="name" label="Tenant" />
+                <SortableTh col="planStatus" label="Status" />
                 <th className="px-6 py-3 text-left font-medium text-muted-foreground">Plan & Limits</th>
-                <th className="px-6 py-3 text-left font-medium text-muted-foreground">Trial</th>
-                <th className="px-6 py-3 text-left font-medium text-muted-foreground">Joined</th>
+                <SortableTh col="trialEndsAt" label="Trial" />
+                <SortableTh col="createdAt" label="Joined" />
                 <th className="px-6 py-3 text-right font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className={`divide-y divide-border ${isBackgroundFetching ? "opacity-70 transition-opacity" : ""}`}>
               {tenants.map(tenant => (
                 <tr key={tenant.id} className="hover:bg-muted/20">
                   <td className="px-6 py-4">
@@ -725,21 +894,52 @@ function TenantsTab() {
                   </td>
                 </tr>
               ))}
-              {tenants.length === 0 && <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">No tenants found.</td></tr>}
+              {tenants.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                    {hasFilters ? (
+                      <div className="space-y-2">
+                        <p>No tenants match your filters.</p>
+                        <Button size="sm" variant="outline" onClick={clearFilters} className="gap-1">
+                          <X className="w-3 h-3" />Clear filters
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p>No tenants yet.</p>
+                        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1">
+                          <Plus className="w-3 h-3" />Create the first tenant
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {pageCount > 1 && (
-        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-          <span>Page {page} of {pageCount}</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-            <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>Next</Button>
-          </div>
+      <div className="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <span>{total === 0 ? "No tenants" : `Showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()} of ${total.toLocaleString()}`}</span>
+          <label className="flex items-center gap-1">
+            <span>Rows per page</span>
+            <select
+              className="border border-border rounded px-1.5 py-0.5 bg-background text-foreground"
+              value={pageSize}
+              onChange={e => setPageSize(Number(e.target.value) as PageSize)}
+            >
+              {PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <span>Page {page} of {pageCount}</span>
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
+          <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage(p => Math.min(pageCount, p + 1))}>Next</Button>
+        </div>
+      </div>
 
       {createOpen && <TenantModal tenant={null} plans={plans} onClose={() => setCreateOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin"] })} />}
       {editing && <TenantModal tenant={editing} plans={plans} onClose={() => setEditing(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin"] })} />}
