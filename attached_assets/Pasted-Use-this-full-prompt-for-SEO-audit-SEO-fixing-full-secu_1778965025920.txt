@@ -1,0 +1,601 @@
+Use this full prompt for **SEO audit + SEO fixing + full security check**:
+
+```text
+Perform a complete SEO audit, technical SEO improvement, performance audit, and full security check for the KhanaLagao platform.
+
+Important:
+- Do not break existing frontend, restaurant admin, super admin, dashboard, APIs, database, POS, QR menu, or mobile app.
+- First audit everything.
+- Then create a clear issue list.
+- Then fix issues step by step.
+- Do not remove working features.
+- Do not expose secrets.
+- Do not use mock fixes.
+- Make changes production-ready.
+
+Brand:
+KhanaLagao
+
+Company:
+Waplia Digital Solutions
+
+Product:
+Restaurant OS for Modern Food Businesses
+
+Location:
+Malviya Nagar, Jaipur, Rajasthan, India
+
+Phone:
++91 8306020200
+
+====================================================
+PART 1: SEO AUDIT
+====================================================
+
+Audit the complete public website.
+
+Check all public pages:
+- Home
+- Platform
+- Features
+- All feature pages
+- Khana AI pages
+- Solution pages
+- Pricing
+- Blog
+- Blog detail
+- About
+- Contact
+- Security
+- Partner
+- FAQ
+- Comparison
+- Legal pages
+- 404
+- Thank-you page
+
+Check these SEO items for every page:
+
+1. Meta title
+- Unique title
+- Correct brand name
+- Contains main keyword
+- Not too long
+- No duplicate titles
+
+2. Meta description
+- Unique description
+- Conversion-focused
+- Contains keyword
+- Not missing
+- No duplicate descriptions
+
+3. Headings
+- One H1 per page
+- Proper H2/H3 structure
+- No skipped heading hierarchy
+- No empty headings
+
+4. URL structure
+- Clean URLs
+- SEO-friendly slugs
+- No broken routes
+- No duplicate route versions
+- No uppercase/random route names
+
+5. Internal linking
+- Homepage links to platform/features/pricing/demo
+- Feature pages link to related features
+- Solution pages link to relevant modules
+- Blog pages link to feature pages
+- Footer links work
+- Header links work
+- No orphan pages
+
+6. Image SEO
+- Alt text for all images/icons/mockups
+- No broken images
+- Optimized image sizes
+- Lazy loading for non-critical images
+- Correct width/height to avoid layout shift
+
+7. Structured data
+Add where relevant:
+- Organization schema
+- SoftwareApplication schema
+- Product schema
+- FAQ schema
+- Breadcrumb schema
+- BlogPosting schema
+- Article schema
+- Website schema
+
+8. Sitemap
+- Generate/update sitemap.xml
+- Include all public pages
+- Include blog posts
+- Exclude private/admin/dashboard pages
+- Exclude duplicate/temporary pages
+- Make sure sitemap URLs are correct
+
+9. Robots.txt
+- Allow public pages
+- Block private/admin/dashboard/API/internal routes
+- Include sitemap URL
+- Do not accidentally block the whole site
+
+10. Canonicals
+- Add canonical URL for each page
+- Avoid duplicate content issues
+- Correct canonical for blog and feature pages
+
+11. Open Graph / Social SEO
+- OG title
+- OG description
+- OG image
+- Twitter card if supported
+- Correct brand image/logo
+
+12. Page content quality
+- No thin content
+- No lorem ipsum
+- No repeated generic text
+- Every feature page has rich content
+- Every solution page has unique content
+- Legal pages are complete
+- Blog pages are not empty
+
+13. Local/company SEO
+Use:
+- Waplia Digital Solutions
+- KhanaLagao
+- Malviya Nagar, Jaipur, Rajasthan, India
+- +91 8306020200
+
+Add organization data where suitable.
+
+====================================================
+PART 2: SEO FIX PLAN
+====================================================
+
+After audit, create a table:
+
+Columns:
+- Page URL
+- Issue
+- Priority: High / Medium / Low
+- SEO impact
+- Fix required
+- Status
+
+Then fix high-priority issues first:
+1. Missing meta titles/descriptions
+2. Broken pages
+3. Broken header/footer links
+4. Missing sitemap/robots
+5. Duplicate titles
+6. Missing H1
+7. Thin content pages
+8. Missing canonical
+9. Missing schema
+10. Broken images
+
+====================================================
+PART 3: TARGET KEYWORDS
+====================================================
+
+Optimize pages for these keyword groups.
+
+Main keywords:
+- Restaurant management software
+- Restaurant POS software
+- Restaurant billing software
+- Restaurant operating system
+- Restaurant SaaS software
+
+Feature keywords:
+- QR menu software
+- KOT software
+- Kitchen display system
+- Restaurant inventory software
+- Restaurant payroll software
+- Restaurant CRM software
+- Restaurant loyalty software
+- Restaurant review management software
+- Restaurant P&L software
+- Restaurant finance software
+- Restaurant reporting software
+
+AI keywords:
+- Restaurant AI software
+- AI restaurant management software
+- AI menu import software
+- AI restaurant growth software
+- AI review booster for restaurants
+
+Solution keywords:
+- Cloud kitchen software
+- Cafe billing software
+- Tiffin management software
+- Catering management software
+- Food court management software
+- Restaurant franchise software
+- Hotel restaurant POS software
+- Bakery POS software
+- Bar POS software
+
+India keywords:
+- Restaurant POS software India
+- QR menu software India
+- Restaurant billing software India
+- Cloud kitchen software India
+- Restaurant management software India
+
+====================================================
+PART 4: TECHNICAL SEO FIXES
+====================================================
+
+Fix:
+
+- sitemap.xml
+- robots.txt
+- canonical tags
+- meta tags
+- Open Graph tags
+- schema markup
+- breadcrumbs
+- internal links
+- broken links
+- image alt tags
+- heading structure
+- 404 page
+- thank-you page
+- dynamic blog sitemap if possible
+- route redirects if needed
+- trailing slash consistency
+- duplicate route handling
+- public/private route separation
+
+Private routes must not be indexed:
+- /admin
+- /dashboard
+- /restaurant
+- /super-admin
+- /api
+- /login app internals where needed
+- any authenticated pages
+- any internal settings pages
+
+====================================================
+PART 5: PERFORMANCE SEO / CORE WEB VITALS
+====================================================
+
+Audit and fix performance.
+
+Check:
+- Largest Contentful Paint
+- Cumulative Layout Shift
+- Interaction to Next Paint
+- First Contentful Paint
+- Time to First Byte
+- JavaScript bundle size
+- Image sizes
+- Font loading
+- Lazy loading
+- Unused CSS/JS
+- Render-blocking resources
+
+Fix:
+- Optimize images
+- Add responsive image sizes
+- Lazy load below-the-fold visuals
+- Preload important hero assets
+- Use proper font display strategy
+- Avoid layout shifts
+- Reduce unnecessary animations
+- Remove unused imports
+- Split heavy components if possible
+- Use skeleton/loading states
+- Cache static assets where possible
+
+Do not reduce design quality, but make site faster.
+
+====================================================
+PART 6: FULL SECURITY AUDIT
+====================================================
+
+Perform a complete security audit of frontend, backend, APIs, auth, database, admin, super admin, restaurant dashboard, AI settings, file uploads, and public forms.
+
+Check these areas:
+
+1. Authentication security
+- Password hashing
+- Login rate limiting
+- Session expiry
+- Secure cookies
+- JWT/token handling if used
+- Logout invalidates session
+- Password reset security
+- No user enumeration
+- Brute-force protection
+
+2. Authorization / RBAC
+- Role-based access enforced on backend
+- Restaurant users cannot access other restaurant data
+- Staff cannot access owner/admin pages
+- Cashier cannot access payroll/finance if not allowed
+- Chef cannot access reports/finance
+- Super admin routes protected
+- Direct URL access blocked
+- API-level permissions checked
+
+3. Multi-tenant data isolation
+- Every restaurant-scoped query must filter by restaurant_id/tenant_id
+- No cross-tenant data leakage
+- Super admin access separated
+- Outlet-level permissions respected
+- Reports scoped correctly
+
+4. API security
+- Validate all inputs
+- Sanitize all user input
+- Protect against SQL injection
+- Protect against NoSQL injection if applicable
+- Protect against XSS
+- Protect against CSRF if cookie sessions are used
+- Rate limit sensitive APIs
+- Do not expose stack traces
+- Proper error responses
+- No debug endpoints exposed
+
+5. Secret/API key security
+- OpenAI key encrypted/masked
+- Claude key encrypted/masked
+- Gemini key encrypted/masked
+- Payment gateway keys encrypted/masked
+- SMTP/SMS/WhatsApp keys encrypted/masked
+- No secrets in frontend bundle
+- No secrets in logs
+- No secrets in public environment variables
+- No hardcoded credentials
+- .env not exposed
+
+6. Super Admin security
+- Separate super admin authentication
+- Strong permissions
+- Audit logs for sensitive actions
+- Login history
+- API key changes logged
+- Plan/module changes logged
+- AI credit changes logged
+- Restaurant suspend/delete logged
+- Login-as restaurant logged
+- Dangerous actions require confirmation
+
+7. File upload security
+Check uploads for:
+- Menu PDFs
+- Menu images
+- Item images
+- Documents
+- Legal docs
+- Staff documents
+- Vendor documents
+- Blog images
+- CMS images
+
+Fix:
+- File type validation
+- File size limit
+- Malware-safe structure if possible
+- Prevent executable uploads
+- Store outside public executable path if needed
+- Use safe filenames
+- Prevent path traversal
+- Image processing validation
+- PDF validation
+
+8. Public forms security
+Forms:
+- Book demo
+- Contact
+- Partner
+- Newsletter
+- Start free trial
+- Review QR
+- Feedback
+- Support
+
+Add:
+- Validation
+- Rate limiting
+- Basic anti-spam
+- Honeypot if possible
+- CAPTCHA placeholder if needed
+- Prevent duplicate spam
+- Sanitize message fields
+- Store source_page safely
+
+9. AI feature security
+- AI requests require restaurant auth except public review draft flow
+- AI credits checked server-side
+- AI provider keys never exposed
+- Prompt injection risk considered
+- AI outputs sanitized before display
+- No auto-posting reviews
+- No auto-sending campaigns without approval
+- AI usage logs saved
+- Failed requests do not wrongly deduct credits
+- Rate limits per restaurant/user
+
+10. Review QR security
+- No Google API required
+- Public review page should not expose private data
+- QR token should not reveal internal IDs if possible
+- Feedback submission rate limited
+- AI review generation credit checked safely
+- No auto-submit to Google
+- No fake review generation without customer input
+
+11. Payment/security
+- Payment gateway secrets protected
+- Webhook verification
+- Payment status cannot be changed from frontend
+- Invoice/payment APIs protected
+- Refund requires permission
+- Manual payment changes logged
+- Subscription changes logged
+
+12. Database security
+- Safe migrations
+- No duplicate unsafe tables
+- Foreign keys or proper relations
+- Indexes for tenant/user lookups
+- Soft delete where needed
+- No sensitive plain-text storage
+- Backups protected
+- Data deletion rules considered
+
+13. Headers/security config
+Add or verify:
+- Content-Security-Policy where possible
+- X-Frame-Options or frame-ancestors
+- X-Content-Type-Options
+- Referrer-Policy
+- Permissions-Policy
+- Strict-Transport-Security in production HTTPS
+- Secure CORS settings
+- No wildcard CORS for sensitive APIs
+
+14. Logging and monitoring
+- Audit logs for sensitive actions
+- Error logs do not leak secrets
+- Failed login logs
+- AI usage logs
+- Payment webhook logs
+- Permission denied logs
+- Suspicious activity logs
+- Admin changes logged
+
+15. Dependency security
+- Check outdated/vulnerable dependencies
+- Remove unused risky packages
+- Run npm audit or equivalent
+- Fix high/critical vulnerabilities if possible
+- Do not blindly upgrade breaking dependencies without testing
+
+====================================================
+PART 7: SECURITY FIX PLAN
+====================================================
+
+After audit, create a table:
+
+Columns:
+- Area
+- Risk
+- Severity: Critical / High / Medium / Low
+- Exploit possibility
+- Fix required
+- Status
+
+Fix in this order:
+1. Secret exposure
+2. Auth/session issues
+3. RBAC/direct URL access
+4. Multi-tenant data isolation
+5. API validation/injection risks
+6. File upload security
+7. Public form spam/security
+8. Payment webhook/security
+9. AI key/credit security
+10. Security headers
+11. Dependency vulnerabilities
+12. Audit logs
+
+====================================================
+PART 8: FINAL TESTING
+====================================================
+
+Test SEO:
+- All pages have title/description
+- All pages have H1
+- All links work
+- Sitemap works
+- Robots works
+- Canonicals exist
+- Schema validates structurally
+- No broken images
+- No old brand names
+- No thin content pages
+
+Test security:
+- Unauthorized user cannot access protected routes
+- Staff cannot access restricted pages
+- Restaurant A cannot access Restaurant B data
+- Super admin pages require super admin
+- API keys not visible in browser/dev tools
+- Sensitive settings masked
+- File upload restrictions work
+- Forms validate and rate limit
+- AI credit deduction works server-side
+- Payment webhooks verify signature if implemented
+- Logout works
+- Direct API calls without auth fail
+
+Test performance:
+- Homepage loads fast
+- Feature pages load fast
+- Mobile layout works
+- No console errors
+- No large broken assets
+- No layout shift
+
+====================================================
+PART 9: FINAL DELIVERABLE
+====================================================
+
+After completing audit and fixes, provide a final report:
+
+SEO Report:
+1. Total pages audited
+2. Pages fixed
+3. Meta title/description fixes
+4. Schema added
+5. Sitemap/robots status
+6. Broken links fixed
+7. Thin content pages improved
+8. Performance improvements
+9. Remaining SEO recommendations
+
+Security Report:
+1. Critical issues found/fixed
+2. High issues found/fixed
+3. Auth/RBAC status
+4. Tenant isolation status
+5. API security status
+6. Secret handling status
+7. File upload security status
+8. Public form security status
+9. AI security status
+10. Payment security status
+11. Dependency security status
+12. Remaining security recommendations
+
+Acceptance criteria:
+- No exposed secrets
+- No broken public routes
+- No broken header/footer links
+- Private routes not indexed
+- Sitemap/robots correct
+- SEO metadata exists for all public pages
+- Role access works
+- Multi-tenant data isolation works
+- API validation added
+- File upload protections added
+- Security headers added where possible
+- AI/payment keys are masked/encrypted
+- Public forms are protected
+- Website remains fast and mobile responsive
+```
+
+This should be the **final audit prompt** before you use the platform for demos, ads, or investor presentation.
