@@ -118,9 +118,13 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   });
   const leadsCount = leadStats?.byStatus.find(s => s.status === "new")?.count ?? 0;
 
+  type ManualPaymentsResponse = { total?: number; payments?: unknown[] };
   const { data: pendingApprovals } = useQuery<{ count: number } | null>({
     queryKey: ["admin-pending-approvals-count"],
-    queryFn: () => apiFetch("/admin/manual-payments?status=pending&limit=1").then((r: any) => ({ count: r?.total ?? r?.payments?.length ?? 0 })).catch(() => null),
+    queryFn: () =>
+      apiFetch<ManualPaymentsResponse>("/admin/manual-payments?status=pending&limit=1")
+        .then((r) => ({ count: r?.total ?? r?.payments?.length ?? 0 }))
+        .catch(() => null),
     enabled: !!user?.isSuperAdmin,
     refetchInterval: 60_000,
   });
