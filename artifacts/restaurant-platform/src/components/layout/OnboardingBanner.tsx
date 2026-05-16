@@ -10,7 +10,7 @@ export function OnboardingBanner() {
   const { data } = useOnboardingState();
 
   if (!canSee) return null;
-  if (location.startsWith("/onboarding")) return null;
+  if (location.startsWith("/onboarding") || location.startsWith("/setup-wizard")) return null;
   if (!data || data.isOnboarded) return null;
 
   const completed = data.steps.filter(s => s.completed).length;
@@ -28,8 +28,8 @@ export function OnboardingBanner() {
           <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <Link href="/onboarding" className="flex items-center gap-1 font-medium text-primary hover:underline flex-shrink-0">
-        Resume setup <ArrowRight className="w-3.5 h-3.5" />
+      <Link href="/setup-wizard" className="flex items-center gap-1 font-medium text-primary hover:underline flex-shrink-0">
+        Resume AI setup <ArrowRight className="w-3.5 h-3.5" />
       </Link>
     </div>
   );

@@ -57,6 +57,13 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: state, isLoading } = useOnboardingState();
+  // New tenants are routed through the AI Setup Wizard. Only fall back to the
+  // legacy step-by-step onboarding for tenants who already started here.
+  useEffect(() => {
+    if (!state || state.isOnboarded) return;
+    const anyProgress = state.steps.some(s => s.completed || s.skipped);
+    if (!anyProgress) navigate("/setup-wizard", { replace: true });
+  }, [state, navigate]);
   const [activeIdx, setActiveIdx] = useState(0);
   const resumedRef = useRef(false);
   // Resume the wizard at the first incomplete (and not-skipped) step so

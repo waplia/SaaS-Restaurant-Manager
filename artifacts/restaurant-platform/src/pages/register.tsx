@@ -53,7 +53,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(form);
-      navigate("/onboarding");
+      navigate("/setup-wizard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {

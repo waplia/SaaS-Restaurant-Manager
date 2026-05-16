@@ -118,6 +118,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "ai_setup_wizard",
+    featureLabel: "AI Setup Wizard",
+    description: "Auto-generate menu categories, tax setup, payment defaults, QR menu style, and starter reports from the new-restaurant signup wizard.",
+    creditsPerUnit: "10",
+    minCharge: 10,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

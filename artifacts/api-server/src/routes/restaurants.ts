@@ -69,7 +69,7 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (!assertRestaurantAccess(req, existing.tenantId)) return void res.status(403).json({ error: "Access denied" });
 
-  const { name, description, phone, email, address, city, country, timezone, currency, taxRate, serviceCharge, logoUrl, coverImageUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron, acceptedPaymentMethods, enableVoiceOrdering } = req.body;
+  const { name, description, phone, email, address, city, country, timezone, currency, taxRate, serviceCharge, logoUrl, coverImageUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron, acceptedPaymentMethods, enableVoiceOrdering, googleReviewLink } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
@@ -92,6 +92,7 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (autoReorderEnabled !== undefined) updates.autoReorderEnabled = autoReorderEnabled;
   if (autoReorderCron !== undefined) updates.autoReorderCron = autoReorderCron;
   if (enableVoiceOrdering !== undefined) updates.enableVoiceOrdering = !!enableVoiceOrdering;
+  if (googleReviewLink !== undefined) updates.googleReviewLink = googleReviewLink === "" ? null : googleReviewLink;
   const [updated] = await db.update(restaurantsTable)
     .set(updates)
     .where(eq(restaurantsTable.id, Number(req.params.id)))

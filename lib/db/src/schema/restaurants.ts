@@ -30,6 +30,7 @@ export const restaurantsTable = pgTable("restaurants", {
   enableVoiceOrdering: boolean("enable_voice_ordering").notNull().default(false),
   acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
   whatsappMonthlyLimitOverride: integer("whatsapp_monthly_limit_override"),
+  googleReviewLink: text("google_review_link"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
