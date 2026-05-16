@@ -91,6 +91,7 @@ import portalRouter from "./portal";
 import barRouter from "./bar";
 import mysteryAuditsRouter from "./mystery-audits";
 import adminMetricsRouter from "./admin-metrics";
+import competitorTrackerRouter from "./competitor-tracker";
 
 const router: IRouter = Router();
 
@@ -201,5 +202,6 @@ router.use(cloudKitchenRouter);
 router.use(portalRouter);
 router.use(barRouter);
 router.use(mysteryAuditsRouter);
+router.use(competitorTrackerRouter);
 
 export default router;

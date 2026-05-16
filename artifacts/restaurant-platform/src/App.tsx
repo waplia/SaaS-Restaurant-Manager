@@ -135,6 +135,9 @@ import TiffinSubscriptionsPage from "@/pages/tiffin-subscriptions";
 import TiffinDeliveriesPage from "@/pages/tiffin-deliveries";
 import TiffinBillingPage from "@/pages/tiffin-billing";
 import TiffinCustomerHistoryPage from "@/pages/tiffin-customer-history";
+import CompetitorsPage from "@/pages/competitors";
+import CompetitorDetailPage from "@/pages/competitor-detail";
+import CompetitorComparisonPage from "@/pages/competitor-comparison";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -247,6 +250,9 @@ function Router() {
       <Route path="/menu/pricing-optimizer" component={() => <RoleProtectedRoute component={PricingOptimizerPage} allow={["owner", "manager"]} />} />
       <Route path="/menu/pricing-rules" component={() => <RoleProtectedRoute component={PricingRulesPage} allow={["owner", "manager"]} />} />
       <Route path="/growth" component={() => <RoleProtectedRoute component={GrowthEnginePage} allow={["owner", "manager"]} />} />
+      <Route path="/competitors" component={() => <RoleProtectedRoute component={CompetitorsPage} allow={["owner", "manager"]} />} />
+      <Route path="/competitors/comparison" component={() => <RoleProtectedRoute component={CompetitorComparisonPage} allow={["owner", "manager"]} />} />
+      <Route path="/competitors/:id" component={() => <RoleProtectedRoute component={CompetitorDetailPage} allow={["owner", "manager"]} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />
