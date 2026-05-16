@@ -1,6 +1,6 @@
 import {
   Terminal, QrCode, ShoppingBag, ChefHat, Utensils, Calendar, Bell, Truck,
-  BookOpen, Tag, TrendingUp, Eye, Boxes, ClipboardList, Users, Trash2,
+  BookOpen, Tag, TrendingUp, Eye, Boxes, Boxes as BoxesIcon, ClipboardList, Users, Trash2,
   ReceiptText, Repeat, UserCheck, Heart, Crown, Star, Megaphone, Ticket,
   UserPlus, ClipboardCheck, Briefcase, GraduationCap, Search, IndianRupee,
   Wallet, Banknote, FileText, BarChart3, ShieldCheck, Store, Cpu, Plug,
