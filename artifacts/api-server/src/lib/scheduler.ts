@@ -1,10 +1,9 @@
 import cron from "node-cron";
 import { db } from "./db";
 import { eq, and, gte, lte, lt, sum, count, desc, sql, notInArray, inArray } from "drizzle-orm";
-import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable, reservationsTable, customersTable, restaurantSettingsTable, documentsTable } from "../lib/db";
-import { sendWhatsApp, reservationEmail } from "./notifications";
+import { ordersTable, menuItemsTable, orderItemsTable, restaurantsTable, usersTable, tenantsTable, notificationsTable, paymentsTable, reservationsTable, customersTable, restaurantSettingsTable, documentsTable, eventBookingsTable, eventPaymentScheduleTable, subscriptionPlansTable as _plansTable, isFeatureEnabled } from "../lib/db";
+import { sendWhatsApp, reservationEmail, sendEmail, dailySummaryEmail } from "./notifications";
 import { pushToStaff } from "./pushNotify";
-import { sendEmail, dailySummaryEmail } from "./notifications";
 import { sendByTemplateKey } from "./emailSender";
 import { sendBroadcastWhatsApp } from "./whatsapp";
 import { logger } from "./logger";
@@ -444,7 +443,103 @@ export function startScheduler(): void {
     }
   });
 
-  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute");
+  registerCron("event-payment-reminders", "0 9 * * *", "Daily 09:00 IST sweep: marks overdue event milestones, emails/WhatsApps customers about due/overdue payments and tomorrow's events");
+  trackCron("event_payment_reminders", "0 9 * * *", async () => {
+    try {
+      const r = await runEventPaymentReminders();
+      logger.info({ ...r }, "[events] payment reminder sweep complete");
+    } catch (err) {
+      logger.error({ err }, "[events] payment reminder sweep failed");
+    }
+  });
+
+  logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute, event payment reminders at 09:00 IST");
+}
+
+async function runEventPaymentReminders(): Promise<{ overdueMarked: number; remindersSent: number; eventReminders: number }> {
+  const now = new Date();
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const dayAfter = new Date(tomorrowStart); dayAfter.setDate(dayAfter.getDate() + 1);
+  const sevenDaysOut = new Date(todayStart); sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+
+  // 1. Mark pending milestones whose dueDate is in the past as overdue.
+  const overdueRows = await db
+    .update(eventPaymentScheduleTable)
+    .set({ status: "overdue" })
+    .where(and(eq(eventPaymentScheduleTable.status, "pending"), lt(eventPaymentScheduleTable.dueDate, todayStart)))
+    .returning({ id: eventPaymentScheduleTable.id });
+
+  // 2. Send reminders for milestones due today, tomorrow, or already overdue
+  //    that haven't had a reminder sent in the last 24h.
+  const dueSoon = await db
+    .select()
+    .from(eventPaymentScheduleTable)
+    .where(
+      and(
+        sql`${eventPaymentScheduleTable.status} IN ('pending', 'overdue')`,
+        lt(eventPaymentScheduleTable.dueDate, sevenDaysOut),
+      ),
+    );
+
+  let remindersSent = 0;
+  for (const m of dueSoon) {
+    const recently = m.remindersSentAt && (now.getTime() - new Date(m.remindersSentAt).getTime() < 22 * 60 * 60 * 1000);
+    if (recently) continue;
+    const due = new Date(m.dueDate);
+    const isOverdue = m.status === "overdue" || due < todayStart;
+    const isDueToday = due >= todayStart && due < tomorrowStart;
+    const isDueTomorrow = due >= tomorrowStart && due < dayAfter;
+    if (!isOverdue && !isDueToday && !isDueTomorrow) continue;
+
+    const [booking] = await db.select().from(eventBookingsTable).where(eq(eventBookingsTable.id, m.bookingId));
+    if (!booking || booking.status === "cancelled") continue;
+
+    const dueLabel = isOverdue ? "is overdue" : isDueToday ? "is due today" : "is due tomorrow";
+    const subject = `Payment ${dueLabel}: ${booking.title}`;
+    const body = `Hi ${booking.customerName}, the ${m.label} payment of ₹${Number(m.amount).toFixed(2)} for "${booking.title}" on ${new Date(booking.eventDate).toLocaleDateString("en-IN")} ${dueLabel}. Please reach out if you have any questions.`;
+    const html = `<div style="font-family:sans-serif;max-width:480px"><h2 style="color:#f97316">Payment Reminder</h2><p>Hi <strong>${booking.customerName}</strong>,</p><p>This is a reminder that your <strong>${m.label}</strong> payment of <strong>₹${Number(m.amount).toFixed(2)}</strong> for <em>${booking.title}</em> on <strong>${new Date(booking.eventDate).toLocaleDateString("en-IN")}</strong> ${dueLabel}.</p><p>Booking #: ${booking.bookingNumber}</p><p style="color:#888;font-size:0.85em">Thank you!</p></div>`;
+
+    try {
+      if (booking.customerEmail) {
+        await sendEmail({ to: booking.customerEmail, subject, html, text: body });
+      }
+      if (booking.customerPhone) {
+        await sendWhatsApp({ to: booking.customerPhone, body });
+      }
+      await db.update(eventPaymentScheduleTable).set({ remindersSentAt: now }).where(eq(eventPaymentScheduleTable.id, m.id));
+      remindersSent++;
+    } catch (err) {
+      logger.warn({ err, milestoneId: m.id }, "[events] reminder send failed");
+    }
+  }
+
+  // 3. "Event tomorrow" notice for confirmed/in-progress bookings whose event is in the next 24h.
+  const upcoming = await db
+    .select()
+    .from(eventBookingsTable)
+    .where(
+      and(
+        gte(eventBookingsTable.eventDate, tomorrowStart),
+        lt(eventBookingsTable.eventDate, dayAfter),
+        sql`${eventBookingsTable.status} IN ('confirmed', 'in_progress')`,
+      ),
+    );
+
+  let eventReminders = 0;
+  for (const b of upcoming) {
+    const subject = `Reminder: ${b.title} is tomorrow`;
+    const body = `Hi ${b.customerName}, this is a friendly reminder that your ${b.type} "${b.title}" is scheduled for ${new Date(b.eventDate).toLocaleString("en-IN")} at ${b.venue ?? "our venue"}. We look forward to hosting you!`;
+    try {
+      if (b.customerEmail) await sendEmail({ to: b.customerEmail, subject, html: `<p>${body}</p>`, text: body });
+      if (b.customerPhone) await sendWhatsApp({ to: b.customerPhone, body });
+      eventReminders++;
+    } catch (err) {
+      logger.warn({ err, bookingId: b.id }, "[events] event reminder send failed");
+    }
+  }
+
+  return { overdueMarked: overdueRows.length, remindersSent, eventReminders };
 }
 
 async function runDocumentsExpirySweep(now: Date): Promise<void> {

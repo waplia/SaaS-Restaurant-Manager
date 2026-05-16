@@ -62,6 +62,7 @@ import DeliveryExecutivesPage from "@/pages/delivery-executives";
 import CodMonitoringPage from "@/pages/cod-monitoring";
 import WaiterRequestsPage from "@/pages/waiter-requests";
 import ReservationsPage from "@/pages/reservations";
+import EventsPage from "@/pages/events";
 import PublicBookingPage from "@/pages/public-booking";
 import PublicSitePage from "@/pages/public-site";
 import AiDashboardPage from "@/pages/ai-dashboard";
@@ -211,6 +212,7 @@ function Router() {
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />
+      <Route path="/events" component={() => <RoleProtectedRoute component={EventsPage} allow={["owner", "manager", "waiter", "kitchen"]} />} />
       <Route path="/ai" component={() => <RoleProtectedRoute component={AiDashboardPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/descriptions" component={() => <RoleProtectedRoute component={AiDescriptionsPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/images" component={() => <RoleProtectedRoute component={AiImagesPage} allow={["owner", "manager"]} />} />

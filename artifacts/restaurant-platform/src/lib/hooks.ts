@@ -19,6 +19,8 @@ import type {
   LoyaltyAccount, LoyaltyTransaction,
   Coupon, CreateCouponInput, UpdateCouponInput,
   CreateReservationInput, UpdateReservationInput, Reservation,
+  EventBooking, EventBookingDetail, EventQuotationData, CreateEventBookingInput,
+  EventBookingType, EventBookingStatus,
   AppNotification,
   WaiterRequest,
   ReportsData,
@@ -2176,7 +2178,6 @@ export function useDeleteExpense() {
 }
 
 
-// ===================== Cash Register =====================
 
 export function useCurrentCashRegister() {
   const RESTAURANT_ID = useRestaurantId();
@@ -2501,7 +2502,6 @@ export function useAggregateInventory() {
   });
 }
 
-// ===================== Payroll =====================
 
 export function usePayrollRuns() {
   const RESTAURANT_ID = useRestaurantId();
@@ -3035,7 +3035,6 @@ export function useBulkRetryAdminEmailLogs() {
   });
 }
 
-// ---------------------------------------------------------------------------
 // Devices & Hardware (Task 118)
 // ---------------------------------------------------------------------------
 
@@ -3160,9 +3159,10 @@ export function useUpdateDevice() {
       qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
       qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, vars.id] });
     },
+      qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, vars.id] });
+    },
   });
 }
-
 export function useDeleteDevice() {
   const qc = useQueryClient();
   const RESTAURANT_ID = useRestaurantId();
@@ -3218,7 +3218,6 @@ export function useDeviceHeartbeat() {
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/devices/${id}/heartbeat`, { status: "online" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
+    enabled: false,
   });
 }
-

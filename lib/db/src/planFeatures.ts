@@ -43,6 +43,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "online_ordering",       label: "Online ordering page",        description: "Public ordering page with checkout for pickup & delivery.", category: "core",       defaultValue: false },
   { key: "reservations",          label: "Table reservations",          description: "Accept and manage table bookings from the customer site.",  category: "operations", defaultValue: false },
   { key: "delivery_module",       label: "Delivery module",             description: "Assign drivers, track runs, manage delivery zones.",        category: "operations", defaultValue: false },
+  { key: "events_catering",       label: "Events, banquets & catering", description: "Manage event bookings, packages, payment schedules, staff assignments and quotations.", category: "operations", defaultValue: false },
   { key: "inventory_management",  label: "Inventory & stock",           description: "Track ingredient stock with low-stock alerts and recipes.", category: "operations", defaultValue: false },
   { key: "expense_tracking",      label: "Expense tracking",            description: "Record vendor bills, approvals, and expense reports.",       category: "operations", defaultValue: false },
   { key: "loyalty_program",       label: "Loyalty & rewards",           description: "Points, tiers, and rewards for repeat customers.",          category: "growth",     defaultValue: false },

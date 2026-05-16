@@ -5,7 +5,7 @@ import {
   Package, Users, UserCheck, BarChart3, Table2, Settings,
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
-  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText,
+  Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ const navConfig: NavEntry[] = [
   { kind: "link", href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
   { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
+  { kind: "link", href: "/events", label: "Events & Catering", icon: PartyPopper, roles: ["owner", "manager", "waiter", "kitchen"] },
   { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
   { kind: "link", href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { kind: "link", href: "/inventory", label: "Inventory", icon: Package },

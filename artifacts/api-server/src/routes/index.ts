@@ -70,6 +70,7 @@ import healthScoresRouter from "./health-scores";
 import tokensRouter from "./tokens";
 import sopTrainingRouter from "./sop-training";
 import complianceRouter from "./compliance";
+import eventsRouter from "./events";
 
 const router: IRouter = Router();
 
@@ -158,5 +159,6 @@ router.use(devicesRouter);
 router.use(healthScoresRouter);
 router.use(sopTrainingRouter);
 router.use(complianceRouter);
+router.use(eventsRouter);
 
 export default router;

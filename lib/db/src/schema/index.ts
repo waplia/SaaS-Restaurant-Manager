@@ -46,3 +46,4 @@ export * from "./health-scores";
 export * from "./tokens";
 export * from "./sop-training";
 export * from "./compliance";
+export * from "./events";

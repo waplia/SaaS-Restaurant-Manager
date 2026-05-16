@@ -1830,3 +1830,142 @@ export interface PayrollSummaryRow {
   netPay: string;
   paidAmount: string;
 }
+
+// ─────────────────────────── Events / Banquets / Catering ───────────────────────────
+
+export type EventBookingType = "event" | "banquet" | "catering";
+export type EventBookingStatus = "quote" | "confirmed" | "in_progress" | "completed" | "cancelled";
+
+export interface EventBooking {
+  id: number;
+  restaurantId: number;
+  bookingNumber: string;
+  type: EventBookingType;
+  title: string;
+  customerId: number | null;
+  customerName: string;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  eventDate: string;
+  durationMinutes: number;
+  venue: string | null;
+  guestCount: number;
+  packageDetails: string | null;
+  notes: string | null;
+  status: EventBookingStatus;
+  subtotal: string;
+  taxAmount: string;
+  discountAmount: string;
+  totalAmount: string;
+  invoicedAt: string | null;
+  invoiceOrderId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventBookingItem {
+  id: number;
+  bookingId: number;
+  kind: "package" | "addon" | "service";
+  name: string;
+  description: string | null;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+  createdAt: string;
+}
+
+export interface EventPaymentMilestone {
+  id: number;
+  bookingId: number;
+  label: string;
+  dueDate: string;
+  amount: string;
+  status: "pending" | "paid" | "overdue";
+  paidAt: string | null;
+  paymentId: number | null;
+  remindersSentAt: string | null;
+  createdAt: string;
+}
+
+export interface EventStaffAssignment {
+  id: number;
+  bookingId: number;
+  staffId: number | null;
+  staffName: string;
+  role: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface EventVendorRequirement {
+  id: number;
+  bookingId: number;
+  category: string;
+  vendorName: string;
+  contactInfo: string | null;
+  cost: string | null;
+  notes: string | null;
+  status: "pending" | "confirmed" | "cancelled";
+  createdAt: string;
+}
+
+export interface EventChecklistItem {
+  id: number;
+  bookingId: number;
+  label: string;
+  notes: string | null;
+  completedAt: string | null;
+  completedBy: number | null;
+  position: number;
+  createdAt: string;
+}
+
+export interface EventStatusHistoryEntry {
+  id: number;
+  bookingId: number;
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: number | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface EventBookingDetail {
+  booking: EventBooking;
+  items: EventBookingItem[];
+  schedule: EventPaymentMilestone[];
+  staff: EventStaffAssignment[];
+  vendors: EventVendorRequirement[];
+  checklist: EventChecklistItem[];
+  history: EventStatusHistoryEntry[];
+  advancePaid: string;
+}
+
+export interface EventQuotationData extends EventBookingDetail {
+  restaurant: {
+    name: string;
+    logoUrl: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+}
+
+export interface CreateEventBookingInput {
+  type: EventBookingType;
+  title: string;
+  customerId?: number | null;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  eventDate: string;
+  durationMinutes?: number;
+  venue?: string;
+  guestCount?: number;
+  packageDetails?: string;
+  notes?: string;
+  taxAmount?: string;
+  discountAmount?: string;
+}

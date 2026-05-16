@@ -352,3 +352,175 @@ export function printOrder(args: PrintOrderArgs): void {
   w.document.write(html);
   w.document.close();
 }
+
+// ─────────────────────────── Event quotation / invoice ───────────────────────────
+
+export interface EventQuotationLineItem {
+  kind: string;
+  name: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface EventQuotationMilestone {
+  label: string;
+  dueDate: string | Date;
+  amount: number;
+  status: string;
+}
+
+export interface EventQuotationArgs {
+  documentKind: "Quotation" | "Invoice";
+  bookingNumber: string;
+  type: string;
+  title: string;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  eventDate: string | Date;
+  durationMinutes: number;
+  venue?: string | null;
+  guestCount: number;
+  packageDetails?: string | null;
+  notes?: string | null;
+  items: EventQuotationLineItem[];
+  schedule: EventQuotationMilestone[];
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  advancePaid: number;
+  restaurant?: PrintRestaurant;
+}
+
+function buildEventQuotationHTML(args: EventQuotationArgs): string {
+  const e = escapeHtml;
+  const balanceDue = Math.max(0, args.totalAmount - args.advancePaid);
+  const itemsHtml = args.items.length
+    ? args.items
+        .map(
+          (i) => `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee">
+            <div style="font-weight:600">${e(i.name)} <span style="font-size:11px;color:#888">[${e(i.kind)}]</span></div>
+            ${i.description ? `<div style="font-size:12px;color:#666">${e(i.description)}</div>` : ""}
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${i.quantity}</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(i.unitPrice)}</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(i.lineTotal)}</td>
+        </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" style="padding:16px;text-align:center;color:#999">No line items</td></tr>`;
+
+  const scheduleHtml = args.schedule.length
+    ? `<div style="margin-top:24px">
+        <h3 style="margin:0 0 8px 0;font-size:14px">Payment Schedule</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:6px;text-align:left;border-bottom:1px solid #ddd">Milestone</th>
+            <th style="padding:6px;text-align:left;border-bottom:1px solid #ddd">Due</th>
+            <th style="padding:6px;text-align:right;border-bottom:1px solid #ddd">Amount</th>
+            <th style="padding:6px;text-align:center;border-bottom:1px solid #ddd">Status</th>
+          </tr></thead>
+          <tbody>${args.schedule
+            .map(
+              (m) => `<tr>
+              <td style="padding:6px;border-bottom:1px solid #eee">${e(m.label)}</td>
+              <td style="padding:6px;border-bottom:1px solid #eee">${formatDate(m.dueDate).split(",")[0]}</td>
+              <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${money(m.amount)}</td>
+              <td style="padding:6px;border-bottom:1px solid #eee;text-align:center;text-transform:capitalize">${e(m.status)}</td>
+            </tr>`,
+            )
+            .join("")}</tbody>
+        </table>
+      </div>`
+    : "";
+
+  return `<!doctype html><html><head>
+<meta charset="utf-8"/>
+<title>${e(args.documentKind)} ${e(args.bookingNumber)}</title>
+<style>
+  @media print { @page { size: A4; margin: 14mm; } }
+  body { font-family: -apple-system, system-ui, Segoe UI, sans-serif; color:#222; }
+  h1, h2, h3 { margin: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  .muted { color: #666; font-size: 12px; }
+</style>
+</head><body onload="window.print()">
+  <div style="max-width:760px;margin:0 auto">
+    <header style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #f97316;padding-bottom:12px;margin-bottom:18px">
+      <div>
+        ${args.restaurant?.logoUrl ? `<img src="${e(args.restaurant.logoUrl)}" alt="logo" style="max-height:48px;margin-bottom:6px" />` : ""}
+        <h2 style="font-size:18px">${e(args.restaurant?.name ?? "")}</h2>
+        ${args.restaurant?.address ? `<div class="muted">${e(args.restaurant.address)}</div>` : ""}
+        ${args.restaurant?.phone ? `<div class="muted">${e(args.restaurant.phone)}</div>` : ""}
+        ${args.restaurant?.gstin ? `<div class="muted">GSTIN: ${e(args.restaurant.gstin)}</div>` : ""}
+      </div>
+      <div style="text-align:right">
+        <h1 style="color:#f97316;font-size:22px;letter-spacing:0.5px">${e(args.documentKind.toUpperCase())}</h1>
+        <div class="muted">#${e(args.bookingNumber)}</div>
+        <div class="muted">${formatDate(new Date())}</div>
+      </div>
+    </header>
+
+    <section style="display:flex;gap:24px;margin-bottom:18px">
+      <div style="flex:1">
+        <div class="muted" style="margin-bottom:4px">Bill To</div>
+        <div style="font-weight:600">${e(args.customerName)}</div>
+        ${args.customerPhone ? `<div class="muted">${e(args.customerPhone)}</div>` : ""}
+        ${args.customerEmail ? `<div class="muted">${e(args.customerEmail)}</div>` : ""}
+      </div>
+      <div style="flex:1">
+        <div class="muted" style="margin-bottom:4px">Event</div>
+        <div style="font-weight:600">${e(args.title)} <span class="muted">(${e(args.type)})</span></div>
+        <div class="muted">${formatDate(args.eventDate)}</div>
+        <div class="muted">Duration: ${args.durationMinutes} min · Guests: ${args.guestCount}</div>
+        ${args.venue ? `<div class="muted">Venue: ${e(args.venue)}</div>` : ""}
+      </div>
+    </section>
+
+    ${args.packageDetails ? `<section style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:12px;margin-bottom:18px"><div class="muted" style="margin-bottom:4px">Package details</div><div>${e(args.packageDetails)}</div></section>` : ""}
+
+    <table style="font-size:13px">
+      <thead><tr style="background:#f9fafb">
+        <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd">Item</th>
+        <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;width:60px">Qty</th>
+        <th style="padding:8px;text-align:right;border-bottom:2px solid #ddd;width:90px">Unit</th>
+        <th style="padding:8px;text-align:right;border-bottom:2px solid #ddd;width:100px">Total</th>
+      </tr></thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <table style="width:300px;font-size:13px">
+        <tr><td style="padding:4px 0">Subtotal</td><td style="padding:4px 0;text-align:right">${money(args.subtotal)}</td></tr>
+        ${args.discountAmount ? `<tr><td style="padding:4px 0">Discount</td><td style="padding:4px 0;text-align:right">- ${money(args.discountAmount)}</td></tr>` : ""}
+        ${args.taxAmount ? `<tr><td style="padding:4px 0">Tax</td><td style="padding:4px 0;text-align:right">${money(args.taxAmount)}</td></tr>` : ""}
+        <tr style="font-weight:700;border-top:2px solid #222"><td style="padding:8px 0">Total</td><td style="padding:8px 0;text-align:right">${money(args.totalAmount)}</td></tr>
+        ${args.advancePaid ? `<tr><td style="padding:4px 0;color:#0a7d2c">Advance paid</td><td style="padding:4px 0;text-align:right;color:#0a7d2c">- ${money(args.advancePaid)}</td></tr>` : ""}
+        ${args.advancePaid ? `<tr style="font-weight:700;color:#b91c1c"><td style="padding:6px 0">Balance due</td><td style="padding:6px 0;text-align:right">${money(balanceDue)}</td></tr>` : ""}
+      </table>
+    </div>
+
+    ${scheduleHtml}
+
+    ${args.notes ? `<section style="margin-top:24px"><div class="muted" style="margin-bottom:4px">Notes</div><div>${e(args.notes)}</div></section>` : ""}
+
+    <footer style="margin-top:32px;padding-top:12px;border-top:1px solid #eee;color:#999;font-size:11px;text-align:center">
+      ${args.documentKind === "Quotation" ? "This quotation is valid for 14 days. Confirm with an advance to lock the date." : "Thank you for your business!"}
+    </footer>
+  </div>
+</body></html>`;
+}
+
+export function printEventQuotation(args: EventQuotationArgs): void {
+  const html = buildEventQuotationHTML(args);
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}

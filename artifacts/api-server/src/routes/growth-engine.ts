@@ -9,7 +9,6 @@ const router = Router();
 
 const CHANNELS = new Set(["whatsapp", "sms", "email", "push", "qr_banner"]);
 const STATUSES = new Set(["draft", "scheduled", "sent", "paused", "completed"]);
-
 // Legal status transitions. Backend is the source of truth — the UI also
 // hides illegal buttons but we must not trust it.
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
