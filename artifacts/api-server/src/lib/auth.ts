@@ -30,6 +30,16 @@ export interface JwtPayload {
    * server can invalidate every existing JWT for a user by bumping
    * `users.tokenVersion` (logout-everywhere / password change / force revoke). */
   tv?: number;
+  /** Per-device session id. Tokens carrying `sid` are checked against
+   * `user_sessions.revokedAt` in `authenticate` so owners can sign out
+   * one device without nuking every other login. Legacy tokens (issued
+   * before this feature shipped) lack `sid` and fall back to the
+   * tokenVersion check only. */
+  sid?: number;
+  /** Random per-session identifier embedded in the JWT and stored on
+   * the session row, so we can also detect cross-session token replay
+   * (a revoked-then-recreated session can't reuse an old token). */
+  jti?: string;
   type: "access" | "refresh";
   impersonated?: boolean;
 }

@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import { verifyToken, type JwtPayload } from "../lib/auth";
 import { db, usersTable } from "../lib/db";
+import { isSessionActive } from "../lib/sessions";
 
 declare global {
   namespace Express {
@@ -71,6 +72,18 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       res.status(401).json({ error: "Session has been revoked, please sign in again" });
       return;
     }
+    // Per-device revocation: tokens minted after the sessions feature
+    // shipped carry `sid` + `jti`. If the row's revokedAt is set (or the
+    // jti has been rotated past this token), reject just this device
+    // without affecting the user's other sessions. Impersonation tokens
+    // skip the check — they are minted ad-hoc without a session row.
+    if (typeof payload.sid === "number" && !payload.impersonated) {
+      const active = await isSessionActive(payload.sid, payload.jti);
+      if (!active) {
+        res.status(401).json({ error: "This device has been signed out" });
+        return;
+      }
+    }
     req.user = payload;
     next();
   } catch {
@@ -87,7 +100,13 @@ export async function optionalAuthenticate(req: Request, _res: Response, next: N
       if (payload.type === "access") {
         const current = await currentTokenVersion(payload.sub);
         if (current != null && typeof payload.tv === "number" && payload.tv === current) {
-          req.user = payload;
+          if (typeof payload.sid === "number" && !payload.impersonated) {
+            if (await isSessionActive(payload.sid, payload.jti)) {
+              req.user = payload;
+            }
+          } else {
+            req.user = payload;
+          }
         }
       }
     } catch {

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, tenantsTable, restaurantsTable, subscriptionPlansTable, branchesTable } from "../lib/db";
+import { db, usersTable, tenantsTable, restaurantsTable, subscriptionPlansTable, branchesTable, userSessionsTable } from "../lib/db";
+import { createSession, rotateSession, revokeSession, revokeAllSessions } from "../lib/sessions";
+import { and, desc, isNull } from "drizzle-orm";
 import {
   hashPassword,
   comparePassword,
@@ -134,6 +136,7 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
     isActive: true,
   }).returning();
 
+  const session = await createSession({ userId: user.id, req });
   const tokenPayload = {
     sub: user.id,
     email: user.email,
@@ -142,6 +145,8 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
     restaurantId: user.restaurantId,
     isSuperAdmin: user.isSuperAdmin,
     tv: user.tokenVersion,
+    sid: session.id,
+    jti: session.jti,
   };
 
   const accessToken = signAccessToken(tokenPayload);
@@ -230,6 +235,7 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: L
     restaurantId: user.restaurantId ?? null,
   });
 
+  const session = await createSession({ userId: user.id, req });
   const tokenPayload = {
     sub: user.id,
     email: user.email,
@@ -238,6 +244,8 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: L
     restaurantId: user.restaurantId,
     isSuperAdmin: user.isSuperAdmin,
     tv: user.tokenVersion,
+    sid: session.id,
+    jti: session.jti,
   };
 
   res.json({
@@ -279,6 +287,27 @@ router.post("/auth/refresh", refreshLimitByIp, validate({ body: RefreshTokenBody
       res.status(401).json({ error: "Session has been revoked, please sign in again" });
       return;
     }
+    // Per-device check: if the refresh token carries a session id, rotate
+    // it. rotateSession atomically requires (sid, jti, revokedAt IS NULL),
+    // so a stolen-and-replayed refresh token (or one for a revoked device)
+    // returns null and we reject the request.
+    let nextSid: number | undefined;
+    let nextJti: string | undefined;
+    if (typeof payload.sid === "number") {
+      const rotated = await rotateSession(payload.sid, payload.jti ?? "", req);
+      if (!rotated) {
+        res.status(401).json({ error: "This device has been signed out" });
+        return;
+      }
+      nextSid = rotated.id;
+      nextJti = rotated.jti;
+    } else {
+      // Legacy refresh token from before the sessions feature shipped.
+      // Mint a fresh session row so subsequent refreshes are tracked.
+      const created = await createSession({ userId: user.id, req });
+      nextSid = created.id;
+      nextJti = created.jti;
+    }
     const tokenPayload = {
       sub: user.id,
       email: user.email,
@@ -287,6 +316,8 @@ router.post("/auth/refresh", refreshLimitByIp, validate({ body: RefreshTokenBody
       restaurantId: user.restaurantId,
       isSuperAdmin: user.isSuperAdmin,
       tv: user.tokenVersion,
+      sid: nextSid,
+      jti: nextJti,
     };
     res.json({
       accessToken: signAccessToken(tokenPayload),
@@ -301,14 +332,61 @@ router.post("/auth/logout", authenticate, async (req, res) => {
   // Logout-everywhere: bump the user's tokenVersion so every existing
   // access/refresh token (on every device, every tab) is rejected by
   // `authenticate` on its next use. Drop the in-process cache entry so the
-  // next request doesn't serve a stale value.
+  // next request doesn't serve a stale value. Also mark every active
+  // session row revoked so the sessions list reflects reality.
   const userId = req.user!.sub;
   await db
     .update(usersTable)
     .set({ tokenVersion: sql`${usersTable.tokenVersion} + 1`, updatedAt: new Date() })
     .where(eq(usersTable.id, userId));
   invalidateTokenVersionCache(userId);
+  await revokeAllSessions(userId);
   await recordAuditLog({ req, module: "auth", action: "logout", entity: "auth" });
+  res.json({ success: true });
+});
+
+// List the caller's active sessions. Returns one row per non-revoked
+// `user_sessions` entry so the settings UI can render a "Your sessions"
+// list and mark the current device.
+router.get("/auth/sessions", authenticate, async (req, res) => {
+  const userId = req.user!.sub;
+  const callerSid = typeof req.user!.sid === "number" ? req.user!.sid : null;
+  const rows = await db
+    .select({
+      id: userSessionsTable.id,
+      deviceLabel: userSessionsTable.deviceLabel,
+      ip: userSessionsTable.ip,
+      userAgent: userSessionsTable.userAgent,
+      createdAt: userSessionsTable.createdAt,
+      lastUsedAt: userSessionsTable.lastUsedAt,
+    })
+    .from(userSessionsTable)
+    .where(and(eq(userSessionsTable.userId, userId), isNull(userSessionsTable.revokedAt)))
+    .orderBy(desc(userSessionsTable.lastUsedAt));
+  res.json({
+    sessions: rows.map(r => ({ ...r, isCurrent: callerSid != null && r.id === callerSid })),
+  });
+});
+
+// Revoke a single session ("Sign out this device"). Scoped to the caller's
+// own user id so one user cannot revoke another's session by id-guessing.
+router.delete("/auth/sessions/:id", authenticate, async (req, res) => {
+  const sid = Number(req.params.id);
+  if (!Number.isInteger(sid) || sid <= 0) {
+    res.status(400).json({ error: "Invalid session id" });
+    return;
+  }
+  const userId = req.user!.sub;
+  const ok = await revokeSession(sid, userId);
+  if (!ok) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  await recordAuditLog({
+    req, module: "auth", action: "session.revoke", entity: "auth",
+    entityId: sid,
+    newValue: { sessionId: sid, current: req.user!.sid === sid },
+  });
   res.json({ success: true });
 });
 

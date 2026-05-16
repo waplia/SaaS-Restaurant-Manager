@@ -33,6 +33,7 @@ import SettingsAccountPage from "@/pages/settings-account";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
+import SettingsSessionsPage from "@/pages/settings-sessions";
 import TokensPage from "@/pages/tokens";
 import TokensHistoryPage from "@/pages/tokens-history";
 import DisplayTokenPage from "@/pages/display-token";
@@ -341,6 +342,7 @@ function Router() {
       <Route path="/tokens" component={() => <RoleProtectedRoute component={TokensPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/display/token/:outletId" component={DisplayTokenPage} />
+      <Route path="/settings/sessions" component={() => <ProtectedRoute component={SettingsSessionsPage} />} />
       <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/accounting" component={() => <RoleProtectedRoute component={AccountingLandingPage} allow={["owner", "manager", "accountant"]} />} />
       <Route path="/settings/accounting/:target" component={() => <RoleProtectedRoute component={AccountingTargetPage} allow={["owner", "manager", "accountant"]} />} />

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, unique, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, unique, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
@@ -56,6 +56,29 @@ export const rolePermissionsTable = pgTable("role_permissions", {
   permissionId: integer("permission_id").notNull().references(() => permissionsTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [unique().on(t.roleId, t.permissionId)]);
+
+// Tracks every issued refresh-token / login session so owners can see their
+// active devices and revoke them individually. Each row is one device-login;
+// the `jti` is embedded in JWTs and re-checked in `authenticate` so flipping
+// `revokedAt` immediately kills only that device (unlike bumping
+// `users.tokenVersion`, which signs every device out everywhere).
+export const userSessionsTable = pgTable(
+  "user_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    jti: text("jti").notNull().unique(),
+    deviceLabel: text("device_label"),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => [index("user_sessions_user_idx").on(t.userId)],
+);
+
+export type UserSession = typeof userSessionsTable.$inferSelect;
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
