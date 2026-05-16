@@ -1,0 +1,1534 @@
+Copy-paste this full prompt:
+
+```text
+Perform a complete final premium frontend audit, content upgrade, design polish, routing fix, branding update, and SEO improvement for the KhanaLagao public website.
+
+Live site:
+https://d1edff1d-147b-4869-ad97-45fd98fcdc8a-00-2pc636wmq4nga.pike.replit.dev/
+
+Current problems:
+- Homepage design direction is good, but many inner pages still have less content.
+- Some feature pages are basic or empty.
+- Some pages may not have proper rich media/mockups/icons.
+- Some routes may exist but do not have enough content.
+- Header/menu should be clean and not overloaded.
+- Features dropdown should not show every feature in a huge menu.
+- Full feature directory should be on /features page.
+- Mega menu should open on hover on desktop.
+- Icons are too common/generic and need improvement.
+- Footer is bulky and legal pages should not be a separate big section.
+- Legal links should be in one horizontal bottom line.
+- About, Contact, Location, Footer, Legal pages should use Waplia Digital Solutions branding.
+- Phone number and Indian location should be correct.
+- Entire frontend should feel premium, consistent, investor-ready, and rich.
+
+Important:
+- Work only on public website/frontend/marketing pages.
+- Do not break restaurant admin, super admin, dashboard, login, POS, APIs, or backend features.
+- Do not remove routes.
+- Do not create blank pages.
+- Do not use lorem ipsum.
+- Do not use broken image URLs.
+- Keep all public routes functional.
+- Keep KhanaLagao branding everywhere as product brand.
+- Use Waplia Digital Solutions as company/owner brand where required.
+- Make the site look like a world-class SaaS website, not a basic template.
+
+====================================================
+BRAND DETAILS
+====================================================
+
+Product Name:
+KhanaLagao
+
+Product tagline:
+Restaurant OS for Modern Food Businesses
+
+Product positioning:
+Restaurant Operating System + Growth Cloud + Finance + Khana AI
+
+Company / Owner Brand:
+Waplia Digital Solutions
+
+Brand relationship:
+“KhanaLagao is a restaurant operating system by Waplia Digital Solutions.”
+
+Company location:
+Malviya Nagar, Jaipur, Rajasthan, India
+
+Phone:
++91 8306020200
+
+Phone link:
+tel:+918306020200
+
+WhatsApp link:
+https://wa.me/918306020200
+
+Use this line where suitable:
+“KhanaLagao is proudly built by Waplia Digital Solutions from Jaipur, India.”
+
+====================================================
+1. FIRST AUDIT THE WEBSITE
+====================================================
+
+First scan all public website routes and create a checklist:
+
+1. Pages with good design
+2. Pages with weak/basic content
+3. Pages with missing sections
+4. Pages with repeated/generic content
+5. Pages with broken links
+6. Pages with missing SEO metadata
+7. Pages with weak/generic icons
+8. Pages with missing mockups/media
+9. Footer issues
+10. Header/menu issues
+11. Mobile layout issues
+12. Pages that need more internal feature content
+13. Old/wrong branding issues
+14. Missing Waplia company information
+15. Legal/contact/about page issues
+
+Then fix everything.
+
+====================================================
+2. BRAND CONSISTENCY
+====================================================
+
+Use product brand:
+KhanaLagao
+
+Use company brand:
+Waplia Digital Solutions
+
+Do not use:
+- TableTrack
+- RestaurantOS generic brand
+- Fake company names
+- Fake addresses
+- Wrong phone numbers
+- Placeholder contact details
+
+Use:
+- KhanaLagao for product/platform
+- Khana AI for AI module
+- Waplia Digital Solutions for company/operator
+- Malviya Nagar, Jaipur, Rajasthan, India as location
+- +91 8306020200 as phone
+
+Update branding everywhere:
+- Header
+- Footer
+- Homepage
+- Feature pages
+- Solution pages
+- Pricing page
+- Khana AI pages
+- Blog/resources
+- About page
+- Contact page
+- Security page
+- Legal pages
+- Meta titles
+- Meta descriptions
+- Open Graph tags
+- Sitemap
+- Copyright
+- Form success messages
+- Schema/structured data
+
+Final required brand relationship:
+Product: KhanaLagao
+Company: Waplia Digital Solutions
+Location: Malviya Nagar, Jaipur, Rajasthan, India
+Phone: +91 8306020200
+
+====================================================
+3. COLOR THEME
+====================================================
+
+Keep and standardize this premium theme:
+
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Dark Navy: #0F172A
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+Border: #F1E7DC
+Success Green: #16A34A
+Warning Amber: #F59E0B
+Danger Red: #EF4444
+Info Blue: #2563EB
+AI Purple Accent: #7C3AED
+
+Use:
+- Website background: warm white / light background
+- Hero sections: warm light background with orange accents, or premium dark sections
+- Primary buttons: orange
+- Secondary buttons: white with dark text
+- Cards: white with soft shadow and subtle orange border
+- Headings: charcoal black
+- Body text: slate gray
+- Khana AI sections: orange + purple gradient accents
+- Status colors:
+  - Revenue/success: green
+  - Orders/POS: orange
+  - Kitchen/KOT: amber
+  - Inventory: blue
+  - Customers: purple
+  - Danger/low stock: red
+
+Gradient for AI/CTA:
+linear-gradient(135deg, #FF6B1A 0%, #F97316 45%, #7C3AED 100%)
+
+Dark premium section:
+linear-gradient(135deg, #0F172A 0%, #111827 55%, #2D1B69 100%)
+
+====================================================
+4. HEADER / MENU FINAL FIX
+====================================================
+
+Keep header clean and premium.
+
+Header top-level menu:
+- Platform
+- Features
+- Solutions
+- Khana AI
+- Resources
+- Company
+- Pricing
+
+Right side buttons:
+- Login
+- Book Demo
+- Start Free Trial
+
+Important:
+Do not show all 50 features inside one huge dropdown.
+Header should be a navigation overview.
+Full feature directory should be on /features page.
+
+Dropdown behavior:
+- Open on hover on desktop.
+- Also open on click for accessibility.
+- Close on mouse leave with small delay.
+- No flickering.
+- Press Escape to close.
+- Click outside to close.
+- Active menu item should highlight.
+- Current page route should highlight where possible.
+- Mobile menu should use accordion click behavior.
+- Desktop hover should not break mobile.
+- Menu should not go outside screen.
+- Use 2 to 4 columns maximum.
+- Do not overload the header.
+- All menu links must work.
+
+====================================================
+5. HEADER DROPDOWN STRUCTURE
+====================================================
+
+Platform dropdown:
+Show only main platform modules, not every small feature.
+
+- Platform Overview → /platform
+- POS Terminal → /features/pos-terminal
+- QR Menu → /features/qr-menu
+- Online Ordering → /features/online-ordering
+- Kitchen / KDS → /features/kitchen-display
+- Inventory → /features/inventory-management
+- Staff & Payroll → /features/staff-payroll
+- Finance & P&L → /features/finance
+- Growth Engine → /features/growth-engine
+- Khana AI → /khana-ai
+- Reports → /features/reports-analytics
+
+Footer of dropdown:
+View Complete Platform → /platform
+
+Features dropdown:
+Show only categories, not every feature.
+
+Categories:
+Sell
+- POS, Orders, Kitchen, Tables
+Link: /features#sell
+
+Menu
+- Menu, QR Menu, Combos, Pricing
+Link: /features#menu
+
+Inventory
+- Stock, Recipes, Vendors, Waste
+Link: /features#inventory
+
+Customers
+- CRM, Loyalty, Feedback, Reviews
+Link: /features#customers
+
+Growth
+- Campaigns, Coupons, Referrals
+Link: /features#growth
+
+Staff
+- Attendance, Payroll, Tasks
+Link: /features#staff
+
+Finance
+- Payments, Expenses, P&L
+Link: /features#finance
+
+Marketplace
+- Add-ons, Hardware, Integrations
+Link: /features#marketplace
+
+At bottom:
+View All Features → /features
+
+Solutions dropdown:
+- Restaurants → /solutions/restaurants
+- Cafes → /solutions/cafes
+- Cloud Kitchens → /solutions/cloud-kitchens
+- Bakeries → /solutions/bakeries
+- Bars & Pubs → /solutions/bars-pubs
+- Hotels → /solutions/hotels
+- Food Courts → /solutions/food-courts
+- Tiffin Services → /solutions/tiffin-services
+- Catering & Banquets → /solutions/catering-banquets
+- Franchise Chains → /solutions/franchise-chains
+- Corporate Canteens → /solutions/corporate-canteens
+
+At bottom:
+View All Solutions → /solutions
+
+Khana AI dropdown:
+- Khana AI Overview → /khana-ai
+- AI Menu Import → /khana-ai/menu-import
+- AI Review Booster → /khana-ai/review-booster
+- AI Campaigns → /khana-ai/campaigns
+- AI Sales Insights → /khana-ai/sales-insights
+- AI Forecasting → /khana-ai/forecasting
+- AI Chat Assistant → /khana-ai/chat-assistant
+- AI Credits → /khana-ai/credits
+
+At bottom:
+Explore Khana AI → /khana-ai
+
+Resources dropdown:
+- Blog → /blog
+- Help Center → /help
+- Guides → /guides
+- FAQs → /faq
+- Comparison → /compare
+- Case Studies → /case-studies
+
+At bottom:
+View Resources → /resources
+
+Company dropdown:
+- About → /about
+- Contact → /contact
+- Security → /security
+- Partner Program → /partners
+- Careers → /careers
+
+At bottom:
+Legal Pages → /privacy-policy
+
+Legal pages should mainly appear in footer, not as a large header menu.
+
+====================================================
+6. HEADER BRANDING
+====================================================
+
+Logo:
+- Orange rounded square/icon with “K”
+- Text: KhanaLagao
+- Modern SaaS style
+
+Replace all old branding:
+- TableTrack → KhanaLagao
+- Any wrong company → Waplia Digital Solutions where company is needed
+
+Header should appear on all public pages.
+
+====================================================
+7. FOOTER REDESIGN
+====================================================
+
+Redesign footer to be cleaner, premium, and not bulky.
+
+Do not keep Legal as a large separate section.
+Legal links should be one single horizontal line at the bottom.
+
+Footer structure:
+
+Top footer:
+Left:
+KhanaLagao logo
+Tagline:
+Restaurant OS for Modern Food Businesses
+
+Short description:
+“KhanaLagao is a complete restaurant operating system by Waplia Digital Solutions, helping food businesses manage POS, QR menu, kitchen, inventory, staff, finance, growth and Khana AI from one platform.”
+
+Right:
+Newsletter / demo CTA:
+“Get product updates and restaurant growth tips.”
+Email input
+Subscribe button
+
+Middle footer columns:
+
+1. Platform
+- POS Terminal
+- QR Menu
+- Kitchen / KDS
+- Inventory
+- Staff & Payroll
+- Finance
+- Reports
+
+2. Growth & AI
+- Growth Engine
+- Review Booster
+- Campaigns
+- Khana AI
+- AI Menu Import
+- AI Sales Insights
+- AI Credits
+
+3. Solutions
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering
+- Franchise Chains
+
+4. Resources
+- Blog
+- Help Center
+- Guides
+- Compare
+- Security
+- Partner Program
+- Contact
+
+Footer contact block:
+Company: Waplia Digital Solutions
+Location: Malviya Nagar, Jaipur, Rajasthan, India
+Phone: +91 8306020200
+WhatsApp: +91 8306020200
+
+Bottom footer:
+Legal links in one horizontal line:
+Privacy Policy | Terms & Conditions | Refund Policy | Cookie Policy | Data Processing Agreement | Acceptable Use Policy
+
+Copyright:
+© 2026 KhanaLagao by Waplia Digital Solutions. All rights reserved.
+
+Footer requirements:
+- Legal links should be small horizontal text in bottom bar.
+- Footer should not look too tall/heavy.
+- Footer should be responsive.
+- On mobile, footer columns can stack cleanly.
+- All footer links must work.
+- No duplicate links.
+- No broken legal links.
+
+====================================================
+8. ICON IMPROVEMENT
+====================================================
+
+Current icons look too common/generic. Replace or improve icons across the whole frontend.
+
+Icon style should be:
+- Custom-looking
+- Premium SaaS
+- Thin/rounded line icons or soft 3D-like icon cards
+- Orange accent
+- Consistent stroke width
+- Consistent size
+- Feature-specific
+- Not random
+- Not repeated everywhere
+
+Avoid:
+- Same icon repeated everywhere
+- Basic default-looking icons
+- Icons that do not match content
+- Overused generic symbols without meaning
+
+Create better icon mapping:
+
+POS Terminal:
+receipt + speed line + rupee
+
+Orders:
+order ticket + check mark
+
+Kitchen / KDS:
+chef board / flame + ticket
+
+Tables:
+table grid + status dot
+
+QR Menu:
+QR code + plate
+
+Online Ordering:
+phone + cart + food
+
+Inventory:
+box/warehouse + stock bars
+
+Recipes:
+recipe card + spoon
+
+Waste:
+recycle bin + food scrap
+
+Staff:
+team + badge
+
+Payroll:
+salary slip + rupee
+
+Attendance:
+clock + user check
+
+Customers:
+customer profile + heart
+
+Loyalty:
+reward badge + star
+
+Review Booster:
+review star + QR
+
+Growth Engine:
+upward graph + campaign megaphone
+
+Khana AI:
+sparkle + plate + neural dots
+
+Finance:
+wallet + graph
+
+P&L:
+profit chart + rupee
+
+Reports:
+dashboard analytics
+
+Marketplace:
+store + connected nodes
+
+Hardware:
+printer/device icon
+
+Integrations:
+plug + API nodes
+
+Super Admin:
+control panel + shield
+
+Use consistent icon style across:
+- Header mega menu
+- Feature cards
+- Solution cards
+- Footer
+- Page sections
+- CTA blocks
+
+If using lucide/react icons, customize them with:
+- colored icon containers
+- gradient backgrounds
+- feature-specific accent colors
+- consistent size and line width
+
+If possible, create reusable component:
+FeatureIcon({ type })
+
+====================================================
+9. HOME PAGE FINAL POLISH
+====================================================
+
+Keep the homepage design direction. It is good.
+
+Update hero content:
+
+Headline:
+Run Your Restaurant Smarter with KhanaLagao
+
+Subheadline:
+From the first order to the last rupee — manage billing, kitchen, tables, stock, staff, customers, finance, growth and Khana AI in one connected restaurant operating system.
+
+Hero badge:
+One platform. POS, KOT, Inventory, Finance, Growth & Khana AI.
+
+CTA buttons:
+- Book Free Demo
+- Explore Platform
+
+Trust line:
+Trusted by restaurants, cafes, cloud kitchens, hotels and food chains.
+
+Right-side dashboard mockup:
+Keep floating cards but update content:
+
+- Today Sales: ₹1,42,800
+- Live Orders: 37 active
+- Reviews: 4.7 • 312
+- Kitchen: 18 cooking
+- Wallet: ₹8,420
+- Stock Alert: Cheese low
+- Attendance: 14 / 16 in
+- Khana AI: Push Paneer Tikka tonight
+
+Make Khana AI card more visible using orange/purple accent.
+
+Below hero add trust/stat strip:
+10+ modules • 50+ reports • AI growth tools • Multi-outlet ready
+
+====================================================
+10. FULL FEATURE DIRECTORY PAGE
+====================================================
+
+The /features page should show the complete feature directory.
+
+This is where all features should be visible, not inside a huge header dropdown.
+
+The /features page should be rich and premium:
+- Hero section
+- Category tabs or sticky category filter
+- Feature cards
+- Icons
+- Short descriptions
+- Benefits
+- CTA
+- FAQ
+
+Sections and feature cards:
+
+Sell:
+- POS Terminal → /features/pos-terminal
+- Orders → /features/orders
+- Kitchen / KDS → /features/kitchen-display
+- Tables → /features/table-management
+- Reservations → /features/reservations
+- Waiter Requests → /features/waiter-requests
+- Delivery Management → /features/delivery-management
+
+Menu:
+- Menu Management → /features/menu-management
+- QR Menu → /features/qr-menu
+- Combos & Add-ons → /features/combos-addons
+- Dynamic Pricing → /features/dynamic-pricing
+- Competitor Tracker → /features/competitor-tracker
+
+Inventory:
+- Stock Management → /features/stock-management
+- Inventory Management → /features/inventory-management
+- Purchase Orders → /features/purchase-orders
+- Vendors → /features/vendor-management
+- Waste Management → /features/waste-management
+- Recipes → /features/recipe-management
+- Stock Transfers → /features/stock-transfers
+
+Customers:
+- CRM → /features/customer-crm
+- Feedback & Surveys → /features/feedback-surveys
+- Loyalty → /features/loyalty
+- Memberships → /features/memberships
+- Review Booster → /features/review-booster
+
+Growth:
+- Growth Engine → /features/growth-engine
+- Campaigns → /features/campaigns
+- Coupons → /features/coupons
+- Referrals → /features/referrals
+- Loyalty Analytics → /features/loyalty-analytics
+- Customer Segments → /features/customer-segments
+
+Khana AI:
+- AI Menu Import → /khana-ai/menu-import
+- AI Descriptions → /khana-ai/descriptions
+- AI Food Images → /khana-ai/food-images
+- AI Review Booster → /khana-ai/review-booster
+- AI Campaigns → /khana-ai/campaigns
+- AI Sales Insights → /khana-ai/sales-insights
+- AI Forecasting → /khana-ai/forecasting
+- AI Chat Assistant → /khana-ai/chat-assistant
+- AI Credits → /khana-ai/credits
+
+Staff:
+- Staff Directory → /features/staff-management
+- Attendance → /features/attendance
+- Payroll → /features/payroll
+- Staff Tasks → /features/staff-tasks
+- SOP & Training → /features/sop-training
+- Mystery Audits → /features/mystery-audits
+
+Finance:
+- Payments → /features/payments
+- Expenses → /features/expenses
+- Wallet → /features/wallet
+- Settlements → /features/settlements
+- P&L → /features/profit-loss
+- Invoices → /features/invoices
+
+Operations:
+- Events & Catering → /features/events-catering
+- Hotel Mode → /features/hotel-mode
+- Food Court → /features/food-court
+- Corporate Ordering → /features/corporate-ordering
+- Tiffin Management → /features/tiffin-management
+
+Marketplace:
+- Vendor Marketplace → /features/vendor-marketplace
+- Add-ons → /features/add-ons
+- Hardware → /features/hardware
+- Integrations → /features/integrations
+
+Insights:
+- Reports & Analytics → /features/reports-analytics
+- Super Admin SaaS → /features/super-admin
+
+Each card should:
+- Have custom icon
+- Have short description
+- Explain benefit
+- Link to dedicated page
+- Not be generic
+
+====================================================
+11. INNER PAGE CONTENT DEPTH
+====================================================
+
+Many inner pages need more content. Every feature page should have at least 8-10 rich sections, not just a hero and one block.
+
+Every feature page must include:
+
+1. Hero section
+- Feature-specific heading
+- Benefit-focused subtitle
+- CTA buttons
+- Relevant mockup/graphic
+
+2. Pain points
+- 4 to 6 problems restaurants face
+
+3. How KhanaLagao solves it
+- 4 to 6 solution cards
+
+4. Internal feature list
+- 8 to 12 internal feature cards
+
+5. Workflow section
+- 3 to 5 steps
+
+6. Product visual/mockup section
+- Dashboard card or mobile mockup or process graphic
+
+7. Benefits section
+- Speed
+- Control
+- Savings
+- Growth
+- Accuracy
+
+8. Use cases
+- Who should use this feature
+
+9. Related modules
+- Internal links to related pages
+
+10. FAQ
+- 5 to 8 questions
+
+11. CTA section
+- Book Demo
+- Start Free Trial
+
+No feature page should have low content.
+
+====================================================
+12. PAGE-SPECIFIC CONTENT REQUIREMENTS
+====================================================
+
+Improve these pages especially:
+
+/features/inventory-management
+Add:
+- Raw material stock
+- Recipe mapping
+- Auto stock deduction
+- Low stock alerts
+- Purchase orders
+- Vendor management
+- Wastage tracking
+- Stock transfers
+- Food cost
+- Inventory valuation
+- Expiry alerts
+- AI purchase suggestions
+- Charts/mockups
+- FAQ
+
+/features/pos-terminal
+Add:
+- Dine-in billing
+- Takeaway
+- Delivery
+- Split bill
+- Merge tables
+- Discounts
+- GST/tax
+- Multiple payments
+- Refund/void
+- KOT generation
+- Day closing
+- Cashier reports
+- POS mockup
+
+/features/kitchen-display
+Add:
+- KOT board
+- Station-wise kitchen
+- Preparing/ready status
+- Delay alerts
+- Chef screen
+- Item-level status
+- Cancellation reasons
+- Kitchen performance
+
+/features/qr-menu
+Add:
+- Table QR
+- Mobile digital menu
+- Add-ons/variants
+- Item availability
+- Customer ordering
+- Waiter approval
+- Payment options
+- Multilingual menu
+- Review QR
+- QR poster/download
+
+/features/review-booster
+Add clear simple flow:
+Customer scans QR → rating → tags → AI draft → copy → open Google review link.
+No Google API required.
+Add:
+- Review QR code
+- Feedback tags
+- AI review draft
+- Copy review
+- Google review link redirect
+- Negative feedback inbox
+- Analytics
+- Poster download
+
+/khana-ai
+Add premium AI storytelling:
+- AI Menu Import
+- AI Descriptions
+- AI Images
+- Review Booster
+- Campaigns
+- Sales Insights
+- Forecasting
+- AI Chat
+- AI Credits
+- Safety/approval flow
+
+/khana-ai/menu-import
+Add:
+- PDF menu upload
+- Image OCR
+- Website URL import
+- Excel/CSV import
+- Category detection
+- Price extraction
+- Preview table
+- Confidence score
+- Import history
+- Rollback
+
+/features/growth-engine
+Add:
+- Campaigns
+- Coupons
+- Referrals
+- Birthday offers
+- Win-back campaigns
+- Customer segments
+- WhatsApp/SMS/email
+- Campaign analytics
+
+/features/finance
+Add:
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+- Profit visibility
+- Payment mode reports
+
+/features/super-admin
+Add:
+- Restaurant management
+- Plans/subscriptions
+- AI provider settings
+- AI credits
+- Website CMS
+- Leads
+- Feature flags
+- Support
+- Reports
+- SaaS metrics
+
+/features/reports-analytics
+Add:
+- Sales report
+- Inventory report
+- Staff report
+- Finance report
+- Customer report
+- Campaign report
+- AI usage report
+- Export
+- Charts
+
+====================================================
+13. SOLUTION PAGES CONTENT DEPTH
+====================================================
+
+Every solution page should be rich and industry-specific.
+
+Each solution page must include:
+- Hero
+- Industry pain points
+- Recommended KhanaLagao modules
+- Example workflow
+- Benefits
+- Case-style scenario
+- Feature cards
+- FAQ
+- CTA
+
+Improve pages for:
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Bakeries
+- Bars & Pubs
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering & Banquets
+- Franchise Chains
+- Corporate Canteens
+- School/College Canteens
+
+Examples:
+
+Cloud Kitchens:
+- Online orders
+- Multi-brand kitchen
+- KOT routing
+- Packaging stock
+- Delivery management
+- Brand-wise reports
+- Food cost tracking
+
+Tiffin Services:
+- Meal subscriptions
+- Pause/skip meal
+- Delivery route
+- Monthly billing
+- Payment reminders
+- Customer plans
+
+Food Courts:
+- Multi-vendor billing
+- Token display
+- Vendor settlement
+- Commission report
+- Shared operations
+
+Catering:
+- Event booking
+- Per-plate quotation
+- Guest count
+- Menu packages
+- Advance payment
+- PDF quote
+
+Franchise Chains:
+- Multi-outlet dashboard
+- Central menu
+- Price control
+- Franchise compliance
+- Royalty reports
+- Outlet ranking
+
+====================================================
+14. PLATFORM PAGE MUST BE RICH
+====================================================
+
+The /platform page should explain the complete system.
+
+Sections:
+- Hero: “One operating system for restaurants”
+- Complete workflow:
+  Order → Kitchen → Inventory → Payment → Customer → Growth → Reports
+- Core modules:
+  POS, QR, KDS, Inventory, Staff, Finance
+- Growth modules:
+  Campaigns, loyalty, reviews, referrals
+- AI modules:
+  Menu import, review drafts, insights, forecasting
+- Multi-outlet readiness
+- Super Admin SaaS control
+- Why KhanaLagao is more than POS
+- CTA
+
+====================================================
+15. KHANA AI PAGES MUST BE PREMIUM
+====================================================
+
+Khana AI pages should have a separate AI-styled premium design.
+
+Use orange + purple gradient accents.
+
+Pages:
+- /khana-ai
+- /khana-ai/menu-import
+- /khana-ai/descriptions
+- /khana-ai/food-images
+- /khana-ai/review-booster
+- /khana-ai/campaigns
+- /khana-ai/sales-insights
+- /khana-ai/forecasting
+- /khana-ai/chat-assistant
+- /khana-ai/credits
+
+Each AI page must explain:
+- What it does
+- How it works
+- Credit usage
+- Approval/safety flow
+- Benefits
+- Examples
+- CTA
+
+====================================================
+16. ABOUT PAGE UPDATE
+====================================================
+
+Update the About page with Waplia branding.
+
+About page should say:
+- KhanaLagao is built by Waplia Digital Solutions.
+- Waplia Digital Solutions is a technology company focused on building modern SaaS, automation, business software, websites, mobile apps, and digital growth platforms.
+- KhanaLagao was created to help restaurants manage POS, QR menu, kitchen, inventory, staff, payroll, finance, growth, customer loyalty, reviews, and Khana AI from one connected platform.
+- The mission is to help restaurants become smarter, faster, more profitable, and independent from multiple disconnected tools.
+
+About page sections:
+- About KhanaLagao
+- Built by Waplia Digital Solutions
+- Our Mission
+- Why We Built KhanaLagao
+- Problems We Solve for Restaurants
+- Our Vision
+- Our Values:
+  - Simplicity
+  - Speed
+  - Trust
+  - Innovation
+  - Growth
+  - Customer Success
+- Contact CTA
+
+Use this line:
+“KhanaLagao is proudly built by Waplia Digital Solutions from Jaipur, India.”
+
+====================================================
+17. CONTACT PAGE UPDATE
+====================================================
+
+Update Contact page with correct company details.
+
+Contact details:
+Company:
+Waplia Digital Solutions
+
+Product:
+KhanaLagao
+
+Phone:
++91 8306020200
+
+Location:
+Malviya Nagar, Jaipur, Rajasthan, India
+
+Contact page sections:
+- Contact Sales
+- Book Demo
+- Support Inquiry
+- Partnership Inquiry
+- Office Location
+- WhatsApp/Call CTA
+
+Use phone link:
+tel:+918306020200
+
+Use WhatsApp link:
+https://wa.me/918306020200
+
+Location display:
+Malviya Nagar, Jaipur, Rajasthan, India
+
+Add map placeholder section:
+“Visit / Reach Us”
+Location: Malviya Nagar, Jaipur, Rajasthan, India
+
+Do not show fake international address.
+
+====================================================
+18. SECURITY PAGE UPDATE
+====================================================
+
+Security page should mention:
+“KhanaLagao by Waplia Digital Solutions follows secure SaaS practices including role-based access, audit logs, protected settings, encrypted API keys, secure authentication, and permission-controlled restaurant data access.”
+
+Include sections:
+- Role-based access
+- Audit logs
+- Secure login
+- Encrypted sensitive settings
+- API key protection
+- Restaurant data separation
+- Staff permission control
+- Backup/security practices
+- Contact/security inquiry CTA
+
+====================================================
+19. PARTNER PAGE UPDATE
+====================================================
+
+Partner page should say:
+“Partner with Waplia Digital Solutions to bring KhanaLagao to restaurants, cafes, cloud kitchens, hotels, food courts and franchise chains.”
+
+Partner types:
+- Reseller partner
+- Implementation partner
+- Hardware partner
+- Vendor partner
+- Agency partner
+- Franchise consultant
+
+Partner contact CTA:
+Call/WhatsApp: +91 8306020200
+
+====================================================
+20. LEGAL PAGES POLISH + WAPLIA DETAILS
+====================================================
+
+Create/polish legal pages:
+
+- /privacy-policy
+- /terms
+- /refund-policy
+- /cookie-policy
+- /data-processing-agreement
+- /acceptable-use-policy
+
+Legal pages should use:
+
+Legal entity/company name:
+Waplia Digital Solutions
+
+Product/platform name:
+KhanaLagao
+
+Contact phone:
++91 8306020200
+
+Location:
+Malviya Nagar, Jaipur, Rajasthan, India
+
+Use wording like:
+“This policy applies to KhanaLagao, a restaurant operating system operated by Waplia Digital Solutions.”
+
+Each legal page:
+- Header
+- Footer
+- Clean legal layout
+- Hero/simple title
+- Last updated date
+- Table of contents
+- Professional sections
+- Contact information
+- SEO metadata
+
+Privacy Policy sections:
+- Introduction
+- Information we collect
+- How we use information
+- Restaurant/customer data
+- Payment data
+- AI feature data
+- Cookies
+- Data sharing
+- Data security
+- Data retention
+- User rights
+- Contact
+
+Terms & Conditions sections:
+- Acceptance of terms
+- Use of platform
+- Restaurant responsibilities
+- Subscription and billing
+- AI feature usage
+- Prohibited use
+- Account security
+- Intellectual property
+- Limitation of liability
+- Termination
+- Changes to terms
+- Contact
+
+Refund Policy sections:
+- Subscription refunds
+- Setup fee refunds
+- AI credit refunds
+- Cancellation
+- Billing disputes
+- Contact
+
+Cookie Policy sections:
+- What cookies are
+- Types of cookies
+- Analytics cookies
+- Preference cookies
+- How to manage cookies
+- Contact
+
+Data Processing Agreement sections:
+- Data controller/processor
+- Processing purpose
+- Security measures
+- Subprocessors
+- Data retention
+- Deletion request
+- Contact
+
+Acceptable Use Policy sections:
+- Prohibited content
+- Spam
+- Abuse
+- Unauthorized access
+- AI misuse
+- Review misuse
+- Suspension rights
+
+Make legal pages look professional, not plain unstyled text.
+
+====================================================
+21. MEDIA / MOCKUP IMPROVEMENT
+====================================================
+
+Add better visual sections.
+
+Use reusable visual mockups:
+- POS terminal screen
+- QR menu phone screen
+- Kitchen KDS board
+- Inventory dashboard
+- Payroll dashboard
+- Growth campaign dashboard
+- Khana AI chat window
+- Review QR mobile flow
+- Finance P&L chart
+- Reports dashboard
+- Super Admin SaaS control panel
+
+Do not use broken image URLs.
+
+If real screenshots are not available, create CSS/HTML mockup cards:
+- Browser frame
+- Mobile frame
+- Dashboard cards
+- Charts
+- Status badges
+- Floating metrics
+
+These visuals should appear on feature pages, not just homepage.
+
+====================================================
+22. BLOG / RESOURCE CONTENT IMPROVEMENT
+====================================================
+
+Blog/resources should not be empty.
+
+Add sample SEO-ready blog cards with realistic titles:
+- Best Restaurant POS Software for Indian Restaurants
+- How QR Menu Ordering Helps Restaurants Increase Sales
+- How to Control Food Cost with Inventory Software
+- How AI Can Help Restaurants Grow Faster
+- Cloud Kitchen Management Software Guide
+- Tiffin Business Management Software Guide
+- Restaurant P&L Guide for Owners
+- How to Get More Google Reviews for Your Restaurant
+- Restaurant Loyalty Program Guide
+- Franchise Restaurant Management Guide
+
+Blog detail template should include:
+- Featured image/mockup
+- Table of contents
+- Article sections
+- FAQ
+- Related posts
+- CTA box
+
+====================================================
+23. CTA IMPROVEMENTS
+====================================================
+
+Add better CTAs across pages.
+
+Primary CTA:
+Book Free Demo
+
+Secondary CTA:
+Start Free Trial
+
+Other CTAs:
+- Explore Platform
+- View All Features
+- See Khana AI
+- Compare Plans
+- Contact Sales
+
+Every page should have:
+- CTA in hero
+- CTA in middle if page is long
+- Final CTA at bottom
+
+All CTAs should route correctly.
+
+CTA routes:
+Book Demo → /book-demo
+Start Free Trial → /start-free-trial
+Explore Platform → /platform
+Login → /login
+Pricing → /pricing
+Contact Sales → /contact
+Khana AI → /khana-ai
+Review Booster → /features/review-booster
+
+====================================================
+24. FORMS / LEAD IMPROVEMENT
+====================================================
+
+Forms:
+- Book demo
+- Contact
+- Partner
+- Newsletter
+- Start free trial
+
+Every form should:
+- Validate input
+- Show loading state
+- Show success/error
+- Save lead if backend exists
+- Include source_page
+- Redirect to /thank-you when suitable
+
+Contact/partner/demo forms should use Waplia contact details where needed.
+
+====================================================
+25. SEO IMPROVEMENT
+====================================================
+
+Every public page should have:
+- Unique meta title
+- Unique meta description
+- H1
+- Proper H2/H3
+- Canonical URL
+- Open Graph tags
+- Breadcrumbs
+- FAQ schema where FAQs exist
+- Image alt tags
+- Internal links
+
+Update:
+- sitemap.xml
+- robots.txt
+- 404
+- thank-you page
+
+SEO examples:
+Home meta title:
+“KhanaLagao — Restaurant OS by Waplia Digital Solutions”
+
+About meta title:
+“About KhanaLagao | Built by Waplia Digital Solutions”
+
+Contact meta title:
+“Contact KhanaLagao | Waplia Digital Solutions”
+
+Footer schema / organization schema:
+Name: Waplia Digital Solutions
+Product: KhanaLagao
+Location: Malviya Nagar, Jaipur, Rajasthan, India
+Phone: +91 8306020200
+
+Keyword focus:
+- Restaurant management software
+- Restaurant POS software
+- Restaurant billing software
+- QR menu software
+- Restaurant inventory software
+- Restaurant payroll software
+- Restaurant CRM software
+- Restaurant loyalty software
+- Restaurant AI software
+- AI restaurant management software
+- Restaurant growth software
+- Cloud kitchen software
+- Tiffin management software
+- Catering management software
+- Food court management software
+- Restaurant franchise software
+- Restaurant P&L software
+- Restaurant review management software
+
+====================================================
+26. RESPONSIVE / MOBILE IMPROVEMENT
+====================================================
+
+Test and fix:
+- Mobile header
+- Mobile menu
+- Hero responsiveness
+- Feature cards
+- Mockups
+- Footer columns
+- Footer legal horizontal links wrapping cleanly
+- Forms
+- Pricing cards
+- FAQ accordions
+- Legal pages
+
+No horizontal scroll.
+No text overlap.
+No oversized mega menu on mobile.
+
+====================================================
+27. REMOVE GENERIC / LOW-QUALITY ELEMENTS
+====================================================
+
+Remove or improve:
+- Generic icons
+- Repeated icons
+- Thin content pages
+- Repeated generic paragraphs
+- Plain legal pages
+- Overloaded header dropdowns
+- Bulky footer legal section
+- Broken route links
+- Empty pages
+- Old brand names
+- Placeholder lorem ipsum
+- Broken images
+- Random animations
+- Overlarge white spaces
+- Fake company/address/phone details
+
+====================================================
+28. FINAL TESTING
+====================================================
+
+Test:
+- Every header link
+- Every dropdown link
+- Every footer link
+- Every feature page
+- Every solution page
+- Every Khana AI page
+- Every legal page
+- Book demo form
+- Contact form
+- Partner form
+- Mobile menu
+- Desktop hover menu
+- SEO metadata
+- Sitemap
+- 404 page
+- No console errors
+- No broken images
+- No old TableTrack branding
+- Correct Waplia details
+- Correct phone number
+- Correct Jaipur location
+
+====================================================
+29. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+The frontend is complete only if:
+
+- Every header link works.
+- Every footer link works.
+- Header is clean, not overloaded.
+- Features dropdown is category-based, not a huge list.
+- Mega menu opens on hover desktop and click mobile.
+- Footer legal links are in one horizontal bottom line.
+- Icons are upgraded and consistent.
+- Every feature page has rich content and media.
+- Every solution page has rich content and media.
+- Khana AI pages look premium.
+- About page clearly says KhanaLagao is built by Waplia Digital Solutions.
+- Contact page shows +91 8306020200 and Malviya Nagar, Jaipur, Rajasthan, India.
+- Footer shows Waplia Digital Solutions details.
+- Legal pages use Waplia Digital Solutions as company/operator.
+- Blog/resources are not empty.
+- No old branding remains.
+- No fake company/contact/location remains.
+- No page is basic.
+- No broken images.
+- No broken routes.
+- No console errors.
+- Mobile responsive.
+- SEO metadata exists.
+- Website feels premium enough for restaurant clients and investors.
+
+After implementation, provide a report:
+1. Pages improved
+2. Pages created
+3. Header changes
+4. Footer changes
+5. Icon changes
+6. Branding/company details updated
+7. SEO fixes
+8. Broken links fixed
+9. Remaining issues if any
+
+Strict rule:
+Do not mark the frontend complete until every public page has at least a premium hero, rich content, visual/mockup section, FAQ, CTA, SEO metadata, and working header/footer.
+```
