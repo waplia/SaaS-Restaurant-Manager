@@ -226,7 +226,10 @@ function PricingCard({
           <span className="text-4xl font-bold">{price}</span>
           {period && <span className="text-muted-foreground">{period}</span>}
         </div>
-        <p className="text-sm text-muted-foreground">{desc}</p>
+        <p className="text-sm text-muted-foreground mb-5">{desc}</p>
+        <a href={href} className="w-full block">
+          <Button className="w-full" variant={variant} size="lg" data-testid={`btn-plan-top-${title.toLowerCase().replace(/\s+/g, "-")}`}>{btnText}</Button>
+        </a>
       </div>
 
       <div className="flex-grow space-y-3 mb-8">
