@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, Coins, TrendingUp, X, Save, AlertTriangle, Clock, Users, Truck, Boxes, ArrowRight } from "lucide-react";
+import { Sparkles, Loader2, Coins, TrendingUp, X, Save, AlertTriangle, Clock, Users, Truck, Boxes, ArrowRight, CalendarClock, Target } from "lucide-react";
 import { apiGet, apiPost, apiPatch } from "@/lib/api";
 import { useRestaurantId } from "@/lib/hooks";
 import { useAiWallet } from "@/lib/aiHooks";
@@ -53,6 +53,22 @@ interface ForecastRow {
   notes: string | null;
 }
 
+interface ForecastRecap {
+  forecastId: number;
+  forecastDate: string;
+  generatedAt: string;
+  predicted: { units: number; revenue: number };
+  actual: { units: number; revenue: number };
+  unitAccuracyPct: number;
+  revenueAccuracyPct: number;
+  topItemAccuracyPct: number;
+  predictedTopItems: Array<{ menuItemId: number; name: string; units: number }>;
+  actualTopItems: Array<{ menuItemId: number; name: string; units: number }>;
+  predictedPeakHours: number[];
+  actualPeakHours: number[];
+  peakHourHitRatePct: number;
+}
+
 const CONF_COLOR: Record<string, string> = {
   high: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
   medium: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
@@ -81,8 +97,24 @@ export default function AiForecastPage() {
     enabled: !!restaurantId,
   });
 
+  const tomorrow = useQuery<{ forecast: ForecastRow | null }>({
+    queryKey: ["ai-forecasts", restaurantId, "tomorrow"],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/ai-ops/forecast/tomorrow`),
+    enabled: !!restaurantId,
+  });
+
+  const recap = useQuery<{ recap: ForecastRecap | null }>({
+    queryKey: ["ai-forecasts", restaurantId, "recap"],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/ai-ops/forecast/recap`),
+    enabled: !!restaurantId,
+  });
+
+  const runForecast = (horizonDays: number, label: string) =>
+    apiPost<{ forecast: ForecastRow }>(`/restaurants/${restaurantId}/ai-ops/forecast/run`, { horizonDays })
+      .then((r) => { void label; return r; });
+
   const generate = useMutation({
-    mutationFn: () => apiPost<{ forecast: ForecastRow }>(`/restaurants/${restaurantId}/ai-ops/forecast/run`, { horizonDays: horizon }),
+    mutationFn: () => runForecast(horizon, `next ${horizon} days`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ai-forecasts", restaurantId] });
       qc.invalidateQueries({ queryKey: ["ai-wallet"] });
@@ -90,6 +122,18 @@ export default function AiForecastPage() {
     },
     onError: (e: unknown) => {
       toast({ title: (e as { message?: string })?.message ?? "Failed to generate", variant: "destructive" });
+    },
+  });
+
+  const runTomorrow = useMutation({
+    mutationFn: () => runForecast(1, "tomorrow"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-forecasts", restaurantId] });
+      qc.invalidateQueries({ queryKey: ["ai-wallet"] });
+      toast({ title: "Tomorrow's forecast is ready" });
+    },
+    onError: (e: unknown) => {
+      toast({ title: (e as { message?: string })?.message ?? "Failed to forecast tomorrow", variant: "destructive" });
     },
   });
 
@@ -157,6 +201,154 @@ export default function AiForecastPage() {
                 <p className="text-sm text-muted-foreground">You need {COST} credits to run a forecast.</p>
               </div>
               <Link href="/ai/usage"><Button size="sm">Recharge</Button></Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ──────────── Tomorrow hero ──────────── */}
+        <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/30 dark:to-background">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-violet-600" />
+                  Tomorrow's outlook
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Auto-generated nightly at 02:00 in your restaurant's timezone — or run it on demand.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => runTomorrow.mutate()}
+                disabled={!planEnabled || insufficient || runTomorrow.isPending}
+                className="gap-1.5"
+              >
+                {runTomorrow.isPending
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Sparkles className="w-3.5 h-3.5" />}
+                Run for tomorrow ({COST} cr)
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {tomorrow.isLoading ? (
+              <Skeleton className="h-24" />
+            ) : tomorrow.data?.forecast ? (
+              (() => {
+                const fc = tomorrow.data.forecast;
+                const p = fc.payload;
+                const peakLabel = (p.peakHours ?? [])
+                  .filter((h) => h.intensity === "peak" || h.intensity === "busy")
+                  .slice(0, 3)
+                  .map((h) => `${String(h.hour).padStart(2, "0")}:00`)
+                  .join(", ") || "—";
+                const dineMix = p.deliveryDemand?.deliveryShare ?? 0;
+                return (
+                  <div className="space-y-3">
+                    {p.summary && <p className="text-sm italic text-muted-foreground">{p.summary}</p>}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="border border-border rounded-lg p-3 bg-background">
+                        <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Expected units</p>
+                        <p className="text-2xl font-bold">{p.totalForecastUnits.toLocaleString()}</p>
+                      </div>
+                      <div className="border border-border rounded-lg p-3 bg-background">
+                        <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Expected revenue</p>
+                        <p className="text-2xl font-bold">₹{p.estimatedRevenue.toLocaleString()}</p>
+                      </div>
+                      <div className="border border-border rounded-lg p-3 bg-background">
+                        <p className="text-[10px] uppercase text-muted-foreground tracking-wide flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Busy hours
+                        </p>
+                        <p className="text-sm font-semibold mt-1">{peakLabel}</p>
+                      </div>
+                      <div className="border border-border rounded-lg p-3 bg-background">
+                        <p className="text-[10px] uppercase text-muted-foreground tracking-wide flex items-center gap-1">
+                          <Truck className="w-3 h-3" /> Delivery share
+                        </p>
+                        <p className="text-2xl font-bold">{dineMix}%</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Generated {format(new Date(fc.generatedAt), "PP p")}
+                      {fc.notes ? ` · ${fc.notes}` : ""}
+                    </p>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="text-center py-6 space-y-2">
+                <CalendarClock className="w-8 h-8 mx-auto text-muted-foreground" />
+                <p className="text-sm font-medium">No tomorrow forecast yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Run one now or wait — we'll auto-generate it tonight at 02:00 in your timezone.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ──────────── Forecast vs Actuals recap ──────────── */}
+        {!recap.isLoading && recap.data?.recap && (
+          <Card className="border-emerald-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-4 h-4 text-emerald-600" />
+                How yesterday's forecast did
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Comparing the {recap.data.recap.forecastDate} forecast (generated {format(new Date(recap.data.recap.generatedAt), "PP p")}) against the day's actuals.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Units</p>
+                  <p className="text-sm">
+                    <span className="font-bold">{recap.data.recap.actual.units.toLocaleString()}</span>
+                    <span className="text-muted-foreground"> / {recap.data.recap.predicted.units.toLocaleString()}</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{recap.data.recap.unitAccuracyPct}% accurate</p>
+                </div>
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Revenue</p>
+                  <p className="text-sm">
+                    <span className="font-bold">₹{recap.data.recap.actual.revenue.toLocaleString()}</span>
+                    <span className="text-muted-foreground"> / ₹{recap.data.recap.predicted.revenue.toLocaleString()}</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{recap.data.recap.revenueAccuracyPct}% accurate</p>
+                </div>
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Top items hit-rate</p>
+                  <p className="text-2xl font-bold">{recap.data.recap.topItemAccuracyPct}%</p>
+                  <p className="text-[10px] text-muted-foreground">of predicted top 5 actually sold most</p>
+                </div>
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Peak hours hit-rate</p>
+                  <p className="text-2xl font-bold">{recap.data.recap.peakHourHitRatePct}%</p>
+                  <p className="text-[10px] text-muted-foreground">of busy hours predicted correctly</p>
+                </div>
+              </div>
+              {(recap.data.recap.predictedTopItems.length > 0 || recap.data.recap.actualTopItems.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="border border-border rounded-lg p-3">
+                    <p className="text-[10px] uppercase text-muted-foreground tracking-wide mb-1.5">Predicted top sellers</p>
+                    {recap.data.recap.predictedTopItems.length === 0
+                      ? <p className="text-muted-foreground">—</p>
+                      : recap.data.recap.predictedTopItems.map((it) => (
+                          <p key={it.menuItemId} className="flex justify-between"><span>{it.name}</span><span className="text-muted-foreground">{it.units}</span></p>
+                        ))}
+                  </div>
+                  <div className="border border-border rounded-lg p-3">
+                    <p className="text-[10px] uppercase text-muted-foreground tracking-wide mb-1.5">Actual top sellers</p>
+                    {recap.data.recap.actualTopItems.length === 0
+                      ? <p className="text-muted-foreground">—</p>
+                      : recap.data.recap.actualTopItems.map((it) => (
+                          <p key={it.menuItemId} className="flex justify-between"><span>{it.name}</span><span className="text-muted-foreground">{it.units}</span></p>
+                        ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

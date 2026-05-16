@@ -42,6 +42,14 @@ import {
   type AiCreditReservation,
 } from "../lib/aiCredits";
 import { recordAuditLog } from "../lib/audit";
+import {
+  runDemandForecast,
+  computeForecastActuals,
+  tomorrowDateInTz,
+  ForecastError,
+  type ForecastPayload as DemandForecastPayload,
+} from "../lib/demandForecast";
+import { restaurantsTable } from "../lib/db";
 
 const router = Router();
 
@@ -390,34 +398,11 @@ router.post("/restaurants/:restaurantId/ai-ops/inventory/suggestions/:id/draft-p
 });
 
 // ────────────────────────── Demand Forecasting ──────────────────────────
-
-interface ForecastItemRow {
-  menuItemId: number;
-  name: string;
-  categoryName: string | null;
-  forecastUnits: number;
-  confidence: "low" | "medium" | "high";
-  rationale: string;
-}
-
-interface PeakHourRow { hour: number; expectedOrders: number; intensity: "quiet" | "normal" | "busy" | "peak" }
-interface ShiftStaffRow { shift: string; window: string; recommendedHeadcount: number; currentlyScheduled: number; rationale: string }
-interface RawMaterialRow { inventoryItemId: number | null; name: string; unit: string; requiredQuantity: number; currentStock: number; shortfall: number }
-
-interface ForecastPayload {
-  summary: string;
-  horizonDays: number;
-  totalForecastUnits: number;
-  estimatedRevenue: number;
-  items: ForecastItemRow[];
-  byCategory: Array<{ category: string; forecastUnits: number }>;
-  peakHours: PeakHourRow[];
-  slowHours: number[];
-  shiftStaffing: ShiftStaffRow[];
-  deliveryDemand: { dineInUnits: number; deliveryUnits: number; takeawayUnits: number; deliveryShare: number };
-  rawMaterialNeeds: RawMaterialRow[];
-  generatedAt: string;
-}
+//
+// The heavy lifting (data gathering + LLM call + payload normalization +
+// persist) lives in `lib/demandForecast.ts` so it can be reused by the
+// nightly auto-run scheduler. The route below just handles HTTP concerns
+// (credit middleware, error mapping, audit log).
 
 router.post(
   "/restaurants/:restaurantId/ai-ops/forecast/run",
@@ -426,397 +411,98 @@ router.post(
     const restaurantId = Number(req.params.restaurantId);
     const reservation = res.locals.aiCreditReservation as AiCreditReservation | null;
     const horizonDays = Math.max(1, Math.min(30, Number((req.body ?? {}).horizonDays) || 7));
+    const tenantId = req.user?.tenantId ?? null;
+    if (!tenantId) {
+      if (reservation) await refundReservation(reservation, "no tenant");
+      return void res.status(403).json({ error: "AI requires a tenant context" });
+    }
 
     try {
-      const since = new Date(Date.now() - 90 * 86_400_000);
-
-      const [salesByItem, salesByDay, menuItems, salesByHour, salesByType, scheduledShifts, recipeForItems, inventoryRows] = await Promise.all([
-        db
-          .select({
-            menuItemId: orderItemsTable.menuItemId,
-            qty: sql<string>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
-            revenue: sql<string>`coalesce(sum(${orderItemsTable.quantity} * ${orderItemsTable.price}), 0)`,
-          })
-          .from(orderItemsTable)
-          .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
-          .where(and(
-            eq(ordersTable.restaurantId, restaurantId),
-            gte(ordersTable.createdAt, since),
-            inArray(ordersTable.status, ["completed", "served", "delivered", "ready"]),
-          ))
-          .groupBy(orderItemsTable.menuItemId),
-        db
-          .select({
-            day: sql<string>`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`,
-            qty: sql<string>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
-          })
-          .from(orderItemsTable)
-          .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
-          .where(and(
-            eq(ordersTable.restaurantId, restaurantId),
-            gte(ordersTable.createdAt, since),
-            inArray(ordersTable.status, ["completed", "served", "delivered", "ready"]),
-          ))
-          .groupBy(sql`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`)
-          .orderBy(sql`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`),
-        db.select({
-          id: menuItemsTable.id,
-          name: menuItemsTable.name,
-          price: menuItemsTable.price,
-          categoryId: menuItemsTable.categoryId,
-          categoryName: menuCategoriesTable.name,
-        })
-          .from(menuItemsTable)
-          .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
-          .where(and(eq(menuItemsTable.restaurantId, restaurantId), eq(menuItemsTable.isAvailable, true))),
-        // Hour-of-day distribution (0-23) of order-item quantity over last 30 days.
-        db
-          .select({
-            hour: sql<string>`extract(hour from ${ordersTable.createdAt})::int`,
-            qty: sql<string>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
-            orderCount: sql<string>`count(distinct ${ordersTable.id})`,
-          })
-          .from(orderItemsTable)
-          .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
-          .where(and(
-            eq(ordersTable.restaurantId, restaurantId),
-            gte(ordersTable.createdAt, new Date(Date.now() - 30 * 86_400_000)),
-            inArray(ordersTable.status, ["completed", "served", "delivered", "ready"]),
-          ))
-          .groupBy(sql`extract(hour from ${ordersTable.createdAt})`)
-          .orderBy(sql`extract(hour from ${ordersTable.createdAt})`),
-        // Order-type split (dine_in / delivery / takeaway) over last 30 days.
-        db
-          .select({
-            orderType: ordersTable.orderType,
-            qty: sql<string>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
-          })
-          .from(orderItemsTable)
-          .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
-          .where(and(
-            eq(ordersTable.restaurantId, restaurantId),
-            gte(ordersTable.createdAt, new Date(Date.now() - 30 * 86_400_000)),
-            inArray(ordersTable.status, ["completed", "served", "delivered", "ready"]),
-          ))
-          .groupBy(ordersTable.orderType),
-        // Currently scheduled shifts looking forward (next 14 days).
-        db
-          .select({ date: staffShiftsTable.date, shiftId: staffShiftsTable.shiftId })
-          .from(staffShiftsTable)
-          .where(and(
-            eq(staffShiftsTable.restaurantId, restaurantId),
-            gte(staffShiftsTable.date, new Date()),
-          )),
-        // Recipe mappings → maps menu item → ingredients (for raw-material needs).
-        db
-          .select({
-            menuItemId: recipeMappingsTable.menuItemId,
-            inventoryItemId: recipeMappingsTable.inventoryItemId,
-            quantity: recipeMappingsTable.quantity,
-            unit: recipeMappingsTable.unit,
-            ingredientName: inventoryItemsTable.name,
-            ingredientUnit: inventoryItemsTable.unit,
-            currentStock: inventoryItemsTable.currentStock,
-          })
-          .from(recipeMappingsTable)
-          .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, recipeMappingsTable.inventoryItemId))
-          .where(eq(recipeMappingsTable.restaurantId, restaurantId)),
-        db.select({ id: inventoryItemsTable.id, name: inventoryItemsTable.name, unit: inventoryItemsTable.unit, currentStock: inventoryItemsTable.currentStock })
-          .from(inventoryItemsTable)
-          .where(eq(inventoryItemsTable.restaurantId, restaurantId)),
-      ]);
-
-      const salesById = new Map(salesByItem.map((s) => [s.menuItemId, { qty: Number(s.qty) || 0, revenue: Number(s.revenue) || 0 }]));
-
-      const itemRows = menuItems.map((m) => {
-        const s = salesById.get(m.id) ?? { qty: 0, revenue: 0 };
-        return {
-          id: m.id,
-          name: m.name,
-          price: Number(m.price),
-          category: m.categoryName ?? "Uncategorised",
-          sold90d: s.qty,
-          dailyAvg: Number((s.qty / 90).toFixed(3)),
-        };
-      }).filter((x) => x.sold90d > 0).slice(0, 80);
-
-      if (itemRows.length === 0) {
-        if (reservation) await refundReservation(reservation, "no historical sales");
-        return void res.status(400).json({ error: "Not enough order history to forecast. Need at least one completed sale in the last 90 days." });
+      // Look up restaurant tz so the persisted forecastDate (when 1-day) is
+      // anchored in restaurant-local time rather than the server's clock.
+      let forecastDate: string | undefined;
+      if (horizonDays === 1) {
+        const [r] = await db.select({ tz: restaurantsTable.timezone })
+          .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+        forecastDate = tomorrowDateInTz(r?.tz || "Asia/Kolkata");
       }
 
-      const dailyLines = salesByDay.slice(-30).map((d) => `  ${d.day}: ${d.qty}`).join("\n");
-      const itemLines = itemRows.map((i) =>
-        `  - id=${i.id} name="${i.name}" cat="${i.category}" price=${i.price} sold90d=${i.sold90d} dailyAvg=${i.dailyAvg}`,
-      ).join("\n");
-
-      // Hour-of-day distribution → peak/slow hours.
-      const hourBuckets = new Map<number, { qty: number; orders: number }>();
-      for (let h = 0; h < 24; h++) hourBuckets.set(h, { qty: 0, orders: 0 });
-      for (const r of salesByHour) {
-        const h = Number(r.hour);
-        if (Number.isFinite(h)) hourBuckets.set(h, { qty: Number(r.qty) || 0, orders: Number(r.orderCount) || 0 });
-      }
-      const hourly30 = Array.from(hourBuckets.entries()).map(([hour, v]) => ({ hour, qty: v.qty, orders: v.orders }));
-      const peakHourLines = hourly30.map((h) => `  ${String(h.hour).padStart(2, "0")}:00 — ${h.qty} units / ${h.orders} orders`).join("\n");
-
-      // Order-type split.
-      const typeMap = new Map<string, number>();
-      for (const r of salesByType) typeMap.set(String(r.orderType ?? ""), Number(r.qty) || 0);
-      const dineIn30 = typeMap.get("dine_in") ?? 0;
-      const delivery30 = typeMap.get("delivery") ?? 0;
-      const takeaway30 = typeMap.get("takeaway") ?? 0;
-      const totalTyped = dineIn30 + delivery30 + takeaway30;
-      const deliveryShareInput = totalTyped > 0 ? Number(((delivery30 / totalTyped) * 100).toFixed(1)) : 0;
-
-      // Currently scheduled headcount per shift over horizon.
-      const horizonEnd = new Date(Date.now() + horizonDays * 86_400_000);
-      const scheduledByShift = new Map<number, number>();
-      for (const r of scheduledShifts) {
-        if (!r.shiftId) continue;
-        const d = r.date instanceof Date ? r.date : new Date(r.date as unknown as string);
-        if (d > horizonEnd) continue;
-        scheduledByShift.set(r.shiftId, (scheduledByShift.get(r.shiftId) ?? 0) + 1);
-      }
-      const scheduledLines = Array.from(scheduledByShift.entries())
-        .map(([sid, n]) => `  shiftId=${sid}: ${n} scheduled assignments in next ${horizonDays}d`).join("\n") || "  (no scheduled shifts)";
-
-      const prompt = `You are a restaurant demand forecaster. Forecast the next ${horizonDays} day(s) of unit sales, peak/slow hours, staffing need, delivery vs dine-in mix, and raw-material requirement.
-
-Daily total order-item quantity (last 30 days):
-${dailyLines || "  (no recent days)"}
-
-Per-item history (last 90 days):
-${itemLines}
-
-Hour-of-day order/units distribution (last 30 days, sums):
-${peakHourLines}
-
-Order-type split (last 30 days, units): dine_in=${dineIn30} delivery=${delivery30} takeaway=${takeaway30} (delivery share ${deliveryShareInput}%)
-
-Currently scheduled staff (next ${horizonDays} days):
-${scheduledLines}
-
-Return ONLY JSON:
-{
-  "summary": "${horizonDays === 1 ? "Tomorrow's outlook in 1-2 sentences" : "1-2 sentence forecast overview"} — mention trend, weekday/weekend, peaks, delivery share",
-  "items": [
-    {"menuItemId": <id>, "forecastUnits": <expected units over next ${horizonDays} day(s)>, "confidence": "low|medium|high", "rationale": "<short reason>"}
-  ],
-  "peakHours": [
-    {"hour": <0-23>, "expectedOrders": <orders/day at this hour>, "intensity": "quiet|normal|busy|peak"}
-  ],
-  "slowHours": [<hour 0-23>, ...],
-  "shiftStaffing": [
-    {"shift": "Breakfast|Lunch|Dinner|Late Night", "window": "08:00-12:00", "recommendedHeadcount": <int>, "currentlyScheduled": <int from input>, "rationale": "<short reason>"}
-  ],
-  "deliveryDemand": {
-    "deliveryUnits": <expected delivery units over horizon>,
-    "dineInUnits": <expected dine_in units over horizon>,
-    "takeawayUnits": <expected takeaway units over horizon>,
-    "deliveryShare": <0-100>
-  }
-}
-
-Rules:
-- Forecast every item in input list. Use dailyAvg * ${horizonDays} as baseline; adjust for recent trend, weekday vs weekend.
-- Round all unit counts to nearest integer.
-- peakHours: list 3-6 busiest hours; intensity "peak" for the top 1-2.
-- slowHours: any open-hour with very low expected orders (suggest closing or running specials).
-- shiftStaffing: 3-4 shifts spanning the typical operating day; recommendedHeadcount ≥ currentlyScheduled if peak demand exceeds capacity, otherwise can be lower; reflect typical "1 staff per ~15 covers/hour" heuristic.
-- deliveryDemand: split must roughly match historical mix unless trend suggests otherwise.
-- Confidence "high" if sold90d >= 60, "medium" if >= 15, else "low".
-- JSON only, no markdown.`;
-
-      const inputsHash = hashInputs({ horizonDays, items: itemRows.map((i) => ({ id: i.id, q: i.sold90d })) });
-
-      const { data, result } = await AIProviderService.generateJson<{
-        summary?: unknown; items?: unknown; peakHours?: unknown; slowHours?: unknown;
-        shiftStaffing?: unknown; deliveryDemand?: unknown;
-      }>({
-        featureSlug: "ai_demand_forecast",
-        tenantId: req.user?.tenantId ?? null,
+      const out = await runDemandForecast({
         restaurantId,
+        tenantId,
         userId: req.user?.sub ?? null,
-        metadata: { inputsHash, horizonDays },
-      }, {
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-        maxTokens: 3000,
+        horizonDays,
+        forecastDate,
+        reservation,
+        source: "manual",
       });
-
-      const itemById = new Map(itemRows.map((i) => [i.id, i]));
-      const rawItems = Array.isArray(data.items) ? data.items : [];
-      const cleanedItems: ForecastItemRow[] = rawItems
-        .map((raw: unknown): ForecastItemRow | null => {
-          const r = raw as Record<string, unknown>;
-          const id = Number(r.menuItemId);
-          const item = itemById.get(id);
-          if (!item) return null;
-          const units = Math.max(0, Math.round(Number(r.forecastUnits) || 0));
-          const conf = String(r.confidence ?? "medium").toLowerCase();
-          const confidence: "low" | "medium" | "high" = conf === "low" || conf === "high" ? conf : "medium";
-          return {
-            menuItemId: id,
-            name: item.name,
-            categoryName: item.category,
-            forecastUnits: units,
-            confidence,
-            rationale: String(r.rationale ?? "").slice(0, 240),
-          };
-        })
-        .filter((x): x is ForecastItemRow => x !== null);
-
-      const totalForecastUnits = cleanedItems.reduce((s, i) => s + i.forecastUnits, 0);
-      const estimatedRevenue = Number(cleanedItems.reduce((s, i) => {
-        const item = itemById.get(i.menuItemId);
-        return s + (item ? item.price * i.forecastUnits : 0);
-      }, 0).toFixed(2));
-
-      const catMap = new Map<string, number>();
-      for (const i of cleanedItems) {
-        const k = i.categoryName ?? "Uncategorised";
-        catMap.set(k, (catMap.get(k) ?? 0) + i.forecastUnits);
-      }
-      const byCategory = Array.from(catMap.entries())
-        .map(([category, forecastUnits]) => ({ category, forecastUnits }))
-        .sort((a, b) => b.forecastUnits - a.forecastUnits);
-
-      // Clean peak hours.
-      const rawPeak = Array.isArray(data.peakHours) ? data.peakHours : [];
-      const cleanedPeak: PeakHourRow[] = rawPeak
-        .map((raw: unknown): PeakHourRow | null => {
-          const r = raw as Record<string, unknown>;
-          const hour = Number(r.hour);
-          if (!Number.isFinite(hour) || hour < 0 || hour > 23) return null;
-          const intensityRaw = String(r.intensity ?? "normal").toLowerCase();
-          const intensity = (["quiet", "normal", "busy", "peak"] as const).includes(intensityRaw as PeakHourRow["intensity"])
-            ? (intensityRaw as PeakHourRow["intensity"]) : "normal";
-          return { hour: Math.floor(hour), expectedOrders: Math.max(0, Math.round(Number(r.expectedOrders) || 0)), intensity };
-        })
-        .filter((x): x is PeakHourRow => x !== null)
-        .sort((a, b) => b.expectedOrders - a.expectedOrders);
-      const cleanedSlow = Array.isArray(data.slowHours)
-        ? data.slowHours.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x >= 0 && x <= 23).map((x) => Math.floor(x))
-        : [];
-
-      // Clean shift staffing.
-      const rawStaff = Array.isArray(data.shiftStaffing) ? data.shiftStaffing : [];
-      const cleanedStaff: ShiftStaffRow[] = rawStaff
-        .map((raw: unknown): ShiftStaffRow | null => {
-          const r = raw as Record<string, unknown>;
-          const shift = String(r.shift ?? "").trim().slice(0, 60);
-          if (!shift) return null;
-          return {
-            shift,
-            window: String(r.window ?? "").trim().slice(0, 30),
-            recommendedHeadcount: Math.max(0, Math.round(Number(r.recommendedHeadcount) || 0)),
-            currentlyScheduled: Math.max(0, Math.round(Number(r.currentlyScheduled) || 0)),
-            rationale: String(r.rationale ?? "").slice(0, 240),
-          };
-        })
-        .filter((x): x is ShiftStaffRow => x !== null);
-
-      // Clean delivery demand.
-      const dd = (data.deliveryDemand ?? {}) as Record<string, unknown>;
-      const deliveryUnits = Math.max(0, Math.round(Number(dd.deliveryUnits) || 0));
-      const dineInUnits = Math.max(0, Math.round(Number(dd.dineInUnits) || 0));
-      const takeawayUnits = Math.max(0, Math.round(Number(dd.takeawayUnits) || 0));
-      const totalDD = deliveryUnits + dineInUnits + takeawayUnits;
-      const deliveryShare = totalDD > 0
-        ? Number(((deliveryUnits / totalDD) * 100).toFixed(1))
-        : Math.max(0, Math.min(100, Number(dd.deliveryShare) || deliveryShareInput));
-
-      // Compute raw-material needs deterministically from forecast × recipe mappings.
-      const recipeByItem = new Map<number, Array<{ inventoryItemId: number; quantity: number; ingredientName: string; ingredientUnit: string; currentStock: number }>>();
-      for (const r of recipeForItems) {
-        const arr = recipeByItem.get(r.menuItemId) ?? [];
-        arr.push({
-          inventoryItemId: r.inventoryItemId,
-          quantity: Number(r.quantity) || 0,
-          ingredientName: r.ingredientName,
-          ingredientUnit: r.ingredientUnit,
-          currentStock: Number(r.currentStock) || 0,
-        });
-        recipeByItem.set(r.menuItemId, arr);
-      }
-      const ingredientById = new Map(inventoryRows.map((i) => [i.id, { name: i.name, unit: i.unit, currentStock: Number(i.currentStock) || 0 }]));
-      const needMap = new Map<number, { name: string; unit: string; required: number; currentStock: number }>();
-      for (const f of cleanedItems) {
-        const ings = recipeByItem.get(f.menuItemId) ?? [];
-        for (const ing of ings) {
-          const cur = needMap.get(ing.inventoryItemId);
-          const required = (cur?.required ?? 0) + ing.quantity * f.forecastUnits;
-          const meta = ingredientById.get(ing.inventoryItemId);
-          needMap.set(ing.inventoryItemId, {
-            name: meta?.name ?? ing.ingredientName,
-            unit: meta?.unit ?? ing.ingredientUnit,
-            required,
-            currentStock: meta?.currentStock ?? ing.currentStock,
-          });
-        }
-      }
-      const rawMaterialNeeds: RawMaterialRow[] = Array.from(needMap.entries())
-        .map(([invId, v]) => ({
-          inventoryItemId: invId,
-          name: v.name,
-          unit: v.unit,
-          requiredQuantity: Number(v.required.toFixed(3)),
-          currentStock: Number(v.currentStock.toFixed(3)),
-          shortfall: Number(Math.max(0, v.required - v.currentStock).toFixed(3)),
-        }))
-        .sort((a, b) => b.shortfall - a.shortfall || b.requiredQuantity - a.requiredQuantity)
-        .slice(0, 30);
-
-      const payload: ForecastPayload = {
-        summary: typeof data.summary === "string" ? data.summary.trim().slice(0, 500) : "",
-        horizonDays,
-        totalForecastUnits,
-        estimatedRevenue,
-        items: cleanedItems.sort((a, b) => b.forecastUnits - a.forecastUnits),
-        byCategory,
-        peakHours: cleanedPeak,
-        slowHours: cleanedSlow,
-        shiftStaffing: cleanedStaff,
-        deliveryDemand: { dineInUnits, deliveryUnits, takeawayUnits, deliveryShare },
-        rawMaterialNeeds,
-        generatedAt: new Date().toISOString(),
-      };
-
-      const avgConf = cleanedItems.length === 0 ? 0.2
-        : cleanedItems.reduce((s, i) => s + (i.confidence === "high" ? 0.85 : i.confidence === "medium" ? 0.6 : 0.35), 0) / cleanedItems.length;
-
-      const [row] = await db.insert(aiForecastsTable).values({
-        restaurantId,
-        horizonDays,
-        inputsHash,
-        payload: payload as unknown,
-        confidence: avgConf.toFixed(2),
-        status: "active",
-        requestLogId: result.requestLogId,
-        generatedBy: req.user?.sub ?? null,
-      }).returning();
-
-      if (reservation) {
-        await commitReservation({ reservation, userId: req.user?.sub ?? null, requestLogId: result.requestLogId });
-      }
       await recordAuditLog({
         req, module: "khana_ai", action: "forecast.run",
-        entity: "ai_forecast", entityId: row.id,
-        newValue: { horizonDays, itemCount: cleanedItems.length, estimatedRevenue, requestLogId: result.requestLogId },
+        entity: "ai_forecast", entityId: out.forecastId,
+        newValue: {
+          horizonDays,
+          itemCount: out.payload.items.length,
+          estimatedRevenue: out.payload.estimatedRevenue,
+        },
       });
-      res.json({ forecast: row });
+      return void res.json({ forecast: out.row });
     } catch (err) {
       if (reservation) await refundReservation(reservation, (err as Error).message ?? "provider error");
+      if (err instanceof ForecastError) {
+        await recordAuditLog({
+          req, module: "khana_ai", action: "forecast.run_failed",
+          entity: "ai_forecast", newValue: { error: err.message, code: err.code },
+        });
+        return void res.status(err.status).json({ error: err.message, code: err.code });
+      }
       req.log.error({ err }, "AI demand forecast failed");
       await recordAuditLog({
         req, module: "khana_ai", action: "forecast.run_failed",
         entity: "ai_forecast", newValue: { error: (err as Error).message ?? "provider error" },
       });
-      res.status(502).json({ error: "Failed to generate demand forecast" });
+      return void res.status(502).json({ error: "Failed to generate demand forecast" });
     }
   },
 );
+
+// Tomorrow hero: returns the most recent active 1-day forecast (manual or
+// nightly). The frontend uses this to render the "Tomorrow's outlook" card
+// without forcing a fresh run.
+router.get("/restaurants/:restaurantId/ai-ops/forecast/tomorrow", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [row] = await db.select().from(aiForecastsTable).where(and(
+    eq(aiForecastsTable.restaurantId, restaurantId),
+    eq(aiForecastsTable.horizonDays, 1),
+    eq(aiForecastsTable.status, "active"),
+  )).orderBy(desc(aiForecastsTable.generatedAt)).limit(1);
+  res.json({ forecast: row ?? null });
+});
+
+// Forecast vs actuals recap: finds the most recent 1-day forecast whose
+// forecasted day has fully completed (in the restaurant's timezone) and
+// returns predicted-vs-actual aggregations. No LLM call.
+router.get("/restaurants/:restaurantId/ai-ops/forecast/recap", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [restaurant] = await db.select({ tz: restaurantsTable.timezone })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const tz = restaurant?.tz || "Asia/Kolkata";
+
+  const candidates = await db.select().from(aiForecastsTable).where(and(
+    eq(aiForecastsTable.restaurantId, restaurantId),
+    eq(aiForecastsTable.horizonDays, 1),
+  )).orderBy(desc(aiForecastsTable.generatedAt)).limit(10);
+
+  for (const row of candidates) {
+    try {
+      const recap = await computeForecastActuals(row, tz);
+      if (recap) return void res.json({ recap });
+    } catch (err) {
+      req.log.warn({ err, forecastId: row.id }, "forecast recap compute failed");
+    }
+  }
+  res.json({ recap: null });
+});
+
 
 router.get("/restaurants/:restaurantId/ai-ops/forecast/list", async (req: Request, res: Response) => {
   const restaurantId = Number(req.params.restaurantId);

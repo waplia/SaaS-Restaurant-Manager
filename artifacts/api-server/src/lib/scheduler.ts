@@ -15,6 +15,7 @@ import { processPendingWebhookDeliveries } from "./webhookDispatcher";
 import { registerCronJob, recordCronRun, runScheduledBackupTick } from "./maintenance";
 import { runMonthlyAllocationSweep } from "./aiCredits";
 import { runFraudCronTick } from "./fraudDetection";
+import { runNightlyDemandForecastsForHour } from "./demandForecast";
 
 function trackCron(name: string, expr: string, fn: () => Promise<void>) {
   registerCronJob(name, expr);
@@ -114,12 +115,27 @@ export function startScheduler(): void {
   registerCron("ai-monthly-allocation", "0 1 * * *", "Credits each tenant's Khana AI monthly allowance on their renewal-cycle anniversary day at 01:00 IST (idempotent per cycle)");
   registerCron("fraud-detect-fast", "5 * * * *", "Hourly fast fraud detectors (discounts, voids, KOT cancels, refunds, free items)");
   registerCron("fraud-detect-slow", "30 2 * * *", "Nightly slow fraud detectors at 02:30 IST (cash, attendance, inventory)");
+  registerCron("nightly-demand-forecast", "0 * * * *", "Per-restaurant nightly tomorrow forecast: ticks hourly and runs whenever a restaurant's local time is 02:00 in its configured timezone (gated on plan, feature toggle, history, and credits)");
 
   trackCron("fraud_detect_fast", "5 * * * *", async () => {
     await runFraudCronTick("fast");
   });
   trackCron("fraud_detect_slow", "30 2 * * *", async () => {
     await runFraudCronTick("slow");
+  });
+
+  // Nightly auto-run of the AI demand forecast — ticks once per IST hour at
+  // minute 0 and runs the per-restaurant scan; the helper itself filters to
+  // restaurants whose own local hour matches the target (02:00 local).
+  trackCron("nightly_demand_forecast", "0 * * * *", async () => {
+    try {
+      const r = await runNightlyDemandForecastsForHour(2);
+      if (r.evaluated > 0 || r.ranOk > 0) {
+        logger.info({ ...r }, "[forecast-nightly] sweep complete");
+      }
+    } catch (err) {
+      logger.error({ err }, "[forecast-nightly] sweep failed");
+    }
   });
 
   trackCron("ai_monthly_allocation", "0 1 * * *", async () => {
