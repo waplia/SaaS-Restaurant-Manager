@@ -31,3 +31,4 @@ export * from "./whatsapp";
 export * from "./ai-control";
 export * from "./ai-credits";
 export * from "./restaurant-ai-settings";
+export * from "./reviews";

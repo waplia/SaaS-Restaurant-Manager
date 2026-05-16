@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable } from "../lib/db";
+import { createHash } from "crypto";
 
 async function checkRestaurantFeature(
   restaurantId: number | null | undefined,
@@ -622,6 +623,102 @@ router.post("/public/loyalty/lookup", async (req, res) => {
       expiresAt: h.expiresAt,
     })),
   });
+});
+
+// ─── Public review-QR feedback funnel ────────────────────────────────────────
+function hashIp(ip: string | null): string | null {
+  if (!ip) return null;
+  return createHash("sha256").update(ip + "|reviewqr").digest("hex").slice(0, 32);
+}
+
+router.get("/public/review-qr/:qrCode", async (req, res) => {
+  const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
+  if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
+  const [restaurant] = await db.select({
+    id: restaurantsTable.id, name: restaurantsTable.name, slug: restaurantsTable.slug,
+    logoUrl: restaurantsTable.logoUrl, currency: restaurantsTable.currency,
+  }).from(restaurantsTable).where(eq(restaurantsTable.id, qr.restaurantId));
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  const [siteRow] = await db.select().from(restaurantSettingsTable)
+    .where(and(eq(restaurantSettingsTable.restaurantId, restaurant.id), eq(restaurantSettingsTable.section, "customer-site")));
+  const site = (siteRow?.data as Record<string, unknown> | undefined) ?? {};
+  const accent = typeof site.accentColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(site.accentColor) ? site.accentColor : "#c2410c";
+
+  // Fire-and-forget scan event
+  void db.insert(reviewQrScansTable).values({
+    qrId: qr.id, restaurantId: qr.restaurantId, event: "scan",
+    ipHash: hashIp((req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || null),
+  }).catch(() => undefined);
+
+  res.json({
+    qrCode: qr.qrCode,
+    title: qr.title,
+    customMessage: qr.customMessage,
+    thankYouMessage: qr.thankYouMessage,
+    negativeFeedbackMessage: qr.negativeFeedbackMessage,
+    googleReviewUrl: qr.googleReviewUrl,
+    positiveThreshold: qr.positiveThreshold,
+    showGoogleButtonOnNegative: qr.showGoogleButtonOnNegative,
+    restaurant: { name: restaurant.name, slug: restaurant.slug, logoUrl: restaurant.logoUrl },
+    accentColor: accent,
+  });
+});
+
+router.post("/public/review-qr/:qrCode/rate", async (req, res) => {
+  const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
+  if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
+  const rating = Math.min(5, Math.max(1, Number((req.body ?? {}).rating)));
+  if (!rating) return void res.status(400).json({ error: "Rating required" });
+  await db.insert(reviewQrScansTable).values({
+    qrId: qr.id, restaurantId: qr.restaurantId, event: "rated", rating,
+  });
+  res.json({ ok: true, positive: rating >= qr.positiveThreshold });
+});
+
+router.post("/public/review-qr/:qrCode/google-redirect", async (req, res) => {
+  const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
+  if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
+  await db.insert(reviewQrScansTable).values({ qrId: qr.id, restaurantId: qr.restaurantId, event: "google_redirect" });
+  res.json({ ok: true });
+});
+
+router.post("/public/review-qr/:qrCode/feedback", async (req, res) => {
+  const [qr] = await db.select().from(reviewQrsTable).where(eq(reviewQrsTable.qrCode, req.params.qrCode));
+  if (!qr || !qr.isActive) return void res.status(404).json({ error: "Not found" });
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const rating = Math.min(5, Math.max(1, Number(b.rating)));
+  if (!rating) return void res.status(400).json({ error: "Rating required" });
+  const [fb] = await db.insert(customerFeedbackTable).values({
+    restaurantId: qr.restaurantId,
+    branchId: qr.branchId,
+    qrId: qr.id,
+    rating,
+    category: typeof b.category === "string" ? b.category.slice(0, 80) : null,
+    comment: typeof b.comment === "string" ? b.comment.slice(0, 4000) : null,
+    customerName: typeof b.customerName === "string" ? b.customerName.slice(0, 200) : null,
+    customerPhone: typeof b.customerPhone === "string" ? b.customerPhone.slice(0, 50) : null,
+    source: "qr",
+  }).returning();
+  await db.insert(reviewQrScansTable).values({
+    qrId: qr.id, restaurantId: qr.restaurantId, event: "submitted_negative", rating,
+  });
+  // Auto-create a recovery task so the manager queue lights up immediately.
+  await db.insert(feedbackRecoveryTasksTable).values({
+    restaurantId: qr.restaurantId,
+    feedbackId: fb.id,
+    category: fb.category,
+    sentiment: rating <= 2 ? "negative" : "neutral",
+    status: "new",
+  });
+  await db.insert(notificationsTable).values({
+    restaurantId: qr.restaurantId,
+    type: "feedback",
+    title: `New ${rating}★ private feedback`,
+    message: (fb.comment ?? "Customer left private feedback").slice(0, 200),
+  });
+  broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+  res.status(201).json({ ok: true });
 });
 
 router.post("/public/feedback", async (req, res) => {

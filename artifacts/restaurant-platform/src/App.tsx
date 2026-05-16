@@ -62,6 +62,10 @@ import AiMenuImportPage from "@/pages/ai-menu-import";
 import AiMenuImportHistoryPage from "@/pages/ai-menu-import-history";
 import AiUsagePage from "@/pages/ai-usage";
 import AiSettingsPage from "@/pages/ai-settings";
+import ReviewQrsPage from "@/pages/review-qrs";
+import AiReviewRepliesPage from "@/pages/ai-review-replies";
+import FeedbackRecoveryPage from "@/pages/feedback-recovery";
+import CustomerFeedbackPage from "@/pages/customer-feedback";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -169,9 +173,13 @@ function Router() {
       <Route path="/ai/menu-import" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
       <Route path="/ai/usage" component={() => <RoleProtectedRoute component={AiUsagePage} allow={["owner", "manager"]} />} />
       <Route path="/ai/settings" component={() => <RoleProtectedRoute component={AiSettingsPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/review-qrs" component={() => <RoleProtectedRoute component={ReviewQrsPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/review-replies" component={() => <RoleProtectedRoute component={AiReviewRepliesPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai/feedback-recovery" component={() => <RoleProtectedRoute component={FeedbackRecoveryPage} allow={["owner", "manager"]} />} />
       <Route path="/site/:slug" component={PublicSitePage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
+      <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
       <Route component={NotFound} />
     </Switch>
   );
