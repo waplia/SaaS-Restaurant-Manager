@@ -32,6 +32,7 @@ interface ReviewQR {
   googlePlaceId: string | null;
   positiveThreshold: number;
   showGoogleButtonOnNegative: boolean;
+  aiAssistEnabled: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -50,6 +51,7 @@ const empty = {
   googlePlaceId: "",
   positiveThreshold: 4,
   showGoogleButtonOnNegative: false,
+  aiAssistEnabled: true,
   isActive: true,
   branchId: null as number | null,
 };
@@ -106,6 +108,7 @@ export default function ReviewQrsPage() {
       googlePlaceId: qr.googlePlaceId ?? "",
       positiveThreshold: qr.positiveThreshold,
       showGoogleButtonOnNegative: qr.showGoogleButtonOnNegative,
+      aiAssistEnabled: qr.aiAssistEnabled ?? true,
       isActive: qr.isActive,
       branchId: qr.branchId,
     });
@@ -343,6 +346,21 @@ export default function ReviewQrsPage() {
                 onCheckedChange={(v) => setForm({ ...form, showGoogleButtonOnNegative: v })}
               />
               <Label>Also show Google link on negative page</Label>
+            </div>
+            <div className="flex items-start gap-3">
+              <Switch
+                checked={form.aiAssistEnabled}
+                onCheckedChange={(v) => setForm({ ...form, aiAssistEnabled: v })}
+                data-testid="switch-ai-assist"
+              />
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> AI review draft assist
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  When a 4–5★ guest taps a few tags, AI writes a friendly draft for them to copy into Google. Uses 1 Khana AI credit per draft.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>

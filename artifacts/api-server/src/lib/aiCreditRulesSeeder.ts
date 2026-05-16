@@ -37,6 +37,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "per_image",
   },
   {
+    featureSlug: "ai_review_draft",
+    featureLabel: "AI Google Review Drafts",
+    description: "Generate a friendly Google review draft for a guest based on rating + selected tags + optional note.",
+    creditsPerUnit: "1",
+    minCharge: 1,
+    unitType: "request",
+    pricingMode: "fixed",
+  },
+  {
     featureSlug: "ai_review_reply",
     featureLabel: "AI Review Replies",
     description: "Generate a reply to a customer review (per generation).",

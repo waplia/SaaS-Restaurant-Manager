@@ -64,6 +64,13 @@
       "when": 1778906310827,
       "tag": "0008_khana_ai_upsell",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778910440971,
+      "tag": "0009_review_qr_ai_draft",
+      "breakpoints": true
     }
   ]
 }

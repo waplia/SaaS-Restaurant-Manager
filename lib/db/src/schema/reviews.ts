@@ -17,6 +17,7 @@ export const reviewQrsTable = pgTable("review_qrs", {
   googlePlaceId: text("google_place_id"),
   positiveThreshold: integer("positive_threshold").notNull().default(4), // ≥ this routes to Google
   showGoogleButtonOnNegative: boolean("show_google_button_on_negative").notNull().default(false),
+  aiAssistEnabled: boolean("ai_assist_enabled").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -50,6 +51,11 @@ export const customerFeedbackTable = pgTable("customer_feedback", {
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   source: text("source").notNull().default("qr"), // qr | manual
+  selectedTags: jsonb("selected_tags").$type<string[]>().notNull().default([]),
+  aiDraftText: text("ai_draft_text"),
+  aiDraftRequestLogId: integer("ai_draft_request_log_id"),
+  copiedDraft: boolean("copied_draft").notNull().default(false),
+  googleRedirected: boolean("google_redirected").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   restIdx: index("customer_feedback_restaurant_idx").on(t.restaurantId, t.createdAt),

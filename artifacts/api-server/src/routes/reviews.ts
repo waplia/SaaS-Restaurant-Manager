@@ -77,6 +77,7 @@ router.post("/restaurants/:restaurantId/review-qrs/list", async (req: Request, r
     googlePlaceId: typeof b.googlePlaceId === "string" ? b.googlePlaceId.slice(0, 200) : null,
     positiveThreshold: Math.min(5, Math.max(1, Number(b.positiveThreshold) || 4)),
     showGoogleButtonOnNegative: !!b.showGoogleButtonOnNegative,
+    aiAssistEnabled: b.aiAssistEnabled !== false,
     isActive: b.isActive !== false,
   }).returning();
   await recordAuditLog({
@@ -102,6 +103,7 @@ router.patch("/restaurants/:restaurantId/review-qrs/:qrId", async (req: Request,
   if (b.googlePlaceId !== undefined) update.googlePlaceId = b.googlePlaceId == null ? null : String(b.googlePlaceId).slice(0, 200);
   if (b.positiveThreshold != null) update.positiveThreshold = Math.min(5, Math.max(1, Number(b.positiveThreshold)));
   if (b.showGoogleButtonOnNegative !== undefined) update.showGoogleButtonOnNegative = !!b.showGoogleButtonOnNegative;
+  if (b.aiAssistEnabled !== undefined) update.aiAssistEnabled = !!b.aiAssistEnabled;
   if (b.isActive !== undefined) update.isActive = !!b.isActive;
   if (b.branchId !== undefined) {
     const branchId = b.branchId == null ? null : Number(b.branchId);
