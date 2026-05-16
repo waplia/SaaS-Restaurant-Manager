@@ -7,6 +7,7 @@ import { seedDefaultAiCreditRules } from "./lib/aiCreditRulesSeeder";
 import { seedAddonCatalogue } from "./lib/addons";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
+import { backfillCustomerCrm } from "./lib/customerBackfill";
 import { getAppSettings } from "./lib/appSettings";
 import { ensureSearchIndexes } from "./lib/searchIndexes";
 
@@ -47,6 +48,10 @@ httpServer.listen(port, () => {
   backfillDefaultKitchens()
     .then(() => logger.info("Default kitchens backfill complete"))
     .catch((e) => logger.error({ err: e }, "Default kitchens backfill failed"));
+
+  backfillCustomerCrm()
+    .then((r) => logger.info(r, "Customer CRM backfill complete"))
+    .catch((e) => logger.error({ err: e }, "Customer CRM backfill failed"));
 
   getAppSettings(true)
     .then(() => logger.info("App settings singleton ensured"))

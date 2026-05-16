@@ -1,15 +1,120 @@
 import { Router } from "express";
-import { eq, and, ilike, or, count, desc } from "drizzle-orm";
-import { db, customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable, customerAddressesTable } from "../lib/db";
+import { eq, and, ilike, or, count, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import {
+  db,
+  customersTable, couponsTable, notificationsTable, loyaltyTransactionsTable,
+  customerAddressesTable,
+  customerTagsTable, customerTagAssignmentsTable,
+  customerNotesTable, customerComplaintsTable,
+  ordersTable, orderItemsTable,
+  customerFeedbackTable, externalReviewsTable,
+  usersTable,
+} from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+const PREFERRED_CHANNELS = ["whatsapp", "sms", "email", "call", "none"] as const;
+type PreferredChannel = (typeof PREFERRED_CHANNELS)[number];
+
+const COMPLAINT_STATUSES = ["open", "in_progress", "resolved"] as const;
+const COMPLAINT_CHANNELS = ["in_person", "phone", "whatsapp", "email", "review", "other"] as const;
+
+const NOTE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+/** Returns "VALID" string, the literal `null` (clear value), or null sentinel for "invalid". */
+function parseDateOnly(v: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (v === null || v === "") return { ok: true, value: null };
+  if (typeof v !== "string") return { ok: false, error: "must be a YYYY-MM-DD string or null" };
+  let iso: string | null = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) iso = v;
+  else {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return { ok: false, error: "not a parseable date" };
+    iso = d.toISOString().slice(0, 10);
+  }
+  // sanity: reject absurd years (DOB before 1900 or future > today + 1y for anniversary edge)
+  const year = Number(iso.slice(0, 4));
+  if (year < 1900 || year > new Date().getFullYear() + 1) {
+    return { ok: false, error: `year ${year} is out of range` };
+  }
+  return { ok: true, value: iso };
+}
+
+/**
+ * Loyalty tiers — mirrors lib/loyalty.ts thresholds.
+ * Used by the list filter so callers can pass tier=silver|gold|bronze
+ * without knowing the exact point cutoffs.
+ */
+const LOYALTY_TIERS = {
+  bronze: 0,
+  silver: 1000,
+  gold: 5000,
+} as const;
+type LoyaltyTier = keyof typeof LOYALTY_TIERS;
+
+async function loadTagsForCustomers(customerIds: number[], restaurantId: number): Promise<Map<number, Array<{ id: number; name: string }>>> {
+  const out = new Map<number, Array<{ id: number; name: string }>>();
+  if (customerIds.length === 0) return out;
+  const rows = await db.select({
+    customerId: customerTagAssignmentsTable.customerId,
+    tagId: customerTagsTable.id,
+    name: customerTagsTable.name,
+  }).from(customerTagAssignmentsTable)
+    .innerJoin(customerTagsTable, eq(customerTagAssignmentsTable.tagId, customerTagsTable.id))
+    .where(and(
+      inArray(customerTagAssignmentsTable.customerId, customerIds),
+      eq(customerTagAssignmentsTable.restaurantId, restaurantId),
+    ));
+  for (const r of rows) {
+    const list = out.get(r.customerId) ?? [];
+    list.push({ id: r.tagId, name: r.name });
+    out.set(r.customerId, list);
+  }
+  return out;
+}
+
+interface DerivedMetrics {
+  averageOrderValue: number;
+  visitFrequencyDays: number | null;
+  lifetimeDays: number | null;
+}
+
+function computeDerivedMetrics(customer: { totalOrders: number; totalSpent: string; firstOrderAt: Date | null; lastVisitAt: Date | null }): DerivedMetrics {
+  const totalOrders = customer.totalOrders ?? 0;
+  const totalSpent = Number(customer.totalSpent ?? 0);
+  const aov = totalOrders > 0 ? totalSpent / totalOrders : 0;
+  let freq: number | null = null;
+  if (totalOrders > 1 && customer.firstOrderAt && customer.lastVisitAt) {
+    const span = customer.lastVisitAt.getTime() - customer.firstOrderAt.getTime();
+    if (span > 0) freq = span / (1000 * 60 * 60 * 24) / Math.max(1, totalOrders - 1);
+  }
+  let lifetime: number | null = null;
+  if (customer.firstOrderAt) {
+    lifetime = (Date.now() - customer.firstOrderAt.getTime()) / (1000 * 60 * 60 * 24);
+  }
+  return {
+    averageOrderValue: Number(aov.toFixed(2)),
+    visitFrequencyDays: freq !== null ? Number(freq.toFixed(1)) : null,
+    lifetimeDays: lifetime !== null ? Math.round(lifetime) : null,
+  };
+}
+
+// ─── Customer list & CRUD ──────────────────────────────────────────────────
+
 router.get("/restaurants/:restaurantId/customers", async (req, res) => {
-  const { search, page, limit } = req.query;
+  const {
+    search, page, limit,
+    tag, tier, vip, preferredChannel, whatsappOptIn,
+    hasComplaints, lastVisitFrom, lastVisitTo,
+    birthdayMonth, anniversaryMonth,
+  } = req.query;
   const pg = Number(page) || 1;
   const lim = Number(limit) || 20;
   const offset = (pg - 1) * lim;
@@ -17,32 +122,528 @@ router.get("/restaurants/:restaurantId/customers", async (req, res) => {
 
   const conditions = [eq(customersTable.restaurantId, restaurantId)] as Parameters<typeof and>[0][];
   if (search) conditions.push(or(ilike(customersTable.name, `%${search}%`), ilike(customersTable.phone, `%${search}%`)) as Parameters<typeof and>[0]);
+  if (vip === "true") conditions.push(eq(customersTable.isVip, true));
+  if (typeof preferredChannel === "string" && (PREFERRED_CHANNELS as readonly string[]).includes(preferredChannel)) {
+    conditions.push(eq(customersTable.preferredChannel, preferredChannel));
+  }
+  if (whatsappOptIn === "true") conditions.push(eq(customersTable.whatsappOptIn, true));
+  if (whatsappOptIn === "false") conditions.push(eq(customersTable.whatsappOptIn, false));
+  if (lastVisitFrom && typeof lastVisitFrom === "string") {
+    const d = new Date(lastVisitFrom);
+    if (!isNaN(d.getTime())) conditions.push(gte(customersTable.lastVisitAt, d));
+  }
+  if (lastVisitTo && typeof lastVisitTo === "string") {
+    const d = new Date(lastVisitTo);
+    if (!isNaN(d.getTime())) conditions.push(lte(customersTable.lastVisitAt, d));
+  }
+  if (birthdayMonth && Number(birthdayMonth) >= 1 && Number(birthdayMonth) <= 12) {
+    conditions.push(sql`EXTRACT(MONTH FROM ${customersTable.birthday}) = ${Number(birthdayMonth)}`);
+  }
+  if (anniversaryMonth && Number(anniversaryMonth) >= 1 && Number(anniversaryMonth) <= 12) {
+    conditions.push(sql`EXTRACT(MONTH FROM ${customersTable.anniversary}) = ${Number(anniversaryMonth)}`);
+  }
+  if (hasComplaints === "true") {
+    conditions.push(sql`EXISTS (SELECT 1 FROM ${customerComplaintsTable} WHERE ${customerComplaintsTable.customerId} = ${customersTable.id} AND ${customerComplaintsTable.status} <> 'resolved')`);
+  }
+  // Loyalty tier filter — accepts named tier (bronze|silver|gold) OR a raw
+  // tierMin point threshold. Named tier maps to the canonical thresholds in
+  // lib/loyalty.ts so the UI doesn't need to know the cutoffs. Named tiers
+  // are EXACT bucket matches (silver excludes gold) so dashboard counts add
+  // up to the total customer count without double-counting.
+  if (tier && typeof tier === "string" && tier in LOYALTY_TIERS) {
+    const min = LOYALTY_TIERS[tier as LoyaltyTier];
+    const orderedTiers = (Object.entries(LOYALTY_TIERS) as Array<[LoyaltyTier, number]>)
+      .sort((a, b) => a[1] - b[1]);
+    const next = orderedTiers.find(([, threshold]) => threshold > min);
+    conditions.push(sql`${customersTable.loyaltyPoints} >= ${min}`);
+    if (next) conditions.push(sql`${customersTable.loyaltyPoints} < ${next[1]}`);
+  } else if (req.query.tierMin !== undefined) {
+    const tierMin = Number(req.query.tierMin);
+    if (Number.isFinite(tierMin) && tierMin > 0) {
+      conditions.push(sql`${customersTable.loyaltyPoints} >= ${tierMin}`);
+    }
+  }
+  // Tag filter — by tag id (exact match) or tag name (case-insensitive).
+  if (tag && typeof tag === "string") {
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${customerTagAssignmentsTable} a
+      INNER JOIN ${customerTagsTable} t ON t.id = a.tag_id
+      WHERE a.customer_id = ${customersTable.id}
+        AND a.restaurant_id = ${restaurantId}
+        AND lower(t.name) = lower(${tag})
+    )`);
+  }
 
   const [rows, totalRows] = await Promise.all([
     db.select().from(customersTable).where(and(...conditions)).orderBy(desc(customersTable.createdAt)).limit(lim).offset(offset),
     db.select({ count: count() }).from(customersTable).where(and(...conditions)),
   ]);
-  res.json({ data: rows, total: totalRows[0]?.count ?? 0 });
+
+  const tagMap = await loadTagsForCustomers(rows.map(r => r.id), restaurantId);
+  const enriched = rows.map(c => ({
+    ...c,
+    tags: tagMap.get(c.id) ?? [],
+    ...computeDerivedMetrics(c),
+  }));
+
+  res.json({ data: enriched, total: totalRows[0]?.count ?? 0 });
 });
 
 router.post("/restaurants/:restaurantId/customers", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
   const { name, email, phone, address, notes } = req.body;
-  const [customer] = await db.insert(customersTable).values({ restaurantId: Number(req.params.restaurantId), name, email, phone, address, notes }).returning();
+  const restaurantId = Number(req.params.restaurantId);
+  // Legacy `customers.notes` is no longer written — all freeform notes live
+  // in the timestamped `customer_notes` log.
+  const [customer] = await db.insert(customersTable)
+    .values({ restaurantId, name, email, phone, address })
+    .returning();
+
+  if (notes && typeof notes === "string" && notes.trim()) {
+    await db.insert(customerNotesTable).values({
+      customerId: customer.id,
+      restaurantId,
+      authorUserId: req.user?.sub ?? null,
+      body: notes.trim(),
+    });
+  }
   res.status(201).json(customer);
 });
 
 router.get("/restaurants/:restaurantId/customers/:id", async (req, res) => {
-  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, Number(req.params.id)), eq(customersTable.restaurantId, Number(req.params.restaurantId))));
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
   if (!customer) return void res.status(404).json({ error: "Not found" });
-  res.json(customer);
+
+  // Tags
+  const tagMap = await loadTagsForCustomers([customerId], restaurantId);
+  const tags = tagMap.get(customerId) ?? [];
+
+  // Favorite items — top 5 by order count + qty for paid orders.
+  const favorites = await db.select({
+    menuItemId: orderItemsTable.menuItemId,
+    name: orderItemsTable.menuItemName,
+    orderCount: sql<number>`COUNT(DISTINCT ${ordersTable.id})`.as("orderCount"),
+    quantity: sql<number>`COALESCE(SUM(${orderItemsTable.quantity}), 0)`.as("quantity"),
+    lastOrderedAt: sql<Date | null>`MAX(${ordersTable.createdAt})`.as("lastOrderedAt"),
+  })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
+    .where(and(eq(ordersTable.customerId, customerId), eq(ordersTable.restaurantId, restaurantId)))
+    .groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName)
+    .orderBy(desc(sql`COUNT(DISTINCT ${ordersTable.id})`), desc(sql`SUM(${orderItemsTable.quantity})`))
+    .limit(5);
+
+  // Recent complaints
+  const complaints = await db.select().from(customerComplaintsTable)
+    .where(eq(customerComplaintsTable.customerId, customerId))
+    .orderBy(desc(customerComplaintsTable.createdAt))
+    .limit(20);
+
+  // In-store feedback — match by phone (strongest signal) OR case-insensitive
+  // name match. (The feedback schema doesn't store an email column, so phone
+  // is the most reliable join key when available.)
+  const feedbackConds: Parameters<typeof or>[0][] = [];
+  if (customer.phone) feedbackConds.push(eq(customerFeedbackTable.customerPhone, customer.phone));
+  if (customer.name) feedbackConds.push(sql`lower(${customerFeedbackTable.customerName}) = lower(${customer.name})`);
+  let feedback: Array<typeof customerFeedbackTable.$inferSelect> = [];
+  if (feedbackConds.length > 0) {
+    feedback = await db.select().from(customerFeedbackTable)
+      .where(and(eq(customerFeedbackTable.restaurantId, restaurantId), or(...feedbackConds)!))
+      .orderBy(desc(customerFeedbackTable.createdAt))
+      .limit(20);
+  }
+
+  // External reviews — case-insensitive author-name match plus a body scan
+  // for the customer's phone or email (some reviewers leave contact info in
+  // the comment, especially for delivery complaints). The DB column is `body`
+  // but the API contract exposes it as `comment` so the UI can render feedback
+  // and external reviews uniformly.
+  const externalConds: Parameters<typeof or>[0][] = [];
+  if (customer.name) externalConds.push(sql`lower(${externalReviewsTable.authorName}) = lower(${customer.name})`);
+  if (customer.phone) externalConds.push(sql`${externalReviewsTable.body} ILIKE ${"%" + customer.phone + "%"}`);
+  if (customer.email) externalConds.push(sql`${externalReviewsTable.body} ILIKE ${"%" + customer.email + "%"}`);
+  let externalReviews: Array<{
+    id: number; rating: number | null; comment: string | null;
+    postedAt: Date | null; source: string; authorName: string | null;
+  }> = [];
+  if (externalConds.length > 0) {
+    externalReviews = await db.select({
+      id: externalReviewsTable.id,
+      rating: externalReviewsTable.rating,
+      comment: externalReviewsTable.body,
+      postedAt: externalReviewsTable.postedAt,
+      source: externalReviewsTable.source,
+      authorName: externalReviewsTable.authorName,
+    }).from(externalReviewsTable)
+      .where(and(eq(externalReviewsTable.restaurantId, restaurantId), or(...externalConds)!))
+      .orderBy(desc(externalReviewsTable.postedAt))
+      .limit(20);
+  }
+
+  res.json({
+    ...customer,
+    tags,
+    ...computeDerivedMetrics(customer),
+    favoriteItems: favorites,
+    recentComplaints: complaints,
+    recentReviews: {
+      feedback,
+      external: externalReviews,
+    },
+  });
 });
 
 router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { name, email, phone, address, loyaltyPoints, notes, isActive } = req.body;
-  const [updated] = await db.update(customersTable).set({ name, email, phone, address, loyaltyPoints, notes, isActive, updatedAt: new Date() }).where(and(eq(customersTable.id, Number(req.params.id)), eq(customersTable.restaurantId, Number(req.params.restaurantId)))).returning();
-  if (!updated) return void res.status(404).json({ error: "Not found" });
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const [existing] = await db.select().from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
+
+  const {
+    name, email, phone, address, loyaltyPoints, isActive, isVip,
+    preferredChannel, whatsappOptIn, whatsappOptInSource,
+    birthday, anniversary,
+  } = req.body as Record<string, unknown>;
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates.name = name;
+  if (email !== undefined) updates.email = email;
+  if (phone !== undefined) updates.phone = phone;
+  if (address !== undefined) updates.address = address;
+  if (loyaltyPoints !== undefined) updates.loyaltyPoints = Number(loyaltyPoints);
+  // Note: the legacy `notes` field is no longer writable through this route.
+  // All freeform notes are now stored in customer_notes via /:id/notes.
+  if (isActive !== undefined) updates.isActive = !!isActive;
+  if (isVip !== undefined) updates.isVip = !!isVip;
+
+  if (preferredChannel !== undefined) {
+    if (!(PREFERRED_CHANNELS as readonly string[]).includes(String(preferredChannel))) {
+      return void res.status(400).json({ error: `preferredChannel must be one of ${PREFERRED_CHANNELS.join(", ")}` });
+    }
+    updates.preferredChannel = preferredChannel as PreferredChannel;
+  }
+
+  if (birthday !== undefined) {
+    const r = parseDateOnly(birthday);
+    if (!r.ok) return void res.status(400).json({ error: `birthday: ${r.error}` });
+    updates.birthday = r.value;
+  }
+  if (anniversary !== undefined) {
+    const r = parseDateOnly(anniversary);
+    if (!r.ok) return void res.status(400).json({ error: `anniversary: ${r.error}` });
+    updates.anniversary = r.value;
+  }
+
+  // WhatsApp opt-in: when toggling to true, source is required and we stamp time.
+  // Toggling to false clears the timestamp/source for compliance.
+  if (whatsappOptIn !== undefined) {
+    const next = !!whatsappOptIn;
+    if (next && !existing.whatsappOptIn) {
+      const src = typeof whatsappOptInSource === "string" ? whatsappOptInSource.trim() : "";
+      if (!src) return void res.status(400).json({ error: "whatsappOptInSource is required when enabling WhatsApp opt-in" });
+      updates.whatsappOptIn = true;
+      updates.whatsappOptInAt = new Date();
+      updates.whatsappOptInSource = src;
+    } else if (!next && existing.whatsappOptIn) {
+      updates.whatsappOptIn = false;
+      updates.whatsappOptInAt = null;
+      updates.whatsappOptInSource = null;
+    }
+  }
+
+  const [updated] = await db.update(customersTable).set(updates)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)))
+    .returning();
+
+  // Audit any change touching opt-in/preferences/milestones for compliance traceability.
+  const auditedKeys = ["preferredChannel", "whatsappOptIn", "whatsappOptInAt", "whatsappOptInSource", "birthday", "anniversary"];
+  if (auditedKeys.some(k => k in updates)) {
+    await recordAuditLog({
+      req,
+      module: "customers",
+      action: "update_preferences",
+      entity: "customer",
+      entityId: customerId,
+      restaurantId,
+      oldValue: Object.fromEntries(auditedKeys.map(k => [k, (existing as Record<string, unknown>)[k]])),
+      newValue: Object.fromEntries(auditedKeys.filter(k => k in updates).map(k => [k, updates[k]])),
+    });
+  }
+
   res.json(updated);
 });
+
+// ─── Tags ──────────────────────────────────────────────────────────────────
+
+async function listTagDictionary(restaurantId: number, search: unknown) {
+  const conds = [eq(customerTagsTable.restaurantId, restaurantId)] as Parameters<typeof and>[0][];
+  if (search && typeof search === "string") conds.push(ilike(customerTagsTable.name, `%${search}%`));
+  return db.select().from(customerTagsTable).where(and(...conds)).orderBy(customerTagsTable.name).limit(100);
+}
+
+router.get("/restaurants/:restaurantId/customer-tags", async (req, res) => {
+  res.json(await listTagDictionary(Number(req.params.restaurantId), req.query.search));
+});
+
+// Documented contract path. `/customer-tags` retained as a back-compat alias
+// to avoid breaking existing clients/tests during rollout.
+router.get("/restaurants/:restaurantId/customers/tags", async (req, res) => {
+  res.json(await listTagDictionary(Number(req.params.restaurantId), req.query.search));
+});
+
+router.get("/restaurants/:restaurantId/customers/:id/tags", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const map = await loadTagsForCustomers([customerId], restaurantId);
+  res.json(map.get(customerId) ?? []);
+});
+
+router.post("/restaurants/:restaurantId/customers/:id/tags", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const raw = String(req.body?.name ?? "").trim();
+  if (!raw) return void res.status(400).json({ error: "Tag name required" });
+  if (raw.length > 40) return void res.status(400).json({ error: "Tag name too long" });
+
+  // Verify customer belongs to restaurant.
+  const [c] = await db.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!c) return void res.status(404).json({ error: "Customer not found" });
+
+  // Upsert tag in dictionary.
+  const [tag] = await db.insert(customerTagsTable)
+    .values({ restaurantId, name: raw })
+    .onConflictDoUpdate({
+      target: [customerTagsTable.restaurantId, customerTagsTable.name],
+      set: { name: raw },
+    })
+    .returning();
+
+  await db.insert(customerTagAssignmentsTable).values({
+    customerId, tagId: tag.id, restaurantId,
+  }).onConflictDoNothing();
+
+  await recordAuditLog({ req, module: "customers", action: "tag_add", entity: "customer", entityId: customerId, restaurantId, newValue: { tag: raw } });
+  res.status(201).json(tag);
+});
+
+router.delete("/restaurants/:restaurantId/customers/:id/tags/:tagId", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const tagId = Number(req.params.tagId);
+  await db.delete(customerTagAssignmentsTable).where(and(
+    eq(customerTagAssignmentsTable.customerId, customerId),
+    eq(customerTagAssignmentsTable.tagId, tagId),
+    eq(customerTagAssignmentsTable.restaurantId, restaurantId),
+  ));
+  await recordAuditLog({ req, module: "customers", action: "tag_remove", entity: "customer", entityId: customerId, restaurantId, oldValue: { tagId } });
+  res.status(204).send();
+});
+
+// ─── Notes (timestamped log) ───────────────────────────────────────────────
+
+router.get("/restaurants/:restaurantId/customers/:id/notes", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const rows = await db.select({
+    id: customerNotesTable.id,
+    customerId: customerNotesTable.customerId,
+    body: customerNotesTable.body,
+    authorUserId: customerNotesTable.authorUserId,
+    authorName: usersTable.name,
+    createdAt: customerNotesTable.createdAt,
+    updatedAt: customerNotesTable.updatedAt,
+  }).from(customerNotesTable)
+    .leftJoin(usersTable, eq(usersTable.id, customerNotesTable.authorUserId))
+    .where(and(eq(customerNotesTable.customerId, customerId), eq(customerNotesTable.restaurantId, restaurantId)))
+    .orderBy(desc(customerNotesTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/customers/:id/notes", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const body = String(req.body?.body ?? "").trim();
+  if (!body) return void res.status(400).json({ error: "Note body required" });
+
+  const [c] = await db.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!c) return void res.status(404).json({ error: "Customer not found" });
+
+  const [note] = await db.insert(customerNotesTable).values({
+    customerId, restaurantId,
+    authorUserId: req.user?.sub ?? null,
+    body,
+  }).returning();
+  res.status(201).json(note);
+});
+
+router.patch("/restaurants/:restaurantId/customers/:id/notes/:noteId", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const noteId = Number(req.params.noteId);
+  const body = String(req.body?.body ?? "").trim();
+  if (!body) return void res.status(400).json({ error: "Note body required" });
+
+  const [existing] = await db.select().from(customerNotesTable).where(and(
+    eq(customerNotesTable.id, noteId),
+    eq(customerNotesTable.customerId, customerId),
+    eq(customerNotesTable.restaurantId, restaurantId),
+  ));
+  if (!existing) return void res.status(404).json({ error: "Note not found" });
+
+  // Only the original author may edit, and only within the edit window.
+  const isAuthor = existing.authorUserId && existing.authorUserId === req.user?.sub;
+  const isAdmin = req.user?.role === "owner" || req.user?.role === "manager" || req.user?.isSuperAdmin;
+  const withinWindow = Date.now() - existing.createdAt.getTime() <= NOTE_EDIT_WINDOW_MS;
+  if (!isAdmin && !(isAuthor && withinWindow)) {
+    return void res.status(403).json({ error: "Notes can only be edited by the author within 15 minutes" });
+  }
+
+  const [updated] = await db.update(customerNotesTable).set({ body, updatedAt: new Date() })
+    .where(eq(customerNotesTable.id, noteId)).returning();
+  res.json(updated);
+});
+
+router.delete("/restaurants/:restaurantId/customers/:id/notes/:noteId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const noteId = Number(req.params.noteId);
+  await db.delete(customerNotesTable).where(and(
+    eq(customerNotesTable.id, noteId),
+    eq(customerNotesTable.customerId, customerId),
+    eq(customerNotesTable.restaurantId, restaurantId),
+  ));
+  res.status(204).send();
+});
+
+// ─── Complaints ────────────────────────────────────────────────────────────
+
+router.get("/restaurants/:restaurantId/customers/:id/complaints", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const rows = await db.select({
+    id: customerComplaintsTable.id,
+    customerId: customerComplaintsTable.customerId,
+    channel: customerComplaintsTable.channel,
+    summary: customerComplaintsTable.summary,
+    details: customerComplaintsTable.details,
+    status: customerComplaintsTable.status,
+    handledByUserId: customerComplaintsTable.handledByUserId,
+    handledByName: usersTable.name,
+    resolvedAt: customerComplaintsTable.resolvedAt,
+    resolutionNotes: customerComplaintsTable.resolutionNotes,
+    createdAt: customerComplaintsTable.createdAt,
+    updatedAt: customerComplaintsTable.updatedAt,
+  }).from(customerComplaintsTable)
+    .leftJoin(usersTable, eq(usersTable.id, customerComplaintsTable.handledByUserId))
+    .where(and(eq(customerComplaintsTable.customerId, customerId), eq(customerComplaintsTable.restaurantId, restaurantId)))
+    .orderBy(desc(customerComplaintsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/customers/:id/complaints", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const { channel, summary, details } = req.body as Record<string, unknown>;
+  const sum = String(summary ?? "").trim();
+  if (!sum) return void res.status(400).json({ error: "Complaint summary required" });
+  const ch = typeof channel === "string" && (COMPLAINT_CHANNELS as readonly string[]).includes(channel) ? channel : "in_person";
+
+  const [c] = await db.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!c) return void res.status(404).json({ error: "Customer not found" });
+
+  const [row] = await db.insert(customerComplaintsTable).values({
+    customerId, restaurantId,
+    channel: ch,
+    summary: sum,
+    details: typeof details === "string" ? details : null,
+    handledByUserId: req.user?.sub ?? null,
+  }).returning();
+  await recordAuditLog({ req, module: "customers", action: "complaint_create", entity: "complaint", entityId: row.id, restaurantId, newValue: { summary: sum, channel: ch } });
+  res.status(201).json(row);
+});
+
+router.patch("/restaurants/:restaurantId/customers/:id/complaints/:complaintId", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const complaintId = Number(req.params.complaintId);
+  const { status, resolutionNotes, summary, details, channel } = req.body as Record<string, unknown>;
+
+  const [existing] = await db.select().from(customerComplaintsTable).where(and(
+    eq(customerComplaintsTable.id, complaintId),
+    eq(customerComplaintsTable.customerId, customerId),
+    eq(customerComplaintsTable.restaurantId, restaurantId),
+  ));
+  if (!existing) return void res.status(404).json({ error: "Complaint not found" });
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (status !== undefined) {
+    if (!(COMPLAINT_STATUSES as readonly string[]).includes(String(status))) {
+      return void res.status(400).json({ error: `status must be one of ${COMPLAINT_STATUSES.join(", ")}` });
+    }
+    updates.status = status;
+    if (status === "resolved" && !existing.resolvedAt) {
+      updates.resolvedAt = new Date();
+      updates.handledByUserId = req.user?.sub ?? existing.handledByUserId;
+    }
+    if (status !== "resolved") updates.resolvedAt = null;
+  }
+  if (resolutionNotes !== undefined) updates.resolutionNotes = String(resolutionNotes);
+  if (summary !== undefined) updates.summary = String(summary);
+  if (details !== undefined) updates.details = String(details);
+  if (channel !== undefined && (COMPLAINT_CHANNELS as readonly string[]).includes(String(channel))) updates.channel = channel;
+
+  const [updated] = await db.update(customerComplaintsTable).set(updates)
+    .where(eq(customerComplaintsTable.id, complaintId)).returning();
+  await recordAuditLog({ req, module: "customers", action: "complaint_update", entity: "complaint", entityId: complaintId, restaurantId, oldValue: { status: existing.status }, newValue: { status: updates.status ?? existing.status } });
+  res.json(updated);
+});
+
+// ─── Reviews aggregate ─────────────────────────────────────────────────────
+
+router.get("/restaurants/:restaurantId/customers/:id/reviews", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const customerId = Number(req.params.id);
+  const [customer] = await db.select().from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.restaurantId, restaurantId)));
+  if (!customer) return void res.status(404).json({ error: "Not found" });
+
+  // Mirror the richer matching used by GET /customers/:id so the dedicated
+  // reviews endpoint stays consistent with the profile aggregate.
+  const feedbackConds: Parameters<typeof or>[0][] = [];
+  if (customer.phone) feedbackConds.push(eq(customerFeedbackTable.customerPhone, customer.phone));
+  if (customer.name) feedbackConds.push(sql`lower(${customerFeedbackTable.customerName}) = lower(${customer.name})`);
+  const feedback = feedbackConds.length > 0
+    ? await db.select().from(customerFeedbackTable)
+      .where(and(eq(customerFeedbackTable.restaurantId, restaurantId), or(...feedbackConds)!))
+      .orderBy(desc(customerFeedbackTable.createdAt))
+      .limit(50)
+    : [];
+
+  const externalConds: Parameters<typeof or>[0][] = [];
+  if (customer.name) externalConds.push(sql`lower(${externalReviewsTable.authorName}) = lower(${customer.name})`);
+  if (customer.phone) externalConds.push(sql`${externalReviewsTable.body} ILIKE ${"%" + customer.phone + "%"}`);
+  if (customer.email) externalConds.push(sql`${externalReviewsTable.body} ILIKE ${"%" + customer.email + "%"}`);
+  const external = externalConds.length > 0
+    ? await db.select({
+        id: externalReviewsTable.id,
+        rating: externalReviewsTable.rating,
+        comment: externalReviewsTable.body,
+        postedAt: externalReviewsTable.postedAt,
+        source: externalReviewsTable.source,
+        authorName: externalReviewsTable.authorName,
+      }).from(externalReviewsTable)
+      .where(and(eq(externalReviewsTable.restaurantId, restaurantId), or(...externalConds)!))
+      .orderBy(desc(externalReviewsTable.postedAt))
+      .limit(50)
+    : [];
+  res.json({ feedback, external });
+});
+
+// ─── Loyalty (unchanged) ───────────────────────────────────────────────────
 
 router.get("/restaurants/:restaurantId/customers/:id/loyalty", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
@@ -68,6 +669,8 @@ router.post("/restaurants/:restaurantId/customers/:id/loyalty", requireRole("own
   const [tx] = await db.insert(loyaltyTransactionsTable).values({ customerId, restaurantId, points: delta, type: type ?? "earn", reason, orderId }).returning();
   res.status(201).json({ balance: newBalance, transaction: tx });
 });
+
+// ─── Coupons (unchanged) ───────────────────────────────────────────────────
 
 router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
   const rows = await db.select().from(couponsTable).where(eq(couponsTable.restaurantId, Number(req.params.restaurantId)));
@@ -114,6 +717,8 @@ router.post("/restaurants/:restaurantId/coupons/validate", async (req, res) => {
 
   res.json({ valid: true, discountAmount: discount.toFixed(2), message: null });
 });
+
+// ─── Addresses (unchanged) ─────────────────────────────────────────────────
 
 router.get("/restaurants/:restaurantId/customers/:id/addresses", async (req, res) => {
   const customerId = Number(req.params.id);
@@ -173,6 +778,8 @@ router.delete("/restaurants/:restaurantId/customers/:id/addresses/:addressId", r
     ));
   res.status(204).send();
 });
+
+// ─── Notifications (unchanged) ─────────────────────────────────────────────
 
 router.get("/restaurants/:restaurantId/notifications", async (req, res) => {
   const { unreadOnly } = req.query;

@@ -1,7 +1,8 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
+import { usersTable } from "./users";
 
 export const customersTable = pgTable("customers", {
   id: serial("id").primaryKey(),
@@ -19,9 +20,82 @@ export const customersTable = pgTable("customers", {
   dateOfBirth: text("date_of_birth"),
   noShowCount: integer("no_show_count").notNull().default(0),
   lastNoShowAt: timestamp("last_no_show_at"),
+  // Task #209 — CRM upgrade: contact preferences, milestones, derived activity.
+  birthday: date("birthday"),
+  anniversary: date("anniversary"),
+  preferredChannel: text("preferred_channel").notNull().default("none"), // whatsapp | sms | email | call | none
+  whatsappOptIn: boolean("whatsapp_opt_in").notNull().default(false),
+  whatsappOptInAt: timestamp("whatsapp_opt_in_at"),
+  whatsappOptInSource: text("whatsapp_opt_in_source"),
+  firstOrderAt: timestamp("first_order_at"),
+  lastVisitAt: timestamp("last_visit_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Task #209 — restaurant-scoped tag dictionary so tags autocomplete from
+// previously-used values and don't leak across restaurants.
+export const customerTagsTable = pgTable("customer_tags", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  uniq: uniqueIndex("customer_tags_restaurant_name_idx").on(t.restaurantId, t.name),
+}));
+
+export const customerTagAssignmentsTable = pgTable("customer_tag_assignments", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id").notNull().references(() => customerTagsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  uniq: uniqueIndex("customer_tag_assignments_uniq_idx").on(t.customerId, t.tagId),
+  byCustomer: index("customer_tag_assignments_customer_idx").on(t.customerId),
+  byTag: index("customer_tag_assignments_tag_idx").on(t.tagId),
+}));
+
+// Append-only timestamped notes log (replaces single notes column for new writes).
+export const customerNotesTable = pgTable("customer_notes", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  authorUserId: integer("author_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  byCustomer: index("customer_notes_customer_idx").on(t.customerId, t.createdAt),
+}));
+
+export const customerComplaintsTable = pgTable("customer_complaints", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull().default("in_person"), // in_person | phone | whatsapp | email | review
+  summary: text("summary").notNull(),
+  details: text("details"),
+  status: text("status").notNull().default("open"), // open | in_progress | resolved
+  handledByUserId: integer("handled_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  byCustomer: index("customer_complaints_customer_idx").on(t.customerId, t.createdAt),
+  byStatus: index("customer_complaints_restaurant_status_idx").on(t.restaurantId, t.status),
+}));
+
+export const insertCustomerTagSchema = createInsertSchema(customerTagsTable).omit({ id: true, createdAt: true });
+export type CustomerTag = typeof customerTagsTable.$inferSelect;
+export type CustomerTagAssignment = typeof customerTagAssignmentsTable.$inferSelect;
+
+export const insertCustomerNoteSchema = createInsertSchema(customerNotesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type CustomerNote = typeof customerNotesTable.$inferSelect;
+
+export const insertCustomerComplaintSchema = createInsertSchema(customerComplaintsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type CustomerComplaint = typeof customerComplaintsTable.$inferSelect;
 
 export const loyaltyPointsTable = pgTable("loyalty_points", {
   id: serial("id").primaryKey(),

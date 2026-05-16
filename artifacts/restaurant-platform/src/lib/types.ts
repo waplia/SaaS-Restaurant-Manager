@@ -965,6 +965,13 @@ export interface Permission {
   createdAt: string;
 }
 
+export type CustomerPreferredChannel = "whatsapp" | "sms" | "email" | "call" | "none";
+
+export interface CustomerTagRef {
+  id: number;
+  name: string;
+}
+
 export interface Customer {
   id: number;
   restaurantId: number;
@@ -977,8 +984,83 @@ export interface Customer {
   totalSpent: string;
   loyaltyPoints: number;
   isActive: boolean;
+  isVip: boolean;
+  birthday: string | null;
+  anniversary: string | null;
+  preferredChannel: CustomerPreferredChannel;
+  whatsappOptIn: boolean;
+  whatsappOptInAt: string | null;
+  whatsappOptInSource: string | null;
+  firstOrderAt: string | null;
+  lastVisitAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // enriched (list/detail)
+  tags?: CustomerTagRef[];
+  averageOrderValue?: number;
+  visitFrequencyDays?: number | null;
+  lifetimeDays?: number | null;
+}
+
+export interface CustomerFavoriteItem {
+  menuItemId: number | null;
+  name: string;
+  orderCount: number;
+  quantity: number;
+  lastOrderedAt: string | null;
+}
+
+export interface CustomerComplaint {
+  id: number;
+  customerId: number;
+  channel: "in_person" | "phone" | "whatsapp" | "email" | "review" | "other";
+  summary: string;
+  details: string | null;
+  status: "open" | "in_progress" | "resolved";
+  handledByUserId: number | null;
+  handledByName?: string | null;
+  resolvedAt: string | null;
+  resolutionNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerNote {
+  id: number;
+  customerId: number;
+  body: string;
+  authorUserId: number | null;
+  authorName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerReviewBundle {
+  feedback: Array<{ id: number; rating: number | null; comment: string | null; createdAt: string; customerName?: string | null }>;
+  external: Array<{ id: number; rating: number | null; comment: string | null; postedAt: string | null; source: string; authorName: string | null }>;
+}
+
+export interface CustomerProfile extends Customer {
+  favoriteItems: CustomerFavoriteItem[];
+  recentComplaints: CustomerComplaint[];
+  recentReviews: CustomerReviewBundle;
+}
+
+export interface CustomerListFilters {
+  search?: string;
+  page?: number;
+  limit?: number;
+  tag?: string;
+  vip?: boolean;
+  preferredChannel?: CustomerPreferredChannel;
+  whatsappOptIn?: boolean;
+  hasComplaints?: boolean;
+  lastVisitFrom?: string;
+  lastVisitTo?: string;
+  birthdayMonth?: number;
+  anniversaryMonth?: number;
+  tier?: string;
+  tierMin?: number;
 }
 
 export interface UpdateCustomerInput {
@@ -989,6 +1071,12 @@ export interface UpdateCustomerInput {
   address?: string;
   notes?: string;
   isActive?: boolean;
+  isVip?: boolean;
+  birthday?: string | null;
+  anniversary?: string | null;
+  preferredChannel?: CustomerPreferredChannel;
+  whatsappOptIn?: boolean;
+  whatsappOptInSource?: string;
 }
 
 export interface CustomerAddress {

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, desc, count, ne, notInArray, inArray } from "drizzle-orm";
+import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
 import { verifyManagerDiscountOtp } from "../lib/managerOtp";
@@ -91,12 +91,20 @@ async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, r
   }
 
   if (txns.length > 0) await db.insert(loyaltyTransactionsTable).values(txns);
-  await db.update(customersTable).set({
-    loyaltyPoints: Math.max(0, customer.loyaltyPoints + balanceDelta),
-    totalOrders: customer.totalOrders + 1,
-    totalSpent: (Number(customer.totalSpent) + Number(paidOrder.totalAmount)).toFixed(2),
-    updatedAt: new Date(),
-  }).where(eq(customersTable.id, customerId));
+  // Maintain CRM-derived activity: firstOrderAt is set once; lastVisitAt is
+  // refreshed every paid order so the profile/list stays accurate without a
+  // full orders scan.
+  const now = new Date();
+  await db.execute(sql`
+    UPDATE customers SET
+      loyalty_points = ${Math.max(0, customer.loyaltyPoints + balanceDelta)},
+      total_orders = total_orders + 1,
+      total_spent = (total_spent::numeric + ${Number(paidOrder.totalAmount)}::numeric)::text,
+      first_order_at = COALESCE(first_order_at, ${now}),
+      last_visit_at = ${now},
+      updated_at = ${now}
+    WHERE id = ${customerId}
+  `);
 }
 
 async function updateCouponUsage(couponCode: string | null, restaurantId: number): Promise<void> {

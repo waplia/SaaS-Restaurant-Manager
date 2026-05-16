@@ -789,14 +789,146 @@ export function useCreateUser() {
   });
 }
 
-export function useCustomers(params?: { search?: string; page?: number }) {
+export function useCustomers(params?: import("./types").CustomerListFilters) {
   const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.tag) q.set("tag", params.tag);
+  if (params?.vip) q.set("vip", "true");
+  if (params?.preferredChannel) q.set("preferredChannel", params.preferredChannel);
+  if (params?.whatsappOptIn !== undefined) q.set("whatsappOptIn", String(params.whatsappOptIn));
+  if (params?.hasComplaints) q.set("hasComplaints", "true");
+  if (params?.lastVisitFrom) q.set("lastVisitFrom", params.lastVisitFrom);
+  if (params?.lastVisitTo) q.set("lastVisitTo", params.lastVisitTo);
+  if (params?.birthdayMonth) q.set("birthdayMonth", String(params.birthdayMonth));
+  if (params?.anniversaryMonth) q.set("anniversaryMonth", String(params.anniversaryMonth));
+  if (params?.tier) q.set("tier", params.tier);
+  if (params?.tierMin) q.set("tierMin", String(params.tierMin));
   return useQuery({
     queryKey: ["customers", RESTAURANT_ID, params],
     queryFn: () => apiGet<CustomersResponse>(`/restaurants/${RESTAURANT_ID}/customers?${q}`),
+  });
+}
+
+export function useCustomerProfile(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["customers", "profile", RESTAURANT_ID, id],
+    queryFn: () => apiGet<import("./types").CustomerProfile>(`/restaurants/${RESTAURANT_ID}/customers/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export function useCustomerTags(search?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (search) q.set("search", search);
+  return useQuery({
+    queryKey: ["customer-tags", RESTAURANT_ID, search ?? null],
+    queryFn: () => apiGet<import("./types").CustomerTagRef[]>(`/restaurants/${RESTAURANT_ID}/customer-tags?${q}`),
+  });
+}
+
+export function useAddCustomerTag() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, name }: { customerId: number; name: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/tags`, { name }),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["customer-tags"] });
+      qc.invalidateQueries({ queryKey: ["customers", "profile", RESTAURANT_ID, customerId] });
+    },
+  });
+}
+
+export function useRemoveCustomerTag() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, tagId }: { customerId: number; tagId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/tags/${tagId}`),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["customers", "profile", RESTAURANT_ID, customerId] });
+    },
+  });
+}
+
+export function useCustomerNotes(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["customer-notes", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<import("./types").CustomerNote[]>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/notes`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useCreateCustomerNote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, body }: { customerId: number; body: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/notes`, { body }),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["customer-notes", RESTAURANT_ID, customerId] }),
+  });
+}
+
+export function useUpdateCustomerNote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, noteId, body }: { customerId: number; noteId: number; body: string }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/notes/${noteId}`, { body }),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["customer-notes", RESTAURANT_ID, customerId] }),
+  });
+}
+
+export function useDeleteCustomerNote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, noteId }: { customerId: number; noteId: number }) =>
+      apiDelete(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/notes/${noteId}`),
+    onSuccess: (_d, { customerId }) => qc.invalidateQueries({ queryKey: ["customer-notes", RESTAURANT_ID, customerId] }),
+  });
+}
+
+export function useCustomerComplaints(customerId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["customer-complaints", RESTAURANT_ID, customerId],
+    queryFn: () => apiGet<import("./types").CustomerComplaint[]>(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/complaints`),
+    enabled: customerId !== null,
+  });
+}
+
+export function useCreateCustomerComplaint() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, ...data }: { customerId: number; channel: string; summary: string; details?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/complaints`, data),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["customer-complaints", RESTAURANT_ID, customerId] });
+      qc.invalidateQueries({ queryKey: ["customers", "profile", RESTAURANT_ID, customerId] });
+    },
+  });
+}
+
+export function useUpdateCustomerComplaint() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, complaintId, ...data }: { customerId: number; complaintId: number; status?: string; resolutionNotes?: string; summary?: string; details?: string; channel?: string }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/customers/${customerId}/complaints/${complaintId}`, data),
+    onSuccess: (_d, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ["customer-complaints", RESTAURANT_ID, customerId] });
+      qc.invalidateQueries({ queryKey: ["customers", "profile", RESTAURANT_ID, customerId] });
+    },
   });
 }
 
