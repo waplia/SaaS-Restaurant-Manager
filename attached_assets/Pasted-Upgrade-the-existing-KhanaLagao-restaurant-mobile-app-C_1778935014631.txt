@@ -1,0 +1,950 @@
+Upgrade the existing KhanaLagao restaurant mobile app.
+
+Current situation:
+The restaurant mobile app is already built with some features. Now I want it to include all important mobile features required for restaurant owners, managers, staff, and daily operations.
+
+Important:
+- Do not rebuild the app from scratch.
+- First scan the existing mobile app features, screens, APIs, authentication, routes, and backend connections.
+- Do not break existing working features.
+- Add only missing important features.
+- Mobile app should connect with the same KhanaLagao backend.
+- Data should sync with restaurant admin web dashboard.
+- Use real APIs and database, not mock data.
+- Add proper loading, empty, error, and offline states.
+- App should be fast, modern, clean, and easy to use.
+
+App name:
+KhanaLagao
+
+Goal:
+Make the mobile app useful for restaurant owners/managers to manage live orders, POS overview, kitchen status, tables, QR orders, inventory alerts, staff attendance, payroll overview, customer feedback, Khana AI, reports, notifications, finance, and support from mobile.
+
+====================================================
+1. MOBILE APP USER TYPES
+====================================================
+
+Support role-based mobile app access:
+
+Owner/Admin:
+- Full mobile access based on plan.
+
+Manager:
+- Dashboard
+- Orders
+- Kitchen
+- Tables
+- Inventory alerts
+- Staff attendance
+- Reports
+- Customer feedback
+- Notifications
+- Approvals
+
+Cashier:
+- Orders
+- POS summary
+- Payments
+- Tables
+- Invoices limited
+
+Waiter/Captain:
+- Tables
+- Orders
+- Waiter requests
+- QR orders
+- Menu view
+- Order status
+
+Chef/Kitchen:
+- Kitchen/KDS
+- KOT list
+- Item status update
+- Delay alerts
+
+Inventory Manager:
+- Stock
+- Low stock alerts
+- Purchase orders
+- Waste
+- Vendors
+
+HR/Payroll:
+- Staff
+- Attendance
+- Leave
+- Payroll summary
+
+Marketing Manager:
+- Customers
+- Growth campaigns
+- Review booster
+- Feedback
+- Khana AI campaign tools
+
+Accountant:
+- Finance
+- Payments
+- Expenses
+- Settlements
+- P&L
+- Invoices
+
+Make sure each role only sees allowed screens.
+
+====================================================
+2. MOBILE APP MAIN NAVIGATION
+====================================================
+
+Create clean bottom navigation for daily-use features:
+
+Bottom Tabs:
+- Home
+- Orders
+- Kitchen
+- Alerts
+- More
+
+Home:
+Dashboard and quick actions.
+
+Orders:
+Live orders, QR orders, delivery, takeaway, dine-in.
+
+Kitchen:
+KOT/KDS status for chef/manager.
+
+Alerts:
+Notifications, stock alerts, staff alerts, payment alerts, customer feedback, AI insights.
+
+More:
+All other modules based on role and plan.
+
+More menu should include:
+- Tables
+- Menu
+- Inventory
+- Customers
+- Growth Engine
+- Khana AI
+- Staff
+- Finance
+- Reports
+- Reservations
+- Delivery
+- Review Booster
+- Support
+- Settings
+
+====================================================
+3. OWNER/MANAGER MOBILE DASHBOARD
+====================================================
+
+Create a powerful mobile dashboard.
+
+Show cards:
+- Today Sales
+- Live Orders
+- Pending Orders
+- Kitchen Delays
+- Occupied Tables
+- QR Orders
+- Online Orders
+- Staff Present
+- Low Stock Items
+- Pending Payments
+- Customer Feedback
+- Review Rating
+- AI Insights
+- Wallet Balance
+- Expenses Today
+- Net Profit Estimate
+
+Charts:
+- Sales trend
+- Order type split
+- Payment mode split
+- Top items
+- Peak hours
+
+Quick actions:
+- View Orders
+- Create Order
+- View Kitchen
+- Check Stock
+- Add Expense
+- View Reports
+- Send Campaign
+- Open Khana AI
+- Raise Support Ticket
+
+Empty state:
+If new restaurant has no data, show onboarding suggestions.
+
+====================================================
+4. LIVE ORDERS
+====================================================
+
+Add complete live order management.
+
+Order types:
+- Dine-in
+- Takeaway
+- Delivery
+- QR order
+- Online order
+- Kiosk order if enabled
+
+Order list should show:
+- Order number
+- Table/customer
+- Order type
+- Amount
+- Status
+- Payment status
+- Time
+- Delay indicator
+
+Filters:
+- New
+- Accepted
+- Preparing
+- Ready
+- Served
+- Delivered
+- Cancelled
+- Payment pending
+
+Actions based on role:
+- Accept order
+- Reject order
+- Send to kitchen
+- Mark preparing
+- Mark ready
+- Mark served
+- Mark delivered
+- Cancel with reason
+- Call customer
+- WhatsApp customer
+- View invoice
+- Print/share bill if supported
+
+====================================================
+5. KITCHEN / KDS MOBILE
+====================================================
+
+Create mobile KDS/KOT view.
+
+Features:
+- New KOT list
+- Preparing list
+- Ready list
+- Delayed orders
+- Item-wise status
+- Station filter
+- Table/order number
+- Preparation time
+- Notes/modifiers
+- Mark item ready
+- Mark full order ready
+- Delay alert
+- Cancelled KOT reason
+
+Kitchen roles should open directly to Kitchen tab after login if desired.
+
+====================================================
+6. TABLE MANAGEMENT
+====================================================
+
+Mobile table view:
+- Floor-wise tables
+- Table status:
+  - Available
+  - Occupied
+  - Reserved
+  - Cleaning
+  - Billed
+- Assign waiter
+- Transfer table
+- Merge table
+- View order
+- Add order
+- Generate table QR
+- Reservation indicator
+
+Useful for manager/waiter app.
+
+====================================================
+7. WAITER REQUESTS
+====================================================
+
+Add waiter/captain request management.
+
+Customer QR menu can trigger:
+- Call waiter
+- Request water
+- Request bill
+- Request cleaning
+- Need help
+- Custom request
+
+Mobile app should show:
+- New request notification
+- Table number
+- Request type
+- Time
+- Accept/resolve button
+- Escalation if not resolved
+
+====================================================
+8. RESERVATIONS
+====================================================
+
+Mobile reservation module:
+- Today reservations
+- Upcoming reservations
+- Create reservation
+- Edit reservation
+- Confirm/cancel
+- Mark arrived
+- Mark no-show
+- Assign table
+- Customer contact
+- Advance payment status
+- Reservation reminders
+
+====================================================
+9. DELIVERY MANAGEMENT
+====================================================
+
+Mobile delivery view:
+- Delivery orders
+- Assign rider
+- Rider status
+- Out for delivery
+- Delivered
+- Failed delivery
+- Cash collected
+- Customer address
+- Call/WhatsApp customer
+- Proof of delivery upload if available
+
+Delivery staff mode:
+- My assigned deliveries
+- Order details
+- Navigation link
+- Mark picked up
+- Mark delivered
+- Collect cash
+- Upload proof
+
+====================================================
+10. INVENTORY MOBILE
+====================================================
+
+Mobile inventory should focus on alerts and quick actions.
+
+Features:
+- Low stock alerts
+- Out-of-stock items
+- Stock list
+- Raw material detail
+- Quick stock adjustment
+- Add purchase
+- Purchase order approval
+- Vendor contact
+- Waste entry
+- Expiry alerts
+- Stock transfer approval
+- Scan barcode/QR if available
+- AI purchase suggestion shortcut
+
+Important:
+Owner/manager should get mobile notification when critical stock is low.
+
+====================================================
+11. MENU MANAGEMENT MOBILE
+====================================================
+
+Mobile menu features:
+- View menu items
+- Search item
+- Toggle item available/unavailable
+- Change price if permission allowed
+- Edit item image
+- Edit description
+- Mark bestseller
+- Change stock availability
+- View QR menu
+- Share QR menu link
+- Use Khana AI description/image shortcut
+
+This is important because restaurants often need to turn items on/off quickly from phone.
+
+====================================================
+12. STAFF & ATTENDANCE MOBILE
+====================================================
+
+Staff module:
+- Staff list
+- Present/absent
+- Late staff
+- Shift list
+- Attendance summary
+- Leave requests
+- Approve/reject leave
+- Payroll summary
+- Salary slips
+- Staff task list
+- Assign task
+- Staff performance summary
+
+Staff attendance:
+- Punch in/out if staff app mode is enabled
+- Location/photo/QR attendance optional
+- Manual correction approval
+
+====================================================
+13. STAFF TASKS / SOP / TRAINING MOBILE
+====================================================
+
+Mobile task flow:
+- Daily tasks
+- Cleaning checklist
+- Opening checklist
+- Closing checklist
+- Kitchen checklist
+- Upload photo proof
+- Mark completed
+- Manager approval
+- Task reminder notification
+
+Training:
+- View training videos/docs
+- Complete quiz
+- Certificate status
+- Staff progress
+
+====================================================
+14. CUSTOMERS & FEEDBACK MOBILE
+====================================================
+
+Customer mobile tools:
+- Customer list
+- Customer profile
+- Order history
+- Total spend
+- Last visit
+- Loyalty status
+- Feedback list
+- Review QR feedback
+- Negative feedback alerts
+- Call/WhatsApp customer
+- Add note
+- Mark complaint resolved
+
+Review Booster:
+- View QR scan count
+- Ratings
+- AI generated review count
+- Google link click count
+- Private negative feedback
+- Copy AI reply suggestion
+
+====================================================
+15. GROWTH ENGINE MOBILE
+====================================================
+
+Mobile marketing features:
+- Campaign list
+- Create quick campaign
+- Use campaign template
+- Select customer segment
+- Generate content with Khana AI
+- Preview message
+- Schedule/send if permission allowed
+- View campaign status
+- Campaign analytics
+- Coupons
+- Referrals
+- Birthday/anniversary reminders
+- Win-back suggestions
+
+Owner should be able to approve campaigns from mobile.
+
+====================================================
+16. KHANA AI MOBILE
+====================================================
+
+Add Khana AI mobile section.
+
+Features:
+- AI Dashboard
+- AI credits balance
+- AI Menu Import status
+- AI Description generator
+- AI Review Booster
+- AI Campaign generator
+- AI Sales Insights
+- AI Forecasting
+- AI Inventory Assistant
+- AI Chat Assistant
+- AI Usage logs
+
+Mobile AI Chat:
+Owner can ask:
+- What are today’s sales?
+- Which item sold most?
+- Which stock is low?
+- Which staff is absent?
+- What campaign should I send today?
+- Summarize negative feedback.
+- Suggest purchase for tomorrow.
+- Generate WhatsApp offer.
+
+Credit behavior:
+- Show credits required before AI action.
+- Deduct credits only after success.
+- If no credits, show recharge/upgrade message.
+
+====================================================
+17. FINANCE MOBILE
+====================================================
+
+Finance features:
+- Today payments
+- Payment mode summary
+- Cash/card/UPI split
+- Pending payments
+- Expenses
+- Add expense
+- Upload bill photo
+- Settlements
+- Wallet balance
+- Invoices
+- P&L summary
+- Profit estimate
+- Refunds
+- Vendor payments
+
+Owner/accountant should be able to approve expenses or settlements.
+
+====================================================
+18. REPORTS MOBILE
+====================================================
+
+Mobile reports should be quick and readable.
+
+Reports:
+- Today sales
+- Weekly sales
+- Monthly sales
+- Item-wise sales
+- Category sales
+- Payment report
+- Order report
+- Inventory report
+- Staff report
+- Payroll report
+- Customer report
+- Campaign report
+- P&L report
+- AI usage report
+
+Features:
+- Date filter
+- Outlet filter
+- Download/share PDF if possible
+- Simple charts
+- Key insights
+- Export link
+
+====================================================
+19. NOTIFICATIONS
+====================================================
+
+Add complete notification system in the mobile app.
+
+Notification types:
+- New order
+- QR order
+- Kitchen delay
+- Order ready
+- Table request
+- Reservation reminder
+- Low stock
+- Out of stock
+- Purchase approval
+- Staff late/absent
+- Leave request
+- Payroll generated
+- Payment received
+- Payment failed
+- Cash mismatch
+- Expense approval
+- Negative feedback
+- Review QR feedback
+- Campaign scheduled/sent
+- AI insight
+- Support ticket reply
+- Subscription/payment reminder
+- System announcement from Super Admin
+
+Notification center:
+- All
+- Orders
+- Kitchen
+- Inventory
+- Staff
+- Finance
+- Customers
+- AI
+- System
+
+Each notification should have:
+- Title
+- Message
+- Time
+- Priority
+- Read/unread
+- Related module link
+- Action button if needed
+
+Push notification:
+- Add Firebase/FCM or existing push notification support.
+- Save device token after login.
+- Allow user to enable/disable notification categories.
+- Respect role permissions.
+- Do not send finance/payroll alerts to unauthorized roles.
+
+====================================================
+20. ALERTS PAGE
+====================================================
+
+Create an Alerts tab.
+
+Show critical alerts:
+- New orders
+- Delayed kitchen orders
+- Low stock
+- Staff absent
+- Payment issues
+- Negative feedback
+- Cash mismatch
+- AI recommendations
+- Support replies
+
+Priority:
+- Critical
+- High
+- Medium
+- Low
+
+Actions:
+- Resolve
+- Snooze
+- View details
+- Assign to staff
+- Add note
+
+====================================================
+21. APPROVAL CENTER
+====================================================
+
+Add mobile approval center for owners/managers.
+
+Approvals:
+- Discount approval
+- Refund approval
+- Void bill approval
+- Expense approval
+- Purchase order approval
+- Stock adjustment approval
+- Leave approval
+- Payroll approval
+- Campaign approval
+- AI campaign approval
+- Menu price change approval
+
+Show:
+- Pending approvals count
+- Request details
+- Approve/reject
+- Add reason
+- Audit log
+
+====================================================
+22. MULTI-OUTLET MOBILE
+====================================================
+
+If restaurant has multiple outlets:
+- Outlet switcher
+- All outlets summary
+- Outlet-wise sales
+- Outlet-wise orders
+- Outlet-wise staff
+- Outlet-wise stock alerts
+- Outlet-wise reports
+- Compare outlets
+- Owner can see all outlets
+- Manager can see assigned outlet only
+
+====================================================
+23. OFFLINE / POOR INTERNET SUPPORT
+====================================================
+
+Mobile app should handle poor internet.
+
+Features:
+- Show offline banner
+- Cache dashboard summary where possible
+- Cache menu where possible
+- Queue simple actions if safe
+- Do not duplicate orders
+- Sync when online
+- Show sync status
+- Prevent critical finance actions if offline unless designed
+
+At minimum:
+- Graceful offline state
+- Retry failed API requests
+- Do not crash
+
+====================================================
+24. APP SETTINGS
+====================================================
+
+Mobile app settings:
+- Profile
+- Restaurant/outlet switcher
+- Notification preferences
+- Language
+- Theme light/dark if available
+- Security
+- Change password
+- Device sessions
+- Help/support
+- App version
+- Logout
+
+Notification preferences:
+- Orders
+- Kitchen
+- Inventory
+- Staff
+- Finance
+- Customers
+- AI
+- System
+
+====================================================
+25. SECURITY
+====================================================
+
+Add app security:
+- Role-based access
+- Token/session handling
+- Secure logout
+- Biometric lock if possible
+- App PIN if possible
+- Device token management
+- No API keys exposed
+- No sensitive data stored insecurely
+- Session expiry handling
+- Direct screen access blocked if no permission
+
+====================================================
+26. UI/UX REQUIREMENTS
+====================================================
+
+Design:
+- Premium KhanaLagao theme
+- Orange/white/dark
+- Clean cards
+- Mobile-first
+- Fast navigation
+- Bottom tabs
+- Clear status badges
+- Large touch targets
+- Smooth loading states
+- Empty states
+- Pull to refresh
+- Search/filter on lists
+- Date filters on reports
+- Skeleton loaders
+- Toast messages
+- Confirmation modals
+
+Brand colors:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Warm White: #FFF8F1
+AI Purple: #7C3AED
+Success: #16A34A
+Warning: #F59E0B
+Danger: #EF4444
+Info: #2563EB
+
+====================================================
+27. IMPORTANT MOBILE SCREENS
+====================================================
+
+Create/upgrade these screens:
+
+Auth:
+- Login
+- Forgot Password
+- Role-based redirect
+- Outlet selection
+
+Main:
+- Home Dashboard
+- Orders
+- Order Detail
+- Kitchen/KDS
+- Alerts
+- Notifications
+- More
+
+Sell:
+- POS summary
+- Live Orders
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery
+
+Menu:
+- Menu Items
+- Item Detail/Edit
+- Toggle Availability
+- QR Menu Share
+
+Inventory:
+- Stock
+- Low Stock
+- Purchase Orders
+- Waste Entry
+- Vendors
+
+Customers:
+- Customer List
+- Customer Detail
+- Feedback
+- Review Booster
+
+Growth:
+- Campaigns
+- Campaign Create
+- Coupons
+- Customer Segments
+
+Khana AI:
+- AI Dashboard
+- AI Chat
+- AI Campaign Generator
+- AI Insights
+- AI Usage & Credits
+
+Staff:
+- Staff List
+- Attendance
+- Leave Requests
+- Payroll Summary
+- Staff Tasks
+
+Finance:
+- Payments
+- Expenses
+- Add Expense
+- Wallet
+- P&L
+- Invoices
+
+Reports:
+- Sales Report
+- Inventory Report
+- Staff Report
+- Finance Report
+- Customer Report
+
+Support:
+- Tickets
+- Create Ticket
+- Ticket Detail
+
+Settings:
+- Profile
+- Notifications
+- Security
+- Language
+- Help
+- Logout
+
+====================================================
+28. TESTING CHECKLIST
+====================================================
+
+Test:
+- Login works
+- Role-based screens work
+- Unauthorized screens blocked
+- Dashboard loads
+- Orders load
+- Order status updates
+- Kitchen status updates
+- Tables load
+- QR orders show
+- Notifications arrive
+- Notification click opens correct screen
+- Low stock alert works
+- Staff attendance works
+- Leave approval works
+- Campaign approval works
+- AI credits show
+- AI actions deduct credits correctly
+- Reports load
+- Multi-outlet switcher works
+- Offline state works
+- Pull to refresh works
+- Forms validate
+- Images upload if supported
+- App does not crash
+- No console/runtime errors
+- Android works
+- iOS/responsive layout works if applicable
+
+====================================================
+29. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Mobile app is complete only if:
+
+- Owner can manage important restaurant operations from phone.
+- Manager can track orders, kitchen, tables, stock, staff, finance, and feedback.
+- Notifications work properly.
+- Critical alerts are visible.
+- Role-based access works.
+- Khana AI is available with credits.
+- Orders and kitchen status sync with web dashboard.
+- Inventory alerts sync.
+- Staff and payroll summary are available.
+- Reports are mobile friendly.
+- Support tickets work.
+- App design matches KhanaLagao brand.
+- No broken screens.
+- No mock data.
+- No exposed secrets.
+- App is fast, clean, and production-ready.
+
+First scan the existing mobile app and provide:
+1. Existing screens/features
+2. Missing required features
+3. Broken or incomplete screens
+4. API gaps
+5. Notification gaps
+6. Permission gaps
+7. UI issues
+
+Then implement missing important features step by step without breaking the existing mobile app.

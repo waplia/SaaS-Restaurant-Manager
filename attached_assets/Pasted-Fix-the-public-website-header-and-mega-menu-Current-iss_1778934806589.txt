@@ -1,0 +1,354 @@
+Fix the public website header and mega menu.
+
+Current issue:
+The Features dropdown is too big and showing too many feature links directly in the header. This makes the website look heavy and messy. I do not want all features shown inside the header menu.
+
+Goal:
+Keep the header clean and premium. The full list of features should be shown on the dedicated /features page, not inside the header dropdown.
+
+Important:
+- Do not remove feature pages.
+- Do not remove routes.
+- Do not break any links.
+- Do not make the header huge.
+- Keep the full feature directory only on /features page.
+- The /features page should be rich and well-designed with all feature categories and feature cards.
+
+Update header menu like this:
+
+Top header:
+- Platform
+- Features
+- Solutions
+- Khana AI
+- Resources
+- Company
+- Pricing
+
+Right side:
+- Login
+- Book Demo
+- Start Free Trial
+
+====================================================
+1. PLATFORM DROPDOWN
+====================================================
+
+Platform dropdown should be medium size, not huge.
+
+Show only main platform modules:
+
+- Platform Overview
+- POS Terminal
+- QR Menu
+- Online Ordering
+- Kitchen / KDS
+- Inventory
+- Staff & Payroll
+- Finance & P&L
+- Growth Engine
+- Khana AI
+- Reports
+
+Footer of dropdown:
+- View Complete Platform →
+
+Do not show every small feature here.
+
+====================================================
+2. FEATURES DROPDOWN
+====================================================
+
+Features dropdown should be small and clean.
+
+Show only feature categories, not every single feature.
+
+Features dropdown should show:
+
+Sell
+POS, Orders, Kitchen, Tables
+
+Menu
+Menu, QR Menu, Combos, Pricing
+
+Inventory
+Stock, Recipes, Vendors, Waste
+
+Customers
+CRM, Loyalty, Feedback, Reviews
+
+Growth
+Campaigns, Coupons, Referrals
+
+Staff
+Attendance, Payroll, Tasks
+
+Finance
+Payments, Expenses, P&L
+
+Marketplace
+Add-ons, Hardware, Integrations
+
+At bottom:
+View All Features →
+
+Important:
+Each category can link to section anchors on /features page, like:
+- /features#sell
+- /features#menu
+- /features#inventory
+- /features#customers
+- /features#growth
+- /features#staff
+- /features#finance
+- /features#marketplace
+
+Only “View All Features” should go to /features.
+
+Do not put 40+ links in the header menu.
+
+====================================================
+3. SOLUTIONS DROPDOWN
+====================================================
+
+Solutions dropdown can show only main business types:
+
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Bakeries
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering & Banquets
+- Franchise Chains
+- Corporate Canteens
+
+At bottom:
+View All Solutions →
+
+Do not make this too large.
+
+====================================================
+4. KHANA AI DROPDOWN
+====================================================
+
+Khana AI dropdown should show only key AI tools:
+
+- Khana AI Overview
+- AI Menu Import
+- AI Review Booster
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Chat Assistant
+- AI Credits
+
+At bottom:
+Explore Khana AI →
+
+====================================================
+5. RESOURCES DROPDOWN
+====================================================
+
+Resources dropdown:
+
+- Blog
+- Help Center
+- Guides
+- FAQs
+- Compare
+- Case Studies
+
+At bottom:
+View Resources →
+
+====================================================
+6. COMPANY DROPDOWN
+====================================================
+
+Company dropdown:
+
+- About
+- Contact
+- Security
+- Partner Program
+- Careers
+
+At bottom:
+Legal Pages →
+
+Legal pages should not all appear in the main header dropdown unless inside a small “Legal Pages” link or footer.
+
+====================================================
+7. FEATURES PAGE SHOULD SHOW EVERYTHING
+====================================================
+
+The /features page should be the full feature directory.
+
+This page should include all feature categories and all individual feature cards.
+
+Sections:
+
+Sell:
+- POS Terminal
+- Orders
+- Kitchen / KDS
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery Management
+
+Menu:
+- Menu Management
+- QR Menu
+- Combos & Add-ons
+- Dynamic Pricing
+- Competitor Tracker
+
+Inventory:
+- Stock Management
+- Purchase Orders
+- Vendors
+- Waste Management
+- Recipes
+- Stock Transfers
+
+Customers:
+- CRM
+- Feedback & Surveys
+- Loyalty
+- Memberships
+- Review Booster
+
+Growth:
+- Growth Engine
+- Campaigns
+- Coupons
+- Referrals
+- Loyalty Analytics
+- Customer Segments
+
+Khana AI:
+- AI Menu Import
+- AI Descriptions
+- AI Food Images
+- AI Review Booster
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Chat Assistant
+- AI Credits
+
+Staff:
+- Staff Directory
+- Attendance
+- Payroll
+- Staff Tasks
+- SOP & Training
+- Mystery Audits
+
+Finance:
+- Payments
+- Expenses
+- Wallet
+- Settlements
+- P&L
+- Invoices
+
+Operations:
+- Events & Catering
+- Hotel Mode
+- Food Court
+- Corporate Ordering
+- Tiffin Management
+
+Marketplace:
+- Vendor Marketplace
+- Add-ons
+- Hardware
+- Integrations
+
+Reports:
+- Reports & Analytics
+- Super Admin SaaS
+
+Each card should link to its own dedicated page.
+
+The /features page should be rich and premium:
+- Hero section
+- Category tabs or sticky category filter
+- Feature cards
+- Icons
+- Short descriptions
+- Benefits
+- CTA
+- FAQ
+
+====================================================
+8. EVERY FEATURE PAGE SHOULD STILL EXIST
+====================================================
+
+Even though header dropdown is smaller, all individual pages should still exist.
+
+Examples:
+- /features/inventory-management
+- /features/vendor-management
+- /features/waste-management
+- /features/payroll
+- /features/review-booster
+- /features/profit-loss
+- /features/super-admin
+
+Do not remove these pages.
+Do not hide them from sitemap.
+They should be linked from /features page, related modules, footer if needed, and internal links.
+
+====================================================
+9. HEADER DESIGN REQUIREMENTS
+====================================================
+
+Header should look clean like premium SaaS:
+- Not too tall
+- Not too wide
+- No huge 8-column dropdown
+- Use 2 to 4 columns maximum
+- Add icons lightly
+- Add short descriptions only where useful
+- Use “View All” links for full pages
+- Keep spacing balanced
+- Open on hover desktop
+- Open on click mobile
+- Close on mouse leave
+- No flickering
+- Works on all pages
+
+====================================================
+10. FOOTER CAN CONTAIN MORE LINKS
+====================================================
+
+Footer can have more links than header.
+
+Header should be clean.
+Footer can include:
+- Main product links
+- Khana AI links
+- Solution links
+- Resource links
+- Legal links
+
+But still avoid making footer too messy.
+
+====================================================
+11. FINAL ACCEPTANCE
+====================================================
+
+Complete when:
+- Header is clean and not overloaded.
+- Features dropdown is small and category-based.
+- Full feature list is on /features page.
+- Every feature page still works.
+- All routes still work.
+- Mega menu opens on hover on desktop.
+- Mobile menu works with click.
+- Website feels premium and not cluttered.
