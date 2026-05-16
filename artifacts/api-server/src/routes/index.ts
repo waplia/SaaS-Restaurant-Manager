@@ -75,6 +75,7 @@ import eventsRouter from "./events";
 import aggregatorPayoutsRouter from "./aggregator-payouts";
 import accountingRouter from "./accounting";
 import foodCourtRouter from "./food-court";
+import bakeryRouter, { bakeryPublicRouter } from "./bakery";
 
 const router: IRouter = Router();
 
@@ -93,6 +94,7 @@ router.use(createCashfreeWebhookRouter());
 router.use(createRazorpayWebhookRouter());
 router.use(whatsappPublicRouter);
 router.use(tokensRouter);
+router.use(bakeryPublicRouter);
 
 // Public API namespace (api-key authenticated). Mounted BEFORE the JWT
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.
@@ -168,5 +170,6 @@ router.use(eventsRouter);
 router.use(aggregatorPayoutsRouter);
 router.use(accountingRouter);
 router.use(foodCourtRouter);
+router.use(bakeryRouter);
 
 export default router;

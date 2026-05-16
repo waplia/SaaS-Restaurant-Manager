@@ -3159,8 +3159,6 @@ export function useUpdateDevice() {
       qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
       qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, vars.id] });
     },
-      qc.invalidateQueries({ queryKey: ["event-detail", RESTAURANT_ID, vars.id] });
-    },
   });
 }
 export function useDeleteDevice() {
@@ -3218,6 +3216,8 @@ export function useDeviceHeartbeat() {
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
     mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/devices/${id}/heartbeat`, { status: "online" }),
-    enabled: false,
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["device", RESTAURANT_ID, id] });
+    },
   });
 }

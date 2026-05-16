@@ -121,6 +121,17 @@ export function startScheduler(): void {
   registerCron("addon-lifecycle-sweep", "*/15 * * * *", "Expires add-on trials and ended billing periods every 15 min");
   registerCron("health-score-nightly", "0 3 * * *", "Computes nightly Restaurant Health Score (0–100) for all active restaurants at 03:00 IST");
   registerCron("compliance-reminders", "15 8 * * *", "Daily Compliance Manager reminders at 08:15 IST (60/30/15/7/1d before expiry, on day, weekly when overdue)");
+  registerCron("bakery-shelf-life", "*/30 * * * *", "Per-restaurant bakery shelf-life sweep: marks expired finished-goods batches and emits expiring-soon + cake-booking-due notifications (every 30 min)");
+
+  trackCron("bakery_shelf_life", "*/30 * * * *", async () => {
+    try {
+      const { runBakeryShelfLifeSweep } = await import("../routes/bakery");
+      const r = await runBakeryShelfLifeSweep(new Date());
+      if (r.batchAlerts || r.bookingAlerts || r.expired) logger.info({ ...r }, "[bakery] shelf-life sweep complete");
+    } catch (err) {
+      logger.error({ err }, "[bakery] shelf-life sweep failed");
+    }
+  });
 
   trackCron("addon_lifecycle_sweep", "*/15 * * * *", async () => {
     try {

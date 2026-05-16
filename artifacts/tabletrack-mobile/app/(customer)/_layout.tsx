@@ -16,6 +16,7 @@ export default function CustomerLayout() {
       <Stack.Screen name="menu" options={{ headerTitle: "Menu", headerBackTitle: "Scan" }} />
       <Stack.Screen name="cart" options={{ headerTitle: "Your Order", headerBackTitle: "Menu" }} />
       <Stack.Screen name="track" options={{ headerTitle: "Order Status", headerBackTitle: "Back" }} />
+      <Stack.Screen name="cake-booking" options={{ headerTitle: "Pre-order Cake", headerBackTitle: "Back" }} />
     </Stack>
   );
 }

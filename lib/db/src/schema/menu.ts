@@ -59,6 +59,10 @@ export const menuItemsTable = pgTable("menu_items", {
   tags: text("tags").array().default([]),
   allergens: text("allergens").array().default([]),
   kitchenId: integer("kitchen_id").references(() => kitchensTable.id),
+  shelfLifeHours: integer("shelf_life_hours"),
+  expiryAlertHours: integer("expiry_alert_hours"),
+  isCake: boolean("is_cake").notNull().default(false),
+  isCustomizable: boolean("is_customizable").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
