@@ -50,34 +50,34 @@ export default function Contact() {
 
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-12 border-b border-border bg-muted/20">
+      <section className="pt-12 md:pt-28 pb-8 md:pb-12 border-b border-border bg-muted/20">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-3 md:mb-5">
             Talk to a real human, <span className="text-primary">in {COMPANY.city}.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
             Questions about features, pricing, onboarding or migration? The {COMPANY.product} team is one call, WhatsApp or email away.
           </p>
         </div>
       </section>
 
       {/* Channels grid */}
-      <section className="py-12 md:py-16">
+      <section className="py-10 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {CHANNELS.map((c) => (
               <a
                 key={c.label}
                 href={c.href}
                 target={c.external ? "_blank" : undefined}
                 rel={c.external ? "noreferrer" : undefined}
-                className="group rounded-2xl border border-border bg-card p-6 hover:shadow-md hover:border-primary/40 transition-all"
+                className="group rounded-2xl border border-border bg-card p-4 md:p-6 hover:shadow-md hover:border-primary/40 transition-all"
               >
-                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                  <c.icon className="h-5 w-5" />
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3 md:mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <c.icon className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
-                <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground mb-1">{c.label}</p>
-                <p className="font-semibold text-base mb-1.5 break-words">{c.value}</p>
+                <p className="text-[10px] md:text-xs uppercase tracking-widest font-semibold text-muted-foreground mb-1">{c.label}</p>
+                <p className="font-semibold text-sm md:text-base mb-1 md:mb-1.5 break-words">{c.value}</p>
                 <p className="text-xs text-muted-foreground">{c.desc}</p>
                 <p className="text-xs text-primary font-medium mt-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   Open <ArrowUpRight className="h-3 w-3" />
@@ -89,12 +89,12 @@ export default function Contact() {
       </section>
 
       {/* Form + office */}
-      <section className="py-12 md:py-16 bg-muted/30 border-y border-border">
-        <div className="container mx-auto px-4 md:px-6 max-w-6xl grid lg:grid-cols-2 gap-12">
+      <section className="py-10 md:py-16 bg-muted/30 border-y border-border">
+        <div className="container mx-auto px-4 md:px-6 max-w-6xl grid lg:grid-cols-2 gap-8 md:gap-12">
           <div>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-4">Send us a message</h2>
-            <p className="text-muted-foreground mb-6">Tell us a bit about your restaurant and what you're looking for. We'll get back within one business day.</p>
-            <div className="bg-card border border-border p-6 md:p-8 rounded-2xl shadow-sm">
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 md:mb-4">Send us a message</h2>
+            <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">Tell us a bit about your restaurant and what you're looking for. We'll get back within one business day.</p>
+            <div className="bg-card border border-border p-4 md:p-8 rounded-2xl shadow-sm">
               <LeadForm source="contact" buttonText="Send message" showMessage showDetails />
             </div>
           </div>

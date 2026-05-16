@@ -17,24 +17,24 @@ const FAQS = [
 
 export function HomeFAQ() {
   return (
-    <section className="py-24 bg-background">
+    <section className="py-12 md:py-24 bg-background">
       <div className="container mx-auto px-4 md:px-6 max-w-3xl">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-4">
+        <div className="text-center mb-8 md:mb-12">
+          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-3 md:mb-4">
             FAQ
           </div>
-          <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5">
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold mb-3 md:mb-5">
             Questions, answered.
           </h2>
-          <p className="text-lg text-muted-foreground">Still curious? Book a demo and we'll walk you through it on your own menu.</p>
+          <p className="text-base md:text-lg text-muted-foreground">Still curious? Book a demo and we'll walk you through it on your own menu.</p>
         </div>
         <Accordion type="single" collapsible className="rounded-xl border border-border bg-card divide-y divide-border">
           {FAQS.map((f, i) => (
-            <AccordionItem key={i} value={`item-${i}`} className="border-0 px-5">
-              <AccordionTrigger className="text-left text-base font-semibold py-5 hover:no-underline">
+            <AccordionItem key={i} value={`item-${i}`} className="border-0 px-4 md:px-5">
+              <AccordionTrigger className="text-left text-sm md:text-base font-semibold py-4 md:py-5 hover:no-underline">
                 {f.q}
               </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed text-sm pb-5">
+              <AccordionContent className="text-muted-foreground leading-relaxed text-sm pb-4 md:pb-5">
                 {f.a}
               </AccordionContent>
             </AccordionItem>

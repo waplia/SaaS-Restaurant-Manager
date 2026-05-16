@@ -5,11 +5,11 @@ export interface Benefit { title: string; desc: string }
 
 export function Benefits({ eyebrow = "Why it matters", title, benefits, visual }: { eyebrow?: string; title: string; benefits: Benefit[]; visual?: React.ReactNode }) {
   return (
-    <section className="py-20 md:py-24">
-      <div className={`container mx-auto px-4 md:px-6 ${visual ? "grid lg:grid-cols-2 gap-12 items-center" : "max-w-4xl"}`}>
+    <section className="py-12 md:py-24">
+      <div className={`container mx-auto px-4 md:px-6 ${visual ? "grid lg:grid-cols-2 gap-8 lg:gap-12 items-center" : "max-w-4xl"}`}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">{eyebrow}</p>
-          <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-8">{title}</h2>
+          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-primary mb-2 md:mb-3">{eyebrow}</p>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-5 md:mb-8">{title}</h2>
           <ul className="space-y-5">
             {benefits.map((b, i) => (
               <motion.li

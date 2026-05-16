@@ -8,26 +8,26 @@ import {
 
 export function HeroSection() {
   return (
-    <section className="relative pt-20 pb-28 md:pt-28 md:pb-36 overflow-hidden">
+    <section className="relative pt-10 pb-16 md:pt-28 md:pb-36 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-background to-background -z-10" />
       <div className="absolute -top-32 -left-32 w-[480px] h-[480px] rounded-full bg-primary/10 blur-3xl -z-10" />
 
-      <div className="container mx-auto px-4 md:px-6 grid lg:grid-cols-2 gap-12 items-center">
+      <div className="container mx-auto px-4 md:px-6 grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="space-y-7 max-w-2xl"
+          className="space-y-5 md:space-y-7 max-w-2xl"
         >
-          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            One platform. POS, KOT, Inventory, Finance, AI &amp; Growth.
+          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] sm:text-sm font-medium text-primary">
+            <Sparkles className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+            <span className="truncate">One platform. POS, KOT, Inventory, Finance, AI &amp; Growth.</span>
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05]">
+          <h1 className="font-serif text-[2rem] sm:text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] md:leading-[1.05]">
             Run Your Restaurant Smarter with{" "}
             <span className="text-primary">One Powerful Operating System</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed">
             From the first order to the last rupee — billing, kitchen, tables, stock, staff,
             customers, finance and AI insights in one connected system built for modern restaurants.
           </p>
@@ -105,14 +105,14 @@ function DashboardMockup() {
       </div>
 
       {/* Floating cards */}
-      <FloatCard className="-top-6 -left-6 hidden sm:flex" delay={0.4}>
+      <FloatCard className="-top-4 -left-2 sm:-top-6 sm:-left-6" delay={0.4}>
         <IndianRupee className="h-4 w-4 text-primary" />
         <div>
           <div className="text-[10px] text-muted-foreground">Today Sales</div>
           <div className="text-sm font-bold">₹ 1,42,800</div>
         </div>
       </FloatCard>
-      <FloatCard className="top-10 -right-4 sm:-right-8" delay={0.55}>
+      <FloatCard className="top-6 -right-2 sm:top-10 sm:-right-8" delay={0.55}>
         <Activity className="h-4 w-4 text-green-500" />
         <div>
           <div className="text-[10px] text-muted-foreground">Live Orders</div>
@@ -126,14 +126,14 @@ function DashboardMockup() {
           <div className="text-sm font-bold">12 KOTs cooking</div>
         </div>
       </FloatCard>
-      <FloatCard className="bottom-16 -right-6 hidden sm:flex" delay={0.85}>
+      <FloatCard className="bottom-16 -right-2 sm:-right-6" delay={0.85}>
         <Sparkles className="h-4 w-4 text-primary" />
         <div>
           <div className="text-[10px] text-muted-foreground">Khana AI</div>
           <div className="text-sm font-bold">Push Paneer Tikka tonight</div>
         </div>
       </FloatCard>
-      <FloatCard className="-bottom-4 left-8" delay={1}>
+      <FloatCard className="-bottom-4 left-4 sm:left-8 hidden md:flex" delay={1}>
         <AlertTriangle className="h-4 w-4 text-red-500" />
         <div>
           <div className="text-[10px] text-muted-foreground">Stock Alert</div>

@@ -4,13 +4,13 @@ import { ArrowRight } from "lucide-react";
 
 export function FinalCTA() {
   return (
-    <section className="relative py-28 overflow-hidden bg-foreground text-background">
+    <section className="relative py-14 md:py-28 overflow-hidden bg-foreground text-background">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(249,115,22,0.25),_transparent_60%)]" />
       <div className="container mx-auto px-4 md:px-6 text-center max-w-3xl relative">
-        <h2 className="font-serif text-4xl md:text-6xl font-bold mb-6 leading-tight">
+        <h2 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold mb-4 md:mb-6 leading-tight">
           Ready to run your restaurant <span className="text-primary">smarter?</span>
         </h2>
-        <p className="text-lg md:text-xl text-white/70 mb-10">
+        <p className="text-base md:text-xl text-white/70 mb-6 md:mb-10">
           Join the restaurants, cafes, cloud kitchens and chains running their entire operation on KhanaLagao.
           14-day free trial. No credit card. Live human onboarding.
         </p>

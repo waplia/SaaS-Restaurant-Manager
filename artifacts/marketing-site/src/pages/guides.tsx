@@ -22,15 +22,15 @@ export default function Guides() {
   });
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-12">
+      <section className="pt-14 md:pt-28 pb-12">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> Owner playbooks
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">
             Practical guides for <span className="text-primary">restaurant operators.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto">
             Written by operators, with the numbers and SOPs that actually move the needle.
           </p>
         </div>

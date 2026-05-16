@@ -20,14 +20,14 @@ export default function ThankYou() {
 
   return (
     <SiteLayout>
-      <section className="py-20 md:py-28">
+      <section className="py-14 md:py-28">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
           <div className="text-center mb-12">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-6">
               <CheckCircle2 className="h-8 w-8" />
             </div>
-            <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">Thank you — we got it.</h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">Thank you — we got it.</h1>
+            <p className="text-base md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Your message is on its way to the {COMPANY.product} team in {COMPANY.city}.
               We'll get back to you within one business day.
             </p>

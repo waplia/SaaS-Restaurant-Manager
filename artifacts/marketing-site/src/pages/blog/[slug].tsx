@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useSeo } from "@/lib/seo";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import ReactMarkdown from "react-markdown";
@@ -108,20 +107,18 @@ export default function BlogPost() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col font-sans">
-        <Header />
-        <main className="flex-grow pt-24 pb-32">
+      <SiteLayout>
+        <div className="pt-12 md:pt-24 pb-16 md:pb-32">
           <div className="container mx-auto px-4 max-w-3xl space-y-6">
-            <Skeleton className="h-12 w-3/4" />
+            <Skeleton className="h-10 md:h-12 w-3/4" />
             <Skeleton className="h-6 w-1/4" />
-            <Skeleton className="h-64 w-full rounded-2xl" />
+            <Skeleton className="h-48 md:h-64 w-full rounded-2xl" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-2/3" />
           </div>
-        </main>
-        <Footer />
-      </div>
+        </div>
+      </SiteLayout>
     );
   }
 
@@ -130,18 +127,17 @@ export default function BlogPost() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow pt-24 pb-32">
+    <SiteLayout>
+      <div className="pt-12 md:pt-24 pb-16 md:pb-32">
         <article className="container mx-auto px-4 max-w-6xl">
-          <div className="mb-12 text-center space-y-4 max-w-3xl mx-auto">
-            <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium capitalize">
+          <div className="mb-8 md:mb-12 text-center space-y-3 md:space-y-4 max-w-3xl mx-auto">
+            <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-primary font-medium capitalize">
               <span>{post.category}</span>
             </div>
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground" data-testid="text-post-title">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-tight" data-testid="text-post-title">
               {post.title}
             </h1>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs md:text-sm text-muted-foreground">
               <span>By {post.author}</span>
               <span>•</span>
               <span>{new Date(post.publishedAt).toLocaleDateString()}</span>
@@ -151,7 +147,7 @@ export default function BlogPost() {
           </div>
 
           {post.coverImage && (
-            <div className="mb-12 aspect-[21/9] rounded-2xl overflow-hidden bg-muted max-w-4xl mx-auto">
+            <div className="mb-8 md:mb-12 aspect-[21/9] rounded-2xl overflow-hidden bg-muted max-w-4xl mx-auto">
               <img
                 src={post.coverImage}
                 alt={post.title}
@@ -164,8 +160,22 @@ export default function BlogPost() {
             </div>
           )}
 
-          <div className="grid lg:grid-cols-[1fr_280px] gap-12 max-w-5xl mx-auto">
-            <div className="prose prose-lg dark:prose-invert prose-p:leading-relaxed prose-a:text-primary prose-headings:font-serif prose-headings:scroll-mt-24 max-w-none">
+          {headings.length > 1 && (
+            <details className="lg:hidden mb-8 max-w-3xl mx-auto rounded-xl border border-border bg-card group">
+              <summary className="cursor-pointer list-none p-4 flex items-center justify-between font-semibold text-sm">
+                <span className="flex items-center gap-2"><ListTree className="w-4 h-4 text-primary" /> On this page</span>
+                <span className="text-primary text-xs group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <nav className="px-4 pb-4 space-y-2 text-sm">
+                {headings.map((h) => (
+                  <a key={h.id} href={`#${h.id}`} className="block text-muted-foreground hover:text-primary leading-snug">{h.text}</a>
+                ))}
+              </nav>
+            </details>
+          )}
+
+          <div className="grid lg:grid-cols-[1fr_280px] gap-8 md:gap-12 max-w-5xl mx-auto">
+            <div className="prose prose-base md:prose-lg dark:prose-invert prose-p:leading-relaxed prose-a:text-primary prose-headings:font-serif prose-headings:scroll-mt-24 prose-img:rounded-xl max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -182,18 +192,18 @@ export default function BlogPost() {
                 {post.content}
               </ReactMarkdown>
 
-              <div className="not-prose mt-12 p-8 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20">
-                <h3 className="font-serif text-2xl font-bold mb-2">See KhanaLagao in your kitchen</h3>
-                <p className="text-muted-foreground mb-6">
+              <div className="not-prose mt-10 md:mt-12 p-5 md:p-8 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20">
+                <h3 className="font-serif text-xl md:text-2xl font-bold mb-2">See KhanaLagao in your kitchen</h3>
+                <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
                   Get a 20-minute walkthrough on real data from a venue like yours. No slides, no pressure.
                 </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button asChild data-testid="button-cta-book-demo">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button asChild data-testid="button-cta-book-demo" className="w-full sm:w-auto">
                     <Link href="/book-demo">
                       Book a free demo <ArrowRight className="w-4 h-4 ml-2" />
                     </Link>
                   </Button>
-                  <Button variant="outline" asChild data-testid="button-cta-pricing">
+                  <Button variant="outline" asChild data-testid="button-cta-pricing" className="w-full sm:w-auto">
                     <Link href="/pricing">See pricing</Link>
                   </Button>
                 </div>
@@ -224,16 +234,21 @@ export default function BlogPost() {
           </div>
 
           {related.length > 0 && (
-            <section className="mt-20 pt-10 border-t max-w-5xl mx-auto">
-              <h2 className="font-serif text-2xl font-bold mb-6">Related reading</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
+            <section className="mt-12 md:mt-20 pt-8 md:pt-10 border-t max-w-5xl mx-auto">
+              <h2 className="font-serif text-xl md:text-2xl font-bold mb-4 md:mb-6">Related reading</h2>
+              {/* Mobile: horizontal snap carousel */}
+              <div className="md:hidden -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-snap-x pb-2">
                 {related.map((r) => (
-                  <Link
-                    key={r.id}
-                    href={`/blog/${r.slug}`}
-                    className="block p-5 rounded-xl border hover:border-primary/50 hover:bg-primary/5 transition-colors"
-                    data-testid={`link-related-${r.slug}`}
-                  >
+                  <Link key={r.id} href={`/blog/${r.slug}`} className="snap-card shrink-0 w-[78%] p-4 rounded-xl border hover:border-primary/50 hover:bg-primary/5 transition-colors" data-testid={`link-related-${r.slug}`}>
+                    <div className="text-xs text-primary font-medium mb-1 capitalize">{r.category}</div>
+                    <div className="font-semibold leading-snug text-sm">{r.title}</div>
+                    {r.excerpt && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{r.excerpt}</p>}
+                  </Link>
+                ))}
+              </div>
+              <div className="hidden md:grid sm:grid-cols-2 gap-4">
+                {related.map((r) => (
+                  <Link key={r.id} href={`/blog/${r.slug}`} className="block p-5 rounded-xl border hover:border-primary/50 hover:bg-primary/5 transition-colors" data-testid={`link-related-${r.slug}`}>
                     <div className="text-xs text-primary font-medium mb-1 capitalize">{r.category}</div>
                     <div className="font-semibold leading-snug">{r.title}</div>
                     {r.excerpt && <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{r.excerpt}</p>}
@@ -243,8 +258,7 @@ export default function BlogPost() {
             </section>
           )}
         </article>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteLayout>
   );
 }

@@ -21,29 +21,29 @@ const MODULES = [
 
 export function PlatformModules() {
   return (
-    <section className="py-24 bg-background">
+    <section className="py-12 md:py-24 bg-background">
       <div className="container mx-auto px-4 md:px-6">
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-4">
+        <div className="text-center max-w-3xl mx-auto mb-8 md:mb-14">
+          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-3 md:mb-4">
             Platform modules
           </div>
-          <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5">
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold mb-3 md:mb-5">
             12 modules. One login. Zero juggling.
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-base md:text-lg text-muted-foreground">
             Each module ships production-ready and integrates natively with the rest — so your data stays consistent and your team stays sane.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
           {MODULES.map(({ icon: Icon, title, desc, href }) => (
             <Link key={title} href={href}>
-              <div className="group h-full p-6 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 transition-all">
-                <div className="mb-4 inline-flex p-2.5 rounded-lg bg-primary/10">
-                  <Icon className="h-5 w-5 text-primary" />
+              <div className="group h-full p-4 md:p-6 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                <div className="mb-2.5 md:mb-4 inline-flex p-2 md:p-2.5 rounded-lg bg-primary/10">
+                  <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                 </div>
-                <h3 className="text-base font-bold mb-1.5">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">{desc}</p>
-                <div className="flex items-center text-xs font-medium text-primary opacity-70 group-hover:opacity-100">
+                <h3 className="text-sm md:text-base font-bold mb-1 md:mb-1.5 leading-tight">{title}</h3>
+                <p className="text-xs md:text-sm text-muted-foreground leading-relaxed mb-2 md:mb-3 line-clamp-3 md:line-clamp-none">{desc}</p>
+                <div className="hidden md:flex items-center text-xs font-medium text-primary opacity-70 group-hover:opacity-100">
                   Learn more <ArrowRight className="ml-1 h-3 w-3" />
                 </div>
               </div>

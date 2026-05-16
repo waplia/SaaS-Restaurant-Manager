@@ -18,9 +18,9 @@ export default function NotFound() {
   useSeo({ title: "Page not found", description: "The page you're looking for doesn't exist. Try one of the quick links below.", noindex: true });
   return (
     <SiteLayout>
-      <section className="py-20 md:py-28">
+      <section className="py-14 md:py-28">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl text-center">
-          <p className="text-7xl md:text-9xl font-serif font-bold tracking-tight bg-gradient-to-br from-primary via-orange-500 to-purple-600 bg-clip-text text-transparent mb-4">404</p>
+          <p className="text-6xl sm:text-7xl md:text-9xl font-serif font-bold tracking-tight bg-gradient-to-br from-primary via-orange-500 to-purple-600 bg-clip-text text-transparent mb-4">404</p>
           <h1 className="font-serif text-3xl md:text-5xl font-bold tracking-tight mb-4">This page didn't make it to the pass.</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
             The page you're looking for moved, was retired, or never existed. Try the quick links below — or call us at {" "}

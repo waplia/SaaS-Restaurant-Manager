@@ -18,18 +18,18 @@ const ITEMS = [
 
 export function FinanceSection() {
   return (
-    <section className="relative py-28 overflow-hidden bg-foreground text-background">
+    <section className="relative py-14 md:py-28 overflow-hidden bg-foreground text-background">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(249,115,22,0.18),_transparent_55%)]" />
       <div className="container mx-auto px-4 md:px-6 relative">
-        <div className="grid lg:grid-cols-12 gap-12 items-center">
+        <div className="grid lg:grid-cols-12 gap-8 md:gap-12 items-center">
           <div className="lg:col-span-5">
-            <div className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 mb-4">
+            <div className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 mb-3 md:mb-4">
               Finance &amp; Profit
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5 leading-tight">
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold mb-3 md:mb-5 leading-tight">
               Know your numbers <span className="text-primary">before your accountant does.</span>
             </h2>
-            <p className="text-lg text-white/70 mb-7">
+            <p className="text-base md:text-lg text-white/70 mb-5 md:mb-7">
               Every sale, expense, settlement and salary flows into one live P&amp;L. No more month-end surprises,
               no more spreadsheets, no more guessing whether last week was actually profitable.
             </p>
@@ -39,13 +39,13 @@ export function FinanceSection() {
               </Button>
             </Link>
           </div>
-          <div className="lg:col-span-7 grid grid-cols-3 gap-3">
+          <div className="lg:col-span-7 grid grid-cols-3 gap-2 md:gap-3">
             {ITEMS.map(({ icon: Icon, title }) => (
-              <div key={title} className="aspect-square rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur p-4 flex flex-col items-center justify-center text-center hover:bg-white/[0.08] transition-colors">
-                <div className="p-2.5 rounded-lg bg-primary/15 mb-3">
-                  <Icon className="h-5 w-5 text-primary" />
+              <div key={title} className="aspect-square rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur p-2 md:p-4 flex flex-col items-center justify-center text-center hover:bg-white/[0.08] transition-colors">
+                <div className="p-2 md:p-2.5 rounded-lg bg-primary/15 mb-2 md:mb-3">
+                  <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                 </div>
-                <div className="text-sm font-semibold">{title}</div>
+                <div className="text-xs md:text-sm font-semibold">{title}</div>
               </div>
             ))}
           </div>

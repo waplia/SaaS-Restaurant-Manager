@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useSeo } from "@/lib/seo";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { Link } from "wouter";
 import { Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -110,15 +109,14 @@ export default function Pricing() {
   const popularIdx = displayPlans.length >= 2 ? Math.floor(displayPlans.length / 2) : -1;
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow pt-24 pb-32">
+    <SiteLayout>
+      <div className="pt-10 md:pt-24 pb-16 md:pb-32">
         <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <div className="text-center max-w-3xl mx-auto mb-8 md:mb-12">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4 md:mb-6">
               Simple, transparent pricing.
             </h1>
-            <p className="text-xl text-muted-foreground mb-8">
+            <p className="text-base md:text-xl text-muted-foreground mb-6 md:mb-8">
               No hidden fees. No long-term contracts. Just the tools you need to run your restaurant.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
@@ -153,7 +151,30 @@ export default function Pricing() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto" data-testid="pricing-grid-anchor">
+            <>
+            {/* Mobile horizontal snap carousel */}
+            <div className="md:hidden -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-snap-x pb-2 pt-8" data-testid="pricing-grid-anchor">
+              {displayPlans.map((dp, i) => {
+                const plan = dp.plan;
+                const isFree = Number(plan.price) === 0;
+                return (
+                  <div key={plan.id} className="shrink-0 snap-card w-[85%]">
+                    <PricingCard
+                      title={plan.name}
+                      price={dp.displayPrice}
+                      period={isFree ? "" : `/${dp.period === "yearly" ? "yr" : "mo"}`}
+                      desc={plan.description ?? `Includes a ${plan.trialDays}-day free trial.`}
+                      features={planFeatureRows(plan)}
+                      href="/app/register"
+                      btnText={isFree ? "Start free trial" : "Get started"}
+                      isPopular={i === popularIdx}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop grid */}
+            <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
               {displayPlans.map((dp, i) => {
                 const plan = dp.plan;
                 const isFree = Number(plan.price) === 0;
@@ -172,23 +193,23 @@ export default function Pricing() {
                 );
               })}
             </div>
+            </>
           )}
 
-          <div className="mt-24 max-w-3xl mx-auto">
-            <h2 className="font-serif text-3xl font-bold text-center mb-10">Frequently asked questions</h2>
-            <div className="space-y-4">
+          <div className="mt-12 md:mt-24 max-w-3xl mx-auto">
+            <h2 className="font-serif text-2xl md:text-3xl font-bold text-center mb-6 md:mb-10">Frequently asked questions</h2>
+            <div className="space-y-3 md:space-y-4">
               {FAQ_ITEMS.map((f) => (
-                <div key={f.q} className="p-6 rounded-xl border border-border bg-card">
-                  <h3 className="font-semibold mb-2">{f.q}</h3>
+                <div key={f.q} className="p-4 md:p-6 rounded-xl border border-border bg-card">
+                  <h3 className="font-semibold text-sm md:text-base mb-1.5 md:mb-2">{f.q}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{f.a}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteLayout>
   );
 }
 
@@ -214,7 +235,7 @@ function PricingCard({
   variant?: "default" | "outline";
 }) {
   return (
-    <div className={`relative bg-card rounded-2xl border ${isPopular ? "border-primary shadow-xl md:scale-105 z-10" : "border-border shadow-md"} p-8 flex flex-col`} data-testid={`card-plan-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+    <div className={`relative h-full bg-card rounded-2xl border ${isPopular ? "border-primary shadow-xl md:scale-105 z-10" : "border-border shadow-md"} p-6 md:p-8 flex flex-col`} data-testid={`card-plan-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       {isPopular && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
           Most Popular

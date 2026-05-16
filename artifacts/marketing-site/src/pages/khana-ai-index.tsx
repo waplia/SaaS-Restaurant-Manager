@@ -23,19 +23,19 @@ export default function KhanaAIIndex() {
 
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-16 relative overflow-hidden">
+      <section className="pt-14 md:pt-28 pb-16 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-orange-500/5 to-purple-600/10 -z-10" />
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-purple-600 text-white px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> Khana AI
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Your AI co-pilot for{" "}
             <span className="bg-gradient-to-r from-primary via-orange-500 to-purple-600 bg-clip-text text-transparent">
               restaurant operations.
             </span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto mb-8">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto mb-8">
             Khana AI sits inside every KhanaLagao workflow — turning menu photos into digital menus,
             replying to reviews in your brand voice, forecasting demand, and answering questions about your data.
           </p>
@@ -49,7 +49,7 @@ export default function KhanaAIIndex() {
       <section className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="text-center mb-10">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-3">Every AI feature, in one place</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3">Every AI feature, in one place</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Pick a tool to see how it works and what it costs.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -73,10 +73,10 @@ export default function KhanaAIIndex() {
         </div>
       </section>
 
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-3">AI that respects your business</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3">AI that respects your business</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {PROMISES.map((p) => (

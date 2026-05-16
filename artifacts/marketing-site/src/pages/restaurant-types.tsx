@@ -1,6 +1,5 @@
 import { useSeo } from "@/lib/seo";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useParams, Link } from "wouter";
 import NotFound from "@/pages/not-found";
 import { LeadForm } from "@/components/LeadForm";
@@ -101,22 +100,21 @@ export default function RestaurantTypes() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow pt-24 pb-32">
+    <SiteLayout>
+      <div className="pt-12 md:pt-24 pb-16 md:pb-32">
         <div className="container mx-auto px-4 md:px-6">
           <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-16">
-              <p className="text-sm uppercase tracking-widest text-primary font-semibold mb-3">Built for {data.title}</p>
-              <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6" data-testid="text-type-title">
+            <div className="text-center mb-10 md:mb-16">
+              <p className="text-xs md:text-sm uppercase tracking-widest text-primary font-semibold mb-2 md:mb-3">Built for {data.title}</p>
+              <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4 md:mb-6 leading-tight" data-testid="text-type-title">
                 The KhanaLagao OS for {data.title}
               </h1>
-              <p className="text-xl text-muted-foreground">{data.desc}</p>
+              <p className="text-base md:text-xl text-muted-foreground">{data.desc}</p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4 mb-16">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-10 md:mb-16">
               {data.highlights.map((h) => (
-                <div key={h} className="flex gap-3 p-5 rounded-2xl border border-border bg-card">
+                <div key={h} className="flex gap-3 p-4 md:p-5 rounded-2xl border border-border bg-card">
                   <div className="shrink-0 w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center">
                     <Check className="w-4 h-4" />
                   </div>
@@ -125,20 +123,20 @@ export default function RestaurantTypes() {
               ))}
             </div>
 
-            <div className="bg-card p-8 rounded-2xl border border-border shadow-lg mb-16">
-              <h3 className="text-2xl font-bold font-serif mb-2 text-center">Talk to a {data.title.toLowerCase()} specialist</h3>
-              <p className="text-muted-foreground text-center mb-6">No slide deck. A working tour of KhanaLagao on real data from a venue like yours.</p>
+            <div className="bg-card p-5 md:p-8 rounded-2xl border border-border shadow-lg mb-10 md:mb-16">
+              <h3 className="text-xl md:text-2xl font-bold font-serif mb-2 text-center">Talk to a {data.title.toLowerCase()} specialist</h3>
+              <p className="text-sm md:text-base text-muted-foreground text-center mb-5 md:mb-6">No slide deck. A working tour of KhanaLagao on real data from a venue like yours.</p>
               <LeadForm source={`type_${type}`} showDetails />
             </div>
 
-            <div className="mt-24">
-              <h4 className="font-bold text-lg mb-6 text-center">Explore other business types</h4>
-              <div className="flex flex-wrap gap-3 justify-center">
+            <div className="mt-14 md:mt-24">
+              <h4 className="font-bold text-base md:text-lg mb-4 md:mb-6 text-center">Explore other business types</h4>
+              <div className="-mx-4 px-4 flex md:flex-wrap gap-2 md:gap-3 md:justify-center overflow-x-auto no-scrollbar">
                 {Object.entries(TYPES).map(([key, val]) => (
                   <Link
                     key={key}
                     href={`/restaurant-types/${key}`}
-                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-colors ${
+                    className={`shrink-0 px-3.5 md:px-4 py-2 rounded-full border text-sm font-medium transition-colors whitespace-nowrap ${
                       key === type ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-accent"
                     }`}
                     data-testid={`link-type-${key}`}
@@ -150,8 +148,7 @@ export default function RestaurantTypes() {
             </div>
           </div>
         </div>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteLayout>
   );
 }

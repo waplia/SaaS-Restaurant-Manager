@@ -71,7 +71,7 @@ export default function Security() {
   return (
     <SiteLayout>
       {/* Hero */}
-      <section className="pt-20 md:pt-28 pb-16 relative overflow-hidden">
+      <section className="pt-14 md:pt-28 pb-16 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-orange-500/5 to-purple-600/5 -z-10" />
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
@@ -80,10 +80,10 @@ export default function Security() {
           <div className="mx-auto w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6">
             <Shield className="w-8 h-8" />
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Built on trust. <span className="text-primary">Protected by design.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
             {COMPANY.product} is built by {COMPANY.legalName} to the same security bar as the systems your bank and aggregators use.
             Here is exactly how we keep your data — and your customers' data — safe.
           </p>
@@ -92,10 +92,10 @@ export default function Security() {
       </section>
 
       {/* Pillars */}
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-3">Six pillars of platform security</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3">Six pillars of platform security</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">From encryption to RBAC to audit trails — designed in, not bolted on.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -113,11 +113,11 @@ export default function Security() {
       </section>
 
       {/* Controls list */}
-      <section className="py-16 md:py-20">
+      <section className="py-12 md:py-20">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl grid lg:grid-cols-2 gap-12 items-start">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Controls you can turn on</p>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-5">Defense in depth — at the platform and the outlet.</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-5">Defense in depth — at the platform and the outlet.</h2>
             <p className="text-muted-foreground leading-relaxed">
               Security is not just our job. We give you the controls to enforce the policies that matter to your business —
               from MFA on the owner account to PINs on the captain's tablet.
@@ -137,10 +137,10 @@ export default function Security() {
       </section>
 
       {/* Program */}
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-3">A mature security program</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3">A mature security program</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Not a one-time audit. A continuous practice baked into how we build, ship and operate.</p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
@@ -155,7 +155,7 @@ export default function Security() {
       </section>
 
       {/* Data ownership / compliance */}
-      <section className="py-16 md:py-20">
+      <section className="py-12 md:py-20">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
           <div className="grid md:grid-cols-2 gap-8">
             <div className="rounded-2xl border border-border bg-card p-7">

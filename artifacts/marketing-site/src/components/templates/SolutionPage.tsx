@@ -60,17 +60,17 @@ export function SolutionPage({ content }: { content: SolutionPageContent }) {
       />
 
       {/* Pain Points */}
-      <section className="py-20 md:py-24 bg-muted/30">
+      <section className="py-10 md:py-24 bg-muted/30">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight text-center mb-12">{content.painPoints.title}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-center mb-6 md:mb-12">{content.painPoints.title}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
             {content.painPoints.items.map(p => (
-              <div key={p.title} className="rounded-2xl border border-border bg-card p-6">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-4">
-                  <p.icon className="h-5 w-5" />
+              <div key={p.title} className="rounded-2xl border border-border bg-card p-4 md:p-6">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-3 md:mb-4">
+                  <p.icon className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
-                <h3 className="font-bold mb-2">{p.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
+                <h3 className="font-bold mb-1.5 md:mb-2 text-sm md:text-base">{p.title}</h3>
+                <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
@@ -78,13 +78,13 @@ export function SolutionPage({ content }: { content: SolutionPageContent }) {
       </section>
 
       {/* Recommended Modules */}
-      <section className="py-20 md:py-24">
+      <section className="py-10 md:py-24">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3 text-center">Built-in</p>
-          <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight text-center mb-10">{content.modules.title}</h2>
+          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-primary mb-2 md:mb-3 text-center">Built-in</p>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-center mb-6 md:mb-10">{content.modules.title}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {content.modules.items.map(m => (
-              <Link key={m.href} href={m.href} className="group rounded-xl border border-border bg-card p-5 hover:border-primary/40 hover:shadow-md transition-all flex items-start gap-3">
+              <Link key={m.href} href={m.href} className="group rounded-xl border border-border bg-card p-4 md:p-5 hover:border-primary/40 hover:shadow-md transition-all flex items-start gap-3">
                 <Check className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold flex items-center gap-1.5 group-hover:text-primary">
@@ -107,12 +107,12 @@ export function SolutionPage({ content }: { content: SolutionPageContent }) {
       )}
 
       {/* Case-style scenario */}
-      <section className="py-20 md:py-24 bg-foreground text-background">
+      <section className="py-12 md:py-24 bg-foreground text-background">
         <div className="container mx-auto px-4 md:px-6 max-w-3xl text-center">
-          <Quote className="h-10 w-10 text-primary mx-auto mb-5" />
-          <p className="font-serif text-2xl md:text-3xl leading-relaxed mb-6">"{content.scenario.quote}"</p>
+          <Quote className="h-8 w-8 md:h-10 md:w-10 text-primary mx-auto mb-3 md:mb-5" />
+          <p className="font-serif text-lg sm:text-xl md:text-3xl leading-relaxed mb-4 md:mb-6">"{content.scenario.quote}"</p>
           <p className="text-background/70 text-sm">— {content.scenario.restaurantName}</p>
-          <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 text-primary px-4 py-2 text-sm font-semibold">
+          <div className="mt-5 md:mt-8 inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 text-primary px-4 py-2 text-xs md:text-sm font-semibold">
             {content.scenario.result}
           </div>
         </div>

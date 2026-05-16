@@ -58,15 +58,15 @@ export default function Partners() {
   });
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-12">
+      <section className="pt-14 md:pt-28 pb-12">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> Partner program
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">
             Grow with the <span className="text-primary">KhanaLagao platform.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto">
             Resell, integrate, or refer — build a recurring business on top of India's modern restaurant OS.
           </p>
         </div>
@@ -97,7 +97,7 @@ export default function Partners() {
         <div className="container mx-auto px-4 md:px-6 max-w-6xl grid lg:grid-cols-2 gap-12 items-start">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Why partner with us</p>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-5">A real product. Real revenue. Real support.</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-5">A real product. Real revenue. Real support.</h2>
             <p className="text-muted-foreground leading-relaxed mb-6">
               {COMPANY.legalName} is a homegrown product company — not a reseller of someone else's software. {COMPANY.proudlyBuiltLine}
               That means stable APIs, direct support, and a roadmap you can actually influence.

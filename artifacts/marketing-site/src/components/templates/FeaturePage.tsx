@@ -90,13 +90,13 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
       />
 
       {/* Problem */}
-      <section className="py-16 md:py-20 bg-muted/30">
+      <section className="py-10 md:py-20 bg-muted/30">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3 text-center">The problem</p>
-          <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight text-center mb-10">{content.problem.title}</h2>
-          <ul className="grid md:grid-cols-2 gap-3">
+          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-primary mb-2 md:mb-3 text-center">The problem</p>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-center mb-6 md:mb-10">{content.problem.title}</h2>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {content.problem.points.map((p, i) => (
-              <li key={i} className="flex gap-3 p-5 rounded-xl border border-border bg-card">
+              <li key={i} className="flex gap-3 p-4 md:p-5 rounded-xl border border-border bg-card">
                 <span className="shrink-0 w-7 h-7 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center text-xs font-bold">!</span>
                 <p className="text-sm leading-relaxed text-foreground/80">{p}</p>
               </li>
@@ -106,13 +106,13 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
       </section>
 
       {/* Solution */}
-      <section className="py-20 md:py-24">
+      <section className="py-12 md:py-24">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl text-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-3 md:mb-5">
             <Sparkles className="h-3 w-3" /> Our approach
           </div>
-          <h2 className="font-serif text-3xl md:text-5xl font-bold tracking-tight mb-5">{content.solution.title}</h2>
-          <p className="text-lg text-muted-foreground leading-relaxed">{content.solution.body}</p>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold tracking-tight mb-3 md:mb-5">{content.solution.title}</h2>
+          <p className="text-base md:text-lg text-muted-foreground leading-relaxed">{content.solution.body}</p>
         </div>
       </section>
 
@@ -123,12 +123,12 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
       <Benefits title={content.benefits.title} benefits={content.benefits.items} />
 
       {/* Use cases */}
-      <section className="py-20 md:py-24 bg-muted/30">
+      <section className="py-12 md:py-24 bg-muted/30">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
-          <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight text-center mb-10">Who it's for</h2>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-center mb-6 md:mb-10">Who it's for</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {content.useCases.map((uc, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-5 flex gap-3 items-start">
+              <div key={i} className="rounded-xl border border-border bg-card p-4 md:p-5 flex gap-3 items-start">
                 <span className="shrink-0 w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center text-sm font-bold">{i + 1}</span>
                 <p className="text-sm leading-relaxed">{uc}</p>
               </div>

@@ -20,10 +20,10 @@ export default function LegalIndex() {
 
   return (
     <SiteLayout>
-      <section className="py-20 md:py-28">
+      <section className="py-14 md:py-28">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
           <div className="text-center mb-12">
-            <h1 className="font-serif text-4xl md:text-5xl font-bold tracking-tight mb-4">Legal</h1>
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">Legal</h1>
             <p className="text-lg text-muted-foreground">Everything you need to know about the rules, your rights, and how we handle data.</p>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">

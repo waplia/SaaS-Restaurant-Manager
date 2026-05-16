@@ -86,15 +86,15 @@ export default function PlatformOverview() {
 
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-16">
+      <section className="pt-14 md:pt-28 pb-16">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> The complete platform
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-6">
             One restaurant OS. <span className="text-primary">Four pillars.</span> Zero silos.
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto mb-8">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto mb-8">
             KhanaLagao connects your front-of-house, back-of-house, growth, finance and AI in a single
             platform — so every team, every outlet and every report stays in sync.
           </p>
@@ -105,7 +105,7 @@ export default function PlatformOverview() {
         </div>
       </section>
 
-      <section className="py-16 md:py-20">
+      <section className="py-12 md:py-20">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {PILLARS.map((p) => (
@@ -132,10 +132,10 @@ export default function PlatformOverview() {
         </div>
       </section>
 
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-4">Why operators choose KhanaLagao</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4">Why operators choose KhanaLagao</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Built for the real rush — not the demo room.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-5">

@@ -16,26 +16,26 @@ const REASONS = [
 
 export function WhyChooseUs() {
   return (
-    <section className="py-24 bg-card">
+    <section className="py-12 md:py-24 bg-card">
       <div className="container mx-auto px-4 md:px-6">
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-4">
+        <div className="text-center max-w-3xl mx-auto mb-8 md:mb-14">
+          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-3 md:mb-4">
             Why KhanaLagao
           </div>
-          <h2 className="font-serif text-3xl md:text-5xl font-bold mb-5">
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold mb-3 md:mb-5">
             Nine reasons restaurants switch — and stay.
           </h2>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5 max-w-6xl mx-auto">
           {REASONS.map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="p-6 rounded-xl border border-border bg-background hover:border-primary/40 transition-colors">
+            <div key={title} className="p-4 md:p-6 rounded-xl border border-border bg-background hover:border-primary/40 transition-colors">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
                   <Icon className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1.5">{title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+                  <h3 className="font-semibold mb-1 md:mb-1.5 text-sm md:text-base">{title}</h3>
+                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{desc}</p>
                 </div>
               </div>
             </div>

@@ -1,12 +1,16 @@
-import { Check, X } from "lucide-react";
+import { Check, X, ChevronRight } from "lucide-react";
 
 export interface ComparisonRow { label: string; values: (boolean | string)[] }
 export interface ComparisonProps { columns: string[]; rows: ComparisonRow[]; highlightCol?: number }
 
 export function ComparisonTable({ columns, rows, highlightCol = 0 }: ComparisonProps) {
   return (
+    <div>
+      <p className="md:hidden text-xs text-muted-foreground mb-2 flex items-center gap-1">
+        Scroll to compare <ChevronRight className="h-3 w-3" />
+      </p>
     <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm min-w-[560px]">
         <thead>
           <tr className="border-b border-border">
             <th className="text-left p-4 font-semibold text-muted-foreground w-1/3">Capability</th>
@@ -32,6 +36,7 @@ export function ComparisonTable({ columns, rows, highlightCol = 0 }: ComparisonP
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

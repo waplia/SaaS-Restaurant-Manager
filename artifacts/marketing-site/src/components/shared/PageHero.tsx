@@ -27,8 +27,8 @@ export function PageHero({
         : "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/12 via-background to-background"}`} />
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] rounded-full bg-primary/10 blur-3xl -z-10" />
 
-      <div className={`container mx-auto px-4 md:px-6 ${visual ? "grid lg:grid-cols-2 gap-12 items-center" : "max-w-4xl"} pt-12 md:pt-16 pb-16 md:pb-20`}>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
+      <div className={`container mx-auto px-4 md:px-6 ${visual ? "grid lg:grid-cols-2 gap-8 lg:gap-12 items-center" : "max-w-4xl"} pt-8 md:pt-16 pb-10 md:pb-20`}>
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-4 md:space-y-5">
           {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
           {eyebrow && (
             <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -37,11 +37,11 @@ export function PageHero({
               <Sparkles className="h-3 w-3 mr-1.5" /> {eyebrow}
             </div>
           )}
-          <h1 className={`font-serif font-bold tracking-tight leading-[1.05] ${visual ? "text-4xl md:text-5xl lg:text-6xl" : "text-4xl md:text-5xl lg:text-6xl text-center md:text-left"}`}>
+          <h1 className={`font-serif font-bold tracking-tight leading-[1.1] ${visual ? "text-[2rem] sm:text-4xl md:text-5xl lg:text-6xl" : "text-[2rem] sm:text-4xl md:text-5xl lg:text-6xl text-center md:text-left"}`}>
             {title}
           </h1>
           {subtitle && (
-            <p className={`text-lg md:text-xl leading-relaxed ${dark ? "text-background/75" : "text-muted-foreground"} ${visual ? "" : "max-w-3xl"}`}>
+            <p className={`text-base md:text-xl leading-relaxed ${dark ? "text-background/75" : "text-muted-foreground"} ${visual ? "" : "max-w-3xl"}`}>
               {subtitle}
             </p>
           )}
@@ -65,7 +65,7 @@ export function PageHero({
           )}
         </motion.div>
         {visual && (
-          <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.15 }}>
+          <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.15 }} className="max-w-full">
             {visual}
           </motion.div>
         )}

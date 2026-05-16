@@ -15,15 +15,15 @@ export default function SolutionsIndex() {
 
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-12">
+      <section className="pt-14 md:pt-28 pb-12">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> Solutions
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">
             Built for <span className="text-primary">every kind of food business.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto">
             Same platform, tailored playbook. Pick the concept that matches yours to see exactly how KhanaLagao fits.
           </p>
         </div>

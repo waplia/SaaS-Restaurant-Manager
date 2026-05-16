@@ -24,17 +24,17 @@ export function CTASection({
   secondary = { label: "Start free trial", href: "/app/register" },
 }: Props) {
   return (
-    <section className="py-20 md:py-28">
+    <section className="py-12 md:py-28">
       <div className="container mx-auto px-4 md:px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-foreground via-foreground to-orange-950 text-background p-10 md:p-16 text-center">
+        <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-br from-foreground via-foreground to-orange-950 text-background p-6 sm:p-10 md:p-16 text-center">
           <div className="absolute -top-32 -right-32 w-[400px] h-[400px] rounded-full bg-primary/30 blur-3xl" />
           <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-orange-500/20 blur-3xl" />
           <div className="relative z-10">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/15 text-primary px-3 py-1 text-xs font-semibold mb-5">
               <Sparkles className="h-3 w-3" /> {eyebrow}
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl font-bold tracking-tight mb-4 max-w-2xl mx-auto">{title}</h2>
-            <p className="text-background/75 text-lg max-w-xl mx-auto mb-8">{subtitle}</p>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold tracking-tight mb-3 md:mb-4 max-w-2xl mx-auto">{title}</h2>
+            <p className="text-background/75 text-base md:text-lg max-w-xl mx-auto mb-6 md:mb-8">{subtitle}</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               {isCrossArtifact(primary.href) ? (
                 <a href={primary.href}>

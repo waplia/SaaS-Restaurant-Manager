@@ -28,15 +28,28 @@ export function LegalPageLayout({ title, intro, lastUpdated, sections, seoDescri
   return (
     <SiteLayout>
       <section className="border-b border-border bg-muted/30">
-        <div className="container mx-auto px-4 md:px-6 py-12">
+        <div className="container mx-auto px-4 md:px-6 py-8 md:py-12">
           <Breadcrumbs items={[{ label: "Legal" }, { label: title }]} />
-          <h1 className="font-serif text-3xl md:text-5xl font-bold tracking-tight mt-4">{title}</h1>
-          <p className="text-muted-foreground mt-3 max-w-3xl">{intro}</p>
-          <p className="text-xs text-muted-foreground/80 mt-4">Last updated: {lastUpdated}</p>
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold tracking-tight mt-3 md:mt-4">{title}</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-2 md:mt-3 max-w-3xl">{intro}</p>
+          <p className="text-xs text-muted-foreground/80 mt-3 md:mt-4">Last updated: {lastUpdated}</p>
         </div>
       </section>
-      <section className="py-12 md:py-16">
-        <div className="container mx-auto px-4 md:px-6 grid lg:grid-cols-[260px_1fr] gap-10">
+      <section className="py-8 md:py-16">
+        <div className="container mx-auto px-4 md:px-6 grid lg:grid-cols-[260px_1fr] gap-6 lg:gap-10">
+          <details className="lg:hidden rounded-xl border border-border bg-card overflow-hidden">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold flex items-center justify-between">
+              On this page
+              <span className="text-xs text-muted-foreground">{sections.length} sections</span>
+            </summary>
+            <div className="px-2 pb-2 space-y-0.5 border-t border-border">
+              {sections.map(s => (
+                <a key={s.id} href={`#${s.id}`} className="block text-sm py-2 px-3 rounded text-foreground/80 hover:text-foreground hover:bg-accent transition-colors">
+                  {s.title}
+                </a>
+              ))}
+            </div>
+          </details>
           <aside className="hidden lg:block">
             <div className="sticky top-24 space-y-1.5">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">On this page</p>

@@ -1,6 +1,5 @@
 import { useSeo } from "@/lib/seo";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { HeroSection } from "@/components/home/HeroSection";
 import { TrustStrip } from "@/components/home/TrustStrip";
 import { ProblemSection } from "@/components/home/ProblemSection";
@@ -27,9 +26,8 @@ export default function Home() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow">
+    <SiteLayout>
+      <div>
         <HeroSection />
         <TrustStrip />
         <ProblemSection />
@@ -47,8 +45,7 @@ export default function Home() {
         <Testimonials />
         <HomeFAQ />
         <FinalCTA />
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteLayout>
   );
 }

@@ -54,10 +54,10 @@ export default function FAQ() {
   });
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-10">
+      <section className="pt-14 md:pt-28 pb-10">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl text-center">
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">Frequently asked questions</h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">Quick, honest answers to the questions operators ask us most.</p>
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">Frequently asked questions</h1>
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto">Quick, honest answers to the questions operators ask us most.</p>
         </div>
       </section>
 

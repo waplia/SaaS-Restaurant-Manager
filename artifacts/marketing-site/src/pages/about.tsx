@@ -30,15 +30,15 @@ export default function About() {
   return (
     <SiteLayout>
       {/* Hero */}
-      <section className="pt-20 md:pt-28 pb-16">
+      <section className="pt-14 md:pt-28 pb-16">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> About us
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Software that respects the <span className="text-primary">craft of hospitality.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
             {COMPANY.product} is built by {COMPANY.legalName} — a small, focused team from {COMPANY.city}, India,
             building the restaurant operating system we wish every operator had.
           </p>
@@ -46,11 +46,11 @@ export default function About() {
       </section>
 
       {/* Mission */}
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 grid lg:grid-cols-2 gap-12 items-start max-w-6xl">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Our mission</p>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-5">
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-5">
               Let chefs be chefs. Let owners be owners.
             </h2>
             <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
@@ -77,10 +77,10 @@ export default function About() {
       </section>
 
       {/* Values */}
-      <section className="py-20 md:py-24">
+      <section className="py-14 md:py-24">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="text-center mb-12 max-w-2xl mx-auto">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-4">What we believe</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4">What we believe</h2>
             <p className="text-muted-foreground text-lg">Four principles that decide every button, every API and every customer call.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -98,11 +98,11 @@ export default function About() {
       </section>
 
       {/* Timeline */}
-      <section className="py-16 md:py-20 bg-muted/30 border-y border-border">
+      <section className="py-12 md:py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
           <div className="text-center mb-10">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Our journey</p>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight">From a Jaipur garage to a restaurant OS</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">From a Jaipur garage to a restaurant OS</h2>
           </div>
           <div className="space-y-4">
             {TIMELINE.map((t) => (
@@ -119,12 +119,12 @@ export default function About() {
       </section>
 
       {/* Company card */}
-      <section className="py-20 md:py-24">
+      <section className="py-14 md:py-24">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
           <div className="grid md:grid-cols-2 gap-8 items-start">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">Company</p>
-              <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-5">{COMPANY.legalName}</h2>
+              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-5">{COMPANY.legalName}</h2>
               <p className="text-muted-foreground mb-6 leading-relaxed">
                 {COMPANY.proudlyBuiltLine} We design, build, ship, and support every line of {COMPANY.product} ourselves.
               </p>

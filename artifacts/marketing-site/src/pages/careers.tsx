@@ -27,15 +27,15 @@ export default function Careers() {
   });
   return (
     <SiteLayout>
-      <section className="pt-20 md:pt-28 pb-12">
+      <section className="pt-14 md:pt-28 pb-12">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold mb-5">
             <Sparkles className="h-3 w-3" /> Careers
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-5">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-5">
             Build the OS that runs <span className="text-primary">Indian restaurants.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-6">
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-6">
             We're a small, product-led team in {COMPANY.city}. We hire people who care about craft, customers and shipping things that actually work.
           </p>
           <p className="text-sm text-muted-foreground inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> {COMPANY.fullAddress}</p>
@@ -44,7 +44,7 @@ export default function Careers() {
 
       <section className="py-12 md:py-16 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-8 text-center">Open roles</h2>
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-8 text-center">Open roles</h2>
           <div className="rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden">
             {ROLES.map((r) => (
               <div key={r.title} className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-3 items-center p-5 md:p-6 hover:bg-muted/30 transition-colors">
@@ -65,10 +65,10 @@ export default function Careers() {
         </div>
       </section>
 
-      <section className="py-16 md:py-20">
+      <section className="py-12 md:py-20">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
           <div className="text-center mb-10">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold tracking-tight mb-4">Why work with us</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4">Why work with us</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {PERKS.map((p) => (

@@ -1,6 +1,5 @@
 import { useSeo } from "@/lib/seo";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { SiStripe, SiRazorpay, SiZomato, SiSwiggy, SiUbereats, SiDoordash, SiQuickbooks, SiXero } from "react-icons/si";
 
 export default function Integrations() {
@@ -21,27 +20,25 @@ export default function Integrations() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow pt-24 pb-32">
+    <SiteLayout>
+      <div className="pt-12 md:pt-24 pb-16 md:pb-32">
         <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h1 className="font-serif text-4xl md:text-6xl font-bold tracking-tight mb-6">Plays well with others</h1>
-            <p className="text-xl text-muted-foreground">Connect KhanaLagao to your favorite tools for a seamless operational flow.</p>
+          <div className="text-center max-w-3xl mx-auto mb-10 md:mb-16">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4 md:mb-6">Plays well with others</h1>
+            <p className="text-base md:text-xl text-muted-foreground">Connect KhanaLagao to your favorite tools for a seamless operational flow.</p>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 max-w-4xl mx-auto">
             {partners.map((partner, i) => (
-              <div key={i} className="flex flex-col items-center justify-center p-8 bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                <partner.icon className="h-12 w-12 text-foreground mb-4 opacity-80 hover:opacity-100 transition-opacity" />
-                <h3 className="font-bold">{partner.name}</h3>
-                <p className="text-sm text-muted-foreground">{partner.category}</p>
+              <div key={i} className="flex flex-col items-center justify-center p-5 md:p-8 bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                <partner.icon className="h-10 w-10 md:h-12 md:w-12 text-foreground mb-3 md:mb-4 opacity-80 hover:opacity-100 transition-opacity" />
+                <h3 className="font-bold text-sm md:text-base">{partner.name}</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">{partner.category}</p>
               </div>
             ))}
           </div>
         </div>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteLayout>
   );
 }
