@@ -9,7 +9,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, QrCode, Download, X, Printer, LayoutGrid, Move, Merge, CalendarDays, Calendar, Pencil, Trash2, ChevronRight, Scissors } from "lucide-react";
+import { Plus, Users, QrCode, Download, X, Printer, LayoutGrid, Move, Merge, CalendarDays, Calendar, Pencil, Trash2, ChevronRight, Scissors, Loader2, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { apiGet } from "@/lib/api";
+import type { jsPDF } from "jspdf";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, Reservation, CreateReservationInput } from "@/lib/types";
@@ -98,6 +101,215 @@ function formatTableLabel(tableNumber: string): string {
   return `Table ${trimmed}`;
 }
 
+type CardRegion = { x: number; y: number; w: number; h: number };
+
+type DrawCardArgs = {
+  table: FloorTable;
+  qrUrl: string;
+  svgData: string;
+  iconPngs: string[];
+  logoPng: string | null;
+  restaurantName: string;
+  hasRealRestaurantName: boolean;
+  showBranding: boolean;
+  drawBackground: boolean;
+};
+
+// Renders a single premium QR card (warm white background, orange border,
+// headline, QR, table label, KhanaLagao footer) inside an arbitrary page
+// region. When `drawBackground` is true the function also paints the warm
+// white fill and the faint corner "K" watermarks (used for the standalone
+// single-card PDF and the bulk 1-per-page export). For the 4-up sheet, the
+// caller paints the page background once and passes `drawBackground: false`
+// so per-cell watermarks don't bleed into adjacent cells.
+async function drawQrCard(
+  doc: jsPDF,
+  region: CardRegion,
+  a: DrawCardArgs,
+): Promise<void> {
+  const W = 210; // virtual reference width (mm)
+  const H = 297; // virtual reference height (mm)
+  const s = region.w / W;
+  const ox = region.x;
+  const oy = region.y;
+  const tx = (x: number) => ox + x * s;
+  const ty = (y: number) => oy + y * s;
+  const sz = (n: number) => n * s;
+
+  if (a.drawBackground) {
+    doc.setFillColor(KL_COLORS.warmWhite);
+    doc.rect(ox, oy, region.w, region.h, "F");
+
+    doc.setTextColor(KL_COLORS.faintOrange);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(220 * s);
+    doc.text("K", tx(-8), ty(78), { baseline: "alphabetic" });
+    doc.text("K", tx(W - 10), ty(H - 12), { align: "right", baseline: "alphabetic" });
+  }
+
+  const M = 12;
+  doc.setDrawColor(KL_COLORS.primaryOrange);
+  doc.setLineWidth(1.4 * s);
+  doc.roundedRect(tx(M), ty(M), sz(W - 2 * M), sz(H - 2 * M), sz(6), sz(6), "S");
+  doc.setDrawColor(KL_COLORS.faintOrange);
+  doc.setLineWidth(0.3 * s);
+  doc.roundedRect(tx(M + 2.2), ty(M + 2.2), sz(W - 2 * (M + 2.2)), sz(H - 2 * (M + 2.2)), sz(4.5), sz(4.5), "S");
+
+  let cursorY = 32;
+  if (a.showBranding && (a.logoPng || a.hasRealRestaurantName)) {
+    if (a.logoPng) {
+      try { doc.addImage(a.logoPng, "PNG", tx(W / 2 - 7), ty(cursorY - 6), sz(14), sz(14)); } catch { /* noop */ }
+      cursorY += 11;
+    }
+    if (a.hasRealRestaurantName) {
+      doc.setTextColor(KL_COLORS.muted);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11 * s);
+      doc.text(a.restaurantName, tx(W / 2), ty(cursorY), { align: "center" });
+      cursorY += 8;
+    }
+    cursorY += 2;
+  } else {
+    cursorY = 42;
+  }
+
+  doc.setTextColor(KL_COLORS.charcoal);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(34 * s);
+  doc.text("Scan to Order", tx(W / 2), ty(cursorY + 8), { align: "center" });
+
+  doc.setTextColor(KL_COLORS.muted);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11 * s);
+  doc.text("Your menu is one scan away.", tx(W / 2), ty(cursorY + 16), { align: "center" });
+
+  const labels: Array<{ key: keyof typeof QR_PDF_ICONS; text: string }> = [
+    { key: "menu", text: "View Menu" },
+    { key: "order", text: "Order" },
+    { key: "waiter", text: "Call Waiter" },
+    { key: "review", text: "Review" },
+  ];
+  doc.setFontSize(11 * s);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(KL_COLORS.charcoal);
+  const iconSize = 5;
+  const gap = 2.2;
+  const bulletSpace = 3.2;
+  const bullet = "•";
+  // getTextWidth returns mm at the *current* font size; divide by s to
+  // get widths in our virtual (W=210) coordinate system.
+  const labelWidthsV = labels.map(l => doc.getTextWidth(l.text) / s);
+  const bulletWidthV = doc.getTextWidth(bullet) / s;
+  const groupWidthV = (i: number) => iconSize + gap + labelWidthsV[i];
+  const totalWidthV = labels.reduce((sum, _, i) => sum + groupWidthV(i), 0)
+    + (labels.length - 1) * (bulletSpace * 2 + bulletWidthV);
+  let xv = (W - totalWidthV) / 2;
+  const rowY = cursorY + 26;
+  for (let i = 0; i < labels.length; i++) {
+    const png = a.iconPngs[i];
+    if (png) {
+      try { doc.addImage(png, "PNG", tx(xv), ty(rowY - iconSize + 0.6), sz(iconSize), sz(iconSize)); } catch { /* noop */ }
+    }
+    doc.text(labels[i].text, tx(xv + iconSize + gap), ty(rowY));
+    xv += groupWidthV(i);
+    if (i < labels.length - 1) {
+      doc.setTextColor(KL_COLORS.muted);
+      doc.text(bullet, tx(xv + bulletSpace), ty(rowY));
+      doc.setTextColor(KL_COLORS.charcoal);
+      xv += bulletSpace * 2 + bulletWidthV;
+    }
+  }
+
+  const qrSize = 110;
+  const qrPadding = 6;
+  const qrBoxSize = qrSize + qrPadding * 2;
+  const qrBoxXv = (W - qrBoxSize) / 2;
+  const qrBoxYv = cursorY + 36;
+  doc.setFillColor("#FFFFFF");
+  doc.setDrawColor(KL_COLORS.faintOrange);
+  doc.setLineWidth(0.5 * s);
+  doc.roundedRect(tx(qrBoxXv), ty(qrBoxYv), sz(qrBoxSize), sz(qrBoxSize), sz(3), sz(3), "FD");
+
+  let qrRendered = false;
+  if (a.svgData) {
+    try {
+      const { svg2pdf } = await import("svg2pdf.js");
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(a.svgData, "image/svg+xml");
+      const svgEl = svgDoc.documentElement as unknown as Element;
+      if (svgEl && svgEl.nodeName.toLowerCase() === "svg") {
+        await svg2pdf(svgEl as SVGElement, doc, {
+          x: tx(qrBoxXv + qrPadding),
+          y: ty(qrBoxYv + qrPadding),
+          width: sz(qrSize),
+          height: sz(qrSize),
+        });
+        qrRendered = true;
+      }
+    } catch { /* fall through to PNG fallback */ }
+  }
+  if (!qrRendered) {
+    const svgBlob = a.svgData ? `data:image/svg+xml;base64,${btoa(a.svgData)}` : "";
+    const fallbackPng = await loadImageToPngDataUrl(
+      svgBlob || (a.qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(a.qrUrl)}&size=1200x1200&margin=20` : ""),
+      1400,
+    );
+    if (fallbackPng) {
+      try {
+        doc.addImage(fallbackPng, "PNG", tx(qrBoxXv + qrPadding), ty(qrBoxYv + qrPadding), sz(qrSize), sz(qrSize));
+        qrRendered = true;
+      } catch { /* noop */ }
+    }
+  }
+  if (!qrRendered) {
+    // Show either the link text (when we have a URL but couldn't rasterize
+    // the QR) or an explicit unavailable notice so failed cards never print
+    // as a silently blank square.
+    doc.setTextColor(KL_COLORS.muted);
+    if (a.qrUrl) {
+      doc.setFontSize(9 * s);
+      doc.text(a.qrUrl, tx(W / 2), ty(qrBoxYv + qrBoxSize / 2), { align: "center", maxWidth: sz(qrSize) });
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14 * s);
+      doc.text("QR unavailable", tx(W / 2), ty(qrBoxYv + qrBoxSize / 2 - 4), { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10 * s);
+      doc.text(
+        `Re-print ${formatTableLabel(a.table.tableNumber)} after retrying`,
+        tx(W / 2),
+        ty(qrBoxYv + qrBoxSize / 2 + 4),
+        { align: "center", maxWidth: sz(qrSize) },
+      );
+    }
+  }
+
+  const tableLabelYv = qrBoxYv + qrBoxSize + 18;
+  doc.setTextColor(KL_COLORS.charcoal);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(38 * s);
+  doc.text(formatTableLabel(a.table.tableNumber), tx(W / 2), ty(tableLabelYv), { align: "center" });
+
+  const dividerYv = tableLabelYv + 12;
+  doc.setDrawColor(KL_COLORS.faintOrange);
+  doc.setLineWidth(0.4 * s);
+  doc.line(tx(W / 2 - 30), ty(dividerYv), tx(W / 2 + 30), ty(dividerYv));
+
+  doc.setTextColor(KL_COLORS.primaryOrange);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22 * s);
+  doc.text("KhanaLagao", tx(W / 2), ty(dividerYv + 11), { align: "center" });
+
+  doc.setTextColor(KL_COLORS.charcoal);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10 * s);
+  doc.text(KL_TAGLINE, tx(W / 2), ty(dividerYv + 18), { align: "center" });
+
+  doc.setTextColor(KL_COLORS.muted);
+  doc.setFontSize(8 * s);
+  doc.text("Powered by KhanaLagao  •  khanalagao.com", tx(W / 2), ty(H - M - 4), { align: "center" });
+}
+
 function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, hasRealRestaurantName, onClose }: { table: FloorTable; restaurantName: string; restaurantId: number | null; restaurantLogoUrl: string | null; hasRealRestaurantName: boolean; onClose: () => void }) {
   const { data: qrData, isLoading } = useGetTableQr(table.id);
   const rawQrUrl = qrData?.qrUrl ?? "";
@@ -139,177 +351,21 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, hasRe
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const W = 210, H = 297;
 
-    // Background warm white
-    doc.setFillColor(KL_COLORS.warmWhite);
-    doc.rect(0, 0, W, H, "F");
+    const iconKeys: Array<keyof typeof QR_PDF_ICONS> = ["menu", "order", "waiter", "review"];
+    const iconPngs = await Promise.all(iconKeys.map(k => svgStringToPngDataUrl(QR_PDF_ICONS[k], 192)));
+    const logoPng = showBranding && restaurantLogoUrl ? await loadImageToPngDataUrl(restaurantLogoUrl, 256) : null;
 
-    // Subtle "K" watermarks in two corners (away from QR), faint orange.
-    doc.setTextColor(KL_COLORS.faintOrange);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(220);
-    doc.text("K", -8, 78, { baseline: "alphabetic" });
-    doc.text("K", W - 10, H - 12, { align: "right", baseline: "alphabetic" });
-
-    // Card frame: margin 12mm, rounded orange border
-    const M = 12;
-    doc.setDrawColor(KL_COLORS.primaryOrange);
-    doc.setLineWidth(1.4);
-    doc.roundedRect(M, M, W - 2 * M, H - 2 * M, 6, 6, "S");
-    // Inner hairline accent
-    doc.setDrawColor(KL_COLORS.faintOrange);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(M + 2.2, M + 2.2, W - 2 * (M + 2.2), H - 2 * (M + 2.2), 4.5, 4.5, "S");
-
-    let cursorY = 32;
-
-    // Optional restaurant branding (logo + name) — subtle, above the headline
-    if (showBranding && (restaurantLogoUrl || hasRealRestaurantName)) {
-      if (restaurantLogoUrl) {
-        const logoPng = await loadImageToPngDataUrl(restaurantLogoUrl, 256);
-        if (logoPng) {
-          try { doc.addImage(logoPng, "PNG", W / 2 - 7, cursorY - 6, 14, 14); } catch { /* noop */ }
-          cursorY += 11;
-        }
-      }
-      if (hasRealRestaurantName) {
-        doc.setTextColor(KL_COLORS.muted);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.text(restaurantName, W / 2, cursorY, { align: "center" });
-        cursorY += 8;
-      }
-      cursorY += 2;
-    } else {
-      cursorY = 42;
-    }
-
-    // Headline
-    doc.setTextColor(KL_COLORS.charcoal);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(34);
-    doc.text("Scan to Order", W / 2, cursorY + 8, { align: "center" });
-
-    // Sub-headline
-    doc.setTextColor(KL_COLORS.muted);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("Your menu is one scan away.", W / 2, cursorY + 16, { align: "center" });
-
-    // Action line with 4 small icons + labels, separated by bullets:
-    // "View Menu • Order • Call Waiter • Review"
-    const labels: Array<{ key: keyof typeof QR_PDF_ICONS; text: string }> = [
-      { key: "menu", text: "View Menu" },
-      { key: "order", text: "Order" },
-      { key: "waiter", text: "Call Waiter" },
-      { key: "review", text: "Review" },
-    ];
-    const iconPngs = await Promise.all(labels.map(l => svgStringToPngDataUrl(QR_PDF_ICONS[l.key], 192)));
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(KL_COLORS.charcoal);
-    const iconSize = 5; // mm
-    const gap = 2.2; // mm between icon and label
-    const bulletSpace = 3.2; // mm padding on each side of the bullet
-    const bullet = "•";
-    const labelWidths = labels.map(l => doc.getTextWidth(l.text));
-    const bulletWidth = doc.getTextWidth(bullet);
-    const groupWidth = (i: number) => iconSize + gap + labelWidths[i];
-    const totalWidth = labels.reduce((s, _, i) => s + groupWidth(i), 0)
-      + (labels.length - 1) * (bulletSpace * 2 + bulletWidth);
-    let x = (W - totalWidth) / 2;
-    const rowY = cursorY + 26;
-    for (let i = 0; i < labels.length; i++) {
-      const png = iconPngs[i];
-      if (png) {
-        try { doc.addImage(png, "PNG", x, rowY - iconSize + 0.6, iconSize, iconSize); } catch { /* noop */ }
-      }
-      doc.text(labels[i].text, x + iconSize + gap, rowY);
-      x += groupWidth(i);
-      if (i < labels.length - 1) {
-        doc.setTextColor(KL_COLORS.muted);
-        doc.text(bullet, x + bulletSpace, rowY);
-        doc.setTextColor(KL_COLORS.charcoal);
-        x += bulletSpace * 2 + bulletWidth;
-      }
-    }
-
-    // QR area — large, centered, with white card behind
-    const qrSize = 110;
-    const qrPadding = 6;
-    const qrBoxSize = qrSize + qrPadding * 2;
-    const qrBoxX = (W - qrBoxSize) / 2;
-    const qrBoxY = cursorY + 36;
-    doc.setFillColor("#FFFFFF");
-    doc.setDrawColor(KL_COLORS.faintOrange);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 3, 3, "FD");
-
-    // Render QR as a true vector when SVG is available (crisp at any
-    // print size). Falls back to a high-res PNG only when no SVG is
-    // returned by the API and the remote PNG can be rasterized.
-    let qrRendered = false;
-    if (svgData) {
-      try {
-        const { svg2pdf } = await import("svg2pdf.js");
-        const parser = new DOMParser();
-        const svgDoc = parser.parseFromString(svgData, "image/svg+xml");
-        const svgEl = svgDoc.documentElement as unknown as Element;
-        if (svgEl && svgEl.nodeName.toLowerCase() === "svg") {
-          await svg2pdf(svgEl as SVGElement, doc, {
-            x: qrBoxX + qrPadding,
-            y: qrBoxY + qrPadding,
-            width: qrSize,
-            height: qrSize,
-          });
-          qrRendered = true;
-        }
-      } catch { /* fall through to PNG fallback */ }
-    }
-    if (!qrRendered) {
-      const fallbackPng = await loadImageToPngDataUrl(
-        svgBlob || `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=1200x1200&margin=20`,
-        1400,
-      );
-      if (fallbackPng) {
-        try {
-          doc.addImage(fallbackPng, "PNG", qrBoxX + qrPadding, qrBoxY + qrPadding, qrSize, qrSize);
-          qrRendered = true;
-        } catch { /* noop */ }
-      }
-    }
-    if (!qrRendered) {
-      doc.setFontSize(9);
-      doc.setTextColor(KL_COLORS.muted);
-      doc.text(qrUrl, W / 2, qrBoxY + qrBoxSize / 2, { align: "center", maxWidth: qrSize });
-    }
-
-    // Table number — large, prominent, under QR
-    const tableLabelY = qrBoxY + qrBoxSize + 18;
-    doc.setTextColor(KL_COLORS.charcoal);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(38);
-    doc.text(formatTableLabel(table.tableNumber), W / 2, tableLabelY, { align: "center" });
-
-    // Divider
-    const dividerY = tableLabelY + 12;
-    doc.setDrawColor(KL_COLORS.faintOrange);
-    doc.setLineWidth(0.4);
-    doc.line(W / 2 - 30, dividerY, W / 2 + 30, dividerY);
-
-    // KhanaLagao wordmark + tagline + footer credit
-    doc.setTextColor(KL_COLORS.primaryOrange);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text("KhanaLagao", W / 2, dividerY + 11, { align: "center" });
-
-    doc.setTextColor(KL_COLORS.charcoal);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(KL_TAGLINE, W / 2, dividerY + 18, { align: "center" });
-
-    doc.setTextColor(KL_COLORS.muted);
-    doc.setFontSize(8);
-    doc.text("Powered by KhanaLagao  •  khanalagao.com", W / 2, H - M - 4, { align: "center" });
+    await drawQrCard(doc, { x: 0, y: 0, w: W, h: H }, {
+      table,
+      qrUrl,
+      svgData,
+      iconPngs,
+      logoPng,
+      restaurantName,
+      hasRealRestaurantName,
+      showBranding,
+      drawBackground: true,
+    });
 
     doc.save(`table-${table.tableNumber}-qr.pdf`);
   }
@@ -862,6 +918,119 @@ export default function TablesPage() {
   const [mergeSelected, setMergeSelected] = useState<number[]>([]);
   const [showReservations, setShowReservations] = useState(false);
   const [splitTable, setSplitTable] = useState<FloorTable | null>(null);
+  const [bulkPrinting, setBulkPrinting] = useState<null | "single" | "grid">(null);
+
+  const handlePrintAllQrs = useCallback(async (layout: "single" | "grid") => {
+    if (tables.length === 0) {
+      toast({ title: "No tables to print", variant: "destructive" });
+      return;
+    }
+    const restId = restaurantInfo?.id ?? null;
+    if (restId == null) {
+      toast({
+        title: "Restaurant not ready",
+        description: "Please wait a moment for your restaurant info to load, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBulkPrinting(layout);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const W = 210, H = 297;
+
+      const brandingPrefKey = `kl.qr.showBranding.${restId}`;
+      const showBranding = Boolean(
+        brandingPrefKey && typeof window !== "undefined" && window.localStorage.getItem(brandingPrefKey) === "1",
+      );
+      const hasRealRestaurantName = Boolean(restaurantInfo?.name);
+      const restaurantName = restaurantInfo?.name ?? "Restaurant";
+
+      // Pre-render shared assets once so the bulk export doesn't re-rasterize per card.
+      const iconKeys: Array<keyof typeof QR_PDF_ICONS> = ["menu", "order", "waiter", "review"];
+      const iconPngs = await Promise.all(iconKeys.map(k => svgStringToPngDataUrl(QR_PDF_ICONS[k], 192)));
+      const logoPng = showBranding && restaurantInfo?.logoUrl
+        ? await loadImageToPngDataUrl(restaurantInfo.logoUrl, 256)
+        : null;
+
+      // Fetch every table's QR in parallel via the existing per-table endpoint.
+      const qrResults = await Promise.all(
+        (tables as FloorTable[]).map(async t => {
+          try {
+            const data = await apiGet<{ qrUrl: string; tableNumber: string; svgData?: string }>(
+              `/restaurants/${restId}/tables/${t.id}/qr`,
+            );
+            const raw = data.qrUrl ?? "";
+            const fullUrl = raw.startsWith("/") ? `${window.location.origin}${raw}` : raw;
+            return { table: t, qrUrl: fullUrl, svgData: data.svgData ?? "", ok: Boolean(raw) };
+          } catch {
+            return { table: t, qrUrl: "", svgData: "", ok: false };
+          }
+        }),
+      );
+      const failed = qrResults.filter(r => !r.ok);
+
+      const cellsPerPage = layout === "single" ? 1 : 4;
+      for (let i = 0; i < qrResults.length; i++) {
+        const cellIndex = i % cellsPerPage;
+        if (cellIndex === 0) {
+          if (i > 0) doc.addPage();
+          if (layout === "grid") {
+            // Paint warm white page background once per page so 4-up cells
+            // share a single, seamless backdrop. For single-layout pages
+            // `drawQrCard(drawBackground: true)` paints the background and
+            // corner watermarks itself, so we skip the redundant fill here.
+            doc.setFillColor(KL_COLORS.warmWhite);
+            doc.rect(0, 0, W, H, "F");
+          }
+        }
+        const region: CardRegion = layout === "single"
+          ? { x: 0, y: 0, w: W, h: H }
+          : (() => {
+              const col = cellIndex % 2;
+              const row = Math.floor(cellIndex / 2);
+              return { x: col * (W / 2), y: row * (H / 2), w: W / 2, h: H / 2 };
+            })();
+        const r = qrResults[i];
+        await drawQrCard(doc, region, {
+          table: r.table,
+          qrUrl: r.qrUrl,
+          svgData: r.svgData,
+          iconPngs,
+          logoPng,
+          restaurantName,
+          hasRealRestaurantName,
+          showBranding,
+          // Single-card pages reproduce the standalone PDF (with corner "K"
+          // watermarks). 4-up cells skip per-cell background/watermarks so
+          // they don't bleed into adjacent cards.
+          drawBackground: layout === "single",
+        });
+      }
+
+      const suffix = layout === "grid" ? "-4up" : "";
+      doc.save(`tables-qr${suffix}.pdf`);
+      if (failed.length > 0) {
+        const names = failed.slice(0, 3).map(f => `Table ${f.table.tableNumber}`).join(", ");
+        const more = failed.length > 3 ? ` and ${failed.length - 3} more` : "";
+        toast({
+          title: `PDF ready — ${failed.length} card${failed.length === 1 ? "" : "s"} had QR issues`,
+          description: `Could not fetch QR for: ${names}${more}. Those cards are marked "QR unavailable" — please retry the download.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "PDF ready",
+          description: `${tables.length} table QR card${tables.length === 1 ? "" : "s"} downloaded.`,
+        });
+      }
+    } catch {
+      toast({ title: "Failed to generate PDF", variant: "destructive" });
+    } finally {
+      setBulkPrinting(null);
+    }
+  }, [tables, restaurantInfo, toast]);
 
   const free = tables.filter((t: FloorTable) => t.status === "free").length;
   const occupied = tables.filter((t: FloorTable) => t.status === "occupied").length;
@@ -994,6 +1163,40 @@ export default function TablesPage() {
                 <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{upcomingCount}</span>
               )}
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={tables.length === 0 || bulkPrinting !== null}
+                  title="Generate a single PDF with QR cards for every table"
+                >
+                  {bulkPrinting !== null ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 mr-1.5" />
+                  )}
+                  {bulkPrinting !== null ? "Building PDF…" : "Download all QR PDFs"}
+                  <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => void handlePrintAllQrs("single")}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  <div className="flex flex-col">
+                    <span>One card per page</span>
+                    <span className="text-xs text-muted-foreground">Premium A4 cards</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void handlePrintAllQrs("grid")}>
+                  <LayoutGrid className="w-4 h-4 mr-2" />
+                  <div className="flex flex-col">
+                    <span>4 cards per A4 sheet</span>
+                    <span className="text-xs text-muted-foreground">Paper-saving 2×2 grid</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4 mr-2" /> Add Table
             </Button>
