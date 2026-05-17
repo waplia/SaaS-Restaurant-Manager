@@ -1,0 +1,111 @@
+Fix Google search result title/description branding for KhanaLagao.
+
+Current issue:
+When searching on Google, the website is showing “Waplia Digital Solution” or wrong company branding. It should show KhanaLagao branding and the Restaurant OS line.
+
+Important:
+- Do not change app functionality.
+- Work only on public website SEO, metadata, schema, sitemap, robots, and branding.
+- Replace old SEO branding everywhere.
+- The Google search result should show KhanaLagao, not Waplia Digital Solution.
+- Waplia can remain only in legal/company footer if needed, but not as main Google search title.
+
+Correct brand:
+KhanaLagao
+
+Correct tagline:
+Restaurant OS for Modern Food Businesses
+
+Homepage SEO should be:
+
+Meta title:
+KhanaLagao | Restaurant OS for Modern Food Businesses
+
+Meta description:
+KhanaLagao is a complete restaurant operating system for POS billing, QR menu, kitchen/KDS, inventory, payroll, finance, growth, reports and Khana AI.
+
+Open Graph title:
+KhanaLagao | Restaurant OS for Modern Food Businesses
+
+Open Graph description:
+Run your restaurant smarter with KhanaLagao — POS, QR menu, inventory, payroll, finance, growth tools and Khana AI in one platform.
+
+Twitter title:
+KhanaLagao | Restaurant OS for Modern Food Businesses
+
+Twitter description:
+Complete Restaurant OS with POS, QR Menu, Inventory, Payroll, Finance, Growth Engine and Khana AI.
+
+Update these everywhere:
+- Homepage title
+- Homepage meta description
+- Open Graph tags
+- Twitter tags
+- Canonical URL
+- Organization schema
+- SoftwareApplication schema
+- Product schema
+- Website schema
+- Sitemap title references if any
+- robots.txt sitemap link
+- Footer copyright
+- Header logo alt text
+- Image alt text
+- Page titles
+- Browser tab title
+- Manifest/app name if present
+- PWA metadata if present
+- Any old “Waplia Digital Solution” or “TableTrack” metadata
+
+For all public pages, use this title format:
+[Page Name] | KhanaLagao
+
+Examples:
+Platform | KhanaLagao
+Features | KhanaLagao
+Khana AI | KhanaLagao
+Pricing | KhanaLagao
+Restaurant POS Software | KhanaLagao
+QR Menu Software | KhanaLagao
+Cloud Kitchen Software | KhanaLagao
+
+Update structured data:
+
+Organization schema:
+name: KhanaLagao
+alternateName: KhanaLagao Restaurant OS
+url: https://khanalagao.com
+description: Restaurant OS for Modern Food Businesses
+
+SoftwareApplication schema:
+name: KhanaLagao
+applicationCategory: BusinessApplication
+operatingSystem: Web
+description: Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.
+
+Website schema:
+name: KhanaLagao
+description: Restaurant OS for Modern Food Businesses
+
+Also:
+- Remove Waplia Digital Solution from main SEO metadata.
+- Remove old brand names from meta tags.
+- Update favicon/title if needed.
+- Update sitemap.xml after changes.
+- Ensure canonical URL uses khanalagao.com.
+- Add robots.txt pointing to correct sitemap.
+- Add clean homepage H1:
+  “Run Your Restaurant Smarter with KhanaLagao”
+- Add visible homepage tagline:
+  “Restaurant OS for Modern Food Businesses”
+
+After changes:
+- Build and test.
+- View page source and confirm no old SEO title remains.
+- Check browser tab title.
+- Check meta tags using inspect/source.
+- Resubmit sitemap in Google Search Console.
+- Request indexing for homepage.
+
+Important:
+Google may take time to update search results after metadata changes. The website source should be fixed immediately, but Google search display may update after recrawling.
