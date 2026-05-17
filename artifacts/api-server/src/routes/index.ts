@@ -100,6 +100,7 @@ import competitorTrackerRouter from "./competitor-tracker";
 import corporateRouter from "./corporate";
 import menuIntelligenceRouter from "./menu-intelligence";
 import menuPublicTrackingRouter from "./menu-public-tracking";
+import customerQualityRouter from "./customer-quality";
 
 const router: IRouter = Router();
 
@@ -157,6 +158,7 @@ router.use(salaryRouter);
 router.use(payrollRouter);
 router.use(staffIncentivesRouter);
 router.use(customersRouter);
+router.use(customerQualityRouter);
 router.use(dashboardRouter);
 router.use(branchesRouter);
 router.use(expensesRouter);

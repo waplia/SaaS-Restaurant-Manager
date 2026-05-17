@@ -129,6 +129,33 @@ export function startScheduler(): void {
   registerCron("compliance-reminders", "15 8 * * *", "Daily Compliance Manager reminders at 08:15 IST (60/30/15/7/1d before expiry, on day, weekly when overdue)");
   registerCron("gift-card-expiry", "0 1 * * *", "Daily 01:00 IST: marks gift cards whose expiresAt has passed as expired");
   registerCron("orphan-upload-sweep", "0 4 * * *", "Daily 04:00 IST: deletes private-bucket uploads older than 24h with no ACL policy (abandoned presigned uploads)");
+  registerCron("complaint-escalation", "*/5 * * * *", "Customer-Quality: SLA-based complaint escalation sweep (every 5 min)");
+  registerCron("repeat-complaint-clusters", "30 3 * * *", "Customer-Quality: nightly rebuild of repeat complaint clusters (03:30 IST)");
+  registerCron("abandoned-cart-detect", "*/10 * * * *", "Customer-Quality: detect & flag abandoned carts (every 10 min)");
+
+  trackCron("complaint_escalation", "*/5 * * * *", async () => {
+    try {
+      const { runComplaintEscalationSweep } = await import("../routes/customer-quality");
+      const n = await runComplaintEscalationSweep();
+      if (n > 0) logger.info({ fired: n }, "[customer-quality] complaint escalation fired");
+    } catch (err) { logger.error({ err }, "[customer-quality] complaint escalation failed"); }
+  });
+
+  trackCron("repeat_complaint_clusters", "30 3 * * *", async () => {
+    try {
+      const { rebuildClusters } = await import("../routes/customer-quality");
+      const n = await rebuildClusters();
+      logger.info({ clusters: n }, "[customer-quality] repeat clusters rebuilt");
+    } catch (err) { logger.error({ err }, "[customer-quality] repeat clusters failed"); }
+  });
+
+  trackCron("abandoned_cart_detect", "*/10 * * * *", async () => {
+    try {
+      const { detectAbandonedCarts } = await import("../routes/customer-quality");
+      const n = await detectAbandonedCarts();
+      if (n > 0) logger.info({ carts: n }, "[customer-quality] carts abandoned");
+    } catch (err) { logger.error({ err }, "[customer-quality] cart detect failed"); }
+  });
 
   trackCron("orphan_upload_sweep", "0 4 * * *", async () => {
     await runTrackedCron("orphan-upload-sweep", async () => {

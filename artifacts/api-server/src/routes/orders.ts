@@ -1,7 +1,27 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled } from "../lib/db";
+import { recordAuditLog } from "../lib/audit";
+
+// Lightweight per-request feature check (used to gate optional order-lifecycle
+// side effects so plans without the entitlement see no behavior change).
+const _featureCache = new Map<string, { ok: boolean; at: number }>();
+async function restaurantHasFeature(restaurantId: number, key: string): Promise<boolean> {
+  const cacheKey = `${restaurantId}:${key}`;
+  const hit = _featureCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < 60_000) return hit.ok;
+  const [row] = await db.select({ planId: tenantsTable.planId })
+    .from(restaurantsTable)
+    .innerJoin(tenantsTable, eq(restaurantsTable.tenantId, tenantsTable.id))
+    .where(eq(restaurantsTable.id, restaurantId));
+  if (!row?.planId) { _featureCache.set(cacheKey, { ok: true, at: Date.now() }); return true; }
+  const [plan] = await db.select({ flags: subscriptionPlansTable.featureFlags })
+    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, row.planId));
+  const ok = !plan ? true : isFeatureEnabled(plan.flags, key);
+  _featureCache.set(cacheKey, { ok, at: Date.now() });
+  return ok;
+}
 import { verifyManagerDiscountOtp } from "../lib/managerOtp";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -413,10 +433,42 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
 
   // Validate customerId belongs to this restaurant (tenant isolation)
   let resolvedCustomerId: number | undefined;
+  let resolvedCustomerRow: typeof customersTable.$inferSelect | undefined;
   if (customerId) {
-    const [cust] = await db.select({ id: customersTable.id }).from(customersTable)
+    const [cust] = await db.select().from(customersTable)
       .where(and(eq(customersTable.id, Number(customerId)), eq(customersTable.restaurantId, restaurantId)));
     resolvedCustomerId = cust?.id;
+    resolvedCustomerRow = cust;
+  } else if (customerPhone) {
+    const [cust] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.phone, String(customerPhone)), eq(customersTable.restaurantId, restaurantId)));
+    if (cust) { resolvedCustomerRow = cust; resolvedCustomerId = cust.id; }
+  }
+
+  // Blacklist intercept (cust_blacklist) — feature-gated; only enforced if the
+  // restaurant's plan includes the Guest Blacklist entitlement.
+  if (resolvedCustomerRow?.isBlacklisted) {
+    const blacklistEnabled = await restaurantHasFeature(restaurantId, "cust_blacklist");
+    if (blacklistEnabled) {
+      const role = (req as any).user?.role;
+      const override = req.body?.blacklistOverrideReason;
+      if (!override || !["owner", "manager", "super_admin"].includes(role)) {
+        return void res.status(403).json({
+          error: "Customer is blacklisted",
+          blacklistReason: resolvedCustomerRow.blacklistReason ?? null,
+          requiresOverride: true,
+        });
+      }
+      try {
+        await recordAuditLog({
+          req, module: "customer_quality", action: "blacklist.override",
+          entity: "CUSTOMER_BLACKLIST_ENTRY", entityId: resolvedCustomerRow.id,
+          restaurantId, newValue: { reason: override, role },
+        });
+      } catch (err) {
+        console.error(`[Blacklist audit] failed for restaurant ${restaurantId} customer ${resolvedCustomerRow.id}:`, err);
+      }
+    }
   }
 
   const [order] = await db.insert(ordersTable).values({
@@ -520,6 +572,54 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     ).catch(() => {});
   }
   broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
+
+  // Auto-create VIP alert when a VIP customer places an order (cust_vip_alerts)
+  if (resolvedCustomerRow?.isVip
+      && await restaurantHasFeature(restaurantId, "cust_vip_alerts")) {
+    try {
+      const [vipAlert] = await db.insert(vipAlertsTable).values({
+        restaurantId, customerId: resolvedCustomerRow.id,
+        orderId: order.id,
+        trigger: "order_placed",
+        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${order.orderNumber}`,
+        channelsNotified: ["notification"],
+      }).returning();
+      await db.insert(notificationsTable).values({
+        restaurantId,
+        type: "vip_alert",
+        title: `VIP guest arrived: ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? "Customer"}`,
+        message: `Order #${order.orderNumber} — give white-glove service`,
+        entityId: vipAlert.id,
+        entityType: "vip_alert",
+      });
+      await recordAuditLog({ req, module: "customer_quality", action: "vip_alert.auto",
+        entity: "CUSTOMER", entityId: resolvedCustomerRow.id, restaurantId,
+        newValue: { alertId: vipAlert.id, trigger: "order_placed", orderId: order.id } });
+    } catch (err) {
+      console.error(`[VIP alert] failed for restaurant ${restaurantId} order ${order.id}:`, err);
+    }
+  }
+
+  // Convert any matching active cart session → "converted" (cust_abandoned_cart)
+  if (await restaurantHasFeature(restaurantId, "cust_abandoned_cart")) {
+    try {
+      const sessKey = req.body?.cartSessionToken ?? req.body?.cartSessionKey ?? null;
+      if (sessKey) {
+        await db.update(cartSessionsTable)
+          .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
+          .where(and(eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.sessionToken, String(sessKey))));
+      } else if (resolvedCustomerId || customerPhone) {
+        const conds = [eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.status, "active")];
+        if (resolvedCustomerId) conds.push(eq(cartSessionsTable.customerId, resolvedCustomerId));
+        else conds.push(eq(cartSessionsTable.customerPhone, String(customerPhone)));
+        await db.update(cartSessionsTable)
+          .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
+          .where(and(...conds));
+      }
+    } catch (err) {
+      console.error(`[Cart convert] failed for restaurant ${restaurantId} order ${order.id}:`, err);
+    }
+  }
 
   const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
 
@@ -1445,6 +1545,22 @@ router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "
 
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "cancelled", orderNumber: order.orderNumber });
   void emitWebhookEvent(restaurantId, "order.cancelled", { id: orderId, orderNumber: order.orderNumber, status: "cancelled" });
+
+  // Customer-Quality: record as a lost sale + accuracy event (KOT cancellation).
+  try {
+    const { lostSalesEventsTable, orderAccuracyEventsTable } = await import("../lib/db");
+    await db.insert(lostSalesEventsTable).values({
+      restaurantId, branchId: order.branchId ?? null, customerId: order.customerId ?? null,
+      orderId, eventType: "cancelled_order", channel: order.orderType ?? null,
+      reason: (req.body && (req.body as any).reason) ?? "Order voided",
+      estimatedValue: String(order.totalAmount ?? "0.00"),
+    }).catch(() => undefined);
+    await db.insert(orderAccuracyEventsTable).values({
+      restaurantId, branchId: order.branchId ?? null, orderId,
+      eventType: "kot_cancel", weight: 2,
+      notes: "Order voided", createdBy: (req as any).user?.sub ?? null,
+    }).catch(() => undefined);
+  } catch { /* non-fatal */ }
 
   res.json(updated);
 });

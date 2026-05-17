@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable, surveysTable, surveyQuestionsTable, surveyResponsesTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable, surveysTable, surveyQuestionsTable, surveyResponsesTable, cartSessionsTable, moodResponsesTable, vipAlertsTable } from "../lib/db";
 import { reserveCredits, commitReservation, refundReservation, resolveCreditRule, priceCredits, gatePublicAiCall, type AiCreditReservation } from "../lib/aiCredits";
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
@@ -188,11 +188,34 @@ router.post("/public/orders", async (req, res) => {
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
 
+  // Resolve customer by phone for CQ hooks (blacklist intercept, VIP alert,
+  // cart conversion). Public flow has no authenticated identity, so we only
+  // resolve when the guest provided a phone number.
+  let resolvedCustomerRow: typeof customersTable.$inferSelect | undefined;
+  if (customerPhone) {
+    const [cust] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.phone, String(customerPhone)), eq(customersTable.restaurantId, restaurantId)));
+    resolvedCustomerRow = cust;
+  }
+
+  // Blacklist intercept (cust_blacklist) — public flow has no staff to
+  // approve an override, so a blacklisted guest is hard-blocked.
+  if (resolvedCustomerRow?.isBlacklisted) {
+    const blacklistEnabled = await checkRestaurantFeature(restaurantId, "cust_blacklist");
+    if (blacklistEnabled.ok) {
+      return void res.status(403).json({
+        error: "We are unable to accept this order. Please contact the restaurant.",
+        blacklistReason: resolvedCustomerRow.blacklistReason ?? null,
+      });
+    }
+  }
+
   const [order] = await db.insert(ordersTable).values({
     restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: "dine_in",
     subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
     serviceCharge: "0.00", discountAmount: "0.00",
     totalAmount: totalAmount.toFixed(2), customerName: customerName ?? null, customerPhone: customerPhone ?? null, notes: notes ?? null,
+    customerId: resolvedCustomerRow?.id ?? null,
   }).returning();
 
   for (const ei of enrichedItems) {
@@ -222,6 +245,47 @@ router.post("/public/orders", async (req, res) => {
     broadcastEvent(restaurantId, "order:new", { id: order.id, orderNumber: order.orderNumber, status: order.status, tableId, ticketId: t.ticketId, kitchenId: t.kitchenId });
   }
 
+  // Auto-create VIP alert when a VIP customer places an order via QR/online
+  if (resolvedCustomerRow?.isVip && (await checkRestaurantFeature(restaurantId, "cust_vip_alerts")).ok) {
+    try {
+      const [vipAlert] = await db.insert(vipAlertsTable).values({
+        restaurantId, customerId: resolvedCustomerRow.id, orderId: order.id,
+        trigger: "order_placed",
+        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${order.orderNumber}`,
+        channelsNotified: ["notification"],
+      }).returning();
+      await db.insert(notificationsTable).values({
+        restaurantId, type: "vip_alert",
+        title: `VIP guest arrived: ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? "Customer"}`,
+        message: `Order #${order.orderNumber} — give white-glove service`,
+        entityId: vipAlert.id, entityType: "vip_alert",
+      });
+    } catch (err) {
+      console.error(`[VIP alert public] failed for restaurant ${restaurantId} order ${order.id}:`, err);
+    }
+  }
+
+  // Convert any matching active cart session → "converted" (cust_abandoned_cart)
+  if ((await checkRestaurantFeature(restaurantId, "cust_abandoned_cart")).ok) {
+    try {
+      const sessKey = (req.body?.cartSessionToken ?? req.body?.cartSessionKey ?? null) as string | null;
+      if (sessKey) {
+        await db.update(cartSessionsTable)
+          .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
+          .where(and(eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.sessionToken, String(sessKey))));
+      } else if (resolvedCustomerRow?.id || customerPhone) {
+        const conds = [eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.status, "active")];
+        if (resolvedCustomerRow?.id) conds.push(eq(cartSessionsTable.customerId, resolvedCustomerRow.id));
+        else conds.push(eq(cartSessionsTable.customerPhone, String(customerPhone)));
+        await db.update(cartSessionsTable)
+          .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
+          .where(and(...conds));
+      }
+    } catch (err) {
+      console.error(`[Cart convert public] failed for restaurant ${restaurantId} order ${order.id}:`, err);
+    }
+  }
+
   const guestToken = generateGuestToken(order.id);
   const issuedToken = await issueTokenForOrder({
     orderId: order.id,
@@ -231,6 +295,117 @@ router.post("/public/orders", async (req, res) => {
     customerPhone: order.customerPhone,
   }).catch(() => null);
   res.status(201).json({ orderId: order.id, orderNumber: order.orderNumber, status: order.status, totalAmount: order.totalAmount, guestToken, token: issuedToken?.token ?? null });
+});
+
+// Public live order tracking — tokenized, no-login (cust_live_order_status)
+router.get("/public/orders/:orderId/track", async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  const token = String(req.query.token ?? "");
+  if (!orderId || !validateGuestToken(orderId, token)) {
+    return void res.status(403).json({ error: "Invalid order token" });
+  }
+  const [order] = await db.select({
+    id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status,
+    paymentStatus: ordersTable.paymentStatus, totalAmount: ordersTable.totalAmount,
+    customerName: ordersTable.customerName, customerPhone: ordersTable.customerPhone,
+    createdAt: ordersTable.createdAt,
+    updatedAt: ordersTable.updatedAt, restaurantId: ordersTable.restaurantId,
+    tableId: ordersTable.tableId,
+  }).from(ordersTable).where(eq(ordersTable.id, orderId));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+
+  // Optional hashed-phone binding: when the order has a customerPhone, an
+  // additional `phone` query param must hash-match. This ties the public
+  // tracking link to the guest who placed the order even if the token leaks.
+  const phoneParam = typeof req.query.phone === "string" ? req.query.phone.trim() : "";
+  if (order.customerPhone && phoneParam) {
+    const expected = createHash("sha256").update(`${order.id}:${order.customerPhone}`).digest("hex");
+    const provided = createHash("sha256").update(`${order.id}:${phoneParam}`).digest("hex");
+    if (expected !== provided) {
+      return void res.status(403).json({ error: "Phone does not match this order" });
+    }
+  }
+  const featureOk = await checkRestaurantFeature(order.restaurantId, "cust_live_order_status");
+  if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
+
+  const tickets = await db.select({
+    id: kitchenTicketsTable.id, status: kitchenTicketsTable.status,
+    kitchenId: kitchenTicketsTable.kitchenId, updatedAt: kitchenTicketsTable.updatedAt,
+  }).from(kitchenTicketsTable).where(eq(kitchenTicketsTable.orderId, orderId));
+
+  const items = await db.select({
+    id: orderItemsTable.id, name: orderItemsTable.menuItemName,
+    quantity: orderItemsTable.quantity, status: orderItemsTable.status,
+  }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+
+  const timeline = [
+    { step: "placed", label: "Order placed", at: order.createdAt },
+    { step: "preparing", label: "Preparing", at: tickets.some(t => t.status === "in_progress" || t.status === "ready") ? tickets[0]?.updatedAt : null },
+    { step: "ready", label: "Ready", at: tickets.length > 0 && tickets.every(t => t.status === "ready" || t.status === "served") ? tickets[0]?.updatedAt : null },
+    { step: "served", label: "Served", at: order.status === "completed" || order.status === "served" ? order.updatedAt : null },
+  ];
+
+  res.json({ order, tickets, items, timeline });
+});
+
+// ─── Public cart sessions (cust_abandoned_cart) ──────────────────────────
+// Create or upsert a cart session as the guest browses QR / online menu
+router.post("/public/carts", async (req, res) => {
+  const { restaurantId, sessionToken, sessionKey, customerName, customerPhone, customerId, channel = "qr", tableId, branchId, items, subtotal, recoveryOptIn } = req.body ?? {};
+  const token = sessionToken ?? sessionKey;
+  if (!restaurantId || !token || !Array.isArray(items)) {
+    return void res.status(400).json({ error: "restaurantId, sessionToken and items required" });
+  }
+  const featureOk = await checkRestaurantFeature(Number(restaurantId), "cust_abandoned_cart");
+  if (!featureOk.ok) {
+    // Silently no-op — never block ordering if plan lacks the feature
+    return void res.json({ ok: true, skipped: true });
+  }
+  const now = new Date();
+  const [existing] = await db.select().from(cartSessionsTable).where(and(
+    eq(cartSessionsTable.restaurantId, Number(restaurantId)),
+    eq(cartSessionsTable.sessionToken, String(token)),
+  ));
+  const itemsJson = items as Record<string, unknown>[];
+  if (existing) {
+    const [updated] = await db.update(cartSessionsTable).set({
+      items: itemsJson, subtotal: String(subtotal ?? "0.00"),
+      customerName: customerName ?? existing.customerName,
+      customerPhone: customerPhone ?? existing.customerPhone,
+      customerId: customerId ?? existing.customerId,
+      recoveryOptIn: recoveryOptIn === true ? true : existing.recoveryOptIn,
+      lastActivityAt: now, status: "active",
+    }).where(eq(cartSessionsTable.id, existing.id)).returning();
+    return void res.json({ cart: updated });
+  }
+  const [created] = await db.insert(cartSessionsTable).values({
+    restaurantId: Number(restaurantId), sessionToken: String(token),
+    channel: String(channel), tableId: tableId ?? null, branchId: branchId ?? null,
+    customerId: customerId ?? null, customerName: customerName ?? null, customerPhone: customerPhone ?? null,
+    items: itemsJson, subtotal: String(subtotal ?? "0.00"),
+    recoveryOptIn: !!recoveryOptIn, status: "active", lastActivityAt: now,
+  }).returning();
+  res.status(201).json({ cart: created });
+});
+
+// Public mood capture (cust_mood) — used by QR / post-order screen
+router.post("/public/mood", async (req, res) => {
+  const { restaurantId, mood, orderId, customerId, customerPhone, comment, source = "checkout", branchId } = req.body ?? {};
+  if (!restaurantId || !mood) return void res.status(400).json({ error: "restaurantId and mood required" });
+  const MOOD_SCORES: Record<string, number> = { delighted: 2, happy: 1, neutral: 0, unhappy: -1, angry: -2 };
+  if (!(mood in MOOD_SCORES)) return void res.status(400).json({ error: "Invalid mood" });
+  const featureOk = await checkRestaurantFeature(Number(restaurantId), "cust_mood");
+  if (!featureOk.ok) return void res.json({ ok: true, skipped: true });
+  const commentWithPhone = customerPhone
+    ? `${comment ? String(comment) + " " : ""}[phone:${String(customerPhone)}]`
+    : (comment ?? null);
+  const [inserted] = await db.insert(moodResponsesTable).values({
+    restaurantId: Number(restaurantId), branchId: branchId ?? null,
+    customerId: customerId ?? null, orderId: orderId ?? null,
+    source: String(source), mood: String(mood), moodScore: MOOD_SCORES[mood],
+    comment: commentWithPhone,
+  }).returning();
+  res.status(201).json({ response: inserted });
 });
 
 router.get("/public/orders/verify-session", async (req, res) => {

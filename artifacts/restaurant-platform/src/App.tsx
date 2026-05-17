@@ -42,6 +42,7 @@ import SettingsSessionsPage from "@/pages/settings-sessions";
 import TokensPage from "@/pages/tokens";
 import TokensHistoryPage from "@/pages/tokens-history";
 import DisplayTokenPage from "@/pages/display-token";
+import OrderTrackPage from "@/pages/order-track";
 import SubscriptionPage from "@/pages/subscription";
 import PricingPage from "@/pages/pricing";
 import { PlanProtectedRoute } from "@/lib/planFeatures";
@@ -81,6 +82,16 @@ import CodMonitoringPage from "@/pages/cod-monitoring";
 import WaiterRequestsPage from "@/pages/waiter-requests";
 import ReservationsPage from "@/pages/reservations";
 const EventsPage = lazy(() => import("@/pages/events"));
+const CqVipAlertsPage = lazy(() => import("@/pages/customer-quality/vip-alerts"));
+const CqBlacklistPage = lazy(() => import("@/pages/customer-quality/blacklist"));
+const CqMoodPage = lazy(() => import("@/pages/customer-quality/mood"));
+const CqComplaintsEscalationPage = lazy(() => import("@/pages/customer-quality/complaints-escalation"));
+const CqRepeatDetectorPage = lazy(() => import("@/pages/customer-quality/repeat-detector"));
+const CqVisitCalendarPage = lazy(() => import("@/pages/customer-quality/visit-calendar"));
+const CqOrderStatusPage = lazy(() => import("@/pages/customer-quality/order-status"));
+const CqAccuracyPage = lazy(() => import("@/pages/customer-quality/accuracy"));
+const CqLostSalesPage = lazy(() => import("@/pages/customer-quality/lost-sales"));
+const CqAbandonedCartsPage = lazy(() => import("@/pages/customer-quality/abandoned-carts"));
 import BakeryPage from "@/pages/bakery";
 import BarPage from "@/pages/bar";
 import PublicBookingPage from "@/pages/public-booking";
@@ -332,6 +343,16 @@ function Router() {
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/staff-tasks" component={() => <RoleProtectedRoute component={StaffTasksPage} allow={["owner", "manager"]} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
+      <Route path="/customers/vip-alerts" component={() => <RoleProtectedRoute component={CqVipAlertsPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
+      <Route path="/customers/blacklist" component={() => <RoleProtectedRoute component={CqBlacklistPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/customers/mood" component={() => <RoleProtectedRoute component={CqMoodPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
+      <Route path="/customers/complaints" component={() => <RoleProtectedRoute component={CqComplaintsEscalationPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/customers/repeat-detector" component={() => <RoleProtectedRoute component={CqRepeatDetectorPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/customers/visit-calendar" component={() => <RoleProtectedRoute component={CqVisitCalendarPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/customers/order-status" component={() => <RoleProtectedRoute component={CqOrderStatusPage} allow={["owner", "manager", "waiter", "kitchen", "cashier", "super_admin"]} />} />
+      <Route path="/customers/accuracy" component={() => <RoleProtectedRoute component={CqAccuracyPage} allow={["owner", "manager", "kitchen", "super_admin"]} />} />
+      <Route path="/customers/lost-sales" component={() => <RoleProtectedRoute component={CqLostSalesPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/customers/abandoned-carts" component={() => <RoleProtectedRoute component={CqAbandonedCartsPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/expenses" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ExpensesPage} feature="expense_tracking" />} allow={["owner", "manager"]} />} />
       <Route path="/waste" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WastePage} feature="inventory_management" />} allow={["owner", "manager", "kitchen", "waiter", "cashier"]} />} />
       <Route path="/pnl" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={PnlPage} feature="smart_pnl" />} allow={["owner", "manager", "super_admin"]} />} />
@@ -380,6 +401,7 @@ function Router() {
       <Route path="/tokens" component={() => <RoleProtectedRoute component={TokensPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/display/token/:outletId" component={DisplayTokenPage} />
+      <Route path="/track/:orderId" component={OrderTrackPage} />
       <Route path="/settings/sessions" component={() => <ProtectedRoute component={SettingsSessionsPage} />} />
       <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ApiKeysPage} feature="api_access" />} allow={["owner", "manager"]} />} />
       <Route path="/settings/accounting" component={() => <RoleProtectedRoute component={AccountingLandingPage} allow={["owner", "manager", "accountant"]} />} />

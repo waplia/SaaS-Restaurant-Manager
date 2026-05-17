@@ -127,6 +127,20 @@ export async function runOrderPaidPipeline(ctx: OrderPaidContext): Promise<void>
     }).where(eq(customersTable.id, sharedId));
   }
 
+  // VIP derivation (cust_vip_alerts): auto-flip isVip once the customer
+  // crosses repeat-visit OR top-spender thresholds. Idempotent — only
+  // flips false→true so a manual unset is preserved until the next bump.
+  try {
+    await db.update(customersTable).set({ isVip: true, updatedAt: new Date() })
+      .where(and(
+        eq(customersTable.id, sharedId),
+        eq(customersTable.isVip, false),
+        sql`(${customersTable.totalOrders} >= 20 OR ${customersTable.totalSpent} >= 50000)`,
+      ));
+  } catch (err) {
+    console.error(`[VIP derive] failed for customer ${sharedId}:`, err);
+  }
+
   // 6) cashback earn
   if (isEnabled(cfg, "cashback")) {
     try {
