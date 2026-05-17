@@ -45,6 +45,7 @@ const Compare = lazy(() => import("@/pages/compare"));
 const CaseStudies = lazy(() => import("@/pages/case-studies"));
 const CaseStudyDetail = lazy(() => import("@/pages/case-studies/[slug]"));
 const ThankYou = lazy(() => import("@/pages/thank-you"));
+const DemoRestaurantOS = lazy(() => import("@/pages/demo/restaurant-os"));
 
 const PrivacyPolicy = lazy(() => import("@/pages/legal/privacy-policy"));
 const Terms = lazy(() => import("@/pages/legal/terms"));
@@ -93,6 +94,8 @@ function Router() {
         <Route path="/book-demo" component={BookDemoOrDisabled} />
         <Route path="/start-free-trial" component={StartFreeTrialRedirect} />
         <Route path="/thank-you" component={ThankYou} />
+        <Route path="/demo/restaurant-os" component={DemoRestaurantOS} />
+        <Route path="/ads/restaurant-os" component={DemoRestaurantOS} />
         <Route path="/pricing" component={Pricing} />
 
         {/* Platform */}
