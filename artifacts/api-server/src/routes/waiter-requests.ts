@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { eq, and, gte, desc, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db, waiterRequestsTable, floorTablesTable, notificationsTable, usersTable } from "../lib/db";
+
+// Separate alias so the resolver name doesn't collide with the acknowledger
+// join in the request list query.
+const resolverUsers = alias(usersTable, "resolver_users");
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent } from "../lib/socketio";
@@ -31,6 +36,7 @@ router.get("/restaurants/:restaurantId/waiter-requests", async (req, res) => {
     acknowledgedByName: usersTable.name,
     acknowledgedAt: waiterRequestsTable.acknowledgedAt,
     resolvedByUserId: waiterRequestsTable.resolvedByUserId,
+    resolvedByName: resolverUsers.name,
     resolvedAt: waiterRequestsTable.resolvedAt,
     createdAt: waiterRequestsTable.createdAt,
     updatedAt: waiterRequestsTable.updatedAt,
@@ -38,6 +44,7 @@ router.get("/restaurants/:restaurantId/waiter-requests", async (req, res) => {
     .from(waiterRequestsTable)
     .leftJoin(floorTablesTable, eq(waiterRequestsTable.tableId, floorTablesTable.id))
     .leftJoin(usersTable, eq(waiterRequestsTable.acknowledgedByUserId, usersTable.id))
+    .leftJoin(resolverUsers, eq(waiterRequestsTable.resolvedByUserId, resolverUsers.id))
     .where(and(
       eq(waiterRequestsTable.restaurantId, restaurantId),
       gte(waiterRequestsTable.createdAt, new Date(sinceMs)),

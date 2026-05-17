@@ -528,11 +528,14 @@ function ItemsStep({ restaurantId, onDone }: { restaurantId: number; onDone: () 
   const [form, setForm] = useState({ categoryId: "", kitchenId: "", name: "", price: "", isVeg: true });
   const { toast } = useToast();
   const qc = useQueryClient();
-  // Default kitchen selection once kitchens load
-  if (kitchens.length > 0 && !form.kitchenId) {
-    const def = kitchens.find(k => k.isDefault) ?? kitchens[0];
-    setForm(f => ({ ...f, kitchenId: String(def.id) }));
-  }
+  // Default kitchen selection once kitchens load. Must happen in an effect —
+  // calling setState during render triggers a re-render loop.
+  useEffect(() => {
+    if (kitchens.length > 0 && !form.kitchenId) {
+      const def = kitchens.find(k => k.isDefault) ?? kitchens[0];
+      setForm(f => ({ ...f, kitchenId: String(def.id) }));
+    }
+  }, [kitchens, form.kitchenId]);
   const mut = useMutation({
     mutationFn: (data: typeof form) => apiPost(`/restaurants/${restaurantId}/items`, {
       categoryId: Number(data.categoryId),

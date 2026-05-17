@@ -150,7 +150,7 @@ export default function DashboardPage() {
           <StatCard
             title="Today's Orders"
             value={s?.todayOrders ?? "–"}
-            subtitle={`Avg ₹${s?.avgOrderValue ?? "0"}`}
+            subtitle={`Avg ₹${Number(s?.avgOrderValue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
             icon={ShoppingBag}
             trend={Number(s?.ordersGrowth) >= 0 ? "up" : "down"}
             trendValue={s?.ordersGrowth}
@@ -273,9 +273,13 @@ export default function DashboardPage() {
           <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="font-semibold text-foreground mb-4">Top Items (30d)</h3>
             <div className="space-y-3">
-              {(popularItems as PopularItem[]).slice(0, 5).map((item, i) => {
-                const maxRevenue = Math.max(...(popularItems as PopularItem[]).map(p => Number(p.revenue)));
-                const pct = maxRevenue > 0 ? (Number(item.revenue) / maxRevenue) * 100 : 0;
+              {(() => {
+                const all = popularItems as PopularItem[];
+                const maxRevenue = all.length > 0
+                  ? Math.max(...all.map(p => Number(p.revenue) || 0))
+                  : 0;
+                return all.slice(0, 5).map((item, i) => {
+                  const pct = maxRevenue > 0 ? (Number(item.revenue) / maxRevenue) * 100 : 0;
                 return (
                   <div key={item.menuItemId} className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -292,7 +296,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 );
-              })}
+              });
+              })()}
               {(popularItems as PopularItem[]).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">No data yet</p>
               )}
@@ -342,7 +347,7 @@ export default function DashboardPage() {
               {(activityData as AuditLogEntry[]).slice(0, 8).map((a) => (
                 <div key={a.id} className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0 mt-0.5">
-                    {(a.userName ?? "?")[0].toUpperCase()}
+                    {((a.userName ?? "").trim() || "?").charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">

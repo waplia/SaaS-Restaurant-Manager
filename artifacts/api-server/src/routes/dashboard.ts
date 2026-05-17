@@ -43,17 +43,32 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(and(eq(expensesTable.restaurantId, restaurantId), gte(expensesTable.expenseDate, monthStartStr))),
   ]);
 
-  const todayRevenue = todayOrdersRows.reduce((s, o) => s + Number(o.totalAmount), 0);
-  const yesterdayRevenue = yesterdayOrders.reduce((s, o) => s + Number(o.totalAmount), 0);
-  const revenueGrowth = yesterdayRevenue === 0 ? "100" : (((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100).toFixed(1);
-  const ordersGrowth = yesterdayOrders.length === 0 ? "100" : (((todayOrdersRows.length - yesterdayOrders.length) / yesterdayOrders.length) * 100).toFixed(1);
+  // Exclude cancelled / voided orders from revenue, order count and AOV so
+  // accounting figures aren't diluted by zero-value lines (cashier mistakes,
+  // table-side voids, etc).
+  const isBillable = (status: string | null) => status !== "cancelled" && status !== "voided";
+  const billableToday = todayOrdersRows.filter(o => isBillable(o.status));
+  const billableYesterday = yesterdayOrders.filter(o => isBillable(o.status));
+  const todayRevenue = billableToday.reduce((s, o) => s + Number(o.totalAmount), 0);
+  const yesterdayRevenue = billableYesterday.reduce((s, o) => s + Number(o.totalAmount), 0);
+  // Growth = 0% when there's no activity at all; "+100%" only when today has
+  // real revenue but yesterday had none — otherwise the dashboard would
+  // misleadingly claim a +100% jump on idle days.
+  const revenueGrowth = yesterdayRevenue === 0
+    ? (todayRevenue === 0 ? "0" : "100")
+    : (((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100).toFixed(1);
+  const ordersGrowth = billableYesterday.length === 0
+    ? (billableToday.length === 0 ? "0" : "100")
+    : (((billableToday.length - billableYesterday.length) / billableYesterday.length) * 100).toFixed(1);
   const activeTables = allTables.filter(t => t.status === "occupied").length;
-  const lowStockAlerts = lowStockItems.filter(i => Number(i.currentStock) <= Number(i.minStockLevel)).length;
-  const avgOrderValue = todayOrdersRows.length ? (todayRevenue / todayOrdersRows.length).toFixed(2) : "0.00";
+  // Treat 0 min-stock-level as "not tracked" so unconfigured items don't
+  // spam owners with bogus low-stock alerts every time stock hits zero.
+  const lowStockAlerts = lowStockItems.filter(i => Number(i.minStockLevel) > 0 && Number(i.currentStock) <= Number(i.minStockLevel)).length;
+  const avgOrderValue = billableToday.length ? (todayRevenue / billableToday.length).toFixed(2) : "0.00";
 
   res.json({
     todayRevenue: todayRevenue.toFixed(2),
-    todayOrders: todayOrdersRows.length,
+    todayOrders: billableToday.length,
     activeTables,
     totalTables: allTables.length,
     pendingTickets: pendingTickets[0]?.count ?? 0,

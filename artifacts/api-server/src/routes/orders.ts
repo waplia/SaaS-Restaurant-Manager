@@ -665,7 +665,11 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     for (const ex of existingItems) {
       const mods = await db.select().from(orderItemModifiersTable)
         .where(eq(orderItemModifiersTable.orderItemId, ex.id));
-      if (mods.length === 0 && Math.abs(Number(ex.unitPrice) - unitPrice) < 0.005) {
+      // Only coalesce when notes match too — otherwise a fresh line with
+      // special instructions (e.g. "no onions") would silently be merged
+      // into a plain line and the kitchen would lose the instruction.
+      const sameNotes = (ex.notes ?? "") === (notes ?? "");
+      if (mods.length === 0 && sameNotes && Math.abs(Number(ex.unitPrice) - unitPrice) < 0.005) {
         targetLine = ex;
         break;
       }
