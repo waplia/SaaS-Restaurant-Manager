@@ -1,9 +1,16 @@
+import { Fragment } from "react";
 import { Link } from "wouter";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { CTASection } from "@/components/shared/CTASection";
 import { Button } from "@/components/ui/button";
 import { useSeo } from "@/lib/seo";
 import { Check, X, Sparkles, ArrowRight } from "lucide-react";
+import {
+  PLAN_BOOLEAN_FEATURES,
+  PLAN_FEATURE_CATEGORIES,
+  isFeatureEnabled,
+} from "@workspace/db/planFeatures";
+import { usePublicPlans } from "@/lib/usePublicPlans";
 
 const ROWS = [
   { feature: "POS billing (offline-safe)", us: true, legacy: true, aggregator: false },
@@ -92,6 +99,8 @@ export default function Compare() {
         </div>
       </section>
 
+      <PlanFeatureMatrix />
+
       <section className="py-10 md:py-16 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl text-center">
           <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 md:mb-4">See it side by side, on your own menu.</h2>
@@ -105,5 +114,92 @@ export default function Compare() {
 
       <CTASection title="Switching from another POS?" subtitle="Our migration team will move your menu, inventory and customers — usually in under a week." />
     </SiteLayout>
+  );
+}
+
+/**
+ * Catalogue-driven plan comparison matrix. Renders every boolean feature
+ * grouped by `PLAN_FEATURE_CATEGORIES`, with one column per live plan from
+ * the public plans API. New flags added to `PLAN_BOOLEAN_FEATURES` show up
+ * here automatically with no further changes.
+ */
+function PlanFeatureMatrix() {
+  const { plans, isLoading } = usePublicPlans();
+  if (isLoading || plans.length === 0) return null;
+
+  const categories = PLAN_FEATURE_CATEGORIES
+    .map((cat) => ({
+      ...cat,
+      features: PLAN_BOOLEAN_FEATURES.filter((f) => f.category === cat.key),
+    }))
+    .filter((c) => c.features.length > 0);
+
+  return (
+    <section className="py-8 md:py-16">
+      <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+        <div className="text-center max-w-3xl mx-auto mb-6 md:mb-10">
+          <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-2 md:mb-3">
+            Full plan comparison
+          </h2>
+          <p className="text-sm md:text-base text-muted-foreground">
+            Every module on KhanaLagao, grouped by category, with the plans that include it.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 sticky top-0">
+              <tr>
+                <th className="text-left px-5 py-3 font-semibold w-1/3">Feature</th>
+                {plans.map((p) => (
+                  <th key={p.id} className="text-left px-5 py-3 font-semibold text-primary">{p.name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((cat) => (
+                <Fragment key={cat.key}>
+                  <tr className="bg-muted/30">
+                    <td
+                      colSpan={1 + plans.length}
+                      className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    >
+                      {cat.label}
+                    </td>
+                  </tr>
+                  {cat.features.map((f, i) => (
+                    <tr key={f.key} className={i % 2 === 0 ? "bg-background" : "bg-muted/10"}>
+                      <td className="px-5 py-2.5 font-medium">
+                        <div>{f.label}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{f.description}</div>
+                      </td>
+                      {plans.map((p) => {
+                        const on = isFeatureEnabled(p.featureFlags, f.key);
+                        return (
+                          <td key={p.id} className="px-5 py-2.5">
+                            {on ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                                <Check className="h-4 w-4" /> Yes
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <X className="h-4 w-4" /> No
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">
+          Plans are loaded live from the platform; super admins can toggle any feature per plan from the admin panel and this matrix updates automatically.
+        </p>
+      </div>
+    </section>
   );
 }

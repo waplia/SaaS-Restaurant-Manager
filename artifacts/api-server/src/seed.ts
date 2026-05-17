@@ -1,6 +1,7 @@
 import { db } from "./lib/db";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
 import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
+import { defaultFeatureFlagsForPlan } from "@workspace/db";
 import {
   subscriptionPlansTable,
   tenantsTable,
@@ -32,21 +33,25 @@ export async function seed(): Promise<void> {
       name: "Free Trial", slug: "free-trial", price: "0.00", billingPeriod: "monthly",
       maxRestaurants: 1, maxBranches: 1, maxStaff: 3, maxTables: 5, maxMenuItems: 20, trialDays: 14,
       features: ["POS", "Basic Reports"],
+      featureFlags: defaultFeatureFlagsForPlan("starter"),
     }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Starter", slug: "starter", price: "29.00", billingPeriod: "monthly",
       maxRestaurants: 1, maxBranches: 1, maxStaff: 5, maxTables: 10, maxMenuItems: 50, trialDays: 14,
       features: ["POS", "QR Ordering", "Basic Reports"],
+      featureFlags: defaultFeatureFlagsForPlan("starter"),
     }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Pro", slug: "pro", price: "79.00", billingPeriod: "monthly",
       maxRestaurants: 3, maxBranches: 5, maxStaff: 25, maxTables: 50, maxMenuItems: 300, trialDays: 14,
       features: ["POS", "QR Ordering", "Kitchen Display", "Inventory", "Advanced Reports", "Multi-branch"],
+      featureFlags: defaultFeatureFlagsForPlan("pro"),
     }).onConflictDoNothing(),
     db.insert(subscriptionPlansTable).values({
       name: "Enterprise", slug: "enterprise", price: "199.00", billingPeriod: "monthly",
       maxRestaurants: -1, maxBranches: -1, maxStaff: -1, maxTables: -1, maxMenuItems: -1, trialDays: 30,
       features: ["All Pro features", "White-label", "API Access", "Dedicated Support"],
+      featureFlags: defaultFeatureFlagsForPlan("enterprise"),
     }).onConflictDoNothing(),
   ]);
 

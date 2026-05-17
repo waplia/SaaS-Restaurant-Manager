@@ -1,12 +1,12 @@
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useSeo } from "@/lib/seo";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { Link } from "wouter";
-import { Check, ArrowRight } from "lucide-react";
+import { Check, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
+  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES, PLAN_FEATURE_CATEGORIES,
   isFeatureEnabled, formatQuantity,
 } from "@workspace/db/planFeatures";
 import { usePublicPlans, type PublicPlan, type BillingView } from "@/lib/usePublicPlans";
@@ -205,6 +205,63 @@ export default function Pricing() {
               })}
             </div>
             </>
+          )}
+
+          {!isLoading && plans.length > 0 && (
+            <div className="mt-12 md:mt-20">
+              <div className="text-center max-w-3xl mx-auto mb-6 md:mb-10">
+                <h2 className="font-serif text-2xl md:text-3xl font-bold mb-2 md:mb-3">Full feature comparison</h2>
+                <p className="text-sm md:text-base text-muted-foreground">
+                  Every module on KhanaLagao, grouped by category, with the plans that include it.
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-border bg-card max-w-6xl mx-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-5 py-3 font-semibold w-1/3">Feature</th>
+                      {displayPlans.map((dp) => (
+                        <th key={dp.plan.id} className="text-left px-5 py-3 font-semibold text-primary">{dp.plan.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PLAN_FEATURE_CATEGORIES
+                      .map((cat) => ({ ...cat, features: PLAN_BOOLEAN_FEATURES.filter((f) => f.category === cat.key) }))
+                      .filter((c) => c.features.length > 0)
+                      .map((cat) => (
+                        <Fragment key={cat.key}>
+                          <tr className="bg-muted/30">
+                            <td colSpan={1 + displayPlans.length} className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              {cat.label}
+                            </td>
+                          </tr>
+                          {cat.features.map((f, i) => (
+                            <tr key={f.key} className={i % 2 === 0 ? "bg-background" : "bg-muted/10"}>
+                              <td className="px-5 py-2.5 font-medium">
+                                <div>{f.label}</div>
+                                <div className="text-xs text-muted-foreground leading-tight">{f.description}</div>
+                              </td>
+                              {displayPlans.map((dp) => {
+                                const on = isFeatureEnabled(dp.plan.featureFlags, f.key);
+                                return (
+                                  <td key={dp.plan.id} className="px-5 py-2.5">
+                                    {on ? (
+                                      <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold"><Check className="h-4 w-4" /> Yes</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-muted-foreground"><X className="h-4 w-4" /> No</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           <div className="mt-12 md:mt-24 max-w-3xl mx-auto">

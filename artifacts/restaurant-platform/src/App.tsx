@@ -158,6 +158,8 @@ import CanteenPosPage from "@/pages/canteen-pos";
 import CanteenParentPage from "@/pages/canteen-parent";
 import CanteenReportsPage from "@/pages/canteen-reports";
 import CanteenHelpPage from "@/pages/canteen-help";
+import UpgradeRequiredPage from "@/pages/upgrade-required";
+import { PLAN_BOOLEAN_FEATURES } from "@workspace/db/planFeatures";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -391,6 +393,22 @@ function Router() {
       <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
       <Route path="/surveys" component={() => <RoleProtectedRoute component={SurveysPage} allow={["owner", "manager"]} />} />
       <Route path="/survey/:slug" component={CustomerSurveyPage} />
+
+      {/* ── Task #365: placeholder routes for advanced-pack features ──────────
+       * Each feature in PLAN_BOOLEAN_FEATURES with a `sidebarHref` gets a
+       * route that renders the UpgradeRequiredPage until a domain task ships
+       * the real screen. The page reads the feature key from the URL via
+       * findFeatureByHref(), so no per-route key threading is needed. */}
+      {PLAN_BOOLEAN_FEATURES
+        .filter((f) => !!f.sidebarHref)
+        .map((f) => (
+          <Route
+            key={f.key}
+            path={f.sidebarHref!}
+            component={() => <ProtectedRoute component={UpgradeRequiredPage} />}
+          />
+        ))}
+
       <Route component={NotFound} />
     </Switch>
   );

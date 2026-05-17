@@ -19,7 +19,13 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 type IconType = typeof LayoutDashboard;
-type PlanGate = "ai" | "ai_insights" | "cloud_kitchen";
+/**
+ * Legacy planGate values still supported, plus any boolean feature-flag key
+ * from the `PLAN_BOOLEAN_FEATURES` catalogue (e.g. `ops_panic_button`,
+ * `menu_heatmap`). Arbitrary keys are resolved by looking the flag up on
+ * `subscription.plan.featureFlags`.
+ */
+type PlanGate = "ai" | "ai_insights" | "cloud_kitchen" | (string & {});
 type BadgeKind = "new" | "ai" | "premium" | "addon" | "beta";
 type LinkItem = {
   kind: "link";
@@ -74,6 +80,18 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/menu/pricing-rules", label: "Pricing Rules", icon: Percent, roles: ["owner", "manager"] },
       { kind: "link", href: "/menu/pricing-optimizer", label: "Cost & Price Optimizer", icon: Flame, roles: ["owner", "manager"], badge: "ai" },
       { kind: "link", href: "/competitors", label: "Competitor Tracker", icon: Eye, roles: ["owner", "manager"], badge: "premium" },
+      // ── Menu Intelligence pack (Task #365) ──
+      { kind: "link", href: "/menu/heatmap",          label: "Menu Heatmap",        icon: TrendingUp,    roles: ["owner", "manager"], planGate: "menu_heatmap",          badge: "premium" },
+      { kind: "link", href: "/menu/ab-tests",         label: "A/B Tests",           icon: Zap,           roles: ["owner", "manager"], planGate: "menu_ab_tests",         badge: "premium" },
+      { kind: "link", href: "/menu/search-analytics", label: "Search Analytics",    icon: Search,        roles: ["owner", "manager"], planGate: "menu_search_analytics", badge: "premium" },
+      { kind: "link", href: "/menu/modifier-builder", label: "Modifier Builder",    icon: Plus,          roles: ["owner", "manager"], planGate: "menu_modifier_builder", badge: "premium" },
+      { kind: "link", href: "/menu/taste-profiles",   label: "Taste Profiles",      icon: Flame,         roles: ["owner", "manager"], planGate: "menu_taste_profiles",   badge: "premium" },
+      { kind: "link", href: "/menu/group-qr",         label: "Group Ordering QR",   icon: Users,         roles: ["owner", "manager"], planGate: "menu_group_qr",         badge: "premium" },
+      { kind: "link", href: "/menu/split-cart",       label: "Split Cart",          icon: Receipt,       roles: ["owner", "manager"], planGate: "menu_split_cart",       badge: "premium" },
+      { kind: "link", href: "/menu/lifecycle",        label: "Item Lifecycle",      icon: ClipboardCheck,roles: ["owner", "manager"], planGate: "menu_lifecycle",        badge: "premium" },
+      { kind: "link", href: "/menu/launches",         label: "Launch Tracker",      icon: Sparkles,      roles: ["owner", "manager"], planGate: "menu_launch_tracker",   badge: "premium" },
+      { kind: "link", href: "/menu/photo-approvals",  label: "Photo Approvals",     icon: ImageIcon,     roles: ["owner", "manager"], planGate: "menu_photo_approval",   badge: "premium" },
+      { kind: "link", href: "/menu/brand-assets",     label: "Brand Assets",        icon: Folder,        roles: ["owner", "manager"], planGate: "menu_brand_assets",     badge: "premium" },
     ],
   },
 
@@ -84,6 +102,11 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/inventory", label: "Stock", icon: Package },
       { kind: "link", href: "/waste", label: "Waste", icon: Trash2, roles: ["owner", "manager", "kitchen", "waiter", "cashier"] },
       { kind: "link", href: "/documents", label: "Documents", icon: Folder, requiresDocsAccess: true },
+      // ── Inventory Control pack (Task #365) ──
+      { kind: "link", href: "/inventory/packaging",       label: "Packaging Inventory",  icon: Package,    roles: ["owner", "manager"], planGate: "inv_packaging",         badge: "premium" },
+      { kind: "link", href: "/inventory/condiments",      label: "Condiment Tracking",   icon: Soup,       roles: ["owner", "manager"], planGate: "inv_condiments",        badge: "premium" },
+      { kind: "link", href: "/inventory/portion-drift",   label: "Portion Drift",        icon: AlertTriangle, roles: ["owner", "manager"], planGate: "inv_portion_drift", badge: "premium" },
+      { kind: "link", href: "/inventory/recipe-versions", label: "Recipe Versions",      icon: History,    roles: ["owner", "manager"], planGate: "inv_recipe_versioning", badge: "premium" },
     ],
   },
 
@@ -97,6 +120,16 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/review-qrs", label: "Review Booster", icon: Sparkles, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
       { kind: "link", href: "/settings/loyalty", label: "Loyalty Settings", icon: Award, roles: ["owner", "manager"] },
+      // ── Customer Intelligence pack (Task #365) ──
+      { kind: "link", href: "/customers/vip-alerts",       label: "VIP Alerts",            icon: BellRing,      roles: ["owner", "manager"], planGate: "cust_vip_alerts",          badge: "premium" },
+      { kind: "link", href: "/customers/blacklist",        label: "Guest Blacklist",       icon: ShieldCheck,   roles: ["owner", "manager"], planGate: "cust_blacklist",           badge: "premium" },
+      { kind: "link", href: "/customers/mood",             label: "Mood Tracker",          icon: MessageSquare, roles: ["owner", "manager"], planGate: "cust_mood",                badge: "premium" },
+      { kind: "link", href: "/customers/complaints",       label: "Complaint Escalation",  icon: AlertTriangle, roles: ["owner", "manager"], planGate: "cust_complaint_escalation",badge: "premium" },
+      { kind: "link", href: "/customers/repeat-detector",  label: "Repeat Detector",       icon: Eye,           roles: ["owner", "manager"], planGate: "cust_repeat_detector",     badge: "premium" },
+      { kind: "link", href: "/customers/visit-calendar",   label: "Visit Calendar",        icon: CalendarDays,  roles: ["owner", "manager"], planGate: "cust_visit_calendar",      badge: "premium" },
+      { kind: "link", href: "/customers/order-status",     label: "Live Order Status",     icon: TrendingUp,    roles: ["owner", "manager"], planGate: "cust_live_order_status",   badge: "premium" },
+      { kind: "link", href: "/customers/lost-sales",       label: "Lost Sales",            icon: AlertCircle,   roles: ["owner", "manager"], planGate: "cust_lost_sales",          badge: "premium" },
+      { kind: "link", href: "/customers/abandoned-carts",  label: "Abandoned Carts",       icon: Inbox,         roles: ["owner", "manager"], planGate: "cust_abandoned_cart",      badge: "premium" },
     ],
   },
 
@@ -110,6 +143,13 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"] },
       { kind: "link", href: "/ai/feedback-wall", label: "Feedback Wall", icon: Sparkles, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
       { kind: "link", href: "/ai/feedback-recovery", label: "Recovery Campaigns", icon: AlertTriangle, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
+      // ── Marketing pack (Task #365) ──
+      { kind: "link", href: "/growth/local-map",         label: "Local Customer Map", icon: Eye,        roles: ["owner", "manager"], planGate: "mkt_local_map",        badge: "premium" },
+      { kind: "link", href: "/growth/festival-calendar", label: "Festival Calendar",  icon: CalendarDays, roles: ["owner", "manager"], planGate: "mkt_festival_calendar", badge: "premium" },
+      { kind: "link", href: "/growth/offer-conflicts",   label: "Offer Conflicts",    icon: AlertTriangle, roles: ["owner", "manager"], planGate: "mkt_offer_conflict",  badge: "premium" },
+      { kind: "link", href: "/growth/margin-floors",     label: "Margin Floors",      icon: Percent,    roles: ["owner", "manager"], planGate: "mkt_margin_floors",    badge: "premium" },
+      { kind: "link", href: "/growth/upsell-pro",        label: "Upsell Pro",         icon: TrendingUp, roles: ["owner", "manager"], planGate: "mkt_upsell_pro",       badge: "premium" },
+      { kind: "link", href: "/growth/referrals",         label: "Referral Program",   icon: Award,      roles: ["owner", "manager"], planGate: "mkt_referral_program", badge: "premium" },
     ],
   },
 
@@ -144,6 +184,10 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"] },
       { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },
+      // ── Staff pack (Task #365) ──
+      { kind: "link", href: "/staff/table-optimization", label: "Table Optimization", icon: Table2,   roles: ["owner", "manager"], planGate: "staff_table_optimization", badge: "premium" },
+      { kind: "link", href: "/staff/tips",               label: "Tip Pooling",        icon: Coins,    roles: ["owner", "manager"], planGate: "staff_tips",               badge: "premium" },
+      { kind: "link", href: "/staff/leaderboard-tv",     label: "Leaderboard TV",     icon: Monitor,  roles: ["owner", "manager"], planGate: "staff_leaderboard_tv",     badge: "premium" },
     ],
   },
 
@@ -191,6 +235,26 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/canteen/meal-plans", label: "Canteen Meal Plans", icon: UtensilsCrossed, roles: ["owner", "manager", "canteen_admin"], requiresCanteenMode: true },
       { kind: "link", href: "/canteen/pos", label: "Canteen POS", icon: Monitor, roles: ["owner", "manager", "cashier", "counter_staff", "canteen_admin"], requiresCanteenMode: true },
       { kind: "link", href: "/canteen/reports", label: "Canteen Reports", icon: BarChart3, roles: ["owner", "manager", "canteen_admin"], requiresCanteenMode: true },
+      // ── Operations Intelligence pack (Task #365) ──
+      { kind: "link", href: "/ops/digital-twin", label: "Digital Twin",       icon: LayoutDashboard, roles: ["owner", "manager"], planGate: "ops_digital_twin",     badge: "premium" },
+      { kind: "link", href: "/ops/panic",        label: "Panic Button",       icon: AlertTriangle,   roles: ["owner", "manager"], planGate: "ops_panic_button",     badge: "premium" },
+      { kind: "link", href: "/ops/handover",     label: "Shift Handover",     icon: ClipboardCheck,  roles: ["owner", "manager"], planGate: "ops_shift_handover",   badge: "premium" },
+      { kind: "link", href: "/ops/briefings",    label: "Daily Briefings",    icon: Megaphone,       roles: ["owner", "manager"], planGate: "ops_daily_briefings",  badge: "premium" },
+      { kind: "link", href: "/ops/checklists",   label: "Checklists",         icon: ClipboardCheck,  roles: ["owner", "manager"], planGate: "ops_closing_checklist",badge: "premium" },
+      { kind: "link", href: "/ops/timeline",     label: "Service Timeline",   icon: History,         roles: ["owner", "manager"], planGate: "ops_event_timeline",   badge: "premium" },
+      { kind: "link", href: "/ops/approvals",    label: "Approvals Inbox",    icon: Inbox,           roles: ["owner", "manager"], planGate: "ops_manager_approvals",badge: "premium" },
+      { kind: "link", href: "/ops/incidents",    label: "Incident Log",       icon: AlertCircle,     roles: ["owner", "manager"], planGate: "ops_incident_log",     badge: "premium" },
+      // ── Kitchen & Quality pack ──
+      { kind: "link", href: "/kitchen/cleaning",      label: "Cleaning Schedule",  icon: ClipboardCheck, roles: ["owner", "manager", "kitchen"], planGate: "kq_cleaning_schedule", badge: "premium" },
+      { kind: "link", href: "/kitchen/temperatures",  label: "Temperature Logs",   icon: Flame,          roles: ["owner", "manager", "kitchen"], planGate: "kq_temperature_log",   badge: "premium" },
+      { kind: "link", href: "/kitchen/equipment",     label: "Equipment Register", icon: Settings,       roles: ["owner", "manager"],            planGate: "kq_equipment_register",badge: "premium" },
+      { kind: "link", href: "/kitchen/taste-testing", label: "Taste Testing",      icon: Soup,           roles: ["owner", "manager", "kitchen"], planGate: "kq_taste_testing",     badge: "premium" },
+      { kind: "link", href: "/kitchen/accuracy",      label: "Order Accuracy",     icon: ShieldCheck,    roles: ["owner", "manager"],            planGate: "kq_accuracy_score",    badge: "premium" },
+      // ── Delivery pack ──
+      { kind: "link", href: "/delivery/queue",               label: "Delivery Queue",       icon: Truck,         roles: ["owner", "manager"], planGate: "dlv_queue_manager",      badge: "premium" },
+      { kind: "link", href: "/delivery/pre-order",           label: "Pre-Order Window",     icon: CalendarDays,  roles: ["owner", "manager"], planGate: "dlv_pre_order",          badge: "premium" },
+      { kind: "link", href: "/delivery/zone-profitability",  label: "Zone Profitability",   icon: TrendingUp,    roles: ["owner", "manager"], planGate: "dlv_zone_profitability", badge: "premium" },
+      { kind: "link", href: "/delivery/tracking-links",      label: "Live Tracking Links",  icon: Truck,         roles: ["owner", "manager"], planGate: "dlv_live_tracking_link", badge: "premium" },
     ],
   },
 
@@ -348,7 +412,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     enabled: !!restaurantId && !!user && (user.isSuperAdmin || ["owner", "manager"].includes(user.role ?? "")),
     staleTime: 60_000,
   });
-  const cloudKitchenPlanEnabled = subscription?.plan?.featureFlags?.cloud_kitchen === true;
+  const planFlags: Record<string, boolean> = subscription?.plan?.featureFlags ?? {};
+  const cloudKitchenPlanEnabled = planFlags.cloud_kitchen === true;
 
   const { data: docsAccess } = useQuery<{ hasAccess: boolean }>({
     queryKey: ["documents-has-access", restaurantId],
@@ -388,7 +453,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     if (gate === "ai") return aiPlanEnabled;
     if (gate === "ai_insights") return aiPlanEnabled && aiInsightsEnabled;
     if (gate === "cloud_kitchen") return cloudKitchenPlanEnabled;
-    return true;
+    // Generic catalogue feature key: look it up on the plan's featureFlags.
+    // Items are shown when the flag is true OR when the plan hasn't loaded yet
+    // (so we never hide newly-introduced links from owners while the request
+    // is in flight). Clicking through still lands on the UpgradeRequiredPage.
+    if (!subscription) return true;
+    return planFlags[gate] === true;
   };
 
   const groupRoleAllowed = (g: GroupItem) => {
@@ -412,7 +482,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, cloudKitchenPlanEnabled, docsHasAccess, bakeryModeOn, barModeOn, canteenModeOn]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, cloudKitchenPlanEnabled, docsHasAccess, bakeryModeOn, barModeOn, canteenModeOn, subscription]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);

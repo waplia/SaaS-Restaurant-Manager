@@ -52,6 +52,29 @@ A multi-tenant SaaS restaurant management platform — POS, table management, in
 
 - User wants the full project running live with database
 
+## Plan feature catalogue
+
+- `lib/db/src/planFeatures.ts` is the single source of truth for per-plan
+  boolean toggles, numeric tunables and quantity columns. Adding a key to
+  `PLAN_BOOLEAN_FEATURES` automatically wires it into:
+  - the super-admin plan editor (`/admin`, grouped by category)
+  - the marketing pricing page (`/pricing`) and the full comparison matrix
+    at `/compare`
+  - the seed defaults (`defaultFeatureFlagsForPlan(tier)`) used by
+    `artifacts/api-server/src/seed.ts` and by `routes/tenants.ts` when an
+    admin creates a brand-new plan
+- New advanced-pack features may set `sidebarHref` on their catalogue
+  entry; this registers an automatic placeholder route in
+  `artifacts/restaurant-platform/src/App.tsx` that renders
+  `pages/upgrade-required.tsx` until a domain task ships the real screen.
+- `Sidebar.tsx` accepts any feature-flag key as `planGate`; the flag is
+  resolved against the live subscription's `plan.featureFlags`. The legacy
+  `ai` / `ai_insights` / `cloud_kitchen` gates remain supported.
+- New audit-log entity and action strings introduced by the advanced packs
+  live in `lib/db/src/auditEntities.ts`. The audit table uses free-form
+  strings (no Postgres enum), so domain tasks should import
+  `NEW_AUDIT_ENTITIES` / `AUDIT_ACTIONS` instead of inlining literals.
+
 ## Gotchas
 
 - Both workflows MUST include `PORT=...` in the command — the app throws if PORT is not set

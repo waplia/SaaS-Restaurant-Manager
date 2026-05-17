@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { eq, desc, asc, count, and, or, ilike, sql, type SQL } from "drizzle-orm";
-import { db, subscriptionPlansTable, tenantsTable, usersTable, PLAN_BOOLEAN_FEATURE_KEYS, defaultFeatureFlags } from "../lib/db";
+import { db, subscriptionPlansTable, tenantsTable, usersTable, PLAN_BOOLEAN_FEATURE_KEYS, PLAN_NUMERIC_FEATURES, defaultFeatureFlags } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { hashPassword, signResetToken, signImpersonationToken } from "../lib/auth";
@@ -84,12 +84,26 @@ function validatePlanInput(body: Record<string, unknown>, partial = false): { er
   }
   if (body.featureFlags !== undefined) {
     if (!body.featureFlags || typeof body.featureFlags !== "object" || Array.isArray(body.featureFlags)) {
-      return { error: "featureFlags must be an object of { [key]: boolean }" };
+      return { error: "featureFlags must be an object of catalogue keys" };
     }
-    const cleaned: Record<string, boolean> = {};
+    const raw = body.featureFlags as Record<string, unknown>;
+    const cleaned: Record<string, boolean | number> = {};
+    // 1. Boolean catalogue keys
     for (const k of PLAN_BOOLEAN_FEATURE_KEYS) {
-      const v = (body.featureFlags as Record<string, unknown>)[k];
+      const v = raw[k];
       if (typeof v === "boolean") cleaned[k] = v;
+    }
+    // 2. Numeric catalogue keys (PLAN_NUMERIC_FEATURES). Accept numbers or
+    //    numeric strings, coerce to integer, clamp to declared [min, max].
+    for (const nf of PLAN_NUMERIC_FEATURES) {
+      const v = raw[nf.key];
+      if (v === undefined || v === null) continue;
+      const n = typeof v === "number" ? v : Number(v);
+      if (!Number.isFinite(n)) {
+        return { error: `featureFlags.${nf.key} must be a number` };
+      }
+      const clamped = Math.max(nf.min, Math.min(nf.max, Math.round(n)));
+      cleaned[nf.key] = clamped;
     }
     out.featureFlags = cleaned;
   } else if (!partial) {
