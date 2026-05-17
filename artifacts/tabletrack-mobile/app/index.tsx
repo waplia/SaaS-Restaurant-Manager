@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { roleHomePath } from "@/lib/roles";
 
 export default function IndexScreen() {
   const { user, isLoading } = useAuth();
@@ -14,18 +15,7 @@ export default function IndexScreen() {
       router.replace("/login");
       return;
     }
-    const role = user.role;
-    if (role === "owner" || role === "super_admin") {
-      router.replace("/(owner)");
-    } else if (role === "waiter") {
-      router.replace("/(waiter)/(tabs)");
-    } else if (role === "kitchen") {
-      router.replace("/(waiter)/(tabs)/notifications");
-    } else if (role === "customer") {
-      router.replace("/(customer)");
-    } else {
-      router.replace("/(owner)");
-    }
+    router.replace(roleHomePath(user.role) as never);
   }, [user, isLoading]);
 
   return (

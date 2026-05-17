@@ -13,11 +13,21 @@ type Item = {
   id: number;
   name: string;
   sku?: string;
+  // API returns `currentStock` + `minStockLevel`; tolerate older alias names.
+  currentStock?: number | string;
   quantity?: number | string;
-  unit?: string;
+  minStockLevel?: number | string;
   reorderPoint?: number | string;
-  unitCost?: string;
+  unit?: string;
+  costPerUnit?: string;
 };
+
+function itemQty(it: Item): number {
+  return Number(it.currentStock ?? it.quantity ?? 0);
+}
+function itemReorder(it: Item): number {
+  return Number(it.minStockLevel ?? it.reorderPoint ?? 0);
+}
 
 export default function InventoryScreen() {
   const colors = useColors();
@@ -32,8 +42,8 @@ export default function InventoryScreen() {
   });
 
   const items = (Array.isArray(q.data) ? q.data : []).filter(it => {
-    const qty = Number(it.quantity ?? 0);
-    const rp = Number(it.reorderPoint ?? 0);
+    const qty = itemQty(it);
+    const rp = itemReorder(it);
     if (filter === "low" && qty > rp) return false;
     if (filter === "out" && qty > 0) return false;
     if (search && !it.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -76,8 +86,8 @@ export default function InventoryScreen() {
           contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: isWeb ? 100 : 100 }}
         >
           {items.map(it => {
-            const qty = Number(it.quantity ?? 0);
-            const rp = Number(it.reorderPoint ?? 0);
+            const qty = itemQty(it);
+            const rp = itemReorder(it);
             const tone = qty === 0 ? "danger" : qty <= rp ? "warning" : "success";
             const label = qty === 0 ? "Out" : qty <= rp ? "Low" : "OK";
             return (

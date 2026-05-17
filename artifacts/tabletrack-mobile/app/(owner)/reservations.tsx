@@ -29,9 +29,25 @@ export default function ReservationsScreen() {
 
   const q = useQuery({
     queryKey: ["reservations", restaurantId, filter],
-    queryFn: () => customFetch<Reservation[] | { reservations?: Reservation[] }>(`/api/restaurants/${restaurantId}/reservations?range=${filter}`).catch(() => []),
+    queryFn: () => {
+      // Backend takes ?date=YYYY-MM-DD for a specific day; for "upcoming" /
+      // "all" we omit the filter and slice client-side below.
+      const today = new Date().toISOString().slice(0, 10);
+      const qs = filter === "today" ? `?date=${today}` : "";
+      return customFetch<Reservation[] | { reservations?: Reservation[] }>(
+        `/api/restaurants/${restaurantId}/reservations${qs}`,
+      ).catch(() => []);
+    },
   });
-  const list: Reservation[] = Array.isArray(q.data) ? q.data : (q.data?.reservations ?? []);
+  const rawList: Reservation[] = Array.isArray(q.data) ? q.data : (q.data?.reservations ?? []);
+  const list: Reservation[] = (() => {
+    if (filter === "all") return rawList;
+    if (filter === "upcoming") {
+      const now = Date.now();
+      return rawList.filter(r => new Date(r.reservationTime).getTime() >= now);
+    }
+    return rawList;
+  })();
 
   const update = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>

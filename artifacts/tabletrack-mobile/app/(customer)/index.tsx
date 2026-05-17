@@ -36,8 +36,17 @@ export default function QRScanScreen() {
   };
 
   const handleManualSubmit = () => {
-    const parts = manualInput.trim().split("/");
-    const restaurantId = 1;
+    // Accept either "tableId" or "restaurantId/tableId" so QR-less browsing
+    // works on the web preview as well as for staff helping a customer enter
+    // a code by hand. Falls back to restaurant 1 when only a table number is
+    // typed (the established demo/default behavior).
+    const trimmed = manualInput.trim();
+    if (!trimmed) {
+      Alert.alert("Enter a table", "Please enter a table number to continue.");
+      return;
+    }
+    const parts = trimmed.split("/").map((p) => p.trim()).filter(Boolean);
+    const restaurantId = parts.length >= 2 ? (parseInt(parts[0], 10) || 1) : 1;
     const tableId = parseInt(parts[parts.length - 1] || "1", 10) || 1;
     setTable(restaurantId, tableId, "demo");
     router.push(`/(customer)/menu?restaurantId=${restaurantId}&tableId=${tableId}&token=demo`);

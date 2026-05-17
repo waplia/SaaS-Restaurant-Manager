@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import {
   View, Text, FlatList, StyleSheet, RefreshControl,
   ActivityIndicator, Pressable, Alert, Linking, Platform,
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { customFetch } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 
@@ -47,34 +48,17 @@ export default function MyDeliveriesScreen() {
   const [filter, setFilter] = useState<"active" | "history">("active");
   const isWeb = Platform.OS === "web";
 
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-
-  const apiFetch = useCallback(async (path: string, init?: RequestInit) => {
-    const res = await fetch(`${baseUrl}/api${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken ?? ""}`,
-        ...(init?.headers ?? {}),
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(text || `Request failed (${res.status})`);
-    }
-    return res.json();
-  }, [baseUrl, accessToken]);
-
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["my-deliveries", restaurantId, accessToken],
-    queryFn: () => apiFetch(`/restaurants/${restaurantId}/delivery/my`) as Promise<Assignment[]>,
+    queryKey: ["my-deliveries", restaurantId],
+    queryFn: () =>
+      customFetch<Assignment[]>(`/api/restaurants/${restaurantId}/delivery/my`),
     refetchInterval: 15_000,
     enabled: !!accessToken,
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, status, codCollected }: { id: number; status: string; codCollected?: boolean }) =>
-      apiFetch(`/restaurants/${restaurantId}/delivery/assignments/${id}/status`, {
+      customFetch(`/api/restaurants/${restaurantId}/delivery/assignments/${id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status, codCollected }),
       }),

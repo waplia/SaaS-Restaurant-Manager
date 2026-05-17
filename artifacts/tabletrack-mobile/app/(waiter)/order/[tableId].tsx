@@ -17,7 +17,7 @@ import {
   getRestaurant, getGetRestaurantQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
-import * as SecureStore from "@/lib/secureStorage";
+import { customFetch } from "@workspace/api-client-react";
 import type { MenuCategory, MenuItem, Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
@@ -150,17 +150,14 @@ export default function WaiterOrderScreen() {
 
   const createOrder = useCreateOrder();
   const addItemMutation = useMutation({
-    mutationFn: async ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number } }) => {
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-      const token = await SecureStore.getItem("accessToken");
-      const resp = await fetch(`${baseUrl}/api/restaurants/${rid}/orders/${id}/items`, {
+    // Use the shared customFetch wrapper so the request automatically picks up
+    // the base URL, current auth token, and global 401 handling — matching
+    // the rest of the app and avoiding silent stale-token failures.
+    mutationFn: ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number } }) =>
+      customFetch(`/api/restaurants/${rid}/orders/${id}/items`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
         body: JSON.stringify(data),
-      });
-      if (!resp.ok) throw new Error("Failed to add item to order");
-      return resp.json();
-    },
+      }),
   });
 
   const categoryList = (isOnline

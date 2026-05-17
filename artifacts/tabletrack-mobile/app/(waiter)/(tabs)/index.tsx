@@ -33,7 +33,7 @@ export default function TablesScreen() {
         <Text style={[styles.title, { color: colors.foreground }]}>Tables</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
           {tableList.filter((t) => t.status === "occupied").length} occupied ·{" "}
-          {tableList.filter((t) => t.status === "available").length} available
+          {tableList.filter((t) => t.status === "free" || t.status === "available").length} free
         </Text>
       </View>
 

@@ -120,6 +120,44 @@ export function allowedModules(role: string | undefined | null): ModuleKey[] {
   return ROLE_ACCESS[role as StaffRole] ?? [];
 }
 
+/**
+ * Returns the post-login home route for a given role. The mobile app has a
+ * small number of role stacks ("(owner)", "(waiter)", "(customer)",
+ * "(delivery)"), so several roles map to the same stack but to a screen that
+ * makes sense for them.
+ */
+export function roleHomePath(role: string | undefined | null): string {
+  switch (role) {
+    case "owner":
+    case "manager":
+    case "super_admin":
+      return "/(owner)";
+    case "cashier":
+      return "/(owner)/orders";
+    case "kitchen":
+    case "chef":
+      return "/(owner)/kitchen";
+    case "inventory_manager":
+      return "/(owner)/inventory";
+    case "accountant":
+    case "payroll":
+      return "/(owner)/finance";
+    case "hr":
+      return "/(owner)/staff";
+    case "marketing":
+      return "/(owner)/growth";
+    case "waiter":
+    case "captain":
+      return "/(waiter)/(tabs)";
+    case "delivery_executive":
+      return "/(delivery)/my-deliveries";
+    case "customer":
+      return "/(customer)";
+    default:
+      return "/(owner)";
+  }
+}
+
 export const ROLE_LABEL: Record<string, string> = {
   super_admin: "Super Admin",
   owner: "Owner",
