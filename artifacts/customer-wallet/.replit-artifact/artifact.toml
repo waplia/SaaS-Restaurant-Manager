@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/wallet/"
+title = "TableTrack Loyalty Wallet"
+version = "1.0.0"
+id = "artifacts/customer-wallet"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/wallet/" ]
+localPort = 23988
+
+[services.development]
+run = "pnpm --filter @workspace/customer-wallet run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/customer-wallet", "run", "build" ]
+publicDir = "artifacts/customer-wallet/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23988"
+BASE_PATH = "/wallet/"

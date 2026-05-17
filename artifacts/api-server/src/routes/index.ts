@@ -115,6 +115,8 @@ import orderCapacityRouter, { publicOrderCapacityRouter } from "./order-capacity
 import operationsRouter from "./operations";
 import vendorInvoicesRouter from "./vendor-invoices";
 import customerAppRouter, { customerAppPublicRouter } from "./customer-app";
+import walletRouter from "./wallet";
+import loyaltyNetworkRouter from "./loyalty-network";
 
 const router: IRouter = Router();
 
@@ -140,6 +142,9 @@ router.use(canteenPublicRouter);
 router.use(tokensRouter);
 router.use(bakeryPublicRouter);
 router.use(customerAppPublicRouter);
+
+// Customer-facing wallet API (own JWT, mounted before the staff `authenticate` gate)
+router.use(walletRouter);
 
 // Public API namespace (api-key authenticated). Mounted BEFORE the JWT
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.
@@ -197,6 +202,7 @@ router.use(subscriptionsRouter);
 router.use(billingRouter);
 router.use(couponsRouter);
 router.use(loyaltyRouter);
+router.use(loyaltyNetworkRouter);
 router.use(settingsRouter);
 router.use(onboardingRouter);
 router.use(implementationsRouter);

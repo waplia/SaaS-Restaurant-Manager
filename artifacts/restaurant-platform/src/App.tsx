@@ -152,6 +152,7 @@ import MenuPhotoApprovalsPage from "@/pages/menu-photo-approvals";
 import MenuBrandAssetsPage from "@/pages/menu-brand-assets";
 import GrowthEnginePage from "@/pages/growth-engine";
 import LoyaltyAnalyticsPage from "@/pages/loyalty-analytics";
+import LoyaltyNetworkPage from "@/pages/loyalty-network";
 import DocumentsPage from "@/pages/documents";
 import WalletsPage from "@/pages/wallets";
 import GiftCardsPage from "@/pages/gift-cards";
@@ -371,6 +372,7 @@ function Router() {
       <Route path="/competitors/comparison" component={() => <RoleProtectedRoute component={CompetitorComparisonPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/:id" component={() => <RoleProtectedRoute component={CompetitorDetailPage} allow={["owner", "manager"]} />} />
       <Route path="/loyalty/analytics" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={LoyaltyAnalyticsPage} feature="loyalty_program" />} allow={["owner", "manager"]} />} />
+      <Route path="/customers/loyalty-network" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={LoyaltyNetworkPage} feature="loyalty_network" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={InventoryPage} feature="inventory_management" />} />} />
       <Route path="/inventory/packaging" component={() => <RoleProtectedRoute component={PackagingInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/condiments" component={() => <RoleProtectedRoute component={CondimentsInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
