@@ -174,7 +174,8 @@ router.get("/restaurants/:restaurantId/tables/:id/qr", requirePlanFeature("qr_or
   const proto = forwardedProto ?? (host.includes("localhost") ? "http" : "https");
   const requestBase = host ? `${proto}://${host}` : "";
   const baseUrl = envBase || requestBase;
-  const qrUrl = `${baseUrl}/menu/${slug}/${table.id}`;
+  const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
+  const qrUrl = `${baseUrl}${webBase}/menu/${slug}/${table.id}`;
   let svgData = "";
   try {
     const QRCode = await import("qrcode");

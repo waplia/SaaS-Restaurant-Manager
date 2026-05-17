@@ -146,7 +146,8 @@ router.get("/restaurants/:restaurantId/review-qrs/:qrId/qr.svg", async (req: Req
   const [row] = await db.select().from(reviewQrsTable).where(and(eq(reviewQrsTable.id, qrId), eq(reviewQrsTable.restaurantId, restaurantId)));
   if (!row) return void res.status(404).json({ error: "Not found" });
   const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") ?? `${req.protocol}://${req.get("host")}`;
-  const url = `${baseUrl}/review/${row.qrCode}`;
+  const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
+  const url = `${baseUrl}${webBase}/review/${row.qrCode}`;
   const QRCode = await import("qrcode");
   const svg = await QRCode.toString(url, { type: "svg", margin: 1, width: 400 });
   res.setHeader("Content-Type", "image/svg+xml");

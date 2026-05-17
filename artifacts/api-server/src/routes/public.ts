@@ -284,7 +284,8 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
     try {
       const stripe = new Stripe(stripeKey);
       const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") ?? "";
-      const returnUrl = `${baseUrl}/menu/${restaurant?.slug ?? ""}/${order.tableId ?? ""}`;
+      const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
+      const returnUrl = `${baseUrl}${webBase}/menu/${restaurant?.slug ?? ""}/${order.tableId ?? ""}`;
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         line_items: [{ price_data: { currency, product_data: { name: `Order ${order.orderNumber}` }, unit_amount: amountSmallestUnit }, quantity: 1 }],
