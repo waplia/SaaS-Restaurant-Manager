@@ -1,0 +1,725 @@
+Use this prompt:
+
+```text
+Perform a complete live end-to-end QA audit of the full KhanaLagao platform and fix all bugs.
+
+Important:
+The platform is already built, but it has bugs, errors, broken flows, and incomplete behavior in different places. Do not rebuild the project. Do not redesign unnecessarily. Test the live platform from start to end like a real user, find all bugs, and fix them properly.
+
+Goal:
+Make KhanaLagao stable, production-ready, and demo-ready.
+
+Platform:
+KhanaLagao — Restaurant OS for Modern Food Businesses.
+
+Test everything:
+- Public website
+- Login/signup
+- Super Admin
+- Restaurant Admin
+- POS
+- Orders
+- Kitchen/KDS
+- Tables
+- QR Menu
+- Table QR PDF
+- Review QR
+- Inventory
+- Staff
+- Payroll
+- Customers
+- Growth Engine
+- Khana AI
+- Finance
+- Reports
+- Marketplace
+- Mobile responsiveness
+- Role permissions
+- Plan/module locks
+- Settings
+- Notifications
+- Forms
+- APIs
+- Database
+- File uploads
+- Exports
+- PDF downloads
+
+====================================================
+1. FIRST RUN FULL PROJECT CHECK
+====================================================
+
+First run and check:
+
+- Install dependencies if needed
+- Run type check if available
+- Run lint if available
+- Run test suite if available
+- Run build command
+- Start app locally or check deployed live app
+- Check console errors
+- Check server logs
+- Check API errors
+- Check database connection
+- Check environment variables
+- Check missing assets/images
+- Check broken imports
+- Check broken routes
+- Check failed builds
+- Check runtime errors
+
+Fix all build/runtime/lint/type errors before feature testing.
+
+====================================================
+2. PUBLIC WEBSITE TEST
+====================================================
+
+Test all public website pages:
+
+- Home
+- Platform
+- Features
+- Feature detail pages
+- Solutions
+- Khana AI pages
+- Pricing
+- Blog
+- Help
+- Compare
+- About
+- Contact
+- Book Demo
+- Partner
+- Security
+- Legal pages
+- 404
+- Thank-you page
+
+Check:
+- Page loads
+- Header visible
+- Footer visible
+- Mega menu works
+- Menu opens on hover desktop
+- Mobile menu works
+- All links work
+- CTA buttons work
+- Forms work
+- Leads save
+- SEO metadata exists
+- Images load
+- No old branding
+- No broken layout
+- No console errors
+- Mobile responsive
+- Page performance acceptable
+
+Fix all broken links, broken pages, form errors, responsive issues, and SEO issues.
+
+====================================================
+3. AUTHENTICATION TEST
+====================================================
+
+Test:
+- Super Admin login
+- Restaurant owner login
+- Staff login
+- Wrong password
+- Logout
+- Session expiry
+- Password reset if available
+- Role-based redirects
+- Unauthorized access
+- Direct URL access protection
+
+Fix:
+- Login bugs
+- Redirect issues
+- Permission bypass
+- Session problems
+- Broken logout
+- Password reset errors
+
+====================================================
+4. SUPER ADMIN TEST
+====================================================
+
+Test full Super Admin flow:
+
+- Dashboard loads real data
+- Restaurant list
+- Create restaurant
+- Edit restaurant
+- Suspend restaurant
+- Activate restaurant
+- Assign plan
+- Change plan
+- Create plan
+- Edit plan
+- Feature flags
+- Module enable/disable
+- Subscription management
+- Payments
+- Invoices
+- Leads
+- CMS
+- Support tickets
+- AI Control Center
+- OpenAI/Claude/Gemini settings
+- AI credit rules
+- Add/deduct AI credits
+- SMS settings
+- WhatsApp settings
+- Email/SMTP settings
+- Payment gateway settings
+- Reports
+- Audit logs
+- System settings
+
+Check:
+- Buttons work
+- Forms validate
+- Data saves
+- Filters work
+- Pagination works
+- Exports work
+- Permissions work
+- API keys are masked
+- Secrets not exposed
+- Audit logs created
+
+Fix all Super Admin bugs.
+
+====================================================
+5. RESTAURANT ONBOARDING TEST
+====================================================
+
+Test restaurant setup from zero:
+
+- Create new restaurant
+- Assign plan
+- Login as owner
+- Setup restaurant profile
+- Add outlet
+- Add business hours
+- Add tax/GST
+- Add tables/floors
+- Add menu category
+- Add menu item
+- Add staff
+- Add inventory item
+- Setup QR menu
+- Setup payment options
+- Complete onboarding
+
+Check:
+- No broken step
+- Data saves
+- Empty states clear
+- Next/back buttons work
+- User reaches dashboard
+- Setup progress works
+
+Fix onboarding bugs.
+
+====================================================
+6. RESTAURANT DASHBOARD TEST
+====================================================
+
+Test dashboard:
+- Sales cards
+- Live orders
+- Kitchen status
+- Table status
+- Inventory alerts
+- Staff attendance
+- Customer activity
+- AI insights
+- Finance cards
+- Charts
+- Date filters
+- Outlet filters
+- Quick actions
+
+Fix wrong numbers, broken charts, loading issues, empty state issues.
+
+====================================================
+7. POS + ORDER FLOW TEST
+====================================================
+
+Test full order cycle:
+
+Dine-in:
+- Select table
+- Add items
+- Add variants/add-ons
+- Add note
+- Apply discount
+- Add tax/service charge
+- Send to kitchen
+- Generate KOT
+- Mark prepared
+- Generate bill
+- Collect payment
+- Print/download invoice
+- Close table
+
+Takeaway:
+- Create order
+- Send KOT
+- Payment
+- Invoice
+
+Delivery:
+- Create order
+- Customer details
+- Delivery charge
+- Payment
+- Delivery status
+
+QR order:
+- Customer scans QR
+- Adds items
+- Places order
+- Restaurant receives order
+- Kitchen receives KOT
+- Payment/serve flow
+
+Check:
+- Totals correct
+- Taxes correct
+- Discounts correct
+- KOT generated
+- Inventory deducted
+- Customer saved
+- Reports updated
+- Table status updated
+- Payment status updated
+- Invoice correct
+
+Fix all POS/order bugs.
+
+====================================================
+8. KITCHEN / KDS TEST
+====================================================
+
+Test:
+- KOT appears
+- New/preparing/ready/served status
+- Item-wise status
+- Station filters
+- Kitchen notes
+- Cancelled KOT reason
+- Delayed order alert
+- Chef role access
+- Mobile view
+
+Fix KDS/KOT bugs.
+
+====================================================
+9. TABLES / RESERVATION / WAITER REQUEST TEST
+====================================================
+
+Test:
+- Create floor
+- Create table
+- Table QR mapping
+- Table availability
+- Occupied/billed/cleaning status
+- Merge table
+- Transfer table
+- Assign waiter
+- Reservation create/edit/cancel
+- Waiter request from QR page
+- Request appears in admin/mobile
+- Resolve request
+
+Fix table/reservation/waiter request bugs.
+
+====================================================
+10. QR MENU + TABLE QR PDF TEST
+====================================================
+
+Test:
+- QR menu opens publicly
+- Table QR opens correct table
+- Menu categories load
+- Items load
+- Images load
+- Add to cart
+- Place order
+- Order reaches restaurant
+- Out-of-stock behavior
+- Call waiter
+- Request bill
+- Review button
+- Download table QR PDF
+- PDF design correct
+- QR in PDF scans correctly
+- Table number correct
+- KhanaLagao branding correct
+
+Fix QR menu and PDF bugs.
+
+====================================================
+11. REVIEW QR TEST
+====================================================
+
+Test simple Review QR flow:
+
+- Scan review QR
+- Rating selection
+- Feedback tags
+- Optional feedback
+- Generate AI review if credits available
+- Copy review
+- Open Google review link
+- Save feedback
+- Track copy click
+- Track Google link click
+- Admin analytics update
+- No Google API required
+- Low rating private feedback saved
+
+Fix review QR bugs.
+
+====================================================
+12. KHANA AI TEST
+====================================================
+
+Test:
+- AI provider settings in Super Admin
+- API keys save/mask properly
+- Model selection
+- Credit wallet
+- Credit deduction
+- Failed request refund/no wrong deduction
+- Usage logs
+- AI Menu Import
+- AI Descriptions
+- AI Food Images if configured
+- AI Review Draft
+- AI Campaigns
+- AI Sales Insights
+- AI Forecasting
+- AI Chat
+- No credit behavior
+- Plan locked behavior
+
+Fix AI bugs, credit bugs, and provider errors.
+
+====================================================
+13. INVENTORY TEST
+====================================================
+
+Test:
+- Add raw material
+- Add vendor
+- Purchase order
+- Stock in
+- Recipe mapping
+- Auto stock deduction after sale
+- Low stock alerts
+- Waste entry
+- Stock adjustment
+- Stock transfer
+- Inventory reports
+- Export
+
+Fix inventory bugs.
+
+====================================================
+14. STAFF / PAYROLL TEST
+====================================================
+
+Test:
+- Add staff
+- Role assign
+- Attendance
+- Shift
+- Leave request
+- Leave approval
+- Salary setup
+- Advance
+- Bonus
+- Deduction
+- Overtime
+- Generate payroll
+- Salary slip PDF
+- Payroll report
+- Staff tasks
+- SOP/training
+- Mystery audits
+
+Fix staff/payroll bugs.
+
+====================================================
+15. CUSTOMERS / GROWTH TEST
+====================================================
+
+Test:
+- Customer creation from orders
+- CRM profile
+- Order history
+- Loyalty points
+- Memberships
+- Feedback
+- Surveys
+- Review booster
+- Campaign creation
+- Customer segments
+- Coupons
+- Referrals
+- Campaign schedule/send
+- Campaign analytics
+
+Fix customer/growth bugs.
+
+====================================================
+16. FINANCE TEST
+====================================================
+
+Test:
+- Payments
+- Expenses
+- Add expense
+- Upload bill
+- Wallet ledger
+- Settlements
+- Vendor payments
+- Invoices
+- Refunds
+- P&L
+- Profit calculations
+- Tax/GST reports
+- Export
+
+Fix finance bugs and wrong calculations.
+
+====================================================
+17. REPORTS TEST
+====================================================
+
+Test all reports:
+- Sales
+- Orders
+- Items
+- Category
+- Payment
+- Tax
+- Inventory
+- Waste
+- Staff
+- Payroll
+- Customer
+- Campaign
+- Finance/P&L
+- AI Usage
+- Outlet reports
+
+Check:
+- Date filters
+- Outlet filters
+- Totals
+- Charts
+- Export PDF/CSV/Excel
+- Empty states
+- Pagination
+
+Fix report bugs.
+
+====================================================
+18. MARKETPLACE / MODULE LOCK TEST
+====================================================
+
+Test:
+- Add-ons
+- Hardware
+- Integrations
+- Vendor marketplace
+- Locked modules
+- Upgrade screens
+- Plan-based visibility
+- Feature flags
+- Super Admin enable/disable
+- Restaurant access updates
+
+Fix module lock/marketplace bugs.
+
+====================================================
+19. ROLE PERMISSION TEST
+====================================================
+
+Test each role:
+- Owner/Admin
+- Manager
+- Cashier
+- Waiter
+- Chef
+- Inventory Manager
+- HR/Payroll
+- Marketing Manager
+- Accountant
+- Support Agent
+- Super Admin
+
+Check:
+- Correct menu visibility
+- Direct URL blocked
+- API access blocked
+- Sensitive data hidden
+- Finance/payroll restrictions
+- Action restrictions
+
+Fix permission bugs.
+
+====================================================
+20. MOBILE RESPONSIVE TEST
+====================================================
+
+Test website and app/admin responsive layouts:
+
+Widths:
+- 360px
+- 390px
+- 430px
+- 768px
+- Desktop
+
+Check:
+- No horizontal scroll
+- Header/menu works
+- Cards compact
+- Forms usable
+- Tables responsive
+- POS usable
+- QR menu mobile-friendly
+- KDS mobile-friendly
+- Reports readable
+- Buttons tap-friendly
+- No overlapping text
+
+Fix all responsive bugs.
+
+====================================================
+21. NOTIFICATION TEST
+====================================================
+
+Test:
+- New order notification
+- QR order notification
+- Kitchen delay alert
+- Low stock alert
+- Staff absent alert
+- Negative feedback alert
+- Payment alert
+- Campaign alert
+- Support ticket reply
+- Super Admin announcement
+- Read/unread
+- Notification click opens correct page
+
+Fix notification bugs.
+
+====================================================
+22. FILE / PDF / EXPORT TEST
+====================================================
+
+Test:
+- Image uploads
+- Logo uploads
+- Menu item images
+- PDF downloads
+- Invoice PDF
+- Salary slip PDF
+- Table QR PDF
+- Report export
+- CSV/Excel export
+- File size limits
+- Invalid file type errors
+
+Fix upload/export bugs.
+
+====================================================
+23. SECURITY TEST
+====================================================
+
+Check:
+- No API keys exposed
+- No real secrets in frontend
+- Role checks backend-side
+- Tenant/restaurant data isolation
+- Direct URL protection
+- File upload validation
+- XSS in forms/CMS/blog
+- SQL injection risk
+- Password hashing
+- Secure sessions
+- Rate limit login/AI if available
+- Audit logs for critical actions
+
+Fix security issues.
+
+====================================================
+24. PERFORMANCE TEST
+====================================================
+
+Check:
+- Public website loading speed
+- Admin dashboard speed
+- POS speed
+- Large tables pagination
+- Reports speed
+- Image sizes
+- JS bundle size
+- Console errors
+- API response time
+- Unnecessary API calls
+
+Fix performance bottlenecks.
+
+====================================================
+25. FINAL BUG REPORT + FIXES
+====================================================
+
+After testing, create a bug report table:
+
+Columns:
+- Module
+- Bug found
+- Severity: Critical/High/Medium/Low
+- Steps to reproduce
+- Root cause
+- Fix applied
+- Retested status
+
+Fix all Critical and High bugs first.
+Then fix Medium and Low bugs.
+
+====================================================
+26. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- Build passes
+- App runs without console/server errors
+- Public website routes work
+- Super Admin core flows work
+- Restaurant onboarding works
+- POS → KOT → Payment → Inventory → Reports flow works
+- QR Menu works
+- Review QR works
+- Khana AI credit system works
+- Finance calculations are correct
+- Reports export works
+- Role permissions work
+- Mobile responsive layout works
+- No broken buttons
+- No broken routes
+- No exposed secrets
+- No major performance issue
+- All Critical/High bugs are fixed and retested
+
+First scan and test the full live platform, then list all bugs found, then fix them module by module, then retest the fixed flows.
+```
