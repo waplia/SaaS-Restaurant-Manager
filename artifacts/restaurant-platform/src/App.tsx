@@ -101,6 +101,17 @@ import CustomerSurveyPage from "@/pages/customer-survey";
 import FraudAlertsPage from "@/pages/fraud-alerts";
 import PricingOptimizerPage from "@/pages/pricing-optimizer";
 import PricingRulesPage from "@/pages/pricing-rules";
+import MenuHeatmapPage from "@/pages/menu-heatmap";
+import MenuAbTestsPage from "@/pages/menu-ab-tests";
+import MenuSearchAnalyticsPage from "@/pages/menu-search-analytics";
+import MenuModifierBuilderPage from "@/pages/menu-modifier-builder";
+import MenuTasteProfilesPage from "@/pages/menu-taste-profiles";
+import MenuGroupQrPage from "@/pages/menu-group-qr";
+import MenuSplitCartPage from "@/pages/menu-split-cart";
+import MenuLifecyclePage from "@/pages/menu-lifecycle";
+import MenuLaunchesPage from "@/pages/menu-launches";
+import MenuPhotoApprovalsPage from "@/pages/menu-photo-approvals";
+import MenuBrandAssetsPage from "@/pages/menu-brand-assets";
 import GrowthEnginePage from "@/pages/growth-engine";
 import LoyaltyAnalyticsPage from "@/pages/loyalty-analytics";
 import DocumentsPage from "@/pages/documents";
@@ -284,6 +295,17 @@ function Router() {
       <Route path="/menu-management" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/menu/pricing-optimizer" component={() => <RoleProtectedRoute component={PricingOptimizerPage} allow={["owner", "manager"]} />} />
       <Route path="/menu/pricing-rules" component={() => <RoleProtectedRoute component={PricingRulesPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/heatmap" component={() => <RoleProtectedRoute component={MenuHeatmapPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/ab-tests" component={() => <RoleProtectedRoute component={MenuAbTestsPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/search-analytics" component={() => <RoleProtectedRoute component={MenuSearchAnalyticsPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/modifier-builder" component={() => <RoleProtectedRoute component={MenuModifierBuilderPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/taste-profiles" component={() => <RoleProtectedRoute component={MenuTasteProfilesPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/group-qr" component={() => <RoleProtectedRoute component={MenuGroupQrPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/split-cart" component={() => <RoleProtectedRoute component={MenuSplitCartPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/lifecycle" component={() => <RoleProtectedRoute component={MenuLifecyclePage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/launches" component={() => <RoleProtectedRoute component={MenuLaunchesPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/photo-approvals" component={() => <RoleProtectedRoute component={MenuPhotoApprovalsPage} allow={["owner", "manager"]} />} />
+      <Route path="/menu/brand-assets" component={() => <RoleProtectedRoute component={MenuBrandAssetsPage} allow={["owner", "manager"]} />} />
       <Route path="/growth" component={() => <RoleProtectedRoute component={GrowthEnginePage} allow={["owner", "manager"]} />} />
       <Route path="/competitors" component={() => <RoleProtectedRoute component={CompetitorsPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/comparison" component={() => <RoleProtectedRoute component={CompetitorComparisonPage} allow={["owner", "manager"]} />} />

@@ -67,3 +67,4 @@ export * from "./competitor-tracker";
 export * from "./corporate";
 export * from "./canteen";
 export * from "./surveys";
+export * from "./menu-intelligence";

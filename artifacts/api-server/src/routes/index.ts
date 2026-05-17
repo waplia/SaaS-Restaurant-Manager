@@ -97,6 +97,8 @@ import mysteryAuditsRouter from "./mystery-audits";
 import adminMetricsRouter from "./admin-metrics";
 import competitorTrackerRouter from "./competitor-tracker";
 import corporateRouter from "./corporate";
+import menuIntelligenceRouter from "./menu-intelligence";
+import menuPublicTrackingRouter from "./menu-public-tracking";
 
 const router: IRouter = Router();
 
@@ -104,6 +106,7 @@ router.use(healthRouter);
 router.use(maintenanceGate);
 router.use(authRouter);
 router.use(publicRouter);
+router.use(menuPublicTrackingRouter);
 router.use(publicUpsellRouter);
 router.use(marketingRouter);
 router.use(marketingAdminRouter);
@@ -214,5 +217,6 @@ router.use(barRouter);
 router.use(mysteryAuditsRouter);
 router.use(competitorTrackerRouter);
 router.use(corporateRouter);
+router.use(menuIntelligenceRouter);
 
 export default router;
