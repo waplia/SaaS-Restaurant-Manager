@@ -3,7 +3,7 @@ import * as SecureStorage from "@/lib/secureStorage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { router } from "expo-router";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setUnauthorizedHandler } from "@workspace/api-client-react";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -122,6 +122,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // the latest token, eliminating stale-closure 401s during hydration and
     // immediately after login/token rotation.
     setAuthTokenGetter(() => tokenRef.current);
+    // If any API call returns 401, the token is dead — wipe local state
+    // and bounce to /login so the user doesn't sit on a dashboard full of
+    // zeros caused by silently-failing requests.
+    setUnauthorizedHandler(() => {
+      if (tokenRef.current == null && userRef.current == null) return;
+      tokenRef.current = null;
+      userRef.current = null;
+      setAccessToken(null);
+      setUser(null);
+      SecureStorage.deleteItem("accessToken").catch(() => {});
+      SecureStorage.deleteItem("refreshToken").catch(() => {});
+      SecureStorage.deleteItem("authUser").catch(() => {});
+      try { router.replace("/login"); } catch { /* nav may not be ready */ }
+    });
     async function loadToken() {
       try {
         const token = await SecureStorage.getItem("accessToken");

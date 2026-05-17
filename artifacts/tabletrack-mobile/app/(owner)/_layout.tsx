@@ -6,6 +6,7 @@ import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { AuthGate } from "@/components/AuthGate";
 
 function NativeOwnerTabs() {
   return (
@@ -97,6 +98,9 @@ function ClassicOwnerTabs() {
 }
 
 export default function OwnerLayout() {
-  if (isLiquidGlassAvailable()) return <NativeOwnerTabs />;
-  return <ClassicOwnerTabs />;
+  return (
+    <AuthGate allowedRoles={["owner", "manager", "super_admin"]}>
+      {isLiquidGlassAvailable() ? <NativeOwnerTabs /> : <ClassicOwnerTabs />}
+    </AuthGate>
+  );
 }

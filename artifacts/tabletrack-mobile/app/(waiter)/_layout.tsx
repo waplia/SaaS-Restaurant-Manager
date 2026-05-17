@@ -1,9 +1,11 @@
 import { Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { AuthGate } from "@/components/AuthGate";
 
 export default function WaiterLayout() {
   const colors = useColors();
   return (
+    <AuthGate allowedRoles={["waiter", "kitchen", "owner", "manager", "super_admin"]}>
     <Stack
       screenOptions={{
         headerShown: false,
@@ -23,5 +25,6 @@ export default function WaiterLayout() {
         }}
       />
     </Stack>
+    </AuthGate>
   );
 }

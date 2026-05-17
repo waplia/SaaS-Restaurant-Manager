@@ -3,6 +3,7 @@ export * from "./generated/api.schemas";
 export {
   setBaseUrl,
   setAuthTokenGetter,
+  setUnauthorizedHandler,
   customFetch,
   ApiError,
   ResponseParseError,
