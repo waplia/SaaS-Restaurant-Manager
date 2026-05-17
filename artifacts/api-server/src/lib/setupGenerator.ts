@@ -6,10 +6,14 @@
  * setup-wizard router on "go live".
  */
 import { eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   db,
   restaurantsTable,
   branchesTable,
+  kitchensTable,
+  floorTablesTable,
+  usersTable,
   menusTable,
   menuCategoriesTable,
   menuItemsTable,
@@ -45,6 +49,9 @@ export interface WizardSummary {
   categoriesCreated: number;
   branchesCreated: number;
   itemsImported: number;
+  tablesCount: number;
+  kitchensCount: number;
+  staffCount: number;
   taxApplied: number | null;
   paymentMethods: string[];
   qrMenuStyle: string | null;
@@ -156,31 +163,39 @@ export async function runSetupWizardGeneration(opts: {
     await tx.update(restaurantsTable).set(restaurantUpdates).where(eq(restaurantsTable.id, restaurantId));
 
     // 2. Branches: ensure a main branch exists, then add any extra outlets.
+    //    Dedupe by case-insensitive name so re-running the wizard never
+    //    creates duplicate branches for outlets already saved.
     const existingBranches = await tx.select().from(branchesTable).where(eq(branchesTable.restaurantId, restaurantId));
+    const existingBranchNames = new Set(existingBranches.map(b => b.name.toLowerCase().trim()));
     let branchesCreated = 0;
     if (existingBranches.length === 0) {
       const main = answers.outlets?.[0];
+      const mainName = (main?.name?.trim() || "Main Branch");
       await tx.insert(branchesTable).values({
         restaurantId,
-        name: main?.name ?? "Main Branch",
+        name: mainName,
         address: main?.address ?? null,
         phone: main?.phone ?? null,
         isMain: true,
         isActive: true,
       });
+      existingBranchNames.add(mainName.toLowerCase());
       branchesCreated += 1;
     }
     const extras = (answers.outlets ?? []).slice(existingBranches.length === 0 ? 1 : 0);
     for (const o of extras) {
-      if (!o.name?.trim()) continue;
+      const name = o.name?.trim();
+      if (!name) continue;
+      if (existingBranchNames.has(name.toLowerCase())) continue;
       await tx.insert(branchesTable).values({
         restaurantId,
-        name: o.name.trim(),
+        name,
         address: o.address ?? null,
         phone: o.phone ?? null,
         isMain: false,
         isActive: true,
       });
+      existingBranchNames.add(name.toLowerCase());
       branchesCreated += 1;
     }
 
@@ -303,10 +318,36 @@ export async function runSetupWizardGeneration(opts: {
       }
     }
 
+    // 6. Tally up counts of resources the wizard sub-steps created so the
+    //    Summary screen can show "X tables, Y kitchens, Z team members"
+    //    immediately. We don't modify tables/kitchens/staff here — the
+    //    sub-steps already created them in the correct tenant/restaurant
+    //    via the standard API endpoints; we just count.
+    const [{ count: tablesCount }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(floorTablesTable)
+      .where(eq(floorTablesTable.restaurantId, restaurantId));
+    const [{ count: kitchensCount }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(kitchensTable)
+      .where(eq(kitchensTable.restaurantId, restaurantId));
+    // Exclude the owner account so "Team members" reflects only staff the
+    // wizard's Staff sub-step invited, not the signup user themselves.
+    const [{ count: staffCount }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(usersTable)
+      .where(and(
+        eq(usersTable.restaurantId, restaurantId),
+        sql`${usersTable.role} <> 'owner'`,
+      ));
+
     return {
       categoriesCreated,
       branchesCreated,
       itemsImported,
+      tablesCount,
+      kitchensCount,
+      staffCount,
       taxApplied: typeof taxRate === "number" ? taxRate : null,
       paymentMethods: methods,
       qrMenuStyle: plan.qrMenuStyle?.preset ?? null,

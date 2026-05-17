@@ -93,7 +93,7 @@ export default function DashboardPage() {
     if (onboarding.isOnboarded) return;
     if (sessionStorage.getItem("tt_onboarding_seen") === "1") return;
     sessionStorage.setItem("tt_onboarding_seen", "1");
-    navigate("/onboarding");
+    navigate("/setup-wizard");
   }, [onboarding, navigate]);
 
   const [trendPeriod, setTrendPeriod] = useState("7d");

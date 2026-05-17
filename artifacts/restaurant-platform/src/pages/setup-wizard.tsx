@@ -37,6 +37,9 @@ interface WizardSummary {
   categoriesCreated: number;
   branchesCreated: number;
   itemsImported: number;
+  tablesCount: number;
+  kitchensCount: number;
+  staffCount: number;
   taxApplied: number | null;
   paymentMethods: string[];
   qrMenuStyle: string | null;
@@ -148,14 +151,49 @@ export default function SetupWizardPage() {
     onSuccess: (s) => qc.setQueryData(["setup-wizard", restaurantId], s),
   });
 
+  // Invalidate every query the wizard may have touched so the dashboard +
+  // sidebar counts + tables / kitchens / staff / menu / settings pages all
+  // re-fetch from the server on first render after the wizard, instead of
+  // serving the stale "empty" responses they cached before the wizard ran.
+  async function invalidateWizardCaches() {
+    const keys: (readonly unknown[])[] = [
+      ["restaurant", restaurantId],
+      ["restaurant"],
+      ["branches-list", restaurantId],
+      ["branches", restaurantId],
+      ["branches"],
+      ["kitchens", restaurantId],
+      ["kitchens"],
+      ["tables", restaurantId],
+      ["tables"],
+      ["wizard-tables", restaurantId],
+      ["staff", restaurantId],
+      ["staff"],
+      ["wizard-staff", restaurantId],
+      ["menus", restaurantId],
+      ["menus"],
+      ["categories"],
+      ["items"],
+      ["menu"],
+      ["settings"],
+      ["dashboard"],
+      ["onboarding-state"],
+      ["setup-wizard", restaurantId],
+    ];
+    await Promise.all(keys.map(queryKey => qc.invalidateQueries({ queryKey })));
+  }
+
   const generateMut = useMutation({
     mutationFn: async () => {
       const s = await apiPost<WizardState>(`/restaurants/${restaurantId}/setup-wizard/generate`, { answers });
       await apiPost(`/restaurants/${restaurantId}/setup-wizard/complete`, {});
       return s;
     },
-    onSuccess: (s) => {
+    onSuccess: async (s) => {
       qc.setQueryData(["setup-wizard", restaurantId], s);
+      // Wait for invalidation to fire before we navigate away — otherwise
+      // the dashboard mounts against the still-cached "empty" responses.
+      await invalidateWizardCaches();
       setGenerating(false);
       toast({ title: "You're live!", description: "Khana AI has set up your restaurant." });
       navigate("/dashboard");
@@ -169,7 +207,8 @@ export default function SetupWizardPage() {
 
   const completeMut = useMutation({
     mutationFn: () => apiPost(`/restaurants/${restaurantId}/setup-wizard/complete`, {}),
-    onSuccess: () => {
+    onSuccess: async () => {
+      await invalidateWizardCaches();
       toast({ title: "You're live!", description: "Welcome to KhanaLagao." });
       navigate("/dashboard");
     },
@@ -849,6 +888,9 @@ function SummaryView({ summary, onGoLive, loading, navigate }: { summary: Wizard
     { label: "Menu categories created", value: `${summary.categoriesCreated}`, link: "/menu-management" },
     { label: "Menu items imported", value: summary.itemsImported > 0 ? `${summary.itemsImported}` : "—", link: "/menu-management" },
     { label: "Outlets / branches", value: `${summary.branchesCreated}`, link: "/settings/branches" },
+    { label: "Tables", value: `${summary.tablesCount ?? 0}`, link: "/tables" },
+    { label: "Kitchens", value: `${summary.kitchensCount ?? 0}`, link: "/settings/kitchens" },
+    { label: "Team members", value: `${summary.staffCount ?? 0}`, link: "/staff" },
     { label: "Default tax rate", value: summary.taxApplied != null ? `${summary.taxApplied}%` : "—", link: "/settings/tax" },
     { label: "Payment methods", value: summary.paymentMethods.join(", ") || "—", link: "/settings/payments" },
     { label: "QR menu style", value: summary.qrMenuStyle ?? "—", link: "/settings/qr-menu" },
