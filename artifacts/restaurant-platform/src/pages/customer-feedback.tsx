@@ -135,7 +135,7 @@ export default function CustomerFeedbackPage() {
       const res = await fetch(`/api/public/review-qr/${qrCode}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, tags, comment }),
+        body: JSON.stringify({ rating, tags, comment, sessionToken }),
       });
       const data = await res.json().catch(() => ({}));
       if (data.id) setFeedbackId(data.id);
@@ -151,13 +151,14 @@ export default function CustomerFeedbackPage() {
       const res = await fetch(`/api/public/review-qr/${qrCode}/generate-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, tags, comment, customerName }),
+        body: JSON.stringify({ rating, tags, comment, customerName, sessionToken }),
       });
       const data = await res.json();
       if (data.feedbackId) setFeedbackId(data.feedbackId);
-      if (data.available && typeof data.draft === "string" && data.draft.trim()) {
-        setDraft(data.draft);
-        setDraftEdited(data.draft);
+      const draftText = typeof data.draftText === "string" ? data.draftText : typeof data.draft === "string" ? data.draft : "";
+      if (data.available && draftText.trim()) {
+        setDraft(draftText);
+        setDraftEdited(draftText);
         setPhase("draft");
       } else {
         setDraftFailed(data.reason ?? "unavailable");
@@ -205,7 +206,7 @@ export default function CustomerFeedbackPage() {
       await fetch(`/api/public/review-qr/${qrCode}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, tags, comment, customerName, customerPhone }),
+        body: JSON.stringify({ rating, tags, comment, customerName, customerPhone, sessionToken }),
       });
       setPhase("done");
     } finally {

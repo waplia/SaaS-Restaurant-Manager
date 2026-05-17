@@ -174,6 +174,16 @@ router.post("/public/orders", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
   if (!restaurant) return void res.status(400).json({ error: "Restaurant not found" });
 
+  // Reject orders whose tableId belongs to a different restaurant — without
+  // this check a malicious payload could attach an order to the wrong tenant's
+  // floor table (the per-restaurant scope below would still skip the status
+  // update, but the order row itself would carry a foreign tableId).
+  if (tableId) {
+    const [tableForOrder] = await db.select({ id: floorTablesTable.id }).from(floorTablesTable)
+      .where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    if (!tableForOrder) return void res.status(400).json({ error: "Invalid table for this restaurant" });
+  }
+
   const taxRate = Number(restaurant.taxRate ?? 5) / 100;
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
@@ -1002,36 +1012,67 @@ router.post("/public/review-qr/:qrCode/feedback", async (req, res) => {
   if (!rating) return void res.status(400).json({ error: "Rating required" });
   const tagsRaw = Array.isArray(b.tags) ? (b.tags as unknown[]) : [];
   const tags = tagsRaw.filter((t): t is string => typeof t === "string").slice(0, 8).map((t) => t.slice(0, 40));
-  const [fb] = await db.insert(customerFeedbackTable).values({
-    restaurantId: qr.restaurantId,
-    branchId: qr.branchId,
-    qrId: qr.id,
-    rating,
-    category: typeof b.category === "string" ? b.category.slice(0, 80) : null,
-    comment: typeof b.comment === "string" ? b.comment.slice(0, 4000) : null,
-    customerName: typeof b.customerName === "string" ? b.customerName.slice(0, 200) : null,
-    customerPhone: typeof b.customerPhone === "string" ? b.customerPhone.slice(0, 50) : null,
-    selectedTags: tags,
-    source: "qr",
-  }).returning();
-  await db.insert(reviewQrScansTable).values({
-    qrId: qr.id, restaurantId: qr.restaurantId, event: "submitted_negative", rating,
-  });
-  // Auto-create a recovery task so the manager queue lights up immediately.
-  await db.insert(feedbackRecoveryTasksTable).values({
-    restaurantId: qr.restaurantId,
-    feedbackId: fb.id,
-    category: fb.category,
-    sentiment: rating <= 2 ? "negative" : "neutral",
-    status: "new",
-  });
-  await db.insert(notificationsTable).values({
-    restaurantId: qr.restaurantId,
-    type: "feedback",
-    title: `New ${rating}★ private feedback`,
-    message: (fb.comment ?? "Customer left private feedback").slice(0, 200),
-  });
-  broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+  const sessionToken = typeof b.sessionToken === "string" ? b.sessionToken.slice(0, 80) : "";
+  const isPositive = rating >= qr.positiveThreshold;
+  const category = typeof b.category === "string" ? b.category.slice(0, 80) : null;
+  const comment = typeof b.comment === "string" ? b.comment.slice(0, 4000) : null;
+  const customerName = typeof b.customerName === "string" ? b.customerName.slice(0, 200) : null;
+  const customerPhone = typeof b.customerPhone === "string" ? b.customerPhone.slice(0, 50) : null;
+
+  // Upsert by sessionToken when provided so /rate + /feedback for the same
+  // scan session updates the same row instead of creating duplicates.
+  let fb: typeof customerFeedbackTable.$inferSelect | null = null;
+  if (sessionToken) {
+    const updated = await db.update(customerFeedbackTable).set({
+      rating, category, comment, customerName, customerPhone, selectedTags: tags,
+    }).where(and(eq(customerFeedbackTable.qrId, qr.id), eq(customerFeedbackTable.sessionToken, sessionToken))).returning();
+    if (updated.length > 0) fb = updated[0]!;
+  }
+  if (!fb) {
+    const [created] = await db.insert(customerFeedbackTable).values({
+      restaurantId: qr.restaurantId,
+      branchId: qr.branchId,
+      qrId: qr.id,
+      rating,
+      category,
+      comment,
+      customerName,
+      customerPhone,
+      selectedTags: tags,
+      sessionToken: sessionToken || null,
+      source: "qr",
+    }).returning();
+    fb = created!;
+  }
+
+  if (!isPositive) {
+    // Only log the "submitted_negative" event and spin up a recovery task for
+    // low ratings — positives going via this endpoint (AI off path) shouldn't
+    // ping managers as if it were a complaint.
+    await db.insert(reviewQrScansTable).values({
+      qrId: qr.id, restaurantId: qr.restaurantId, event: "submitted_negative", rating,
+      metadata: { feedbackId: fb.id },
+    });
+    const [existingTask] = await db.select({ id: feedbackRecoveryTasksTable.id })
+      .from(feedbackRecoveryTasksTable)
+      .where(eq(feedbackRecoveryTasksTable.feedbackId, fb.id));
+    if (!existingTask) {
+      await db.insert(feedbackRecoveryTasksTable).values({
+        restaurantId: qr.restaurantId,
+        feedbackId: fb.id,
+        category: fb.category,
+        sentiment: rating <= 2 ? "negative" : "neutral",
+        status: "new",
+      });
+      await db.insert(notificationsTable).values({
+        restaurantId: qr.restaurantId,
+        type: "feedback",
+        title: `New ${rating}★ private feedback`,
+        message: ((fb.comment ?? tags.join(", ")) || "Customer left private feedback").slice(0, 200),
+      });
+      broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+    }
+  }
   res.status(201).json({ ok: true, id: fb.id });
 });
 
