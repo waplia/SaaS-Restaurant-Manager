@@ -4,7 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
+const API_BASE = "/api";
 
 function apiPublicGet<T>(path: string, token?: string): Promise<T> {
   const url = token ? `${API_BASE}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : `${API_BASE}${path}`;

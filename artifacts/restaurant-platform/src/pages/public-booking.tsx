@@ -3,7 +3,7 @@ import { useParams } from "wouter";
 import { CalendarDays, Clock, Users, CheckCircle2, AlertCircle, Search, ArrowLeft, Phone, Mail, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
+const API_BASE = "/api";
 
 async function publicGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);

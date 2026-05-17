@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { MapPin, Phone, Mail, Clock, Instagram, Facebook, Twitter, ChevronRight, Calendar, AlertCircle, UtensilsCrossed } from "lucide-react";
 
-const API_BASE = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "") + "/api";
+const API_BASE = "/api";
 
 interface MenuItem { id: number; name: string; description: string | null; price: string; imageUrl: string | null }
 interface MenuCategory { id: number; name: string; items: MenuItem[] }
