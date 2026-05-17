@@ -54,3 +54,183 @@ id = "KpMlPapwOeaTRG0l4xFDV"
 uri = "file://artifacts/marketing-site/src/assets/analytics.png"
 type = "image"
 title = "Data analytics graph"
+
+[[generated]]
+id = "5Rm02DofCjbo2l2nIK0jb"
+uri = "file://attached_assets/menu_seed/item_01_samosa.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "e2_6bjYtiTK4YbxMVuZ0R"
+uri = "file://attached_assets/menu_seed/item_02_paneer_tikka.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "9vxVlmboVGO9PQ9OkAg9h"
+uri = "file://attached_assets/menu_seed/item_03_chicken_tikka.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "LszxuqSn_PuhDpUupbwci"
+uri = "file://attached_assets/menu_seed/item_04_spring_rolls.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "H_kdjJjSenNYDH7tGzfw4"
+uri = "file://attached_assets/menu_seed/item_05_soup.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "4v51PVzY_jzKaeGQUgc_6"
+uri = "file://attached_assets/menu_seed/item_06_butter_chicken.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "d84qrjV2Ia3yedQ87w0wu"
+uri = "file://attached_assets/menu_seed/item_07_paneer_butter_masala.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "FNHmuV8298q-Wv-Mp4ed3"
+uri = "file://attached_assets/menu_seed/item_08_dal_makhani.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "FzHv4Kfp-04nqVnCVPx2G"
+uri = "file://attached_assets/menu_seed/item_09_chicken_biryani.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "oeKeu_FkVpHd35ol08Z9F"
+uri = "file://attached_assets/menu_seed/item_10_veg_biryani.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "e1rrF0tH0Z5YiSTRJH7MN"
+uri = "file://attached_assets/menu_seed/item_11_palak_paneer.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "cc_Kg4EMQ4HreK-_58IS-"
+uri = "file://attached_assets/menu_seed/item_12_fish_curry.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Py7yw8O1A3uZBAe0KI-9U"
+uri = "file://attached_assets/menu_seed/item_13_naan.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "YKWHgTJwL2Y-CgOkU3Si-"
+uri = "file://attached_assets/menu_seed/item_14_butter_naan.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "oLSTU32YbgW_zbUkKdpDe"
+uri = "file://attached_assets/menu_seed/item_15_garlic_naan.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "QZXUDuBB-uZuqrYqrao3-"
+uri = "file://attached_assets/menu_seed/item_16_tandoori_roti.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "DEv6iNWeQwPmWsq3kc1dC"
+uri = "file://attached_assets/menu_seed/item_17_steamed_rice.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "fCcYw1h_Jjdz3oQAN5RNL"
+uri = "file://attached_assets/menu_seed/item_18_sweet_lassi.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "StlXWNHk-VlxzPVIHECqC"
+uri = "file://attached_assets/menu_seed/item_19_mango_lassi.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "IvCRYk1rYtEdZMX0H0Rou"
+uri = "file://attached_assets/menu_seed/item_20_masala_chai.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ZYA2qETmKA2ntC0RM3zcY"
+uri = "file://attached_assets/menu_seed/item_21_lime_soda.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "6gcvFuV_517D-UWuRemf1"
+uri = "file://attached_assets/menu_seed/item_22_water.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "UUnvMM_Prgu3BnQ4Cb9rS"
+uri = "file://attached_assets/menu_seed/item_23_gulab_jamun.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "nm2IOCUo-f2QIH10olZSp"
+uri = "file://attached_assets/menu_seed/item_24_kheer.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "bTDFX7EUpuA0mpBd5jjs6"
+uri = "file://attached_assets/menu_seed/item_25_ice_cream.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "3KUcwzpOJgec_mW76sSlo"
+uri = "file://attached_assets/menu_seed/addon_raita.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "uZOT_3SErE-z_btFlY3Pi"
+uri = "file://attached_assets/menu_seed/addon_mint_chutney.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "SDDr4VoShyBMFn6On7Z2N"
+uri = "file://attached_assets/menu_seed/addon_salan.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "tm_g7vYFZ1pG9h4drtTtw"
+uri = "file://attached_assets/menu_seed/addon_egg.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "pM3rMcGDrBEBvzgWBvs5I"
+uri = "file://attached_assets/menu_seed/addon_chocolate_sauce.png"
+type = "image"
+title = "generated_image"
