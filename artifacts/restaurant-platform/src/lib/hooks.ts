@@ -3224,7 +3224,7 @@ export function useDeleteAdminNotificationTemplate() {
 }
 
 // ─── Admin email (Task #27) ───────────────────────────────────────
-export type EmailDriver = "smtp" | "sendgrid" | "mailgun" | "ses" | "custom";
+export type EmailDriver = "smtp" | "sendgrid" | "mailgun" | "ses" | "resend" | "postmark" | "custom";
 export type EmailLogStatus = "queued" | "sent" | "delivered" | "bounced" | "failed";
 
 export interface AdminEmailProvider {
@@ -4636,3 +4636,131 @@ export function useDeleteVendorInvoice() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-invoices"] }),
   });
 }
+// ─── Email Center: Sequences, Automations, Marketing Templates, Suppressions, etc. (Task #414) ───
+export interface EmailSequenceRow { id: number; key: string; name: string; description: string; trigger: string; isEnabled: boolean; stopRules: Array<{ type: string; value?: unknown }>; createdAt: string; updatedAt: string; }
+export interface EmailSequenceStepRow { id: number; sequenceId: number; position: number; delayHours: number; templateKey: string; conditionJson: Record<string, unknown> | null; isEnabled: boolean; label: string; }
+export interface EmailSequenceEnrollmentRow { id: number; sequenceId: number; tenantId: number | null; recipientEmail: string; recipientName: string | null; currentStep: number; status: string; stopReason: string | null; nextRunAt: string; lastRunAt: string | null; enrolledAt: string; completedAt: string | null; }
+export function useAdminEmailSequences() { return useQuery({ queryKey: ["admin","email","sequences"], queryFn: () => apiGet<{ data: EmailSequenceRow[] }>("/admin/email/sequences") }); }
+export function useAdminEmailSequence(id: number | null) { return useQuery({ queryKey: ["admin","email","sequences", id], queryFn: () => apiGet<{ data: EmailSequenceRow & { steps: EmailSequenceStepRow[] } }>(`/admin/email/sequences/${id}`), enabled: !!id }); }
+export function useCreateAdminEmailSequence() { const qc = useQueryClient(); return useMutation({ mutationFn: (b: Partial<EmailSequenceRow>) => apiPost<EmailSequenceRow>("/admin/email/sequences", b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","sequences"] }) }); }
+export function useUpdateAdminEmailSequence() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, ...b }: Partial<EmailSequenceRow> & { id: number }) => apiPut<EmailSequenceRow>(`/admin/email/sequences/${id}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","sequences"] }) }); }
+export function useDeleteAdminEmailSequence() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiDelete(`/admin/email/sequences/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","sequences"] }) }); }
+export function useAddAdminEmailSequenceStep() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, ...b }: Partial<EmailSequenceStepRow> & { id: number }) => apiPost<EmailSequenceStepRow>(`/admin/email/sequences/${id}/steps`, b), onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["admin","email","sequences", v.id] }) }); }
+export function useUpdateAdminEmailSequenceStep() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ stepId, ...b }: Partial<EmailSequenceStepRow> & { stepId: number }) => apiPut<EmailSequenceStepRow>(`/admin/email/sequence-steps/${stepId}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","sequences"] }) }); }
+export function useDeleteAdminEmailSequenceStep() { const qc = useQueryClient(); return useMutation({ mutationFn: (stepId: number) => apiDelete(`/admin/email/sequence-steps/${stepId}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","sequences"] }) }); }
+export function useAdminEmailSequenceEnrollments(id: number | null) { return useQuery({ queryKey: ["admin","email","sequences", id, "enrollments"], queryFn: () => apiGet<{ data: EmailSequenceEnrollmentRow[] }>(`/admin/email/sequences/${id}/enrollments`), enabled: !!id }); }
+export function useRunAdminEmailSequenceTick() { const qc = useQueryClient(); return useMutation({ mutationFn: () => apiPost<{ ok: boolean }>("/admin/email/sequences/run-tick-now"), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email"] }) }); }
+
+export interface EmailAutomationRow { id: number; name: string; description: string; trigger: string; conditionJson: Record<string, unknown>; actions: Array<{ type: string; params?: Record<string, unknown> }>; isEnabled: boolean; runCount: number; lastRunAt: string | null; createdAt: string; updatedAt: string; }
+export interface EmailAutomationRunRow { id: number; automationId: number; trigger: string; context: Record<string, unknown>; matched: boolean; actionsRun: number; status: string; error: string | null; createdAt: string; }
+export function useAdminEmailAutomations() { return useQuery({ queryKey: ["admin","email","automations"], queryFn: () => apiGet<{ data: EmailAutomationRow[] }>("/admin/email/automations") }); }
+export function useCreateAdminEmailAutomation() { const qc = useQueryClient(); return useMutation({ mutationFn: (b: Partial<EmailAutomationRow>) => apiPost<EmailAutomationRow>("/admin/email/automations", b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","automations"] }) }); }
+export function useUpdateAdminEmailAutomation() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, ...b }: Partial<EmailAutomationRow> & { id: number }) => apiPut<EmailAutomationRow>(`/admin/email/automations/${id}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","automations"] }) }); }
+export function useDeleteAdminEmailAutomation() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiDelete(`/admin/email/automations/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","automations"] }) }); }
+export function useAdminEmailAutomationRuns(id: number | null) { return useQuery({ queryKey: ["admin","email","automations", id, "runs"], queryFn: () => apiGet<{ data: EmailAutomationRunRow[] }>(`/admin/email/automations/${id}/runs`), enabled: !!id }); }
+export function useTestAdminEmailAutomation() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, context }: { id: number; context: Record<string, unknown> }) => apiPost<{ matched: boolean; actionsRun: number; status: string }>(`/admin/email/automations/${id}/test`, { context }), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","automations"] }) }); }
+
+export interface EmailMarketingTemplateRow { id: number; key: string; name: string; category: string; subject: string; preheader: string; body: string; ctaLabel: string | null; ctaUrl: string | null; brandColor: string; businessTypes: string[]; planRestrictions: number[]; isGlobal: boolean; isHidden: boolean; isAiGenerated: boolean; createdAt: string; updatedAt: string; }
+export function useAdminEmailMarketingTemplates(category?: string) { return useQuery({ queryKey: ["admin","email","marketing-templates", category ?? "all"], queryFn: () => apiGet<{ data: EmailMarketingTemplateRow[] }>(`/admin/email/marketing-templates${category ? `?category=${encodeURIComponent(category)}` : ""}`) }); }
+export function useCreateAdminEmailMarketingTemplate() { const qc = useQueryClient(); return useMutation({ mutationFn: (b: Partial<EmailMarketingTemplateRow>) => apiPost<EmailMarketingTemplateRow>("/admin/email/marketing-templates", b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","marketing-templates"] }) }); }
+export function useUpdateAdminEmailMarketingTemplate() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, ...b }: Partial<EmailMarketingTemplateRow> & { id: number }) => apiPut<EmailMarketingTemplateRow>(`/admin/email/marketing-templates/${id}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","marketing-templates"] }) }); }
+export function useDeleteAdminEmailMarketingTemplate() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiDelete(`/admin/email/marketing-templates/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","marketing-templates"] }) }); }
+
+export interface EmailSuppressionRow { id: number; email: string; scope: string; reason: string; source: string | null; tenantId: number | null; restaurantId: number | null; notes: string | null; createdAt: string; }
+export function useAdminEmailSuppressions(search?: string) { return useQuery({ queryKey: ["admin","email","suppressions", search ?? ""], queryFn: () => apiGet<{ data: EmailSuppressionRow[] }>(`/admin/email/suppressions${search ? `?search=${encodeURIComponent(search)}` : ""}`) }); }
+export function useCreateAdminEmailSuppression() { const qc = useQueryClient(); return useMutation({ mutationFn: (b: Partial<EmailSuppressionRow>) => apiPost<EmailSuppressionRow>("/admin/email/suppressions", b), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","suppressions"] }) }); }
+export function useDeleteAdminEmailSuppression() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiDelete(`/admin/email/suppressions/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","suppressions"] }) }); }
+
+export interface EmailUnsubscribeRow { id: number; email: string; restaurantId: number | null; scope: string; reason: string | null; source: string; createdAt: string; }
+export function useAdminEmailUnsubscribes() { return useQuery({ queryKey: ["admin","email","unsubscribes"], queryFn: () => apiGet<{ data: EmailUnsubscribeRow[] }>("/admin/email/unsubscribes") }); }
+
+export interface EmailTemplateVariableRow { id: number; domain: string; name: string; description: string; example: string; }
+export function useAdminEmailVariables() { return useQuery({ queryKey: ["admin","email","variables"], queryFn: () => apiGet<{ data: EmailTemplateVariableRow[] }>("/admin/email/variables") }); }
+// Variables registry is read-only per Task #414 spec — no create/delete hooks.
+
+export function useGenerateAdminEmailAi() { return useMutation({ mutationFn: (b: { action: "compose" | "rewrite" | "subject_lines" | "shorten" | "expand"; prompt?: string; subject?: string; body?: string; tone?: string; audience?: string; brandName?: string; language?: string }) => apiPost<{ subject: string; preheader: string; body: string; subjectVariants?: string[]; provider?: string; model?: string }>("/admin/email/ai/generate", b) }); }
+
+export interface EmailTemplateVersionRow { id: number; templateId: number; versionNumber: number; subject: string; preheader: string; body: string; plainText: string; ctaLabel: string | null; ctaUrl: string | null; changedBy: number | null; createdAt: string; }
+export function useAdminEmailTemplateVersions(id: number | null) { return useQuery({ queryKey: ["admin","email","templates", id, "versions"], queryFn: () => apiGet<{ data: EmailTemplateVersionRow[] }>(`/admin/email/templates/${id}/versions`), enabled: !!id }); }
+export function useSaveAdminEmailTemplateVersion() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiPost<EmailTemplateVersionRow>(`/admin/email/templates/${id}/versions`), onSuccess: (_d, id) => qc.invalidateQueries({ queryKey: ["admin","email","templates", id, "versions"] }) }); }
+export function useRollbackAdminEmailTemplate() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, versionId }: { id: number; versionId: number }) => apiPost(`/admin/email/templates/${id}/rollback/${versionId}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["admin","email","templates"] }) }); }
+
+export interface EmailDashboardData { counts: { total30: number; sent30: number; failed30: number; opens30: number; clicks30: number; since7Total: number; activeSequences: number; activeAutomations: number; enrollments: number; unsubs30: number }; byDay: Array<{ day: string; sent: number; failed: number; opened: number; clicked: number }>; topTemplates: Array<{ templateKey: string | null; sent: number; opened: number }>; }
+export function useAdminEmailDashboard() { return useQuery({ queryKey: ["admin","email","dashboard"], queryFn: () => apiGet<EmailDashboardData>("/admin/email/dashboard"), refetchInterval: 30_000 }); }
+export interface AdminEmailCampaignRow { id: number; tenantId: number | null; restaurantId: number | null; name: string; subject: string; status: string; segment: string; sentCount: number; failedCount: number; scheduledAt: string | null; sentAt: string | null; updatedAt: string; }
+export function useAdminEmailCampaigns(params?: { status?: string; tenantId?: number }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.tenantId) qs.set("tenantId", String(params.tenantId));
+  const s = qs.toString();
+  return useQuery({ queryKey: ["admin","email","campaigns", s], queryFn: () => apiGet<{ data: AdminEmailCampaignRow[] }>(`/admin/email/campaigns${s ? `?${s}` : ""}`) });
+}
+export interface AdminEmailCampaignAnalytics { summary: { total: number; sent: number; scheduled: number; draft: number; failed: number; recipients: number; bounces: number }; top: AdminEmailCampaignRow[]; }
+export function useAdminEmailCampaignAnalytics() { return useQuery({ queryKey: ["admin","email","campaigns","analytics"], queryFn: () => apiGet<AdminEmailCampaignAnalytics>("/admin/email/campaigns/analytics"), refetchInterval: 60_000 }); }
+
+export interface EmailPerTenantReportRow { tenantId: number; tenantName: string; sent: number; delivered: number; opened: number; clicked: number; bounced: number; failed: number; unsubscribed: number; openRate: number; clickRate: number; }
+export function useAdminEmailPerTenantReport() { return useQuery({ queryKey: ["admin","email","reports","per-tenant"], queryFn: () => apiGet<{ data: EmailPerTenantReportRow[] }>("/admin/email/reports/per-tenant") }); }
+export function useAdminEmailLogEvents(id: number | null) { return useQuery({ queryKey: ["admin","email","logs", id, "events"], queryFn: () => apiGet<{ data: Array<{ id: number; eventType: string; url: string | null; userAgent: string | null; ip: string | null; createdAt: string }> }>(`/admin/email/logs/${id}/events`), enabled: !!id }); }
+
+// ─── Restaurant-scoped email settings & campaigns (Task #414) ───
+// Server resolves restaurant from the authenticated user, so paths are /email/* (not /restaurants/:id/email/*).
+export interface RestaurantEmailSettings { restaurantId: number; marketingEnabled: boolean; followUpEnabled: boolean; fromName: string; replyTo: string | null; footerText: string; businessAddress: string; consentRequired: boolean; birthdayEnabled: boolean; feedbackEnabled: boolean; reviewEnabled: boolean; inactiveEnabled: boolean; updatedAt: string; }
+export interface RestaurantEmailUsage { tenantId: number; year: number; month: number; transactionalSent: number; marketingSent: number; automationSent: number; sequenceSent: number; }
+export interface RestaurantEmailLimits { marketingEnabled: boolean; sequencesEnabled: boolean; automationsEnabled: boolean; aiEnabled: boolean; monthlyMarketingCap: number | null; monthlyTransactionalCap: number | null; }
+export function useRestaurantEmailSettings() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["restaurants", RID, "email", "settings"],
+    queryFn: async () => {
+      const r = await apiGet<{ data: RestaurantEmailSettings; limits: RestaurantEmailLimits | null; usage: RestaurantEmailUsage | null }>("/email/settings");
+      return r.data;
+    },
+    enabled: !!RID,
+  });
+}
+export function useRestaurantEmailSettingsWithLimits() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["restaurants", RID, "email", "settings", "full"],
+    queryFn: () => apiGet<{ data: RestaurantEmailSettings; limits: RestaurantEmailLimits | null; usage: RestaurantEmailUsage | null }>("/email/settings"),
+    enabled: !!RID,
+  });
+}
+export function useUpdateRestaurantEmailSettings() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (b: Partial<RestaurantEmailSettings>) => {
+      const r = await apiPut<{ data: RestaurantEmailSettings }>("/email/settings", b);
+      return r.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["restaurants", RID, "email", "settings"] });
+      qc.invalidateQueries({ queryKey: ["restaurants", RID, "email", "settings", "full"] });
+    },
+  });
+}
+export function useRestaurantEmailMarketingTemplates(category?: string) { const RID = useRestaurantId(); return useQuery({ queryKey: ["restaurants", RID, "email","marketing-templates", category ?? "all"], queryFn: () => apiGet<{ data: EmailMarketingTemplateRow[] }>(`/email/marketing-templates${category ? `?category=${encodeURIComponent(category)}` : ""}`), enabled: !!RID }); }
+
+export interface EmailCampaignRow { id: number; restaurantId: number; tenantId: number | null; name: string; marketingTemplateId: number | null; segment: string; audienceFilter: Record<string, unknown>; subject: string; preheader: string; body: string; ctaLabel: string | null; ctaUrl: string | null; brandColor: string; status: string; scheduledAt: string | null; startedAt: string | null; completedAt: string | null; recipientCount: number; sentCount: number; deliveredCount: number; openedCount: number; clickedCount: number; unsubscribedCount: number; bouncedCount: number; failedCount: number; blockedReason: string | null; createdAt: string; updatedAt: string; }
+export function useRestaurantEmailCampaigns() { const RID = useRestaurantId(); return useQuery({ queryKey: ["restaurants", RID, "email","campaigns"], queryFn: () => apiGet<{ data: EmailCampaignRow[] }>("/email/campaigns"), enabled: !!RID }); }
+export function useCreateRestaurantEmailCampaign() { const RID = useRestaurantId(); const qc = useQueryClient(); return useMutation({ mutationFn: (b: Partial<EmailCampaignRow>) => apiPost<EmailCampaignRow>("/email/campaigns", b), onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurants", RID, "email","campaigns"] }) }); }
+export function useUpdateRestaurantEmailCampaign() { const RID = useRestaurantId(); const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, ...b }: Partial<EmailCampaignRow> & { id: number }) => apiPut<EmailCampaignRow>(`/email/campaigns/${id}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurants", RID, "email","campaigns"] }) }); }
+export function useDeleteRestaurantEmailCampaign() { const RID = useRestaurantId(); const qc = useQueryClient(); return useMutation({ mutationFn: (id: number) => apiDelete(`/email/campaigns/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurants", RID, "email","campaigns"] }) }); }
+export function useSendRestaurantEmailCampaignTest() { return useMutation({ mutationFn: ({ id, to }: { id: number; to: string }) => apiPost<{ ok: boolean; logId?: number; error?: string }>(`/email/campaigns/${id}/test`, { to }) }); }
+export function usePreviewRestaurantEmailCampaignAudience() {
+  return useMutation({
+    mutationFn: ({ id, segment, audienceFilter }: { id: number; segment?: string; audienceFilter?: Record<string, unknown> }) =>
+      apiPost<{ count: number; sample: Array<{ email: string; name: string | null }> }>(`/email/campaigns/${id}/audience-preview`, { segment, audienceFilter }),
+  });
+}
+export function useSendRestaurantEmailCampaign() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: number }) => apiPost<{ ok: boolean; queued: number }>(`/email/campaigns/${id}/send`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["restaurants", RID, "email", "campaigns"] }),
+  });
+}
+export function useRestaurantEmailCampaignReport(id: number | null) { const RID = useRestaurantId(); return useQuery({ queryKey: ["restaurants", RID, "email","campaigns", id, "report"], queryFn: () => apiGet<{ campaign: EmailCampaignRow; stats: { opened: number; clicked: number; sent: number; failed: number }; recipients: Array<{ id: number; email: string; status: string; reason: string | null; sentAt: string | null }> }>(`/email/campaigns/${id}/report`), enabled: !!RID && !!id }); }
+export function useSetCustomerMarketingConsent() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, optIn, source }: { id: number; optIn: boolean; source?: string }) => apiPost<{ ok: boolean }>(`/email/customers/${id}/marketing-consent`, { optIn, source }), onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }) }); }

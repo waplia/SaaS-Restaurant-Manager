@@ -353,6 +353,7 @@ export function createStripeWebhookRouter(): Router {
     }
 
     try {
+      const { runAutomationsForEvent } = await import("../lib/emailAutomations");
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantId = Number(session.metadata?.tenantId);
@@ -368,28 +369,37 @@ export function createStripeWebhookRouter(): Router {
             subscriptionEndsAt: endsAt,
             updatedAt: new Date(),
           }).where(eq(tenantsTable.id, tenantId));
+          void runAutomationsForEvent("subscription.activated", { tenantId, planId });
         }
       } else if (event.type === "invoice.paid") {
-        const invoice = event.data.object as unknown as { subscription?: string | null; customer?: string | null };
+        const invoice = event.data.object as unknown as { subscription?: string | null; customer?: string | null; amount_paid?: number | null };
         if (invoice.customer) {
           const sub = invoice.subscription
             ? await stripe.subscriptions.retrieve(String(invoice.subscription)) as unknown as { current_period_end?: number }
             : null;
           const endsAt = sub?.current_period_end ? new Date(sub.current_period_end * 1000) : null;
-          await db.update(tenantsTable).set({
+          const [t] = await db.update(tenantsTable).set({
             planStatus: "active",
             subscriptionEndsAt: endsAt,
             updatedAt: new Date(),
-          }).where(eq(tenantsTable.stripeCustomerId, String(invoice.customer)));
+          }).where(eq(tenantsTable.stripeCustomerId, String(invoice.customer))).returning({ id: tenantsTable.id });
+          if (t?.id) void runAutomationsForEvent("payment.succeeded", { tenantId: t.id, amount: invoice.amount_paid ?? null });
+        }
+      } else if (event.type === "invoice.payment_failed") {
+        const invoice = event.data.object as unknown as { customer?: string | null; amount_due?: number | null };
+        if (invoice.customer) {
+          const [t] = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(eq(tenantsTable.stripeCustomerId, String(invoice.customer)));
+          if (t?.id) void runAutomationsForEvent("payment.failed", { tenantId: t.id, amount: invoice.amount_due ?? null });
         }
       } else if (event.type === "customer.subscription.deleted") {
         const sub = event.data.object as unknown as { customer?: string | null };
         if (sub.customer) {
-          await db.update(tenantsTable).set({
+          const [t] = await db.update(tenantsTable).set({
             planStatus: "cancelled",
             stripeSubscriptionId: null,
             updatedAt: new Date(),
-          }).where(eq(tenantsTable.stripeCustomerId, String(sub.customer)));
+          }).where(eq(tenantsTable.stripeCustomerId, String(sub.customer))).returning({ id: tenantsTable.id });
+          if (t?.id) void runAutomationsForEvent("subscription.cancelled", { tenantId: t.id });
         }
       }
     } catch (err) {

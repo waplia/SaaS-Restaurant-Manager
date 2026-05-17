@@ -195,6 +195,20 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
     appName: "Khana Lagao",
   }, { tenantId: tenant.id });
 
+  // Email Center automations: fire user.signup + trial.started events.
+  void (async () => {
+    try {
+      const { runAutomationsForEvent } = await import("../lib/emailAutomations");
+      const ctx = {
+        userId: user.id, userEmail: user.email, userName: user.name,
+        tenantId: tenant.id, restaurantId: restaurant.id,
+        restaurantName: restaurant.name, trialEndsAt: trialEndsAt.toISOString(),
+      };
+      await runAutomationsForEvent("user.signup", ctx);
+      await runAutomationsForEvent("trial.started", ctx);
+    } catch { /* never block signup */ }
+  })();
+
   res.status(201).json({
     accessToken,
     refreshToken,

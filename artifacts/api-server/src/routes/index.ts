@@ -55,6 +55,8 @@ import systemHealthRouter from "./system-health";
 import apiManagementRouter from "./api-management";
 import publicV1Router from "./public-v1";
 import adminEmailRouter from "./admin-email";
+import adminEmailCenterRouter from "./admin-email-center";
+import emailTrackingRouter from "./email-tracking";
 import maintenanceRouter from "./maintenance";
 import adminSettingsRouter, { publicAppSettingsRouter } from "./admin-settings";
 import { maintenanceMode, maintenanceGate } from "../middleware/maintenanceMode";
@@ -132,6 +134,10 @@ router.use(bakeryPublicRouter);
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.
 router.use(publicV1Router);
 
+// Public email tracking endpoints (open pixel, click redirect, unsubscribe) —
+// must be BEFORE the JWT authenticate gate. Task #414.
+router.use(emailTrackingRouter);
+
 router.use(authenticate);
 router.use(maintenanceMode);
 
@@ -187,6 +193,7 @@ router.use(supportTicketsRouter);
 router.use(systemHealthRouter);
 router.use(apiManagementRouter);
 router.use(adminEmailRouter);
+router.use(adminEmailCenterRouter);
 router.use(maintenanceRouter);
 router.use(whatsappRouter);
 router.use(auditLogsRouter);

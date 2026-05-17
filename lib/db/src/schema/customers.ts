@@ -33,6 +33,12 @@ export const customersTable = pgTable("customers", {
   whatsappOptInSource: text("whatsapp_opt_in_source"),
   firstOrderAt: timestamp("first_order_at"),
   lastVisitAt: timestamp("last_visit_at"),
+  // Task #414 — Email Center: per-customer marketing consent for email.
+  emailMarketingOptIn: boolean("email_marketing_opt_in").notNull().default(false),
+  emailMarketingOptInSource: text("email_marketing_opt_in_source"),
+  emailMarketingOptInAt: timestamp("email_marketing_opt_in_at"),
+  emailUnsubscribed: boolean("email_unsubscribed").notNull().default(false),
+  emailUnsubscribedAt: timestamp("email_unsubscribed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

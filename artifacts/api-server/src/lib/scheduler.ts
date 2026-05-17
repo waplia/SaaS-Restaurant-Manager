@@ -388,6 +388,20 @@ export function startScheduler(): void {
     }
   });
 
+  // Email Center (Task #414) — every minute: advance sequence steps and
+  // dispatch any scheduled marketing campaigns whose time has arrived.
+  registerCron("email-center-tick", "* * * * *", "Every minute: advance email sequences and dispatch due scheduled marketing campaigns.");
+  trackCron("email_center_tick", "* * * * *", async () => {
+    try {
+      const { runSequenceTick } = await import("./emailSequences");
+      const { runScheduledCampaignTick } = await import("./emailCampaigns");
+      await runSequenceTick();
+      await runScheduledCampaignTick();
+    } catch (err) {
+      logger.error({ err }, "[email-center] tick failed");
+    }
+  });
+
   registerCron("portion-drift-nightly", "30 3 * * *", "Nightly portion-drift sweep at 03:30 IST: compares expected vs actual ingredient consumption and creates alerts for >10% drift per restaurant.");
   trackCron("portion_drift_nightly", "30 3 * * *", async () => {
     try {

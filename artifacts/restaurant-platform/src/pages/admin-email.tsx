@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Mail, Plus, Pencil, Trash2, Star, Send, RotateCcw, X, CheckCircle2, AlertTriangle, Eye, FileText, Server,
+  GitBranch, Zap, Sparkles, Ban, BarChart3, Tag, Megaphone as MegaphoneIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +21,22 @@ import {
   useAdminEmailLogs, useRetryAdminEmailLog, useBulkRetryAdminEmailLogs,
   useSendAdminEmailAnnouncement,
   type AdminEmailLogFilters,
+  useAdminEmailSequences, useCreateAdminEmailSequence, useUpdateAdminEmailSequence, useDeleteAdminEmailSequence,
+  useAdminEmailSequence, useAddAdminEmailSequenceStep, useDeleteAdminEmailSequenceStep, useRunAdminEmailSequenceTick,
+  useAdminEmailAutomations, useCreateAdminEmailAutomation, useUpdateAdminEmailAutomation, useDeleteAdminEmailAutomation,
+  useAdminEmailMarketingTemplates, useCreateAdminEmailMarketingTemplate, useUpdateAdminEmailMarketingTemplate, useDeleteAdminEmailMarketingTemplate,
+  useAdminEmailSuppressions, useCreateAdminEmailSuppression, useDeleteAdminEmailSuppression,
+  useAdminEmailUnsubscribes,
+  useAdminEmailVariables,
+  useGenerateAdminEmailAi,
+  useAdminEmailDashboard, useAdminEmailPerTenantReport,
+  useAdminEmailCampaigns, useAdminEmailCampaignAnalytics,
+  type EmailSequenceRow, type EmailAutomationRow, type EmailMarketingTemplateRow, type EmailSuppressionRow,
 } from "@/lib/hooks";
 import { Megaphone } from "lucide-react";
 
 const DRIVER_LABEL: Record<EmailDriver, string> = {
-  smtp: "SMTP", sendgrid: "SendGrid", mailgun: "Mailgun", ses: "Amazon SES", custom: "Custom HTTP",
+  smtp: "SMTP", sendgrid: "SendGrid", mailgun: "Mailgun", ses: "Amazon SES", resend: "Resend", postmark: "Postmark", custom: "Custom HTTP",
 };
 
 const STATUS_BADGE: Record<EmailLogStatus, string> = {
@@ -35,30 +47,557 @@ const STATUS_BADGE: Record<EmailLogStatus, string> = {
   failed: "bg-red-500/15 text-red-700",
 };
 
+type EmailTab = "dashboard" | "providers" | "templates" | "marketing" | "sequences" | "automations" | "campaigns" | "suppressions" | "variables" | "reports" | "logs";
+
 export default function AdminEmail() {
-  const [tab, setTab] = useState<"providers" | "templates" | "logs">("providers");
+  const [tab, setTab] = useState<EmailTab>("dashboard");
   return (
     <div className="space-y-4">
-      <div className="border-b border-border flex gap-1">
+      <div className="border-b border-border flex gap-1 overflow-x-auto">
         {[
+          { id: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
           { id: "providers" as const, label: "Providers", icon: Server },
           { id: "templates" as const, label: "Templates", icon: FileText },
+          { id: "marketing" as const, label: "Marketing Library", icon: MegaphoneIcon },
+          { id: "sequences" as const, label: "Sequences", icon: GitBranch },
+          { id: "automations" as const, label: "Automations", icon: Zap },
+          { id: "campaigns" as const, label: "Campaigns", icon: MegaphoneIcon },
+          { id: "suppressions" as const, label: "Suppressions", icon: Ban },
+          { id: "variables" as const, label: "Variables", icon: Tag },
+          { id: "reports" as const, label: "Reports", icon: BarChart3 },
           { id: "logs" as const, label: "Logs", icon: Mail },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
               tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}>
             <t.icon className="w-4 h-4" />{t.label}
           </button>
         ))}
       </div>
+      {tab === "dashboard" && <DashboardTab />}
       {tab === "providers" && <ProvidersTab />}
       {tab === "templates" && <TemplatesTab />}
+      {tab === "marketing" && <MarketingLibraryTab />}
+      {tab === "sequences" && <SequencesTab />}
+      {tab === "automations" && <AutomationsTab />}
+      {tab === "campaigns" && <CampaignsTab />}
+      {tab === "suppressions" && <SuppressionsTab />}
+      {tab === "variables" && <VariablesTab />}
+      {tab === "reports" && <ReportsTab />}
       {tab === "logs" && <LogsTab />}
     </div>
   );
 }
+
+// ─── Dashboard ─────────────────────────────────────────────────
+function DashboardTab() {
+  const { data, isLoading } = useAdminEmailDashboard();
+  if (isLoading || !data) return <div className="p-8 text-center text-muted-foreground text-sm">Loading dashboard…</div>;
+  const c = data.counts;
+  const cards: Array<{ label: string; value: number; tone?: string }> = [
+    { label: "Sent (30d)", value: c.sent30 },
+    { label: "Failed", value: c.failed30, tone: "text-red-700" },
+    { label: "Opened", value: c.opens30, tone: "text-blue-700" },
+    { label: "Clicked", value: c.clicks30, tone: "text-violet-700" },
+    { label: "Unsubscribed", value: c.unsubs30, tone: "text-amber-700" },
+    { label: "Active sequences", value: c.activeSequences },
+    { label: "Active automations", value: c.activeAutomations },
+    { label: "Enrollments", value: c.enrollments },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {cards.map(card => (
+          <div key={card.label} className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground">{card.label}</p>
+            <p className={`text-2xl font-semibold ${card.tone ?? "text-foreground"}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-card border border-border rounded-xl p-4">
+        <p className="text-sm font-medium mb-3">Top templates (30d)</p>
+        {data.topTemplates.length === 0 ? <p className="text-xs text-muted-foreground">No sends yet.</p> :
+          <ul className="space-y-2 text-sm">
+            {data.topTemplates.map(t => (
+              <li key={t.templateKey ?? "(none)"} className="flex justify-between"><span className="font-mono text-xs">{t.templateKey ?? "(none)"}</span><Badge variant="outline">{t.sent} sent · {t.opened} opened</Badge></li>
+            ))}
+          </ul>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Marketing Library ─────────────────────────────────────────
+function MarketingLibraryTab() {
+  const { data } = useAdminEmailMarketingTemplates();
+  const create = useCreateAdminEmailMarketingTemplate();
+  const update = useUpdateAdminEmailMarketingTemplate();
+  const del = useDeleteAdminEmailMarketingTemplate();
+  const [editing, setEditing] = useState<EmailMarketingTemplateRow | "new" | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const { toast } = useToast();
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Global marketing email library. Restaurants pick from these when authoring campaigns.</p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setAiOpen(true)} className="gap-2"><Sparkles className="w-4 h-4" />AI compose</Button>
+          <Button size="sm" onClick={() => setEditing("new")} className="gap-2"><Plus className="w-4 h-4" />New</Button>
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {(data?.data ?? []).map(t => (
+          <div key={t.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium">{t.name}</p>
+                <Badge variant="outline">{t.category}</Badge>
+                {t.isAiGenerated && <Badge className="bg-violet-500/10 text-violet-700 border-violet-500/20">AI</Badge>}
+                {t.isHidden && <Badge variant="secondary">Hidden</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">{t.subject}</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(t)}><Pencil className="w-4 h-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: t.id, isHidden: !t.isHidden })}>{t.isHidden ? "Show" : "Hide"}</Button>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { if (confirm("Delete?")) del.mutate(t.id); }}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        ))}
+        {(data?.data ?? []).length === 0 && <div className="bg-muted/30 border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">No marketing templates yet.</div>}
+      </div>
+      {editing && <MarketingTemplateEditor row={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSave={async (b) => {
+        if (editing === "new") await create.mutateAsync(b); else await update.mutateAsync({ id: editing.id, ...b });
+        setEditing(null); toast({ title: "Saved" });
+      }} />}
+      {aiOpen && <AiComposeDialog onClose={() => setAiOpen(false)} onAccept={(r) => { setAiOpen(false); setEditing({ id: 0, key: "", name: r.subject.slice(0, 30), category: "general", subject: r.subject, preheader: r.preheader, body: r.body, ctaLabel: r.ctaLabel ?? null, ctaUrl: null, brandColor: "#f97316", businessTypes: [], planRestrictions: [], isGlobal: true, isHidden: false, isAiGenerated: true, createdAt: "", updatedAt: "" } as EmailMarketingTemplateRow); }} />}
+    </div>
+  );
+}
+
+function MarketingTemplateEditor({ row, onClose, onSave }: { row: EmailMarketingTemplateRow | null; onClose: () => void; onSave: (b: Partial<EmailMarketingTemplateRow>) => Promise<void> }) {
+  const [name, setName] = useState(row?.name ?? "");
+  const [key, setKey] = useState(row?.key ?? "");
+  const [category, setCategory] = useState(row?.category ?? "general");
+  const [subject, setSubject] = useState(row?.subject ?? "");
+  const [preheader, setPreheader] = useState(row?.preheader ?? "");
+  const [body, setBody] = useState(row?.body ?? "");
+  const [ctaLabel, setCtaLabel] = useState(row?.ctaLabel ?? "");
+  const [ctaUrl, setCtaUrl] = useState(row?.ctaUrl ?? "");
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>{row?.id ? "Edit" : "New"} marketing template</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Row2><Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Key"><Input value={key} onChange={e => setKey(e.target.value)} /></Field></Row2>
+          <Field label="Category">
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{["birthday","anniversary","weekend","festival","new_item","win_back","loyalty","feedback","review","membership","tiffin","catering","general"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field label="Subject"><Input value={subject} onChange={e => setSubject(e.target.value)} /></Field>
+          <Field label="Preheader"><Input value={preheader} onChange={e => setPreheader(e.target.value)} /></Field>
+          <Field label="Body (HTML)"><Textarea rows={8} value={body} onChange={e => setBody(e.target.value)} /></Field>
+          <Row2><Field label="CTA label"><Input value={ctaLabel ?? ""} onChange={e => setCtaLabel(e.target.value)} /></Field><Field label="CTA URL"><Input value={ctaUrl ?? ""} onChange={e => setCtaUrl(e.target.value)} /></Field></Row2>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onSave({ name, key: key || name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), category, subject, preheader, body, ctaLabel: ctaLabel || null, ctaUrl: ctaUrl || null })}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AiComposeDialog({ onClose, onAccept }: { onClose: () => void; onAccept: (r: { subject: string; preheader: string; body: string; ctaLabel?: string }) => void }) {
+  const gen = useGenerateAdminEmailAi();
+  const [goal, setGoal] = useState("");
+  const [tone, setTone] = useState("friendly");
+  const [audience, setAudience] = useState("returning customers");
+  const [result, setResult] = useState<{ subject: string; preheader: string; body: string; ctaLabel?: string } | null>(null);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>AI email composer</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Field label="Goal"><Textarea rows={3} value={goal} placeholder="e.g. Promote our weekend brunch menu" onChange={e => setGoal(e.target.value)} /></Field>
+          <Row2><Field label="Tone"><Input value={tone} onChange={e => setTone(e.target.value)} /></Field><Field label="Audience"><Input value={audience} onChange={e => setAudience(e.target.value)} /></Field></Row2>
+          <Button onClick={async () => { const r = await gen.mutateAsync({ action: "compose", prompt: goal, tone, audience }); setResult({ subject: r.subject, preheader: r.preheader, body: r.body }); }} disabled={!goal || gen.isPending}><Sparkles className="w-4 h-4 mr-2" />{gen.isPending ? "Generating…" : "Generate"}</Button>
+          {result && (<div className="border border-border rounded-lg p-3 text-sm space-y-2 bg-muted/30">
+            <p><span className="font-semibold">Subject:</span> {result.subject}</p>
+            <p className="text-xs text-muted-foreground">{result.preheader}</p>
+            <div className="text-xs whitespace-pre-wrap font-mono max-h-48 overflow-auto">{result.body}</div>
+          </div>)}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          {result && <Button onClick={() => onAccept(result)}>Use this</Button>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Sequences ─────────────────────────────────────────────────
+function SequencesTab() {
+  const { data } = useAdminEmailSequences();
+  const create = useCreateAdminEmailSequence();
+  const update = useUpdateAdminEmailSequence();
+  const del = useDeleteAdminEmailSequence();
+  const tick = useRunAdminEmailSequenceTick();
+  const [editing, setEditing] = useState<EmailSequenceRow | "new" | null>(null);
+  const [stepsFor, setStepsFor] = useState<number | null>(null);
+  const { toast } = useToast();
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Multi-step lifecycle sequences (e.g. signup welcome, demo follow-up, trial nudge).</p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => tick.mutate(undefined, { onSuccess: () => toast({ title: "Tick triggered" }) })}><RotateCcw className="w-4 h-4 mr-2" />Run tick</Button>
+          <Button size="sm" onClick={() => setEditing("new")}><Plus className="w-4 h-4 mr-2" />New sequence</Button>
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {(data?.data ?? []).map(s => (
+          <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium">{s.name}</p>
+                <Badge variant="outline">{s.trigger}</Badge>
+                {!s.isEnabled && <Badge variant="secondary">Paused</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{s.description}</p>
+            </div>
+            <Switch checked={s.isEnabled} onCheckedChange={(v) => update.mutate({ id: s.id, isEnabled: v })} />
+            <Button size="sm" variant="ghost" onClick={() => setStepsFor(s.id)}>Steps</Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(s)}><Pencil className="w-4 h-4" /></Button>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { if (confirm("Delete?")) del.mutate(s.id); }}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        ))}
+        {(data?.data ?? []).length === 0 && <div className="bg-muted/30 border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">No sequences yet.</div>}
+      </div>
+      {editing && <SequenceEditor row={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSave={async (b) => {
+        if (editing === "new") await create.mutateAsync(b); else await update.mutateAsync({ id: editing.id, ...b });
+        setEditing(null); toast({ title: "Saved" });
+      }} />}
+      {stepsFor && <SequenceStepsDialog id={stepsFor} onClose={() => setStepsFor(null)} />}
+    </div>
+  );
+}
+
+function SequenceEditor({ row, onClose, onSave }: { row: EmailSequenceRow | null; onClose: () => void; onSave: (b: Partial<EmailSequenceRow>) => Promise<void> }) {
+  const [name, setName] = useState(row?.name ?? "");
+  const [key, setKey] = useState(row?.key ?? "");
+  const [trigger, setTrigger] = useState(row?.trigger ?? "manual");
+  const [description, setDescription] = useState(row?.description ?? "");
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{row ? "Edit" : "New"} sequence</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Row2><Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Key"><Input value={key} onChange={e => setKey(e.target.value)} /></Field></Row2>
+          <Field label="Trigger">
+            <Select value={trigger} onValueChange={setTrigger}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{["signup","demo_lead_created","trial_started","payment_failed","inactive_restaurant","manual"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field label="Description"><Textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} /></Field>
+        </div>
+        <DialogFooter><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={() => onSave({ name, key: key || name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), trigger, description })}>Save</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SequenceStepsDialog({ id, onClose }: { id: number; onClose: () => void }) {
+  const { data } = useAdminEmailSequence(id);
+  const addStep = useAddAdminEmailSequenceStep();
+  const delStep = useDeleteAdminEmailSequenceStep();
+  const [templateKey, setTemplateKey] = useState("");
+  const [delayHours, setDelayHours] = useState(24);
+  const [label, setLabel] = useState("");
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>Steps for {data?.data.name}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          {(data?.data.steps ?? []).map((step) => (
+            <div key={step.id} className="border border-border rounded-lg p-3 flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium">#{step.position + 1} {step.label || step.templateKey}</p>
+                <p className="text-xs text-muted-foreground">After {step.delayHours}h · template <code className="font-mono">{step.templateKey}</code></p>
+              </div>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delStep.mutate(step.id)}><Trash2 className="w-4 h-4" /></Button>
+            </div>
+          ))}
+          <div className="border border-dashed rounded-lg p-3 space-y-2">
+            <p className="text-xs font-medium uppercase text-muted-foreground">Add step</p>
+            <Row2><Field label="Template key"><Input value={templateKey} onChange={e => setTemplateKey(e.target.value)} /></Field><Field label="Delay (h)"><Input type="number" value={delayHours} onChange={e => setDelayHours(Number(e.target.value))} /></Field></Row2>
+            <Field label="Label"><Input value={label} onChange={e => setLabel(e.target.value)} /></Field>
+            <Button size="sm" onClick={async () => { await addStep.mutateAsync({ id, templateKey, delayHours, label }); setTemplateKey(""); setLabel(""); }} disabled={!templateKey}>Add</Button>
+          </div>
+        </div>
+        <DialogFooter><Button onClick={onClose}>Done</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Automations ───────────────────────────────────────────────
+function AutomationsTab() {
+  const { data } = useAdminEmailAutomations();
+  const create = useCreateAdminEmailAutomation();
+  const update = useUpdateAdminEmailAutomation();
+  const del = useDeleteAdminEmailAutomation();
+  const [editing, setEditing] = useState<EmailAutomationRow | "new" | null>(null);
+  const { toast } = useToast();
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Event-triggered automations (e.g. when a tenant downgrades, when a kitchen ticket fails).</p>
+        <Button size="sm" onClick={() => setEditing("new")}><Plus className="w-4 h-4 mr-2" />New automation</Button>
+      </div>
+      <div className="grid gap-3">
+        {(data?.data ?? []).map(a => (
+          <div key={a.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium">{a.name}</p>
+                <Badge variant="outline">{a.trigger}</Badge>
+                {!a.isEnabled && <Badge variant="secondary">Paused</Badge>}
+                <Badge>{a.runCount} runs</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
+            </div>
+            <Switch checked={a.isEnabled} onCheckedChange={(v) => update.mutate({ id: a.id, isEnabled: v })} />
+            <Button size="sm" variant="ghost" onClick={() => setEditing(a)}><Pencil className="w-4 h-4" /></Button>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { if (confirm("Delete?")) del.mutate(a.id); }}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        ))}
+        {(data?.data ?? []).length === 0 && <div className="bg-muted/30 border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">No automations yet.</div>}
+      </div>
+      {editing && <AutomationEditor row={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSave={async (b) => {
+        if (editing === "new") await create.mutateAsync(b); else await update.mutateAsync({ id: editing.id, ...b });
+        setEditing(null); toast({ title: "Saved" });
+      }} />}
+    </div>
+  );
+}
+
+function AutomationEditor({ row, onClose, onSave }: { row: EmailAutomationRow | null; onClose: () => void; onSave: (b: Partial<EmailAutomationRow>) => Promise<void> }) {
+  const [name, setName] = useState(row?.name ?? "");
+  const [description, setDescription] = useState(row?.description ?? "");
+  const [trigger, setTrigger] = useState(row?.trigger ?? "");
+  const [conditionJson, setConditionJson] = useState(JSON.stringify(row?.conditionJson ?? {}, null, 2));
+  const [actions, setActions] = useState(JSON.stringify(row?.actions ?? [{ type: "send_template", params: { key: "", to: "" } }], null, 2));
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>{row ? "Edit" : "New"} automation</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Row2><Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Trigger event"><Input value={trigger} placeholder="user.signup" onChange={e => setTrigger(e.target.value)} /></Field></Row2>
+          <Field label="Description"><Input value={description} onChange={e => setDescription(e.target.value)} /></Field>
+          <Field label="Condition (JSON)"><Textarea rows={4} value={conditionJson} onChange={e => setConditionJson(e.target.value)} /></Field>
+          <Field label="Actions (JSON array)"><Textarea rows={6} value={actions} onChange={e => setActions(e.target.value)} /></Field>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => {
+            let cj = {}, ac = [];
+            try { cj = JSON.parse(conditionJson); ac = JSON.parse(actions); } catch { alert("Invalid JSON"); return; }
+            onSave({ name, description, trigger, conditionJson: cj, actions: ac });
+          }}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Suppressions ──────────────────────────────────────────────
+function CampaignsTab() {
+  const [status, setStatus] = useState<string>("");
+  const list = useAdminEmailCampaigns(status ? { status } : undefined);
+  const analytics = useAdminEmailCampaignAnalytics();
+  const rows = list.data?.data ?? [];
+  const sum = analytics.data?.summary;
+  const cards: Array<{ label: string; value: number; tone?: string }> = sum ? [
+    { label: "Total", value: sum.total },
+    { label: "Sent", value: sum.sent, tone: "text-emerald-700" },
+    { label: "Scheduled", value: sum.scheduled, tone: "text-amber-700" },
+    { label: "Draft", value: sum.draft },
+    { label: "Failed", value: sum.failed, tone: "text-red-700" },
+    { label: "Recipients", value: sum.recipients, tone: "text-blue-700" },
+    { label: "Bounces", value: sum.bounces, tone: "text-orange-700" },
+  ] : [];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+        {cards.map(c => (
+          <div key={c.label} className="bg-card border border-border rounded-xl p-3">
+            <p className="text-xs text-muted-foreground">{c.label}</p>
+            <p className={`text-xl font-semibold ${c.tone ?? "text-foreground"}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm font-medium">Campaigns (all tenants)</p>
+          <select value={status} onChange={e => setStatus(e.target.value)} className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="sending">Sending</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </div>
+        {rows.length === 0 ? <p className="text-xs text-muted-foreground">No campaigns yet.</p> :
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr><th className="text-left py-2">Name</th><th className="text-left">Tenant</th><th className="text-left">Status</th><th className="text-left">Segment</th><th className="text-right">Sent</th><th className="text-right">Failed</th><th className="text-left">Updated</th></tr>
+              </thead>
+              <tbody>
+                {rows.map(c => (
+                  <tr key={c.id} className="border-t border-border">
+                    <td className="py-2 font-medium">{c.name}<div className="text-xs text-muted-foreground">{c.subject}</div></td>
+                    <td>{c.tenantId ?? "—"}</td>
+                    <td><Badge variant="outline">{c.status}</Badge></td>
+                    <td className="text-xs">{c.segment}</td>
+                    <td className="text-right">{c.sentCount}</td>
+                    <td className="text-right text-red-700">{c.failedCount}</td>
+                    <td className="text-xs text-muted-foreground">{new Date(c.updatedAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>}
+      </div>
+    </div>
+  );
+}
+
+function SuppressionsTab() {
+  const [search, setSearch] = useState("");
+  const { data } = useAdminEmailSuppressions(search);
+  const unsubs = useAdminEmailUnsubscribes();
+  const create = useCreateAdminEmailSuppression();
+  const del = useDeleteAdminEmailSuppression();
+  const [email, setEmail] = useState("");
+  const [scope, setScope] = useState<"all" | "marketing" | "transactional">("marketing");
+  const [reason, setReason] = useState("manual");
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Input className="max-w-xs" placeholder="Search email…" value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+        <p className="text-sm font-medium">Add suppression</p>
+        <Row2>
+          <Field label="Email"><Input value={email} onChange={e => setEmail(e.target.value)} /></Field>
+          <Field label="Scope"><Select value={scope} onValueChange={(v) => setScope(v as typeof scope)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["all","marketing","transactional"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></Field>
+        </Row2>
+        <Row2>
+          <Field label="Reason"><Input value={reason} onChange={e => setReason(e.target.value)} /></Field>
+          <Field label=""><Button onClick={() => { create.mutate({ email, scope, reason }); setEmail(""); }} disabled={!email}>Add</Button></Field>
+        </Row2>
+      </div>
+      <div className="grid gap-2">
+        {(data?.data ?? []).map(s => (
+          <div key={s.id} className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
+            <Ban className="w-4 h-4 text-orange-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">{s.email}</p>
+              <p className="text-xs text-muted-foreground">{s.scope} · {s.reason} · {new Date(s.createdAt).toLocaleDateString()}</p>
+            </div>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del.mutate(s.id)}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        ))}
+        {(data?.data ?? []).length === 0 && <div className="bg-muted/30 border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">No suppressions.</div>}
+      </div>
+      <div>
+        <p className="text-sm font-medium mb-2">Recent unsubscribes</p>
+        <div className="grid gap-2">
+          {(unsubs.data?.data ?? []).slice(0, 20).map(u => (
+            <div key={u.id} className="bg-muted/30 border border-border rounded-lg p-2 px-3 text-xs flex justify-between">
+              <span>{u.email}</span>
+              <span className="text-muted-foreground">{u.scope}{u.restaurantId ? ` · R#${u.restaurantId}` : ""} · {new Date(u.createdAt).toLocaleDateString()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Variables ─────────────────────────────────────────────────
+function VariablesTab() {
+  const { data } = useAdminEmailVariables();
+  const grouped = useMemo(() => {
+    const g: Record<string, Array<{ id: number; domain: string; name: string; description: string; example: string }>> = {};
+    for (const v of data?.data ?? []) { g[v.domain] ??= []; g[v.domain].push(v); }
+    return g;
+  }, [data]);
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Read-only registry of template merge variables. Used by the template editor, AI generator, and the live preview. Variables are platform-managed to keep template rendering consistent.</p>
+      {Object.keys(grouped).sort().map(d => (
+        <div key={d}>
+          <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">{d}</p>
+          <div className="grid gap-1">
+            {grouped[d].map(v => (
+              <div key={v.id} className="bg-card border border-border rounded p-2 px-3 flex items-center gap-3 text-sm">
+                <code className="font-mono text-xs bg-muted px-1.5 rounded">{`{{${v.name}}}`}</code>
+                <span className="flex-1 text-muted-foreground">{v.description}</span>
+                <span className="text-xs text-muted-foreground">e.g. {v.example}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {(data?.data ?? []).length === 0 && <div className="bg-muted/30 border border-dashed rounded-xl p-8 text-center text-sm text-muted-foreground">No variables registered.</div>}
+    </div>
+  );
+}
+
+// ─── Reports ───────────────────────────────────────────────────
+function ReportsTab() {
+  const { data, isLoading } = useAdminEmailPerTenantReport();
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground text-sm">Loading reports…</div>;
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Per-tenant email volume and engagement (last 30 days).</p>
+      <div className="overflow-x-auto bg-card border border-border rounded-xl">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40"><tr>{["Tenant","Sent","Delivered","Opened","Clicked","Bounced","Failed","Unsub","Open %","Click %"].map(h => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+          <tbody>
+            {(data?.data ?? []).map(r => (
+              <tr key={r.tenantId} className="border-t border-border">
+                <td className="px-3 py-2">{r.tenantName}</td>
+                <td className="px-3 py-2">{r.sent}</td>
+                <td className="px-3 py-2">{r.delivered}</td>
+                <td className="px-3 py-2">{r.opened}</td>
+                <td className="px-3 py-2">{r.clicked}</td>
+                <td className="px-3 py-2">{r.bounced}</td>
+                <td className="px-3 py-2">{r.failed}</td>
+                <td className="px-3 py-2">{r.unsubscribed}</td>
+                <td className="px-3 py-2">{(r.openRate * 100).toFixed(1)}%</td>
+                <td className="px-3 py-2">{(r.clickRate * 100).toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(data?.data ?? []).length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">No tenant activity in the last 30 days.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────
+function Row2({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-2 gap-3">{children}</div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>; }
 
 // ─── Providers ───────────────────────────────────────────────────
 function ProvidersTab() {
@@ -237,6 +776,12 @@ function ProviderEditor({ row, onClose }: { row: AdminEmailProvider | null; onCl
               <div className="space-y-1.5"><Label>Secret access key</Label><Input type="password" value={cfg.secretKey ?? ""} onChange={e => setCfg("secretKey", e.target.value)} placeholder={isNew ? "" : "Leave blank to keep existing"} /></div>
               <div className="space-y-1.5 col-span-2"><Label>Region</Label><Input value={cfg.region ?? ""} onChange={e => setCfg("region", e.target.value)} placeholder="us-east-1" /></div>
             </div>
+          )}
+          {driver === "resend" && (
+            <div className="p-3 bg-muted/30 rounded-lg space-y-1.5"><Label>API key</Label><Input type="password" value={cfg.apiKey ?? ""} onChange={e => setCfg("apiKey", e.target.value)} placeholder={isNew ? "re_…" : "Leave blank to keep existing"} /></div>
+          )}
+          {driver === "postmark" && (
+            <div className="p-3 bg-muted/30 rounded-lg space-y-1.5"><Label>Server token</Label><Input type="password" value={cfg.serverToken ?? cfg.apiKey ?? ""} onChange={e => setCfg("serverToken", e.target.value)} placeholder={isNew ? "" : "Leave blank to keep existing"} /></div>
           )}
           {driver === "custom" && (
             <div className="grid gap-3 p-3 bg-muted/30 rounded-lg">

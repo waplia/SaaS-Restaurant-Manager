@@ -28,6 +28,11 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   trialDays: integer("trial_days").notNull().default(14),
   smsMonthlyLimit: integer("sms_monthly_limit").notNull().default(0),
   whatsappMonthlyLimit: integer("whatsapp_monthly_limit").notNull().default(0),
+  // Task #414 — Email Center plan limits.
+  emailMonthlyLimit: integer("email_monthly_limit").notNull().default(1000),
+  emailMarketingMonthlyLimit: integer("email_marketing_monthly_limit").notNull().default(0),
+  emailActiveSequencesLimit: integer("email_active_sequences_limit").notNull().default(0),
+  emailCustomTemplatesLimit: integer("email_custom_templates_limit").notNull().default(0),
   currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
   featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),

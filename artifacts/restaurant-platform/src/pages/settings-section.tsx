@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { SettingsLayout, SETTINGS_GROUPS, type SectionKey } from "@/components/settings/SettingsLayout";
 import { SettingForm, Field, Row, Toggle, Select, ListEditor } from "@/components/settings/SettingForm";
-import { useRestaurantInfo, useSubscription, useRestaurantId, useUpdateRestaurant } from "@/lib/hooks";
+import { useRestaurantInfo, useSubscription, useRestaurantId, useUpdateRestaurant, useRestaurantEmailSettings, useUpdateRestaurantEmailSettings, type RestaurantEmailSettings } from "@/lib/hooks";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Trash2, ExternalLink, Lock, FileDown } from "lucide-react";
 import { Link } from "wouter";
 import { ImageUploadField } from "@/components/ImageUploadField";
@@ -529,6 +531,67 @@ interface EmailCfg {
   };
 }
 function EmailSection() {
+  return (
+    <div className="space-y-6">
+      <RestaurantEmailCommunicationCard />
+      <EmailSectionLegacy />
+    </div>
+  );
+}
+
+function RestaurantEmailCommunicationCard() {
+  const { data, isLoading } = useRestaurantEmailSettings();
+  const update = useUpdateRestaurantEmailSettings();
+  const { toast } = useToast();
+  if (isLoading || !data) {
+    return <div className="border border-border rounded-lg p-4 text-sm text-muted-foreground">Loading email communication settings…</div>;
+  }
+  const Toggle = ({ k, label, hint }: { k: keyof RestaurantEmailSettings; label: string; hint?: string }) => (
+    <label className="flex items-start justify-between gap-3 py-2 cursor-pointer">
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      </div>
+      <Switch checked={Boolean(data[k])} onCheckedChange={(v) => update.mutate({ [k]: v } as Partial<RestaurantEmailSettings>, { onSuccess: () => toast({ title: "Saved" }) })} />
+    </label>
+  );
+  return (
+    <div className="border border-border rounded-xl p-5 space-y-3 bg-card">
+      <div>
+        <p className="text-sm font-semibold">Communication → Email</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Marketing &amp; follow-up email controls for this restaurant. Plan limits apply.</p>
+      </div>
+      <Toggle k="marketingEnabled" label="Marketing emails" hint="Send opt-in marketing campaigns to your customers." />
+      <Toggle k="followUpEnabled" label="Follow-up automations" hint="Birthday wishes, win-back, feedback requests and reviews." />
+      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+        <Toggle k="birthdayEnabled" label="Birthday emails" />
+        <Toggle k="feedbackEnabled" label="Feedback requests" />
+        <Toggle k="reviewEnabled" label="Review requests" />
+        <Toggle k="inactiveEnabled" label="Win-back emails" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+        <div className="space-y-1">
+          <Label className="text-xs">From name</Label>
+          <Input value={data.fromName} onChange={e => update.mutate({ fromName: e.target.value })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Reply-to address</Label>
+          <Input value={data.replyTo ?? ""} onChange={e => update.mutate({ replyTo: e.target.value })} />
+        </div>
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">Footer text (required for marketing)</Label>
+          <Input value={data.footerText} onChange={e => update.mutate({ footerText: e.target.value })} />
+        </div>
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">Business address (required for marketing)</Label>
+          <Input value={data.businessAddress} onChange={e => update.mutate({ businessAddress: e.target.value })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailSectionLegacy() {
   const defaults: EmailCfg = {
     senderName: "KhanaLagao", replyTo: "",
     templates: {

@@ -170,6 +170,14 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "staff_table_optimization", label: "Table Optimization",          description: "Optimize floor plans and reservations to lift covers per shift.",                      category: "staff",                   defaultValue: false, defaultPlans: ["pro","enterprise","addon"], sidebarHref: "/staff/table-optimization" },
   { key: "staff_tips",               label: "Tip Pooling & Distribution",  description: "Pool, split and audit tips across staff per shift with payslip lines.",               category: "staff",                   defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/staff/tips" },
   { key: "staff_leaderboard_tv",     label: "Staff Leaderboard TV",        description: "Live leaderboard for the staff TV: sales, upsell wins and accuracy.",                  category: "staff",                   defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/staff/leaderboard-tv" },
+
+  // ──────────────────────────────────────────────────────────────────
+  // Email Center (Task #414)
+  // ──────────────────────────────────────────────────────────────────
+  { key: "email_marketing",            label: "Marketing email campaigns",   description: "Send opt-in marketing email campaigns to customers with templates and segments.",      category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "email_follow_up_automation", label: "Follow-up email sequences",   description: "Multi-step automated email sequences and trigger-based automations.",                category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "ai_email_generation",        label: "AI email writing assistant",  description: "AI-assisted authoring of subjects, bodies and variants for marketing emails.",        category: "growth",                  defaultValue: false, defaultPlans: ["pro","enterprise"] },
+  { key: "email_advanced_analytics",   label: "Email advanced analytics",    description: "Per-template, per-tenant open/click/unsub reports and click-map.",                    category: "growth",                  defaultValue: false, defaultPlans: ["pro","enterprise"] },
 ];
 
 export const PLAN_QUANTITY_FEATURES: PlanQuantityFeature[] = [
