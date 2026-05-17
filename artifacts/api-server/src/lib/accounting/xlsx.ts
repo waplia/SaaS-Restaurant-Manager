@@ -1,4 +1,9 @@
-import archiver, { type Archiver } from "archiver";
+import { createRequire } from "module";
+import type { Archiver } from "archiver";
+const archiver = createRequire(import.meta.url)("archiver") as (
+  format: "zip",
+  options?: { zlib?: { level?: number } },
+) => Archiver;
 
 /**
  * Minimal XLSX (Office Open XML SpreadsheetML) writer using `archiver`.
