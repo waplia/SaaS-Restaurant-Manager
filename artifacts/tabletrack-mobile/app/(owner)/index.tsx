@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform, Alert, Linking,
+  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -227,35 +227,19 @@ export default function OwnerDashboard() {
     }
   }, [user]);
 
-  // Tap-through helpers. Where a dedicated mobile screen exists, navigate;
-  // otherwise deep-link into the web admin app via Linking (the established
-  // pattern used throughout this app for features that aren't yet on mobile).
-  const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "";
-  const openWeb = (path: string, label: string) => () => {
-    if (!webBaseUrl) {
-      Alert.alert(label, `${label} isn't available on mobile yet.`);
-      return;
-    }
-    Linking.openURL(`${webBaseUrl}${path}`).catch(() => {
-      Alert.alert(label, `Couldn't open ${label.toLowerCase()} on the web.`);
-    });
-  };
+  // Tap-through helpers — every action navigates to an internal mobile
+  // screen. "New Order" goes to the tables grid so the user picks a table,
+  // which then opens the waiter order-create flow.
   const openOrders = () => router.push("/(owner)/orders" as never);
+  const openNewOrder = () => router.push("/(owner)/tables" as never);
   const openKitchen = () => router.push("/(owner)/kitchen" as never);
   const openExpenses = () => router.push("/(owner)/expenses" as never);
-  const openCashRegister = openWeb("/cash-register", "Cash register");
-  const openAttendance = openWeb("/staff", "Attendance");
-  const openLowStock = openWeb("/inventory", "Inventory");
-  const openApprovals = () => {
-    Alert.alert(
-      "Approvals",
-      "Discount/void/refund approvals aren't available yet — this is coming soon.",
-    );
-  };
-  const openFraud = openWeb("/fraud-alerts", "Fraud alerts");
-  const openComplaints = openWeb("/review-qrs", "Complaints & reviews");
+  const openCashRegister = () => router.push("/(owner)/finance" as never);
+  const openAttendance = () => router.push("/(owner)/attendance" as never);
+  const openLowStock = () => router.push("/(owner)/inventory" as never);
+  const openApprovals = () => router.push("/(owner)/approvals" as never);
+  const openFraud = () => router.push("/(owner)/alerts" as never);
+  const openComplaints = () => router.push("/(owner)/feedback" as never);
 
   // ---------- Derived values ----------
   const ds = summaryQ.data as DashboardSummary | undefined;
@@ -384,7 +368,7 @@ export default function OwnerDashboard() {
 
       {/* Quick actions */}
       <View style={styles.quickGrid}>
-        <QuickAction icon="add-circle" label="New Order" onPress={openOrders} />
+        <QuickAction icon="add-circle" label="New Order" onPress={openNewOrder} />
         <QuickAction icon="cash" label={cashOpen ? "Close Cash" : "Open Cash"} onPress={openCashRegister} />
         <QuickAction icon="time" label="Attendance" onPress={openAttendance} />
         <QuickAction icon="cube" label="Low Stock" onPress={openLowStock} />

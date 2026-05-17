@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -62,6 +63,7 @@ export default function TablesScreen() {
                   return (
                     <Pressable
                       key={t.id}
+                      onPress={() => router.push(`/(waiter)/order/${t.id}` as never)}
                       style={({ pressed }) => [
                         styles.tile,
                         { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },

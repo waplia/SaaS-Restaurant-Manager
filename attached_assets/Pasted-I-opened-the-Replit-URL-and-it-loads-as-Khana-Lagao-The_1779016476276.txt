@@ -1,0 +1,658 @@
+I opened the Replit URL and it loads as **“Khana Lagao — The Operating System for Modern Restaurants”**, but I could not visually inspect every section through the browser renderer here. Based on your requirement, the issue is clear: the site should not just be text/cards; it needs **real product visuals, UI screenshots, motion/video sections, live order demos, realistic dashboard mockups, and modern SaaS storytelling**. Use this prompt:
+
+```text
+Audit and upgrade the complete KhanaLagao public website UI/UX, visuals, product media, screenshots, animations, content, and conversion flow.
+
+Current issue:
+The website is built, but it still does not feel fully real, premium, visual, and modern enough. It needs better product screenshots, realistic dashboard mockups, live order flow visuals, small demo videos/animations, richer feature sections, better UI hierarchy, better content, stronger trust, and more modern SaaS-style design.
+
+Important:
+- Do not break existing app, admin, super admin, restaurant dashboard, login, backend, or routes.
+- Work only on public marketing website and public pages.
+- Keep brand name KhanaLagao.
+- Keep positioning: Restaurant OS for Modern Food Businesses.
+- Make the website look like a world-class SaaS product, not a basic template.
+- Every section should feel real, visual, product-led, and conversion-focused.
+- All pages should remain fast and responsive.
+
+Brand:
+KhanaLagao
+
+Tagline:
+Restaurant OS for Modern Food Businesses
+
+Core message:
+POS, QR Menu, Kitchen/KDS, Inventory, Staff, Payroll, Customers, Growth Engine, Finance, Reports and Khana AI in one connected platform.
+
+====================================================
+1. FIRST AUDIT CURRENT WEBSITE
+====================================================
+
+First scan the full website UI and UX.
+
+Check:
+- Homepage design
+- Header/menu
+- Hero section
+- Product visuals
+- Feature sections
+- Khana AI sections
+- Pricing
+- Solution pages
+- Feature pages
+- Legal pages
+- Forms
+- Footer
+- Mobile responsiveness
+- Page speed
+- Images/media
+- Animations
+- Content quality
+- CTA flow
+- Broken routes
+- Missing pages
+- Empty/basic pages
+
+Then create a report:
+1. Sections that look good
+2. Sections that look basic
+3. Missing product visuals
+4. Missing screenshots/mockups
+5. Missing video/demo sections
+6. UI/UX issues
+7. Content gaps
+8. Mobile issues
+9. Performance issues
+10. Final improvement plan
+
+After that, implement the improvements.
+
+====================================================
+2. DESIGN DIRECTION
+====================================================
+
+Make the website feel like:
+- Modern SaaS
+- Premium restaurant technology
+- Real product platform
+- AI-powered operating system
+- Investor-ready startup website
+- Product-led sales website
+
+Use design inspiration from modern SaaS websites:
+- Large product mockups
+- Real dashboard previews
+- Floating UI cards
+- Short demo videos
+- Scroll-based product storytelling
+- Interactive tabs
+- Feature comparison sections
+- Customer workflow sections
+- Modern gradients
+- Smooth transitions
+- Clean iconography
+- Strong CTA buttons
+- Realistic product UI screenshots
+
+Do not make it only text + cards.
+
+====================================================
+3. VISUAL MEDIA STRATEGY
+====================================================
+
+Add strong visual media throughout the website.
+
+Required visual types:
+
+1. Product dashboard screenshots/mockups
+- Main restaurant dashboard
+- POS terminal
+- Live orders
+- Kitchen/KDS
+- Table management
+- QR menu mobile screen
+- Inventory dashboard
+- Staff/payroll dashboard
+- Finance/P&L dashboard
+- Growth Engine campaign screen
+- Khana AI chat screen
+- Super Admin dashboard
+- Reports dashboard
+
+2. Small live demo animations/videos
+Add short product demo sections:
+- POS order being created
+- Customer scanning QR menu
+- Order going to kitchen/KDS
+- Kitchen marking order ready
+- Inventory stock reducing
+- Dashboard updating sales
+- Review QR flow
+- Khana AI generating campaign
+- Owner checking mobile dashboard
+
+3. Floating metric cards
+Use cards like:
+- Today Sales ₹1,42,800
+- Live Orders 37
+- Kitchen 18 cooking
+- Stock Alert Cheese Low
+- Staff Present 14/16
+- Rating 4.7
+- Wallet ₹8,420
+- AI Insight: Push Paneer Tikka tonight
+
+4. Workflow graphics
+Show:
+Customer → QR/POS → Kitchen → Inventory → Payment → CRM → Reports → Growth
+
+5. Feature illustrations
+Use clean 3D/isometric/SaaS-style illustrations for:
+- Restaurants
+- Cloud kitchens
+- Cafes
+- Hotels
+- Food courts
+- Tiffin
+- Catering
+- Franchise chains
+
+Important:
+If real screenshots are not available, create realistic UI mockup components using HTML/CSS instead of using random stock images.
+
+====================================================
+4. HOMEPAGE UPGRADE
+====================================================
+
+Upgrade homepage to become product-led and visual.
+
+Homepage sections should be:
+
+1. Hero Section
+Headline:
+“Run Your Restaurant Smarter with KhanaLagao”
+
+Subheadline:
+“Manage billing, QR orders, kitchen, tables, stock, staff, customers, finance, growth and Khana AI in one connected restaurant operating system.”
+
+CTA:
+- Book Free Demo
+- Watch Product Tour
+- Explore Platform
+
+Hero visual:
+Large animated dashboard mockup showing:
+- Live orders
+- Sales
+- Kitchen status
+- Inventory alert
+- Khana AI insight
+- Staff attendance
+- Review rating
+
+Add small animated “live” badges:
+- Order received
+- Sent to kitchen
+- Payment completed
+- Stock updated
+
+2. Product Tour Video Section
+Add section:
+“See KhanaLagao in action”
+
+Show small embedded video/mock animation:
+- Create order
+- KOT generated
+- Kitchen status changes
+- Inventory deducts
+- Sales dashboard updates
+
+If no real video exists, create animated UI demo using components.
+
+3. Problem Section
+Make it visual:
+- Paper bills
+- Kitchen confusion
+- Stock leakage
+- Staff attendance issues
+- No profit clarity
+- No customer retention
+
+Use icons and mini alerts.
+
+4. Connected Workflow Section
+Show visual flow:
+POS/QR Order → Kitchen/KDS → Inventory → Payment → Customer CRM → Reports → Growth Engine → Khana AI
+
+5. Platform Modules Section
+Use interactive tabs instead of huge grid:
+Tabs:
+- Sell
+- Kitchen
+- Inventory
+- Staff
+- Customers
+- Growth
+- Finance
+- AI
+Each tab shows:
+- Screenshot/mockup
+- 4-6 feature points
+- CTA
+
+6. Khana AI Feature Section
+Make this premium with purple/orange gradient.
+Show:
+- AI Menu Import
+- AI Review Booster
+- AI Campaign Generator
+- AI Sales Insights
+- AI Inventory Assistant
+- AI Chat Assistant
+
+Add visual:
+AI chat panel:
+“Paneer Tikka is trending tonight. Send a 10% offer to repeat customers?”
+
+7. QR Menu + Table Ordering Section
+Show mobile phone mockup:
+- Customer scans QR
+- Menu opens
+- Order placed
+- Waiter request
+- Review QR
+
+8. Kitchen/KDS Section
+Show live kitchen screen mockup:
+- New
+- Preparing
+- Ready
+- Served
+
+9. Inventory + Food Cost Section
+Show:
+- Raw material stock
+- Recipe cost
+- Low stock alert
+- Auto deduction
+
+10. Finance/P&L Section
+Show:
+- Sales
+- Expenses
+- Staff cost
+- Food cost
+- Wastage
+- Net profit
+
+11. Growth Engine Section
+Show campaign builder:
+- Birthday campaign
+- Win-back offer
+- WhatsApp/SMS campaign
+- Loyalty analytics
+
+12. Industry Solutions Section
+Show solution cards with visuals:
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Hotels
+- Food Courts
+- Tiffin
+- Catering
+- Franchise Chains
+
+13. Super Admin / SaaS Control Section
+Show:
+- Manage restaurants
+- Plans
+- Subscriptions
+- AI credits
+- Feature flags
+- Leads
+- Support
+
+14. Pricing Preview
+Modern pricing cards.
+
+15. Trust / Investor Metrics Section
+Show:
+- Multi-outlet ready
+- AI credit system
+- Marketplace ready
+- Finance-ready
+- India + global ready
+
+16. FAQ
+17. Final CTA
+
+====================================================
+5. FEATURE PAGES UPGRADE
+====================================================
+
+Every feature page should feel real and media-rich.
+
+Each feature page must include:
+- Hero with product mockup
+- Problem section
+- Product workflow
+- Internal features
+- Realistic UI screenshots/mockups
+- Mini demo animation where useful
+- Benefits
+- Related features
+- FAQ
+- CTA
+
+Examples:
+
+POS page:
+Show animated POS flow:
+Select table → add items → send KOT → collect payment → print bill.
+
+Kitchen page:
+Show live KDS board with status changing.
+
+QR Menu page:
+Show mobile phone QR ordering flow.
+
+Inventory page:
+Show stock deduction after sale.
+
+Review Booster page:
+Show:
+Scan QR → rating → AI review draft → copy → open Google review link.
+
+Khana AI page:
+Show AI chat and generation flows.
+
+Finance page:
+Show P&L dashboard and expense cards.
+
+Super Admin page:
+Show SaaS dashboard, plans, AI credits, restaurant list.
+
+====================================================
+6. ADD LIVE PRODUCT DEMO BLOCKS
+====================================================
+
+Add reusable component:
+LiveProductDemo
+
+Use it in homepage and feature pages.
+
+Demo types:
+1. POS Order Demo
+- Item added
+- KOT created
+- Payment done
+- Sales updated
+
+2. QR Order Demo
+- Customer scans QR
+- Adds item
+- Sends order
+- Restaurant receives order
+
+3. Kitchen Demo
+- New order
+- Preparing
+- Ready
+
+4. Inventory Demo
+- Paneer stock decreases after order
+- Low stock alert appears
+
+5. Khana AI Demo
+- AI generates campaign
+- AI creates review draft
+- AI gives sales insight
+
+6. Finance Demo
+- Revenue, expenses, profit update
+
+These can be lightweight CSS/JS animations, not heavy videos if performance is a concern.
+
+====================================================
+7. REALISTIC UI MOCKUPS
+====================================================
+
+Create reusable mockup components:
+
+- DashboardMockup
+- POSMockup
+- QRMenuMobileMockup
+- KitchenKDSMockup
+- InventoryMockup
+- PayrollMockup
+- FinanceMockup
+- GrowthCampaignMockup
+- KhanaAIChatMockup
+- SuperAdminMockup
+- ReportsMockup
+- MobileAppMockup
+
+Use actual brand colors:
+Primary Orange #FF6B1A
+Dark Navy #0F172A
+Charcoal #111827
+Warm White #FFF8F1
+AI Purple #7C3AED
+
+Mockups should look like real app screenshots:
+- Tables
+- Charts
+- Buttons
+- Badges
+- Status labels
+- Menu items
+- Order cards
+- Live metrics
+
+Do not use generic placeholder boxes.
+
+====================================================
+8. IMAGES / MEDIA REQUIREMENTS
+====================================================
+
+Use:
+- WebP/AVIF optimized images
+- SVG icons
+- CSS mockups
+- Lightweight animations
+- Lazy loading
+- Responsive images
+
+Do not:
+- Use broken external URLs
+- Use huge uncompressed PNGs
+- Use random irrelevant restaurant stock images
+- Use heavy videos above the fold
+- Use large animation libraries unnecessarily
+
+If adding video:
+- Use short compressed MP4/WebM
+- Lazy load video
+- Use poster image
+- Mute autoplay only where suitable
+- Add fallback image
+
+====================================================
+9. HEADER / NAVIGATION FIX
+====================================================
+
+Keep header clean.
+
+Header:
+- Platform
+- Features
+- Solutions
+- Khana AI
+- Resources
+- Company
+- Pricing
+
+Do not show all features in huge header menu.
+Features dropdown should show categories only.
+Full feature directory should be on /features page.
+
+Mega menu:
+- Open on hover desktop
+- Click on mobile
+- No flicker
+- Clean and compact
+
+====================================================
+10. CONTENT IMPROVEMENT
+====================================================
+
+Upgrade all text so it feels premium and clear.
+
+Tone:
+- Simple
+- Confident
+- Business-focused
+- Owner-friendly
+- SaaS-quality
+- Not generic
+
+Avoid:
+- Repetitive text
+- Too much jargon
+- Thin content
+- Placeholder content
+- Overpromising fake claims
+
+Every page should answer:
+- What is this feature?
+- Why does restaurant need it?
+- How does KhanaLagao solve it?
+- What business result does it improve?
+- How does it connect with other modules?
+
+====================================================
+11. MOBILE UI IMPROVEMENT
+====================================================
+
+Mobile website should look premium and compact.
+
+- Hero should not be too tall.
+- Mockups should fit screen.
+- Use tabs/accordions/carousels.
+- Avoid endless vertical cards.
+- Use sticky CTA where suitable.
+- No horizontal overflow.
+- Fast loading.
+- Touch-friendly buttons.
+- Mobile menu clean.
+
+====================================================
+12. PERFORMANCE REQUIREMENTS
+====================================================
+
+The website already has loading/performance concerns, so optimize while upgrading.
+
+- Do not add heavy JS unnecessarily.
+- Lazy load below-the-fold sections.
+- Lazy load demo animations.
+- Use CSS animations where possible.
+- Use static mockups instead of heavy video where possible.
+- Optimize images.
+- Remove unused JS/CSS.
+- Do not load admin code on public pages.
+- Keep PageSpeed strong.
+
+====================================================
+13. CTA / CONVERSION FLOW
+====================================================
+
+Every major section should have relevant CTA:
+- Book Demo
+- Watch Product Tour
+- Explore Platform
+- See Features
+- Start Free Trial
+- Contact Sales
+
+Add sticky mobile CTA:
+- Book Demo
+- Start Free Trial
+
+Forms should:
+- Work
+- Validate
+- Save lead
+- Show success
+- Redirect to thank-you if suitable
+
+====================================================
+14. TRUST BUILDING SECTIONS
+====================================================
+
+Add credibility sections:
+- Built for Indian and global restaurants
+- Multi-outlet ready
+- AI-powered growth
+- Finance and P&L clarity
+- QR and mobile-first ordering
+- Super admin SaaS control
+- Role-based access
+- Secure and scalable
+
+Add comparison:
+KhanaLagao vs Basic POS
+Rows:
+- POS
+- QR menu
+- KDS
+- Inventory
+- Payroll
+- Growth campaigns
+- Khana AI
+- P&L
+- Multi-outlet
+- Marketplace
+- Super admin
+
+====================================================
+15. FINAL TEST
+====================================================
+
+After changes test:
+- Homepage desktop/mobile
+- Platform page
+- Features page
+- Khana AI page
+- Pricing page
+- Feature pages
+- Solution pages
+- Header hover menu
+- Mobile menu
+- CTA buttons
+- Forms
+- Loading speed
+- Images
+- No broken routes
+- No console errors
+
+====================================================
+16. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Website looks more real and modern.
+- Homepage has product screenshots/mockups.
+- Homepage has at least one live demo/video/animation section.
+- Feature pages have feature-specific visuals.
+- Khana AI feels premium and unique.
+- QR/POS/Kitchen/Inventory flows are visually shown.
+- Header is clean and not overloaded.
+- Mobile website is compact and responsive.
+- Performance is optimized.
+- No broken links/images.
+- No basic-looking pages.
+- Content clearly explains the full platform.
+```
+
+My suggestion: don’t use heavy real videos everywhere. Use **small animated UI demos** made with HTML/CSS/JS, because they look like “live product videos” but load much faster than real video files.

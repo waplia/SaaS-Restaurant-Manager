@@ -24,7 +24,9 @@ interface KitchenTicketCardProps {
 }
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
+  new: { color: "#f59e0b", label: "New" },
   pending: { color: "#f59e0b", label: "Pending" },
+  preparing: { color: "#3b82f6", label: "Cooking" },
   in_progress: { color: "#3b82f6", label: "Cooking" },
   ready: { color: "#22c55e", label: "Ready" },
   served: { color: "#6b7280", label: "Served" },
@@ -78,7 +80,7 @@ export function KitchenTicketCard({
           </View>
         ))}
       </View>
-      {(status === "pending" || status === "in_progress") && onMarkReady ? (
+      {(status === "new" || status === "pending" || status === "preparing" || status === "in_progress") && onMarkReady ? (
         <Pressable
           style={({ pressed }) => [styles.readyBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }]}
           onPress={() => onMarkReady(ticketId)}
