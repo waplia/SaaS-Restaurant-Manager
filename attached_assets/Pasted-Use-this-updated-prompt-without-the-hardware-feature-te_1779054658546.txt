@@ -1,0 +1,814 @@
+Use this updated prompt without the hardware feature:
+
+```text
+Add and complete these 19 famous-platform-level features in KhanaLagao.
+
+Important:
+KhanaLagao is already built with many modules. Do not rebuild from scratch. First scan the existing platform and check which of these features already exist. If any feature already exists, do not duplicate it — improve it, connect it with real APIs/data, fix bugs, add missing settings, pricing, permissions, reports and testing.
+
+Goal:
+Make KhanaLagao stronger for US/global markets by adding missing features commonly found in top restaurant platforms like Toast, Square, Clover, Lightspeed, Restaurant365, TouchBistro, Revel and SpotOn.
+
+Every feature must be:
+- Fully working with real data
+- Connected to database/API
+- Connected to restaurant admin
+- Controlled by Super Admin plan/module access
+- Added to pricing/features table
+- Protected by roles/permissions
+- Mobile responsive
+- Logged in audit/activity logs where needed
+- Tested from start to end
+
+Do not add mock-only features.
+
+====================================================
+1. FIRST SCAN EXISTING SYSTEM
+====================================================
+
+Before building, scan the project and create a checklist for these 19 features.
+
+For each feature mark:
+- Already built and working
+- Built but incomplete
+- Partially built
+- Missing
+- Needs pricing connection
+- Needs permission connection
+- Needs backend/API
+- Needs UI
+- Needs report
+- Needs mobile support
+
+Then implement missing or incomplete parts.
+
+====================================================
+2. FEATURES TO ADD / COMPLETE
+====================================================
+
+1. Handheld POS Mode
+
+Add a dedicated waiter handheld POS mode for mobile/tablet devices.
+
+Features:
+- Fast table ordering
+- Tableside item selection
+- Add-ons/modifiers
+- Send to kitchen
+- Edit table order
+- Table-wise bill
+- Tableside payment placeholder
+- Digital receipt
+- Waiter device assignment
+- Device-wise sales report
+- Waiter-wise order report
+
+Placement:
+Restaurant Admin / Mobile App:
+Sell → Handheld POS
+
+Super Admin:
+Enable/disable by plan.
+
+2. Physical Card Terminal Integration
+
+Add structure for physical card terminal integration.
+
+Features:
+- Terminal pairing
+- Terminal status
+- Device ID
+- Tap/chip/swipe payment placeholder
+- Tip on terminal
+- Terminal refund
+- Terminal receipt
+- Device-wise payment report
+- Payment provider mapping
+
+Providers/config:
+- Stripe Terminal
+- Square Terminal placeholder
+- Clover Terminal placeholder
+- Custom Terminal
+
+If actual terminal API is not configured, show “configuration required” instead of broken buttons.
+
+Placement:
+Settings → Payments → Terminals
+
+3. Deep Tip Management
+
+Add proper restaurant tip management.
+
+Features:
+- Tip on bill
+- Tip on payment
+- Suggested tip percentage
+- Fixed/custom tip amount
+- Tip by server
+- Tip by table
+- Tip by shift
+- Tip pooling
+- Tip adjustment
+- Tip declaration
+- Tip payout report
+- Payroll tip sync
+
+Reports:
+- Staff tip report
+- Shift tip report
+- Tip payout report
+
+4. True Offline POS Sync
+
+Add offline-first POS capability or architecture.
+
+Features:
+- Offline billing
+- Offline table order
+- Offline KOT queue
+- Offline payment note
+- Local order queue
+- Sync when online
+- Conflict handling
+- Unsynced order warning
+- Offline mode badge
+- Offline audit log
+- Sync status screen
+
+Important:
+If full offline mode cannot be completed immediately, implement proper offline-ready architecture and make POS not crash during poor internet.
+
+5. Curbside Pickup Flow
+
+Add curbside pickup order type.
+
+Features:
+- Curbside pickup order
+- Customer vehicle details
+- Car color/model/number
+- Parking spot number
+- Customer arrival notification
+- Staff handoff status
+- Pickup completed status
+- Curbside prep timer
+- Curbside report
+
+Customer flow:
+Order → Select curbside pickup → Enter vehicle details → Staff notified → Customer arrives → Staff marks handed over.
+
+6. Advanced Staff Scheduling + Labor Forecasting
+
+Improve staff scheduling.
+
+Features:
+- Weekly/monthly shift scheduler
+- Role-wise scheduling
+- Staff availability
+- Shift trade request
+- Shift approval
+- Schedule publishing
+- Staff notification
+- Labor cost target
+- Sales-based labor forecast
+- Overstaffed/understaffed alert
+- Break rule reminder
+- Labor cost percentage report
+
+Placement:
+Staff → Scheduling
+
+7. HR Compliance and Benefits
+
+Add HR compliance-ready structure.
+
+Features:
+- Employee benefits tracking
+- Employee documents
+- Document expiry reminders
+- Tax form placeholders
+- W-2 / 1099-ready placeholder
+- Minimum wage rule by country/state
+- Overtime rule configuration
+- Break rule configuration
+- Leave policy configuration
+- Compliance notes
+- HR audit logs
+
+Placement:
+Staff → HR Compliance
+
+8. Accounting-Grade Back Office
+
+Add accounting-grade finance structure.
+
+Features:
+- Chart of accounts
+- Journal entries
+- Accounts payable
+- Accounts receivable
+- Vendor bills
+- Bank reconciliation placeholder
+- Bill payment workflow
+- Accounting period close
+- Balance sheet placeholder
+- Cash flow statement placeholder
+- Ledger mapping
+- Export to accounting tools
+
+Placement:
+Finance → Accounting
+
+9. Vendor Invoice OCR
+
+Add vendor invoice OCR/import feature.
+
+Features:
+- Upload vendor invoice PDF/image
+- OCR invoice data
+- Extract vendor name
+- Extract invoice number/date
+- Extract line items
+- Match with purchase order
+- Detect price variance
+- Create vendor bill
+- Update stock from invoice after approval
+- Approval workflow
+- OCR confidence score
+- Manual correction before saving
+
+Placement:
+Inventory → Vendor Invoice OCR
+Finance → Vendor Bills
+
+10. Supplier Catalog / Auto Reorder Network
+
+Add supplier catalog and reorder system.
+
+Features:
+- Supplier product catalog
+- Vendor item pricing
+- Vendor availability
+- Auto reorder suggestion
+- Reorder rules
+- Bulk purchase request
+- Vendor quote comparison
+- Supplier portal placeholder
+- Vendor order tracking
+- Purchase history
+- Best vendor suggestion
+
+Placement:
+Marketplace → Supplier Catalog
+Inventory → Auto Reorder
+
+11. Customer Loyalty App / Network
+
+Create customer-facing loyalty profile/web app structure.
+
+Features:
+- Customer reward wallet
+- Points balance
+- Cashback balance
+- Digital loyalty card
+- Gift card balance
+- Visit history
+- Rewards marketplace placeholder
+- Participating restaurants placeholder
+- Cross-restaurant loyalty network ready structure
+- Customer login/profile
+
+Placement:
+Customer Web App / Loyalty
+Restaurant Admin → Customers → Loyalty Network
+
+12. White-Label Customer App Builder
+
+Add branded customer app/web app builder.
+
+Features:
+- Restaurant branded ordering page
+- Custom logo/color
+- Custom domain placeholder
+- App menu sync
+- Customer loyalty wallet
+- Push notification campaigns placeholder
+- App-exclusive coupons
+- Home banner
+- About/contact page
+- Gallery
+- Review widget
+
+Placement:
+Marketplace → White Label App
+Settings → Branding → Customer App
+
+13. Advanced Guestbook / Reservation CRM
+
+Improve reservations with guest CRM.
+
+Features:
+- Guestbook
+- Guest notes
+- Occasion tracking
+- No-show history
+- Preferred table
+- Dietary preferences
+- Allergy notes
+- Reservation deposit
+- Waitlist SMS/WhatsApp
+- Table pacing
+- Server assignment
+- Guest visit history
+
+Placement:
+Customers → Guestbook
+Sell → Reservations
+
+14. SEO-Ready Direct Online Ordering
+
+Improve direct ordering pages.
+
+Features:
+- Restaurant SEO ordering page
+- Clean slug
+- SEO title/description
+- Menu schema if possible
+- Pickup/delivery scheduling
+- Guest checkout
+- Reorder previous order
+- Customer account
+- Delivery fee rules
+- Minimum order rules
+- Holiday hours
+- Delivery radius
+- Custom ordering link
+
+Placement:
+Menu → Online Ordering
+Settings → Direct Ordering
+
+15. Order Throttling / Kitchen Capacity Control
+
+Add capacity control.
+
+Features:
+- Max orders per time slot
+- Pause online/QR orders
+- Pause delivery zone
+- Auto extend prep time
+- Kitchen capacity rules
+- Item-level prep capacity
+- Rush-hour order delay
+- Throttle by outlet
+- Throttle by order type
+- Capacity alerts
+
+Placement:
+Settings → Order Capacity
+Kitchen → Capacity
+
+16. Developer Portal with API Scopes
+
+Improve API/webhook ecosystem.
+
+Features:
+- Developer portal
+- API key generation
+- API key scopes
+- Sandbox API keys
+- Webhook endpoints
+- Webhook secrets
+- Webhook logs
+- Webhook retry
+- Rate limits
+- API usage logs
+- API docs page
+- OAuth app model placeholder
+
+Placement:
+Settings → Developer API
+Super Admin → API Control
+
+17. Implementation / Go-Live Checklist
+
+Add onboarding and implementation workflow.
+
+Features:
+- Implementation checklist
+- Onboarding manager assignment
+- Data migration status
+- Setup progress tracking
+- Menu setup status
+- Staff training status
+- Payment setup status
+- Printer setup status if printer module exists
+- QR setup status
+- Launch date
+- Go-live checklist
+- Post-launch support tasks
+
+Placement:
+Restaurant Admin → Setup / Onboarding
+Super Admin → Implementation
+
+18. Support SLA / Emergency Support
+
+Improve support system.
+
+Features:
+- Support SLA plans
+- Priority support
+- Emergency POS issue ticket
+- Live chat placeholder
+- Callback request
+- Escalation matrix
+- Support response timer
+- SLA breach alert
+- Status page
+- Incident updates
+- Support satisfaction rating
+
+Placement:
+Support → SLA / Emergency Support
+Super Admin → Support Settings
+
+19. Capital / Financing Offers
+
+Add restaurant capital/financing module structure.
+
+Features:
+- Working capital eligibility
+- Sales-based advance placeholder
+- Repayment from daily sales placeholder
+- Financing offer cards
+- Loan application status
+- Finance partner dashboard placeholder
+- Restaurant credit score connection
+- Document upload
+- Offer accepted/rejected status
+
+Placement:
+Finance → Capital
+Super Admin → Finance Partners
+
+====================================================
+3. PRICING / PLAN INTEGRATION
+====================================================
+
+Add these features into plan management and pricing comparison.
+
+Plan mapping suggestion:
+
+Starter:
+- Basic online ordering
+- Basic guestbook
+- Basic support
+- Basic tips
+- Basic implementation checklist
+
+Growth:
+- Handheld POS Mode
+- Curbside Pickup
+- Advanced Guestbook
+- Direct Ordering SEO
+- Staff Scheduling
+- Supplier Catalog basic
+- Customer Loyalty Web Profile
+- Tip Management
+
+Pro:
+- Offline POS Sync
+- Order Throttling
+- Vendor Invoice OCR
+- Labor Forecasting
+- Accounting Back Office
+- Developer API
+- White-Label Customer App
+- Support SLA
+
+Enterprise:
+- Physical Card Terminal Integration
+- Advanced Offline Sync
+- HR Compliance
+- Capital/Financing Offers
+- Supplier Network
+- Dedicated Implementation
+- Emergency Support
+- Advanced API Scopes
+- Multi-outlet/Franchise level controls
+
+Add-ons:
+- White-Label Customer App
+- Vendor Invoice OCR
+- Accounting Back Office
+- Offline POS
+- Card Terminal Integration
+- Capital Module
+- Advanced Support SLA
+- Developer API
+
+Super Admin must control:
+- Enable/disable each feature by plan
+- Enable/disable per restaurant
+- Usage limits
+- Add-on pricing
+- Upgrade screen text
+- Feature flags
+- Beta/coming soon status
+
+Pricing page should show these features in comparison table under:
+- POS & Payments
+- Online Ordering
+- Staff & HR
+- Finance & Accounting
+- Customer Growth
+- Developer & Integrations
+- Support & Implementation
+
+====================================================
+4. SIDEBAR / MODULE PLACEMENT
+====================================================
+
+Do not add 19 new main sidebar items. Place them inside existing menus.
+
+Sell:
+- Handheld POS Mode
+- Curbside Pickup
+- Order Capacity / Throttling
+
+Staff:
+- Advanced Scheduling
+- Labor Forecasting
+- HR Compliance & Benefits
+
+Finance:
+- Accounting
+- Vendor Bills
+- Capital / Financing
+- Tip Management
+
+Inventory:
+- Vendor Invoice OCR
+- Supplier Catalog
+- Auto Reorder
+
+Customers:
+- Loyalty App / Network
+- Guestbook
+- Reservation CRM
+
+Menu / Online Ordering:
+- SEO Direct Ordering
+- Customer App Builder
+
+Settings:
+- Card Terminals
+- Developer API
+- Order Capacity Rules
+
+Marketplace:
+- Supplier Network
+- Add-ons
+
+Support:
+- SLA
+- Emergency Support
+- Implementation / Go-Live
+
+Super Admin:
+- API Control
+- Finance Partners
+- Implementation Manager
+- Support SLA Settings
+- Feature Flags
+
+====================================================
+5. DATABASE / API REQUIREMENTS
+====================================================
+
+Create safe migrations only after checking existing tables.
+
+Every new table must include:
+- id
+- restaurant_id where needed
+- outlet_id where needed
+- created_by where needed
+- status
+- created_at
+- updated_at
+
+Add or reuse tables for:
+- handheld_devices
+- card_terminals
+- tip_pools
+- offline_sync_queue
+- curbside_orders
+- staff_schedules
+- labor_forecasts
+- hr_compliance_rules
+- employee_benefits
+- chart_of_accounts
+- journal_entries
+- vendor_bills
+- vendor_invoice_ocr_jobs
+- supplier_catalog_items
+- reorder_rules
+- customer_loyalty_profiles
+- white_label_apps
+- guestbook_profiles
+- direct_ordering_pages
+- order_capacity_rules
+- api_keys
+- api_key_scopes
+- webhook_logs
+- implementation_checklists
+- support_sla_rules
+- emergency_tickets
+- capital_offers
+- financing_applications
+
+APIs should support:
+- list
+- create
+- update
+- delete where needed
+- status update
+- approval where needed
+- logs/reports
+- exports where needed
+
+All APIs must enforce:
+- authentication
+- restaurant tenant isolation
+- outlet scope
+- role permissions
+- plan/module access
+- validation
+- audit logging
+
+====================================================
+6. REPORTING REQUIREMENTS
+====================================================
+
+Add reports for:
+
+- Handheld sales report
+- Device-wise sales report
+- Terminal payment report
+- Tip report
+- Offline sync report
+- Curbside pickup report
+- Labor forecast report
+- Schedule report
+- HR compliance report
+- Accounting ledger report
+- Vendor bill report
+- Invoice OCR variance report
+- Supplier price report
+- Loyalty profile report
+- Guestbook report
+- Direct ordering report
+- Order capacity report
+- API usage report
+- Implementation progress report
+- Support SLA report
+- Capital eligibility report
+
+Each report should have:
+- Date filter
+- Outlet filter
+- Status filter where needed
+- Export CSV/PDF/Excel where available
+- Pagination
+- Empty state
+
+====================================================
+7. NOTIFICATION REQUIREMENTS
+====================================================
+
+Add notifications for:
+- Curbside customer arrived
+- Terminal disconnected
+- Offline orders pending sync
+- High tip adjustment
+- Schedule published
+- Staff shift changed
+- Labor forecast warning
+- HR document expiring
+- Vendor invoice variance
+- Auto reorder suggestion
+- Guest reservation note
+- Order capacity reached
+- Webhook failed
+- Implementation task due
+- Support SLA breach
+- Emergency ticket created
+- Capital offer updated
+
+Notifications should respect role permissions.
+
+====================================================
+8. MOBILE APP REQUIREMENTS
+====================================================
+
+If mobile app exists, add compact mobile access for:
+- Handheld POS Mode
+- Curbside Pickup
+- Tips
+- Staff Scheduling
+- Support Emergency Ticket
+- Implementation Checklist
+- Guestbook notes
+- Offline sync warnings
+- Order capacity alerts
+- Vendor invoice approval
+- Capital offer status
+
+Do not create clutter. Place inside existing mobile modules.
+
+====================================================
+9. SECURITY / COMPLIANCE
+====================================================
+
+Important:
+- Do not expose payment terminal credentials.
+- Do not expose API keys.
+- Mask sensitive settings.
+- Secure API key scopes.
+- Role-check finance/accounting data.
+- Role-check HR/benefits data.
+- Audit log terminal settings, API keys, accounting changes, capital applications, support SLA changes.
+- Validate file uploads for OCR and documents.
+- Do not store real card data unless compliant; use provider tokens only.
+
+====================================================
+10. TESTING CHECKLIST
+====================================================
+
+Test each feature live with real data.
+
+Must test:
+- Feature page loads
+- Data loads
+- Create works
+- Edit works
+- Status change works
+- Permission works
+- Plan lock works
+- Upgrade screen works
+- Report works
+- Notification works if applicable
+- Mobile responsive
+- Super Admin controls work
+- Pricing table updated
+
+Critical flows to test:
+
+1. Handheld order → KOT → payment → report
+2. Terminal payment configuration → payment placeholder/status
+3. Tip added → tip pool → payroll/report
+4. Offline order created → sync online → reports update
+5. Curbside order → arrival → handoff complete
+6. Schedule published → staff notified
+7. Labor forecast generated → warning shown
+8. Vendor invoice uploaded → OCR → bill/stock update
+9. Auto reorder suggestion → PO draft
+10. Direct ordering page → customer order → KOT
+11. Order throttling blocks/extends orders
+12. API key created → webhook log
+13. Implementation checklist → go-live status
+14. Emergency support ticket → SLA timer
+15. Capital offer → application status
+
+====================================================
+11. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- All 19 features are scanned against existing platform.
+- Existing features are not duplicated.
+- Missing features are added.
+- Partial features are completed.
+- Every feature is connected to pricing/plans.
+- Every feature has Super Admin control.
+- Every feature has permissions.
+- Locked features show upgrade screen.
+- APIs and database are real.
+- Reports and logs exist where needed.
+- Mobile support exists where needed.
+- Notifications work where needed.
+- No mock-only screen remains.
+- Build passes.
+- Critical flows are tested.
+- Bugs found during testing are fixed.
+
+First produce the feature status checklist, then implement phase by phase.
+```
+
+Add this strict line:
+
+```text
+Do not add these as fake menu pages. Each feature must be real, connected to database/API, plan-controlled, permission-protected, and tested live.
+```
