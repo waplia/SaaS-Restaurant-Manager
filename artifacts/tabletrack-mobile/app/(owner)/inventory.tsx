@@ -40,9 +40,11 @@ export default function InventoryScreen() {
   const [filter, setFilter] = useState<"all" | "low" | "out">("all");
   const [showCreate, setShowCreate] = useState(false);
 
+  // Don't swallow errors — when the API returns 403 (plan gate) or any
+  // other failure we want to surface it instead of showing a blank list.
   const q = useQuery({
     queryKey: ["inventory", restaurantId],
-    queryFn: () => customFetch<Item[]>(`/api/restaurants/${restaurantId}/inventory`).catch(() => []),
+    queryFn: () => customFetch<Item[]>(`/api/restaurants/${restaurantId}/inventory`),
   });
 
   const items = (Array.isArray(q.data) ? q.data : []).filter(it => {
@@ -105,8 +107,16 @@ export default function InventoryScreen() {
           ))}
         </ScrollView>
       </View>
-      {items.length === 0 ? (
-        <EmptyState icon="cube-outline" title="No items" message="Stock items match this filter." />
+      {q.isError ? (
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Couldn't load inventory"
+          message={q.error instanceof Error ? q.error.message : "Please try again."}
+        />
+      ) : q.isLoading ? (
+        <EmptyState icon="time-outline" title="Loading…" message="Fetching your stock items." />
+      ) : items.length === 0 ? (
+        <EmptyState icon="cube-outline" title="No items" message="No stock items match this filter yet." />
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}

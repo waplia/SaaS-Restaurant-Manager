@@ -34,18 +34,18 @@ export default function MenuScreen() {
   // The API exposes menu items at `/restaurants/:id/items` — the previous
   // `/menu/items` path doesn't exist and always returned 404, which is why
   // this screen looked empty.
+  // Surface server errors rather than silently returning [] — a blank
+  // screen on a failed request hides real problems (auth, plan gate, etc).
   const q = useQuery({
     queryKey: ["menu-items-mobile", restaurantId],
-    queryFn: () =>
-      customFetch<MenuItem[]>(`/api/restaurants/${restaurantId}/items`).catch(() => []),
+    queryFn: () => customFetch<MenuItem[]>(`/api/restaurants/${restaurantId}/items`),
   });
   const items: MenuItem[] = Array.isArray(q.data) ? q.data : [];
   const filtered = items.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()));
 
   const categoriesQ = useQuery({
     queryKey: ["menu-categories-mobile", restaurantId],
-    queryFn: () =>
-      customFetch<Category[]>(`/api/restaurants/${restaurantId}/categories`).catch(() => []),
+    queryFn: () => customFetch<Category[]>(`/api/restaurants/${restaurantId}/categories`),
   });
   const categories: Category[] = Array.isArray(categoriesQ.data) ? categoriesQ.data : [];
 
@@ -96,7 +96,15 @@ export default function MenuScreen() {
           />
         </View>
       </View>
-      {filtered.length === 0 ? (
+      {q.isError ? (
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Couldn't load menu"
+          message={q.error instanceof Error ? q.error.message : "Please try again."}
+        />
+      ) : q.isLoading ? (
+        <EmptyState icon="time-outline" title="Loading…" message="Fetching your menu." />
+      ) : filtered.length === 0 ? (
         <EmptyState icon="restaurant-outline" title="No items" message="No menu items match your search." />
       ) : (
         <ScrollView
