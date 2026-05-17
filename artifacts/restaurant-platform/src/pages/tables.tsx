@@ -111,6 +111,14 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, hasRe
     if (typeof window === "undefined" || !brandingPrefKey) return false;
     return window.localStorage.getItem(brandingPrefKey) === "1";
   });
+  // Rehydrate from localStorage when the restaurant key first resolves
+  // (e.g. modal opened before restaurantInfo loaded). Guarded so we
+  // don't stomp existing state when the key is empty.
+  useEffect(() => {
+    if (typeof window === "undefined" || !brandingPrefKey) return;
+    const stored = window.localStorage.getItem(brandingPrefKey);
+    if (stored !== null) setShowBranding(stored === "1");
+  }, [brandingPrefKey]);
   useEffect(() => {
     if (typeof window === "undefined" || !brandingPrefKey) return;
     window.localStorage.setItem(brandingPrefKey, showBranding ? "1" : "0");
