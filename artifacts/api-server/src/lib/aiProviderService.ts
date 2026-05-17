@@ -245,14 +245,14 @@ async function callAnthropic(
   } else {
     throw new Error(`Anthropic provider ${provider.slug} has no API key`);
   }
-  const message = await client.messages.create({
+  const message = await (client.messages.create as (opts: unknown) => Promise<{ content: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } }>)({
     model,
     max_tokens: req.maxTokens ?? provider.maxTokens,
     ...(req.systemPrompt ? { system: req.systemPrompt } : {}),
     messages: req.messages.map((m) => ({ role: m.role, content: m.content })),
   });
   const block = message.content[0];
-  const text = block && block.type === "text" ? block.text : "";
+  const text = block && block.type === "text" ? (block.text ?? "") : "";
   return {
     text,
     inputTokens: message.usage?.input_tokens ?? 0,
@@ -670,7 +670,7 @@ export class AIProviderService {
       if (fallbackId) {
         try { return await tryOne(fallbackId, fallbackModel ?? primaryModel, true); }
         catch (err2) {
-          await logRequest({ ctx, providerSlug: null, providerId: fallbackId, model: fallbackModel ?? undefined, modality: "vision",
+          await logRequest({ ctx, providerSlug: null, providerId: fallbackId, model: fallbackModel ?? null, modality: "vision",
             status: "error", errorMessage: (err2 as Error).message, latencyMs: Date.now() - start,
             prompt: storePrompt ? joined : undefined, storePrompt, storeResponse });
           throw err2;

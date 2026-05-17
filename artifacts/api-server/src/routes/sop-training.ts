@@ -24,7 +24,7 @@ import {
   type StaffRoleForTraining,
   type Sop,
 } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, type AppRole } from "../middleware/authorize";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -35,8 +35,8 @@ import { setObjectAclPolicy } from "../lib/objectAcl";
 const router = Router();
 const objectStorage = new ObjectStorageService();
 
-const STAFF_VIEW_ROLES = ["owner", "manager", "cashier", "waiter", "kitchen", "delivery_executive", "super_admin"];
-const AUTHOR_ROLES = ["owner", "manager", "super_admin"];
+const STAFF_VIEW_ROLES: AppRole[] = ["owner", "manager", "cashier", "waiter", "kitchen", "delivery_executive", "super_admin"];
+const AUTHOR_ROLES: AppRole[] = ["owner", "manager", "super_admin"];
 
 function isCategory(s: unknown): s is SopCategory {
   return typeof s === "string" && (SOP_CATEGORIES as readonly string[]).includes(s);

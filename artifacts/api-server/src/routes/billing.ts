@@ -57,7 +57,7 @@ router.put("/admin/payment-methods/:provider", requireSuperAdmin, async (req, re
   const row = await upsertProvider(provider, { isEnabled, isDefault, config }, req.user?.id);
   await recordAuditLog({
     req, module: "billing", action: "payment_method.update", entity: "payment_method",
-    entityId: row.id, newValue: { provider, isEnabled, isDefault, config },
+    entityId: null, newValue: { provider: row.provider, isEnabled, isDefault, config },
   });
   res.json({
     provider: row.provider,

@@ -649,11 +649,11 @@ router.get("/restaurants/:restaurantId/feedback-wall/list", async (req: Request,
     return {
       ...item,
       rating: fb?.rating ?? ex?.rating ?? null,
-      comment: fb?.comment ?? ex?.reviewText ?? null,
+      comment: fb?.comment ?? ex?.body ?? null,
       authorName: item.displayNameOverride ?? fb?.customerName ?? ex?.authorName ?? "Guest",
       sourceLabel: item.source === "google" ? "Google" : item.source === "qr" ? "QR feedback" : "Manual",
-      externalUrl: ex?.reviewUrl ?? null,
-      occurredAt: fb?.createdAt ?? ex?.publishedAt ?? item.createdAt,
+      externalUrl: null,
+      occurredAt: fb?.createdAt ?? ex?.postedAt ?? item.createdAt,
     };
   });
 
@@ -701,7 +701,7 @@ router.get("/restaurants/:restaurantId/feedback-wall/candidates", async (req: Re
       eq(externalReviewsTable.restaurantId, restaurantId),
       gte(externalReviewsTable.rating, minRating),
     ))
-    .orderBy(desc(externalReviewsTable.publishedAt))
+    .orderBy(desc(externalReviewsTable.postedAt))
     .limit(100);
 
   res.json({
@@ -710,8 +710,8 @@ router.get("/restaurants/:restaurantId/feedback-wall/candidates", async (req: Re
       customerName: r.customerName, createdAt: r.createdAt,
     })),
     externalReviews: ex.filter(r => !existingExIds.has(r.id)).map(r => ({
-      id: r.id, source: r.source, rating: r.rating, reviewText: r.reviewText,
-      authorName: r.authorName, publishedAt: r.publishedAt, reviewUrl: r.reviewUrl,
+      id: r.id, source: r.source, rating: r.rating, reviewText: r.body,
+      authorName: r.authorName, publishedAt: r.postedAt, reviewUrl: null,
     })),
   });
 });

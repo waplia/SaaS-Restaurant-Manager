@@ -4030,7 +4030,7 @@ export function useRecomputeStaffIncentives() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { year: number; month: number }) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/staff-incentives/recompute`, {
+      apiPost<{ count: number }>(`/restaurants/${RESTAURANT_ID}/staff-incentives/recompute`, {
         periodYear: input.year, periodMonth: input.month,
       }),
     onSuccess: (_d, v) => {
@@ -4062,7 +4062,7 @@ export function useApproveAllStaffIncentives() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { year: number; month: number }) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/staff-incentives/approve-all`, {
+      apiPost<{ approved: number }>(`/restaurants/${RESTAURANT_ID}/staff-incentives/approve-all`, {
         periodYear: input.year, periodMonth: input.month,
       }),
     onSuccess: () => {

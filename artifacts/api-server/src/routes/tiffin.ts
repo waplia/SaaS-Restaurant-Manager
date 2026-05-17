@@ -370,7 +370,7 @@ router.post("/restaurants/:restaurantId/tiffin/deliveries/:id/attendance", requi
 router.get("/restaurants/:restaurantId/tiffin/my-route", requireRole("delivery_executive", "owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const date = (typeof req.query.date === "string" ? req.query.date : new Date().toISOString().slice(0, 10));
-  const userId = req.user!.id;
+  const userId = req.user!.sub;
   const rows = await db.select({
     id: tiffinDeliveriesTable.id,
     subscriptionId: tiffinDeliveriesTable.subscriptionId,

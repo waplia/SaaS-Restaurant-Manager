@@ -1068,13 +1068,13 @@ async function aggregateStaffMetrics(restaurantId: number, from: Date, to: Date)
       .groupBy(ordersTable.waiterId),
     db.select({
       waiterId: ordersTable.waiterId,
-      avgMin: sql<string>`avg(extract(epoch from (${ordersTable.completedAt} - ${ordersTable.createdAt})) / 60.0)`,
+      avgMin: sql<string>`avg(extract(epoch from (${ordersTable.updatedAt} - ${ordersTable.createdAt})) / 60.0)`,
     }).from(ordersTable)
       .where(and(
         eq(ordersTable.restaurantId, restaurantId),
         gte(ordersTable.createdAt, from),
         lte(ordersTable.createdAt, to),
-        sql`${ordersTable.completedAt} is not null`,
+        eq(ordersTable.status, "completed"),
         sql`${ordersTable.waiterId} is not null`,
       ))
       .groupBy(ordersTable.waiterId),

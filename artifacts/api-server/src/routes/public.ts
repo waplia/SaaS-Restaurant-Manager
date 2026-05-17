@@ -1137,10 +1137,10 @@ router.get("/public/feedback-wall/:slug", async (req, res) => {
       source: item.source,
       isFeatured: item.isFeatured,
       rating: fb?.rating ?? ex?.rating ?? null,
-      comment: fb?.comment ?? ex?.reviewText ?? null,
+      comment: fb?.comment ?? ex?.body ?? null,
       authorName: safeName,
-      externalUrl: ex?.reviewUrl ?? null,
-      occurredAt: fb?.createdAt ?? ex?.publishedAt ?? item.createdAt,
+      externalUrl: null,
+      occurredAt: fb?.createdAt ?? ex?.postedAt ?? item.createdAt,
     };
   });
 
@@ -1215,12 +1215,12 @@ router.get("/marketing/testimonials", async (_req, res) => {
         id: item.id,
         source: item.source,
         rating: fb?.rating ?? ex?.rating ?? null,
-        comment: fb?.comment ?? ex?.reviewText ?? null,
+        comment: fb?.comment ?? ex?.body ?? null,
         authorName: safeName,
         restaurantName: item.restaurantName,
         restaurantSlug: item.restaurantSlug,
         restaurantLogo: item.restaurantLogo,
-        externalUrl: ex?.reviewUrl ?? null,
+        externalUrl: null,
       };
     })
     .filter(t => t.comment && (t.comment.length ?? 0) > 10);

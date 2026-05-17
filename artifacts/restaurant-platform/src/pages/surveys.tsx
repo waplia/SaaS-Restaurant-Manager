@@ -14,7 +14,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
-import { apiFetch, getApiUrl } from "@/lib/api";
+import { apiFetch, apiPost, apiPut, apiPatch, apiDelete, getApiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from "recharts";
 
@@ -99,9 +99,7 @@ export default function SurveysPage() {
   });
 
   const createMut = useMutation({
-    mutationFn: (type: string) => apiFetch(`/restaurants/${restaurantId}/surveys`, {
-      method: "POST", body: JSON.stringify({ type }),
-    }),
+    mutationFn: (type: string) => apiPost(`/restaurants/${restaurantId}/surveys`, { type }),
     onSuccess: (s: SurveyDetail) => {
       toast({ title: "Survey created" });
       setCreateOpen(false);
@@ -112,7 +110,7 @@ export default function SurveysPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiFetch(`/restaurants/${restaurantId}/surveys/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) => apiDelete(`/restaurants/${restaurantId}/surveys/${id}`),
     onSuccess: () => {
       toast({ title: "Survey deleted" });
       setSelectedId(null);
@@ -229,9 +227,7 @@ function SurveyDetailPanel({ restaurantId, surveyId }: { restaurantId: number; s
   const publicUrl = survey ? `${window.location.origin}/survey/${survey.slug}` : "";
 
   const updateMut = useMutation({
-    mutationFn: (body: Partial<SurveyDetail>) => apiFetch(`/restaurants/${restaurantId}/surveys/${surveyId}`, {
-      method: "PATCH", body: JSON.stringify(body),
-    }),
+    mutationFn: (body: Partial<SurveyDetail>) => apiPatch(`/restaurants/${restaurantId}/surveys/${surveyId}`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["survey", restaurantId, surveyId] });
       qc.invalidateQueries({ queryKey: ["surveys", restaurantId] });
@@ -240,9 +236,7 @@ function SurveyDetailPanel({ restaurantId, surveyId }: { restaurantId: number; s
   });
 
   const saveQuestionsMut = useMutation({
-    mutationFn: (questions: SurveyQuestion[]) => apiFetch(`/restaurants/${restaurantId}/surveys/${surveyId}/questions`, {
-      method: "PUT", body: JSON.stringify({ questions }),
-    }),
+    mutationFn: (questions: SurveyQuestion[]) => apiPut(`/restaurants/${restaurantId}/surveys/${surveyId}/questions`, { questions }),
     onSuccess: (data: { structuralEditsLocked: boolean }) => {
       qc.invalidateQueries({ queryKey: ["survey", restaurantId, surveyId] });
       toast({

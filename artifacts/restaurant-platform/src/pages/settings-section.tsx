@@ -873,7 +873,7 @@ function ReservationSection() {
               ].map(([k, l]) => (
                 <label key={k as string} className="flex items-center gap-1.5">
                   <input type="checkbox" checked={(s as unknown as Record<string, boolean>)[k as string]}
-                    onChange={e => set(p => ({ ...p, [k as string]: e.target.checked }) as ReservationCfg)} />
+                    onChange={e => set(p => ({ ...p, [k as string]: e.target.checked }) as typeof p)} />
                   {l}
                 </label>
               ))}
@@ -1972,7 +1972,7 @@ function LoyaltyStampsTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
       <ListEditor items={s.stampCards}
         onChange={cards => set(p => ({ ...p, stampCards: cards }))}
         addLabel="Add stamp card"
-        makeNew={() => ({ id: `card-${Date.now()}`, name: "Buy 5, get 1 free", required: 5, rewardType: "free_item", rewardValue: "", rewardLabel: "" })}
+        makeNew={() => ({ id: `card-${Date.now()}`, name: "Buy 5, get 1 free", required: 5, rewardType: "free_item" as const, rewardValue: "", rewardLabel: "" })}
         render={(item, _i, update, remove) => (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -2067,7 +2067,7 @@ function LoyaltyMysteryTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
       <ListEditor items={m.pool}
         onChange={pool => set(p => ({ ...p, mystery: { ...p.mystery, pool } }))}
         addLabel="Add reward"
-        makeNew={() => ({ key: `r-${Date.now()}`, label: "", weight: 1, rewardType: "points", rewardValue: 50 })}
+        makeNew={() => ({ key: `r-${Date.now()}`, label: "", weight: 1, rewardType: "points" as const, rewardValue: 50 })}
         render={(item, _i, update, remove) => (
           <div className="flex items-center gap-2">
             <Input className="flex-1" placeholder="Label" value={item.label} onChange={e => update({ label: e.target.value })} />
@@ -2123,7 +2123,7 @@ function LoyaltyMilestonesTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
       <ListEditor items={m.tiers}
         onChange={tiers => set(p => ({ ...p, milestones: { ...p.milestones, tiers } }))}
         addLabel="Add milestone"
-        makeNew={() => ({ key: `ms-${Date.now()}`, threshold: 1000, rewardType: "points", rewardValue: 100 })}
+        makeNew={() => ({ key: `ms-${Date.now()}`, threshold: 1000, rewardType: "points" as const, rewardValue: 100 })}
         render={(item, _i, update, remove) => (
           <div className="flex items-center gap-2">
             <Input className="w-32" placeholder="Key" value={item.key} onChange={e => update({ key: e.target.value })} />
@@ -2202,7 +2202,7 @@ function LoyaltyItemRulesTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
       <ListEditor items={s.itemRules.rules}
         onChange={rules => set(p => ({ ...p, itemRules: { ...p.itemRules, rules } }))}
         addLabel="Add rule"
-        makeNew={() => ({ id: `ir-${Date.now()}`, scope: "item", refId: 0, multiplier: 1, bonusPoints: 0, earnsStampCardId: "" })}
+        makeNew={() => ({ id: `ir-${Date.now()}`, scope: "item" as const, refId: 0, multiplier: 1, bonusPoints: 0, earnsStampCardId: "" })}
         render={(item, _i, update, remove) => (
           <div className="flex items-center gap-2">
             <Select value={item.scope} onChange={v => update({ scope: v })}
@@ -2239,9 +2239,9 @@ function LoyaltyFamilyTab({ s, set }: { s: Loyalty2Cfg; set: Setter }) {
 
 // Legacy compat wrapper (unused — kept for the old shape so older code doesn't error).
 interface LoyaltyTier { id: string; name: string; threshold: number; multiplier: number; }
-interface _LegacyLoyaltyCfg { enabled: boolean; pointsPerCurrencyUnit: number; redemptionRate: number; tiers: LoyaltyTier[]; expiryMonths: number; }
+interface _LegacyLoyaltyCfg { enabled: boolean; pointsPerCurrencyUnit: number; redemptionRate: number; tiers: LoyaltyTier[]; expiryMonths: number; signupBonus: number; birthdayBonus: number; referralBonus: number; }
 function _UnusedLegacyLoyaltySection() {
-  const defaults: _LegacyLoyaltyCfg = { enabled: false, pointsPerCurrencyUnit: 1, redemptionRate: 0.05, tiers: [], expiryMonths: 0 };
+  const defaults: _LegacyLoyaltyCfg = { enabled: false, pointsPerCurrencyUnit: 1, redemptionRate: 0.05, tiers: [], expiryMonths: 0, signupBonus: 0, birthdayBonus: 0, referralBonus: 0 };
   return (
     <SettingForm section="loyalty_legacy_unused" defaults={defaults}>
       {(s, set) => (

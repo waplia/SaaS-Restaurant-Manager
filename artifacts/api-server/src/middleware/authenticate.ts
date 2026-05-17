@@ -16,19 +16,26 @@ declare global {
 // request just to look up `tokenVersion`. Entries expire after 30 s, which
 // caps the worst-case window a revoked token can keep working at ~30 s.
 const VERSION_TTL_MS = 30_000;
-const versionCache = new Map<number, { v: number; exp: number }>();
+type CachedUser = { v: number; exp: number; name: string | null; phone: string | null };
+const versionCache = new Map<number, CachedUser>();
 
-async function currentTokenVersion(userId: number): Promise<number | null> {
+async function currentTokenVersion(userId: number): Promise<CachedUser | null> {
   const now = Date.now();
   const cached = versionCache.get(userId);
-  if (cached && cached.exp > now) return cached.v;
+  if (cached && cached.exp > now) return cached;
   const [row] = await db
-    .select({ tokenVersion: usersTable.tokenVersion, isActive: usersTable.isActive })
+    .select({
+      tokenVersion: usersTable.tokenVersion,
+      isActive: usersTable.isActive,
+      name: usersTable.name,
+      phone: usersTable.phone,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, userId));
   if (!row || !row.isActive) return null;
-  versionCache.set(userId, { v: row.tokenVersion, exp: now + VERSION_TTL_MS });
-  return row.tokenVersion;
+  const entry: CachedUser = { v: row.tokenVersion, exp: now + VERSION_TTL_MS, name: row.name, phone: row.phone };
+  versionCache.set(userId, entry);
+  return entry;
 }
 
 export function invalidateTokenVersionCache(userId: number): void {
@@ -68,7 +75,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // Reject tokens missing the claim outright so any JWT minted before
     // this deploy is rejected immediately (rather than continuing to
     // work until its 24h/7d expiry).
-    if (typeof payload.tv !== "number" || payload.tv !== current) {
+    if (typeof payload.tv !== "number" || payload.tv !== current.v) {
       res.status(401).json({ error: "Session has been revoked, please sign in again" });
       return;
     }
@@ -84,6 +91,9 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         return;
       }
     }
+    payload.id = payload.sub;
+    payload.name = current.name;
+    payload.phone = current.phone;
     req.user = payload;
     next();
   } catch {
@@ -99,7 +109,10 @@ export async function optionalAuthenticate(req: Request, _res: Response, next: N
       const payload = verifyToken(token);
       if (payload.type === "access") {
         const current = await currentTokenVersion(payload.sub);
-        if (current != null && typeof payload.tv === "number" && payload.tv === current) {
+        if (current != null && typeof payload.tv === "number" && payload.tv === current.v) {
+          payload.id = payload.sub;
+          payload.name = current.name;
+          payload.phone = current.phone;
           if (typeof payload.sid === "number" && !payload.impersonated) {
             if (await isSessionActive(payload.sid, payload.jti)) {
               req.user = payload;

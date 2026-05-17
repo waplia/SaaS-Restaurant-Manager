@@ -120,27 +120,29 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   const presetPriceId = period === "yearly" ? plan.stripeYearlyPriceId : plan.stripeMonthlyPriceId;
   const stripeCurrency = (plan.currency ?? "INR").toLowerCase();
 
-  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = presetPriceId
-    ? { price: presetPriceId, quantity: 1 }
-    : {
-        price_data: {
-          currency: stripeCurrency,
-          product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
-          unit_amount: Math.round(
-            (period === "yearly" && yearlyConfigured
-              ? Number(plan.yearlyPrice)
-              : Number(plan.price)) * 100,
-          ),
-          recurring: { interval: period === "yearly" ? "year" : "month" },
+  const lineItems: Stripe.Checkout.SessionCreateParams["line_items"] = [
+    presetPriceId
+      ? { price: presetPriceId, quantity: 1 }
+      : {
+          price_data: {
+            currency: stripeCurrency,
+            product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
+            unit_amount: Math.round(
+              (period === "yearly" && yearlyConfigured
+                ? Number(plan.yearlyPrice)
+                : Number(plan.price)) * 100,
+            ),
+            recurring: { interval: period === "yearly" ? "year" : "month" },
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      };
+  ];
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     payment_method_types: ["card"],
     mode: "subscription",
-    line_items: [lineItem],
+    line_items: lineItems,
     metadata: { tenantId: String(tenantId), planId: String(planId), billingPeriod: period },
     success_url: successUrl + "?session_id={CHECKOUT_SESSION_ID}",
     cancel_url: cancelUrl,

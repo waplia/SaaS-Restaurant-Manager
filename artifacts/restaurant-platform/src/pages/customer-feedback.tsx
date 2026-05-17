@@ -49,7 +49,15 @@ export default function CustomerFeedbackPage() {
   const qrCode = params?.qrCode ?? "";
   const [config, setConfig] = useState<QrConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sessionToken] = useState<string>(() => newSessionToken());
+  const [sessionToken] = useState<string>(() => {
+    try {
+      return typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    } catch {
+      return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  });
   const { toast } = useToast();
   const [rating, setRating] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);

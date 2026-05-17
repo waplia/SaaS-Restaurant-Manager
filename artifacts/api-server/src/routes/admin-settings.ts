@@ -176,7 +176,7 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
       });
       return;
     }
-    await setObjectAclPolicy(file, { owner: "system:app-settings", visibility: "public" });
+    await setObjectAclPolicy(file, { restaurantId: "system", uploaderId: String(req.user?.sub ?? ""), visibility: "public" });
     const wildcardPath = objectPath.replace(/^\/objects\//, "");
     const publicUrl = `/api/public/storage/objects/${wildcardPath}`;
     res.json({ objectPath, publicUrl, contentType: result.mime, size: result.size });

@@ -370,7 +370,7 @@ router.use(
 
 // List conversations for the calling user.
 router.get("/restaurants/:restaurantId/dashboard-chat/conversations", async (req: Request, res: Response) => {
-  const userId = req.user!.id;
+  const userId = req.user!.sub;
   const rows = await db.select({
     id: aiChatConversationsTable.id,
     title: aiChatConversationsTable.title,
@@ -387,7 +387,7 @@ router.get("/restaurants/:restaurantId/dashboard-chat/conversations", async (req
 // Read one conversation with its messages.
 router.get("/restaurants/:restaurantId/dashboard-chat/conversations/:id", async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const convo = await loadConversation(id, req.user!.id);
+  const convo = await loadConversation(id, req.user!.sub);
   if (!convo) return void res.status(404).json({ error: "Conversation not found" });
   const messages = await loadMessages(id);
   res.json({ conversation: convo, messages });
@@ -396,7 +396,7 @@ router.get("/restaurants/:restaurantId/dashboard-chat/conversations/:id", async 
 // Delete a conversation.
 router.delete("/restaurants/:restaurantId/dashboard-chat/conversations/:id", async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const convo = await loadConversation(id, req.user!.id);
+  const convo = await loadConversation(id, req.user!.sub);
   if (!convo) return void res.status(404).json({ error: "Conversation not found" });
   await db.delete(aiChatConversationsTable).where(eq(aiChatConversationsTable.id, id));
   res.status(204).end();
@@ -409,7 +409,7 @@ router.post(
   requireAiCredits(FEATURE_SLUG, () => ({ units: 1 })),
   async (req: Request, res: Response) => {
     const restaurantId = Number(req.params.restaurantId);
-    const userId = req.user!.id;
+    const userId = req.user!.sub;
     const tenantId = req.user!.tenantId!;
     const role = req.user!.role;
     const isSuperAdmin = !!req.user!.isSuperAdmin;

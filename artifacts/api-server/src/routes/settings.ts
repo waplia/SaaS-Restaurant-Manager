@@ -165,7 +165,7 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
     .returning();
   await recordAuditLog({
     req, module: "settings", action: `settings.${section}.update`, entity: "settings",
-    entityId: row.id, restaurantId, targetRestaurantId: restaurantId,
+    entityId: row.restaurantId, restaurantId, targetRestaurantId: restaurantId,
     oldValue: previous?.data ?? null, newValue: data,
   });
   let respData: unknown = row.data;

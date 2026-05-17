@@ -52,7 +52,7 @@ function isStatus(s: unknown): s is TicketStatus {
   return typeof s === "string" && (STATUSES as string[]).includes(s);
 }
 
-function actorInfo(req: { user?: { sub?: number; id?: number; isSuperAdmin?: boolean; name?: string; email?: string } }) {
+function actorInfo(req: { user?: { sub?: number; id?: number; isSuperAdmin?: boolean; name?: string | null; email?: string } }) {
   const id = req.user?.sub ?? req.user?.id ?? null;
   const isAdmin = !!req.user?.isSuperAdmin;
   const name = req.user?.name ?? req.user?.email ?? null;

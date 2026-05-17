@@ -558,7 +558,7 @@ adminRouter.post("/admin/leads/:id/follow-up", async (req, res) => {
     return;
   }
   await logActivity(id, req.user!.sub, when ? "follow_up_scheduled" : "follow_up_cleared", { at: when?.toISOString() ?? null, note: note ?? null });
-  await recordAuditLog(req, {
+  await recordAuditLog({ req, 
     module: "marketing",
     action: "lead.update",
     entity: "lead",
@@ -597,7 +597,7 @@ adminRouter.post("/admin/leads/:id/status", async (req, res) => {
     .where(eq(leadsTable.id, id))
     .returning();
   await logActivity(id, req.user!.sub, "status_changed", { from: current.status, to: status });
-  await recordAuditLog(req, {
+  await recordAuditLog({ req, 
     module: "marketing",
     action: "lead.update",
     entity: "lead",
@@ -810,7 +810,7 @@ adminRouter.post("/admin/blog/posts", async (req, res) => {
         published: body.published !== false,
       })
       .returning();
-    await recordAuditLog(req, {
+    await recordAuditLog({ req, 
       module: "marketing",
       action: "blog_post.create",
       entity: "blog_post",
@@ -847,7 +847,7 @@ adminRouter.patch("/admin/blog/posts/:id", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  await recordAuditLog(req, {
+  await recordAuditLog({ req, 
     module: "marketing",
     action: "blog_post.update",
     entity: "blog_post",
@@ -867,7 +867,7 @@ adminRouter.delete("/admin/blog/posts/:id", async (req, res) => {
   }
   const [before] = await db.select().from(blogPostsTable).where(eq(blogPostsTable.id, id));
   await db.delete(blogPostsTable).where(eq(blogPostsTable.id, id));
-  await recordAuditLog(req, {
+  await recordAuditLog({ req, 
     module: "marketing",
     action: "blog_post.delete",
     entity: "blog_post",

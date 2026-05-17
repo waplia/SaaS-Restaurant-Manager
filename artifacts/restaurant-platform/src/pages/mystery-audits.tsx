@@ -161,9 +161,10 @@ function TemplateEditor({ initial, onClose, onSaved }: { initial: TemplateDetail
   const [saving, setSaving] = useState(false);
   const isNew = !tpl.id;
   const save = async () => {
-    if (!tpl.name.trim()) return toast({ title: "Name required", variant: "destructive" });
+    if (!tpl.name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
     if (!tpl.categories.length || tpl.categories.some(c => !c.name.trim() || !c.items.length || c.items.some(i => !i.label.trim()))) {
-      return toast({ title: "Each category needs a name and at least one item with a label", variant: "destructive" });
+      toast({ title: "Each category needs a name and at least one item with a label", variant: "destructive" });
+      return;
     }
     setSaving(true);
     try {
@@ -316,7 +317,8 @@ function NewAssignmentDialog({ onClose, onCreated }: { onClose: () => void; onCr
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     if (!form.templateId || !form.restaurantId || !form.auditorUserId) {
-      return toast({ title: "Template, outlet and auditor are required", variant: "destructive" });
+      toast({ title: "Template, outlet and auditor are required", variant: "destructive" });
+      return;
     }
     setSaving(true);
     try {
@@ -796,7 +798,7 @@ function NewActionPanel({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ submissionId: 0, description: "", priority: "medium" as "low" | "medium" | "high", dueDate: "" });
   const submit = async () => {
-    if (!form.submissionId || !form.description.trim()) return toast({ title: "Audit and description required", variant: "destructive" });
+    if (!form.submissionId || !form.description.trim()) { toast({ title: "Audit and description required", variant: "destructive" }); return; }
     try {
       await apiPost("/mystery-audits/corrective-actions", {
         submissionId: form.submissionId,

@@ -258,7 +258,9 @@ router.post(
 // `/bulk-delete`, `/bulk-download`, `/category-defaults` coexist with the
 // generic `/documents/:id` family without strict ordering.
 function numericIdGuard(req: Request, _res: Response, next: (err?: unknown) => void) {
-  if (!/^\d+$/.test(req.params.id ?? "")) return next("route");
+  const raw = req.params.id;
+  const id = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
+  if (!/^\d+$/.test(id)) return next("route");
   next();
 }
 

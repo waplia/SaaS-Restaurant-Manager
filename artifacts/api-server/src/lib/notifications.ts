@@ -5,7 +5,7 @@ const SMTP_HOST = process.env.SMTP_HOST ?? "";
 const SMTP_PORT = Number(process.env.SMTP_PORT ?? 587);
 const SMTP_USER = process.env.SMTP_USER ?? "";
 const SMTP_PASS = process.env.SMTP_PASS ?? "";
-const SMTP_FROM = process.env.SMTP_FROM ?? "noreply@tabletrack.app";
+const SMTP_FROM = process.env.SMTP_FROM ?? "noreply@khanalagao.app";
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
@@ -80,7 +80,7 @@ export async function sendWhatsApp(opts: {
       logger.error({ status: res.status, text }, "Twilio WhatsApp error");
       throw new Error(`Twilio WhatsApp error ${res.status}: ${text}`);
     }
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return { sid: typeof json.sid === "string" ? json.sid : null };
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send WhatsApp message");
@@ -116,7 +116,7 @@ export async function sendSms(opts: {
       logger.error({ status: res.status, text }, "Twilio SMS error");
       throw new Error(`Twilio SMS error ${res.status}: ${text}`);
     }
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return { sid: typeof json.sid === "string" ? json.sid : null };
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send SMS");

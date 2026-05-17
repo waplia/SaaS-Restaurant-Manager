@@ -1,6 +1,8 @@
-# TableTrack
+# KhanaLagao
 
 A multi-tenant SaaS restaurant management platform — POS, table management, inventory, payroll, staff shifts, and AI-assisted menu generation for restaurant owners and staff.
+
+(Internal package and directory names retain the `tabletrack` identifier; the user-facing brand is KhanaLagao.)
 
 ## Run & Operate
 

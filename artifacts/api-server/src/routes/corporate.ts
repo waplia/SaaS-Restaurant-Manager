@@ -467,7 +467,7 @@ router.post("/restaurants/:restaurantId/corporate/scheduled-orders", requireRole
   const restaurantId = Number(req.params.restaurantId);
   const parsed = insertCorporateScheduledOrderSchema.safeParse({ ...req.body, restaurantId });
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.issues }); return; }
-  const next = computeNextRun(parsed.data.recurrence, parsed.data.weekday ?? null, parsed.data.scheduledTime, new Date());
+  const next = computeNextRun(parsed.data.recurrence ?? "one_off", parsed.data.weekday ?? null, parsed.data.scheduledTime ?? "", new Date());
   const [row] = await db.insert(corporateScheduledOrdersTable).values({ ...parsed.data, nextRunAt: next }).returning();
   res.status(201).json(row);
 });

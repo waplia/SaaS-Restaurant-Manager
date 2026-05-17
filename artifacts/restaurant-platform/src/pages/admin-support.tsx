@@ -198,7 +198,7 @@ function AdminTicketDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const admins = useQuery({ queryKey: ["admin-support-admins"], queryFn: () => apiGet<{ data: AdminUser[] }>("/admin/support/admins") });
 
   const patch = useMutation({
-    mutationFn: (body: Partial<Ticket>) => apiAction(`/admin/support/tickets/${id}`, body, "PATCH"),
+    mutationFn: (body: Partial<Ticket>) => apiAction(`/admin/support/tickets/${id}`, "PATCH", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-support-ticket", id] });
       qc.invalidateQueries({ queryKey: ["admin-support-tickets"] });
@@ -473,7 +473,7 @@ function CategoryDialog({ initial, onClose }: { initial: Category | null; onClos
         isActive, sortOrder: Number(sortOrder) || 0,
       };
       return initial
-        ? apiAction(`/admin/support/categories/${initial.id}`, body, "PATCH")
+        ? apiAction(`/admin/support/categories/${initial.id}`, "PATCH", body)
         : apiPost("/admin/support/categories", body);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-support-categories"] }); toast({ title: "Saved" }); onClose(); },
@@ -524,7 +524,7 @@ function SlaSettingsManager() {
   const [draft, setDraft] = useState<Partial<SlaSettings>>({});
   const merged = { ...(settings.data ?? {}), ...draft } as SlaSettings;
   const save = useMutation({
-    mutationFn: () => apiAction("/admin/support/sla-settings", draft, "PUT"),
+    mutationFn: () => apiAction("/admin/support/sla-settings", "PUT", draft),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-support-sla"] }); setDraft({}); toast({ title: "Saved" }); },
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });

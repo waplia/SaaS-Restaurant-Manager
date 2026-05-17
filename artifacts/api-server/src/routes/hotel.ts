@@ -417,7 +417,7 @@ router.post(
           totalPrice: (Number(ei.mi.price) * ei.qty).toFixed(2), notes: ei.notes,
         });
       }
-      const tickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId });
+      const tickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId, isPriority: false });
       for (const t of tickets) {
         broadcastEvent(restaurantId, "order:new", { ...order, ticketId: t.ticketId, kitchenId: t.kitchenId });
       }

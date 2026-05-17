@@ -21,7 +21,14 @@ export const SALT_ROUNDS = 10;
 
 export interface JwtPayload {
   sub: number;
+  /** Convenience alias for `sub` (populated by the `authenticate` middleware
+   * so route handlers can read `req.user?.id` ergonomically). */
+  id?: number;
   email: string;
+  /** Best-effort display name copied from the user row by `authenticate`. */
+  name?: string | null;
+  /** Best-effort phone copied from the user row by `authenticate`. */
+  phone?: string | null;
   role: string;
   tenantId: number | null;
   restaurantId: number | null;

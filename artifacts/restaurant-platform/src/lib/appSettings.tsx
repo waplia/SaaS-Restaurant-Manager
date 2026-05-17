@@ -31,7 +31,7 @@ const DEFAULTS: PublicAppSettings = {
   faviconUrl: "/favicon.png",
   primaryColor: "#f97316",
   secondaryColor: "#fb923c",
-  supportEmail: "support@tabletrack.app",
+  supportEmail: "support@khanalagao.app",
   supportPhone: null,
   supportWhatsapp: null,
   companyAddress: null,

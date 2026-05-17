@@ -114,7 +114,7 @@ async function callProvider(provider: SmsProvider, to: string, body: string, tem
       body: form.toString(),
     });
     if (!res.ok) throw new Error(`Twilio ${res.status}: ${await res.text()}`);
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return { providerMessageId: typeof json.sid === "string" ? json.sid : null, cost: typeof json.price === "string" ? json.price : null, costCurrency: typeof json.price_unit === "string" ? json.price_unit : null };
   }
 
@@ -141,7 +141,7 @@ async function callProvider(provider: SmsProvider, to: string, body: string, tem
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`MSG91 ${res.status}: ${await res.text()}`);
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return { providerMessageId: typeof json.request_id === "string" ? json.request_id : (typeof json.message === "string" ? json.message : null) };
   }
 
@@ -156,7 +156,7 @@ async function callProvider(provider: SmsProvider, to: string, body: string, tem
       body: form.toString(),
     });
     if (!res.ok) throw new Error(`Textlocal ${res.status}: ${await res.text()}`);
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (json.status !== "success") throw new Error(`Textlocal: ${JSON.stringify(json.errors ?? json)}`);
     return { providerMessageId: typeof json.batch_id === "string" || typeof json.batch_id === "number" ? String(json.batch_id) : null };
   }
@@ -176,7 +176,7 @@ async function callProvider(provider: SmsProvider, to: string, body: string, tem
     if (template?.dltTemplateId) params.set("template_id", template.dltTemplateId);
     const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?${params.toString()}`);
     if (!res.ok) throw new Error(`Fast2SMS ${res.status}: ${await res.text()}`);
-    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (json.return !== true) throw new Error(`Fast2SMS: ${JSON.stringify(json)}`);
     const reqId = json.request_id;
     return { providerMessageId: typeof reqId === "string" || typeof reqId === "number" ? String(reqId) : null };

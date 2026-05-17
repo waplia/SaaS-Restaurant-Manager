@@ -402,9 +402,12 @@ interface ApplyRechargeOptions {
 /**
  * Drizzle gives us no canonical "tx-or-db" type, so we accept either the root
  * `db` handle or a transaction handle obtained via `db.transaction(async (tx) => …)`.
- * Both expose the same query builder surface we use here.
+ * Both expose the same query builder surface we use here. We derive the tx
+ * type from `db.transaction`'s callback parameter so the two stay in lockstep
+ * with the schema.
  */
-type DbOrTx = typeof db;
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbOrTx = typeof db | DbTx;
 
 /**
  * Internal: credits a wallet from a recharge package, on the supplied db handle.

@@ -1,4 +1,4 @@
-import { ZipArchive } from "archiver";
+import archiver, { type Archiver } from "archiver";
 
 /**
  * Minimal XLSX (Office Open XML SpreadsheetML) writer using `archiver`.
@@ -12,7 +12,7 @@ export async function writeXlsx(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const archive: Archiver = archiver("zip", { zlib: { level: 9 } });
     archive.on("data", (chunk: Buffer) => chunks.push(chunk));
     archive.on("end", () => resolve(Buffer.concat(chunks)));
     archive.on("error", reject);
