@@ -1,0 +1,13 @@
+node_modules
+.env
+
+# Build outputs from the native iOS project (the project itself IS
+# committed so a fresh clone can open it in Xcode).
+ios/App/Pods
+ios/App/build
+ios/DerivedData
+ios/App/App/public
+ios/App/Podfile.lock
+ios/.xcode.env.local
+*.xcuserstate
+xcuserdata/

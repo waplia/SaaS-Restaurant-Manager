@@ -3,6 +3,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { InstallPrompt } from "@/components/install-prompt";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { BranchProvider } from "@/lib/branch";
@@ -561,6 +562,7 @@ function App() {
                 <Router />
               </WouterRouter>
               <Toaster />
+              <InstallPrompt />
             </TooltipProvider>
           </BranchProvider>
           </AppSettingsProvider>

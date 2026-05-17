@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Khana Lagao</title>
+    <style>
+      html, body { height: 100%; margin: 0; background: #e25a0f; color: white;
+        font-family: -apple-system, system-ui, Roboto, sans-serif;
+        display: flex; align-items: center; justify-content: center; }
+      .msg { text-align: center; }
+      .msg h1 { margin: 0 0 6px; font-size: 22px; }
+      .msg p { margin: 0; font-size: 14px; opacity: 0.85; }
+    </style>
+    <script>
+      // Capacitor loads this fallback bundle if the remote server is unreachable.
+      // The Capacitor server.url config (see capacitor.config.json) normally
+      // sends the WebView straight to the production web app.
+      var APP_URL = "https://khanalagao.com/app/";
+      window.addEventListener("load", function () {
+        try { window.location.replace(APP_URL); } catch (e) { /* ignore */ }
+      });
+    </script>
+  </head>
+  <body>
+    <div class="msg">
+      <h1>Khana Lagao</h1>
+      <p>Loading…</p>
+    </div>
+  </body>
+</html>

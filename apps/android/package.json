@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/android",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Capacitor Android wrapper for the Khana Lagao Restaurant Platform.",
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "assets": "capacitor-assets generate --android",
+    "build:apk": "cap sync android && cd android && ./gradlew assembleDebug",
+    "build:aab": "cap sync android && cd android && ./gradlew bundleRelease"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  }
+}

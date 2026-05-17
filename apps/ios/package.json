@@ -1,0 +1,19 @@
+{
+  "name": "@workspace/ios",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Capacitor iOS scaffold for the Khana Lagao Restaurant Platform. Requires macOS + Xcode to build.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "open": "cap open ios",
+    "assets": "capacitor-assets generate --ios"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0"
+  }
+}

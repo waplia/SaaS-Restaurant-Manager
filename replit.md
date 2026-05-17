@@ -48,6 +48,14 @@ A multi-tenant SaaS restaurant management platform — POS, table management, in
 - Customers: QR-code menu browsing and order tracking
 - AI features: menu drafting from images/text via Gemini and Anthropic
 
+## Installable app builds
+
+The Restaurant Platform also ships as a PWA (`artifacts/restaurant-platform/public/`),
+an Electron desktop wrapper (`apps/desktop/`), a Capacitor Android app
+(`apps/android/`), and a Capacitor iOS scaffold (`apps/ios/`). All wrappers
+load the same production web app — see `docs/app-builds.md` for build,
+signing, and store-submission steps.
+
 ## User preferences
 
 - User wants the full project running live with database

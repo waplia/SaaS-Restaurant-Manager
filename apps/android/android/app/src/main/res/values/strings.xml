@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Khana Lagao</string>
+    <string name="title_activity_main">Khana Lagao</string>
+    <string name="package_name">com.khanalagao.app</string>
+    <string name="custom_url_scheme">com.khanalagao.app</string>
+</resources>

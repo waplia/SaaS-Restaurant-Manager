@@ -1,0 +1,15 @@
+{
+  "appId": "com.khanalagao.app",
+  "appName": "Khana Lagao",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://khanalagao.com/app/",
+    "cleartext": false,
+    "iosScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
