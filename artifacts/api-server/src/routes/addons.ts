@@ -150,9 +150,23 @@ router.post("/addons/:key/confirm-payment", validate({ body: AddonConfirmPayment
   const key = String(req.params.key);
   const state = await resolveAddonState(tid, key);
   if (!state) { res.status(404).json({ error: "Add-on not found" }); return; }
+  if (!state.addon.isEnabled) { res.status(400).json({ error: "This add-on is not currently available." }); return; }
+  if (state.addon.comingSoon) { res.status(400).json({ error: "This add-on is coming soon.", code: "COMING_SOON" }); return; }
+  if (!state.eligibleByPlan) {
+    res.status(402).json({ error: "Your current plan can't install this add-on. Upgrade your plan to enable it.", code: "PLAN_INELIGIBLE" });
+    return;
+  }
+  if (state.addon.pricing.mode === "free") {
+    res.status(400).json({ error: "This add-on is free — use the install endpoint instead.", code: "NOT_PAID" });
+    return;
+  }
   const price = cycle === "yearly" ? state.addon.pricing.yearlyPrice ?? 0
     : cycle === "one_off" ? state.addon.pricing.oneOffPrice ?? 0
     : state.addon.pricing.monthlyPrice ?? 0;
+  if (!(price > 0)) {
+    res.status(400).json({ error: `No ${cycle} price configured for this add-on.`, code: "NO_PRICE" });
+    return;
+  }
   try {
     const row = await activatePaidAddon({
       tenantId: tid, addonKey: key,

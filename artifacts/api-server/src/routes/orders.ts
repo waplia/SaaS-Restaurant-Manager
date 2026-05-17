@@ -27,28 +27,37 @@ async function deductInventoryForOrder(orderId: number, restaurantId: number): P
     );
     for (const mapping of mappings) {
       const totalDeduct = Number(mapping.quantity) * item.quantity;
-      const [inv] = await db.select().from(inventoryItemsTable).where(
-        and(eq(inventoryItemsTable.id, mapping.inventoryItemId), eq(inventoryItemsTable.restaurantId, restaurantId))
-      );
-      if (!inv) continue;
-      const newStock = Math.max(0, Number(inv.currentStock) - totalDeduct);
-      await db.update(inventoryItemsTable).set({ currentStock: newStock.toFixed(3), updatedAt: new Date() }).where(eq(inventoryItemsTable.id, inv.id));
-      await db.insert(inventoryTransactionsTable).values({
-        itemId: inv.id,
-        restaurantId,
-        type: "use",
-        quantity: totalDeduct.toFixed(3),
-        notes: `Auto-deducted for order #${orderId}`,
-        referenceId: orderId,
-        referenceType: "order",
+      if (!Number.isFinite(totalDeduct) || totalDeduct <= 0) continue;
+      // Atomically decrement (clamped to 0) under a row lock so concurrent
+      // orders for the same inventory item cannot lose updates / oversell.
+      // Returns the post-update row so we know whether to fire a low-stock alert.
+      const updated = await db.transaction(async (tx) => {
+        const [inv] = await tx.select().from(inventoryItemsTable).where(
+          and(eq(inventoryItemsTable.id, mapping.inventoryItemId), eq(inventoryItemsTable.restaurantId, restaurantId))
+        ).for("update");
+        if (!inv) return null;
+        const newStock = Math.max(0, Number(inv.currentStock) - totalDeduct);
+        await tx.update(inventoryItemsTable)
+          .set({ currentStock: newStock.toFixed(3), updatedAt: new Date() })
+          .where(eq(inventoryItemsTable.id, inv.id));
+        await tx.insert(inventoryTransactionsTable).values({
+          itemId: inv.id,
+          restaurantId,
+          type: "use",
+          quantity: totalDeduct.toFixed(3),
+          notes: `Auto-deducted for order #${orderId}`,
+          referenceId: orderId,
+          referenceType: "order",
+        });
+        return { inv, newStock };
       });
-      if (newStock <= Number(inv.minStockLevel)) {
+      if (updated && updated.newStock <= Number(updated.inv.minStockLevel)) {
         await db.insert(notificationsTable).values({
           restaurantId,
           type: "low_stock",
           title: "Low Stock Alert",
-          message: `${inv.name} is running low (${newStock.toFixed(1)} ${inv.unit} remaining, min: ${Number(inv.minStockLevel).toFixed(1)} ${inv.unit})`,
-          entityId: inv.id,
+          message: `${updated.inv.name} is running low (${updated.newStock.toFixed(1)} ${updated.inv.unit} remaining, min: ${Number(updated.inv.minStockLevel).toFixed(1)} ${updated.inv.unit})`,
+          entityId: updated.inv.id,
           entityType: "inventory_item",
         });
       }
