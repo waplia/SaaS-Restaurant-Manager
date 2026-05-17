@@ -21,7 +21,7 @@ export type SectionKey =
   | "cancellation-reasons" | "order-settings" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
-  | "accounting" | "account" | "sessions";
+  | "accounting" | "account" | "sessions" | "customer-app";
 
 type IconType = typeof Building2;
 
@@ -111,6 +111,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     label: "Branding",
     items: [
       { key: "theme", label: "Theme & Branding", icon: Palette, ownerOnly: true },
+      { key: "customer-app", label: "Customer App", icon: MonitorSmartphone, ownerOnly: true, href: "/settings/customer-app" },
       { key: "menu-image", label: "Menu Item Images", icon: ImageIcon },
       { key: "downloads", label: "Downloads / Apps", icon: Download },
       { key: "allergens", label: "Allergens (EU 1169/2011)", icon: Wheat },

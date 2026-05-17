@@ -112,6 +112,7 @@ import customerQualityRouter from "./customer-quality";
 import advancedGrowthRouter from "./advanced-growth";
 import operationsRouter from "./operations";
 import vendorInvoicesRouter from "./vendor-invoices";
+import customerAppRouter, { customerAppPublicRouter } from "./customer-app";
 
 const router: IRouter = Router();
 
@@ -134,6 +135,7 @@ router.use(whatsappPublicRouter);
 router.use(canteenPublicRouter);
 router.use(tokensRouter);
 router.use(bakeryPublicRouter);
+router.use(customerAppPublicRouter);
 
 // Public API namespace (api-key authenticated). Mounted BEFORE the JWT
 // `authenticate` gate so external clients can call it with `Bearer <api_key>`.
@@ -248,5 +250,6 @@ router.use(menuIntelligenceRouter);
 router.use(advancedGrowthRouter);
 router.use(operationsRouter);
 router.use(vendorInvoicesRouter);
+router.use(customerAppRouter);
 
 export default router;

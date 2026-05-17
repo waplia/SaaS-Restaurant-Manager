@@ -112,6 +112,8 @@ import BakeryPage from "@/pages/bakery";
 import BarPage from "@/pages/bar";
 import PublicBookingPage from "@/pages/public-booking";
 import PublicSitePage from "@/pages/public-site";
+import CustomerAppBuilderPage from "@/pages/customer-app-builder";
+import CustomerAppPage from "@/pages/customer-app";
 import AiDashboardPage from "@/pages/ai-dashboard";
 import AiDescriptionsPage from "@/pages/ai-descriptions";
 import AiImagesPage from "@/pages/ai-images";
@@ -478,6 +480,7 @@ function Router() {
       <Route path="/settings/oauth-apps" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={OauthAppsPage} feature="api_access" />} allow={["owner", "manager"]} />} />
       <Route path="/admin/api-settings" component={() => <SuperAdminRoute component={AdminApiSettingsPage} />} />
       <Route path="/settings/account" component={() => <ProtectedRoute component={SettingsAccountPage} />} />
+      <Route path="/settings/customer-app" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CustomerAppBuilderPage} feature="customer_app" />} allow={["owner", "super_admin"]} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/events" component={() => <Suspense fallback={null}><RoleProtectedRoute component={() => <PlanProtectedRoute component={EventsPage} feature="events_catering" />} allow={["owner", "manager", "waiter", "kitchen"]} /></Suspense>} />
@@ -510,6 +513,7 @@ function Router() {
       <Route path="/food-court/:id/reports" component={() => <RoleProtectedRoute component={FoodCourtReportsPage} allow={["owner", "manager", "food_court_owner"]} />} />
       <Route path="/food-court/my-counter" component={() => <ProtectedRoute component={FoodCourtMyCounterPage} />} />
       <Route path="/site/:slug" component={PublicSitePage} />
+      <Route path="/app/:slug" component={CustomerAppPage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
       <Route path="/memberships" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={MembershipsPage} feature="loyalty_program" />} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />

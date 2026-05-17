@@ -21,7 +21,7 @@ const SettingsSectionBody = z.union([
 // Manager+ sections cover operational and customer-facing configuration.
 const OWNER_ONLY = new Set([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
-  "currencies", "taxes", "loyalty", "discounts",
+  "currencies", "taxes", "loyalty", "discounts", "customer-app",
 ]);
 
 const ALL_SECTIONS = new Set([
@@ -31,7 +31,7 @@ const ALL_SECTIONS = new Set([
   "downloads", "menu-image", "menu-nutrition", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "kitchen-delay", "token-display",
-  "direct-ordering",
+  "direct-ordering", "customer-app",
 ]);
 
 function rolesForSection(section: string): AppRole[] {
