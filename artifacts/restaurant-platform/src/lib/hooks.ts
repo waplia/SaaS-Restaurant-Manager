@@ -217,10 +217,13 @@ export function useItemModifierGroups(menuItemId?: number) {
 export function useCreatePaymentIntent() {
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
-    mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
+    mutationFn: ({ orderId, amount, tipAmount }: { orderId: number; amount?: number; tipAmount?: number }) =>
       apiPost<import("./types").PaymentIntentResult>(
         `/restaurants/${RESTAURANT_ID}/orders/${orderId}/payment-intent`,
-        amount !== undefined ? { customAmount: amount } : {}
+        {
+          ...(amount !== undefined ? { customAmount: amount } : {}),
+          ...(tipAmount && tipAmount > 0 ? { tipAmount } : {}),
+        }
       ),
   });
 }
@@ -228,10 +231,13 @@ export function useCreatePaymentIntent() {
 export function useCreateRazorpayOrder() {
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
-    mutationFn: ({ orderId, amount }: { orderId: number; amount?: number }) =>
+    mutationFn: ({ orderId, amount, tipAmount }: { orderId: number; amount?: number; tipAmount?: number }) =>
       apiPost<import("./types").RazorpayOrderResult>(
         `/restaurants/${RESTAURANT_ID}/orders/${orderId}/razorpay-order`,
-        amount !== undefined ? { customAmount: amount } : {}
+        {
+          ...(amount !== undefined ? { customAmount: amount } : {}),
+          ...(tipAmount && tipAmount > 0 ? { tipAmount } : {}),
+        }
       ),
   });
 }

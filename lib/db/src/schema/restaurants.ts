@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, jsonb } from "drizzle-orm/pg-core";
 // Payment methods accepted at billing — stored as a string[] so the bill UI can
 // hide unused tenders. Defaults cover the typical Indian dine-in setup.
 import { createInsertSchema } from "drizzle-zod";
@@ -51,6 +51,27 @@ export const restaurantsTable = pgTable("restaurants", {
   canteenDefaultDailyCap: integer("canteen_default_daily_cap").notNull().default(0),
   // Default low-balance alert threshold (paise).
   canteenLowBalanceThreshold: integer("canteen_low_balance_threshold").notNull().default(5000),
+  // Tip policy (Task #421) — drives the POS tip step UI and the pooling
+  // engine. `presets` are suggested % buttons shown at payment; `splitMethod`
+  // chooses between equal split and role-weighted distribution at sweep time;
+  // `enabled` gates the whole tip workflow on top of the staff_tips plan
+  // feature; `allowCashDeclaration` lets servers declare end-of-shift cash
+  // tips so they flow into payroll alongside card/upi tips.
+  tipPolicy: jsonb("tip_policy").$type<{
+    enabled: boolean;
+    presets: number[];
+    customAllowed: boolean;
+    splitMethod: "equal" | "role_weighted";
+    allowCashDeclaration: boolean;
+    syncToPayroll: boolean;
+  }>().notNull().default({
+    enabled: true,
+    presets: [0, 5, 10, 15, 20],
+    customAllowed: true,
+    splitMethod: "role_weighted",
+    allowCashDeclaration: true,
+    syncToPayroll: true,
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

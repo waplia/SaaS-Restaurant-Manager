@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
@@ -1692,7 +1692,7 @@ router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "
 router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { customAmount } = req.body as { customAmount?: number };
+  const { customAmount, tipAmount: rawTipPI } = req.body as { customAmount?: number; tipAmount?: number };
 
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -1701,10 +1701,15 @@ router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, 
     return void res.status(400).json({ error: "Order is not payable" });
   }
 
-  // customAmount allows split payments to create a PI for a per-person share
-  const amountPaise = customAmount !== undefined
+  // customAmount allows split payments to create a PI for a per-person share.
+  // tipAmount (Task #421) is added on top so the gateway charges the full
+  // grand total including the tip — otherwise we'd record tip revenue we
+  // never actually collected.
+  const tipPaise = Number.isFinite(Number(rawTipPI)) ? Math.max(0, Math.round(Number(rawTipPI) * 100)) : 0;
+  const basePaise = customAmount !== undefined
     ? Math.round(Number(customAmount) * 100)
     : Math.round(Number(order.totalAmount) * 100);
+  const amountPaise = basePaise + tipPaise;
 
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   if (stripeSecretKey) {
@@ -1733,7 +1738,7 @@ router.post("/restaurants/:restaurantId/orders/:id/payment-intent", async (req, 
 router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
-  const { customAmount } = req.body as { customAmount?: number };
+  const { customAmount, tipAmount: rawTipRzp } = req.body as { customAmount?: number; tipAmount?: number };
 
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -1742,10 +1747,14 @@ router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, 
     return void res.status(400).json({ error: "Order is not payable" });
   }
 
-  // customAmount allows split payments to create a Razorpay order for a per-person share
-  const amountPaise = customAmount !== undefined
+  // customAmount allows split payments to create a Razorpay order for a per-person share.
+  // tipAmount (Task #421) is added on top so Razorpay charges the full grand total
+  // including the tip — otherwise the captured tip wouldn't be backed by gateway funds.
+  const tipPaise = Number.isFinite(Number(rawTipRzp)) ? Math.max(0, Math.round(Number(rawTipRzp) * 100)) : 0;
+  const basePaise = customAmount !== undefined
     ? Math.round(Number(customAmount) * 100)
     : Math.round(Number(order.totalAmount) * 100);
+  const amountPaise = basePaise + tipPaise;
 
   const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -1786,6 +1795,29 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { paymentMethod, stripePaymentIntentId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+  // Tip captured at payment time (Task #421). Optional; validated and clamped
+  // to >= 0 with up to 2 decimal places. Recorded on the order, payments
+  // ledger, and auto-captured into the open daily tip pool against the
+  // serving waiter so pooling/payroll sweeps include it.
+  const rawTip = req.body?.tipAmount;
+  let tipAmount = rawTip == null || rawTip === "" ? 0 : Math.max(0, Math.round(Number(rawTip) * 100) / 100);
+  if (!Number.isFinite(tipAmount)) {
+    return void res.status(400).json({ error: "tipAmount must be a finite number" });
+  }
+  // Plan/policy gating for tips: silently zero out tip capture if the
+  // restaurant's plan lacks the staff_tips feature or the restaurant has
+  // disabled tipping in its tip policy. Silent because POS clients on
+  // mixed-plan tenants shouldn't fail the whole sale just because tips
+  // aren't entitled — the sale still completes without a tip.
+  if (tipAmount > 0) {
+    const allowed = await restaurantHasFeature(restaurantId, "staff_tips");
+    if (!allowed) tipAmount = 0;
+    else {
+      const [restRow] = await db.select({ tipPolicy: restaurantsTable.tipPolicy })
+        .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      if (restRow?.tipPolicy?.enabled === false) tipAmount = 0;
+    }
+  }
 
   // Strict payment method enum validation
   if (!["cash", "card", "upi", "room_charge"].includes(String(paymentMethod))) {
@@ -1903,7 +1935,10 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         if (intent.metadata?.orderId !== String(orderId) || intent.metadata?.restaurantId !== String(restaurantId)) {
           return void res.status(400).json({ error: "PaymentIntent does not belong to this order" });
         }
-        const expectedPaise = Math.round(Number(order.totalAmount) * 100);
+        // Tip (Task #421) is charged on top of the order total, so the
+        // expected paise must include it to avoid rejecting legitimate
+        // tip-inclusive payments.
+        const expectedPaise = Math.round(Number(order.totalAmount) * 100) + Math.round(tipAmount * 100);
         if (intent.amount !== expectedPaise) {
           return void res.status(400).json({ error: "PaymentIntent amount does not match order total" });
         }
@@ -1949,7 +1984,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         if (rzpPay.status !== "captured") {
           return void res.status(400).json({ error: `Razorpay payment not captured: ${rzpPay.status}` });
         }
-        const expectedPaise = Math.round(Number(order.totalAmount) * 100);
+        // Tip (Task #421) is charged on top of the order total.
+        const expectedPaise = Math.round(Number(order.totalAmount) * 100) + Math.round(tipAmount * 100);
         if (Math.abs(rzpPay.amount - expectedPaise) > 100) {
           return void res.status(400).json({ error: "Razorpay payment amount does not match order total" });
         }
@@ -2009,6 +2045,10 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         paymentStatus: "paid",
         status: "completed",
         stripePaymentId: storedPaymentId,
+        tipAmount: tipAmount.toFixed(2),
+        // Add tip onto the bill total so the payments ledger, cash drawer
+        // movement, and receipts all reconcile with what the customer paid.
+        totalAmount: (Number(order.totalAmount) + tipAmount).toFixed(2),
         updatedAt: new Date(),
       }).where(and(
         eq(ordersTable.id, orderId),
@@ -2026,6 +2066,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         direction: "in",
         method: ledgerMethod,
         amount: Number(u.totalAmount).toFixed(2),
+        tipAmount: tipAmount.toFixed(2),
         paymentDate: new Date(),
         partyType: u.customerId ? "customer" : "other",
         partyId: u.customerId ?? null,
@@ -2035,6 +2076,39 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
         notes: null,
         recordedBy: req.user?.sub ?? null,
       });
+
+      // Auto-capture tip into today's open pool, attributed to the serving
+      // waiter (or the cashier if no waiter). The pool is created on demand
+      // so the first tip of the day still lands somewhere. We use 'order'
+      // sourceType so post-payment adjustments and reports can trace each
+      // pool entry back to its originating order.
+      if (tipAmount > 0) {
+        const beneficiaryUserId = u.waiterId ?? req.user?.sub ?? null;
+        if (beneficiaryUserId) {
+          const today = new Date().toISOString().slice(0, 10);
+          let [openPool] = await tx.select().from(tipPoolsTable).where(and(
+            eq(tipPoolsTable.restaurantId, restaurantId),
+            eq(tipPoolsTable.periodStart, today),
+            eq(tipPoolsTable.periodEnd, today),
+            eq(tipPoolsTable.status, "open"),
+          )).limit(1);
+          if (!openPool) {
+            [openPool] = await tx.insert(tipPoolsTable).values({
+              restaurantId, periodStart: today, periodEnd: today,
+              status: "open", totalRupees: "0.00",
+            }).returning();
+          }
+          await tx.insert(tipPoolEntriesTable).values({
+            poolId: openPool.id, restaurantId, userId: beneficiaryUserId,
+            sharePct: "0", amountRupees: tipAmount.toFixed(2),
+            sourceType: "order", sourceOrderId: u.id, tableId: u.tableId ?? null,
+            notes: `${paymentMethod} tip on order ${u.orderNumber}`,
+          });
+          await tx.update(tipPoolsTable)
+            .set({ totalRupees: sql`COALESCE(${tipPoolsTable.totalRupees}, 0) + ${tipAmount.toFixed(2)}` })
+            .where(eq(tipPoolsTable.id, openPool.id));
+        }
+      }
 
       // Cash drawer movement is part of the same transaction so the order,
       // payment ledger, and cash drawer all commit together (or all roll back).

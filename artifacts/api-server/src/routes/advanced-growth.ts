@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, desc, sql, gte, isNull, or } from "drizzle-orm";
+import { and, eq, desc, sql, gte, isNull, or, inArray } from "drizzle-orm";
 import {
   db,
   customerGeoPointsTable,
@@ -16,6 +16,9 @@ import {
   tipSplitRulesTable,
   tipPoolsTable,
   tipPoolEntriesTable,
+  tipAdjustmentsTable,
+  cashTipDeclarationsTable,
+  paymentsTable,
   leaderboardSnapshotsTable,
   couponsTable,
   pricingRulesTable,
@@ -766,13 +769,42 @@ router.get(`${BASE}/tip-pools`, requireRole(...MANAGER_ROLES), requirePlanFeatur
 });
 
 router.post(`${BASE}/tip-pools`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
-  const { periodStart, periodEnd, totalRupees } = req.body ?? {};
+  const { periodStart, periodEnd, totalRupees, splitMethod } = req.body ?? {};
   if (!periodStart || !periodEnd || totalRupees == null) { res.status(400).json({ error: "periodStart/periodEnd/totalRupees required" }); return; }
+  const method = splitMethod === "equal" ? "equal" : "role_weighted";
   const [row] = await db.insert(tipPoolsTable).values({
     restaurantId: rid(req), periodStart, periodEnd, totalRupees: String(totalRupees),
+    splitMethod: method,
   }).returning();
   await recordAuditLog({ req, module: "advanced_growth", action: "tip_pool.create", entity: "tip_pool", entityId: row.id, restaurantId: rid(req), newValue: row });
   res.status(201).json(row);
+});
+
+// Tip policy lives on restaurants.tip_policy (jsonb). Single GET/PUT so the
+// settings UI and the POS payment modal can read presets, split method,
+// cash-declaration toggle, and payroll-sync toggle in one round trip.
+router.get(`${BASE}/tip-policy`, requireRole(...SERVICE_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const [r] = await db.select({ tipPolicy: restaurantsTable.tipPolicy })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, rid(req)));
+  res.json(r?.tipPolicy ?? {
+    enabled: true, presets: [0, 5, 10, 15, 20], customAllowed: true,
+    splitMethod: "role_weighted", allowCashDeclaration: true, syncToPayroll: true,
+  });
+});
+router.put(`${BASE}/tip-policy`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const policy = req.body ?? {};
+  const safe = {
+    enabled: !!policy.enabled,
+    presets: Array.isArray(policy.presets) ? policy.presets.map((n: unknown) => Math.max(0, Math.min(100, Number(n) || 0))) : [0, 5, 10, 15, 20],
+    customAllowed: policy.customAllowed !== false,
+    splitMethod: policy.splitMethod === "equal" ? "equal" : "role_weighted",
+    allowCashDeclaration: policy.allowCashDeclaration !== false,
+    syncToPayroll: policy.syncToPayroll !== false,
+  } as const;
+  await db.update(restaurantsTable).set({ tipPolicy: safe, updatedAt: new Date() })
+    .where(eq(restaurantsTable.id, rid(req)));
+  await recordAuditLog({ req, module: "advanced_growth", action: "tip_policy.update", entity: "restaurant", entityId: rid(req), restaurantId: rid(req), newValue: safe });
+  res.json(safe);
 });
 
 router.post(`${BASE}/tip-pools/:id/distribute`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
@@ -782,9 +814,32 @@ router.post(`${BASE}/tip-pools/:id/distribute`, requireRole(...MANAGER_ROLES), r
     .where(and(eq(tipPoolsTable.id, id), eq(tipPoolsTable.restaurantId, restaurantId)));
   if (!pool) { res.status(404).json({ error: "Pool not found" }); return; }
   if (pool.status === "distributed") { res.status(409).json({ error: "Already distributed" }); return; }
+  // The pool's splitMethod overrides the policy default. 'equal' divides
+  // totalRupees evenly across contributing staff (users who already have
+  // a captured 'order' or 'cash_declaration' entry in this pool, falling
+  // back to all active waiters if no contributors yet). 'role_weighted'
+  // applies tip_split_rules percentages.
+  const overrideMethod = req.body?.splitMethod;
+  const splitMethod = overrideMethod === "equal" || overrideMethod === "role_weighted"
+    ? overrideMethod
+    : pool.splitMethod;
+  // Honor the syncToPayroll policy toggle — when off, distribution still
+  // computes per-staff shares but skips the payroll_items bonus/gross/net
+  // updates so tips are tracked in pool entries only.
+  const [restCfg] = await db.select({ tipPolicy: restaurantsTable.tipPolicy })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const syncToPayroll = restCfg?.tipPolicy?.syncToPayroll !== false;
   const rules = await db.select().from(tipSplitRulesTable).where(eq(tipSplitRulesTable.restaurantId, restaurantId));
   const users = await db.select().from(usersTable).where(eq(usersTable.restaurantId, restaurantId));
-  await db.delete(tipPoolEntriesTable).where(eq(tipPoolEntriesTable.poolId, id));
+  // Capture pre-existing capture-source entries (order/cash) so we don't
+  // wipe out the audit trail when re-running a distribute. We delete only
+  // previously-distributed shares and recompute fresh shares.
+  const captureEntries = await db.select().from(tipPoolEntriesTable)
+    .where(and(eq(tipPoolEntriesTable.poolId, id), inArray(tipPoolEntriesTable.sourceType, ["order", "cash_declaration"])));
+  await db.delete(tipPoolEntriesTable).where(and(
+    eq(tipPoolEntriesTable.poolId, id),
+    eq(tipPoolEntriesTable.sourceType, "distribution"),
+  ));
   const total = Number(pool.totalRupees);
   const ruleMap = new Map(rules.map(r => [r.role, Number(r.sharePct)]));
 
@@ -808,34 +863,51 @@ router.post(`${BASE}/tip-pools/:id/distribute`, requireRole(...MANAGER_ROLES), r
     arr.push(u);
     usersByRole.set(u.role, arr);
   }
-  for (const [role, roleUsers] of usersByRole) {
-    const pct = ruleMap.get(role) ?? 0;
-    const pot = total * pct / 100;
-    const per = roleUsers.length > 0 ? pot / roleUsers.length : 0;
-    const perPct = roleUsers.length > 0 ? pct / roleUsers.length : 0;
-    for (const u of roleUsers) {
-      let payrollItemId: number | null = null;
-      if (draftRun) {
-        const [item] = await db.select().from(payrollItemsTable).where(and(
-          eq(payrollItemsTable.runId, draftRun.id),
-          eq(payrollItemsTable.userId, u.id),
-        ));
-        if (item) {
-          const newBonus = (Number(item.bonus) + per).toFixed(2);
-          const newGross = (Number(item.grossPay) + per).toFixed(2);
-          const newNet = (Number(item.netPay) + per).toFixed(2);
-          await db.update(payrollItemsTable).set({
-            bonus: newBonus, grossPay: newGross, netPay: newNet, updatedAt: new Date(),
-          }).where(eq(payrollItemsTable.id, item.id));
-          payrollItemId = item.id;
-        }
+  // Helper that creates a distribution entry and optionally syncs to payroll.
+  async function awardShare(userId: number, amount: number, sharePct: number) {
+    let payrollItemId: number | null = null;
+    if (draftRun && syncToPayroll) {
+      const [item] = await db.select().from(payrollItemsTable).where(and(
+        eq(payrollItemsTable.runId, draftRun.id),
+        eq(payrollItemsTable.userId, userId),
+      ));
+      if (item) {
+        const newBonus = (Number(item.bonus) + amount).toFixed(2);
+        const newGross = (Number(item.grossPay) + amount).toFixed(2);
+        const newNet = (Number(item.netPay) + amount).toFixed(2);
+        await db.update(payrollItemsTable).set({
+          bonus: newBonus, grossPay: newGross, netPay: newNet, updatedAt: new Date(),
+        }).where(eq(payrollItemsTable.id, item.id));
+        payrollItemId = item.id;
       }
-      const [e] = await db.insert(tipPoolEntriesTable).values({
-        poolId: id, restaurantId, userId: u.id,
-        sharePct: String(perPct.toFixed(2)), amountRupees: String(per.toFixed(2)),
-        payrollItemId,
-      }).returning();
-      entries.push(e);
+    }
+    const [e] = await db.insert(tipPoolEntriesTable).values({
+      poolId: id, restaurantId, userId,
+      sharePct: String(sharePct.toFixed(2)), amountRupees: String(amount.toFixed(2)),
+      payrollItemId, sourceType: "distribution",
+    }).returning();
+    entries.push(e);
+  }
+
+  if (splitMethod === "equal") {
+    // Equal split across distinct contributors from the capture entries,
+    // or all active waiter-role users if no captures yet.
+    const contribIds = Array.from(new Set(captureEntries.map(e => e.userId)));
+    const targets = contribIds.length > 0
+      ? users.filter(u => contribIds.includes(u.id))
+      : users.filter(u => u.role && ["waiter", "cashier", "manager", "captain"].includes(String(u.role).toLowerCase()));
+    if (targets.length > 0) {
+      const per = total / targets.length;
+      const perPct = 100 / targets.length;
+      for (const u of targets) await awardShare(u.id, per, perPct);
+    }
+  } else {
+    for (const [role, roleUsers] of usersByRole) {
+      const pct = ruleMap.get(role) ?? 0;
+      const pot = total * pct / 100;
+      const per = roleUsers.length > 0 ? pot / roleUsers.length : 0;
+      const perPct = roleUsers.length > 0 ? pct / roleUsers.length : 0;
+      for (const u of roleUsers) await awardShare(u.id, per, perPct);
     }
   }
   await db.update(tipPoolsTable).set({ status: "distributed", distributedAt: new Date(), updatedAt: new Date() })
@@ -896,6 +968,212 @@ router.post(`${BASE}/tip-pools/capture-order-tip`, requireRole(...SERVICE_ROLES)
     .where(eq(tipPoolsTable.id, pool.id));
   await recordAuditLog({ req, module: "advanced_growth", action: "tip.capture_order", entity: "tip_pool_entry", entityId: entry.id, restaurantId, newValue: { orderId, waiterUserId, amountRupees } });
   res.status(201).json({ poolId: pool.id, entryId: entry.id, amountRupees });
+});
+
+// Post-payment tip adjustment with audit. Managers can edit a pool entry
+// (e.g. customer disputed amount, server share corrected). The previous
+// value, new value, delta, and reason are persisted in tip_adjustments and
+// the audit log; if the entry already synced to payroll the payroll item's
+// bonus/gross/net are adjusted by the delta so the slip stays in sync.
+router.post(`${BASE}/tip-pool-entries/:id/adjust`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const entryId = Number(req.params.id);
+  const { newAmount, reason } = req.body ?? {};
+  if (newAmount == null || !reason || String(reason).trim().length === 0) {
+    res.status(400).json({ error: "newAmount and reason required" }); return;
+  }
+  const parsed = Math.max(0, Math.round(Number(newAmount) * 100) / 100);
+  if (!Number.isFinite(parsed)) { res.status(400).json({ error: "newAmount must be a number" }); return; }
+  const [entry] = await db.select().from(tipPoolEntriesTable)
+    .where(and(eq(tipPoolEntriesTable.id, entryId), eq(tipPoolEntriesTable.restaurantId, restaurantId)));
+  if (!entry) { res.status(404).json({ error: "Entry not found" }); return; }
+  const prev = Number(entry.amountRupees);
+  const delta = parsed - prev;
+  await db.update(tipPoolEntriesTable).set({ amountRupees: parsed.toFixed(2) })
+    .where(eq(tipPoolEntriesTable.id, entryId));
+  // Reflect change on the parent pool's total so downstream reports remain consistent.
+  await db.update(tipPoolsTable)
+    .set({ totalRupees: sql`COALESCE(${tipPoolsTable.totalRupees}, 0) + ${delta.toFixed(2)}`, updatedAt: new Date() })
+    .where(eq(tipPoolsTable.id, entry.poolId));
+  if (entry.payrollItemId) {
+    const [item] = await db.select().from(payrollItemsTable).where(eq(payrollItemsTable.id, entry.payrollItemId));
+    if (item) {
+      await db.update(payrollItemsTable).set({
+        bonus: (Number(item.bonus) + delta).toFixed(2),
+        grossPay: (Number(item.grossPay) + delta).toFixed(2),
+        netPay: (Number(item.netPay) + delta).toFixed(2),
+        updatedAt: new Date(),
+      }).where(eq(payrollItemsTable.id, item.id));
+    }
+  }
+  const [adj] = await db.insert(tipAdjustmentsTable).values({
+    restaurantId, entryId, orderId: entry.sourceOrderId ?? null,
+    poolId: entry.poolId, userId: entry.userId,
+    previousAmount: prev.toFixed(2), newAmount: parsed.toFixed(2), delta: delta.toFixed(2),
+    reason: String(reason).trim(), adjustedByUserId: req.user?.sub ?? null,
+  }).returning();
+  await recordAuditLog({ req, module: "advanced_growth", action: "tip_entry.adjust", entity: "tip_pool_entry", entityId: entryId, restaurantId, newValue: { previousAmount: prev, newAmount: parsed, delta, reason } });
+  res.json({ entry: { ...entry, amountRupees: parsed.toFixed(2) }, adjustment: adj });
+});
+
+// Server-declared cash tips at shift end. Captures the rupee amount, files
+// it into the active daily pool as a 'cash_declaration' source entry, and
+// records a row in cash_tip_declarations for the shift-end report.
+router.post(`${BASE}/tip-pools/declare-cash`, requireRole(...SERVICE_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const { amountRupees, shiftId, shiftDate, notes, userId: bodyUserId } = req.body ?? {};
+  // Enforce the allowCashDeclaration policy toggle — when off, the API
+  // refuses declarations even from managers (matches the UI which hides
+  // the tab when disabled).
+  const [policyRow] = await db.select({ tipPolicy: restaurantsTable.tipPolicy })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  if (policyRow?.tipPolicy?.allowCashDeclaration === false) {
+    res.status(403).json({ error: "Cash tip declarations are disabled in your tip policy" }); return;
+  }
+  if (amountRupees == null) { res.status(400).json({ error: "amountRupees required" }); return; }
+  const amount = Math.max(0, Math.round(Number(amountRupees) * 100) / 100);
+  if (!Number.isFinite(amount)) { res.status(400).json({ error: "amountRupees must be a number" }); return; }
+  // Servers can only declare for themselves; managers may declare on behalf of another user.
+  // Manager-on-behalf declarations must target a user inside the same
+  // restaurant — otherwise a manager could cross tenant boundaries by
+  // passing an arbitrary userId.
+  const isManager = ["owner", "admin", "manager", "super_admin"].includes(String(req.user?.role ?? "").toLowerCase());
+  let userId = req.user?.sub ?? null;
+  if (isManager && bodyUserId) {
+    const targetId = Number(bodyUserId);
+    const [target] = await db.select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(eq(usersTable.id, targetId), eq(usersTable.restaurantId, restaurantId)));
+    if (!target) { res.status(403).json({ error: "Target user not in this restaurant" }); return; }
+    userId = targetId;
+  }
+  if (!userId) { res.status(401).json({ error: "User context required" }); return; }
+  const day = shiftDate ? String(shiftDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
+  let [pool] = await db.select().from(tipPoolsTable).where(and(
+    eq(tipPoolsTable.restaurantId, restaurantId),
+    eq(tipPoolsTable.periodStart, day),
+    eq(tipPoolsTable.periodEnd, day),
+    eq(tipPoolsTable.status, "open"),
+  )).limit(1);
+  if (!pool) {
+    [pool] = await db.insert(tipPoolsTable).values({
+      restaurantId, periodStart: day, periodEnd: day, status: "open", totalRupees: "0.00",
+    }).returning();
+  }
+  const [entry] = await db.insert(tipPoolEntriesTable).values({
+    poolId: pool.id, restaurantId, userId, sharePct: "0",
+    amountRupees: amount.toFixed(2), sourceType: "cash_declaration",
+    sourceShiftId: shiftId ? Number(shiftId) : null,
+    notes: notes ? String(notes) : "Cash tip declaration",
+  }).returning();
+  await db.update(tipPoolsTable)
+    .set({ totalRupees: sql`COALESCE(${tipPoolsTable.totalRupees}, 0) + ${amount.toFixed(2)}` })
+    .where(eq(tipPoolsTable.id, pool.id));
+  const [decl] = await db.insert(cashTipDeclarationsTable).values({
+    restaurantId, userId, shiftId: shiftId ? Number(shiftId) : null,
+    shiftDate: day, amountRupees: amount.toFixed(2),
+    notes: notes ? String(notes) : null, poolEntryId: entry.id,
+  }).returning();
+  await recordAuditLog({ req, module: "advanced_growth", action: "tip.declare_cash", entity: "cash_tip_declaration", entityId: decl.id, restaurantId, newValue: decl });
+  res.status(201).json({ declaration: decl, poolId: pool.id, entryId: entry.id });
+});
+
+router.get(`${BASE}/tip-declarations`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const since = req.query.since ? String(req.query.since) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const rows = await db.select({
+    id: cashTipDeclarationsTable.id,
+    userId: cashTipDeclarationsTable.userId,
+    name: usersTable.name,
+    shiftId: cashTipDeclarationsTable.shiftId,
+    shiftDate: cashTipDeclarationsTable.shiftDate,
+    amountRupees: cashTipDeclarationsTable.amountRupees,
+    notes: cashTipDeclarationsTable.notes,
+    declaredAt: cashTipDeclarationsTable.declaredAt,
+  }).from(cashTipDeclarationsTable)
+    .leftJoin(usersTable, eq(cashTipDeclarationsTable.userId, usersTable.id))
+    .where(and(
+      eq(cashTipDeclarationsTable.restaurantId, restaurantId),
+      sql`${cashTipDeclarationsTable.shiftDate} >= ${since}`,
+    ))
+    .orderBy(desc(cashTipDeclarationsTable.shiftDate))
+    .limit(200);
+  res.json({ items: rows });
+});
+
+// Per-staff tip totals across a date window. Sums all pool entries (capture
+// + distribution) so the report reflects what each staff member actually
+// earned, broken out by source so managers can see card vs cash declared.
+router.get(`${BASE}/reports/staff-tips`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const since = req.query.since ? String(req.query.since) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const until = req.query.until ? String(req.query.until) : new Date().toISOString().slice(0, 10);
+  const rows = await db.select({
+    userId: tipPoolEntriesTable.userId,
+    name: usersTable.name,
+    role: usersTable.role,
+    sourceType: tipPoolEntriesTable.sourceType,
+    total: sql<string>`SUM(${tipPoolEntriesTable.amountRupees})`,
+    entries: sql<string>`COUNT(*)`,
+  }).from(tipPoolEntriesTable)
+    .leftJoin(usersTable, eq(tipPoolEntriesTable.userId, usersTable.id))
+    .leftJoin(tipPoolsTable, eq(tipPoolEntriesTable.poolId, tipPoolsTable.id))
+    .where(and(
+      eq(tipPoolEntriesTable.restaurantId, restaurantId),
+      sql`${tipPoolsTable.periodStart} >= ${since}`,
+      sql`${tipPoolsTable.periodEnd} <= ${until}`,
+    ))
+    .groupBy(tipPoolEntriesTable.userId, usersTable.name, usersTable.role, tipPoolEntriesTable.sourceType);
+  res.json({ since, until, items: rows });
+});
+
+// Per-shift tip totals — groups cash declarations by shift_date + user so the
+// shift-end report shows what each server declared and earned per day.
+router.get(`${BASE}/reports/shift-tips`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const since = req.query.since ? String(req.query.since) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const rows = await db.select({
+    shiftDate: cashTipDeclarationsTable.shiftDate,
+    userId: cashTipDeclarationsTable.userId,
+    name: usersTable.name,
+    declared: sql<string>`SUM(${cashTipDeclarationsTable.amountRupees})`,
+    entries: sql<string>`COUNT(*)`,
+  }).from(cashTipDeclarationsTable)
+    .leftJoin(usersTable, eq(cashTipDeclarationsTable.userId, usersTable.id))
+    .where(and(
+      eq(cashTipDeclarationsTable.restaurantId, restaurantId),
+      sql`${cashTipDeclarationsTable.shiftDate} >= ${since}`,
+    ))
+    .groupBy(cashTipDeclarationsTable.shiftDate, cashTipDeclarationsTable.userId, usersTable.name)
+    .orderBy(desc(cashTipDeclarationsTable.shiftDate));
+  res.json({ items: rows });
+});
+
+// Tip payouts report — distribution entries that have a payroll item link
+// (i.e. swept into payroll) so finance can reconcile what went into salary
+// runs against pool totals.
+router.get(`${BASE}/reports/tip-payouts`, requireRole(...MANAGER_ROLES), requirePlanFeature("staff_tips"), async (req, res) => {
+  const restaurantId = rid(req);
+  const since = req.query.since ? String(req.query.since) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const rows = await db.select({
+    poolId: tipPoolEntriesTable.poolId,
+    userId: tipPoolEntriesTable.userId,
+    name: usersTable.name,
+    amountRupees: tipPoolEntriesTable.amountRupees,
+    payrollItemId: tipPoolEntriesTable.payrollItemId,
+    periodStart: tipPoolsTable.periodStart,
+    periodEnd: tipPoolsTable.periodEnd,
+    distributedAt: tipPoolsTable.distributedAt,
+  }).from(tipPoolEntriesTable)
+    .leftJoin(usersTable, eq(tipPoolEntriesTable.userId, usersTable.id))
+    .leftJoin(tipPoolsTable, eq(tipPoolEntriesTable.poolId, tipPoolsTable.id))
+    .where(and(
+      eq(tipPoolEntriesTable.restaurantId, restaurantId),
+      eq(tipPoolEntriesTable.sourceType, "distribution"),
+      sql`${tipPoolsTable.periodStart} >= ${since}`,
+    ))
+    .orderBy(desc(tipPoolsTable.periodStart));
+  res.json({ items: rows });
 });
 
 // =================== 11. STAFF LEADERBOARD TV ===================

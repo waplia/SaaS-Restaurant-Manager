@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useRestaurantId } from "@/lib/hooks";
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from "@/lib/api";
@@ -581,77 +583,304 @@ export function TableOptimizationPage() {
 }
 
 // 10. STAFF TIP MANAGEMENT
+type TipPolicyDto = { enabled: boolean; presets: number[]; customAllowed: boolean; splitMethod: "equal" | "role_weighted"; allowCashDeclaration: boolean; syncToPayroll: boolean };
+
 export function TipsPage() {
   const rid = useRestaurantId();
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: rulesData } = useApi<{ items: any[] }>(["tip-rules", rid], `${base(rid)}/tip-split-rules`);
   const { data: poolsData } = useApi<{ items: any[] }>(["tip-pools", rid], `${base(rid)}/tip-pools`);
+  const { data: declarationsData } = useApi<{ items: any[] }>(["tip-declarations", rid], `${base(rid)}/tip-declarations`);
+  const { data: staffReport } = useApi<{ items: any[] }>(["report-staff-tips", rid], `${base(rid)}/reports/staff-tips`);
+  const { data: shiftReport } = useApi<{ items: any[] }>(["report-shift-tips", rid], `${base(rid)}/reports/shift-tips`);
+  const { data: payoutReport } = useApi<{ items: any[] }>(["report-tip-payouts", rid], `${base(rid)}/reports/tip-payouts`);
+  const { data: policyData } = useApi<TipPolicyDto>(["tip-policy", rid], `${base(rid)}/tip-policy`);
   const [rules, setRules] = useState<Array<{ role: string; sharePct: number }>>([]);
-  useEffect(() => {
-    if (rulesData?.items) setRules(rulesData.items.map((r: any) => ({ role: r.role, sharePct: Number(r.sharePct) })));
-  }, [rulesData]);
+  const [policy, setPolicy] = useState<TipPolicyDto | null>(null);
+  const [selectedPoolId, setSelectedPoolId] = useState<number | null>(null);
+  const { data: entriesData } = useApi<{ items: any[] }>(
+    ["tip-pool-entries", rid, selectedPoolId],
+    selectedPoolId ? `${base(rid)}/tip-pools/${selectedPoolId}/entries` : "",
+    { enabled: !!selectedPoolId },
+  );
+
+  useEffect(() => { if (rulesData?.items) setRules(rulesData.items.map((r: any) => ({ role: r.role, sharePct: Number(r.sharePct) }))); }, [rulesData]);
+  useEffect(() => { if (policyData) setPolicy(policyData); }, [policyData]);
+
   const saveRules = useMutation({
     mutationFn: () => apiPut(`${base(rid)}/tip-split-rules`, { rules }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tip-rules", rid] }); toast({ title: "Rules saved" }); },
   });
-  const [pool, setPool] = useState({ periodStart: "", periodEnd: "", totalRupees: "" });
+  const savePolicy = useMutation({
+    mutationFn: () => apiPut(`${base(rid)}/tip-policy`, policy),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tip-policy", rid] }); toast({ title: "Policy saved" }); },
+  });
+  const [pool, setPool] = useState({ periodStart: "", periodEnd: "", totalRupees: "", splitMethod: "role_weighted" as "equal" | "role_weighted" });
   const createPool = useMutation({
     mutationFn: () => apiPost(`${base(rid)}/tip-pools`, { ...pool, totalRupees: Number(pool.totalRupees) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tip-pools", rid] }); setPool({ periodStart: "", periodEnd: "", totalRupees: "" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tip-pools", rid] }); setPool({ periodStart: "", periodEnd: "", totalRupees: "", splitMethod: "role_weighted" }); },
   });
   const distribute = useMutation({
     mutationFn: (id: number) => apiPost(`${base(rid)}/tip-pools/${id}/distribute`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tip-pools", rid] }); toast({ title: "Distributed" }); },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
+  const [cashDecl, setCashDecl] = useState({ amountRupees: "", shiftDate: new Date().toISOString().slice(0, 10), notes: "" });
+  const declareCash = useMutation({
+    mutationFn: () => apiPost(`${base(rid)}/tip-pools/declare-cash`, { ...cashDecl, amountRupees: Number(cashDecl.amountRupees) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tip-declarations", rid] });
+      qc.invalidateQueries({ queryKey: ["report-shift-tips", rid] });
+      setCashDecl({ amountRupees: "", shiftDate: new Date().toISOString().slice(0, 10), notes: "" });
+      toast({ title: "Cash tip declared" });
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const adjust = useMutation({
+    mutationFn: ({ id, newAmount, reason }: { id: number; newAmount: number; reason: string }) =>
+      apiPost(`${base(rid)}/tip-pool-entries/${id}/adjust`, { newAmount, reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tip-pool-entries", rid] });
+      qc.invalidateQueries({ queryKey: ["tip-pools", rid] });
+      toast({ title: "Adjustment recorded" });
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
   const totalPct = rules.reduce((s, r) => s + Number(r.sharePct || 0), 0);
+
   return (
     <Layout>
-      <PageHeader title="Staff Tip Management" description="Split rules per role, plus pool periods that distribute to active staff." />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader><CardTitle>Split rules (total {totalPct.toFixed(2)}%)</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {rules.map((r, i) => (
-              <div key={i} className="flex gap-2 items-end">
-                <div className="flex-1"><Label>Role</Label><Input value={r.role} onChange={e => { const next = [...rules]; next[i].role = e.target.value; setRules(next); }} /></div>
-                <div className="w-24"><Label>%</Label><Input type="number" value={r.sharePct} onChange={e => { const next = [...rules]; next[i].sharePct = Number(e.target.value); setRules(next); }} /></div>
-                <Button variant="ghost" onClick={() => setRules(rules.filter((_, x) => x !== i))}>×</Button>
+      <PageHeader title="Staff Tip Management" description="Capture, attribute, pool, adjust, and report tips. Sync to payroll on distribute." />
+      <Tabs defaultValue="pools" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="pools">Pools</TabsTrigger>
+          <TabsTrigger value="rules">Split Rules</TabsTrigger>
+          <TabsTrigger value="cash">Cash Declarations</TabsTrigger>
+          <TabsTrigger value="adjust">Adjustments</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="policy">Policy</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pools" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader><CardTitle>New tip pool</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <div><Label>Period start</Label><Input type="date" value={pool.periodStart} onChange={e => setPool({ ...pool, periodStart: e.target.value })} /></div>
+              <div><Label>Period end</Label><Input type="date" value={pool.periodEnd} onChange={e => setPool({ ...pool, periodEnd: e.target.value })} /></div>
+              <div><Label>Total ₹</Label><Input type="number" value={pool.totalRupees} onChange={e => setPool({ ...pool, totalRupees: e.target.value })} /></div>
+              <div>
+                <Label>Split method</Label>
+                <Select value={pool.splitMethod} onValueChange={(v: "equal" | "role_weighted") => setPool({ ...pool, splitMethod: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="role_weighted">Role-weighted (uses split rules)</SelectItem>
+                    <SelectItem value="equal">Equal split (across contributors)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ))}
-            <Button variant="outline" onClick={() => setRules([...rules, { role: "waiter", sharePct: 0 }])}>+ Add role</Button>
-            <Button className="w-full" onClick={() => saveRules.mutate()} disabled={saveRules.isPending}>Save rules</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>New tip pool</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <div><Label>Period start</Label><Input type="date" value={pool.periodStart} onChange={e => setPool({ ...pool, periodStart: e.target.value })} /></div>
-            <div><Label>Period end</Label><Input type="date" value={pool.periodEnd} onChange={e => setPool({ ...pool, periodEnd: e.target.value })} /></div>
-            <div><Label>Total ₹</Label><Input type="number" value={pool.totalRupees} onChange={e => setPool({ ...pool, totalRupees: e.target.value })} /></div>
-            <Button onClick={() => createPool.mutate()} disabled={!pool.periodStart || !pool.totalRupees || createPool.isPending}>Create pool</Button>
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Pool history</CardTitle></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader><TableRow><TableHead>Period</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
-              <TableBody>
-                {(poolsData?.items ?? []).map((p: any) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{p.periodStart} → {p.periodEnd}</TableCell>
-                    <TableCell>₹{p.totalRupees}</TableCell>
-                    <TableCell><Badge variant={p.status === "distributed" ? "secondary" : "default"}>{p.status}</Badge></TableCell>
-                    <TableCell>{p.status === "open" && <Button size="sm" onClick={() => distribute.mutate(p.id)}>Distribute</Button>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+              <Button onClick={() => createPool.mutate()} disabled={!pool.periodStart || !pool.totalRupees || createPool.isPending}>Create pool</Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Pool history</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Period</TableHead><TableHead>Total</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(poolsData?.items ?? []).map((p: any) => (
+                    <TableRow key={p.id} className={selectedPoolId === p.id ? "bg-muted" : ""}>
+                      <TableCell>{p.periodStart} → {p.periodEnd}</TableCell>
+                      <TableCell>₹{Number(p.totalRupees).toFixed(2)}</TableCell>
+                      <TableCell><span className="text-xs">{p.splitMethod ?? "role_weighted"}</span></TableCell>
+                      <TableCell><Badge variant={p.status === "distributed" ? "secondary" : "default"}>{p.status}</Badge></TableCell>
+                      <TableCell className="space-x-1">
+                        <Button size="sm" variant="outline" onClick={() => setSelectedPoolId(p.id)}>View</Button>
+                        {p.status === "open" && <Button size="sm" onClick={() => distribute.mutate(p.id)}>Distribute</Button>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rules">
+          <Card>
+            <CardHeader><CardTitle>Split rules (total {totalPct.toFixed(2)}%)</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {rules.map((r, i) => (
+                <div key={i} className="flex gap-2 items-end">
+                  <div className="flex-1"><Label>Role</Label><Input value={r.role} onChange={e => { const next = [...rules]; next[i].role = e.target.value; setRules(next); }} /></div>
+                  <div className="w-24"><Label>%</Label><Input type="number" value={r.sharePct} onChange={e => { const next = [...rules]; next[i].sharePct = Number(e.target.value); setRules(next); }} /></div>
+                  <Button variant="ghost" onClick={() => setRules(rules.filter((_, x) => x !== i))}>×</Button>
+                </div>
+              ))}
+              <Button variant="outline" onClick={() => setRules([...rules, { role: "waiter", sharePct: 0 }])}>+ Add role</Button>
+              <Button className="w-full" onClick={() => saveRules.mutate()} disabled={saveRules.isPending}>Save rules</Button>
+              <p className="text-xs text-muted-foreground">Used when a pool is distributed with the role-weighted method. Equal split ignores rules and divides evenly across contributors.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cash" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader><CardTitle>Declare cash tip (shift end)</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <div><Label>Shift date</Label><Input type="date" value={cashDecl.shiftDate} onChange={e => setCashDecl({ ...cashDecl, shiftDate: e.target.value })} /></div>
+              <div><Label>Amount ₹</Label><Input type="number" value={cashDecl.amountRupees} onChange={e => setCashDecl({ ...cashDecl, amountRupees: e.target.value })} /></div>
+              <div><Label>Notes</Label><Textarea rows={2} value={cashDecl.notes} onChange={e => setCashDecl({ ...cashDecl, notes: e.target.value })} /></div>
+              <Button onClick={() => declareCash.mutate()} disabled={!cashDecl.amountRupees || declareCash.isPending}>Declare</Button>
+              <p className="text-xs text-muted-foreground">Files into today's open pool against the declaring user (managers can declare for staff via API).</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Recent declarations</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Staff</TableHead><TableHead>Amount</TableHead><TableHead>Notes</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(declarationsData?.items ?? []).map((d: any) => (
+                    <TableRow key={d.id}>
+                      <TableCell>{d.shiftDate}</TableCell>
+                      <TableCell>{d.name ?? `#${d.userId}`}</TableCell>
+                      <TableCell>₹{Number(d.amountRupees).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{d.notes ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="adjust">
+          <Card>
+            <CardHeader><CardTitle>{selectedPoolId ? `Pool #${selectedPoolId} entries` : "Pick a pool from the Pools tab"}</CardTitle></CardHeader>
+            <CardContent>
+              {selectedPoolId ? (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Staff</TableHead><TableHead>Role</TableHead><TableHead>Amount</TableHead><TableHead>Payroll</TableHead><TableHead>Adjust</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {(entriesData?.items ?? []).map((e: any) => (
+                      <TableRow key={e.id}>
+                        <TableCell>{e.name ?? `#${e.userId}`}</TableCell>
+                        <TableCell className="text-xs">{e.role ?? "—"}</TableCell>
+                        <TableCell>₹{Number(e.amountRupees).toFixed(2)}</TableCell>
+                        <TableCell className="text-xs">{e.payrollItemId ? `#${e.payrollItemId}` : "—"}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => {
+                            const newAmount = Number(window.prompt(`New amount (current ₹${e.amountRupees})`, String(e.amountRupees)) ?? "");
+                            if (!Number.isFinite(newAmount) || newAmount < 0) return;
+                            const reason = window.prompt("Reason (required for audit log)") ?? "";
+                            if (!reason.trim()) return;
+                            adjust.mutate({ id: e.id, newAmount, reason });
+                          }}>Adjust</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : <p className="text-sm text-muted-foreground">No pool selected.</p>}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reports" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader><CardTitle>Per-staff tip totals (last 30 days)</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Staff</TableHead><TableHead>Source</TableHead><TableHead>Entries</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(staffReport?.items ?? []).map((r: any, i: number) => (
+                    <TableRow key={`${r.userId}-${r.sourceType}-${i}`}>
+                      <TableCell>{r.name ?? `#${r.userId}`}</TableCell>
+                      <TableCell className="text-xs">{r.sourceType}</TableCell>
+                      <TableCell>{r.entries}</TableCell>
+                      <TableCell>₹{Number(r.total).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Per-shift declared cash</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Staff</TableHead><TableHead>Declared</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(shiftReport?.items ?? []).map((r: any, i: number) => (
+                    <TableRow key={`${r.shiftDate}-${r.userId}-${i}`}>
+                      <TableCell>{r.shiftDate}</TableCell>
+                      <TableCell>{r.name ?? `#${r.userId}`}</TableCell>
+                      <TableCell>₹{Number(r.declared).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle>Payroll payouts (distributed entries)</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Period</TableHead><TableHead>Staff</TableHead><TableHead>Amount</TableHead><TableHead>Payroll Item</TableHead><TableHead>Distributed</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(payoutReport?.items ?? []).map((r: any, i: number) => (
+                    <TableRow key={`${r.poolId}-${r.userId}-${i}`}>
+                      <TableCell className="text-xs">{r.periodStart} → {r.periodEnd}</TableCell>
+                      <TableCell>{r.name ?? `#${r.userId}`}</TableCell>
+                      <TableCell>₹{Number(r.amountRupees).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs">{r.payrollItemId ? `#${r.payrollItemId}` : <span className="text-muted-foreground">unsynced</span>}</TableCell>
+                      <TableCell className="text-xs">{r.distributedAt ? new Date(r.distributedAt).toLocaleString() : "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="policy">
+          <Card>
+            <CardHeader><CardTitle>Tip policy</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {policy ? (
+                <>
+                  <div className="flex items-center justify-between"><Label>Tips enabled at checkout</Label>
+                    <Switch checked={policy.enabled} onCheckedChange={v => setPolicy({ ...policy, enabled: v })} /></div>
+                  <div>
+                    <Label>Suggested presets (%)</Label>
+                    <Input value={policy.presets.join(", ")} onChange={e => setPolicy({ ...policy, presets: e.target.value.split(",").map(s => Number(s.trim()) || 0) })} />
+                    <p className="text-xs text-muted-foreground mt-1">Comma-separated percentages, e.g. 0, 5, 10, 15, 20</p>
+                  </div>
+                  <div className="flex items-center justify-between"><Label>Allow custom amount</Label>
+                    <Switch checked={policy.customAllowed} onCheckedChange={v => setPolicy({ ...policy, customAllowed: v })} /></div>
+                  <div>
+                    <Label>Default split method</Label>
+                    <Select value={policy.splitMethod} onValueChange={(v: "equal" | "role_weighted") => setPolicy({ ...policy, splitMethod: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="role_weighted">Role-weighted</SelectItem>
+                        <SelectItem value="equal">Equal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between"><Label>Allow cash tip declarations</Label>
+                    <Switch checked={policy.allowCashDeclaration} onCheckedChange={v => setPolicy({ ...policy, allowCashDeclaration: v })} /></div>
+                  <div className="flex items-center justify-between"><Label>Sync distributions to payroll</Label>
+                    <Switch checked={policy.syncToPayroll} onCheckedChange={v => setPolicy({ ...policy, syncToPayroll: v })} /></div>
+                  <Button className="w-full" onClick={() => savePolicy.mutate()} disabled={savePolicy.isPending}>Save policy</Button>
+                </>
+              ) : <p className="text-sm text-muted-foreground">Loading policy…</p>}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </Layout>
   );
 }

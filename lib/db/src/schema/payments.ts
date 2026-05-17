@@ -10,6 +10,10 @@ export const paymentsTable = pgTable("payments", {
   direction: text("direction").notNull(),
   method: text("method").notNull(),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  // Portion of `amount` that represents a customer tip (already included in
+  // amount). Lets the payments ledger separately report tip turnover without
+  // double-counting the sale.
+  tipAmount: decimal("tip_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
   paymentDate: timestamp("payment_date").notNull().defaultNow(),
   partyType: text("party_type").notNull().default("other"),
   partyId: integer("party_id"),

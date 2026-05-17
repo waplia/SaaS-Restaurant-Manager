@@ -22,6 +22,10 @@ export const ordersTable = pgTable("orders", {
   serviceCharge: decimal("service_charge", { precision: 10, scale: 2 }).notNull().default("0.00"),
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  // Tip captured at payment time. Recorded on the order so reports/receipts
+  // can show subtotal+tax+service+tip-totals and so post-payment adjustments
+  // have a single source of truth.
+  tipAmount: decimal("tip_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
   notes: text("notes"),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),

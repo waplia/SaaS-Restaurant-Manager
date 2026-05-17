@@ -350,6 +350,16 @@ export interface PayOrderInput {
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   razorpaySignature?: string;
+  tipAmount?: number;
+}
+
+export interface TipPolicy {
+  enabled: boolean;
+  presets: number[];
+  customAllowed: boolean;
+  splitMethod: "equal" | "role_weighted";
+  allowCashDeclaration: boolean;
+  syncToPayroll: boolean;
 }
 
 export interface RazorpayOrderResult {

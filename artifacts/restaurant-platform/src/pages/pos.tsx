@@ -14,9 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem } from "@/lib/types";
+import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
-import { apiPost, apiAction } from "@/lib/api";
+import { apiPost, apiAction, apiGet } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { useRestaurantId } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
 import { printOrder } from "@/lib/printOrder";
@@ -629,6 +630,7 @@ interface PaymentConfirmDetails {
   razorpaySignature?: string;
   giftCardCode?: string;
   redeemedPaise?: number;
+  tipAmount?: number;
 }
 
 function PaymentModal({
@@ -647,10 +649,33 @@ function PaymentModal({
   const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card">("cash");
   const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
+  // Tip selection — drives both the displayed grand total and the value sent
+  // to the server (Task #421). Presets come from the restaurant.tipPolicy.
+  // tipPct === -1 means a free-form custom rupee amount.
+  const [tipPct, setTipPct] = useState<number>(0);
+  const [customTip, setCustomTip] = useState<string>("");
+  const restaurantId = useRestaurantId();
+  const { data: tipPolicy, isError: tipPolicyError } = useQuery<TipPolicy>({
+    queryKey: ["tip-policy", restaurantId],
+    queryFn: () => apiGet<TipPolicy>(`/restaurants/${restaurantId}/advanced-growth/tip-policy`),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  // Treat a failed policy fetch (commonly a 403 from the plan-feature gate
+  // when the tenant lacks `staff_tips`) as "tips disabled" so the UI doesn't
+  // show tip controls the backend will silently zero out.
+  const tipsEnabled = tipPolicyError ? false : (tipPolicy?.enabled ?? true);
+  const presets = tipPolicy?.presets ?? [0, 5, 10, 15, 20];
+  const customAllowed = tipPolicy?.customAllowed ?? true;
+  const tipAmount = tipPct === -1
+    ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
+    : Math.round(totals.totalAmount * tipPct) / 100;
+  const grandTotal = totals.totalAmount + tipAmount;
   const [upiId, setUpiId] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardError, setGiftCardError] = useState("");
-  const restaurantIdForGift = useRestaurantId();
+  const restaurantIdForGift = restaurantId;
   const [cardReady, setCardReady] = useState(false);
   const [stripeError, setStripeError] = useState("");
   const cardMountRef = useRef<HTMLDivElement>(null);
@@ -669,7 +694,7 @@ function PaymentModal({
   const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined;
 
   const change = method === "cash" && amountTendered
-    ? Math.max(0, Number(amountTendered) - totals.totalAmount)
+    ? Math.max(0, Number(amountTendered) - grandTotal)
     : 0;
 
   useEffect(() => {
@@ -712,7 +737,7 @@ function PaymentModal({
     setStage("processing");
     try {
       if (method === "card") {
-        const intent = await createPaymentIntent.mutateAsync({ orderId });
+        const intent = await createPaymentIntent.mutateAsync({ orderId, tipAmount });
         if (intent.mode === "live" && intent.clientSecret && stripeRef.current.stripe && stripeRef.current.card) {
           const result = await stripeRef.current.stripe.confirmCardPayment(intent.clientSecret, {
             payment_method: { card: stripeRef.current.card },
@@ -722,13 +747,13 @@ function PaymentModal({
             setStage("card-form");
             return;
           }
-          await onConfirm("card", { stripePaymentIntentId: result.paymentIntent?.id });
+          await onConfirm("card", { stripePaymentIntentId: result.paymentIntent?.id, tipAmount });
         } else {
           await new Promise(r => setTimeout(r, 1500));
-          await onConfirm("card", { stripePaymentIntentId: intent.intentId });
+          await onConfirm("card", { stripePaymentIntentId: intent.intentId, tipAmount });
         }
       } else if (method === "upi") {
-        const rzpOrder = await createRazorpayOrder.mutateAsync({ orderId });
+        const rzpOrder = await createRazorpayOrder.mutateAsync({ orderId, tipAmount });
         if (rzpOrder.mode === "live" && rzpOrder.keyId) {
           // Load Razorpay checkout.js script once
           if (!(window as unknown as Record<string, unknown>).Razorpay) {
@@ -752,6 +777,7 @@ function PaymentModal({
                   razorpayPaymentId: response.razorpay_payment_id,
                   razorpayOrderId: response.razorpay_order_id,
                   razorpaySignature: response.razorpay_signature,
+                  tipAmount,
                 });
                 resolve();
               },
@@ -767,7 +793,7 @@ function PaymentModal({
         } else {
           // Demo mode — simulate gateway latency then mark paid
           await new Promise(r => setTimeout(r, 1500));
-          await onConfirm("upi", { razorpayPaymentId: `demo_rzp_pay_${orderId}_${Date.now()}` });
+          await onConfirm("upi", { razorpayPaymentId: `demo_rzp_pay_${orderId}_${Date.now()}`, tipAmount });
         }
       } else if (method === "gift_card") {
         if (!restaurantIdForGift) throw new Error("No restaurant context");
@@ -777,14 +803,14 @@ function PaymentModal({
             "POST",
             {
               code: giftCardCode.trim(),
-              amountPaise: Math.round(totals.totalAmount * 100),
+              amountPaise: Math.round(grandTotal * 100),
               referenceType: "order",
               referenceId: orderId,
               idempotencyKey: `pos-${orderId}-${Date.now()}`,
               notes: `POS payment for order #${orderId}`,
             },
           );
-          await onConfirm("gift_card", { giftCardCode: result.code, redeemedPaise: result.redeemedPaise });
+          await onConfirm("gift_card", { giftCardCode: result.code, redeemedPaise: result.redeemedPaise, tipAmount });
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Gift card redemption failed";
           setGiftCardError(msg);
@@ -792,7 +818,7 @@ function PaymentModal({
           return;
         }
       } else {
-        await onConfirm("cash", { amountTendered: Number(amountTendered) || undefined });
+        await onConfirm("cash", { amountTendered: Number(amountTendered) || undefined, tipAmount });
       }
     } catch {
       toast({ title: "Payment failed", description: "Please try again.", variant: "destructive" });
@@ -818,12 +844,48 @@ function PaymentModal({
           <span>Discount</span><span>-₹{totals.discountAmount.toFixed(2)}</span>
         </div>
       )}
+      {tipAmount > 0 && (
+        <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+          <span>Tip{tipPct > 0 ? ` (${tipPct}%)` : ""}</span><span>+₹{tipAmount.toFixed(2)}</span>
+        </div>
+      )}
       <div className="flex justify-between font-bold text-xl border-t border-border pt-2">
         <span>Total</span>
-        <span className="text-primary">₹{totals.totalAmount.toFixed(2)}</span>
+        <span className="text-primary">₹{grandTotal.toFixed(2)}</span>
       </div>
     </div>
   );
+
+  // Tip selector shown on the method-select stage. Hidden entirely when the
+  // restaurant has disabled tips in their policy.
+  const TipSelector = () => {
+    if (!tipsEnabled) return null;
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Add a tip</span>
+          {tipAmount > 0 && (
+            <button className="text-xs text-muted-foreground hover:underline"
+              onClick={() => { setTipPct(0); setCustomTip(""); }}>Clear</button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {presets.map(p => (
+            <button key={p} onClick={() => { setTipPct(p); setCustomTip(""); }}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition ${tipPct === p && tipAmount > 0 ? "bg-primary text-primary-foreground border-primary" : tipPct === 0 && p === 0 ? "bg-muted border-border" : "border-border hover:bg-muted"}`}>
+              {p === 0 ? "No tip" : `${p}%`}
+            </button>
+          ))}
+          {customAllowed && (
+            <input type="number" min="0" step="0.01" placeholder="Custom ₹"
+              value={tipPct === -1 ? customTip : ""}
+              onChange={e => { setTipPct(-1); setCustomTip(e.target.value); }}
+              className="px-3 py-1.5 rounded-lg text-sm border border-border bg-background w-28" />
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -844,6 +906,7 @@ function PaymentModal({
           {stage === "select" && (
             <>
               <TotalsSummary />
+              <TipSelector />
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -963,7 +1026,7 @@ function PaymentModal({
                   onClick={handleProcessPayment}
                 >
                   <Lock className="w-3.5 h-3.5 mr-2" />
-                  {STRIPE_PK ? `Pay ₹${totals.totalAmount.toFixed(2)}` : "Process Demo Payment"}
+                  {STRIPE_PK ? `Pay ₹${grandTotal.toFixed(2)}` : "Process Demo Payment"}
                 </Button>
               </div>
             </>
@@ -1382,6 +1445,7 @@ export default function PosPage() {
       razorpayPaymentId: details?.razorpayPaymentId,
       razorpayOrderId: details?.razorpayOrderId,
       razorpaySignature: details?.razorpaySignature,
+      tipAmount: details?.tipAmount,
     });
     setShowPayModal(false);
     toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
