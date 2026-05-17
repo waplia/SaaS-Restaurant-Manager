@@ -14,7 +14,7 @@ const LEGAL_LINKS = [
 
 export default function LegalIndex() {
   useSeo({
-    title: "Legal Pages",
+    title: "Legal | KhanaLagao",
     description: "Privacy policy, terms, refund policy and other legal documents for KhanaLagao.",
   });
 

@@ -7,7 +7,7 @@ import { Sparkles, ArrowRight } from "lucide-react";
 
 export default function SolutionsIndex() {
   useSeo({
-    title: "Solutions — KhanaLagao for every kind of food business",
+    title: "Solutions | KhanaLagao",
     description: "Tailored playbooks for restaurants, cafes, cloud kitchens, bakeries, hotels, food courts, tiffin services, catering, franchise chains and corporate canteens.",
   });
 

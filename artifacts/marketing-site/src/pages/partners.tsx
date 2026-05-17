@@ -53,8 +53,8 @@ const BENEFITS = [
 
 export default function Partners() {
   useSeo({
-    title: "Partner Program — KhanaLagao",
-    description: `Resell, integrate or refer KhanaLagao. Build a recurring revenue stream with ${COMPANY.legalName}.`,
+    title: "Partner Program | KhanaLagao",
+    description: `Resell, integrate or refer ${COMPANY.product}. Build a recurring revenue stream with India's modern Restaurant OS.`,
   });
   return (
     <SiteLayout>

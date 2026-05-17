@@ -95,7 +95,7 @@ export default function RestaurantTypes() {
   const data = TYPES[type];
 
   useSeo({
-    title: `KhanaLagao for ${data.title}`,
+    title: `${data.title} | KhanaLagao`,
     description: data.desc,
   });
 

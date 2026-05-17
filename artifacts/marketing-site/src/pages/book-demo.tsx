@@ -4,7 +4,7 @@ import { LeadForm } from "@/components/LeadForm";
 
 export default function BookDemo() {
   useSeo({
-    title: "Book a Demo — KhanaLagao",
+    title: "Book a Demo | KhanaLagao",
     description: "Schedule a personalized demo of KhanaLagao with our restaurant experts.",
   });
 

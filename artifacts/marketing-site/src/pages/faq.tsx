@@ -4,7 +4,7 @@ import { FAQSection, type FAQ } from "@/components/shared/FAQSection";
 import { useSeo } from "@/lib/seo";
 
 const GENERAL: FAQ[] = [
-  { q: "What is KhanaLagao?", a: "KhanaLagao is a complete restaurant operating system by Waplia Digital Solutions. It combines POS, QR menu, kitchen display, inventory, staff & payroll, finance, growth and Khana AI into one connected platform." },
+  { q: "What is KhanaLagao?", a: "KhanaLagao is a complete Restaurant OS for modern food businesses. It combines POS, QR menu, kitchen display, inventory, staff & payroll, finance, growth and Khana AI into one connected platform." },
   { q: "What kinds of businesses use it?", a: "Restaurants, cafes, cloud kitchens, bakeries, hotels with F&B, food courts, tiffin services, catering & banquets, franchise chains and corporate canteens." },
   { q: "Where is KhanaLagao based?", a: "We're based in Malviya Nagar, Jaipur, Rajasthan, India. Our team supports customers across India in English and Hindi." },
   { q: "Do I need to be technical to use it?", a: "No. The product is built for working operators. Setup takes a day or two with help from our onboarding team — including menu, hardware and staff training." },
@@ -43,7 +43,7 @@ const FAQ_SCHEMA = {
 
 export default function FAQ() {
   useSeo({
-    title: "FAQ — KhanaLagao",
+    title: "FAQ | KhanaLagao",
     description: "Frequently asked questions about KhanaLagao — pricing, product, integrations, data, security and support.",
     breadcrumbs: [
       { label: "Home", href: "/" },

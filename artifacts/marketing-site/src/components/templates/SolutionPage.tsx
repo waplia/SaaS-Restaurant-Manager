@@ -28,7 +28,7 @@ export interface SolutionPageContent {
 
 export function SolutionPage({ content }: { content: SolutionPageContent }) {
   useSeo({
-    title: content.seoTitle ?? `KhanaLagao for ${content.industryLabel}`,
+    title: content.seoTitle ?? `${content.industryLabel} | KhanaLagao`,
     description: content.seoDesc ?? content.hero.tagline,
     breadcrumbs: [
       { label: "Home", href: "/" },

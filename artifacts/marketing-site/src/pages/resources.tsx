@@ -16,7 +16,7 @@ const SECTIONS = [
 
 export default function Resources() {
   useSeo({
-    title: "Resources — KhanaLagao",
+    title: "Resources | KhanaLagao",
     description: "Blog, guides, help center, FAQs, comparisons, case studies and security — everything you need to evaluate, deploy and scale KhanaLagao.",
   });
   return (

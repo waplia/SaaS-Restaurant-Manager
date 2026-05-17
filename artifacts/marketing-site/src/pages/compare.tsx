@@ -30,7 +30,7 @@ function Cell({ v }: { v: boolean | "partial" }) {
 
 export default function Compare() {
   useSeo({
-    title: "Compare KhanaLagao — vs. legacy POS & aggregator-only tools",
+    title: "Compare | KhanaLagao",
     description: "How KhanaLagao compares to legacy POS systems and aggregator-only solutions — features, integrations, AI, finance, growth and support.",
   });
   return (

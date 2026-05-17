@@ -17,7 +17,7 @@ const GUIDES = [
 
 export default function Guides() {
   useSeo({
-    title: "Owner Guides — KhanaLagao",
+    title: "Owner Guides | KhanaLagao",
     description: "Step-by-step playbooks for restaurant owners: migration, opening, growth, operations, finance, people and Khana AI.",
   });
   return (

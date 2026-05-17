@@ -64,7 +64,7 @@ export function Header() {
         <div className="flex items-center gap-6 lg:gap-8">
           <Link href="/" className="flex items-center gap-2 shrink-0" data-testid="link-home">
             {settings.logoUrl
-              ? <img src={settings.logoUrl} alt={settings.appName} className="h-7 w-auto" />
+              ? <img src={settings.logoUrl} alt="KhanaLagao" className="h-7 w-auto" />
               : <span className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center text-white font-bold">K</span>}
             <span className="font-serif text-xl font-bold tracking-tight text-foreground">{settings.appName}</span>
           </Link>

@@ -36,9 +36,9 @@ function Deferred({ children, minHeight = 320 }: { children: React.ReactNode; mi
 
 export default function Home() {
   useSeo({
-    title: "KhanaLagao | Run Your Restaurant Smarter with One Powerful Operating System",
+    title: "KhanaLagao | Restaurant OS for Modern Food Businesses",
     description:
-      "POS, QR menu, KOT, tables, inventory, payroll, finance, growth and Khana AI — one connected operating system for restaurants, cafes, cloud kitchens, bakeries, bars, hotels and chains.",
+      "KhanaLagao is a complete restaurant operating system for POS billing, QR menu, kitchen/KDS, inventory, payroll, finance, growth, reports and Khana AI.",
   });
 
   return (

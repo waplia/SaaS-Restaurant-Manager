@@ -5,17 +5,24 @@
  */
 
 export const COMPANY = {
-  // Product
+  // Product (this is the brand Google should see in titles, descriptions, and schema)
   product: "KhanaLagao",
+  productAlternateName: "KhanaLagao Restaurant OS",
   productTagline: "Restaurant OS for Modern Food Businesses",
   productPositioning:
     "Restaurant Operating System + Growth Cloud + Finance + Khana AI",
   productShortDescription:
-    "KhanaLagao is a complete restaurant operating system by Waplia Digital Solutions, helping food businesses manage POS, QR menu, kitchen, inventory, staff, finance, growth and Khana AI from one platform.",
+    "KhanaLagao is a complete restaurant operating system for POS billing, QR menu, kitchen/KDS, inventory, payroll, finance, growth, reports and Khana AI.",
+  productOgDescription:
+    "Run your restaurant smarter with KhanaLagao — POS, QR menu, inventory, payroll, finance, growth tools and Khana AI in one platform.",
+  productTwitterDescription:
+    "Complete Restaurant OS with POS, QR Menu, Inventory, Payroll, Finance, Growth Engine and Khana AI.",
   proudlyBuiltLine:
     "KhanaLagao is proudly built by Waplia Digital Solutions from Jaipur, India.",
 
-  // Legal entity
+  // Legal entity — used ONLY in the footer copyright row, legal pages, About story,
+  // and the "proudly built" attribution. Never in <title>, meta description, OG/Twitter,
+  // or the user-visible name in structured data.
   legalName: "Waplia Digital Solutions",
   legalShortName: "Waplia",
 
@@ -54,15 +61,23 @@ export const LEGAL_LINKS: { title: string; href: string }[] = [
   { title: "Acceptable Use Policy", href: "/acceptable-use-policy" },
 ];
 
-/** Organization JSON-LD ready to drop into a <script type="application/ld+json"> tag. */
+/**
+ * Organization JSON-LD ready to drop into a <script type="application/ld+json"> tag.
+ *
+ * Per SEO direction: the user-visible Organization `name` is the brand "KhanaLagao".
+ * The legal entity (Waplia) is intentionally NOT included here — structured data
+ * is SEO-facing and surfaces in Google's Knowledge Graph, so the brand identity
+ * stays consistent. Waplia remains only in the footer copyright row, legal
+ * pages, and the About story.
+ */
 export const ORG_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: COMPANY.legalName,
-  alternateName: COMPANY.product,
+  name: COMPANY.product,
+  alternateName: COMPANY.productAlternateName,
   url: COMPANY.siteUrl,
   logo: `${COMPANY.siteUrl}/logo.png`,
-  description: COMPANY.productShortDescription,
+  description: COMPANY.productTagline,
   telephone: COMPANY.phoneDisplay,
   email: COMPANY.supportEmail,
   address: {

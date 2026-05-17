@@ -93,7 +93,7 @@ export default function BlogPost() {
           },
           publisher: {
             "@type": "Organization",
-            name: "Waplia Digital Solutions",
+            name: "KhanaLagao",
             logo: {
               "@type": "ImageObject",
               url: "https://khanalagao.com/logo.png",

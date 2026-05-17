@@ -19,7 +19,7 @@ const FAQS = [
 
 export default function FeaturesIndex() {
   useSeo({
-    title: "All Features — KhanaLagao Restaurant OS",
+    title: "All Features | KhanaLagao",
     description: "Browse the complete KhanaLagao feature directory across Sell, Menu, Inventory, Customers, Growth, Khana AI, Staff, Finance, Operations, Marketplace and Reports.",
   });
 

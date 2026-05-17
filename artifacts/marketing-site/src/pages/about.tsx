@@ -23,8 +23,8 @@ const TIMELINE = [
 
 export default function About() {
   useSeo({
-    title: `About ${COMPANY.product} — built by ${COMPANY.legalName}`,
-    description: `${COMPANY.product} is built by ${COMPANY.legalName} from ${COMPANY.city}, India. Learn about our mission, values and team.`,
+    title: "About | KhanaLagao",
+    description: `${COMPANY.product} — ${COMPANY.productTagline}. Built from ${COMPANY.city}, India. Learn about our mission, values and team.`,
   });
 
   return (

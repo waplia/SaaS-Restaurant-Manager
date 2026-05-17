@@ -77,7 +77,11 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const p = hexToHsl(settings.primaryColor); if (p) root.style.setProperty("--primary", p);
     const s = hexToHsl(settings.secondaryColor); if (s) root.style.setProperty("--secondary", s);
-    if (settings.appName) document.title = `${settings.appName} — The Operating System for Modern Restaurants`;
+    // NOTE: document.title is owned by the per-page `useSeo` hook so each page
+    // controls its own browser tab title and SEO. We intentionally do NOT
+    // overwrite it from app settings here — doing so would clobber every page's
+    // title with a single hard-coded string and break the "[Page] | KhanaLagao"
+    // pattern Google indexes.
     if (settings.faviconUrl) {
       let link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
       if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }

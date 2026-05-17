@@ -22,8 +22,8 @@ const PERKS = [
 
 export default function Careers() {
   useSeo({
-    title: `Careers at ${COMPANY.legalName} — build ${COMPANY.product}`,
-    description: `Join ${COMPANY.legalName} in ${COMPANY.city}. We're building India's modern restaurant operating system — engineering, design, AI, customer success and sales roles.`,
+    title: "Careers | KhanaLagao",
+    description: `Join the team building ${COMPANY.product} in ${COMPANY.city}. We're building India's modern Restaurant OS — engineering, design, AI, customer success and sales roles.`,
   });
   return (
     <SiteLayout>

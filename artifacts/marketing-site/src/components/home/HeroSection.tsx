@@ -25,8 +25,11 @@ export function HeroSection() {
           </div>
           <h1 className="font-serif text-[2rem] sm:text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] md:leading-[1.05]">
             Run Your Restaurant Smarter with{" "}
-            <span className="text-primary">One Powerful Operating System</span>
+            <span className="text-primary">KhanaLagao</span>
           </h1>
+          <p className="text-lg md:text-2xl font-semibold text-foreground/90 leading-snug">
+            Restaurant OS for Modern Food Businesses
+          </p>
           <p className="text-base md:text-xl text-muted-foreground leading-relaxed">
             From the first order to the last rupee — billing, kitchen, tables, stock, staff,
             customers, finance and AI insights in one connected system built for modern restaurants.

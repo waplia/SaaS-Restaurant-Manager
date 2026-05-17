@@ -51,7 +51,7 @@ const STORIES = [
 
 export default function CaseStudies() {
   useSeo({
-    title: "Case Studies — KhanaLagao",
+    title: "Case Studies | KhanaLagao",
     description: "Real restaurants, cafes, cloud kitchens, hotels and franchises share what changed after moving to KhanaLagao.",
   });
   return (

@@ -17,7 +17,7 @@ const TOPICS = [
 
 export default function HelpCenter() {
   useSeo({
-    title: "Help Center — KhanaLagao",
+    title: "Help Center | KhanaLagao",
     description: "Documentation, troubleshooting and answers for the KhanaLagao platform — POS, QR menu, kitchen, inventory, staff, finance and Khana AI.",
   });
   return (

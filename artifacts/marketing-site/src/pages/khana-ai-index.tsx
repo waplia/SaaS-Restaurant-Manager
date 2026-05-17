@@ -15,7 +15,7 @@ const PROMISES = [
 
 export default function KhanaAIIndex() {
   useSeo({
-    title: "Khana AI — AI co-pilot for restaurants | KhanaLagao",
+    title: "Khana AI | KhanaLagao",
     description: "Khana AI brings restaurant-specific AI to your operations — menu import, review booster, smart campaigns, sales insights, forecasting and chat. Pay per use with AI Credits.",
   });
 

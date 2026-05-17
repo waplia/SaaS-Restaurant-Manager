@@ -64,8 +64,8 @@ const PROGRAM = [
 
 export default function Security() {
   useSeo({
-    title: "Security at KhanaLagao — protecting your restaurant's data",
-    description: `How ${COMPANY.legalName} secures the ${COMPANY.product} platform: encryption, role-based access, audit logs, key protection, tenant isolation and a mature security program.`,
+    title: "Security | KhanaLagao",
+    description: `How ${COMPANY.product} secures your restaurant data: encryption, role-based access, audit logs, key protection, tenant isolation and a mature security program.`,
   });
 
   return (

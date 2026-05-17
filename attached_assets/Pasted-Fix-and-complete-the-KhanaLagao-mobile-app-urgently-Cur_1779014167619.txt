@@ -1,0 +1,887 @@
+Fix and complete the KhanaLagao mobile app urgently.
+
+Current issue:
+The mobile app exists, but almost nothing is working properly. Features are showing but data is not loading. Live orders are not showing. Create actions are not working. Orders, dashboard, kitchen, tables, inventory, staff, finance, notifications and other modules are not connected properly with real backend data.
+
+Important:
+- Do not create fake/mock data.
+- Do not just design screens.
+- Do not only add UI.
+- Make every important mobile feature functional with real API/backend data.
+- Connect the mobile app with the existing KhanaLagao backend.
+- Use the same restaurant/admin data that web dashboard uses.
+- Do not break the web app, restaurant admin, super admin, POS, or public website.
+- First audit current mobile app screens, API calls, auth, backend endpoints, and data flow.
+- Then fix all broken features one by one.
+- Build and test the mobile app after fixes.
+
+Goal:
+The mobile app should be usable by restaurant owner, manager, cashier, waiter, chef, inventory manager, HR/payroll, marketing manager and accountant based on role permissions.
+
+====================================================
+1. FIRST AUDIT MOBILE APP
+====================================================
+
+First scan the mobile app and report:
+
+- App framework used
+- Existing screens
+- Existing navigation
+- Existing API base URL
+- Existing auth/token flow
+- Existing backend endpoints used
+- Missing endpoints
+- Broken API calls
+- Screens using mock data
+- Screens with no data loading
+- Create/update/delete actions not working
+- Role permission issues
+- Notification setup status
+- Build errors
+- Runtime errors
+- Console/API errors
+
+Then fix all issues.
+
+Do not proceed with visual polish before fixing real functionality.
+
+====================================================
+2. FIX AUTHENTICATION FIRST
+====================================================
+
+Mobile app login must work with real backend.
+
+Fix:
+- Login API
+- Token/session storage
+- Restaurant ID loading
+- User role loading
+- Outlet ID loading
+- Refresh token/session expiry if available
+- Logout
+- Unauthorized API handling
+- Role-based redirect
+- Multi-outlet selection if applicable
+
+After login:
+- Owner/Manager should go to Home Dashboard.
+- Chef should go to Kitchen.
+- Waiter should go to Tables/Orders.
+- Cashier should go to Orders/POS summary.
+- Inventory manager should go to Inventory.
+- Accountant should go to Finance.
+
+No screen should load without valid auth token.
+
+====================================================
+3. FIX API CONFIGURATION
+====================================================
+
+Make sure mobile app uses correct backend API.
+
+Add/fix:
+- API_BASE_URL from environment/config
+- Auth token attached to every protected request
+- Restaurant ID scoped correctly
+- Outlet ID scoped correctly
+- Error handling for 401/403/500
+- Loading states
+- Empty states
+- Retry button
+- Pull to refresh
+- Network offline handling
+
+Remove all hardcoded localhost URLs unless for development.
+Use production/staging API config properly.
+
+====================================================
+4. FIX MOBILE DASHBOARD WITH REAL DATA
+====================================================
+
+Dashboard should load real data from backend.
+
+Show:
+- Today sales
+- Live orders
+- Pending orders
+- QR orders
+- Kitchen status
+- Occupied tables
+- Staff present
+- Low stock items
+- Pending payments
+- Customer feedback
+- Review rating
+- AI insights if enabled
+- Wallet balance
+- Expenses today
+- Net profit estimate
+
+Add API endpoint or connect existing endpoint:
+GET /mobile/dashboard
+
+Data should match web dashboard numbers.
+
+Dashboard actions:
+- View Orders
+- View Kitchen
+- View Tables
+- Check Stock
+- Add Expense
+- View Reports
+- Open Khana AI
+- Support Ticket
+
+If no data:
+Show useful empty state, not blank screen.
+
+====================================================
+5. FIX LIVE ORDERS
+====================================================
+
+Live orders must load and work.
+
+Screens:
+- Orders list
+- Order detail
+- Create order if supported
+- Update order status
+- Cancel order with reason
+- Payment status
+- Invoice view/share
+
+Load real orders:
+- Dine-in
+- Takeaway
+- Delivery
+- QR orders
+- Online orders
+- Kiosk orders if enabled
+
+Filters:
+- New
+- Accepted
+- Preparing
+- Ready
+- Served
+- Delivered
+- Cancelled
+- Payment Pending
+
+Actions:
+- Accept order
+- Reject order
+- Send to kitchen
+- Mark preparing
+- Mark ready
+- Mark served
+- Mark delivered
+- Cancel with reason
+- Call customer
+- WhatsApp customer
+- View invoice
+- Share invoice
+
+Fix backend APIs if missing:
+GET /mobile/orders
+GET /mobile/orders/:id
+POST /mobile/orders
+PATCH /mobile/orders/:id/status
+PATCH /mobile/orders/:id/payment
+POST /mobile/orders/:id/cancel
+
+All actions should update web dashboard too.
+
+====================================================
+6. FIX ORDER CREATE FLOW
+====================================================
+
+If mobile supports order creation, make it actually work.
+
+Create order should support:
+- Select order type: dine-in/takeaway/delivery
+- Select table for dine-in
+- Select customer if needed
+- Select items
+- Variants/add-ons
+- Quantity
+- Notes
+- Discount if permission allowed
+- Tax/service charge
+- Payment mode
+- Submit order
+- Generate KOT
+- Update kitchen
+- Update inventory
+- Update reports
+
+Do not allow create button to do nothing.
+If mobile POS order creation is not ready, show proper “Use POS Terminal on web” message instead of broken screen.
+
+====================================================
+7. FIX KITCHEN / KDS
+====================================================
+
+Kitchen screen must load real KOT/orders.
+
+Show:
+- New KOTs
+- Preparing
+- Ready
+- Delayed
+- Cancelled
+
+Each KOT should show:
+- Order number
+- Table/order type
+- Items
+- Quantity
+- Add-ons/modifiers
+- Notes
+- Time
+- Delay status
+- Station if available
+
+Actions:
+- Accept KOT
+- Mark item preparing
+- Mark item ready
+- Mark full order ready
+- Mark served
+- Cancel item with reason if permission allowed
+
+APIs:
+GET /mobile/kitchen
+PATCH /mobile/kitchen/items/:id/status
+PATCH /mobile/kitchen/orders/:id/status
+
+Kitchen updates should sync with web KDS and order status.
+
+====================================================
+8. FIX TABLES
+====================================================
+
+Tables screen must load real floors/tables.
+
+Show:
+- Floors
+- Tables
+- Status:
+  - Available
+  - Occupied
+  - Reserved
+  - Cleaning
+  - Billed
+- Current order
+- Assigned waiter
+- Table amount
+- QR table link if available
+
+Actions:
+- Open table order
+- Create table order
+- Transfer table
+- Merge table if supported
+- Mark cleaning
+- Mark available
+- Assign waiter
+- View table QR
+
+APIs:
+GET /mobile/tables
+GET /mobile/tables/:id
+PATCH /mobile/tables/:id/status
+
+====================================================
+9. FIX WAITER REQUESTS
+====================================================
+
+Waiter requests must work from QR to app.
+
+Customer actions:
+- Call waiter
+- Request water
+- Request bill
+- Request cleaning
+- Need help
+
+Mobile app should show:
+- New request notification
+- Table number
+- Request type
+- Time
+- Accept
+- Resolve
+- Escalate if delayed
+
+APIs:
+GET /mobile/waiter-requests
+PATCH /mobile/waiter-requests/:id/status
+
+====================================================
+10. FIX RESERVATIONS
+====================================================
+
+Reservations should load real data.
+
+Features:
+- Today reservations
+- Upcoming
+- Create reservation
+- Edit reservation
+- Confirm
+- Cancel
+- Mark arrived
+- Mark no-show
+- Assign table
+- Contact customer
+
+APIs:
+GET /mobile/reservations
+POST /mobile/reservations
+PATCH /mobile/reservations/:id
+PATCH /mobile/reservations/:id/status
+
+====================================================
+11. FIX DELIVERY
+====================================================
+
+Delivery screen should load and update real delivery orders.
+
+Features:
+- Delivery orders
+- Assign rider
+- Rider status
+- Picked up
+- Out for delivery
+- Delivered
+- Failed
+- Returned
+- Cash collected
+- Customer address
+- Call/WhatsApp customer
+- Proof of delivery upload if available
+
+Delivery staff role:
+- My assigned deliveries
+- Mark picked up
+- Mark delivered
+- Collect cash
+
+====================================================
+12. FIX MENU MOBILE
+====================================================
+
+Menu screen should load real menu items.
+
+Features:
+- Menu item list
+- Categories
+- Search/filter
+- Item detail
+- Toggle item available/unavailable
+- Change price if permission allowed
+- Edit item image if supported
+- Mark bestseller
+- View QR menu link
+- Share QR menu
+- Use Khana AI description/image if enabled
+
+APIs:
+GET /mobile/menu/items
+PATCH /mobile/menu/items/:id/availability
+PATCH /mobile/menu/items/:id
+
+====================================================
+13. FIX INVENTORY MOBILE
+====================================================
+
+Inventory must load real stock data.
+
+Features:
+- Stock list
+- Low stock
+- Out of stock
+- Raw material detail
+- Quick adjustment
+- Add purchase
+- Purchase order approval
+- Vendor contact
+- Waste entry
+- Expiry alerts
+- Stock transfer approval
+
+APIs:
+GET /mobile/inventory
+GET /mobile/inventory/low-stock
+POST /mobile/inventory/adjustment
+POST /mobile/inventory/waste
+GET /mobile/purchase-orders
+PATCH /mobile/purchase-orders/:id/approve
+
+====================================================
+14. FIX STAFF / ATTENDANCE / PAYROLL
+====================================================
+
+Staff module should show real data.
+
+Features:
+- Staff list
+- Present/absent
+- Late staff
+- Shift list
+- Attendance summary
+- Leave requests
+- Approve/reject leave
+- Payroll summary
+- Salary slips
+- Staff task list
+- Assign task
+- Staff performance summary
+
+APIs:
+GET /mobile/staff
+GET /mobile/attendance
+POST /mobile/attendance/punch
+GET /mobile/leaves
+PATCH /mobile/leaves/:id/status
+GET /mobile/payroll/summary
+GET /mobile/staff-tasks
+POST /mobile/staff-tasks
+PATCH /mobile/staff-tasks/:id/status
+
+====================================================
+15. FIX CUSTOMERS / FEEDBACK / REVIEW BOOSTER
+====================================================
+
+Customer module should load real CRM data.
+
+Features:
+- Customer list
+- Customer detail
+- Order history
+- Total spend
+- Last visit
+- Loyalty status
+- Feedback
+- Review QR feedback
+- Negative feedback alerts
+- Call/WhatsApp customer
+- Add note
+- Mark complaint resolved
+
+Review Booster:
+- QR scan count
+- Ratings
+- AI review generated count
+- Google link click count
+- Private negative feedback
+- Copy AI reply suggestion
+
+APIs:
+GET /mobile/customers
+GET /mobile/customers/:id
+GET /mobile/feedback
+PATCH /mobile/feedback/:id/status
+GET /mobile/reviews/analytics
+
+====================================================
+16. FIX GROWTH ENGINE MOBILE
+====================================================
+
+Growth Engine should work with real campaigns.
+
+Features:
+- Campaign list
+- Create campaign
+- Select customer segment
+- Generate with Khana AI if enabled
+- Preview message
+- Schedule/send if permission allowed
+- Coupons
+- Referrals
+- Birthday/anniversary reminders
+- Campaign analytics
+
+APIs:
+GET /mobile/campaigns
+POST /mobile/campaigns
+PATCH /mobile/campaigns/:id/status
+GET /mobile/customer-segments
+GET /mobile/coupons
+
+If sending is not configured, show “Configure SMS/WhatsApp/Email in Settings” instead of failing silently.
+
+====================================================
+17. FIX KHANA AI MOBILE
+====================================================
+
+Khana AI must work with real credits and providers.
+
+Features:
+- AI dashboard
+- Credit balance
+- AI usage logs
+- AI sales insights
+- AI campaign generator
+- AI review draft/reply
+- AI menu description
+- AI inventory assistant
+- AI chat assistant
+
+Rules:
+- Check plan access
+- Check AI credits
+- Show credits required
+- Deduct credits after success
+- Save usage log
+- Show error if provider not configured
+- Show recharge/upgrade if no credits
+
+APIs:
+GET /mobile/ai/dashboard
+GET /mobile/ai/credits
+GET /mobile/ai/usage
+POST /mobile/ai/generate
+POST /mobile/ai/chat
+
+====================================================
+18. FIX FINANCE MOBILE
+====================================================
+
+Finance should load real data.
+
+Features:
+- Today payments
+- Payment mode summary
+- Cash/card/UPI split
+- Pending payments
+- Expenses
+- Add expense
+- Upload bill photo
+- Settlements
+- Wallet balance
+- Invoices
+- P&L summary
+- Profit estimate
+- Refunds
+- Vendor payments
+
+APIs:
+GET /mobile/finance/summary
+GET /mobile/payments
+GET /mobile/expenses
+POST /mobile/expenses
+GET /mobile/wallet
+GET /mobile/settlements
+GET /mobile/invoices
+GET /mobile/profit-loss
+
+====================================================
+19. FIX REPORTS MOBILE
+====================================================
+
+Reports should load real numbers.
+
+Reports:
+- Today sales
+- Weekly sales
+- Monthly sales
+- Item-wise sales
+- Category sales
+- Payment report
+- Order report
+- Inventory report
+- Staff report
+- Payroll report
+- Customer report
+- Campaign report
+- P&L report
+- AI usage report
+
+Features:
+- Date filter
+- Outlet filter
+- Download/share PDF if possible
+- Simple charts
+- Key insights
+
+APIs:
+GET /mobile/reports/sales
+GET /mobile/reports/orders
+GET /mobile/reports/items
+GET /mobile/reports/payments
+GET /mobile/reports/inventory
+GET /mobile/reports/staff
+GET /mobile/reports/finance
+
+====================================================
+20. FIX NOTIFICATIONS
+====================================================
+
+Notifications must work properly.
+
+Add/fix:
+- Push notification setup
+- FCM/device token save if applicable
+- Notification center
+- Read/unread status
+- Notification categories
+- Notification click opens correct screen
+- Role-based notifications
+
+Notification types:
+- New order
+- QR order
+- Kitchen delay
+- Order ready
+- Waiter request
+- Reservation reminder
+- Low stock
+- Staff late/absent
+- Leave request
+- Payment alert
+- Expense approval
+- Negative feedback
+- AI insight
+- Support ticket reply
+- Super Admin announcement
+
+APIs:
+POST /mobile/device-token
+GET /mobile/notifications
+PATCH /mobile/notifications/:id/read
+PATCH /mobile/notifications/read-all
+
+====================================================
+21. FIX APPROVAL CENTER
+====================================================
+
+Add/fix Approval Center for owners/managers.
+
+Approvals:
+- Discount approval
+- Refund approval
+- Void bill approval
+- Expense approval
+- Purchase order approval
+- Stock adjustment approval
+- Leave approval
+- Payroll approval
+- Campaign approval
+- Menu price change approval
+
+Actions:
+- Approve
+- Reject
+- Add reason
+- View details
+
+====================================================
+22. FIX SUPPORT MOBILE
+====================================================
+
+Support should work.
+
+Features:
+- Ticket list
+- Create ticket
+- Ticket detail
+- Reply
+- Attach image/file if supported
+- Status tracking
+- Support notifications
+
+APIs:
+GET /mobile/support/tickets
+POST /mobile/support/tickets
+GET /mobile/support/tickets/:id
+POST /mobile/support/tickets/:id/reply
+
+====================================================
+23. FIX ROLE-BASED MOBILE ACCESS
+====================================================
+
+Every role should only see allowed screens.
+
+Test:
+- Owner
+- Manager
+- Cashier
+- Waiter
+- Chef
+- Inventory Manager
+- HR/Payroll
+- Marketing Manager
+- Accountant
+- Delivery Staff
+
+Fix:
+- Wrong menu visibility
+- Unauthorized API access
+- Direct screen access
+- Missing role redirects
+- Sensitive finance/payroll data exposure
+
+====================================================
+24. FIX MOBILE NAVIGATION
+====================================================
+
+Use this bottom navigation:
+
+- Home
+- Orders
+- Kitchen
+- Alerts
+- More
+
+More menu:
+- Tables
+- Menu
+- Inventory
+- Customers
+- Growth Engine
+- Khana AI
+- Staff
+- Finance
+- Reports
+- Reservations
+- Delivery
+- Review Booster
+- Support
+- Settings
+
+Show/hide More menu items based on role, plan and module access.
+
+====================================================
+25. FIX OFFLINE / NETWORK HANDLING
+====================================================
+
+Add:
+- Offline banner
+- Retry failed requests
+- Pull to refresh
+- Graceful API error screens
+- No app crash when network fails
+- “Unable to load data” message with retry
+- Loading skeletons
+
+Do not show blank screens.
+
+====================================================
+26. FIX MOBILE UI STATES
+====================================================
+
+Every screen should have:
+- Loading state
+- Empty state
+- Error state
+- Retry button
+- Pull to refresh where useful
+- Toast success/error
+- Confirmation dialogs for destructive actions
+- Form validation
+- Status badges
+- Date filters where needed
+
+====================================================
+27. BUILD AND TEST
+====================================================
+
+After fixes:
+
+Run:
+- Install dependencies
+- Type check if available
+- Lint if available
+- Build app
+- Run on Android
+- Run responsive/web preview if applicable
+- Test API calls
+- Test login
+- Test all major screens
+- Test role permissions
+- Test notifications
+- Test create/update actions
+
+Fix all build/runtime errors.
+
+====================================================
+28. TEST WITH REAL DATA
+====================================================
+
+Create or use a test restaurant with real data:
+
+- 1 outlet
+- 3 tables
+- 5 menu items
+- 2 staff
+- 2 raw materials
+- 1 recipe
+- 1 customer
+- 1 order
+- 1 KOT
+- 1 payment
+- 1 expense
+- 1 low stock item
+
+Then verify mobile app shows this real data correctly.
+
+Test flow:
+1. Login as owner
+2. Dashboard loads
+3. Create order
+4. Kitchen sees order
+5. Update KOT status
+6. Table status updates
+7. Inventory deducts
+8. Payment updates
+9. Reports update
+10. Notification appears
+11. Finance summary updates
+
+====================================================
+29. FINAL BUG REPORT
+====================================================
+
+After audit and fixes, provide report:
+
+- Screens fixed
+- APIs fixed
+- Backend endpoints added
+- Data loading issues fixed
+- Create/update actions fixed
+- Notification issues fixed
+- Role permission issues fixed
+- Remaining limitations
+- How to test each main flow
+
+====================================================
+30. ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- Mobile login works.
+- Dashboard loads real data.
+- Live orders load.
+- Order create/update works or shows proper unavailable message.
+- Kitchen/KDS works.
+- Tables load.
+- QR orders show.
+- Inventory loads.
+- Staff/attendance loads.
+- Customers/feedback loads.
+- Growth Engine loads.
+- Khana AI loads and uses credits.
+- Finance loads.
+- Reports load.
+- Notifications work.
+- Support tickets work.
+- Role-based access works.
+- No blank screens.
+- No mock data.
+- No broken buttons.
+- No console/runtime errors.
+- Mobile app syncs with web dashboard.
+- App is build-ready and production-ready.

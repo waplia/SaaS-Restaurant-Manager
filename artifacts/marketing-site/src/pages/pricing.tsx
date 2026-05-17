@@ -70,7 +70,7 @@ function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
 
 export default function Pricing() {
   useSeo({
-    title: "Pricing — KhanaLagao Restaurant OS plans",
+    title: "Pricing | KhanaLagao",
     description: "Simple, transparent monthly pricing for restaurants, cafes, cloud kitchens and chains. No setup fee, no lock-in. 14-day free trial on every plan.",
     breadcrumbs: [
       { label: "Home", href: "/" },

@@ -44,7 +44,7 @@ const ROUTES = [
 
 export default function Contact() {
   useSeo({
-    title: `Contact ${COMPANY.product} — ${COMPANY.legalName}, ${COMPANY.city}`,
+    title: "Contact | KhanaLagao",
     description: `Talk to the ${COMPANY.product} team in ${COMPANY.city}. Call ${COMPANY.phoneDisplay}, WhatsApp us, or email ${COMPANY.salesEmail}.`,
   });
 

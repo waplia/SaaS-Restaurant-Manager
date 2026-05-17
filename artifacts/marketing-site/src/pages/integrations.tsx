@@ -4,7 +4,7 @@ import { SiStripe, SiRazorpay, SiZomato, SiSwiggy, SiUbereats, SiDoordash, SiQui
 
 export default function Integrations() {
   useSeo({
-    title: "Integrations",
+    title: "Integrations | KhanaLagao",
     description: "KhanaLagao integrates with the tools you already use. Payments, delivery, accounting, and more.",
   });
 

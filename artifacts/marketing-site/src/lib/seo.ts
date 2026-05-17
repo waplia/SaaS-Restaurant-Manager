@@ -31,8 +31,10 @@ const WEBSITE_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: COMPANY.product,
+  alternateName: COMPANY.productAlternateName,
   url: COMPANY.siteUrl,
-  publisher: { "@type": "Organization", name: COMPANY.legalName },
+  description: COMPANY.productTagline,
+  publisher: { "@type": "Organization", name: COMPANY.product },
   potentialAction: {
     "@type": "SearchAction",
     target: `${COMPANY.siteUrl}/blog?q={search_term_string}`,
@@ -93,8 +95,13 @@ export function useSeo({
   noindex = false,
 }: SeoProps) {
   useEffect(() => {
-    // Title (avoid double-suffix)
-    document.title = title.includes(COMPANY.product) ? title : `${title} | ${COMPANY.product}`;
+    // Single source of truth for the title used by <title>, og:title, and
+    // twitter:title — guarantees every public page ends in "| KhanaLagao"
+    // without each caller having to remember the suffix.
+    const effectiveTitle = title.includes(COMPANY.product)
+      ? title
+      : `${title} | ${COMPANY.product}`;
+    document.title = effectiveTitle;
 
     // Canonical URL — required for SEO. Absolute, derived from siteUrl + path.
     const path = url ?? (typeof window !== "undefined" ? window.location.pathname : "/");
@@ -106,10 +113,10 @@ export function useSeo({
     upsertMeta("name", "robots", noindex ? "noindex, nofollow" : "index, follow");
 
     // Open Graph
-    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:title", effectiveTitle);
     upsertMeta("property", "og:description", description);
     upsertMeta("property", "og:image", ogImage);
-    upsertMeta("property", "og:image:alt", `${COMPANY.product} — ${title}`);
+    upsertMeta("property", "og:image:alt", `${COMPANY.product} — ${effectiveTitle}`);
     upsertMeta("property", "og:type", ogType);
     upsertMeta("property", "og:url", canonicalUrl);
     upsertMeta("property", "og:site_name", COMPANY.product);
@@ -117,7 +124,7 @@ export function useSeo({
 
     // Twitter
     upsertMeta("name", "twitter:card", "summary_large_image");
-    upsertMeta("name", "twitter:title", title);
+    upsertMeta("name", "twitter:title", effectiveTitle);
     upsertMeta("name", "twitter:description", description);
     upsertMeta("name", "twitter:image", ogImage);
 
