@@ -4083,3 +4083,223 @@ export function useStaffIncentiveLeaderboard(year: number, month: number) {
 export function staffIncentiveCsvUrl(restaurantId: number, year: number, month: number): string {
   return `/api/restaurants/${restaurantId}/staff-incentives/report.csv?year=${year}&month=${month}`;
 }
+
+// ────────────────────────────────────────────────────────────────
+// Inventory Control pack (Task #369)
+// ────────────────────────────────────────────────────────────────
+
+export interface KindItem {
+  id: number; restaurantId: number; name: string; unit: string;
+  currentStock: string; minStockLevel: string; parLevel: string | null;
+  reorderQuantity: string | null; costPerUnit: string; category: string | null;
+  kind: string; isActive: boolean; supplierId: number | null;
+}
+export interface KindRecipe {
+  id: number; menuItemId: number; menuItemName: string | null;
+  inventoryItemId: number; inventoryItemName: string | null;
+  quantity: string; unit: string; kind: string; costPerUnit: string | null;
+}
+export interface PortionDriftEvent {
+  id: number; inventoryItemId: number; inventoryItemName: string | null; inventoryUnit: string | null;
+  periodStart: string; periodEnd: string; expectedQuantity: string; actualQuantity: string;
+  driftPct: string; severity: string; status: string; notes: string | null;
+  createdAt: string; acknowledgedAt: string | null;
+}
+export interface RecipeVersionRow {
+  id: number; menuItemId: number; menuItemName: string | null;
+  versionNumber: number; status: string; isActive: boolean; totalCost: string;
+  notes: string | null; createdBy: number | null; approvedBy: number | null;
+  approvedAt: string | null; activatedAt: string | null; createdAt: string;
+}
+export interface RecipeVersionDetail extends RecipeVersionRow {
+  lines: Array<{
+    id: number; inventoryItemId: number; inventoryItemName: string | null;
+    inventoryUnit: string | null; quantity: string; unit: string; costAtSnapshot: string;
+  }>;
+}
+export interface TasteTestNote {
+  id: number; menuItemId: number; menuItemName: string | null; recipeVersionId: number | null;
+  tasterId: number | null; tasterName: string | null; rating: number;
+  appearance: number | null; aroma: number | null; taste: number | null; texture: number | null; temperature: number | null;
+  notes: string | null; correctiveActions: string | null;
+  status: string; approvedBy: number | null; approvedAt: string | null; rejectedReason: string | null;
+  createdAt: string;
+}
+
+function useKindItems(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId();
+  return useQuery<KindItem[]>({
+    queryKey: [`${kind}-items`, RID],
+    queryFn: () => apiGet(`/restaurants/${RID}/${kind}-items`),
+  });
+}
+function useCreateKindItem(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<KindItem>) => apiPost(`/restaurants/${RID}/${kind}-items`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-items`] }),
+  });
+}
+function useUpdateKindItem(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<KindItem> & { id: number }) =>
+      apiPatch(`/restaurants/${RID}/${kind}-items/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-items`] }),
+  });
+}
+function useDeleteKindItem(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RID}/${kind}-items/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-items`] }),
+  });
+}
+function useAdjustKindItem(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, delta, reason }: { id: number; delta: number; reason?: string }) =>
+      apiPost(`/restaurants/${RID}/${kind}-items/${id}/adjust`, { delta, reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-items`] }),
+  });
+}
+function useKindRecipes(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId();
+  return useQuery<KindRecipe[]>({
+    queryKey: [`${kind}-recipes`, RID],
+    queryFn: () => apiGet(`/restaurants/${RID}/${kind}-recipes`),
+  });
+}
+function useCreateKindRecipe(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { menuItemId: number; inventoryItemId: number; quantity: number | string; unit?: string }) =>
+      apiPost(`/restaurants/${RID}/${kind}-recipes`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-recipes`] }),
+  });
+}
+function useDeleteKindRecipe(kind: "packaging" | "condiment") {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RID}/${kind}-recipes/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${kind}-recipes`] }),
+  });
+}
+
+export const usePackagingItems = () => useKindItems("packaging");
+export const useCreatePackagingItem = () => useCreateKindItem("packaging");
+export const useUpdatePackagingItem = () => useUpdateKindItem("packaging");
+export const useDeletePackagingItem = () => useDeleteKindItem("packaging");
+export const useAdjustPackagingItem = () => useAdjustKindItem("packaging");
+export const usePackagingRecipes = () => useKindRecipes("packaging");
+export const useCreatePackagingRecipe = () => useCreateKindRecipe("packaging");
+export const useDeletePackagingRecipe = () => useDeleteKindRecipe("packaging");
+
+export const useCondimentItems = () => useKindItems("condiment");
+export const useCreateCondimentItem = () => useCreateKindItem("condiment");
+export const useUpdateCondimentItem = () => useUpdateKindItem("condiment");
+export const useDeleteCondimentItem = () => useDeleteKindItem("condiment");
+export const useAdjustCondimentItem = () => useAdjustKindItem("condiment");
+export const useCondimentRecipes = () => useKindRecipes("condiment");
+export const useCreateCondimentRecipe = () => useCreateKindRecipe("condiment");
+export const useDeleteCondimentRecipe = () => useDeleteKindRecipe("condiment");
+
+export function usePortionDriftEvents(filters?: { status?: string; severity?: string }) {
+  const RID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (filters?.status) q.set("status", filters.status);
+  if (filters?.severity) q.set("severity", filters.severity);
+  return useQuery<PortionDriftEvent[]>({
+    queryKey: ["portion-drift", RID, filters],
+    queryFn: () => apiGet(`/restaurants/${RID}/portion-drift?${q.toString()}`),
+  });
+}
+export function useAcknowledgePortionDrift() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, notes, resolved }: { id: number; notes?: string; resolved?: boolean }) =>
+      apiPost(`/restaurants/${RID}/portion-drift/${id}/ack`, { notes, resolved }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["portion-drift"] }),
+  });
+}
+export function useRunPortionDriftSweep() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (days?: number) => apiPost(`/restaurants/${RID}/portion-drift/run`, { days: days ?? 1 }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["portion-drift"] }),
+  });
+}
+
+export function useRecipeVersions(menuItemId?: number) {
+  const RID = useRestaurantId();
+  const q = menuItemId ? `?menuItemId=${menuItemId}` : "";
+  return useQuery<RecipeVersionRow[]>({
+    queryKey: ["recipe-versions", RID, menuItemId ?? null],
+    queryFn: () => apiGet(`/restaurants/${RID}/recipe-versions${q}`),
+  });
+}
+export function useRecipeVersionDetail(id: number | null) {
+  const RID = useRestaurantId();
+  return useQuery<RecipeVersionDetail>({
+    queryKey: ["recipe-version-detail", RID, id],
+    queryFn: () => apiGet(`/restaurants/${RID}/recipe-versions/${id}`),
+    enabled: !!id,
+  });
+}
+export function useCreateRecipeVersion() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { menuItemId: number; notes?: string; lines?: Array<{ inventoryItemId: number; quantity: string | number; unit?: string }> }) =>
+      apiPost(`/restaurants/${RID}/recipe-versions`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipe-versions"] }),
+  });
+}
+export function useUpdateRecipeVersion() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; notes?: string; lines?: Array<{ inventoryItemId: number; quantity: string | number; unit?: string }> }) =>
+      apiPatch(`/restaurants/${RID}/recipe-versions/${id}`, data),
+    onSuccess: (_d, v) => { const qc2 = qc; qc2.invalidateQueries({ queryKey: ["recipe-versions"] }); qc2.invalidateQueries({ queryKey: ["recipe-version-detail", RID, v.id] }); },
+  });
+}
+export function useRecipeVersionAction() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, reason }: { id: number; action: "submit" | "approve" | "reject" | "activate" | "rollback"; reason?: string }) =>
+      apiPost(`/restaurants/${RID}/recipe-versions/${id}/${action}`, reason ? { reason } : {}),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["recipe-versions"] }); qc.invalidateQueries({ queryKey: ["recipe-version-detail"] }); qc.invalidateQueries({ queryKey: ["recipe-mappings"] }); },
+  });
+}
+
+export function useTasteTests(filters?: { status?: string; menuItemId?: number }) {
+  const RID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (filters?.status) q.set("status", filters.status);
+  if (filters?.menuItemId) q.set("menuItemId", String(filters.menuItemId));
+  return useQuery<TasteTestNote[]>({
+    queryKey: ["taste-tests", RID, filters],
+    queryFn: () => apiGet(`/restaurants/${RID}/taste-tests?${q.toString()}`),
+  });
+}
+export function useCreateTasteTest() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<TasteTestNote>) => apiPost(`/restaurants/${RID}/taste-tests`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["taste-tests"] }),
+  });
+}
+export function useTasteTestAction() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, reason }: { id: number; action: "approve" | "reject"; reason?: string }) =>
+      apiPost(`/restaurants/${RID}/taste-tests/${id}/${action}`, reason ? { reason } : {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["taste-tests"] }),
+  });
+}
+export function useDeleteTasteTest() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RID}/taste-tests/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["taste-tests"] }),
+  });
+}

@@ -1388,18 +1388,59 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/void", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
-  if (order.status === "completed") return void res.status(400).json({ error: "Cannot void a completed order" });
+  if (order.status === "cancelled") return void res.status(400).json({ error: "Order is already cancelled" });
+  // A completed order may still be voided (e.g. customer dispute / wrong order)
+  // — we permit it so inventory can be reversed. Payment refunds are tracked
+  // separately on the payments ledger.
 
   const [updated] = await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, orderId)).returning();
 
   if (order.tableId) {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+  }
+
+  // Reverse any inventory that was auto-deducted for this order (packaging,
+  // condiment, and ingredient kinds). Idempotent: looks up existing
+  // 'use' transactions for this order and emits inverse 'adjustment' rows.
+  try {
+    const txns = await db.select().from(inventoryTransactionsTable).where(and(
+      eq(inventoryTransactionsTable.restaurantId, restaurantId),
+      eq(inventoryTransactionsTable.referenceType, "order"),
+      eq(inventoryTransactionsTable.referenceId, orderId),
+      eq(inventoryTransactionsTable.type, "use"),
+    ));
+    // Skip if we already wrote reversals for this order
+    const reversed = await db.select({ id: inventoryTransactionsTable.id }).from(inventoryTransactionsTable).where(and(
+      eq(inventoryTransactionsTable.restaurantId, restaurantId),
+      eq(inventoryTransactionsTable.referenceType, "order_cancel"),
+      eq(inventoryTransactionsTable.referenceId, orderId),
+    ));
+    if (reversed.length === 0) {
+      for (const t of txns) {
+        const qty = Number(t.quantity);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        await db.transaction(async (tx) => {
+          const [inv] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, t.itemId)).for("update");
+          if (!inv) return;
+          const newStock = Number(inv.currentStock) + qty;
+          await tx.update(inventoryItemsTable).set({ currentStock: newStock.toFixed(3), updatedAt: new Date() }).where(eq(inventoryItemsTable.id, inv.id));
+          await tx.insert(inventoryTransactionsTable).values({
+            itemId: inv.id, restaurantId, type: "adjustment", quantity: qty.toFixed(3),
+            notes: `Restocked from cancelled order #${orderId}`,
+            referenceId: orderId, referenceType: "order_cancel",
+          });
+        });
+      }
+    }
+  } catch (err) {
+    // Log but do not fail the void
+    console.error("[order-void] inventory reversal failed", err);
   }
 
   broadcastEvent(restaurantId, "order:status", { id: orderId, status: "cancelled", orderNumber: order.orderNumber });

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, useMenuEngineeringReport, type CompareBranchRow } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, useMenuEngineeringReport, usePortionDriftEvents, useTasteTests, usePackagingItems, useCondimentItems, useRecipeVersions, type CompareBranchRow } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
 import { MenuEngineeringTab } from "@/components/MenuEngineeringTab";
 import { cn } from "@/lib/utils";
@@ -50,10 +50,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering" | "inventory-control";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering", "inventory-control"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -582,6 +582,7 @@ export default function ReportsPage() {
             { label: "Cash Variance", val: "cash-variance" as Tab },
             { label: "Kitchen Performance", val: "kitchen-performance" as Tab },
             { label: "Menu Engineering", val: "menu-engineering" as Tab },
+            { label: "Inventory Control", val: "inventory-control" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -1198,8 +1199,63 @@ export default function ReportsPage() {
             custom={useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : undefined}
           />
         )}
+
+        {tab === "inventory-control" && <InventoryControlReport />}
       </div>
     </Layout>
+  );
+}
+
+function InventoryControlReport() {
+  const drift = usePortionDriftEvents({ status: "open" });
+  const tt = useTasteTests({ status: "pending" });
+  const pkg = usePackagingItems();
+  const cond = useCondimentItems();
+  const versions = useRecipeVersions();
+
+  const lowPkg = (pkg.data ?? []).filter(i => Number(i.currentStock) <= Number(i.minStockLevel));
+  const lowCond = (cond.data ?? []).filter(i => Number(i.currentStock) <= Number(i.minStockLevel));
+  const activeVersions = (versions.data ?? []).filter(v => v.isActive);
+  const pendingVersions = (versions.data ?? []).filter(v => v.status === "pending_approval");
+
+  const Cell = ({ label, value, href, tone }: { label: string; value: string | number; href: string; tone?: string }) => (
+    <Link href={href} className="block bg-card border border-border rounded-xl p-5 hover:border-primary transition-colors">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`text-3xl font-bold mt-1 ${tone ?? "text-foreground"}`}>{value}</p>
+    </Link>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <Cell label="Packaging items" value={pkg.data?.length ?? 0} href="/inventory/packaging" />
+        <Cell label="Low-stock packaging" value={lowPkg.length} href="/inventory/packaging" tone={lowPkg.length ? "text-orange-600" : undefined} />
+        <Cell label="Condiments tracked" value={cond.data?.length ?? 0} href="/inventory/condiments" />
+        <Cell label="Low-stock condiments" value={lowCond.length} href="/inventory/condiments" tone={lowCond.length ? "text-orange-600" : undefined} />
+        <Cell label="Open drift alerts" value={drift.data?.length ?? 0} href="/inventory/portion-drift" tone={(drift.data?.length ?? 0) > 0 ? "text-red-600" : undefined} />
+        <Cell label="Active recipe versions" value={activeVersions.length} href="/inventory/recipe-versions" />
+        <Cell label="Pending approval" value={pendingVersions.length} href="/inventory/recipe-versions" tone={pendingVersions.length ? "text-amber-600" : undefined} />
+        <Cell label="Pending taste tests" value={tt.data?.length ?? 0} href="/kitchen/taste-testing" tone={(tt.data?.length ?? 0) > 0 ? "text-amber-600" : undefined} />
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="font-semibold mb-3">Recent portion-drift alerts</h3>
+        {(drift.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No open drift alerts. The nightly sweep runs at 03:30 IST.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {(drift.data ?? []).slice(0, 8).map(ev => (
+              <li key={ev.id} className="flex justify-between border-b py-1">
+                <span>{ev.inventoryItemName} <span className="text-xs text-muted-foreground">({ev.severity})</span></span>
+                <span className={Number(ev.driftPct) > 0 ? "text-red-600" : "text-amber-600"}>
+                  {Number(ev.driftPct) > 0 ? "+" : ""}{Number(ev.driftPct).toFixed(1)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

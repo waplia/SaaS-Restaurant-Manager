@@ -15,6 +15,11 @@ import KitchenPage from "@/pages/kitchen";
 import TablesPage from "@/pages/tables";
 import MenuPage from "@/pages/menu";
 import InventoryPage from "@/pages/inventory";
+import PackagingInventoryPage from "@/pages/inventory-packaging";
+import CondimentsInventoryPage from "@/pages/inventory-condiments";
+import PortionDriftPage from "@/pages/inventory-portion-drift";
+import RecipeVersionsPage from "@/pages/inventory-recipe-versions";
+import TasteTestingPage from "@/pages/kitchen-taste-testing";
 import StaffPage from "@/pages/staff";
 import StaffTasksPage from "@/pages/staff-tasks";
 import CustomersPage from "@/pages/customers";
@@ -312,6 +317,11 @@ function Router() {
       <Route path="/competitors/:id" component={() => <RoleProtectedRoute component={CompetitorDetailPage} allow={["owner", "manager"]} />} />
       <Route path="/loyalty/analytics" component={() => <RoleProtectedRoute component={LoyaltyAnalyticsPage} allow={["owner", "manager"]} />} />
       <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
+      <Route path="/inventory/packaging" component={() => <RoleProtectedRoute component={PackagingInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/inventory/condiments" component={() => <RoleProtectedRoute component={CondimentsInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/inventory/portion-drift" component={() => <RoleProtectedRoute component={PortionDriftPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/inventory/recipe-versions" component={() => <RoleProtectedRoute component={RecipeVersionsPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/kitchen/taste-testing" component={() => <RoleProtectedRoute component={TasteTestingPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />
       <Route path="/cash-register" component={() => <RoleProtectedRoute component={CashRegisterPage} allow={["owner", "manager", "waiter"]} />} />

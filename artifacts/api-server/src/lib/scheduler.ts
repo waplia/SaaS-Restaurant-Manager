@@ -204,6 +204,26 @@ export function startScheduler(): void {
     }
   });
 
+  registerCron("portion-drift-nightly", "30 3 * * *", "Nightly portion-drift sweep at 03:30 IST: compares expected vs actual ingredient consumption and creates alerts for >10% drift per restaurant.");
+  trackCron("portion_drift_nightly", "30 3 * * *", async () => {
+    try {
+      const { runPortionDriftSweep } = await import("../routes/inventory-control");
+      const restaurants = await db.select({ id: restaurantsTable.id }).from(restaurantsTable).where(eq(restaurantsTable.isActive, true));
+      let totalCreated = 0;
+      for (const r of restaurants) {
+        try {
+          const s = await runPortionDriftSweep(r.id, 1);
+          totalCreated += s.created;
+        } catch (err) {
+          logger.error({ err, restaurantId: r.id }, "[portion-drift] sweep failed");
+        }
+      }
+      logger.info({ totalCreated, restaurants: restaurants.length }, "[portion-drift] nightly sweep complete");
+    } catch (err) {
+      logger.error({ err }, "[portion-drift] nightly sweep crashed");
+    }
+  });
+
   trackCron("ai_monthly_allocation", "0 1 * * *", async () => {
     await runTrackedCron("ai-monthly-allocation", async () => {
       const r = await runMonthlyAllocationSweep();
