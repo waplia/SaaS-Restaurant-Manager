@@ -32,14 +32,14 @@ export function TrialBanner() {
         {isTrialExpired ? (
           <span>
             Your free trial has expired.{" "}
-            <Link href="/settings/subscription" className="underline font-bold hover:opacity-80">Upgrade now</Link>
+            <Link href="/pricing" className="underline font-bold hover:opacity-80">Upgrade now</Link>
             {" "}to restore full access.
           </span>
         ) : (
           <span>
             Your free trial ends in{" "}
             <strong>{trialDaysLeft === 0 ? "less than 1 day" : `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""}`}</strong>.{" "}
-            <Link href="/settings/subscription" className="underline font-bold hover:opacity-80">Upgrade now</Link>
+            <Link href="/pricing" className="underline font-bold hover:opacity-80">Upgrade now</Link>
             {" "}to avoid service interruption.
           </span>
         )}
@@ -68,7 +68,7 @@ export function TrialPaywall() {
   const { planStatus, isTrialExpired } = data.tenant;
   if (planStatus !== "trial" || !isTrialExpired) return null;
 
-  if (location.startsWith("/settings/subscription") || location.startsWith("/settings/billing")) return null;
+  if (location.startsWith("/settings/subscription") || location.startsWith("/settings/billing") || location.startsWith("/pricing")) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -83,7 +83,7 @@ export function TrialPaywall() {
           </p>
         </div>
         <div className="space-y-3">
-          <Link href="/settings/subscription">
+          <Link href="/pricing">
             <Button className="w-full" size="lg">
               View Plans & Upgrade
             </Button>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSearch, Link, useLocation } from "wouter";
+import { useSearch, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Check, X, ArrowRight, Sparkles } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
@@ -7,29 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { usePaymentMethods } from "@/lib/hooks";
+import { CheckoutDrawer } from "@/components/billing/CheckoutDrawer";
+import { useQueryClient } from "@tanstack/react-query";
+import type { SubscriptionPlan } from "@/lib/types";
 import {
   PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
   isFeatureEnabled, formatQuantity,
 } from "@workspace/db/planFeatures";
 
-interface Plan {
-  id: number;
-  name: string;
-  slug: string;
-  price: string;
+const RESTAURANT_ID = 1;
+
+type Plan = SubscriptionPlan & {
   yearlyPrice?: string | null;
-  currency: string;
-  billingPeriod: string;
   description?: string | null;
-  features?: string[];
-  featureFlags: Record<string, boolean> | null;
-  trialDays: number;
-  maxRestaurants: number;
-  maxBranches: number;
-  maxStaff: number;
-  maxTables: number;
-  maxMenuItems: number;
-}
+};
 
 interface SubscriptionInfo {
   tenant?: { planStatus: string } | null;
@@ -51,9 +43,11 @@ export default function PricingPage() {
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
   const search = useSearch();
-  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const highlightFeature = useMemo(() => new URLSearchParams(search).get("feature") ?? "", [search]);
   const [view, setView] = useState<"monthly" | "yearly">("monthly");
+  const [activePlan, setActivePlan] = useState<Plan | null>(null);
+  const { data: methods, isLoading: methodsLoading } = usePaymentMethods(RESTAURANT_ID);
 
   const { data, isLoading } = useQuery<SubscriptionInfo>({
     queryKey: ["subscription", restaurantId],
@@ -130,7 +124,7 @@ export default function PricingPage() {
                     ) : (
                       <Button
                         className="w-full mb-5 gap-2"
-                        onClick={() => navigate(`/settings/subscription?planId=${plan.id}&billing=${view}`)}
+                        onClick={() => setActivePlan(plan)}
                         data-testid={`btn-buy-${plan.slug}`}
                       >
                         Upgrade <ArrowRight className="w-4 h-4" />
@@ -200,6 +194,21 @@ export default function PricingPage() {
           </>
         )}
       </div>
+
+      {activePlan && (
+        <CheckoutDrawer
+          plan={activePlan}
+          methods={methods}
+          methodsLoading={methodsLoading}
+          initialBillingPeriod={view}
+          onClose={() => setActivePlan(null)}
+          onPaid={() => {
+            setActivePlan(null);
+            void queryClient.invalidateQueries({ queryKey: ["subscription", restaurantId] });
+            void queryClient.invalidateQueries({ queryKey: ["billing", "methods", RESTAURANT_ID] });
+          }}
+        />
+      )}
     </Layout>
   );
 }

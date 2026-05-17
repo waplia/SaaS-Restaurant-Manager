@@ -75,12 +75,12 @@ export default function UpgradeRequiredPage({ featureKey }: UpgradeRequiredPageP
           <CardContent className="p-6 space-y-4">
             <h3 className="font-semibold text-foreground">How to unlock this</h3>
             <ol className="space-y-2 text-sm text-muted-foreground list-decimal pl-5">
-              <li>The tenant owner opens <Link href="/settings/subscription" className="text-primary font-medium hover:underline">Subscription &amp; Billing</Link>.</li>
+              <li>The tenant owner opens <Link href="/pricing" className="text-primary font-medium hover:underline">Plans &amp; Pricing</Link>.</li>
               <li>Upgrade to a plan that includes this module, or add it from the marketplace.</li>
               <li>Refresh this page — the module will appear in the sidebar automatically.</li>
             </ol>
             <div className="flex flex-wrap gap-3 pt-2">
-              <Link href="/settings/subscription">
+              <Link href="/pricing">
                 <Button className="gap-2">View plans &amp; upgrade <ArrowRight className="w-4 h-4" /></Button>
               </Link>
               <Link href="/support">
