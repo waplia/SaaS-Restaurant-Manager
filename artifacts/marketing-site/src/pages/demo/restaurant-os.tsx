@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -102,14 +103,15 @@ export default function DemoRestaurantOS() {
       className="min-h-screen flex flex-col font-sans overflow-x-hidden"
       style={{ backgroundColor: BRAND.warm, color: BRAND.charcoal }}
     >
-      <AdsHeader appName={settings.appName} />
+      <AdsHeader appName={settings.appName} logoUrl={settings.logoUrl} />
 
       <main className="flex-grow pb-20 lg:pb-0">
-        <Hero />
+        <Hero logoUrl={settings.logoUrl} />
         <TrustStrip />
         <PainPoints />
         <Solution />
         <ProductFlow />
+        <LiveOrderFlow />
         <KeyFeatures />
         <KhanaAISection />
         <RestaurantTypes />
@@ -120,7 +122,7 @@ export default function DemoRestaurantOS() {
         <FinalCTA />
       </main>
 
-      <AdsFooter />
+      <AdsFooter logoUrl={settings.logoUrl} appName={settings.appName} />
       <StickyBottomBar />
     </div>
   );
@@ -130,7 +132,7 @@ export default function DemoRestaurantOS() {
 /* Header & Footer                                                    */
 /* ------------------------------------------------------------------ */
 
-function AdsHeader({ appName }: { appName: string }) {
+function AdsHeader({ appName, logoUrl }: { appName: string; logoUrl?: string | null }) {
   return (
     <header
       className="sticky top-0 z-50 w-full border-b backdrop-blur-xl"
@@ -138,13 +140,17 @@ function AdsHeader({ appName }: { appName: string }) {
       data-testid="ads-header"
     >
       <div className="container mx-auto px-4 h-14 md:h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
-            style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
-          >
-            K
-          </span>
+        <Link href="/" className="flex items-center gap-2 min-w-0" data-testid="ads-header-logo">
+          {logoUrl ? (
+            <img src={logoUrl} alt={appName} className="h-7 md:h-8 w-auto shrink-0" />
+          ) : (
+            <span
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+            >
+              K
+            </span>
+          )}
           <span className="font-serif text-base md:text-xl font-bold tracking-tight truncate">
             {appName}
           </span>
@@ -154,7 +160,7 @@ function AdsHeader({ appName }: { appName: string }) {
           >
             Restaurant OS
           </span>
-        </div>
+        </Link>
         <div className="flex items-center gap-2">
           <a href={REGISTER_URL} className="hidden sm:inline-flex">
             <Button
@@ -183,21 +189,25 @@ function AdsHeader({ appName }: { appName: string }) {
   );
 }
 
-function AdsFooter() {
+function AdsFooter({ logoUrl, appName }: { logoUrl?: string | null; appName: string }) {
   return (
     <footer className="border-t mt-8" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
       <div className="container mx-auto px-4 py-8 md:py-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className="h-7 w-7 rounded-md flex items-center justify-center text-white font-bold text-xs"
-                style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
-              >
-                K
-              </span>
+            <Link href="/" className="flex items-center gap-2 mb-2" data-testid="ads-footer-logo">
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="h-7 w-auto" />
+              ) : (
+                <span
+                  className="h-7 w-7 rounded-md flex items-center justify-center text-white font-bold text-xs"
+                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+                >
+                  K
+                </span>
+              )}
               <span className="font-serif font-bold text-lg">{COMPANY.product}</span>
-            </div>
+            </Link>
             <p className="text-sm text-muted-foreground max-w-md">
               {COMPANY.productTagline}.
             </p>
@@ -273,7 +283,8 @@ function StickyBottomBar() {
 /* Hero                                                               */
 /* ------------------------------------------------------------------ */
 
-function Hero() {
+function Hero({ logoUrl }: { logoUrl?: string | null }) {
+  void logoUrl;
   return (
     <section className="relative pt-6 pb-10 md:pt-16 md:pb-24 overflow-hidden">
       <div
@@ -363,6 +374,7 @@ function Hero() {
 function HeroMockup() {
   return (
     <div className="relative">
+      {/* Real product screenshot in a browser frame */}
       <div
         className="rounded-2xl md:rounded-3xl border shadow-2xl overflow-hidden"
         style={{ backgroundColor: "white", borderColor: "rgba(17,24,39,0.1)" }}
@@ -371,43 +383,38 @@ function HeroMockup() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
           <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
           <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+          <span className="ml-2 text-[10px] md:text-xs text-muted-foreground truncate">
+            app.khanalagao.com/dashboard
+          </span>
         </div>
-        <div className="p-3 md:p-5 space-y-3 md:space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[10px] md:text-xs text-muted-foreground">Today</div>
-              <div className="font-bold text-sm md:text-base">Dashboard</div>
-            </div>
-            <div
-              className="text-[10px] md:text-xs px-2 py-1 rounded-full font-semibold"
-              style={{ backgroundColor: `${BRAND.primary}15`, color: BRAND.deep }}
-            >
-              Live
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:gap-3">
-            <MetricTile label="Sales" value="₹ 1,42,800" tone="primary" />
-            <MetricTile label="Orders" value="187" tone="green" />
-            <MetricTile label="Avg Bill" value="₹ 764" tone="blue" />
-            <MetricTile label="Pending KOT" value="12" tone="amber" />
-          </div>
-          <div
-            className="rounded-xl p-2.5 md:p-3 border"
-            style={{ backgroundColor: `${BRAND.purple}08`, borderColor: `${BRAND.purple}30` }}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <Brain className="h-3.5 w-3.5" style={{ color: BRAND.purple }} />
-              <span className="text-[10px] md:text-xs font-bold" style={{ color: BRAND.purple }}>
-                Khana AI insight
-              </span>
-            </div>
-            <p className="text-[11px] md:text-xs leading-snug">
-              Friday dinners drop 18% — push Paneer Tikka combo at 7pm.
-            </p>
-          </div>
-        </div>
+        <img
+          src="/screenshots/dashboard.jpg"
+          alt="KhanaLagao live restaurant dashboard with sales, orders and kitchen queue"
+          className="w-full h-auto block"
+          loading="eager"
+          decoding="async"
+        />
       </div>
-
+      {/* Floating "live order" notification — animated to feel real-time */}
+      <motion.div
+        initial={{ opacity: 0, x: 30, y: -10 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.4 }}
+        className="absolute -top-3 -right-2 md:-top-4 md:-right-6 rounded-xl border shadow-xl bg-white px-3 py-2 flex items-center gap-2"
+        style={{ borderColor: "rgba(17,24,39,0.1)" }}
+        aria-hidden
+      >
+        <motion.span
+          animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
+          transition={{ repeat: Infinity, duration: 1.8 }}
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: "#10B981" }}
+        />
+        <div className="leading-tight">
+          <div className="text-[10px] md:text-xs text-muted-foreground">New order · Table 7</div>
+          <div className="text-xs md:text-sm font-bold">₹ 1,240 · 3 items</div>
+        </div>
+      </motion.div>
       <FloatCard className="-top-3 -left-2 md:-top-5 md:-left-5" delay={0.3}>
         <IndianRupee className="h-3.5 w-3.5" style={{ color: BRAND.primary }} />
         <div>
@@ -630,6 +637,190 @@ function ProductFlow() {
             </motion.div>
           ))}
         </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Live order flow — cycles through real product screenshots          */
+/* ------------------------------------------------------------------ */
+
+const LIVE_FLOW_STEPS = [
+  {
+    src: "/screenshots/pos.jpg",
+    label: "1. Order taken at POS",
+    note: "Captain rings up Table 7 — 3 items, ₹1,240. KOT auto-routes to kitchen.",
+    icon: ShoppingBag,
+    chip: "POS · Table 7",
+  },
+  {
+    src: "/screenshots/kitchen.jpg",
+    label: "2. Kitchen receives KOT",
+    note: "Live ticket appears on the KDS. Prep timer starts. Course pacing keeps the kitchen in sync.",
+    icon: ChefHat,
+    chip: "Kitchen Display",
+  },
+  {
+    src: "/screenshots/inventory.jpg",
+    label: "3. Inventory auto-deducts",
+    note: "Recipe-linked ingredients deducted in real time. Low-stock alerts fire automatically.",
+    icon: Boxes,
+    chip: "Inventory",
+  },
+  {
+    src: "/screenshots/dashboard.jpg",
+    label: "4. Dashboard updates live",
+    note: "Sales, orders, KOTs and AOV refresh the moment the bill is settled. No double entry.",
+    icon: Activity,
+    chip: "Dashboard · Live",
+  },
+  {
+    src: "/screenshots/reports.jpg",
+    label: "5. Reports & insights ready",
+    note: "Daily P&L, dish profitability and Khana AI insights — ready when you walk in tomorrow.",
+    icon: BarChart3,
+    chip: "Reports",
+  },
+];
+
+function LiveOrderFlow() {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    const t = window.setInterval(() => {
+      setIdx((i) => (i + 1) % LIVE_FLOW_STEPS.length);
+    }, 3500);
+    return () => window.clearInterval(t);
+  }, [paused]);
+
+  const step = LIVE_FLOW_STEPS[idx];
+  const Icon = step.icon;
+
+  return (
+    <Section
+      title="See one order move through the system — live"
+      eyebrow="Live product"
+      subtitle="A real walkthrough of how a dine-in order flows through KhanaLagao — POS, kitchen, inventory, dashboard and reports."
+    >
+      <div
+        className="relative max-w-5xl mx-auto grid lg:grid-cols-[1fr,320px] gap-4 md:gap-6 items-start"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        data-testid="live-order-flow"
+      >
+        {/* Screenshot stage with browser chrome */}
+        <div
+          className="relative rounded-2xl md:rounded-3xl border shadow-2xl overflow-hidden bg-white"
+          style={{ borderColor: "rgba(17,24,39,0.1)" }}
+        >
+          <div className="h-7 md:h-9 flex items-center px-3 gap-1.5 border-b" style={{ backgroundColor: "#F3F4F6", borderColor: "rgba(17,24,39,0.06)" }}>
+            <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+            <span className="ml-2 text-[10px] md:text-xs text-muted-foreground truncate">
+              app.khanalagao.com — {step.chip}
+            </span>
+            <span
+              className="ml-auto inline-flex items-center gap-1 text-[10px] md:text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: "#10B98115", color: "#047857" }}
+            >
+              <span className="relative inline-flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Live
+            </span>
+          </div>
+          <div className="relative aspect-[16/10] bg-muted/20">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={step.src}
+                src={step.src}
+                alt={step.label}
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.5 }}
+                className="absolute inset-0 w-full h-full object-cover object-top"
+                loading="lazy"
+                decoding="async"
+              />
+            </AnimatePresence>
+            {/* Step caption overlay */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`cap-${idx}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.35 }}
+                className="absolute left-3 right-3 bottom-3 md:left-5 md:right-5 md:bottom-5 rounded-xl bg-black/70 backdrop-blur text-white px-3 md:px-4 py-2.5 md:py-3 flex items-center gap-3"
+              >
+                <span
+                  className="h-9 w-9 md:h-10 md:w-10 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${BRAND.primary}30` }}
+                >
+                  <Icon className="h-4 w-4 md:h-5 md:w-5" style={{ color: "#FDBA74" }} />
+                </span>
+                <div className="min-w-0">
+                  <div className="font-bold text-sm md:text-base truncate">{step.label}</div>
+                  <div className="text-[11px] md:text-xs text-white/80 leading-snug line-clamp-2">{step.note}</div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          {/* Progress bar */}
+          <div className="h-1 bg-muted/40">
+            <motion.div
+              key={`bar-${idx}-${paused}`}
+              initial={{ width: "0%" }}
+              animate={{ width: paused ? "100%" : "100%" }}
+              transition={{ duration: paused ? 0 : 3.5, ease: "linear" }}
+              className="h-full"
+              style={{ backgroundColor: BRAND.primary }}
+            />
+          </div>
+        </div>
+
+        {/* Step list */}
+        <ol className="space-y-2 lg:space-y-2.5" aria-label="Order flow steps">
+          {LIVE_FLOW_STEPS.map((s, i) => {
+            const active = i === idx;
+            const SIcon = s.icon;
+            return (
+              <li key={s.src}>
+                <button
+                  type="button"
+                  onClick={() => setIdx(i)}
+                  className={cn(
+                    "w-full text-left rounded-xl border p-2.5 md:p-3 flex items-start gap-2.5 transition-all",
+                    active ? "shadow-md" : "hover:bg-muted/40",
+                  )}
+                  style={{
+                    borderColor: active ? BRAND.primary : "rgba(17,24,39,0.08)",
+                    backgroundColor: active ? `${BRAND.primary}08` : "white",
+                  }}
+                  data-testid={`live-flow-step-${i}`}
+                  aria-current={active ? "step" : undefined}
+                >
+                  <span
+                    className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: active ? BRAND.primary : `${BRAND.primary}15`, color: active ? "white" : BRAND.deep }}
+                  >
+                    <SIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm leading-tight">{s.label}</div>
+                    <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{s.note}</div>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </Section>
   );
@@ -1076,14 +1267,85 @@ function PricingCompareDialog({
   ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
-        <DialogHeader className="p-5 md:p-6 pb-3 border-b" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
-          <DialogTitle className="font-serif text-2xl md:text-3xl">Compare all features</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto p-0 sm:rounded-2xl">
+        <DialogHeader className="p-4 md:p-6 pb-3 border-b sticky top-0 bg-background z-10" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
+          <DialogTitle className="font-serif text-xl md:text-3xl">Compare all features</DialogTitle>
+          <DialogDescription className="text-xs md:text-sm">
             Every plan includes a free trial, onboarding and chat support. Upgrade or downgrade any time.
           </DialogDescription>
         </DialogHeader>
-        <div className="p-3 md:p-6 overflow-x-auto">
+
+        {/* Mobile: stacked card per plan (no horizontal scroll) */}
+        <div className="md:hidden p-4 space-y-4">
+          {displayPlans.map((dp) => {
+            const isFree = Number(dp.plan.price) === 0;
+            return (
+              <div
+                key={dp.plan.id}
+                className="rounded-2xl border bg-card overflow-hidden"
+                style={{ borderColor: "rgba(17,24,39,0.1)" }}
+                data-testid={`compare-mobile-plan-${dp.plan.slug}`}
+              >
+                <div
+                  className="px-4 py-3 flex items-baseline justify-between"
+                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}10, ${BRAND.purple}08)` }}
+                >
+                  <div>
+                    <div className="font-serif text-lg font-bold">{dp.plan.name}</div>
+                    {dp.plan.description && (
+                      <div className="text-[11px] text-muted-foreground line-clamp-1">{dp.plan.description}</div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold">{dp.displayPrice}</div>
+                    {!isFree && <div className="text-[10px] text-muted-foreground">/mo</div>}
+                  </div>
+                </div>
+                <div className="p-4 space-y-3 text-sm">
+                  {/* Quantities */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {PLAN_QUANTITY_FEATURES.map((q) => {
+                      const v = dp.plan[q.key] ?? 0;
+                      const label = formatQuantity(q, v);
+                      if (!label) return null;
+                      return (
+                        <div
+                          key={q.key}
+                          className="rounded-lg border px-2.5 py-1.5"
+                          style={{ borderColor: "rgba(17,24,39,0.08)" }}
+                        >
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{q.label}</div>
+                          <div className="font-semibold text-sm">{label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Booleans grouped by category */}
+                  {categoryOrder.map(({ key, label }) => {
+                    const rows = (groups[key] ?? []).filter((f) => isFeatureEnabled(dp.plan.featureFlags, f.key));
+                    if (!rows.length) return null;
+                    return (
+                      <div key={key}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{label}</div>
+                        <ul className="space-y-1">
+                          {rows.map((f) => (
+                            <li key={f.key} className="flex items-start gap-2">
+                              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: BRAND.primary }} />
+                              <span className="leading-snug">{f.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop: full comparison table */}
+        <div className="hidden md:block p-3 md:p-6 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
