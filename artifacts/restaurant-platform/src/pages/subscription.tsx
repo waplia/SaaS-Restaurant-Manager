@@ -205,10 +205,11 @@ function ManualForm({
 }
 
 function CheckoutModal({
-  plan, methods, initialMethod, initialBillingPeriod, onClose, onPaid,
+  plan, methods, methodsLoading, initialMethod, initialBillingPeriod, onClose, onPaid,
 }: {
   plan: SubscriptionPlan & { currency?: string };
-  methods: PaymentMethodsView;
+  methods: PaymentMethodsView | undefined;
+  methodsLoading: boolean;
   initialMethod?: PayMethod;
   initialBillingPeriod?: "monthly" | "yearly";
   onClose: () => void;
@@ -248,24 +249,43 @@ function CheckoutModal({
     setCouponCode(""); setCouponResult(null); setCouponError(null);
   }
 
+  // Fall back to an empty methods view while the query is still loading so
+  // the drawer can render its skeleton instead of being hidden by the caller.
+  const effectiveMethods: PaymentMethodsView = methods ?? {
+    online: { cashfree: { enabled: false }, razorpay: { enabled: false, keyId: null }, stripe: { enabled: false }, default: null },
+    manual: { bank: { enabled: false }, upi: { enabled: false } },
+    latestManual: null,
+    pendingManual: null,
+  };
+
   // Render every enabled gateway in canonical order — no provider gets
-  // visual priority. Super-admin's `methods.online.default` only determines
-  // which radio is pre-selected.
+  // visual priority. Super-admin's `effectiveMethods.online.default` only
+  // determines which radio is pre-selected.
   const planCurrency = (plan.currency ?? "INR").toUpperCase();
   const manualAllowed = planCurrency === "INR";
   const available: PayMethod[] = [];
-  if (methods.online.cashfree.enabled) available.push("cashfree");
-  if (methods.online.razorpay.enabled) available.push("razorpay");
-  if (methods.online.stripe.enabled) available.push("stripe");
-  if (manualAllowed && methods.manual.upi.enabled) available.push("upi");
-  if (manualAllowed && methods.manual.bank.enabled) available.push("bank");
+  if (effectiveMethods.online.cashfree.enabled) available.push("cashfree");
+  if (effectiveMethods.online.razorpay.enabled) available.push("razorpay");
+  if (effectiveMethods.online.stripe.enabled) available.push("stripe");
+  if (manualAllowed && effectiveMethods.manual.upi.enabled) available.push("upi");
+  if (manualAllowed && effectiveMethods.manual.bank.enabled) available.push("bank");
 
-  const defOnline = methods.online.default;
+  const defOnline = effectiveMethods.online.default;
   const defaultMethod: PayMethod | null =
     initialMethod && available.includes(initialMethod) ? initialMethod
     : defOnline && available.includes(defOnline) ? defOnline
     : (available[0] ?? null);
   const [method, setMethod] = useState<PayMethod>(defaultMethod ?? "cashfree");
+  // When the methods query resolves after the drawer is already open, the
+  // initial `method` may no longer be in the available list (e.g. drawer
+  // opened during loading with cashfree default, then loaded data shows only
+  // bank+upi). Reconcile to the first available option so the CTA is never
+  // pointing at an unselectable provider.
+  useEffect(() => {
+    if (available.length > 0 && !available.includes(method)) {
+      setMethod(available[0]);
+    }
+  }, [available.join("|"), method]);
   const [reference, setReference] = useState("");
   const [proofUrl, setProofUrl] = useState("");
   const [note, setNote] = useState("");
@@ -443,7 +463,17 @@ function CheckoutModal({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {available.length === 0 ? (
+          {methodsLoading && !methods ? (
+            <div className="space-y-3" data-testid="checkout-methods-skeleton">
+              <div className="h-3 w-32 bg-muted rounded animate-pulse" />
+              <div className="flex gap-2">
+                <div className="h-9 w-24 bg-muted rounded animate-pulse" />
+                <div className="h-9 w-24 bg-muted rounded animate-pulse" />
+                <div className="h-9 w-24 bg-muted rounded animate-pulse" />
+              </div>
+              <div className="h-32 bg-muted/50 rounded animate-pulse" />
+            </div>
+          ) : available.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center space-y-2">
               <CreditCard className="w-6 h-6 mx-auto text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
@@ -473,15 +503,20 @@ function CheckoutModal({
             </div>
           )}
 
-          {method === "bank" && methods.manual.bank.enabled && (
+          {method === "bank" && effectiveMethods.manual.bank.enabled && (
             <div className="space-y-3">
+              {effectiveMethods.manual.bank.isPlaceholder && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                  Sample details — ask your admin to update these in Admin → Payment methods. You can still submit a payment request below.
+                </div>
+              )}
               <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-1">
-                {methods.manual.bank.bankName && <p><span className="text-muted-foreground">Bank:</span> <span className="font-medium">{methods.manual.bank.bankName}</span></p>}
-                {methods.manual.bank.accountHolder && <p><span className="text-muted-foreground">Account holder:</span> <span className="font-medium">{methods.manual.bank.accountHolder}</span></p>}
-                {methods.manual.bank.accountNumber && <p><span className="text-muted-foreground">Account no.:</span> <span className="font-mono font-medium">{methods.manual.bank.accountNumber}</span></p>}
-                {methods.manual.bank.ifsc && <p><span className="text-muted-foreground">IFSC:</span> <span className="font-mono font-medium">{methods.manual.bank.ifsc}</span></p>}
-                {methods.manual.bank.branch && <p><span className="text-muted-foreground">Branch:</span> <span className="font-medium">{methods.manual.bank.branch}</span></p>}
-                {methods.manual.bank.instructions && <p className="text-muted-foreground pt-1 border-t border-border mt-2">{methods.manual.bank.instructions}</p>}
+                {effectiveMethods.manual.bank.bankName && <p><span className="text-muted-foreground">Bank:</span> <span className="font-medium">{effectiveMethods.manual.bank.bankName}</span></p>}
+                {effectiveMethods.manual.bank.accountHolder && <p><span className="text-muted-foreground">Account holder:</span> <span className="font-medium">{effectiveMethods.manual.bank.accountHolder}</span></p>}
+                {effectiveMethods.manual.bank.accountNumber && <p><span className="text-muted-foreground">Account no.:</span> <span className="font-mono font-medium">{effectiveMethods.manual.bank.accountNumber}</span></p>}
+                {effectiveMethods.manual.bank.ifsc && <p><span className="text-muted-foreground">IFSC:</span> <span className="font-mono font-medium">{effectiveMethods.manual.bank.ifsc}</span></p>}
+                {effectiveMethods.manual.bank.branch && <p><span className="text-muted-foreground">Branch:</span> <span className="font-medium">{effectiveMethods.manual.bank.branch}</span></p>}
+                {effectiveMethods.manual.bank.instructions && <p className="text-muted-foreground pt-1 border-t border-border mt-2">{effectiveMethods.manual.bank.instructions}</p>}
               </div>
               <ManualForm
                 reference={reference} setReference={setReference}
@@ -495,12 +530,17 @@ function CheckoutModal({
             </div>
           )}
 
-          {method === "upi" && methods.manual.upi.enabled && (
+          {method === "upi" && effectiveMethods.manual.upi.enabled && (
             <div className="space-y-3">
+              {effectiveMethods.manual.upi.isPlaceholder && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                  Sample details — ask your admin to update these in Admin → Payment methods. You can still submit a payment request below.
+                </div>
+              )}
               <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
-                {methods.manual.upi.upiId && <p><span className="text-muted-foreground">UPI ID:</span> <span className="font-mono font-medium">{methods.manual.upi.upiId}</span></p>}
-                {methods.manual.upi.payeeName && <p><span className="text-muted-foreground">Payee:</span> <span className="font-medium">{methods.manual.upi.payeeName}</span></p>}
-                {methods.manual.upi.qrUrl && <img src={resolveImageUrl(methods.manual.upi.qrUrl)} alt="UPI QR code" className="w-40 h-40 rounded-md border border-border bg-white p-2" />}
+                {effectiveMethods.manual.upi.upiId && <p><span className="text-muted-foreground">UPI ID:</span> <span className="font-mono font-medium">{effectiveMethods.manual.upi.upiId}</span></p>}
+                {effectiveMethods.manual.upi.payeeName && <p><span className="text-muted-foreground">Payee:</span> <span className="font-medium">{effectiveMethods.manual.upi.payeeName}</span></p>}
+                {effectiveMethods.manual.upi.qrUrl && <img src={resolveImageUrl(effectiveMethods.manual.upi.qrUrl)} alt="UPI QR code" className="w-40 h-40 rounded-md border border-border bg-white p-2" />}
               </div>
               <ManualForm
                 reference={reference} setReference={setReference}
@@ -820,7 +860,7 @@ function ManualAiRechargePanel({ packages, isOwner, blocked, onSubmitted }: {
 
 export default function SubscriptionPage() {
   const { data, isLoading, refetch } = useSubscription(RESTAURANT_ID);
-  const { data: methods } = usePaymentMethods(RESTAURANT_ID);
+  const { data: methods, isLoading: methodsLoading } = usePaymentMethods(RESTAURANT_ID);
   const confirmCashfreeOrder = useConfirmCashfreeOrder();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1047,12 +1087,13 @@ export default function SubscriptionPage() {
         )}
       </div>
 
-      {activePlan && methods && (
+      {activePlan && (
         <CheckoutModal
           plan={activePlan}
           initialMethod={initialMethod}
           initialBillingPeriod={initialBillingPeriod}
           methods={methods}
+          methodsLoading={methodsLoading}
           onClose={() => { setActivePlan(null); setInitialBillingPeriod(undefined); }}
           onPaid={() => { setActivePlan(null); setInitialBillingPeriod(undefined); refetch(); }}
         />

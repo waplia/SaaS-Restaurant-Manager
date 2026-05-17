@@ -28,6 +28,30 @@ export interface UpiConfig {
   qrUrl?: string;
 }
 
+// Sample manual-payment details shown to tenants when the super-admin hasn't
+// configured Bank / UPI yet. Lets tenants still pick a method and submit a
+// manual request so onboarding never dead-ends. The `_placeholder` marker is
+// removed automatically the first time an admin edits the row (see
+// upsertProvider below) so the "Sample details" notice disappears.
+export const DEFAULT_BANK_CONFIG: BankConfig & { _placeholder?: boolean } = {
+  bankName: "HDFC Bank",
+  accountHolder: "KhanaLagao Demo Pvt Ltd",
+  accountNumber: "00000000000000",
+  ifsc: "HDFC0000000",
+  branch: "Bengaluru — Demo Branch",
+  instructions: "Please add your tenant ID in the transfer narration so we can match the payment quickly.",
+  _placeholder: true,
+};
+
+export const DEFAULT_UPI_CONFIG: UpiConfig & { _placeholder?: boolean } = {
+  upiId: "khanalagao-demo@upi",
+  payeeName: "KhanaLagao Demo",
+  // Generated via a public QR endpoint so we don't need a bundled image asset.
+  qrUrl: "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" +
+    encodeURIComponent("upi://pay?pa=khanalagao-demo@upi&pn=KhanaLagao%20Demo"),
+  _placeholder: true,
+};
+
 const SECRET_FIELDS: Record<ProviderKey, string[]> = {
   cashfree: ["secretKey"],
   razorpay: ["keySecret", "webhookSecret"],
@@ -98,12 +122,61 @@ export async function getEffectiveRazorpayConfig(): Promise<{ enabled: boolean; 
   };
 }
 
-export async function getEnabledManualMethods(): Promise<{ bank: { enabled: boolean; config: BankConfig }; upi: { enabled: boolean; config: UpiConfig } }> {
+export async function getEnabledManualMethods(): Promise<{
+  bank: { enabled: boolean; isPlaceholder: boolean; config: BankConfig };
+  upi: { enabled: boolean; isPlaceholder: boolean; config: UpiConfig };
+}> {
   const [bankRow, upiRow] = await Promise.all([getProviderRow("bank"), getProviderRow("upi")]);
-  return {
-    bank: { enabled: !!bankRow?.isEnabled, config: (bankRow?.config ?? {}) as BankConfig },
-    upi: { enabled: !!upiRow?.isEnabled, config: (upiRow?.config ?? {}) as UpiConfig },
-  };
+
+  // Bank: if no row exists yet, surface the placeholder defaults so the tenant
+  // can still pick the method and submit a manual request.
+  let bank: { enabled: boolean; isPlaceholder: boolean; config: BankConfig };
+  if (!bankRow) {
+    bank = { enabled: true, isPlaceholder: true, config: stripPlaceholderFlag(DEFAULT_BANK_CONFIG) };
+  } else {
+    const cfg = (bankRow.config ?? {}) as BankConfig & { _placeholder?: boolean };
+    bank = { enabled: bankRow.isEnabled, isPlaceholder: cfg._placeholder === true, config: stripPlaceholderFlag(cfg) };
+  }
+
+  let upi: { enabled: boolean; isPlaceholder: boolean; config: UpiConfig };
+  if (!upiRow) {
+    upi = { enabled: true, isPlaceholder: true, config: stripPlaceholderFlag(DEFAULT_UPI_CONFIG) };
+  } else {
+    const cfg = (upiRow.config ?? {}) as UpiConfig & { _placeholder?: boolean };
+    upi = { enabled: upiRow.isEnabled, isPlaceholder: cfg._placeholder === true, config: stripPlaceholderFlag(cfg) };
+  }
+
+  return { bank, upi };
+}
+
+function stripPlaceholderFlag<T extends { _placeholder?: boolean }>(c: T): Omit<T, "_placeholder"> {
+  const { _placeholder: _drop, ...rest } = c;
+  return rest;
+}
+
+/**
+ * Seed the bank/UPI rows once at startup with placeholder defaults so the
+ * super-admin can edit them directly in Admin → Payment methods, and so the
+ * tenant checkout drawer always has something to display. Idempotent.
+ */
+export async function seedDefaultManualMethods(): Promise<void> {
+  const [bankRow, upiRow] = await Promise.all([getProviderRow("bank"), getProviderRow("upi")]);
+  if (!bankRow) {
+    await db.insert(paymentMethodSettingsTable).values({
+      provider: "bank",
+      isEnabled: true,
+      isDefault: false,
+      config: DEFAULT_BANK_CONFIG as Record<string, unknown>,
+    });
+  }
+  if (!upiRow) {
+    await db.insert(paymentMethodSettingsTable).values({
+      provider: "upi",
+      isEnabled: true,
+      isDefault: false,
+      config: DEFAULT_UPI_CONFIG as Record<string, unknown>,
+    });
+  }
 }
 
 /**
@@ -124,6 +197,12 @@ export async function upsertProvider(
       // Masked sentinel — keep the previously stored secret as-is.
       merged[k] = (existing?.config ?? {})[k];
     }
+  }
+  // The first time an admin saves real config for a manual method, drop the
+  // placeholder marker so the tenant UI stops showing the "Sample details"
+  // notice.
+  if ((provider === "bank" || provider === "upi") && body.config) {
+    delete (merged as Record<string, unknown>)._placeholder;
   }
 
   const isEnabled = body.isEnabled ?? existing?.isEnabled ?? false;

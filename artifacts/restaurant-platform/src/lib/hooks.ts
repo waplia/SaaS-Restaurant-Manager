@@ -2218,8 +2218,8 @@ export interface PaymentMethodsView {
     default: "cashfree" | "razorpay" | null;
   };
   manual: {
-    bank: { enabled: boolean; bankName?: string; accountHolder?: string; accountNumber?: string; ifsc?: string; branch?: string; instructions?: string };
-    upi:  { enabled: boolean; upiId?: string; payeeName?: string; qrUrl?: string };
+    bank: { enabled: boolean; isPlaceholder?: boolean; bankName?: string; accountHolder?: string; accountNumber?: string; ifsc?: string; branch?: string; instructions?: string };
+    upi:  { enabled: boolean; isPlaceholder?: boolean; upiId?: string; payeeName?: string; qrUrl?: string };
   };
   latestManual: {
     id: number; planId: number; method: string; amount: string; currency: string;

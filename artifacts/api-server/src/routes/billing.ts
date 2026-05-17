@@ -12,8 +12,10 @@ import { requireRole, requireSuperAdmin } from "../middleware/authorize";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
-  type ProviderKey, listProviderRows, getProviderRow, upsertProvider, maskConfig,
+  type ProviderKey, type BankConfig, type UpiConfig,
+  listProviderRows, getProviderRow, upsertProvider, maskConfig,
   getEffectiveCashfreeConfig, getEffectiveRazorpayConfig, getEnabledManualMethods,
+  DEFAULT_BANK_CONFIG, DEFAULT_UPI_CONFIG,
 } from "../lib/paymentSettings";
 import {
   createRazorpayOrder, fetchRazorpayOrder, verifyRazorpayPaymentSignature, verifyRazorpayWebhook,
@@ -72,7 +74,7 @@ router.put("/admin/payment-methods/:provider", requireSuperAdmin, async (req, re
 router.get("/restaurants/:restaurantId/billing/methods", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
-  const [cashfree, razorpay, manual] = await Promise.all([
+  const [cashfree, razorpay, manualRaw] = await Promise.all([
     getEffectiveCashfreeConfig(),
     getEffectiveRazorpayConfig(),
     getEnabledManualMethods(),
@@ -94,8 +96,21 @@ router.get("/restaurants/:restaurantId/billing/methods", requireRole("owner", "m
     .orderBy(desc(manualPaymentRequestsTable.createdAt))
     .limit(1);
 
-  // Stripe is configured at the platform level via env var (legacy path).
-  const stripeEnabled = Boolean(process.env.STRIPE_SECRET_KEY);
+  // Stripe is configured at the platform level via env vars. Show it only when
+  // both credentials are present (enabled + credentialed parity with the other
+  // online gateways).
+  const stripeEnabled = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY);
+
+  // Fallback safety net: if super-admin has disabled (or never configured) every
+  // payment provider, tenants would be stranded with no way to pay. In that case
+  // surface placeholder bank + UPI so the checkout drawer still has selectable
+  // methods and the tenant can submit a manual payment request.
+  const anyEnabled = cashfree.enabled || razorpay.enabled || stripeEnabled
+    || manualRaw.bank.enabled || manualRaw.upi.enabled;
+  const manual = anyEnabled ? manualRaw : {
+    bank: { enabled: true, isPlaceholder: true, config: { ...DEFAULT_BANK_CONFIG, _placeholder: undefined } as BankConfig },
+    upi:  { enabled: true, isPlaceholder: true, config: { ...DEFAULT_UPI_CONFIG,  _placeholder: undefined } as UpiConfig },
+  };
 
   res.json({
     online: {
@@ -105,8 +120,12 @@ router.get("/restaurants/:restaurantId/billing/methods", requireRole("owner", "m
       default: defaultOnline,
     },
     manual: {
-      bank: manual.bank.enabled ? { enabled: true, ...manual.bank.config } : { enabled: false },
-      upi: manual.upi.enabled ? { enabled: true, ...manual.upi.config } : { enabled: false },
+      bank: manual.bank.enabled
+        ? { enabled: true, isPlaceholder: manual.bank.isPlaceholder, ...manual.bank.config }
+        : { enabled: false, isPlaceholder: false },
+      upi: manual.upi.enabled
+        ? { enabled: true, isPlaceholder: manual.upi.isPlaceholder, ...manual.upi.config }
+        : { enabled: false, isPlaceholder: false },
     },
     latestManual: latest ? {
       id: latest.id,
@@ -511,8 +530,19 @@ router.post("/restaurants/:restaurantId/subscription/manual-payment", requireRol
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
   if (!plan) return void res.status(404).json({ error: "Plan not found" });
 
-  const manual = await getEnabledManualMethods();
-  if ((method === "bank" && !manual.bank.enabled) || (method === "upi" && !manual.upi.enabled)) {
+  const [manualRaw, cf, rzp] = await Promise.all([
+    getEnabledManualMethods(),
+    getEffectiveCashfreeConfig(),
+    getEffectiveRazorpayConfig(),
+  ]);
+  const stripeOn = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY);
+  // Mirror the fallback applied in the GET /methods response: if nothing is
+  // enabled at all, treat bank + upi as enabled (placeholder) so the tenant
+  // can still submit a manual request for the super-admin to review.
+  const anyEnabled = cf.enabled || rzp.enabled || stripeOn || manualRaw.bank.enabled || manualRaw.upi.enabled;
+  const bankEnabled = anyEnabled ? manualRaw.bank.enabled : true;
+  const upiEnabled  = anyEnabled ? manualRaw.upi.enabled  : true;
+  if ((method === "bank" && !bankEnabled) || (method === "upi" && !upiEnabled)) {
     return void res.status(400).json({ error: `${method.toUpperCase()} payments are not enabled` });
   }
 

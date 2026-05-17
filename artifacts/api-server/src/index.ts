@@ -7,6 +7,7 @@ import { seedDefaultAiCreditRules } from "./lib/aiCreditRulesSeeder";
 import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
 import { seedDefaultFestivals } from "./routes/advanced-growth";
 import { seedAddonCatalogue } from "./lib/addons";
+import { seedDefaultManualMethods } from "./lib/paymentSettings";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { backfillCustomerCrm } from "./lib/customerBackfill";
@@ -37,6 +38,7 @@ seedDefaultAiCreditRules().catch(err => console.error("Failed to seed default AI
 seedDefaultSupportCategories().catch(err => console.error("Failed to seed default support categories", err));
 seedDefaultFestivals().catch(err => console.error("Failed to seed default festivals", err));
 seedAddonCatalogue().catch(err => console.error("Failed to seed add-on catalogue", err));
+seedDefaultManualMethods().catch(err => console.error("Failed to seed default manual payment methods", err));
 runBootstrapPasswordReset().catch(err => console.error("Bootstrap password reset failed", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
