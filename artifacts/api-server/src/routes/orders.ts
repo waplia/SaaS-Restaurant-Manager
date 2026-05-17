@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, isFeatureEnabled } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
@@ -1583,9 +1583,14 @@ router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
+
+  const rawReason = (req.body && typeof (req.body as any).reason === "string") ? String((req.body as any).reason).trim() : "";
+  if (rawReason.length < 3) {
+    return void res.status(400).json({ error: "A void reason of at least 3 characters is required.", code: "VOID_REASON_REQUIRED" });
+  }
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
@@ -1594,7 +1599,31 @@ router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "
   // — we permit it so inventory can be reversed. Payment refunds are tracked
   // separately on the payments ledger.
 
-  const [updated] = await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, orderId)).returning();
+  // Void + audit must be atomic — if the audit insert fails, the void itself
+  // is rolled back so a destructive action is never recorded without trail.
+  let updated: typeof ordersTable.$inferSelect;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const [u] = await tx.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, orderId)).returning();
+      await tx.insert(auditLogsTable).values({
+        restaurantId,
+        userId: (req as any).user?.sub ?? null,
+        userDisplay: (req as any).user?.email ?? null,
+        role: (req as any).user?.isSuperAdmin ? "super_admin" : ((req as any).user?.role ?? null),
+        module: "orders",
+        action: "order.void",
+        entity: "ORDER",
+        entityId: orderId,
+        oldValue: { status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount } as any,
+        newValue: { status: "cancelled", reason: rawReason } as any,
+        details: `Order ${order.orderNumber ?? orderId} voided: ${rawReason}`,
+      });
+      return u;
+    });
+  } catch (err) {
+    console.error("[order-void] transactional audit failed — void aborted", err);
+    return void res.status(500).json({ error: "Could not record void audit — order was not voided. Try again.", code: "VOID_AUDIT_FAILED" });
+  }
 
   if (order.tableId) {
     await db.update(floorTablesTable).set({ status: "free" }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -2131,11 +2160,60 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   const restaurantId = Number(req.params.restaurantId);
   const { status } = req.body;
   const now = new Date();
+
+  // Cancelling a KOT is destructive (waste, customer dispute, kitchen mistake)
+  // — gate it behind manager/owner and require a written reason for audit.
+  let cancelReason: string | null = null;
+  if (status === "cancelled") {
+    const role = (req as any).user?.role;
+    const isSuperAdmin = (req as any).user?.isSuperAdmin;
+    if (!isSuperAdmin && !["owner", "manager", "super_admin"].includes(role)) {
+      return void res.status(403).json({ error: "Only owners or managers can cancel KOTs.", code: "FORBIDDEN_CANCEL" });
+    }
+    const raw = typeof req.body?.reason === "string" ? String(req.body.reason).trim() : "";
+    if (raw.length < 3) {
+      return void res.status(400).json({ error: "A cancel reason of at least 3 characters is required.", code: "CANCEL_REASON_REQUIRED" });
+    }
+    cancelReason = raw;
+  }
+
   const updates: Record<string, unknown> = { status, updatedAt: now };
   if (status === "preparing") updates.startedAt = now;
   if (status === "ready" || status === "served") updates.completedAt = now;
-  const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
-  if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // For cancels, the ticket update + audit insert run in one transaction so
+  // an audit failure rolls back the cancel — destructive change is never
+  // recorded without an audit row.
+  let updated: typeof kitchenTicketsTable.$inferSelect | undefined;
+  if (status === "cancelled" && cancelReason) {
+    try {
+      updated = await db.transaction(async (tx) => {
+        const [u] = await tx.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
+        if (!u) throw new Error("NOT_FOUND");
+        await tx.insert(auditLogsTable).values({
+          restaurantId,
+          userId: (req as any).user?.sub ?? null,
+          userDisplay: (req as any).user?.email ?? null,
+          role: (req as any).user?.isSuperAdmin ? "super_admin" : ((req as any).user?.role ?? null),
+          module: "kitchen",
+          action: "ticket.cancel",
+          entity: "KITCHEN_TICKET",
+          entityId: u.id,
+          newValue: { orderId: u.orderId, reason: cancelReason } as any,
+          details: `KOT #${u.id} (order ${u.orderId}) cancelled: ${cancelReason}`,
+        });
+        return u;
+      });
+    } catch (err) {
+      if ((err as Error).message === "NOT_FOUND") return void res.status(404).json({ error: "Not found" });
+      console.error("[ticket-cancel] transactional audit failed — cancel aborted", err);
+      return void res.status(500).json({ error: "Could not record cancel audit — KOT was not cancelled.", code: "CANCEL_AUDIT_FAILED" });
+    }
+  } else {
+    const [u] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
+    if (!u) return void res.status(404).json({ error: "Not found" });
+    updated = u;
+  }
 
   // Service-timer: mirror the kitchen ticket transition onto the order so
   // the per-stage SLA chart (preparing/ready/served) reflects the kitchen

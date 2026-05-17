@@ -1403,13 +1403,20 @@ export default function PosPage() {
 
   const handleVoid = async () => {
     if (!placedOrder) { handleNewOrder(); return; }
-    if (!confirm("Void this order? This cannot be undone.")) return;
+    const reason = window.prompt("Reason for voiding this order (required, min 3 chars):", "");
+    if (reason == null) return; // user cancelled
+    const trimmed = reason.trim();
+    if (trimmed.length < 3) {
+      toast({ title: "Void cancelled", description: "A reason of at least 3 characters is required.", variant: "destructive" });
+      return;
+    }
     try {
-      await voidOrder.mutateAsync(placedOrder.id);
-      toast({ title: "Order voided" });
+      await voidOrder.mutateAsync({ orderId: placedOrder.id, reason: trimmed });
+      toast({ title: "Order voided", description: trimmed });
       handleNewOrder();
-    } catch {
-      toast({ title: "Failed to void order", variant: "destructive" });
+    } catch (e) {
+      const msg = (e as Error)?.message ?? "Failed to void order";
+      toast({ title: "Failed to void order", description: msg, variant: "destructive" });
     }
   };
 

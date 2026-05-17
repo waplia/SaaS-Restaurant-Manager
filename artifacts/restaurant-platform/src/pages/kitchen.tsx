@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useKitchenTickets, useUpdateTicketStatus, useUpdateTicketPriority, useKitchens, useRestaurantInfo } from "@/lib/hooks";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefHat } from "lucide-react";
+import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefHat, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -111,12 +111,14 @@ function TicketCard({
   onUpdate,
   onPriority,
   onReprint,
+  onCancel,
   showKitchenBadge,
 }: {
   ticket: KitchenTicket;
   onUpdate: (id: number, status: string) => void;
   onPriority: (id: number) => void;
   onReprint: (t: KitchenTicket) => void;
+  onCancel: (id: number) => void;
   showKitchenBadge: boolean;
 }) {
   const cfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.new;
@@ -189,6 +191,13 @@ function TicketCard({
           >
             <Flag className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={() => onCancel(ticket.id)}
+            title="Cancel KOT (manager only — requires reason)"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -246,6 +255,7 @@ function KanbanColumn({
   onUpdate,
   onPriority,
   onReprint,
+  onCancel,
   showKitchenBadge,
 }: {
   status: string;
@@ -253,6 +263,7 @@ function KanbanColumn({
   onUpdate: (id: number, s: string) => void;
   onPriority: (id: number) => void;
   onReprint: (t: KitchenTicket) => void;
+  onCancel: (id: number) => void;
   showKitchenBadge: boolean;
 }) {
   const cfg = STATUS_CONFIG[status];
@@ -267,7 +278,7 @@ function KanbanColumn({
       </div>
       <div className="space-y-3 flex-1 overflow-y-auto pr-1">
         {sorted.map((t) => (
-          <TicketCard key={t.id} ticket={t} onUpdate={onUpdate} onPriority={onPriority} onReprint={onReprint} showKitchenBadge={showKitchenBadge} />
+          <TicketCard key={t.id} ticket={t} onUpdate={onUpdate} onPriority={onPriority} onReprint={onReprint} onCancel={onCancel} showKitchenBadge={showKitchenBadge} />
         ))}
         {tickets.length === 0 && (
           <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed border-border/40 rounded-xl">
@@ -321,6 +332,22 @@ export default function KitchenPage() {
       toast({ title: "Priority toggle failed", variant: "destructive" });
     }
   }, [updatePriority, toast]);
+
+  const handleCancel = useCallback(async (id: number) => {
+    const reason = window.prompt("Reason for cancelling this KOT (required, min 3 chars):", "");
+    if (reason == null) return;
+    const trimmed = reason.trim();
+    if (trimmed.length < 3) {
+      toast({ title: "Cancel aborted", description: "A reason of at least 3 characters is required.", variant: "destructive" });
+      return;
+    }
+    try {
+      await updateStatus.mutateAsync({ id, status: "cancelled", reason: trimmed });
+      toast({ title: "KOT cancelled", description: trimmed });
+    } catch (e) {
+      toast({ title: "Cancel failed", description: (e as Error)?.message, variant: "destructive" });
+    }
+  }, [updateStatus, toast]);
 
   const handleReprint = useCallback((ticket: KitchenTicket) => {
     printKitchenTicket(ticket, restaurant?.name);
@@ -452,9 +479,9 @@ export default function KitchenPage() {
 
       <div className="p-6 h-[calc(100vh-12rem)]">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-          <KanbanColumn status="new" tickets={newTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} showKitchenBadge={showKitchenBadge} />
-          <KanbanColumn status="preparing" tickets={preparingTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} showKitchenBadge={showKitchenBadge} />
-          <KanbanColumn status="ready" tickets={readyTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} showKitchenBadge={showKitchenBadge} />
+          <KanbanColumn status="new" tickets={newTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} onCancel={handleCancel} showKitchenBadge={showKitchenBadge} />
+          <KanbanColumn status="preparing" tickets={preparingTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} onCancel={handleCancel} showKitchenBadge={showKitchenBadge} />
+          <KanbanColumn status="ready" tickets={readyTickets} onUpdate={handleUpdate} onPriority={handlePriority} onReprint={handleReprint} onCancel={handleCancel} showKitchenBadge={showKitchenBadge} />
         </div>
       </div>
     </Layout>

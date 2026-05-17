@@ -360,8 +360,8 @@ export function useVoidOrder() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (orderId: number) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/void`, {}),
+    mutationFn: ({ orderId, reason }: { orderId: number; reason: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/void`, { reason }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
       qc.invalidateQueries({ queryKey: ["tables", RESTAURANT_ID] });
@@ -447,7 +447,8 @@ export function useUpdateTicketStatus() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, { status }),
+    mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, reason ? { status, reason } : { status }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["kitchen"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
