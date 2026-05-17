@@ -211,6 +211,161 @@ router.get("/restaurants/:restaurantId/inventory/:id/transactions", async (req, 
   res.json(rows);
 });
 
+// Inventory valuation: current stock × cost per unit, broken down by category.
+// Used by Reports → Inventory Valuation. Owners and managers can read.
+router.get("/restaurants/:restaurantId/inventory/valuation", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const rows = await db.select().from(inventoryItemsTable)
+    .where(and(eq(inventoryItemsTable.restaurantId, restaurantId), eq(inventoryItemsTable.isActive, true)));
+
+  const items = rows.map(r => {
+    const stock = Number(r.currentStock);
+    const cost = Number(r.costPerUnit);
+    const value = stock * cost;
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.category ?? "general",
+      kind: r.kind,
+      unit: r.unit,
+      currentStock: r.currentStock,
+      costPerUnit: r.costPerUnit,
+      value: value.toFixed(2),
+      isLowStock: stock <= Number(r.minStockLevel),
+    };
+  });
+
+  const byCategory = new Map<string, { category: string; itemCount: number; value: number }>();
+  for (const it of items) {
+    const cat = it.category ?? "general";
+    const e = byCategory.get(cat) ?? { category: cat, itemCount: 0, value: 0 };
+    e.itemCount += 1;
+    e.value += Number(it.value);
+    byCategory.set(cat, e);
+  }
+  const byKind = new Map<string, { kind: string; itemCount: number; value: number }>();
+  for (const it of items) {
+    const k = it.kind ?? "ingredient";
+    const e = byKind.get(k) ?? { kind: k, itemCount: 0, value: 0 };
+    e.itemCount += 1;
+    e.value += Number(it.value);
+    byKind.set(k, e);
+  }
+
+  const totalValue = items.reduce((s, it) => s + Number(it.value), 0);
+  res.json({
+    asOf: new Date().toISOString(),
+    totalItems: items.length,
+    totalValue: totalValue.toFixed(2),
+    byCategory: Array.from(byCategory.values())
+      .map(c => ({ ...c, value: c.value.toFixed(2) }))
+      .sort((a, b) => Number(b.value) - Number(a.value)),
+    byKind: Array.from(byKind.values())
+      .map(k => ({ ...k, value: k.value.toFixed(2) })),
+    items: items.sort((a, b) => Number(b.value) - Number(a.value)),
+  });
+});
+
+// Stock transfer between two outlets (restaurants) under the same tenant.
+// Decrements source item, increments matching destination item (matched by
+// name + unit, created if missing). Records audit transactions on both ends.
+router.post("/restaurants/:restaurantId/inventory/:id/transfer", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const srcRestaurantId = Number(req.params.restaurantId);
+  const srcItemId = Number(req.params.id);
+  const { destRestaurantId, quantity, notes } = req.body as { destRestaurantId: number; quantity: string | number; notes?: string };
+  const destId = Number(destRestaurantId);
+  const qty = Number(quantity);
+  if (!destId || destId === srcRestaurantId) return void res.status(400).json({ error: "destRestaurantId required and must differ from source" });
+  if (!Number.isFinite(qty) || qty <= 0) return void res.status(400).json({ error: "quantity must be > 0" });
+
+  // Authorize destination outlet with the same rules as validateRestaurantAccess:
+  //   - must exist
+  //   - super-admin bypasses tenant + branch checks
+  //   - otherwise must share tenant
+  //   - branch-pinned users (non-owner with restaurantId on JWT) can't write
+  //     to any restaurant other than their own — so they can't transfer to
+  //     a sibling outlet at all.
+  const [dest] = await db.select({ id: restaurantsTable.id, tenantId: restaurantsTable.tenantId })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, destId));
+  if (!dest) return void res.status(404).json({ error: "Destination restaurant not found" });
+  if (!req.user?.isSuperAdmin) {
+    if (dest.tenantId !== req.user?.tenantId) {
+      return void res.status(403).json({ error: "Access denied: destination outlet is in a different tenant" });
+    }
+    if (
+      req.user.restaurantId != null &&
+      req.user.role !== "owner" &&
+      req.user.restaurantId !== destId
+    ) {
+      return void res.status(403).json({ error: "Access denied: destination outlet is out of branch scope" });
+    }
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [src] = await tx.select().from(inventoryItemsTable)
+        .where(and(
+          eq(inventoryItemsTable.id, srcItemId),
+          eq(inventoryItemsTable.restaurantId, srcRestaurantId),
+          eq(inventoryItemsTable.isActive, true),
+        )).for("update");
+      if (!src) throw new Error("SRC_NOT_FOUND");
+      if (Number(src.currentStock) < qty) throw new Error("INSUFFICIENT_STOCK");
+
+      // Find matching ACTIVE item in destination by (name, unit); create if
+      // missing. We deliberately ignore soft-deleted (isActive=false) items
+      // so that transferred stock never lands on a hidden row that's
+      // filtered out of inventory lists and valuation.
+      const [existingDest] = await tx.select().from(inventoryItemsTable)
+        .where(and(
+          eq(inventoryItemsTable.restaurantId, destId),
+          eq(inventoryItemsTable.name, src.name),
+          eq(inventoryItemsTable.unit, src.unit),
+          eq(inventoryItemsTable.isActive, true),
+        )).for("update");
+
+      let destItem = existingDest;
+      if (!destItem) {
+        const [created] = await tx.insert(inventoryItemsTable).values({
+          restaurantId: destId,
+          name: src.name,
+          unit: src.unit,
+          currentStock: "0.000",
+          minStockLevel: src.minStockLevel,
+          costPerUnit: src.costPerUnit,
+          category: src.category,
+          kind: src.kind,
+        }).returning();
+        destItem = created;
+      }
+
+      const newSrcStock = Number(src.currentStock) - qty;
+      const newDestStock = Number(destItem!.currentStock) + qty;
+      await tx.update(inventoryItemsTable)
+        .set({ currentStock: newSrcStock.toFixed(3), updatedAt: new Date() })
+        .where(eq(inventoryItemsTable.id, src.id));
+      await tx.update(inventoryItemsTable)
+        .set({ currentStock: newDestStock.toFixed(3), updatedAt: new Date() })
+        .where(eq(inventoryItemsTable.id, destItem!.id));
+
+      const transferNote = `Transfer to outlet #${destId}${notes ? `: ${notes}` : ""}`;
+      const receiveNote = `Transfer from outlet #${srcRestaurantId}${notes ? `: ${notes}` : ""}`;
+      await tx.insert(inventoryTransactionsTable).values([
+        { itemId: src.id, restaurantId: srcRestaurantId, type: "transfer_out", quantity: qty.toFixed(3), notes: transferNote, referenceId: destItem!.id, referenceType: "stock_transfer" },
+        { itemId: destItem!.id, restaurantId: destId, type: "transfer_in", quantity: qty.toFixed(3), notes: receiveNote, referenceId: src.id, referenceType: "stock_transfer" },
+      ]);
+      return { src: { ...src, currentStock: newSrcStock.toFixed(3) }, dest: { ...destItem!, currentStock: newDestStock.toFixed(3) } };
+    });
+    res.json({ ok: true, source: result.src, destination: result.dest });
+  } catch (err) {
+    const m = (err as Error).message;
+    if (m === "SRC_NOT_FOUND") return void res.status(404).json({ error: "Source item not found" });
+    if (m === "INSUFFICIENT_STOCK") return void res.status(409).json({ error: "Insufficient stock for transfer" });
+    console.error("[Inventory] transfer failed:", err);
+    res.status(500).json({ error: "Transfer failed" });
+  }
+});
+
 router.get("/restaurants/:restaurantId/inventory/waste-log", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const wasteTxs = await db.select().from(inventoryTransactionsTable)
