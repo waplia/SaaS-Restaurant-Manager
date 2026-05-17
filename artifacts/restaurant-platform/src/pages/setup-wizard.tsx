@@ -149,12 +149,16 @@ export default function SetupWizardPage() {
   });
 
   const generateMut = useMutation({
-    mutationFn: () => apiPost<WizardState>(`/restaurants/${restaurantId}/setup-wizard/generate`, { answers }),
+    mutationFn: async () => {
+      const s = await apiPost<WizardState>(`/restaurants/${restaurantId}/setup-wizard/generate`, { answers });
+      await apiPost(`/restaurants/${restaurantId}/setup-wizard/complete`, {});
+      return s;
+    },
     onSuccess: (s) => {
       qc.setQueryData(["setup-wizard", restaurantId], s);
-      setShowSummary(true);
       setGenerating(false);
-      toast({ title: "Setup complete!", description: "Khana AI has set up your restaurant." });
+      toast({ title: "You're live!", description: "Khana AI has set up your restaurant." });
+      navigate("/dashboard");
     },
     onError: (err: unknown) => {
       setGenerating(false);
@@ -268,7 +272,7 @@ export default function SetupWizardPage() {
           </div>
         </div>
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Generation uses 10 Khana AI credits. You can edit everything later from Settings.
+          Generating your setup is free — you can edit everything later from Settings.
         </p>
       </div>
     </div>

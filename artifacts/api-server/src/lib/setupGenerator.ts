@@ -18,12 +18,7 @@ import {
   restaurantSettingsTable,
 } from "./db";
 import { AIProviderService } from "./aiProviderService";
-import {
-  reserveCredits,
-  commitReservation,
-  refundReservation,
-  type AiCreditReservation,
-} from "./aiCredits";
+// Setup wizard generation is free for all plans — no AI credit reservation.
 import { logger } from "./logger";
 
 export interface WizardOutlet {
@@ -125,9 +120,9 @@ Return STRICT JSON only with shape:
 
 /**
  * Apply the AI-generated plan + the user's wizard answers to the restaurant.
- * Reserves+commits AI credits, runs the AI call, then writes everything
- * (restaurant fields, branches, default menu+categories, settings sections)
- * inside a single DB transaction.
+ * Runs the AI call (no credit gating — onboarding is free), then writes
+ * everything (restaurant fields, branches, default menu+categories,
+ * settings sections) inside a single DB transaction.
  */
 export async function runSetupWizardGeneration(opts: {
   tenantId: number;
@@ -137,35 +132,8 @@ export async function runSetupWizardGeneration(opts: {
 }): Promise<WizardSummary> {
   const { tenantId, restaurantId, userId, answers } = opts;
 
-  // Reserve credits up-front. minCharge=10 from the seeder rule.
-  let reservation: AiCreditReservation | null = null;
-  try {
-    reservation = await reserveCredits({
-      tenantId,
-      featureSlug: "ai_setup_wizard",
-      credits: 10,
-      meta: { restaurantId },
-    });
-  } catch (err) {
-    const e = err as { code?: string; message?: string };
-    if (e?.code === "INSUFFICIENT_CREDITS") {
-      throw Object.assign(new Error("Insufficient AI credits to run the setup wizard"), { code: "INSUFFICIENT_CREDITS", status: 402 });
-    }
-    throw err;
-  }
-
-  let plan: AiPlan;
-  let requestLogId: number | null = null;
-  try {
-    const out = await callKhanaAi(answers, { tenantId, restaurantId, userId });
-    plan = out.plan;
-    requestLogId = out.requestLogId;
-  } catch (err) {
-    if (reservation) await refundReservation(reservation, "ai_call_failed");
-    throw err;
-  }
-
-  await commitReservation({ reservation, userId, requestLogId, actualCredits: 10 });
+  // Setup wizard is a free onboarding step — no credit reservation, no gating.
+  const { plan } = await callKhanaAi(answers, { tenantId, restaurantId, userId });
 
   // Apply everything in a single transaction so partial setups can't leak.
   const summary = await db.transaction(async (tx) => {
