@@ -31,7 +31,7 @@ export interface PnlRange {
 export interface PnlBreakdown {
   sales: number;            // gross order totals (paid + unpaid, completed orders only)
   discounts: number;        // sum of discount_amount on those orders
-  netRevenue: number;       // sales - discounts
+  netRevenue: number;       // sales - taxes (totalAmount is already net of discounts)
   foodCost: number;         // inventory consumption + wastage at cost
   wastage: number;          // wastage subset of foodCost
   staffCost: number;        // payroll gross for the period (or salary fallback)
@@ -133,8 +133,10 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
   const discounts = num(salesRow?.discount);
   const taxes = num(salesRow?.tax);
   // P&L sales = totals net of taxes (tax is collected for the government,
-  // not revenue) and net of discounts.
-  const netRevenue = Math.max(0, sales - taxes - discounts);
+  // not revenue). `totalAmount` is already net of discounts (it is
+  // computed as subtotal + tax + service - discount), so we must NOT
+  // subtract discounts again here — that would double-count them.
+  const netRevenue = Math.max(0, sales - taxes);
 
   // Approved expenses bucketed by `expenseType` (snapshotted at write time).
   const expRows = await db
@@ -209,8 +211,24 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
       .from(staffTable)
       .where(eq(staffTable.restaurantId, restaurantId));
     const monthlyBill = staff.reduce((s, r) => s + num(r.salary), 0);
-    const days = inclusiveDays(range);
-    staffCost = (monthlyBill * days) / 30;
+    // Prorate per calendar-month segment so multi-month ranges and
+    // Feb (28/29) crossings don't over/understate. For each month the
+    // range touches, add `monthlyBill * overlapDays / daysInThatMonth`.
+    let fraction = 0;
+    let cursor = new Date(range.from.getFullYear(), range.from.getMonth(), 1);
+    const endExclusive = new Date(range.to.getFullYear(), range.to.getMonth() + 1, 1);
+    while (cursor < endExclusive) {
+      const monthStart = cursor;
+      const monthEndExclusive = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const daysInMonth = (monthEndExclusive.getTime() - monthStart.getTime()) / 86_400_000;
+      const overlapStart = monthStart > range.from ? monthStart : new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate());
+      const rangeEndExclusive = new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate() + 1);
+      const overlapEnd = monthEndExclusive < rangeEndExclusive ? monthEndExclusive : rangeEndExclusive;
+      const overlapDays = Math.max(0, (overlapEnd.getTime() - overlapStart.getTime()) / 86_400_000);
+      fraction += overlapDays / daysInMonth;
+      cursor = monthEndExclusive;
+    }
+    staffCost = monthlyBill * fraction;
   }
 
   // Payment gateway fees: outflow payments tagged as `gateway_fee` (or

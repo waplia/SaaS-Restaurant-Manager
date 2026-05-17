@@ -292,8 +292,7 @@ function DocumentsTab({ member }: { member: StaffMember }) {
   const handleDownload = async (doc: StaffDocument) => {
     try {
       const token = localStorage.getItem("tt_access_token");
-      const base = (import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "");
-      const url = `${base}/api/restaurants/${RESTAURANT_ID}/staff/${member.id}/documents/${doc.id}/download`;
+      const url = `/api/restaurants/${RESTAURANT_ID}/staff/${member.id}/documents/${doc.id}/download`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
