@@ -99,10 +99,17 @@ export function useSeo({
     // twitter:title — guarantees every public page ends in "| KhanaLagao"
     // without each caller having to remember the suffix.
     //
-    // Exception: Khana AI sub-pages intentionally use "[Feature] | Khana AI"
-    // (the sub-brand) and skip the KhanaLagao suffix per SEO spec.
+    // Exception: pages under `/khana-ai/*` intentionally use
+    // "[Feature] | Khana AI" (the sub-brand) and skip the KhanaLagao suffix
+    // per SEO spec. Route-scoping this check (rather than matching the
+    // string "Khana AI" anywhere in the title) prevents accidental
+    // suffix-skipping on unrelated pages that may mention Khana AI.
+    const pathname =
+      typeof window !== "undefined" ? window.location.pathname : "/";
+    const isKhanaAiSubpage = pathname.startsWith("/khana-ai");
     const alreadyBranded =
-      title.includes(COMPANY.product) || title.includes("Khana AI");
+      title.includes(COMPANY.product) ||
+      (isKhanaAiSubpage && title.includes("Khana AI"));
     const effectiveTitle = alreadyBranded
       ? title
       : `${title} | ${COMPANY.product}`;
