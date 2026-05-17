@@ -69,3 +69,4 @@ export * from "./canteen";
 export * from "./surveys";
 export * from "./menu-intelligence";
 export * from "./customer-quality";
+export * from "./advanced-growth";

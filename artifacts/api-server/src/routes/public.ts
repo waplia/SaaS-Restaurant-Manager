@@ -6,6 +6,7 @@ import { reserveCredits, commitReservation, refundReservation, resolveCreditRule
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
 import { createHash } from "crypto";
+import { recordAuditLog } from "../lib/audit";
 
 async function checkRestaurantFeature(
   restaurantId: number | null | undefined,
@@ -1701,6 +1702,154 @@ router.post("/public/surveys/:slug/responses", async (req, res) => {
     .where(eq(surveysTable.id, survey.id));
 
   res.json({ success: true, thankYouMessage: survey.thankYouMessage });
+});
+
+// ============================================================
+// Public takeaway queue & pre-order booking
+//
+// These endpoints let walk-in customers join the takeaway waitlist or book
+// a pre-order slot from a QR-code landing page without logging in. They are
+// rate-limited implicitly by the upstream proxy and only expose minimal
+// information back (no PII other than what the customer just supplied).
+// ============================================================
+router.post("/public/restaurants/:restaurantId/queue/tickets", async (req, res) => {
+  try {
+    const restaurantId = Number(req.params.restaurantId);
+    if (!Number.isFinite(restaurantId)) { res.status(400).json({ error: "Invalid restaurantId" }); return; }
+    const gate = await checkRestaurantFeature(restaurantId, "dlv_queue_manager");
+    if (!gate.ok) { res.status(gate.status).json({ error: gate.error }); return; }
+    const { customerName, phone, partySize, notes } = req.body ?? {};
+    if (!customerName || !phone) { res.status(400).json({ error: "customerName and phone required" }); return; }
+    const { takeawayQueueTicketsTable } = await import("@workspace/db");
+    // Atomic per-day ticket-number allocation: a transactional advisory
+    // lock keyed by (restaurantId, day-of-year) serialises concurrent
+    // self-joins so two phones cannot grab the same number.
+    const row = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${restaurantId}, EXTRACT(DOY FROM CURRENT_DATE)::int)`);
+      const [maxRow] = await tx.select({ m: sql<number>`COALESCE(MAX(${takeawayQueueTicketsTable.ticketNumber}), 0)` })
+        .from(takeawayQueueTicketsTable)
+        .where(and(eq(takeawayQueueTicketsTable.restaurantId, restaurantId), sql`DATE(${takeawayQueueTicketsTable.createdAt}) = CURRENT_DATE`));
+      const nextNumber = Number(maxRow?.m ?? 0) + 1;
+      const [inserted] = await tx.insert(takeawayQueueTicketsTable).values({
+        restaurantId, ticketNumber: nextNumber, customerName: String(customerName).slice(0, 80),
+        phone: String(phone).slice(0, 20), partySize: Number(partySize ?? 1),
+        status: "waiting",
+        notes: `[QR self-join] ${notes ? String(notes).slice(0, 180) : ""}`.trim(),
+      }).returning();
+      return inserted;
+    });
+    const [ahead] = await db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(takeawayQueueTicketsTable)
+      .where(and(eq(takeawayQueueTicketsTable.restaurantId, restaurantId), eq(takeawayQueueTicketsTable.status, "waiting"), sql`${takeawayQueueTicketsTable.id} < ${row.id}`));
+    await recordAuditLog({
+      req, module: "dlv_queue_manager", action: "queue.ticket.create_public",
+      entity: "takeaway_queue_ticket", entityId: row.id, restaurantId,
+      userDisplay: `public:${String(phone).slice(-4)}`,
+      newValue: { ticketNumber: row.ticketNumber, partySize: row.partySize, source: "public_qr" },
+    });
+    res.status(201).json({ ticketNumber: row.ticketNumber, status: row.status, partySize: row.partySize, peopleAhead: Number(ahead?.count ?? 0), createdAt: row.createdAt });
+  } catch (err) {
+    logger.error({ err }, "public queue ticket failed");
+    res.status(500).json({ error: "Failed to join queue" });
+  }
+});
+
+router.get("/public/restaurants/:restaurantId/queue/tickets/:ticketNumber", async (req, res) => {
+  try {
+    const restaurantId = Number(req.params.restaurantId);
+    const ticketNumber = Number(req.params.ticketNumber);
+    const { takeawayQueueTicketsTable } = await import("@workspace/db");
+    const [row] = await db.select().from(takeawayQueueTicketsTable)
+      .where(and(eq(takeawayQueueTicketsTable.restaurantId, restaurantId), eq(takeawayQueueTicketsTable.ticketNumber, ticketNumber)))
+      .orderBy(desc(takeawayQueueTicketsTable.id)).limit(1);
+    if (!row) { res.status(404).json({ error: "Ticket not found" }); return; }
+    const [ahead] = await db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(takeawayQueueTicketsTable)
+      .where(and(eq(takeawayQueueTicketsTable.restaurantId, restaurantId), eq(takeawayQueueTicketsTable.status, "waiting"), sql`${takeawayQueueTicketsTable.id} < ${row.id}`));
+    res.json({ ticketNumber: row.ticketNumber, status: row.status, partySize: row.partySize, peopleAhead: row.status === "waiting" ? Number(ahead?.count ?? 0) : 0, notifiedAt: row.notifiedAt, fulfilledAt: row.fulfilledAt, cancelledAt: row.cancelledAt });
+  } catch (err) {
+    logger.error({ err }, "public queue ticket lookup failed");
+    res.status(500).json({ error: "Failed to look up ticket" });
+  }
+});
+
+router.get("/public/restaurants/:restaurantId/preorder/slots", async (req, res) => {
+  try {
+    const restaurantId = Number(req.params.restaurantId);
+    const gate = await checkRestaurantFeature(restaurantId, "ops_preorder_booking");
+    if (!gate.ok) { res.status(gate.status).json({ error: gate.error }); return; }
+    const { preorderSlotsTable, preorderBookingsTable } = await import("@workspace/db");
+    const fromDate = (req.query.date as string) ?? new Date().toISOString().slice(0, 10);
+    const rows = await db.select({
+      id: preorderSlotsTable.id, slotDate: preorderSlotsTable.slotDate,
+      startMinutes: preorderSlotsTable.startMinutes, endMinutes: preorderSlotsTable.endMinutes,
+      capacity: preorderSlotsTable.capacity,
+      booked: sql<number>`COALESCE((SELECT COUNT(*)::int FROM ${preorderBookingsTable} pb WHERE pb.slot_id = ${preorderSlotsTable.id} AND pb.status <> 'cancelled'), 0)`,
+    }).from(preorderSlotsTable)
+      .where(and(eq(preorderSlotsTable.restaurantId, restaurantId), gte(preorderSlotsTable.slotDate, fromDate), eq(preorderSlotsTable.isActive, true)))
+      .orderBy(preorderSlotsTable.slotDate, preorderSlotsTable.startMinutes).limit(50);
+    const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    res.json({ slots: rows.map((s) => ({ id: s.id, slotDate: s.slotDate, startTime: fmt(s.startMinutes), endTime: fmt(s.endMinutes), capacity: s.capacity, booked: Number(s.booked), available: Math.max(0, s.capacity - Number(s.booked)) })) });
+  } catch (err) {
+    logger.error({ err }, "public preorder slots failed");
+    res.status(500).json({ error: "Failed to load slots" });
+  }
+});
+
+router.post("/public/restaurants/:restaurantId/preorder/bookings", async (req, res) => {
+  try {
+    const restaurantId = Number(req.params.restaurantId);
+    const gate = await checkRestaurantFeature(restaurantId, "ops_preorder_booking");
+    if (!gate.ok) { res.status(gate.status).json({ error: gate.error }); return; }
+    const { slotId, customerName, phone, partySize, items } = req.body ?? {};
+    if (!slotId || !customerName || !phone) { res.status(400).json({ error: "slotId, customerName, phone required" }); return; }
+    const { preorderSlotsTable, preorderBookingsTable } = await import("@workspace/db");
+    const notesPayload = [
+      `Party of ${Number(partySize ?? 1)}`,
+      items ? `Items: ${typeof items === "string" ? items.slice(0, 200) : JSON.stringify(items).slice(0, 200)}` : null,
+      "[QR self-book]",
+    ].filter(Boolean).join(" • ");
+    // Atomic capacity check: lock the slot row inside a transaction and
+    // count active (non-cancelled) bookings while holding the lock so two
+    // concurrent QR self-bookings can never oversell the slot.
+    type Outcome =
+      | { kind: "missing" }
+      | { kind: "full" }
+      | { kind: "ok"; row: typeof preorderBookingsTable.$inferSelect; slotDate: string; startMinutes: number };
+    const outcome: Outcome = await db.transaction(async (tx) => {
+      const locked = await tx.execute(
+        sql`SELECT id, capacity, slot_date AS "slotDate", start_minutes AS "startMinutes"
+            FROM ${preorderSlotsTable}
+            WHERE id = ${Number(slotId)} AND restaurant_id = ${restaurantId} AND is_active = true
+            FOR UPDATE`,
+      );
+      const rows = (locked as { rows?: Array<{ id: number; capacity: number; slotDate: string; startMinutes: number }> }).rows
+        ?? (locked as unknown as Array<{ id: number; capacity: number; slotDate: string; startMinutes: number }>);
+      const slotRow = Array.isArray(rows) ? rows[0] : undefined;
+      if (!slotRow) return { kind: "missing" };
+      const [{ c }] = await tx.select({ c: sql<number>`COUNT(*)::int` }).from(preorderBookingsTable)
+        .where(and(eq(preorderBookingsTable.slotId, slotRow.id), sql`${preorderBookingsTable.status} <> 'cancelled'`));
+      if (Number(c) >= slotRow.capacity) return { kind: "full" };
+      const [inserted] = await tx.insert(preorderBookingsTable).values({
+        restaurantId, slotId: slotRow.id, customerName: String(customerName).slice(0, 80),
+        phone: String(phone).slice(0, 20), status: "confirmed", notes: notesPayload,
+      }).returning();
+      return { kind: "ok", row: inserted, slotDate: slotRow.slotDate, startMinutes: slotRow.startMinutes };
+    });
+    if (outcome.kind === "missing") { res.status(404).json({ error: "Slot not available" }); return; }
+    if (outcome.kind === "full") { res.status(409).json({ error: "Slot is fully booked" }); return; }
+    const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    await recordAuditLog({
+      req, module: "ops_preorder_booking", action: "preorder.booking.create_public",
+      entity: "preorder_booking", entityId: outcome.row.id, restaurantId,
+      userDisplay: `public:${String(phone).slice(-4)}`,
+      newValue: { slotId: outcome.row.slotId, slotDate: outcome.slotDate, startMinutes: outcome.startMinutes, partySize: Number(partySize ?? 1), source: "public_qr" },
+    });
+    res.status(201).json({ bookingId: outcome.row.id, status: outcome.row.status, slotDate: outcome.slotDate, startTime: fmt(outcome.startMinutes) });
+  } catch (err) {
+    logger.error({ err }, "public preorder booking failed");
+    res.status(500).json({ error: "Failed to create booking" });
+  }
 });
 
 export default router;

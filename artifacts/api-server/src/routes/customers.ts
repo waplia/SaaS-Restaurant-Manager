@@ -13,6 +13,7 @@ import {
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { recordAuditLog } from "../lib/audit";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -678,8 +679,32 @@ router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
 });
 
 router.post("/restaurants/:restaurantId/coupons", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  const { code, discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom, validTo } = req.body;
-  const [coupon] = await db.insert(couponsTable).values({ restaurantId: Number(req.params.restaurantId), code: code.toUpperCase(), discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom: validFrom ? new Date(validFrom) : new Date(), validTo: validTo ? new Date(validTo) : undefined }).returning();
+  const { code, discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom, validTo, force } = req.body;
+  const restaurantId = Number(req.params.restaurantId);
+
+  // Conflict pre-check: surface any other active coupon that overlaps in
+  // validity window and discount type so the operator notices a stacking
+  // risk *before* saving. Recorded into the audit log + offer_conflict_checks
+  // table by the helper. Caller can pass `force:true` to override.
+  try {
+    const { detectCouponConflictsBeforeSave } = await import("./advanced-growth");
+    const newFrom = validFrom ? new Date(validFrom) : new Date();
+    const newTo = validTo ? new Date(validTo) : null;
+    const conflicts = await detectCouponConflictsBeforeSave({
+      restaurantId, code: String(code).toUpperCase(), discountType, validFrom: newFrom, validTo: newTo,
+    });
+    if (conflicts.length > 0 && !force) {
+      res.status(409).json({ error: "Offer conflict detected", conflicts, hint: "Resubmit with force:true to save anyway." });
+      return;
+    }
+  } catch (err) {
+    // Conflict check is best-effort — never block coupon creation if the
+    // advanced-growth module is unavailable in this build. Log so an
+    // operator can investigate when the safeguard silently goes offline.
+    logger.warn({ err, restaurantId, code }, "[coupon.save] offer-conflict precheck failed; allowing save");
+  }
+
+  const [coupon] = await db.insert(couponsTable).values({ restaurantId, code: code.toUpperCase(), discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom: validFrom ? new Date(validFrom) : new Date(), validTo: validTo ? new Date(validTo) : undefined }).returning();
   res.status(201).json(coupon);
 });
 
@@ -715,7 +740,62 @@ router.post("/restaurants/:restaurantId/coupons/validate", async (req, res) => {
   else discount = Number(coupon.discountValue);
   if (coupon.maxDiscountAmount) discount = Math.min(discount, Number(coupon.maxDiscountAmount));
 
-  res.json({ valid: true, discountAmount: discount.toFixed(2), message: null });
+  // Margin-floor enforcement: if any active floor would be breached by this
+  // discounted order, block the coupon. An override is permitted only when
+  // ALL of the following are true:
+  //   1. The caller is authenticated as owner / manager / super_admin
+  //   2. The caller supplies a non-empty `overrideReason`
+  //   3. The caller sets `acceptMarginRisk:true` (explicit opt-in)
+  // Every override is recorded in the audit log. Infra errors fail-open
+  // (don't block the till) but never fail-open on a successful violation.
+  let marginWarning: { floorPct: number; effectivePct: number; message: string } | null = null;
+  try {
+    const { enforceMarginFloorAtCheckout, recordMarginOverrideAudit } = await import("./advanced-growth");
+    const effectiveAmount = Number(orderAmount) - discount;
+    const check = await enforceMarginFloorAtCheckout({
+      restaurantId, orderAmount: Number(orderAmount), discountedAmount: effectiveAmount,
+    });
+    if (check.violates) {
+      const body = (req.body ?? {}) as { acceptMarginRisk?: unknown; overrideReason?: unknown };
+      const wantsOverride = Boolean(body.acceptMarginRisk);
+      const reason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
+      const reqUser = (req as { user?: { role?: string; isSuperAdmin?: boolean } }).user;
+      const isManager = !!reqUser && (reqUser.isSuperAdmin || reqUser.role === "owner" || reqUser.role === "manager" || reqUser.role === "super_admin");
+      if (!wantsOverride) {
+        return void res.json({
+          valid: false, discountAmount: "0.00",
+          message: `This discount drops effective margin to ${check.effectivePct.toFixed(1)}% — below the configured floor of ${check.floorPct.toFixed(1)}%. A manager override (acceptMarginRisk + overrideReason) is required to apply.`,
+          marginViolation: { floorPct: check.floorPct, effectivePct: check.effectivePct },
+        });
+      }
+      if (!isManager) {
+        return void res.status(403).json({
+          valid: false, discountAmount: "0.00",
+          error: "Manager role required to override margin floor",
+          marginViolation: { floorPct: check.floorPct, effectivePct: check.effectivePct },
+        });
+      }
+      if (reason.length < 5) {
+        return void res.status(400).json({
+          valid: false, discountAmount: "0.00",
+          error: "overrideReason of at least 5 characters required",
+          marginViolation: { floorPct: check.floorPct, effectivePct: check.effectivePct },
+        });
+      }
+      await recordMarginOverrideAudit({
+        req, restaurantId, code: String(code).toUpperCase(), orderAmount: Number(orderAmount),
+        discountedAmount: effectiveAmount, floorPct: check.floorPct, effectivePct: check.effectivePct, reason,
+      });
+      marginWarning = { floorPct: check.floorPct, effectivePct: check.effectivePct, message: "Manager override applied; reason recorded in audit log." };
+    }
+  } catch (err) {
+    // Margin enforcement is a guardrail, not a hard dependency — if the
+    // floor lookup itself errors we log and fall through so the till keeps
+    // working. Successful violations above still block deterministically.
+    logger.warn({ err, restaurantId, code }, "[coupon.validate] margin-floor enforcement errored; allowing checkout");
+  }
+
+  res.json({ valid: true, discountAmount: discount.toFixed(2), message: marginWarning?.message ?? null, marginWarning });
 });
 
 // ─── Addresses (unchanged) ─────────────────────────────────────────────────

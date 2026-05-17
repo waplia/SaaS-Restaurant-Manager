@@ -15,6 +15,7 @@ import {
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { detectOfferConflicts, persistConflictCheck } from "./advanced-growth";
 import {
   resolveItemPrice,
   buildPricingCalendar,
@@ -142,6 +143,18 @@ router.post("/restaurants/:restaurantId/pricing-rules", async (req, res) => {
     .values(inputToRow(restaurantId, parsed.data, req.user?.sub))
     .returning();
   invalidatePricingRulesCache();
+  // Run the shared offer-conflict scan so any stacking risk against active
+  // coupons is surfaced to the operator and persisted for audit. Failures
+  // are best-effort — the rule already saved.
+  let conflicts: Awaited<ReturnType<typeof detectOfferConflicts>> = [];
+  try {
+    conflicts = await detectOfferConflicts(restaurantId, {
+      kind: "pricing_rule", label: row.name,
+    });
+    await persistConflictCheck(restaurantId, req.user?.sub ?? null, conflicts);
+  } catch (err) {
+    void err;
+  }
   await recordAuditLog({
     req,
     module: "pricing_rules",
@@ -149,9 +162,9 @@ router.post("/restaurants/:restaurantId/pricing-rules", async (req, res) => {
     entity: "pricing_rule",
     entityId: row.id,
     restaurantId,
-    newValue: { name: row.name, ruleType: row.ruleType },
-  }).catch(() => {});
-  res.status(201).json(row);
+    newValue: { name: row.name, ruleType: row.ruleType, conflictCount: conflicts.length },
+  });
+  res.status(201).json({ ...row, conflicts, conflictCount: conflicts.length });
 });
 
 router.put("/restaurants/:restaurantId/pricing-rules/:id", async (req, res) => {
@@ -173,6 +186,15 @@ router.put("/restaurants/:restaurantId/pricing-rules/:id", async (req, res) => {
     return;
   }
   invalidatePricingRulesCache();
+  let conflicts: Awaited<ReturnType<typeof detectOfferConflicts>> = [];
+  try {
+    conflicts = await detectOfferConflicts(restaurantId, {
+      kind: "pricing_rule", label: row.name,
+    });
+    await persistConflictCheck(restaurantId, req.user?.sub ?? null, conflicts);
+  } catch (err) {
+    void err;
+  }
   await recordAuditLog({
     req,
     module: "pricing_rules",
@@ -180,9 +202,9 @@ router.put("/restaurants/:restaurantId/pricing-rules/:id", async (req, res) => {
     entity: "pricing_rule",
     entityId: row.id,
     restaurantId,
-    newValue: { name: row.name, ruleType: row.ruleType },
-  }).catch(() => {});
-  res.json(row);
+    newValue: { name: row.name, ruleType: row.ruleType, conflictCount: conflicts.length },
+  });
+  res.json({ ...row, conflicts, conflictCount: conflicts.length });
 });
 
 router.patch("/restaurants/:restaurantId/pricing-rules/:id/toggle", async (req, res) => {

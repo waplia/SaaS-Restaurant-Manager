@@ -14,6 +14,7 @@ export const deliveryAssignmentsTable = pgTable("delivery_assignments", {
   codAmount: decimal("cod_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
   codCollected: boolean("cod_collected").notNull().default(false),
   codHandedIn: boolean("cod_handed_in").notNull().default(false),
+  zoneId: integer("zone_id"),
   notes: text("notes"),
   assignedBy: integer("assigned_by").references(() => usersTable.id),
   assignedAt: timestamp("assigned_at").notNull().defaultNow(),

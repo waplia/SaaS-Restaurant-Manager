@@ -526,6 +526,21 @@ export function startScheduler(): void {
     await runScheduledBackupTick();
   });
 
+  // Advanced Growth nightly rollup — recomputes per-restaurant delivery-zone
+  // profitability and per-table revenue snapshots at 02:00 IST so the
+  // "Zone Profitability" and "Table Optimization" dashboards reflect the
+  // previous day's activity without manual recompute.
+  registerCron("advanced_growth_rollup", "0 2 * * *", "Recomputes delivery-zone profit & table revenue snapshots per restaurant (daily 02:00 IST)");
+  trackCron("advanced_growth_rollup", "0 2 * * *", async () => {
+    try {
+      const { runAdvancedGrowthNightlyRollup } = await import("../routes/advanced-growth");
+      const r = await runAdvancedGrowthNightlyRollup();
+      logger.info(r, "Advanced growth nightly rollup completed");
+    } catch (err) {
+      logger.error({ err }, "[advanced-growth-rollup] failed");
+    }
+  });
+
   // Reservation reminders + no-show sweep — runs every 5 minutes.
   // - Sends a one-shot reminder for confirmed reservations whose start is
   //   ~`reminderMinutes` minutes away (default 60).

@@ -78,6 +78,10 @@ import PaymentsPage from "@/pages/payments";
 import DuePaymentsPage from "@/pages/due-payments";
 import CashRegisterPage from "@/pages/cash-register";
 import DeliveryExecutivesPage from "@/pages/delivery-executives";
+import {
+  LocalMapPage, FestivalCalendarPage, OfferConflictsPage, MarginFloorsPage, UpsellProPage,
+  QueueManagerPage, PreorderPage, ZoneProfitabilityPage, TableOptimizationPage, TipsPage, LeaderboardTvPage,
+} from "@/pages/advanced-growth";
 import CodMonitoringPage from "@/pages/cod-monitoring";
 import WaiterRequestsPage from "@/pages/waiter-requests";
 import ReservationsPage from "@/pages/reservations";
@@ -360,6 +364,17 @@ function Router() {
       <Route path="/cloud-kitchen" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CloudKitchenPage} feature="cloud_kitchen" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/staff-incentives" component={() => <RoleProtectedRoute component={StaffIncentivesPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth/local-map" component={() => <RoleProtectedRoute component={LocalMapPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth/festival-calendar" component={() => <RoleProtectedRoute component={FestivalCalendarPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth/offer-conflicts" component={() => <RoleProtectedRoute component={OfferConflictsPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth/margin-floors" component={() => <RoleProtectedRoute component={MarginFloorsPage} allow={["owner", "manager"]} />} />
+      <Route path="/growth/upsell-pro" component={() => <RoleProtectedRoute component={UpsellProPage} allow={["owner", "manager", "waiter"]} />} />
+      <Route path="/delivery/queue" component={() => <RoleProtectedRoute component={QueueManagerPage} allow={["owner", "manager", "cashier"]} />} />
+      <Route path="/delivery/pre-order" component={() => <RoleProtectedRoute component={PreorderPage} allow={["owner", "manager", "cashier"]} />} />
+      <Route path="/delivery/zone-profitability" component={() => <RoleProtectedRoute component={ZoneProfitabilityPage} allow={["owner", "manager"]} />} />
+      <Route path="/staff/table-optimization" component={() => <RoleProtectedRoute component={TableOptimizationPage} allow={["owner", "manager"]} />} />
+      <Route path="/staff/tips" component={() => <RoleProtectedRoute component={TipsPage} allow={["owner", "manager"]} />} />
+      <Route path="/staff/leaderboard-tv" component={() => <RoleProtectedRoute component={LeaderboardTvPage} allow={["owner", "manager"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
       <Route path="/gift-cards" component={() => <RoleProtectedRoute component={GiftCardsPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/settlements" component={() => <RoleProtectedRoute component={SettlementReconPage} allow={["owner", "manager", "cashier"]} />} />

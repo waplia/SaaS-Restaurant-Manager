@@ -4,6 +4,7 @@ import { db, campaignsTable, campaignLogsTable } from "../lib/db";
 import type { NewCampaign } from "@workspace/db/schema";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { detectOfferConflicts, persistConflictCheck } from "./advanced-growth";
 
 const router = Router();
 
@@ -150,14 +151,27 @@ router.post("/restaurants/:restaurantId/growth/campaigns", async (req, res) => {
   };
 
   const [c] = await db.insert(campaignsTable).values(values).returning();
+  // Run the shared offer-conflict scan so the operator is warned when a
+  // new campaign overlaps a live coupon's validity window. Persisted to
+  // offer_conflict_checks for audit. Best-effort — never blocks save.
+  let conflicts: Awaited<ReturnType<typeof detectOfferConflicts>> = [];
+  try {
+    conflicts = await detectOfferConflicts(restaurantId, {
+      kind: "campaign", label: c.name,
+      validFrom: c.scheduledAt ?? c.createdAt ?? null, validTo: null,
+    });
+    await persistConflictCheck(restaurantId, req.user?.sub ?? null, conflicts);
+  } catch (err) {
+    void err;
+  }
   await db.insert(campaignLogsTable).values({
     campaignId: c.id,
     restaurantId,
     event: "created",
     actorId: req.user?.sub ?? null,
-    payload: { name: c.name, type: c.type, channel: c.channel, status: c.status },
+    payload: { name: c.name, type: c.type, channel: c.channel, status: c.status, conflictCount: conflicts.length },
   });
-  res.status(201).json(c);
+  res.status(201).json({ ...c, conflicts, conflictCount: conflicts.length });
 });
 
 // ───────── update (any field) ─────────
