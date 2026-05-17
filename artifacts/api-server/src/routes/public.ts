@@ -137,8 +137,9 @@ router.post("/public/orders", async (req, res) => {
     return void res.status(400).json({ error: "restaurantId and items are required" });
   }
 
-  const onlineOk = await checkRestaurantFeature(restaurantId, "online_ordering");
-  if (!onlineOk.ok) return void res.status(onlineOk.status).json({ error: onlineOk.error });
+  const featureKey = tableId ? "qr_ordering" : "online_ordering";
+  const featureOk = await checkRestaurantFeature(restaurantId, featureKey);
+  if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
 
   let subtotal = 0;
   const enrichedItems: Array<{ mi: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers: Array<{ id: number; name: string; price: string }> }> = [];
