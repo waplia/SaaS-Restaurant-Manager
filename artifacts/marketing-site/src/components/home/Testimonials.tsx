@@ -1,66 +1,18 @@
-import { Star, Quote } from "lucide-react";
-
-interface Testimonial {
-  name: string;
-  role: string;
-  brand: string;
-  rating: number;
-  quote: string;
-  initial: string;
-}
-
-const TESTIMONIALS: Testimonial[] = [
-  {
-    name: "Rohan Mehta",
-    role: "Owner",
-    brand: "Sutra Modern Indian, Mumbai",
-    rating: 5,
-    quote: "We replaced three apps with KhanaLagao on day one. Food cost dropped 4% in the first month — and our manager actually leaves the floor before midnight now.",
-    initial: "S",
-  },
-  {
-    name: "Aarti Iyer",
-    role: "COO",
-    brand: "Café Lumiere · 12 outlets",
-    rating: 5,
-    quote: "Central menu and branch pricing finally work the way I always imagined. Roll-up reports across 12 outlets land on my phone every morning at 8am.",
-    initial: "C",
-  },
-  {
-    name: "Vikram Singh",
-    role: "Founder",
-    brand: "Hot Tawa Cloud Kitchens",
-    rating: 5,
-    quote: "Zomato, Swiggy and our own app in one inbox. Khana AI tells us what to prep tomorrow. We've cut wastage in half.",
-    initial: "H",
-  },
-  {
-    name: "Neha Kapoor",
-    role: "GM",
-    brand: "The Bakehouse, Delhi",
-    rating: 5,
-    quote: "Pre-orders, wholesale and walk-ins under one POS. Production planner alone has saved us two hours every morning.",
-    initial: "B",
-  },
-  {
-    name: "Imran Sayed",
-    role: "Director",
-    brand: "Brewski Bars · 7 outlets",
-    rating: 5,
-    quote: "Pour-cost reports caught a leak in week two. Honestly the system paid for itself before we'd even rolled it out everywhere.",
-    initial: "B",
-  },
-  {
-    name: "Priya Nair",
-    role: "F&B Head",
-    brand: "Coastline Resort",
-    rating: 5,
-    quote: "Room-charge posting to our PMS just works. Banquet billing, multi-outlet F&B and live P&L in one place — exactly what hotel ops needed.",
-    initial: "C",
-  },
-];
+import { Link } from "wouter";
+import { Star, Quote, ArrowRight } from "lucide-react";
+import { CASE_STUDIES } from "@/lib/caseStudies";
 
 export function Testimonials() {
+  const testimonials = CASE_STUDIES.map((c) => ({
+    slug: c.slug,
+    brand: `${c.brand} · ${c.segment.split(" · ")[0]}`,
+    name: c.quote.name,
+    role: c.quote.role,
+    quote: c.quote.text,
+    initial: c.brand.charAt(0),
+    metric: c.heroMetric,
+  }));
+
   return (
     <section className="py-12 md:py-24 bg-card">
       <div className="container mx-auto px-4 md:px-6">
@@ -72,51 +24,63 @@ export function Testimonials() {
             Loved by restaurants that care about the details.
           </h2>
           <p className="text-base md:text-lg text-muted-foreground">
-            Independent cafes, multi-outlet chains, cloud kitchens and luxury hotels — all running on KhanaLagao.
+            Real quotes pulled straight from our customer case studies — independent cafes, multi-outlet chains, cloud kitchens and luxury hotels.
           </p>
         </div>
         {/* Mobile: horizontal snap carousel */}
         <div className="md:hidden -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-snap-x pb-2">
-          {TESTIMONIALS.map(t => (
-            <article key={t.brand} className="shrink-0 snap-card w-[85%] rounded-xl border border-border bg-background p-5 flex flex-col">
+          {testimonials.map((t) => (
+            <Link key={t.slug} href={`/case-studies/${t.slug}`} className="shrink-0 snap-card w-[85%] rounded-xl border border-border bg-background p-5 flex flex-col">
               <Quote className="h-5 w-5 text-primary/40 mb-2" />
               <div className="flex items-center gap-0.5 mb-2">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`h-3.5 w-3.5 ${i <= t.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`} />
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star key={i} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                 ))}
               </div>
-              <p className="text-sm leading-relaxed text-foreground/90 flex-1">{t.quote}</p>
+              <p className="text-sm leading-relaxed text-foreground/90 flex-1">"{t.quote}"</p>
+              <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
+                {t.metric.value} {t.metric.label}
+              </div>
               <div className="mt-4 pt-3 border-t border-border flex items-center gap-3">
                 <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{t.initial}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-semibold truncate">{t.name}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">{t.role} · {t.brand}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">{t.role}</div>
                 </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
         <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {TESTIMONIALS.map(t => (
-            <article key={t.brand} className="rounded-xl border border-border bg-background p-6 flex flex-col">
+          {testimonials.map((t) => (
+            <Link key={t.slug} href={`/case-studies/${t.slug}`} className="group rounded-xl border border-border bg-background p-6 flex flex-col hover:border-primary/40 hover:shadow-md transition-all">
               <Quote className="h-6 w-6 text-primary/40 mb-3" />
               <div className="flex items-center gap-0.5 mb-3">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`h-4 w-4 ${i <= t.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`} />
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                 ))}
               </div>
-              <p className="text-sm leading-relaxed text-foreground/90 flex-1">{t.quote}</p>
+              <p className="text-sm leading-relaxed text-foreground/90 flex-1">"{t.quote}"</p>
+              <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
+                {t.metric.value} {t.metric.label}
+              </div>
               <div className="mt-5 pt-4 border-t border-border flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                   {t.initial}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold truncate">{t.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{t.role} · {t.brand}</div>
+                  <div className="text-xs text-muted-foreground truncate">{t.role}</div>
                 </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
               </div>
-            </article>
+            </Link>
           ))}
+        </div>
+        <div className="text-center mt-8 md:mt-10">
+          <Link href="/case-studies" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+            Read all customer case studies <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </div>
     </section>

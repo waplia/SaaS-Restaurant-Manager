@@ -1,35 +1,33 @@
-import {
-  Smartphone, QrCode, Package, Users, TrendingUp, Sparkles, Wallet, BarChart3,
-} from "lucide-react";
-
-const ITEMS = [
-  { icon: Smartphone, label: "POS" },
-  { icon: QrCode, label: "QR Menu" },
-  { icon: Package, label: "Inventory" },
-  { icon: Users, label: "Payroll" },
-  { icon: TrendingUp, label: "Growth" },
-  { icon: Sparkles, label: "AI" },
-  { icon: Wallet, label: "Finance" },
-  { icon: BarChart3, label: "Reports" },
-];
+import { Link } from "wouter";
+import { CASE_STUDIES } from "@/lib/caseStudies";
 
 export function TrustStrip() {
   return (
     <section className="py-8 md:py-14 border-y border-border bg-card/60">
       <div className="container mx-auto px-4 md:px-6">
-        <p className="text-center text-sm md:text-base text-muted-foreground mb-5 md:mb-8 max-w-2xl mx-auto">
-          Everything your restaurant needs to <span className="text-foreground font-medium">sell, serve, manage and grow.</span>
+        <p className="text-center text-xs md:text-sm uppercase tracking-widest font-semibold text-muted-foreground mb-5 md:mb-7">
+          Trusted by restaurants, cafes, hotels and cloud kitchens
         </p>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-3 md:gap-2 max-w-5xl mx-auto">
-          {ITEMS.map(({ icon: Icon, label }) => (
-            <div key={label} className="flex flex-col items-center gap-1.5 md:gap-2 text-muted-foreground hover:text-primary transition-colors">
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-background border border-border flex items-center justify-center">
-                <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary" />
-              </div>
-              <div className="text-[11px] md:text-sm font-medium">{label}</div>
-            </div>
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4 max-w-5xl mx-auto">
+          {CASE_STUDIES.map((c) => (
+            <Link
+              key={c.slug}
+              href={`/case-studies/${c.slug}`}
+              className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-4 md:py-5 hover:border-primary/40 hover:shadow-sm transition-all"
+              title={`${c.brand} — ${c.segment}`}
+            >
+              <span className="font-serif text-base md:text-lg font-bold tracking-tight text-foreground/80 group-hover:text-primary transition-colors">
+                {c.logoText}
+              </span>
+              <span className="text-[10px] md:text-[11px] text-muted-foreground text-center leading-tight line-clamp-1">
+                {c.location}
+              </span>
+            </Link>
           ))}
         </div>
+        <p className="text-center text-xs md:text-sm text-muted-foreground mt-5 md:mt-7">
+          Click a logo to read their story →
+        </p>
       </div>
     </section>
   );

@@ -43,6 +43,7 @@ const Guides = lazy(() => import("@/pages/guides"));
 const FAQ = lazy(() => import("@/pages/faq"));
 const Compare = lazy(() => import("@/pages/compare"));
 const CaseStudies = lazy(() => import("@/pages/case-studies"));
+const CaseStudyDetail = lazy(() => import("@/pages/case-studies/[slug]"));
 const ThankYou = lazy(() => import("@/pages/thank-you"));
 
 const PrivacyPolicy = lazy(() => import("@/pages/legal/privacy-policy"));
@@ -139,6 +140,7 @@ function Router() {
         <Route path="/faq" component={FAQ} />
         <Route path="/compare" component={Compare} />
         <Route path="/case-studies" component={CaseStudies} />
+        <Route path="/case-studies/:slug" component={CaseStudyDetail} />
         <Route path="/partners" component={Partners} />
         <Route path="/careers" component={Careers} />
 
