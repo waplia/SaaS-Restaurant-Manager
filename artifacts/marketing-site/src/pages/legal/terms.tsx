@@ -58,7 +58,7 @@ export default function Terms() {
       title="Terms & Conditions"
       lastUpdated="January 2026"
       intro={<>The rules governing your use of {COMPANY.product} by {COMPANY.legalName}.</>}
-      seoDescription={`Terms & Conditions for ${COMPANY.product} by ${COMPANY.legalName}.`}
+      seoDescription={`Terms & Conditions governing your use of the ${COMPANY.product} platform and services.`}
       sections={sections}
     />
   );

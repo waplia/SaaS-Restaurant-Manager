@@ -70,7 +70,7 @@ export default function PrivacyPolicy() {
       title="Privacy Policy"
       lastUpdated="January 2026"
       intro={<>How {COMPANY.legalName} collects, uses and protects data on the {COMPANY.product} platform.</>}
-      seoDescription={`Privacy Policy for ${COMPANY.product} by ${COMPANY.legalName}. Learn what data we collect, how we use it, and your rights.`}
+      seoDescription={`Privacy Policy for ${COMPANY.product}. Learn what data we collect, how we use it, and your rights.`}
       sections={sections}
     />
   );

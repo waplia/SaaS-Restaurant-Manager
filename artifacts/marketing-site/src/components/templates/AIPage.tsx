@@ -35,10 +35,10 @@ export function AIPage({ content }: { content: AIPageContent }) {
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: `Khana AI — ${content.shortName}`,
-        description: content.tagline,
+        name: "KhanaLagao",
+        description: "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
         applicationCategory: "BusinessApplication",
-        operatingSystem: "Web, iOS, Android",
+        operatingSystem: "Web",
         offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
         brand: { "@type": "Brand", name: "KhanaLagao" },
       },

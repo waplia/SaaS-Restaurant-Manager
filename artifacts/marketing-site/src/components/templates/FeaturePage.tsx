@@ -45,10 +45,10 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: `KhanaLagao ${content.title}`,
-        description: content.description,
+        name: "KhanaLagao",
+        description: "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
         applicationCategory: "BusinessApplication",
-        operatingSystem: "Web, iOS, Android, Windows",
+        operatingSystem: "Web",
         offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
         brand: { "@type": "Brand", name: "KhanaLagao" },
       },

@@ -98,7 +98,12 @@ export function useSeo({
     // Single source of truth for the title used by <title>, og:title, and
     // twitter:title — guarantees every public page ends in "| KhanaLagao"
     // without each caller having to remember the suffix.
-    const effectiveTitle = title.includes(COMPANY.product)
+    //
+    // Exception: Khana AI sub-pages intentionally use "[Feature] | Khana AI"
+    // (the sub-brand) and skip the KhanaLagao suffix per SEO spec.
+    const alreadyBranded =
+      title.includes(COMPANY.product) || title.includes("Khana AI");
+    const effectiveTitle = alreadyBranded
       ? title
       : `${title} | ${COMPANY.product}`;
     document.title = effectiveTitle;

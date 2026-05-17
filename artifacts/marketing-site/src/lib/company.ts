@@ -96,4 +96,11 @@ export const ORG_JSON_LD = {
       areaServed: "IN",
     },
   ],
+  // Legal entity relationship — kept in structured data so the corporate
+  // relationship is discoverable, but Waplia is never surfaced in the
+  // user-visible Organization `name` (which is the brand "KhanaLagao").
+  parentOrganization: {
+    "@type": "Organization",
+    name: COMPANY.legalName,
+  },
 };

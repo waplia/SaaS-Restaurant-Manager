@@ -66,7 +66,7 @@ export default function DPA() {
       title="Data Processing Agreement"
       lastUpdated="January 2026"
       intro={<>Our standard DPA for enterprise and chain customers using {COMPANY.product}.</>}
-      seoDescription={`Data Processing Agreement (DPA) for ${COMPANY.product} by ${COMPANY.legalName}.`}
+      seoDescription={`Data Processing Agreement (DPA) for ${COMPANY.product} — how we process customer personal data on your behalf.`}
       sections={sections}
     />
   );

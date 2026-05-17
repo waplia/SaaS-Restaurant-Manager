@@ -52,7 +52,7 @@ export default function AUP() {
       title="Acceptable Use Policy"
       lastUpdated="January 2026"
       intro={<>What's allowed — and what isn't — on {COMPANY.product}.</>}
-      seoDescription={`Acceptable Use Policy (AUP) for ${COMPANY.product} by ${COMPANY.legalName}.`}
+      seoDescription={`Acceptable Use Policy (AUP) for ${COMPANY.product} — what's allowed and what isn't.`}
       sections={sections}
     />
   );
