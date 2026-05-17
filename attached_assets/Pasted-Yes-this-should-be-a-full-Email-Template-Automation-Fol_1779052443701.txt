@@ -1,0 +1,1078 @@
+Yes, this should be a full **Email Template + Automation + Follow-up Campaign System** in Super Admin.
+
+You need 3 types:
+
+**1. System Transactional Emails**
+For signup, plan upgrade, payment, password reset, trial ending, etc.
+
+**2. Lifecycle / Follow-up Emails**
+Automatic emails after signup like Day 0, Day 1, Day 3, Day 7, trial ending, onboarding incomplete, demo follow-up, etc.
+
+**3. Restaurant Marketing Emails**
+Restaurant owner can create/send campaigns to their customers only if email marketing is enabled.
+
+Use this prompt:
+
+```text
+Add a complete Email Templates, Email Automation, and Follow-up Marketing system to KhanaLagao.
+
+Current requirement:
+Super Admin should be able to create, edit, design, preview, test, enable/disable, and manage email templates for all important platform actions like signup, trial, plan upgrade, payment, onboarding, follow-up emails, reminders, support, etc.
+
+Also add a marketing email feature where templates/campaigns can be designed and sent, but customer marketing emails should only be sent if the restaurant enables it and customer consent/opt-in exists.
+
+Important:
+- Do not rebuild existing platform.
+- Do not break current email/SMTP settings if already available.
+- Use existing Super Admin, restaurant admin, plan, subscription, lead, support, and customer data.
+- Do not send emails automatically unless the template/automation is enabled.
+- Do not send marketing emails to customers unless restaurant has turned on email marketing and customer consent exists.
+- Create editable templates with variables.
+- Add preview and test email option.
+- Add logs for every sent/failed email.
+- Add unsubscribe/opt-out for marketing emails.
+- Keep transactional emails separate from marketing emails.
+
+====================================================
+1. SUPER ADMIN EMAIL CENTER
+====================================================
+
+Add new Super Admin menu:
+
+Email Center
+- Dashboard
+- Email Templates
+- Automation Flows
+- Follow-up Sequences
+- Marketing Templates
+- Email Campaigns
+- SMTP / Provider Settings
+- Email Logs
+- Suppression / Unsubscribe List
+- Variables
+- Reports
+
+Email Center Dashboard should show:
+- Emails sent today
+- Emails sent this month
+- Failed emails
+- Open rate if tracking available
+- Click rate if tracking available
+- Most used templates
+- Active automations
+- Active follow-up sequences
+- Email provider status
+- Recent logs
+
+====================================================
+2. EMAIL PROVIDER SETTINGS
+====================================================
+
+Add or improve email provider settings.
+
+Supported providers:
+- SMTP
+- SendGrid
+- Mailgun
+- Amazon SES
+- Resend
+- Postmark
+- Custom SMTP
+
+Fields:
+- Provider
+- Enable/disable
+- SMTP host
+- SMTP port
+- SMTP username
+- SMTP password
+- Encryption TLS/SSL/None
+- From name
+- From email
+- Reply-to email
+- Bounce email if available
+- Test connection button
+- Send test email button
+
+Important:
+- Encrypt passwords/API keys.
+- Mask secrets in UI.
+- Never expose secrets on frontend.
+
+====================================================
+3. EMAIL TEMPLATE BUILDER
+====================================================
+
+Create editable email template system.
+
+Template editor should support:
+- Template name
+- Template type
+- Subject line
+- Preheader text
+- Email body
+- Variables/placeholders
+- Button/CTA text
+- Button/CTA URL
+- Header logo
+- Footer text
+- Brand color
+- Preview mode
+- Send test email
+- Enable/disable
+- Version history
+- Duplicate template
+- Reset to default
+- Plain text fallback
+
+Editor options:
+- Rich text editor
+- HTML editor optional
+- Drag-and-drop block editor if possible
+- Basic blocks:
+  - Logo
+  - Heading
+  - Text
+  - Button
+  - Divider
+  - Feature list
+  - Card
+  - Table
+  - Footer
+  - Social links
+
+Template styling:
+- Premium KhanaLagao email design
+- Orange/white/dark theme
+- Mobile responsive
+- Clean typography
+- CTA button
+- Footer with unsubscribe for marketing emails
+- Footer with company/legal info
+
+====================================================
+4. TEMPLATE VARIABLES
+====================================================
+
+Add dynamic variables.
+
+Global variables:
+{{app_name}}
+{{app_url}}
+{{logo_url}}
+{{support_email}}
+{{support_phone}}
+{{current_year}}
+{{login_url}}
+{{dashboard_url}}
+{{pricing_url}}
+{{book_demo_url}}
+
+Restaurant variables:
+{{restaurant_name}}
+{{owner_name}}
+{{owner_email}}
+{{owner_phone}}
+{{restaurant_city}}
+{{restaurant_id}}
+{{restaurant_login_url}}
+{{restaurant_dashboard_url}}
+{{trial_end_date}}
+{{plan_name}}
+{{subscription_status}}
+
+Plan/subscription variables:
+{{plan_name}}
+{{plan_price}}
+{{billing_cycle}}
+{{subscription_start_date}}
+{{subscription_end_date}}
+{{renewal_date}}
+{{trial_days_left}}
+{{invoice_number}}
+{{invoice_amount}}
+{{payment_due_date}}
+{{payment_link}}
+
+Lead variables:
+{{lead_name}}
+{{lead_restaurant_name}}
+{{lead_phone}}
+{{lead_email}}
+{{lead_city}}
+{{lead_business_type}}
+{{demo_date}}
+{{assigned_sales_person}}
+
+Support variables:
+{{ticket_id}}
+{{ticket_subject}}
+{{ticket_status}}
+{{ticket_priority}}
+{{ticket_url}}
+
+AI variables:
+{{ai_credits_balance}}
+{{ai_credits_used}}
+{{ai_recharge_url}}
+
+Customer marketing variables:
+{{customer_name}}
+{{customer_phone}}
+{{customer_email}}
+{{last_order_date}}
+{{favorite_item}}
+{{coupon_code}}
+{{coupon_expiry}}
+{{unsubscribe_url}}
+
+====================================================
+5. TRANSACTIONAL EMAIL TEMPLATES
+====================================================
+
+Create default editable templates for platform/system actions.
+
+These should be controlled by Super Admin.
+
+Templates:
+
+1. Restaurant Signup Welcome
+Trigger: new restaurant account created or signup completed.
+Subject:
+Welcome to KhanaLagao — Your Restaurant OS is Ready
+
+2. Email Verification
+Trigger: restaurant owner needs email verification.
+
+3. Password Reset
+Trigger: password reset requested.
+
+4. Super Admin Created Restaurant Account
+Trigger: Super Admin creates restaurant manually.
+Includes login details/reset link.
+
+5. Trial Started
+Trigger: free trial activated.
+
+6. Trial Ending Soon
+Trigger: 7 days, 3 days, 1 day before trial end.
+
+7. Trial Expired
+Trigger: trial ended.
+
+8. Plan Activated
+Trigger: paid plan activated.
+
+9. Plan Upgraded
+Trigger: plan upgrade.
+
+10. Plan Downgraded
+Trigger: plan downgrade.
+
+11. Plan Expiring Soon
+Trigger: subscription expiry reminder.
+
+12. Subscription Renewed
+Trigger: renewal successful.
+
+13. Subscription Cancelled
+Trigger: cancellation.
+
+14. Payment Successful
+Trigger: payment received.
+
+15. Payment Failed
+Trigger: failed payment.
+
+16. Payment Reminder
+Trigger: invoice due.
+
+17. Invoice Generated
+Trigger: new invoice created.
+
+18. Refund Processed
+Trigger: refund marked.
+
+19. Restaurant Suspended
+Trigger: account suspended.
+
+20. Restaurant Reactivated
+Trigger: account reactivated.
+
+21. AI Credits Added
+Trigger: AI credits added or recharge successful.
+
+22. AI Credits Low
+Trigger: low credit threshold.
+
+23. AI Credits Exhausted
+Trigger: credits finished.
+
+24. Support Ticket Created
+Trigger: new ticket created.
+
+25. Support Ticket Replied
+Trigger: support reply.
+
+26. Support Ticket Resolved
+Trigger: ticket resolved.
+
+27. New Feature Announcement
+Trigger: Super Admin announcement.
+
+28. Maintenance Notice
+Trigger: scheduled maintenance.
+
+29. Security Alert
+Trigger: suspicious login/password change.
+
+30. Onboarding Incomplete Reminder
+Trigger: restaurant did not complete setup.
+
+====================================================
+6. LIFECYCLE / FOLLOW-UP EMAIL SEQUENCES
+====================================================
+
+Add follow-up automation system.
+
+This is for automatic emails after signup/demo/trial.
+
+Call this:
+Lifecycle Emails
+or
+Follow-up Sequences
+or
+Onboarding Automation
+
+Super Admin can create sequences like:
+
+A. New Signup Onboarding Sequence
+Trigger: restaurant signup completed.
+
+Emails:
+Day 0:
+Welcome to KhanaLagao
+
+Day 1:
+Set up your menu and first outlet
+
+Day 2:
+Create your first table QR menu
+
+Day 3:
+Add staff and payroll setup
+
+Day 4:
+Connect inventory and recipes
+
+Day 5:
+Try Khana AI menu import
+
+Day 7:
+Your restaurant dashboard is ready — complete setup
+
+Day 10:
+Start using Growth Engine to bring repeat customers
+
+Day 13:
+Trial ending soon — choose your plan
+
+Day 14:
+Trial ends today
+
+B. Demo Lead Follow-up Sequence
+Trigger: lead submitted demo form.
+
+Emails:
+Immediately:
+Thanks for booking a demo
+
+After 1 day:
+See what KhanaLagao can do for your restaurant
+
+After 3 days:
+POS + QR Menu + Inventory + AI in one system
+
+After 5 days:
+Restaurants can reduce chaos with connected operations
+
+After 7 days:
+Still interested? Book your walkthrough
+
+C. Trial Engagement Sequence
+Trigger: trial started.
+
+Based on activity:
+- If no menu created after 24 hours → send menu setup reminder.
+- If no QR generated after 48 hours → send QR setup reminder.
+- If no order created after 72 hours → send first order guide.
+- If AI credits unused after 3 days → send Khana AI intro.
+- If plan not selected before trial end → send upgrade email.
+
+D. Payment Recovery Sequence
+Trigger: payment failed.
+
+Emails:
+- Payment failed
+- Reminder after 1 day
+- Reminder after 3 days
+- Account risk/suspension warning
+- Final reminder
+
+E. Inactive Restaurant Sequence
+Trigger: restaurant did not login/use platform for X days.
+
+Emails:
+- We noticed you haven’t used KhanaLagao recently
+- Need help setting up?
+- Book a setup call
+- Your restaurant OS is waiting
+
+Sequence builder should allow:
+- Trigger selection
+- Delay days/hours
+- Conditions
+- Template selection
+- Enable/disable step
+- Stop sequence when goal completed
+- Test sequence
+- View sequence logs
+
+Stop rules:
+- Stop onboarding sequence if setup completed.
+- Stop demo follow-up if demo scheduled.
+- Stop trial ending sequence if plan purchased.
+- Stop payment recovery if payment completed.
+
+====================================================
+7. AUTOMATION RULES
+====================================================
+
+Add automation rule engine for emails.
+
+Trigger types:
+- Restaurant signup
+- Lead created
+- Trial started
+- Trial ending
+- Trial expired
+- Plan upgraded
+- Plan expired
+- Payment success
+- Payment failed
+- Invoice due
+- Onboarding incomplete
+- No login for X days
+- No menu created
+- No QR generated
+- No order created
+- AI credits low
+- Support ticket update
+- Super Admin announcement
+
+Conditions:
+- Plan type
+- Restaurant status
+- Trial days left
+- Setup completion percentage
+- Last login date
+- Country/city
+- Business type
+- Module enabled
+- AI enabled
+- Payment status
+
+Actions:
+- Send email
+- Add notification
+- Create task
+- Add tag
+- Update lead status
+- Notify sales/support team
+
+====================================================
+8. RESTAURANT MARKETING EMAIL FEATURE
+====================================================
+
+Add email marketing feature for restaurant owners.
+
+Important:
+Marketing emails to restaurant customers should only work if:
+- Restaurant has Email Marketing enabled.
+- Restaurant has configured/super admin enabled email sending.
+- Customer has email address.
+- Customer has marketing consent/opt-in.
+- Customer is not unsubscribed.
+- Plan allows email campaigns.
+
+Restaurant admin menu:
+Growth Engine → Email Campaigns
+
+Features:
+- Create email campaign
+- Select template
+- Select customer segment
+- Edit subject/body
+- Preview
+- Send test email
+- Schedule campaign
+- Send now
+- View campaign analytics
+- Clone campaign
+
+Customer segments:
+- All customers with email consent
+- VIP customers
+- Inactive customers
+- Birthday customers
+- Anniversary customers
+- High spenders
+- Favorite item customers
+- Coupon users
+- New customers
+- Repeat customers
+
+Marketing templates:
+- Birthday offer
+- Anniversary offer
+- Weekend special
+- Festival offer
+- New item launch
+- Win-back offer
+- Loyalty reward
+- Feedback request
+- Review request
+- Membership promotion
+- Tiffin plan promotion
+- Catering offer
+
+Marketing safety:
+- Add unsubscribe link.
+- Add restaurant address/footer.
+- Respect opt-out.
+- Do not send to unsubscribed customers.
+- Rate limit sending.
+- Show estimated recipients before send.
+
+====================================================
+9. SUPER ADMIN MARKETING TEMPLATE LIBRARY
+====================================================
+
+Super Admin can create global marketing templates that restaurants can use.
+
+Template library:
+- Restaurant offer template
+- Cafe offer template
+- Cloud kitchen offer template
+- Birthday template
+- Festival template
+- Review request template
+- Loyalty template
+- Tiffin template
+- Catering template
+
+Restaurant can:
+- Use template
+- Customize content
+- Save as own template
+- Send to customers
+
+Super Admin can:
+- Make template global
+- Hide/show template
+- Assign to business type
+- Assign to plan
+
+====================================================
+10. EMAIL LOGS
+====================================================
+
+Create email logs.
+
+Fields:
+- id
+- restaurant_id nullable
+- recipient_email
+- recipient_type: restaurant_owner/customer/admin/lead/staff
+- template_id
+- campaign_id nullable
+- automation_id nullable
+- subject
+- provider
+- status: queued/sent/delivered/failed/bounced/opened/clicked
+- error_message
+- sent_at
+- opened_at
+- clicked_at
+- created_at
+
+Email log page:
+- Filter by status
+- Filter by template
+- Filter by restaurant
+- Filter by date
+- Retry failed email
+- View email content snapshot
+- Export logs
+
+====================================================
+11. EMAIL ANALYTICS
+====================================================
+
+If tracking is possible, add:
+- Sent
+- Delivered
+- Failed
+- Open rate
+- Click rate
+- Bounce rate
+- Unsubscribe rate
+- Campaign conversion if available
+
+If open/click tracking is not implemented yet, add structure and show basic sent/failed logs.
+
+====================================================
+12. UNSUBSCRIBE / CONSENT SYSTEM
+====================================================
+
+Add unsubscribe and consent management.
+
+For marketing emails:
+- Every marketing email must include unsubscribe link.
+- Customer can unsubscribe.
+- Store unsubscribe status.
+- Do not send again after unsubscribe.
+- Restaurant admin can see opt-out status.
+- Super Admin can see suppression list.
+
+Customer consent fields:
+- email_marketing_opt_in
+- email_marketing_opt_in_source
+- email_marketing_opt_in_at
+- email_unsubscribed
+- email_unsubscribed_at
+
+Important:
+Transactional emails can still be sent where legally/operationally required.
+Marketing emails must respect unsubscribe.
+
+====================================================
+13. RESTAURANT CONTROL SETTINGS
+====================================================
+
+Restaurant admin should have settings:
+
+Settings → Communication → Email
+
+Options:
+- Enable email marketing yes/no
+- Enable customer follow-up emails yes/no
+- Default from name
+- Reply-to email
+- Email footer text
+- Business address
+- Customer consent required yes/no
+- Send birthday emails yes/no
+- Send feedback emails yes/no
+- Send review request emails yes/no
+- Send inactive customer emails yes/no
+
+If off:
+- Do not send customer marketing emails.
+
+====================================================
+14. PLAN / PRICING INTEGRATION
+====================================================
+
+Add email features to plans and pricing.
+
+Plan limits:
+- Email marketing enabled yes/no
+- Monthly email limit
+- Follow-up automation enabled yes/no
+- Number of active automation sequences
+- Number of custom templates
+- Advanced analytics enabled yes/no
+- AI email generation enabled yes/no
+
+Suggested plan mapping:
+
+Starter:
+- Basic transactional emails
+- 3 system templates editable
+- No customer email marketing
+- Basic email logs
+
+Growth:
+- Customer email marketing
+- 2 active follow-up sequences
+- 2,000 emails/month
+- Template library
+- Basic analytics
+
+Pro:
+- Advanced automation
+- 10 active sequences
+- 10,000 emails/month
+- Custom templates
+- Segmentation
+- AI email generation
+- Open/click tracking if available
+
+Enterprise:
+- Unlimited/Custom email limits
+- Advanced automation
+- White-label emails
+- Dedicated sending domain placeholder
+- Advanced analytics
+- API/webhooks
+- Custom onboarding sequences
+
+Super Admin should be able to override limits per restaurant.
+
+Pricing page should include:
+- Email templates
+- Automated follow-ups
+- Email campaigns
+- Customer segmentation
+- AI email generation
+- Email analytics
+- Monthly email limits
+
+====================================================
+15. AI EMAIL GENERATION
+====================================================
+
+Inside email template/campaign editor, add Khana AI support.
+
+AI can generate:
+- Subject line
+- Preheader
+- Email body
+- CTA text
+- Follow-up sequence
+- Festival email
+- Win-back email
+- Trial reminder email
+- Payment reminder email
+- Restaurant onboarding email
+
+AI should use:
+- Tone: professional, friendly, urgent, premium, casual
+- Language: English, Hindi, Hinglish if supported
+- Goal: demo booking, setup completion, plan upgrade, customer offer, feedback, review
+
+Credit usage:
+- Deduct AI credits when generating content.
+- Log usage.
+- Show credits required.
+
+====================================================
+16. DEFAULT EMAIL TEMPLATE CONTENT
+====================================================
+
+Create beautiful default templates for these:
+
+A. Signup Welcome
+Subject:
+Welcome to KhanaLagao — Your Restaurant OS is Ready
+
+Body:
+Hi {{owner_name}},
+
+Welcome to KhanaLagao.
+
+Your restaurant workspace for {{restaurant_name}} is now ready. You can manage POS billing, QR menu, kitchen, inventory, staff, finance, growth tools and Khana AI from one connected platform.
+
+Start here:
+[Open Dashboard]
+
+Recommended next steps:
+1. Add your outlet details
+2. Create your menu
+3. Generate table QR codes
+4. Add staff members
+5. Try Khana AI
+
+Need help? Book a free setup call.
+
+B. Trial Ending Soon
+Subject:
+Your KhanaLagao trial ends in {{trial_days_left}} days
+
+Body:
+Hi {{owner_name}},
+
+Your KhanaLagao trial for {{restaurant_name}} is ending soon.
+
+To keep using POS, QR menu, inventory, payroll, growth tools and Khana AI without interruption, please choose a plan before {{trial_end_date}}.
+
+[Choose Plan]
+
+C. Plan Upgraded
+Subject:
+Your KhanaLagao plan has been upgraded to {{plan_name}}
+
+Body:
+Hi {{owner_name}},
+
+Your restaurant has been upgraded to the {{plan_name}} plan.
+
+You now have access to additional KhanaLagao features based on your plan.
+
+[Open Dashboard]
+
+D. Payment Successful
+Subject:
+Payment received for KhanaLagao invoice {{invoice_number}}
+
+Body:
+Hi {{owner_name}},
+
+We have received your payment of {{invoice_amount}} for invoice {{invoice_number}}.
+
+Thank you for using KhanaLagao.
+
+[View Invoice]
+
+E. AI Credits Low
+Subject:
+Your Khana AI credits are running low
+
+Body:
+Hi {{owner_name}},
+
+Your Khana AI credit balance is now {{ai_credits_balance}}.
+
+Recharge credits to continue using AI menu import, AI campaigns, AI review drafts, AI insights and AI chat.
+
+[Recharge AI Credits]
+
+F. Onboarding Incomplete
+Subject:
+Complete your KhanaLagao setup in a few steps
+
+Body:
+Hi {{owner_name}},
+
+Your restaurant setup is almost ready.
+
+Complete these steps to start using KhanaLagao smoothly:
+- Add menu items
+- Generate QR menu
+- Add staff
+- Set tax and payment settings
+
+[Continue Setup]
+
+G. Marketing Offer Template
+Subject:
+A special offer from {{restaurant_name}}
+
+Body:
+Hi {{customer_name}},
+
+We have a special offer for you.
+
+Use code {{coupon_code}} before {{coupon_expiry}} and enjoy your favorite food from {{restaurant_name}}.
+
+[Order Now]
+
+Footer:
+You are receiving this because you opted in to updates from {{restaurant_name}}.
+[Unsubscribe]
+
+====================================================
+17. DATABASE REQUIREMENTS
+====================================================
+
+Create or update tables:
+
+email_providers
+email_templates
+email_template_versions
+email_automations
+email_automation_steps
+email_sequences
+email_sequence_enrollments
+email_campaigns
+email_campaign_recipients
+email_logs
+email_unsubscribes
+email_suppression_list
+email_template_variables
+email_tracking_events
+
+If similar tables already exist, reuse and extend instead of duplicating.
+
+All tables should include:
+- id
+- restaurant_id nullable where applicable
+- created_by
+- status
+- created_at
+- updated_at
+
+====================================================
+18. API REQUIREMENTS
+====================================================
+
+Create APIs for:
+
+Super Admin:
+- Manage providers
+- Manage templates
+- Manage automations
+- Manage follow-up sequences
+- Manage logs
+- Send test email
+- Preview email
+- Retry failed email
+
+Restaurant Admin:
+- Manage marketing templates
+- Create campaign
+- Select recipients
+- Send/schedule campaign
+- View campaign analytics
+- Manage email settings
+- Manage unsubscribe list
+
+System:
+- Trigger transactional email
+- Trigger automation sequence
+- Process scheduled emails
+- Track opens/clicks if available
+- Unsubscribe endpoint
+
+====================================================
+19. QUEUE / CRON REQUIREMENTS
+====================================================
+
+Emails should not block user actions.
+
+Use queue/cron if available:
+- Queue email sending
+- Process scheduled emails
+- Process follow-up sequences
+- Retry failed emails
+- Stop sequence when condition met
+
+If queue system is not available:
+- Add safe scheduled processing structure and document configuration.
+
+====================================================
+20. SECURITY / COMPLIANCE
+====================================================
+
+- Do not expose SMTP/API keys.
+- Validate templates.
+- Sanitize HTML.
+- Prevent script injection in templates.
+- Respect unsubscribe for marketing.
+- Rate limit campaign sending.
+- Audit log template changes.
+- Audit log provider setting changes.
+- Audit log campaign sending.
+- Role permission required for sending emails.
+
+====================================================
+21. UI REQUIREMENTS
+====================================================
+
+Super Admin UI:
+- Premium SaaS design
+- Template cards
+- Template status badges
+- Automation flow builder
+- Sequence timeline
+- Logs table
+- Preview modal
+- Test email modal
+- Filters/search/pagination
+
+Restaurant Admin UI:
+- Simple email campaign builder
+- Template selection
+- Customer segment selection
+- Preview
+- Schedule/send
+- Analytics
+- Opt-in/unsubscribe visibility
+
+====================================================
+22. TESTING
+====================================================
+
+Test:
+
+Transactional emails:
+- Signup welcome
+- Trial started
+- Trial ending
+- Plan upgraded
+- Payment success
+- Payment failed
+- Invoice generated
+- Support ticket
+- AI credits low
+
+Follow-up emails:
+- Signup sequence
+- Trial sequence
+- Demo lead sequence
+- Payment recovery sequence
+- Inactive restaurant sequence
+
+Marketing emails:
+- Restaurant enables email marketing.
+- Customer has opt-in.
+- Campaign sends.
+- Unsubscribed customer does not receive.
+- Logs created.
+
+Template editor:
+- Save template.
+- Preview template.
+- Test email.
+- Variables replaced correctly.
+- Version history.
+- Reset default.
+
+Provider:
+- SMTP test.
+- Failed provider error.
+- Logs.
+
+====================================================
+23. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Super Admin can create/edit email templates.
+- System templates are editable.
+- Follow-up sequences can be created and enabled.
+- Signup/trial/payment/plan/support emails work.
+- Restaurant marketing emails work only when enabled.
+- Customer consent/unsubscribe works.
+- Email logs are saved.
+- Test email works.
+- Preview works.
+- Variables replace correctly.
+- AI email generation works if enabled.
+- Plan/pricing limits are connected.
+- No real secrets exposed.
+- No email is sent automatically unless enabled.
+- No marketing email is sent without opt-in.
+```
+
+Best naming inside platform:
+
+```text
+Super Admin: Email Center
+Restaurant Admin: Growth Engine → Email Campaigns
+Automation: Lifecycle Emails / Follow-up Sequences
+```
+
+This will make your platform look like a real SaaS CRM/marketing system, not only POS.
