@@ -108,7 +108,7 @@ export default function AdminSettingsPage() {
   useEffect(() => { if (data) setForm(data); }, [data]);
 
   const update = useMutation({
-    mutationFn: (patch: Partial<Settings>) => apiAction<Settings>("PUT", "/admin/app-settings", patch),
+    mutationFn: (patch: Partial<Settings>) => apiAction<Settings>("/admin/app-settings", "PUT", patch),
     onSuccess: (s) => {
       qc.setQueryData(["admin-app-settings"], s);
       qc.invalidateQueries({ queryKey: ["public-app-settings"] });
