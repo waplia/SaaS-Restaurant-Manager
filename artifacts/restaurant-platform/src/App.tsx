@@ -23,6 +23,7 @@ import RecipeVersionsPage from "@/pages/inventory-recipe-versions";
 import TasteTestingPage from "@/pages/kitchen-taste-testing";
 import StaffPage from "@/pages/staff";
 import StaffTasksPage from "@/pages/staff-tasks";
+import StaffSchedulingPage from "@/pages/staff-scheduling";
 import CustomersPage from "@/pages/customers";
 import ExpensesPage from "@/pages/expenses";
 import WastePage from "@/pages/waste";
@@ -365,6 +366,7 @@ function Router() {
       <Route path="/cash-register" component={() => <RoleProtectedRoute component={CashRegisterPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/staff-tasks" component={() => <RoleProtectedRoute component={StaffTasksPage} allow={["owner", "manager"]} />} />
+      <Route path="/staff/scheduling" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={StaffSchedulingPage} feature="advanced_scheduling" />} allow={["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "staff", "super_admin"]} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
       <Route path="/customers/vip-alerts" component={() => <RoleProtectedRoute component={CqVipAlertsPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/customers/blacklist" component={() => <RoleProtectedRoute component={CqBlacklistPage} allow={["owner", "manager", "super_admin"]} />} />

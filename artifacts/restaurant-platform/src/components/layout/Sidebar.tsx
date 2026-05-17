@@ -196,6 +196,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"], planGate: "mystery_audits" },
       { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },
       // ── Staff pack (Task #365) ──
+      { kind: "link", href: "/staff/scheduling",         label: "Scheduling & Forecast", icon: CalendarDays, roles: ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "staff", "super_admin"], planGate: "advanced_scheduling", badge: "premium" },
       { kind: "link", href: "/staff/table-optimization", label: "Table Optimization", icon: Table2,   roles: ["owner", "manager"], planGate: "staff_table_optimization", badge: "premium" },
       { kind: "link", href: "/staff/tips",               label: "Tip Pooling",        icon: Coins,    roles: ["owner", "manager"], planGate: "staff_tips",               badge: "premium" },
       { kind: "link", href: "/staff/leaderboard-tv",     label: "Leaderboard TV",     icon: Monitor,  roles: ["owner", "manager"], planGate: "staff_leaderboard_tv",     badge: "premium" },

@@ -434,3 +434,101 @@ export const STAFF_INCENTIVE_RULE_TYPES = [
   "low_complaint_bonus",
 ] as const;
 export type StaffIncentiveRuleType = (typeof STAFF_INCENTIVE_RULE_TYPES)[number];
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task #424 — Advanced staff scheduling & labor forecasting
+// ─────────────────────────────────────────────────────────────────────────
+
+// Per-staff weekly availability submission. `dayOfWeek` is 0=Sun..6=Sat,
+// `startTime`/`endTime` are HH:MM strings, `isAvailable` lets staff mark
+// hard-unavailable slots (e.g. classes). One row per (user, day, slot).
+export const staffAvailabilityTable = pgTable("staff_availability", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  isAvailable: boolean("is_available").notNull().default(true),
+  note: text("note"),
+  effectiveFrom: timestamp("effective_from"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("staff_avail_rest_user_idx").on(t.restaurantId, t.userId),
+]);
+
+// Shift-trade request: staff A asks to trade/giveaway a specific staffShift
+// to staff B. Status flow: pending → accepted_peer → approved | rejected | cancelled.
+export const shiftTradeRequestsTable = pgTable("shift_trade_requests", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  fromUserId: integer("from_user_id").notNull().references(() => usersTable.id),
+  toUserId: integer("to_user_id").references(() => usersTable.id),
+  staffShiftId: integer("staff_shift_id").notNull().references(() => staffShiftsTable.id, { onDelete: "cascade" }),
+  tradeType: text("trade_type").notNull().default("giveaway"), // giveaway | swap
+  swapStaffShiftId: integer("swap_staff_shift_id").references(() => staffShiftsTable.id),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"), // pending | accepted_peer | approved | rejected | cancelled
+  peerRespondedAt: timestamp("peer_responded_at"),
+  decidedByUserId: integer("decided_by_user_id").references(() => usersTable.id),
+  decidedAt: timestamp("decided_at"),
+  decisionNote: text("decision_note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("shift_trade_rest_status_idx").on(t.restaurantId, t.status),
+]);
+
+// Records when a week (or arbitrary date-range) was published. Stores
+// snapshot of assignment count & notification channels used.
+export const schedulePublicationsTable = pgTable("schedule_publications", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  weekStart: timestamp("week_start").notNull(),
+  weekEnd: timestamp("week_end").notNull(),
+  publishedByUserId: integer("published_by_user_id").references(() => usersTable.id),
+  assignmentCount: integer("assignment_count").notNull().default(0),
+  channels: jsonb("channels").$type<{ push: boolean; sms: boolean; whatsapp: boolean }>().notNull().default({ push: true, sms: false, whatsapp: false }),
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("sched_pub_rest_week_idx").on(t.restaurantId, t.weekStart),
+]);
+
+// Per-restaurant labor settings: target labor%, default hourly cost when
+// a staff record has no salary, and break/overtime rule configuration.
+export const laborSettingsTable = pgTable("labor_settings", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  targetLaborPct: decimal("target_labor_pct", { precision: 5, scale: 2 }).notNull().default("25.00"),
+  defaultHourlyCost: decimal("default_hourly_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Forecast: average revenue (in local currency) handled per labor-hour.
+  // Used to convert forecast sales → suggested headcount per hour.
+  salesPerLaborHour: decimal("sales_per_labor_hour", { precision: 12, scale: 2 }).notNull().default("1000"),
+  breakMinutesPerShift: integer("break_minutes_per_shift").notNull().default(30),
+  breakAfterMinutes: integer("break_after_minutes").notNull().default(300),
+  overtimeAfterMinutesPerDay: integer("overtime_after_minutes_per_day").notNull().default(540),
+  overtimeAfterMinutesPerWeek: integer("overtime_after_minutes_per_week").notNull().default(2700),
+  // List of {role, minHeadcount} per hour-of-day, optional override.
+  minHeadcountByRole: jsonb("min_headcount_by_role").$type<Record<string, number>>().notNull().default({}),
+  updatedByUserId: integer("updated_by_user_id").references(() => usersTable.id),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique("labor_settings_rest_uq").on(t.restaurantId)]);
+
+export const insertStaffAvailabilitySchema = createInsertSchema(staffAvailabilityTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStaffAvailability = z.infer<typeof insertStaffAvailabilitySchema>;
+export type StaffAvailability = typeof staffAvailabilityTable.$inferSelect;
+
+export const insertShiftTradeRequestSchema = createInsertSchema(shiftTradeRequestsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertShiftTradeRequest = z.infer<typeof insertShiftTradeRequestSchema>;
+export type ShiftTradeRequest = typeof shiftTradeRequestsTable.$inferSelect;
+
+export const insertSchedulePublicationSchema = createInsertSchema(schedulePublicationsTable).omit({ id: true, createdAt: true });
+export type InsertSchedulePublication = z.infer<typeof insertSchedulePublicationSchema>;
+export type SchedulePublication = typeof schedulePublicationsTable.$inferSelect;
+
+export const insertLaborSettingsSchema = createInsertSchema(laborSettingsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLaborSettings = z.infer<typeof insertLaborSettingsSchema>;
+export type LaborSettings = typeof laborSettingsTable.$inferSelect;

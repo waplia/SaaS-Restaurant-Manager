@@ -4636,6 +4636,7 @@ export function useDeleteVendorInvoice() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-invoices"] }),
   });
 }
+
 // ─── Email Center: Sequences, Automations, Marketing Templates, Suppressions, etc. (Task #414) ───
 export interface EmailSequenceRow { id: number; key: string; name: string; description: string; trigger: string; isEnabled: boolean; stopRules: Array<{ type: string; value?: unknown }>; createdAt: string; updatedAt: string; }
 export interface EmailSequenceStepRow { id: number; sequenceId: number; position: number; delayHours: number; templateKey: string; conditionJson: Record<string, unknown> | null; isEnabled: boolean; label: string; }
@@ -4764,3 +4765,314 @@ export function useSendRestaurantEmailCampaign() {
 }
 export function useRestaurantEmailCampaignReport(id: number | null) { const RID = useRestaurantId(); return useQuery({ queryKey: ["restaurants", RID, "email","campaigns", id, "report"], queryFn: () => apiGet<{ campaign: EmailCampaignRow; stats: { opened: number; clicked: number; sent: number; failed: number }; recipients: Array<{ id: number; email: string; status: string; reason: string | null; sentAt: string | null }> }>(`/email/campaigns/${id}/report`), enabled: !!RID && !!id }); }
 export function useSetCustomerMarketingConsent() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, optIn, source }: { id: number; optIn: boolean; source?: string }) => apiPost<{ ok: boolean }>(`/email/customers/${id}/marketing-consent`, { optIn, source }), onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }) }); }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task #424 — Advanced staff scheduling & labor forecasting
+// ─────────────────────────────────────────────────────────────────────────
+
+export function useStaffAvailability(userId?: number) {
+  const RID = useRestaurantId();
+  const q = userId ? `?userId=${userId}` : "";
+  return useQuery({
+    queryKey: ["staff-availability", RID, userId],
+    queryFn: () => apiGet<import("./types").StaffAvailabilitySlot[]>(`/restaurants/${RID}/staff-availability${q}`),
+  });
+}
+
+export function useReplaceStaffAvailability() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userId?: number; slots: Array<{ dayOfWeek: number; startTime: string; endTime: string; isAvailable?: boolean; note?: string | null; effectiveFrom?: string | null }> }) =>
+      apiPut<import("./types").StaffAvailabilitySlot[]>(`/restaurants/${RID}/staff-availability`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-availability"] }),
+  });
+}
+
+export function useShiftTrades(status?: string) {
+  const RID = useRestaurantId();
+  const q = status ? `?status=${status}` : "";
+  return useQuery({
+    queryKey: ["shift-trades", RID, status],
+    queryFn: () => apiGet<import("./types").ShiftTradeRequest[]>(`/restaurants/${RID}/shift-trades${q}`),
+  });
+}
+
+export function useCreateShiftTrade() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { staffShiftId: number; toUserId?: number; tradeType?: "giveaway" | "swap"; swapStaffShiftId?: number; reason?: string }) =>
+      apiPost<import("./types").ShiftTradeRequest>(`/restaurants/${RID}/shift-trades`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useShiftTradePeerRespond() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, accept }: { id: number; accept: boolean }) =>
+      apiPost(`/restaurants/${RID}/shift-trades/${id}/peer-respond`, { accept }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useShiftTradeDecide() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision, note }: { id: number; decision: "approve" | "reject"; note?: string }) =>
+      apiPost(`/restaurants/${RID}/shift-trades/${id}/decide`, { decision, note }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shift-trades"] });
+      qc.invalidateQueries({ queryKey: ["staff-shifts"] });
+    },
+  });
+}
+
+export function useShiftTradeCancel() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RID}/shift-trades/${id}/cancel`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useSchedulePublications() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["schedule-publications", RID],
+    queryFn: () => apiGet<import("./types").SchedulePublication[]>(`/restaurants/${RID}/schedule-publications`),
+  });
+}
+
+export function usePublishSchedule() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { weekStart: string; weekEnd: string; note?: string; channels?: { push?: boolean; sms?: boolean; whatsapp?: boolean } }) =>
+      apiPost<import("./types").SchedulePublication>(`/restaurants/${RID}/schedule-publications`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule-publications"] }),
+  });
+}
+
+export function useLaborSettings() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-settings", RID],
+    queryFn: () => apiGet<import("./types").LaborSettings>(`/restaurants/${RID}/labor-settings`),
+  });
+}
+
+export function useUpdateLaborSettings() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("./types").LaborSettings>) =>
+      apiPatch<import("./types").LaborSettings>(`/restaurants/${RID}/labor-settings`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["labor-settings"] }),
+  });
+}
+
+export function useLaborForecast(weekStart: string | null) {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-forecast", RID, weekStart],
+    queryFn: () => apiGet<import("./types").LaborForecast>(`/restaurants/${RID}/labor-forecast?weekStart=${encodeURIComponent(weekStart!)}`),
+    enabled: !!weekStart,
+  });
+}
+
+export function useLaborReport(from: string | null, to: string | null) {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-report", RID, from, to],
+    queryFn: () => apiGet<import("./types").LaborReport>(`/restaurants/${RID}/labor-report?from=${encodeURIComponent(from!)}&to=${encodeURIComponent(to!)}`),
+    enabled: !!from && !!to,
+  });
+}
+
+export function useLaborViolations() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-violations", RID],
+    queryFn: () => apiGet<import("./types").LaborViolationsResponse>(`/restaurants/${RID}/labor-violations`),
+    refetchInterval: 5 * 60 * 1000,
+  });
+}
+
+export function useCopyScheduleWeek() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { fromWeekStart: string; toWeekStart: string }) =>
+      apiPost<{ count: number; assignments: import("./types").StaffShift[] }>(`/restaurants/${RID}/staff-shifts/copy-week`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}
+
+export function useBulkCreateStaffShifts() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { assignments: Array<{ userId: number; shiftId: number; date: string; endDate?: string | null; recurringDays?: string[] }> }) =>
+      apiPost<import("./types").StaffShift[]>(`/restaurants/${RID}/staff-shifts/bulk`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+// ─────────────────────────────────────────────────────────────────────────
+// Task #424 — Advanced staff scheduling & labor forecasting
+// ─────────────────────────────────────────────────────────────────────────
+
+export function useStaffAvailability(userId?: number) {
+  const RID = useRestaurantId();
+  const q = userId ? `?userId=${userId}` : "";
+  return useQuery({
+    queryKey: ["staff-availability", RID, userId],
+    queryFn: () => apiGet<import("./types").StaffAvailabilitySlot[]>(`/restaurants/${RID}/staff-availability${q}`),
+  });
+}
+
+export function useReplaceStaffAvailability() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userId?: number; slots: Array<{ dayOfWeek: number; startTime: string; endTime: string; isAvailable?: boolean; note?: string | null; effectiveFrom?: string | null }> }) =>
+      apiPut<import("./types").StaffAvailabilitySlot[]>(`/restaurants/${RID}/staff-availability`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-availability"] }),
+  });
+}
+
+export function useShiftTrades(status?: string) {
+  const RID = useRestaurantId();
+  const q = status ? `?status=${status}` : "";
+  return useQuery({
+    queryKey: ["shift-trades", RID, status],
+    queryFn: () => apiGet<import("./types").ShiftTradeRequest[]>(`/restaurants/${RID}/shift-trades${q}`),
+  });
+}
+
+export function useCreateShiftTrade() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { staffShiftId: number; toUserId?: number; tradeType?: "giveaway" | "swap"; swapStaffShiftId?: number; reason?: string }) =>
+      apiPost<import("./types").ShiftTradeRequest>(`/restaurants/${RID}/shift-trades`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useShiftTradePeerRespond() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, accept }: { id: number; accept: boolean }) =>
+      apiPost(`/restaurants/${RID}/shift-trades/${id}/peer-respond`, { accept }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useShiftTradeDecide() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision, note }: { id: number; decision: "approve" | "reject"; note?: string }) =>
+      apiPost(`/restaurants/${RID}/shift-trades/${id}/decide`, { decision, note }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shift-trades"] });
+      qc.invalidateQueries({ queryKey: ["staff-shifts"] });
+    },
+  });
+}
+
+export function useShiftTradeCancel() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RID}/shift-trades/${id}/cancel`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-trades"] }),
+  });
+}
+
+export function useSchedulePublications() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["schedule-publications", RID],
+    queryFn: () => apiGet<import("./types").SchedulePublication[]>(`/restaurants/${RID}/schedule-publications`),
+  });
+}
+
+export function usePublishSchedule() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { weekStart: string; weekEnd: string; note?: string; channels?: { push?: boolean; sms?: boolean; whatsapp?: boolean } }) =>
+      apiPost<import("./types").SchedulePublication>(`/restaurants/${RID}/schedule-publications`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule-publications"] }),
+  });
+}
+
+export function useLaborSettings() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-settings", RID],
+    queryFn: () => apiGet<import("./types").LaborSettings>(`/restaurants/${RID}/labor-settings`),
+  });
+}
+
+export function useUpdateLaborSettings() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("./types").LaborSettings>) =>
+      apiPatch<import("./types").LaborSettings>(`/restaurants/${RID}/labor-settings`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["labor-settings"] }),
+  });
+}
+
+export function useLaborForecast(weekStart: string | null) {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-forecast", RID, weekStart],
+    queryFn: () => apiGet<import("./types").LaborForecast>(`/restaurants/${RID}/labor-forecast?weekStart=${encodeURIComponent(weekStart!)}`),
+    enabled: !!weekStart,
+  });
+}
+
+export function useLaborReport(from: string | null, to: string | null) {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-report", RID, from, to],
+    queryFn: () => apiGet<import("./types").LaborReport>(`/restaurants/${RID}/labor-report?from=${encodeURIComponent(from!)}&to=${encodeURIComponent(to!)}`),
+    enabled: !!from && !!to,
+  });
+}
+
+export function useLaborViolations() {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["labor-violations", RID],
+    queryFn: () => apiGet<import("./types").LaborViolationsResponse>(`/restaurants/${RID}/labor-violations`),
+    refetchInterval: 5 * 60 * 1000,
+  });
+}
+
+export function useCopyScheduleWeek() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { fromWeekStart: string; toWeekStart: string }) =>
+      apiPost<{ count: number; assignments: import("./types").StaffShift[] }>(`/restaurants/${RID}/staff-shifts/copy-week`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}
+
+export function useBulkCreateStaffShifts() {
+  const RID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { assignments: Array<{ userId: number; shiftId: number; date: string; endDate?: string | null; recurringDays?: string[] }> }) =>
+      apiPost<import("./types").StaffShift[]>(`/restaurants/${RID}/staff-shifts/bulk`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}

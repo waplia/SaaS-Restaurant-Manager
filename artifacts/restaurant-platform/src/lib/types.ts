@@ -2400,3 +2400,121 @@ export interface StaffIncentiveLeaderboardRow {
   totalPending: number;
   breakdown: Record<string, number>;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task #424 — Advanced staff scheduling & labor forecasting
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface StaffAvailabilitySlot {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  note: string | null;
+  effectiveFrom: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ShiftTradeStatus = "pending" | "accepted_peer" | "approved" | "rejected" | "cancelled";
+
+export interface ShiftTradeRequest {
+  id: number;
+  restaurantId: number;
+  fromUserId: number;
+  toUserId: number | null;
+  staffShiftId: number;
+  tradeType: "giveaway" | "swap";
+  swapStaffShiftId: number | null;
+  reason: string | null;
+  status: ShiftTradeStatus;
+  peerRespondedAt: string | null;
+  decidedByUserId: number | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SchedulePublication {
+  id: number;
+  restaurantId: number;
+  weekStart: string;
+  weekEnd: string;
+  publishedByUserId: number | null;
+  assignmentCount: number;
+  channels: { push: boolean; sms: boolean; whatsapp: boolean };
+  note: string | null;
+  createdAt: string;
+}
+
+export interface LaborSettings {
+  id: number;
+  restaurantId: number;
+  targetLaborPct: string;
+  defaultHourlyCost: string;
+  salesPerLaborHour: string;
+  breakMinutesPerShift: number;
+  breakAfterMinutes: number;
+  overtimeAfterMinutesPerDay: number;
+  overtimeAfterMinutesPerWeek: number;
+  minHeadcountByRole: Record<string, number>;
+  updatedByUserId: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface LaborForecastSlot {
+  dow: number;
+  hour: number;
+  avgSales: number;
+  suggestedHeadcount: number;
+  scheduledHeadcount: number;
+  status: "ok" | "under" | "over";
+}
+
+export interface LaborForecast {
+  weekStart: string;
+  weekEnd: string;
+  lookbackWeeks: number;
+  salesPerLaborHour: number;
+  slots: LaborForecastSlot[];
+  alerts: Array<{ dow: number; hour: number; kind: "under" | "over"; suggested: number; scheduled: number }>;
+}
+
+export interface LaborReportDay {
+  day: string;
+  sales: number;
+  laborCost: number;
+  laborMinutes: number;
+  laborPct: number;
+  overTarget: boolean;
+}
+
+export interface LaborReport {
+  from: string;
+  to: string;
+  targetLaborPct: number;
+  defaultHourlyCost: number;
+  series: LaborReportDay[];
+  totals: { sales: number; laborCost: number; laborPct: number };
+}
+
+export interface LaborViolation {
+  id: number;
+  userId: number;
+  userName: string | null;
+  clockIn: string;
+  workedMinutes: number | null;
+  overtimeMinutes: number | null;
+  currentMinutes: number;
+  issues: string[];
+}
+
+export interface LaborViolationsResponse {
+  violations: LaborViolation[];
+  settings: LaborSettings;
+}

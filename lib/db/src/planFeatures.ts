@@ -171,6 +171,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "staff_table_optimization", label: "Table Optimization",          description: "Optimize floor plans and reservations to lift covers per shift.",                      category: "staff",                   defaultValue: false, defaultPlans: ["pro","enterprise","addon"], sidebarHref: "/staff/table-optimization" },
   { key: "staff_tips",               label: "Tip Pooling & Distribution",  description: "Pool, split and audit tips across staff per shift with payslip lines.",               category: "staff",                   defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/staff/tips" },
   { key: "staff_leaderboard_tv",     label: "Staff Leaderboard TV",        description: "Live leaderboard for the staff TV: sales, upsell wins and accuracy.",                  category: "staff",                   defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/staff/leaderboard-tv" },
+  { key: "advanced_scheduling",      label: "Advanced Scheduling & Labor Forecast", description: "Weekly drag-and-drop scheduling grid, staff availability, shift-trade approvals, publish & notify (push/SMS/WhatsApp), sales-based headcount forecast, and labor-cost-vs-sales reports.", category: "staff", defaultValue: false, defaultPlans: ["pro","enterprise","addon"], sidebarHref: "/staff/scheduling" },
 
   // ──────────────────────────────────────────────────────────────────
   // Email Center (Task #414)
