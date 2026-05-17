@@ -166,33 +166,44 @@ export default function DashboardPage() {
           <StatCard
             title="Kitchen Queue"
             value={s?.pendingTickets ?? "–"}
-            subtitle={(s?.lowStockAlerts ?? 0) > 0 ? `${s!.lowStockAlerts} low stock alerts` : "All stock good"}
+            subtitle={(s?.pendingTickets ?? 0) > 0 ? "tickets in progress" : "kitchen is clear"}
             icon={ChefHat}
             color="purple"
           />
+          <StatCard
+            title="Avg Order Value"
+            value={s ? `₹${Number(s.avgOrderValue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "–"}
+            subtitle="per bill today"
+            icon={Receipt}
+            color="blue"
+          />
+          <StatCard
+            title="Low Stock Alerts"
+            value={s?.lowStockAlerts ?? 0}
+            subtitle={(s?.lowStockAlerts ?? 0) > 0 ? "items need reorder" : "all stock healthy"}
+            icon={AlertTriangle}
+            color="orange"
+          />
+          {s?.monthlyExpenses != null ? (
+            <Link href="/expenses" className="block">
+              <StatCard
+                title="Month Expenses"
+                value={`₹${Number(s.monthlyExpenses).toLocaleString("en-IN")}`}
+                subtitle="tap to manage"
+                icon={DollarSign}
+                color="purple"
+              />
+            </Link>
+          ) : (
+            <StatCard
+              title="Month Expenses"
+              value="–"
+              subtitle="awaiting data"
+              icon={DollarSign}
+              color="purple"
+            />
+          )}
         </div>
-
-        {s?.monthlyExpenses != null && (
-          <Link
-            href="/expenses"
-            className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">This Month's Expenses</p>
-                  <p className="text-2xl font-bold text-foreground mt-0.5">
-                    ₹{Number(s.monthlyExpenses).toLocaleString("en-IN")}
-                  </p>
-                </div>
-              </div>
-              <span className="text-sm text-primary font-medium">Manage →</span>
-            </div>
-          </Link>
-        )}
 
         {wasteTile && (
           <Link
