@@ -146,6 +146,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "inv_portion_drift",        label: "Portion Drift Alerts",        description: "Detect when actual ingredient usage drifts from recipe expectations.",                 category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/portion-drift" },
   { key: "inv_recipe_versioning",    label: "Recipe Versioning",           description: "Versioned recipes with rollback, approval and side-by-side diff.",                     category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/recipe-versions" },
   { key: "inv_vendor_invoice_ocr",   label: "Vendor Invoice OCR",          description: "Upload supplier invoices as PDF or photos; AI extracts vendor, totals, line items, matches a PO, flags price variances and books the bill on approval.", category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/vendor-invoices" },
+  { key: "supplier_network",         label: "Supplier Catalog & Network",  description: "Vendor catalogs, bulk RFQs, quote comparison, best-vendor suggestions and a supplier portal.", category: "inventory_control",  defaultValue: false, defaultPlans: ["growth","pro","enterprise","addon"], sidebarHref: "/marketplace/supplier-catalog" },
 
   // ──────────────────────────────────────────────────────────────────
   // Marketing pack (Growth, Delivery & Staff intelligence)

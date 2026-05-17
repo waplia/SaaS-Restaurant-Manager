@@ -277,6 +277,8 @@ const navConfig: NavEntry[] = [
     kind: "group", key: "marketplace", label: "Marketplace", icon: Package, badge: "addon",
     children: [
       { kind: "link", href: "/marketplace", label: "Vendor Marketplace", icon: Package, roles: ["owner", "manager"] },
+      { kind: "link", href: "/marketplace/supplier-catalog", label: "Supplier Catalog", icon: Truck, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
+      { kind: "link", href: "/marketplace/purchase-requests", label: "Bulk RFQs", icon: FileText, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/settings/devices", label: "Hardware & Devices", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
       { kind: "link", href: "/settings/terminals", label: "Card Terminals", icon: CreditCard, roles: ["owner", "manager", "cashier"], planGate: "card_terminal", badge: "premium" },
       { kind: "link", href: "/settings/token-display", label: "Token Display", icon: BellRing, roles: ["owner", "manager"] },

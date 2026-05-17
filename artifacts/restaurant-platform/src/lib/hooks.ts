@@ -4851,6 +4851,109 @@ export function useShiftTradeDecide() {
   });
 }
 
+// ───────────────────────── Supplier Network (Task #428) ─────────────────────────
+import type {
+  SupplierCatalogItem, BestVendorResponse, PurchaseRequestSummary, PurchaseRequestDetail, PurchaseHistoryRow,
+} from "./types";
+
+export function useSupplierCatalog(opts?: { supplierId?: number; inventoryItemId?: number; q?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (opts?.supplierId) params.set("supplierId", String(opts.supplierId));
+  if (opts?.inventoryItemId) params.set("inventoryItemId", String(opts.inventoryItemId));
+  if (opts?.q) params.set("q", opts.q);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["supplier-catalog", RESTAURANT_ID, opts ?? null],
+    queryFn: () => apiGet<SupplierCatalogItem[]>(`/restaurants/${RESTAURANT_ID}/supplier-catalog${qs ? `?${qs}` : ""}`),
+  });
+}
+
+export function useCreateSupplierCatalogItem() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<SupplierCatalogItem> & { supplierId: number; name: string }) =>
+      apiPost<SupplierCatalogItem>(`/restaurants/${RESTAURANT_ID}/supplier-catalog`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["supplier-catalog"] }),
+  });
+}
+
+export function useUpdateSupplierCatalogItem() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<SupplierCatalogItem> & { id: number }) =>
+      apiPatch<SupplierCatalogItem>(`/restaurants/${RESTAURANT_ID}/supplier-catalog/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["supplier-catalog"] }),
+  });
+}
+
+export function useDeleteSupplierCatalogItem() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/supplier-catalog/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["supplier-catalog"] }),
+  });
+}
+
+export function useBestVendorsForItem(inventoryItemId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["supplier-catalog-by-item", RESTAURANT_ID, inventoryItemId],
+    queryFn: () => apiGet<BestVendorResponse>(`/restaurants/${RESTAURANT_ID}/supplier-catalog/by-item/${inventoryItemId}`),
+    enabled: inventoryItemId != null,
+  });
+}
+
+export function usePurchaseRequests() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["purchase-requests", RESTAURANT_ID],
+    queryFn: () => apiGet<PurchaseRequestSummary[]>(`/restaurants/${RESTAURANT_ID}/purchase-requests`),
+  });
+}
+
+export function usePurchaseRequest(id: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["purchase-request", RESTAURANT_ID, id],
+    queryFn: () => apiGet<PurchaseRequestDetail>(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}`),
+    enabled: id != null,
+  });
+}
+
+export interface CreatePurchaseRequestInput {
+  title: string;
+  notes?: string | null;
+  neededBy?: string | null;
+  supplierIds?: number[];
+  items: Array<{ inventoryItemId?: number | null; name: string; unit: string; quantity: number | string; notes?: string }>;
+}
+
+export function useCreatePurchaseRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreatePurchaseRequestInput) => apiPost<PurchaseRequestDetail>(`/restaurants/${RESTAURANT_ID}/purchase-requests`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-requests"] }),
+  });
+}
+
+export function useSendPurchaseRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, supplierIds }: { id: number; supplierIds: number[] }) =>
+      apiPost<PurchaseRequestDetail>(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}/send`, { supplierIds }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["purchase-requests"] });
+      qc.invalidateQueries({ queryKey: ["purchase-request", RESTAURANT_ID, v.id] });
+    },
+  });
+}
+
 export function useShiftTradeCancel() {
   const RID = useRestaurantId();
   const qc = useQueryClient();
@@ -5005,6 +5108,19 @@ export function useShiftTradeDecide() {
   });
 }
 
+export function useAddManualQuote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; supplierId: number; leadTimeDays?: number; notes?: string; items: Array<{ requestItemId: number; pricePerUnit: number; available?: boolean; alternativeName?: string; notes?: string }> }) =>
+      apiPost<PurchaseRequestDetail>(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}/quotes`, data),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["purchase-requests"] });
+      qc.invalidateQueries({ queryKey: ["purchase-request", RESTAURANT_ID, v.id] });
+    },
+  });
+}
+
 export function useShiftTradeCancel() {
   const RID = useRestaurantId();
   const qc = useQueryClient();
@@ -5094,5 +5210,50 @@ export function useBulkCreateStaffShifts() {
     mutationFn: (data: { assignments: Array<{ userId: number; shiftId: number; date: string; endDate?: string | null; recurringDays?: string[] }> }) =>
       apiPost<import("./types").StaffShift[]>(`/restaurants/${RID}/staff-shifts/bulk`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-shifts"] }),
+  });
+}
+
+export function useAwardPurchaseRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, quoteId }: { id: number; quoteId: number }) =>
+      apiPost<{ purchaseOrderId: number; requestId: number }>(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}/award`, { quoteId }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["purchase-requests"] });
+      qc.invalidateQueries({ queryKey: ["purchase-request", RESTAURANT_ID, v.id] });
+      qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+    },
+  });
+}
+
+export function useCancelPurchaseRequest() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}/cancel`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["purchase-requests"] }),
+  });
+}
+
+export function usePurchaseHistory(opts?: { supplierId?: number; inventoryItemId?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (opts?.supplierId) params.set("supplierId", String(opts.supplierId));
+  if (opts?.inventoryItemId) params.set("inventoryItemId", String(opts.inventoryItemId));
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["purchase-history", RESTAURANT_ID, opts ?? null],
+    queryFn: () => apiGet<PurchaseHistoryRow[]>(`/restaurants/${RESTAURANT_ID}/purchase-history${qs ? `?${qs}` : ""}`),
+  });
+}
+
+export function useUpdateSupplierNetworkInfo() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; leadTimeDays?: number | null; minOrderValue?: string | null; paymentTerms?: string | null; reliabilityScore?: string | null; notes?: string | null; categoryTags?: string[]; isCatalogPublic?: boolean; regeneratePortalToken?: boolean }) =>
+      apiPatch(`/restaurants/${RESTAURANT_ID}/supplier-network/suppliers/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["suppliers"] }),
   });
 }

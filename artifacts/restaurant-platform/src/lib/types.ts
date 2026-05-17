@@ -2437,6 +2437,64 @@ export interface StaffAvailabilitySlot {
   updatedAt: string;
 }
 
+// ───────────────────────── Supplier Network (Task #428) ─────────────────────────
+export interface SupplierCatalogItem {
+  id: number;
+  restaurantId: number;
+  supplierId: number;
+  supplierName: string | null;
+  inventoryItemId: number | null;
+  inventoryItemName: string | null;
+  name: string;
+  sku: string | null;
+  category: string | null;
+  unit: string;
+  packSize: string;
+  pricePerUnit: string;
+  minOrderQuantity: string;
+  leadTimeDays: number | null;
+  isAvailable: boolean;
+  notes: string | null;
+  lastUpdatedAt: string;
+}
+
+export interface BestVendorEntry {
+  id: number;
+  supplierId: number;
+  supplierName: string | null;
+  supplierReliability: string | null;
+  supplierPaymentTerms: string | null;
+  name: string;
+  unit: string;
+  packSize: string;
+  pricePerUnit: string;
+  minOrderQuantity: string;
+  leadTimeDays: number | null;
+  isAvailable: boolean;
+  _score: number;
+}
+
+export interface BestVendorResponse {
+  inventoryItemId: number;
+  vendors: BestVendorEntry[];
+  recommended: BestVendorEntry | null;
+}
+
+export interface PurchaseRequestSummary {
+  id: number;
+  restaurantId: number;
+  title: string;
+  notes: string | null;
+  status: string;
+  neededBy: string | null;
+  createdBy: number | null;
+  awardedQuoteId: number | null;
+  sentAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ShiftTradeStatus = "pending" | "accepted_peer" | "approved" | "rejected" | "cancelled";
 
 export interface ShiftTradeRequest {
@@ -2535,4 +2593,77 @@ export interface LaborViolation {
 export interface LaborViolationsResponse {
   violations: LaborViolation[];
   settings: LaborSettings;
+}
+
+export interface PurchaseRequestItem {
+  id: number;
+  requestId: number;
+  inventoryItemId: number | null;
+  name: string;
+  unit: string;
+  quantity: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PurchaseRequestRecipient {
+  id: number;
+  supplierId: number;
+  supplierName: string | null;
+  status: string;
+  sentAt: string;
+  respondedAt: string | null;
+}
+
+export interface SupplierQuoteItem {
+  id: number;
+  quoteId: number;
+  requestItemId: number;
+  pricePerUnit: string;
+  available: boolean;
+  alternativeName: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface SupplierQuote {
+  id: number;
+  supplierId: number;
+  supplierName: string | null;
+  supplierReliability: string | null;
+  status: string;
+  totalAmount: string;
+  leadTimeDays: number | null;
+  notes: string | null;
+  source: string;
+  submittedAt: string;
+  items: SupplierQuoteItem[];
+}
+
+export interface PurchaseRequestDetail {
+  request: PurchaseRequestSummary;
+  items: PurchaseRequestItem[];
+  recipients: PurchaseRequestRecipient[];
+  quotes: SupplierQuote[];
+}
+
+export interface PurchaseHistoryRow {
+  id: number;
+  supplierId: number | null;
+  supplierName: string | null;
+  status: string;
+  totalAmount: string;
+  orderedAt: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+  items: Array<{
+    id: number;
+    purchaseOrderId: number;
+    inventoryItemId: number | null;
+    name: string;
+    unit: string;
+    quantity: string;
+    costPerUnit: string;
+    createdAt: string;
+  }>;
 }

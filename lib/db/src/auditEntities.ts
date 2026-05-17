@@ -50,6 +50,11 @@ export const NEW_AUDIT_ENTITIES = {
   PORTION_DRIFT_ALERT: "portion_drift_alert",
   RECIPE_VERSION: "recipe_version",
 
+  // Supplier Network (Task #428)
+  SUPPLIER_CATALOG_ITEM: "supplier_catalog_item",
+  PURCHASE_REQUEST: "purchase_request",
+  SUPPLIER_QUOTE: "supplier_quote",
+
   // Marketing
   FESTIVAL_OFFER: "festival_offer",
   OFFER_CONFLICT: "offer_conflict",

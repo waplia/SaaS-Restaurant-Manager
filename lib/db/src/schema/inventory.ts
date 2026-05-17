@@ -12,6 +12,15 @@ export const suppliersTable = pgTable("suppliers", {
   email: text("email"),
   address: text("address"),
   isActive: boolean("is_active").notNull().default(true),
+  // Supplier Network (Task #428): vendor catalog / RFQ extras.
+  categoryTags: jsonb("category_tags").$type<string[]>().notNull().default([] as unknown as string[]),
+  leadTimeDays: integer("lead_time_days"),
+  minOrderValue: decimal("min_order_value", { precision: 12, scale: 2 }),
+  paymentTerms: text("payment_terms"),
+  reliabilityScore: decimal("reliability_score", { precision: 3, scale: 2 }),
+  portalToken: text("portal_token"),
+  isCatalogPublic: boolean("is_catalog_public").notNull().default(false),
+  notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -296,3 +305,131 @@ export type PortionDriftEvent = typeof portionDriftEventsTable.$inferSelect;
 export const insertTasteTestNoteSchema = createInsertSchema(tasteTestNotesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTasteTestNote = z.infer<typeof insertTasteTestNoteSchema>;
 export type TasteTestNote = typeof tasteTestNotesTable.$inferSelect;
+
+// ────────────────────────────────────────────────────────────────────
+// Supplier Catalog & Auto-Reorder Network (Task #428)
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-supplier catalog rows: each line is one product a vendor offers,
+ * with its price, pack size, lead time, and availability. Optionally
+ * linked to an inventory_item so the "best vendor" lookup can rank
+ * vendors for a given stocked item.
+ */
+export const supplierCatalogItemsTable = pgTable("supplier_catalog_items", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  supplierId: integer("supplier_id").notNull().references(() => suppliersTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  sku: text("sku"),
+  category: text("category"),
+  unit: text("unit").notNull().default("kg"),
+  packSize: decimal("pack_size", { precision: 10, scale: 3 }).notNull().default("1.000"),
+  pricePerUnit: decimal("price_per_unit", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  minOrderQuantity: decimal("min_order_quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  leadTimeDays: integer("lead_time_days"),
+  isAvailable: boolean("is_available").notNull().default(true),
+  notes: text("notes"),
+  lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("supplier_catalog_rest_idx").on(t.restaurantId, t.supplierId),
+  index("supplier_catalog_item_idx").on(t.inventoryItemId),
+]);
+
+export const PURCHASE_REQUEST_STATUSES = ["draft", "sent", "quoted", "awarded", "closed", "cancelled"] as const;
+export type PurchaseRequestStatus = (typeof PURCHASE_REQUEST_STATUSES)[number];
+
+/**
+ * Bulk RFQ (request for quote). Restaurant compiles a list of items it
+ * wants to source, broadcasts to multiple vendors, collects quotes, and
+ * awards one (or splits per item).
+ */
+export const purchaseRequestsTable = pgTable("purchase_requests", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  title: text("title").notNull(),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"),
+  neededBy: timestamp("needed_by"),
+  createdBy: integer("created_by"),
+  awardedQuoteId: integer("awarded_quote_id"),
+  sentAt: timestamp("sent_at"),
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("purchase_requests_rest_idx").on(t.restaurantId, t.status),
+]);
+
+export const purchaseRequestItemsTable = pgTable("purchase_request_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull().references(() => purchaseRequestsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  unit: text("unit").notNull().default("kg"),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull().default("0.000"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** Many-to-many: which vendors received this RFQ and where they're at. */
+export const purchaseRequestSuppliersTable = pgTable("purchase_request_suppliers", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull().references(() => purchaseRequestsTable.id, { onDelete: "cascade" }),
+  supplierId: integer("supplier_id").notNull().references(() => suppliersTable.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("sent"),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+  respondedAt: timestamp("responded_at"),
+}, (t) => [
+  index("purchase_request_suppliers_idx").on(t.requestId, t.supplierId),
+]);
+
+export const SUPPLIER_QUOTE_STATUSES = ["draft", "submitted", "accepted", "rejected"] as const;
+
+/**
+ * Vendor quote against an RFQ. Captured manually by the restaurant
+ * (phone / WhatsApp reply) or by the vendor through the supplier portal
+ * placeholder. One quote per (request, supplier).
+ */
+export const supplierQuotesTable = pgTable("supplier_quotes", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull().references(() => purchaseRequestsTable.id, { onDelete: "cascade" }),
+  supplierId: integer("supplier_id").notNull().references(() => suppliersTable.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("submitted"),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  leadTimeDays: integer("lead_time_days"),
+  notes: text("notes"),
+  source: text("source").notNull().default("manual"),
+  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("supplier_quotes_request_idx").on(t.requestId),
+]);
+
+export const supplierQuoteItemsTable = pgTable("supplier_quote_items", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull().references(() => supplierQuotesTable.id, { onDelete: "cascade" }),
+  requestItemId: integer("request_item_id").notNull().references(() => purchaseRequestItemsTable.id, { onDelete: "cascade" }),
+  pricePerUnit: decimal("price_per_unit", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  available: boolean("available").notNull().default(true),
+  alternativeName: text("alternative_name"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSupplierCatalogItemSchema = createInsertSchema(supplierCatalogItemsTable).omit({ id: true, createdAt: true, updatedAt: true, lastUpdatedAt: true });
+export type InsertSupplierCatalogItem = z.infer<typeof insertSupplierCatalogItemSchema>;
+export type SupplierCatalogItem = typeof supplierCatalogItemsTable.$inferSelect;
+
+export const insertPurchaseRequestSchema = createInsertSchema(purchaseRequestsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPurchaseRequest = z.infer<typeof insertPurchaseRequestSchema>;
+export type PurchaseRequest = typeof purchaseRequestsTable.$inferSelect;
+
+export type PurchaseRequestItem = typeof purchaseRequestItemsTable.$inferSelect;
+export type PurchaseRequestSupplier = typeof purchaseRequestSuppliersTable.$inferSelect;
+export type SupplierQuote = typeof supplierQuotesTable.$inferSelect;
+export type SupplierQuoteItem = typeof supplierQuoteItemsTable.$inferSelect;
