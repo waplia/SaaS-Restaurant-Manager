@@ -1,0 +1,578 @@
+Yes, this is an important missing feature. It should be called **Modifiers / Toppings / Add-ons / Customizations** and must work in both **POS Terminal** and **QR ordering**.
+
+Use this prompt:
+
+```text
+Add complete Toppings / Add-ons / Modifiers feature to KhanaLagao POS and QR ordering.
+
+Current issue:
+In POS Terminal and QR menu ordering, I cannot see proper topping/customization options like extra sauce, extra cheese, with onion, without onion, spicy level, add dip, extra topping, etc.
+
+Important:
+- Do not rebuild POS or QR menu.
+- Add this feature into the existing menu, POS, QR ordering, KOT, billing, inventory, and reports flow.
+- It must work with real data, not mock data.
+- It should work for both cashier POS and customer QR ordering.
+- It should be configurable from menu item settings.
+
+Feature name:
+Modifiers / Toppings / Add-ons
+
+Goal:
+Restaurant should be able to create menu item customizations like:
+- Extra cheese
+- Extra sauce
+- Extra onion
+- Without onion
+- Less spicy
+- Medium spicy
+- Extra spicy
+- Add dip
+- Add toppings
+- Add paneer
+- Add egg
+- Add cold drink
+- Add fries
+- Choose size
+- Choose crust
+- Choose gravy
+- Choose bread
+- Choose sauce
+- Choose cooking preference
+
+====================================================
+1. MENU ADMIN: MODIFIER GROUPS
+====================================================
+
+Add modifier group management in Menu settings.
+
+Route suggestion:
+Menu → Modifiers / Add-ons
+
+Create modifier groups:
+- Sauces
+- Toppings
+- Spice Level
+- Size
+- Crust
+- Extras
+- Remove Ingredients
+- Cooking Preference
+- Side Options
+
+Fields for modifier group:
+- Group name
+- Display name
+- Selection type:
+  - Single select
+  - Multi select
+- Required yes/no
+- Minimum selection
+- Maximum selection
+- Sort order
+- Active/inactive
+- Show on POS yes/no
+- Show on QR menu yes/no
+
+Examples:
+Group: Spice Level
+Selection type: Single
+Required: Yes
+Options:
+- Less spicy ₹0
+- Medium spicy ₹0
+- Extra spicy ₹0
+
+Group: Toppings
+Selection type: Multi
+Required: No
+Max selection: 5
+Options:
+- Extra cheese ₹30
+- Extra onion ₹10
+- Extra paneer ₹50
+- Extra mushroom ₹40
+
+Group: Remove Ingredients
+Selection type: Multi
+Required: No
+Options:
+- Without onion ₹0
+- Without garlic ₹0
+- Without tomato ₹0
+- No sauce ₹0
+
+====================================================
+2. MODIFIER OPTIONS
+====================================================
+
+Each modifier option should have:
+- Name
+- Price adjustment
+- Optional SKU/code
+- Tax included/excluded handling if needed
+- Inventory ingredient mapping optional
+- Active/inactive
+- Sort order
+- Image optional
+- Description optional
+
+Price behavior:
+- ₹0 options allowed
+- Positive price options allowed
+- Negative price optional if discounts/removals are needed
+- Modifier price should add to item price
+
+Example:
+Burger ₹120
+Extra cheese ₹30
+Extra sauce ₹10
+Final item price = ₹160
+
+====================================================
+3. ASSIGN MODIFIERS TO MENU ITEMS
+====================================================
+
+Inside menu item create/edit page, add section:
+
+“Modifiers / Toppings / Add-ons”
+
+Allow:
+- Assign existing modifier groups to item
+- Create new modifier group quickly
+- Set item-specific price override if needed
+- Set required/optional per item
+- Set POS visibility
+- Set QR visibility
+- Set sort order
+
+Example:
+Pizza item:
+- Size required: Small/Medium/Large
+- Crust required: Thin/Regular/Cheese Burst
+- Toppings optional: Extra cheese, olives, mushroom, corn
+- Spice level optional
+
+Burger item:
+- Add-ons optional: Extra cheese, extra patty, fries, coke
+- Remove ingredients optional: No onion, no tomato, no sauce
+
+Biryani item:
+- Spice level
+- Add raita
+- Add boiled egg
+- Extra salan
+
+====================================================
+4. POS TERMINAL FLOW
+====================================================
+
+When cashier adds an item that has modifiers:
+
+- Open modifier selection modal automatically.
+- Show item name and base price.
+- Show modifier groups.
+- Required groups must be selected before adding to cart.
+- Show price changes live.
+- Allow quantity.
+- Allow item note.
+- Add final customized item to cart.
+
+Cart should show:
+Paneer Pizza
+Medium Size
+Extra Cheese
+Extra Onion
+No Garlic
+Item note: Make it crispy
+Base: ₹249
+Add-ons: ₹60
+Total: ₹309
+
+Actions:
+- Edit modifiers from cart
+- Duplicate customized item
+- Remove item
+- Add same item with different modifiers
+
+Important:
+If same item has different modifiers, show as separate cart lines.
+Do not merge incorrectly.
+
+====================================================
+5. QR MENU CUSTOMER FLOW
+====================================================
+
+In QR menu, when customer taps “Add” on item with modifiers:
+
+- Open mobile-friendly customization bottom sheet/modal.
+- Show image, item name, price, description.
+- Show modifier groups.
+- Required choices clearly marked.
+- Show free/paid add-ons.
+- Show selected add-on total.
+- Show final price.
+- Add to cart button disabled until required selection is complete.
+
+Mobile UX:
+- Use clean chips/check boxes/radio buttons.
+- Keep it fast and easy.
+- Show “Required” badge.
+- Show “Choose up to 3” where needed.
+- Avoid confusing layout.
+
+Example customer view:
+Customize Burger
+Choose Sauce:
+○ Mayo
+○ Spicy Mayo
+○ Cheese Sauce +₹20
+
+Add Extras:
+☐ Extra Cheese +₹30
+☐ Extra Patty +₹60
+☐ Fries +₹50
+
+Remove:
+☐ No Onion
+☐ No Tomato
+
+Button:
+Add to Cart ₹260
+
+====================================================
+6. CART / BILL / INVOICE
+====================================================
+
+Modifiers should appear everywhere:
+- POS cart
+- QR cart
+- Order detail
+- KOT
+- Invoice
+- Bill print
+- Customer order summary
+- Kitchen display
+- Reports where needed
+
+KOT should clearly show:
+Burger x1
+- Extra cheese
+- No onion
+- Spicy sauce
+Note: Make it crispy
+
+Kitchen must see modifiers clearly because they affect preparation.
+
+Invoice should show:
+Burger ₹120
+Add-ons:
+Extra cheese ₹30
+Extra sauce ₹10
+Total ₹160
+
+Or show compact:
+Burger with Extra Cheese, Extra Sauce ₹160
+
+====================================================
+7. INVENTORY CONNECTION
+====================================================
+
+Modifiers should optionally deduct inventory.
+
+Example:
+Extra cheese deducts cheese stock.
+Extra paneer deducts paneer stock.
+Extra sauce deducts sauce stock.
+Extra egg deducts egg stock.
+
+Add optional ingredient mapping:
+- Modifier option → raw material
+- Quantity used
+- Unit
+
+If no ingredient mapping, still allow modifier but no inventory deduction.
+
+Stock deduction should happen when order is confirmed/billed based on existing inventory logic.
+
+====================================================
+8. KOT / KDS CONNECTION
+====================================================
+
+KOT and Kitchen Display must show modifiers.
+
+Kitchen should see:
+- Add-ons
+- Removals
+- Spice level
+- Cooking preference
+- Notes
+
+Highlight special instructions:
+- Without onion
+- Extra spicy
+- Jain
+- No garlic
+
+This should be very visible in kitchen view.
+
+====================================================
+9. PRICING / TAX / DISCOUNT
+====================================================
+
+Modifier price should be included in item total.
+
+Need to handle:
+- Base item price
+- Modifier price
+- Quantity
+- Discount
+- Tax
+- Service charge
+- Final total
+
+Tax:
+Use same tax as item by default unless separate tax handling already exists.
+
+Discount:
+Discount should apply to final item price unless restaurant setting says discount on base price only.
+
+====================================================
+10. REPORTS
+====================================================
+
+Add modifier/add-on reports.
+
+Reports:
+- Most selected add-ons
+- Add-on revenue
+- Modifier group performance
+- Item-wise add-on usage
+- QR add-on conversion
+- POS add-on conversion
+- Free removals report
+- Inventory usage from modifiers
+
+Example:
+Extra Cheese generated ₹12,450 this month.
+
+====================================================
+11. SETTINGS
+====================================================
+
+Add settings:
+- Enable modifiers in POS yes/no
+- Enable modifiers in QR menu yes/no
+- Show add-on price yes/no
+- Allow item note yes/no
+- Required modifier validation yes/no
+- Show modifiers on invoice yes/no
+- Show modifiers on KOT yes/no
+- Same item with different modifiers should be separate cart line yes/no
+
+====================================================
+12. DATABASE REQUIREMENTS
+====================================================
+
+Add or reuse tables:
+
+modifier_groups:
+- id
+- restaurant_id
+- outlet_id nullable
+- name
+- display_name
+- selection_type
+- required
+- min_selection
+- max_selection
+- show_on_pos
+- show_on_qr
+- sort_order
+- status
+- created_at
+- updated_at
+
+modifier_options:
+- id
+- restaurant_id
+- modifier_group_id
+- name
+- price
+- description
+- image
+- sku
+- sort_order
+- status
+- created_at
+- updated_at
+
+menu_item_modifier_groups:
+- id
+- restaurant_id
+- menu_item_id
+- modifier_group_id
+- required_override
+- min_selection_override
+- max_selection_override
+- sort_order
+- created_at
+- updated_at
+
+order_item_modifiers:
+- id
+- restaurant_id
+- order_id
+- order_item_id
+- modifier_group_id
+- modifier_option_id
+- name_snapshot
+- price_snapshot
+- quantity
+- created_at
+
+modifier_inventory_mappings:
+- id
+- restaurant_id
+- modifier_option_id
+- raw_material_id
+- quantity
+- unit
+- created_at
+- updated_at
+
+If similar add-ons tables already exist, reuse and improve them instead of duplicating.
+
+====================================================
+13. API REQUIREMENTS
+====================================================
+
+Add/fix APIs:
+
+Modifier management:
+- GET /api/modifier-groups
+- POST /api/modifier-groups
+- PATCH /api/modifier-groups/:id
+- DELETE /api/modifier-groups/:id
+- GET /api/modifier-options
+- POST /api/modifier-options
+- PATCH /api/modifier-options/:id
+- DELETE /api/modifier-options/:id
+
+Menu item modifiers:
+- GET /api/menu-items/:id/modifiers
+- POST /api/menu-items/:id/modifiers
+- PATCH /api/menu-items/:id/modifiers
+
+POS/QR:
+- When loading menu items, include modifier groups and options.
+- When creating order, accept selected modifiers.
+- Validate required modifiers server-side.
+- Save modifier snapshots in order items.
+- Calculate totals server-side.
+
+====================================================
+14. VALIDATION
+====================================================
+
+Server-side validation:
+- Required modifier group must be selected.
+- Single select allows only one option.
+- Multi select respects min/max.
+- Option must belong to assigned group.
+- Group must belong to item.
+- Inactive options cannot be selected.
+- Price calculation must not trust frontend only.
+- Restaurant tenant isolation required.
+
+Frontend validation:
+- Disable Add to Cart until required choices complete.
+- Show clear error if missing required choice.
+- Show max selection reached message.
+
+====================================================
+15. PERMISSIONS
+====================================================
+
+Add permissions:
+- View modifiers
+- Create modifiers
+- Edit modifiers
+- Delete modifiers
+- Assign modifiers to items
+- Use modifiers in POS
+- Use modifiers in QR
+- View modifier reports
+
+Owner/admin can manage.
+Cashier can use in POS.
+Customer can use in QR.
+Kitchen can view in KOT.
+Inventory manager can map ingredients.
+
+====================================================
+16. TESTING
+====================================================
+
+Test these cases:
+
+POS:
+- Add item without modifiers
+- Add item with required single modifier
+- Add item with optional multi modifiers
+- Add item with free removal option
+- Add same item twice with different modifiers
+- Edit modifiers from cart
+- Bill total correct
+- KOT shows modifiers
+- Invoice shows modifiers
+
+QR:
+- Customer adds item with required modifier
+- Add to cart disabled until required selected
+- Multi-select max limit works
+- Cart shows modifiers
+- Order reaches POS/Kitchen with modifiers
+- Mobile layout works
+
+Inventory:
+- Modifier ingredient deducts stock
+- No mapping means no deduction
+- Low stock behavior works
+
+Reports:
+- Add-on revenue correct
+- Most used modifier report works
+
+Edge cases:
+- Inactive modifier not selectable
+- Deleted option on old order still visible as snapshot
+- Price changes should not affect old orders
+- Required validation cannot be bypassed via API
+
+====================================================
+17. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Modifier groups can be created.
+- Modifier options can be created.
+- Modifiers can be assigned to menu items.
+- POS shows modifier modal.
+- QR menu shows customization modal.
+- Required/optional selection works.
+- Prices calculate correctly.
+- Cart shows selected modifiers.
+- KOT/KDS shows selected modifiers.
+- Invoice shows selected modifiers.
+- Inventory deduction works if mapping exists.
+- Reports show modifier/add-on usage.
+- Mobile QR flow is smooth.
+- No mock data.
+- No broken buttons.
+- No duplicate add-on system.
+- Existing POS and QR menu continue working.
+```
+
+This feature is very important because it directly increases order value. For restaurants, **toppings/add-ons/modifiers** are not optional; pizza, burgers, cafes, biryani, thali, rolls, sandwiches, and cloud kitchens all need it.
