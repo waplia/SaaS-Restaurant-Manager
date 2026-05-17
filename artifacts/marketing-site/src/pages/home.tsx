@@ -1,22 +1,38 @@
+import { lazy, Suspense } from "react";
 import { useSeo } from "@/lib/seo";
 import { SiteLayout } from "@/components/layout/SiteLayout";
+import { LazyMount } from "@/components/shared/LazyMount";
+
+// Eager: above-the-fold pieces so the hero paints immediately.
 import { HeroSection } from "@/components/home/HeroSection";
 import { TrustStrip } from "@/components/home/TrustStrip";
 import { ProblemSection } from "@/components/home/ProblemSection";
-import { SolutionSection } from "@/components/home/SolutionSection";
-import { PlatformModules } from "@/components/home/PlatformModules";
-import { KhanaAIHighlight } from "@/components/home/KhanaAIHighlight";
-import { GrowthEngineSection } from "@/components/home/GrowthEngineSection";
-import { FinanceSection } from "@/components/home/FinanceSection";
-import { IndustrySolutions } from "@/components/home/IndustrySolutions";
-import { MultiOutletSection } from "@/components/home/MultiOutletSection";
-import { MarketplaceSection } from "@/components/home/MarketplaceSection";
-import { ReportsSection } from "@/components/home/ReportsSection";
-import { WhyChooseUs } from "@/components/home/WhyChooseUs";
-import { PricingPreview } from "@/components/home/PricingPreview";
-import { Testimonials } from "@/components/home/Testimonials";
-import { HomeFAQ } from "@/components/home/HomeFAQ";
-import { FinalCTA } from "@/components/home/FinalCTA";
+
+// Deferred: every below-the-fold section lives in its own chunk and is mounted
+// only when it scrolls into view, so it stays out of the initial JS payload
+// and doesn't run animations or render expensive subtrees on first paint.
+const SolutionSection = lazy(() => import("@/components/home/SolutionSection").then(m => ({ default: m.SolutionSection })));
+const PlatformModules = lazy(() => import("@/components/home/PlatformModules").then(m => ({ default: m.PlatformModules })));
+const KhanaAIHighlight = lazy(() => import("@/components/home/KhanaAIHighlight").then(m => ({ default: m.KhanaAIHighlight })));
+const GrowthEngineSection = lazy(() => import("@/components/home/GrowthEngineSection").then(m => ({ default: m.GrowthEngineSection })));
+const FinanceSection = lazy(() => import("@/components/home/FinanceSection").then(m => ({ default: m.FinanceSection })));
+const IndustrySolutions = lazy(() => import("@/components/home/IndustrySolutions").then(m => ({ default: m.IndustrySolutions })));
+const MultiOutletSection = lazy(() => import("@/components/home/MultiOutletSection").then(m => ({ default: m.MultiOutletSection })));
+const MarketplaceSection = lazy(() => import("@/components/home/MarketplaceSection").then(m => ({ default: m.MarketplaceSection })));
+const ReportsSection = lazy(() => import("@/components/home/ReportsSection").then(m => ({ default: m.ReportsSection })));
+const WhyChooseUs = lazy(() => import("@/components/home/WhyChooseUs").then(m => ({ default: m.WhyChooseUs })));
+const PricingPreview = lazy(() => import("@/components/home/PricingPreview").then(m => ({ default: m.PricingPreview })));
+const Testimonials = lazy(() => import("@/components/home/Testimonials").then(m => ({ default: m.Testimonials })));
+const HomeFAQ = lazy(() => import("@/components/home/HomeFAQ").then(m => ({ default: m.HomeFAQ })));
+const FinalCTA = lazy(() => import("@/components/home/FinalCTA").then(m => ({ default: m.FinalCTA })));
+
+function Deferred({ children, minHeight = 320 }: { children: React.ReactNode; minHeight?: number }) {
+  return (
+    <LazyMount minHeight={minHeight}>
+      <Suspense fallback={<div style={{ minHeight }} />}>{children}</Suspense>
+    </LazyMount>
+  );
+}
 
 export default function Home() {
   useSeo({
@@ -31,20 +47,20 @@ export default function Home() {
         <HeroSection />
         <TrustStrip />
         <ProblemSection />
-        <SolutionSection />
-        <PlatformModules />
-        <KhanaAIHighlight />
-        <GrowthEngineSection />
-        <FinanceSection />
-        <IndustrySolutions />
-        <MultiOutletSection />
-        <MarketplaceSection />
-        <ReportsSection />
-        <WhyChooseUs />
-        <PricingPreview />
-        <Testimonials />
-        <HomeFAQ />
-        <FinalCTA />
+        <Deferred><SolutionSection /></Deferred>
+        <Deferred><PlatformModules /></Deferred>
+        <Deferred><KhanaAIHighlight /></Deferred>
+        <Deferred><GrowthEngineSection /></Deferred>
+        <Deferred><FinanceSection /></Deferred>
+        <Deferred><IndustrySolutions /></Deferred>
+        <Deferred><MultiOutletSection /></Deferred>
+        <Deferred><MarketplaceSection /></Deferred>
+        <Deferred><ReportsSection /></Deferred>
+        <Deferred><WhyChooseUs /></Deferred>
+        <Deferred minHeight={600}><PricingPreview /></Deferred>
+        <Deferred><Testimonials /></Deferred>
+        <Deferred><HomeFAQ /></Deferred>
+        <Deferred minHeight={240}><FinalCTA /></Deferred>
       </div>
     </SiteLayout>
   );

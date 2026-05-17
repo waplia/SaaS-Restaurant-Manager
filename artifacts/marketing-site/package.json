@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "prebuild": "node scripts/generate-sitemap.mjs",
+    "prebuild": "node scripts/check-no-admin-imports.mjs && node scripts/generate-sitemap.mjs",
+    "check:no-admin-imports": "node scripts/check-no-admin-imports.mjs",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
+    "serve:prod": "node scripts/serve-prod.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate-sitemap": "node scripts/generate-sitemap.mjs"
   },
@@ -78,6 +80,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "compression": "^1.7.4",
+    "express": "^5.0.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   }

@@ -57,6 +57,37 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: "es2020",
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.match(/[\\/]node_modules[\\/](react|react-dom|scheduler|wouter)[\\/]/)
+          ) {
+            return "react-vendor";
+          }
+          if (id.match(/[\\/]node_modules[\\/](framer-motion|motion-utils|motion-dom)[\\/]/)) {
+            return "motion-vendor";
+          }
+          if (id.includes("lucide-react") || id.includes("react-icons")) {
+            return "icons-vendor";
+          }
+          if (id.includes("@tanstack/react-query")) {
+            return "query-vendor";
+          }
+          if (
+            id.includes("react-markdown") ||
+            id.match(/[\\/]node_modules[\\/](remark-|micromark|mdast-|unist-|hast-|property-information|space-separated-tokens|comma-separated-tokens|character-entities|decode-named-character|html-url-attributes|trim-lines|vfile|bail|is-plain-obj|trough|zwitch|ccount|markdown-table|longest-streak|escape-string-regexp)/)
+          ) {
+            return "markdown-vendor";
+          }
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port,
