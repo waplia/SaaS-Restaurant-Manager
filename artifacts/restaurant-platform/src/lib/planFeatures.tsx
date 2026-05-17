@@ -17,6 +17,13 @@ export interface PlanCapabilityResult {
   planName: string | null;
   featureKey: string;
   featureLabel: string;
+  /**
+   * True only when the subscription query has actually returned data
+   * (success path). False while loading and also when the query errored
+   * out — important for the offline-pos engine, which must not turn
+   * queueing off just because /subscription couldn't be reached.
+   */
+  isResolved: boolean;
 }
 
 /**
@@ -32,7 +39,7 @@ export function usePlanCapability(featureKey: string): PlanCapabilityResult {
   // role-allowed gated pages when the tenant's plan includes the feature.
   const canQuery = !!restaurantId && !!user;
 
-  const { data, isLoading } = useQuery<SubscriptionPayload>({
+  const { data, isLoading, isSuccess } = useQuery<SubscriptionPayload>({
     queryKey: ["subscription-features", restaurantId],
     queryFn: () => apiFetch(`/restaurants/${restaurantId}/subscription`),
     enabled: canQuery,
@@ -43,10 +50,10 @@ export function usePlanCapability(featureKey: string): PlanCapabilityResult {
   const label = def?.label ?? featureKey;
 
   if (user?.isSuperAdmin) {
-    return { isLoading: false, enabled: true, planName: data?.plan?.name ?? null, featureKey, featureLabel: label };
+    return { isLoading: false, enabled: true, planName: data?.plan?.name ?? null, featureKey, featureLabel: label, isResolved: true };
   }
   if (!canQuery) {
-    return { isLoading: false, enabled: false, planName: null, featureKey, featureLabel: label };
+    return { isLoading: false, enabled: false, planName: null, featureKey, featureLabel: label, isResolved: false };
   }
   return {
     isLoading,
@@ -54,6 +61,11 @@ export function usePlanCapability(featureKey: string): PlanCapabilityResult {
     planName: data?.plan?.name ?? null,
     featureKey,
     featureLabel: label,
+    // Only treat the capability as resolved when /subscription actually
+    // succeeded. While loading OR when the request failed (typical
+    // offline path), keep `isResolved=false` so consumers like the
+    // offline-pos engine don't clobber the persisted bootstrap value.
+    isResolved: isSuccess && !!data,
   };
 }
 

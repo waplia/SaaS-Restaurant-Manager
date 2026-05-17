@@ -1,32 +1,28 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
+import { View, Text } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
-import { useColors } from "@/hooks/useColors";
 
+/**
+ * Lightweight offline banner for the waiter app. Mirrors the web POS
+ * offline pill so floor staff get the same visual signal when the
+ * device drops connectivity. The mobile waiter flow currently writes
+ * directly through the API client; full request-queue parity is left
+ * to a follow-up task — this banner is the architectural seam for it.
+ */
 export function OfflineBanner() {
-  const colors = useColors();
-  const [offline, setOffline] = useState(false);
-
+  const [online, setOnline] = useState(true);
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    const sub = NetInfo.addEventListener(s => setOffline(!(s.isConnected ?? true)));
-    return () => sub();
+    const unsub = NetInfo.addEventListener(state => {
+      setOnline(!!state.isConnected && state.isInternetReachable !== false);
+    });
+    return () => unsub();
   }, []);
-
-  if (!offline) return null;
+  if (online) return null;
   return (
-    <View style={[styles.banner, { backgroundColor: colors.warning }]}>
-      <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
-      <Text style={styles.text}>Offline — actions will sync when you reconnect.</Text>
+    <View style={{ backgroundColor: "#fee2e2", paddingVertical: 6, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#fecaca" }}>
+      <Text style={{ color: "#991b1b", fontWeight: "600", fontSize: 12, textAlign: "center" }}>
+        You're offline — new orders will sync once you reconnect.
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
-  text: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
-});

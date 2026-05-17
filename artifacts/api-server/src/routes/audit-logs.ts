@@ -3,6 +3,7 @@ import { eq, and, desc, sql, type SQL, gte, lte, ilike, or } from "drizzle-orm";
 import { db, auditLogsTable, usersTable, restaurantsTable } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -138,6 +139,36 @@ router.get(
       .where(and(eq(auditLogsTable.id, Number(req.params.id)), eq(auditLogsTable.restaurantId, restaurantId)));
     if (!row) return void res.status(404).json({ error: "Not found" });
     res.json(row);
+  },
+);
+
+// ─── Client-reported offline mode events ──────────────────────────
+// POS clients (web + mobile) POST here when they detect the device has
+// gone offline, recovered from offline, or hit a sync conflict. Any
+// authenticated staff member at the restaurant can record these so the
+// owner gets a full timeline of offline-mode usage.
+router.post(
+  "/restaurants/:restaurantId/offline-events",
+  validateRestaurantAccess,
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const action = typeof req.body?.action === "string" ? req.body.action.slice(0, 64) : "offline.event";
+    const metadata = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
+    try {
+      await recordAuditLog({
+        req,
+        restaurantId,
+        module: "pos",
+        action,
+        entity: "offline_session",
+        details: `Offline POS event: ${action}`,
+        newValue: metadata,
+      });
+      res.status(204).end();
+    } catch (err) {
+      // Audit logging is best-effort from the client's perspective.
+      res.status(202).json({ accepted: false, error: (err as Error).message });
+    }
   },
 );
 

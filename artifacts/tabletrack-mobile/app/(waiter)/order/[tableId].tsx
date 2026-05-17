@@ -37,6 +37,18 @@ interface QueuedOrder {
   tableId: number;
   items: CartItem[];
   queuedAt: number;
+  /**
+   * Stable idempotency key generated when the order is first queued.
+   * Sent as `X-Idempotency-Key` on every replay so the server can dedupe
+   * if a prior attempt actually reached the DB but the response was lost.
+   */
+  idempotencyKey?: string;
+  /** Per-line keys so individual /items writes can be deduped on retry. */
+  itemKeys?: string[];
+}
+
+function mobileUid(): string {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export default function WaiterOrderScreen() {
@@ -153,10 +165,13 @@ export default function WaiterOrderScreen() {
     // Use the shared customFetch wrapper so the request automatically picks up
     // the base URL, current auth token, and global 401 handling — matching
     // the rest of the app and avoiding silent stale-token failures.
-    mutationFn: ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number } }) =>
+    // Accepts an optional idempotency key so queued retries can dedupe
+    // safely on the server when a previous attempt succeeded mid-flight.
+    mutationFn: ({ rid, id, data, idempotencyKey }: { rid: number; id: number; data: { menuItemId: number; quantity: number }; idempotencyKey?: string }) =>
       customFetch(`/api/restaurants/${rid}/orders/${id}/items`, {
         method: "POST",
         body: JSON.stringify(data),
+        headers: idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : undefined,
       }),
   });
 
@@ -202,20 +217,42 @@ export default function WaiterOrderScreen() {
     });
   };
 
-  const submitOrderItems = async (cartItems: CartItem[], targetTableId: number, existingOrderId?: number): Promise<void> => {
+  const submitOrderItems = async (
+    cartItems: CartItem[],
+    targetTableId: number,
+    existingOrderId?: number,
+    itemKeys?: string[],
+    orderIdempotencyKey?: string,
+  ): Promise<void> => {
     let orderId = existingOrderId;
     if (!orderId) {
-      const newOrder = await createOrder.mutateAsync({
-        restaurantId,
-        data: { tableId: targetTableId, orderType: "dine_in", items: [] },
-      });
-      orderId = newOrder.id;
+      // When replaying a queued order we go through customFetch directly so
+      // we can attach X-Idempotency-Key for the parent order create —
+      // generated mutations from api-client-react don't expose header
+      // overrides. The server can then dedupe if a previous attempt had
+      // actually reached the DB but its response was lost mid-flight.
+      if (orderIdempotencyKey) {
+        const created = await customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
+          method: "POST",
+          body: JSON.stringify({ tableId: targetTableId, orderType: "dine_in", items: [] }),
+          headers: { "X-Idempotency-Key": orderIdempotencyKey },
+        });
+        orderId = created.id;
+      } else {
+        const newOrder = await createOrder.mutateAsync({
+          restaurantId,
+          data: { tableId: targetTableId, orderType: "dine_in", items: [] },
+        });
+        orderId = newOrder.id;
+      }
     }
-    for (const item of cartItems) {
+    for (let i = 0; i < cartItems.length; i++) {
+      const item = cartItems[i];
       await addItemMutation.mutateAsync({
         rid: restaurantId,
         id: orderId!,
         data: { menuItemId: item.menuItemId, quantity: item.quantity },
+        idempotencyKey: itemKeys?.[i],
       });
     }
     qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
@@ -228,7 +265,7 @@ export default function WaiterOrderScreen() {
     const failed: QueuedOrder[] = [];
     for (const entry of queue) {
       try {
-        await submitOrderItems(entry.items, entry.tableId);
+        await submitOrderItems(entry.items, entry.tableId, undefined, entry.itemKeys, entry.idempotencyKey);
         successCount++;
       } catch {
         failed.push(entry);
@@ -254,7 +291,14 @@ export default function WaiterOrderScreen() {
     try {
       if (!isOnline) {
         const existing = (await readQueueCache()) ?? [];
-        await writeQueueCache([...existing, { tableId: numTableId, items: [...cart], queuedAt: Date.now() }]);
+        // Stamp the queued order with stable idempotency keys so the
+        // flush replay is safe even if individual /items writes already
+        // hit the server on a previous (lost) attempt.
+        const itemKeys = cart.map(() => mobileUid());
+        await writeQueueCache([
+          ...existing,
+          { tableId: numTableId, items: [...cart], queuedAt: Date.now(), idempotencyKey: mobileUid(), itemKeys },
+        ]);
         setCart([]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert("Saved Offline", "You're offline. The order will be sent to the kitchen automatically when you reconnect.");

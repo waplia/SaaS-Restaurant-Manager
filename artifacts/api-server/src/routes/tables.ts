@@ -4,6 +4,7 @@ import { db, floorTablesTable, reservationsTable, waitlistEntriesTable, customer
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { idempotency } from "../middleware/idempotency";
 import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
 import { pushToStaff } from "../lib/pushNotify";
 import { validate } from "../middleware/validate";
@@ -160,7 +161,7 @@ router.post("/restaurants/:restaurantId/tables", requireRole("owner", "manager",
   res.status(201).json(table);
 });
 
-router.patch("/restaurants/:restaurantId/tables/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: UpdateTableBody }), async (req, res) => {
+router.patch("/restaurants/:restaurantId/tables/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: UpdateTableBody }), idempotency(), async (req, res) => {
   const { tableNumber, capacity, status, positionX, positionY, shape, isActive } = req.body;
   const [updated] = await db.update(floorTablesTable).set({ tableNumber, capacity, status, positionX, positionY, shape, isActive, updatedAt: new Date() }).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });

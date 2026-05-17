@@ -47,6 +47,7 @@ import { verifyManagerDiscountOtp } from "../lib/managerOtp";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { idempotency } from "../middleware/idempotency";
 import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { emitWebhookEvent } from "../lib/webhookDispatcher";
 import { pushToStaff } from "../lib/pushNotify";
@@ -306,7 +307,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   res.json({ data: rows, total: totalRows[0]?.count ?? 0 });
 });
 
-router.post("/restaurants/:restaurantId/orders", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const {
     tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId,
@@ -777,7 +778,7 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   });
 });
 
-router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/orders/:id", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { status, notes, isPriority, customerName } = req.body;
   const updates: Record<string, unknown> = { notes, isPriority, customerName, updatedAt: new Date() };
@@ -803,7 +804,7 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/items", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { menuItemId, quantity, notes, modifiers, variantId } = req.body as {
@@ -958,7 +959,7 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   res.json({ ...updatedOrder, items });
 });
 
-router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req, res) => {
+router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
@@ -987,7 +988,7 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", async (req,
   res.json({ ...updatedOrder, items });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { type, orderItemId, value, reason, managerPin, managerOtp } = req.body as {
@@ -1155,7 +1156,7 @@ router.post("/restaurants/:restaurantId/orders/:id/discounts", requireRole("owne
   res.json({ ...updatedOrder, items, discounts });
 });
 
-router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), async (req, res) => {
+router.delete("/restaurants/:restaurantId/orders/:id/discounts/:discountId", requireRole("owner", "manager", "cashier", "waiter", "super_admin"), requirePlanFeature("discounts_promotions"), idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const discountId = Number(req.params.discountId);
@@ -1314,7 +1315,7 @@ router.post("/restaurants/:restaurantId/orders/:id/apply-coupon", requirePlanFea
   res.json({ ...updatedOrder, items, discounts, couponApplied: { code: coupon.code, discountAmount: couponAmount.toFixed(2), discountType: coupon.discountType } });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/split", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/split", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { splits } = req.body as {
@@ -1809,7 +1810,7 @@ router.post("/restaurants/:restaurantId/orders/:id/razorpay-order", async (req, 
   });
 });
 
-router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
+router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
   const { paymentMethod, stripePaymentIntentId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
@@ -2258,7 +2259,7 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
   res.json(enriched);
 });
 
-router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req, res) => {
+router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { status } = req.body;
   const now = new Date();

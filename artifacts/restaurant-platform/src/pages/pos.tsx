@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
-import { apiPost, apiAction, apiGet } from "@/lib/api";
+import { apiPost, apiAction, apiGet, isOfflineQueuedResult } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useRestaurantId } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
@@ -1516,7 +1516,7 @@ export default function PosPage() {
   const handlePlaceOrder = async (): Promise<OrderDetail | null> => {
     if (cart.length === 0) { toast({ title: "Add items first", variant: "destructive" }); return null; }
     try {
-      const order = await createOrder.mutateAsync({
+      const result = await createOrder.mutateAsync({
         tableId: selectedTableId ?? undefined,
         orderType,
         customerName: customerName || undefined,
@@ -1528,7 +1528,16 @@ export default function PosPage() {
             ? c.modifiers.map(m => ({ name: m.name, price: m.price.toFixed(2) }))
             : undefined,
         })),
-      }) as OrderDetail;
+      });
+      // wrapQueueable returns a sentinel `{ __offlineQueued: true }` when
+      // the write was deferred to the local offline queue — treat it as
+      // success-with-queued so floor staff aren't blocked offline.
+      if (isOfflineQueuedResult(result)) {
+        toast({ title: "Order saved offline", description: "It will sync to the kitchen the moment you're back online." });
+        setCart([]);
+        return null;
+      }
+      const order = result as OrderDetail;
       setPlacedOrder(order);
       toast({ title: `Order ${order.orderNumber} placed!`, description: "Kitchen has been notified." });
       return order;
@@ -1539,15 +1548,24 @@ export default function PosPage() {
   };
 
   const handleVoiceOrderConfirm = async (payload: VoiceOrderConfirmation): Promise<void> => {
-    const order = await createOrder.mutateAsync({
+    const result = await createOrder.mutateAsync({
       tableId: payload.tableId ?? selectedTableId ?? undefined,
       orderType: payload.tableId != null ? "dine_in" : orderType,
       customerName: customerName || undefined,
       customerId: linkedCustomerId ?? undefined,
       notes: payload.notes,
       items: payload.items,
-    }) as OrderDetail;
+    });
     if (payload.tableId != null) setSelectedTableId(payload.tableId);
+    // When offline the API layer hands back a sentinel — the voice order
+    // is safely queued, but we can't echo its server-issued line ids /
+    // order number. Show a clear "saved offline" toast instead of trying
+    // to populate cart with non-existent server data.
+    if (isOfflineQueuedResult(result)) {
+      toast({ title: "Voice order saved offline", description: "It will sync to the kitchen the moment you're back online." });
+      return;
+    }
+    const order = result as OrderDetail;
     setPlacedOrder(order);
     setCart(order.items.map(oi => ({
       lineKey: String(oi.id),
@@ -1576,7 +1594,7 @@ export default function PosPage() {
   const handleConfirmPayment = async (method: string, details?: PaymentConfirmDetails) => {
     const orderId = placedOrder?.id;
     if (!orderId) return;
-    await payOrder.mutateAsync({
+    const result = await payOrder.mutateAsync({
       id: orderId,
       paymentMethod: method,
       stripePaymentIntentId: details?.stripePaymentIntentId,
@@ -1585,8 +1603,12 @@ export default function PosPage() {
       razorpaySignature: details?.razorpaySignature,
       tipAmount: details?.tipAmount,
     });
+    if (isOfflineQueuedResult(result)) {
+      toast({ title: "Payment saved offline", description: `${placedOrder?.orderNumber} will be settled when you reconnect.` });
+    } else {
+      toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
+    }
     setShowPayModal(false);
-    toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
     const receiptItems = placedOrder
       ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
       : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));

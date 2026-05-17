@@ -1,11 +1,15 @@
+import { View } from "react-native";
 import { Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { AuthGate } from "@/components/AuthGate";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
 export default function WaiterLayout() {
   const colors = useColors();
   return (
     <AuthGate allowedRoles={["waiter", "kitchen", "owner", "manager", "super_admin"]}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <OfflineBanner />
     <Stack
       screenOptions={{
         headerShown: false,
@@ -25,6 +29,7 @@ export default function WaiterLayout() {
         }}
       />
     </Stack>
+    </View>
     </AuthGate>
   );
 }

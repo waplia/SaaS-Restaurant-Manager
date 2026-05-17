@@ -18,6 +18,10 @@ import { Download } from "lucide-react";
 import { INR_DENOMINATIONS } from "@/lib/types";
 import type { CashMovement, CashRegisterReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useOfflineQueue, useOnlineStatus } from "@/lib/useOnlineStatus";
+import { usePlanCapability } from "@/lib/planFeatures";
+import { Link } from "wouter";
+import { WifiOff, RefreshCw } from "lucide-react";
 
 const movementLabels: Record<CashMovement["type"], string> = {
   sale: "Cash sale",
@@ -205,6 +209,18 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
   const [isBlind, setIsBlind] = useState(false);
   const [closeNotes, setCloseNotes] = useState("");
   const [varianceReason, setVarianceReason] = useState("");
+  // Surface unsynced POS writes before close — if a shift is closed while
+  // orders/payments are still queued offline, the Z-report will be wrong
+  // until they sync. Gate UI on plan capability so non-offline plans see
+  // the legacy flow untouched.
+  const offlineCap = usePlanCapability("offline_pos");
+  const queue = useOfflineQueue();
+  const { online } = useOnlineStatus();
+  const unsynced = offlineCap.enabled
+    ? queue.filter(e => e.status === "pending" || e.status === "syncing" || e.status === "failed" || e.status === "conflict")
+    : [];
+  const hasConflicts = unsynced.some(e => e.status === "conflict");
+  const [unsyncedAck, setUnsyncedAck] = useState(false);
 
   const breakdownTotal = INR_DENOMINATIONS.reduce((s, d) => s + d * (counts[d] ?? 0), 0);
   const total = useBreakdown ? breakdownTotal : Number(quickAmount) || 0;
@@ -216,6 +232,16 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
   const reasonMissing = reasonRequired && !varianceReason.trim();
 
   const handleSubmit = async () => {
+    if (unsynced.length > 0 && !unsyncedAck) {
+      toast({
+        title: `${unsynced.length} unsynced ${unsynced.length === 1 ? "change" : "changes"}`,
+        description: hasConflicts
+          ? "Resolve conflicts on the Sync Status screen before closing — the Z-report will be off otherwise."
+          : "Check the warning above and confirm you want to close anyway.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (hasVisibleVariance && !varianceReason.trim()) {
       toast({ title: "Reason required", description: "Please explain why the drawer is over/short before closing.", variant: "destructive" });
       return;
@@ -258,6 +284,48 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
+          {unsynced.length > 0 && (
+            <div className={cn(
+              "p-3 rounded-lg border space-y-2",
+              hasConflicts
+                ? "bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800"
+                : "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"
+            )}>
+              <div className="flex items-start gap-2">
+                {online ? <RefreshCw className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400" /> : <WifiOff className="w-4 h-4 mt-0.5 text-rose-600 dark:text-rose-400" />}
+                <div className="flex-1 text-sm">
+                  <div className="font-semibold text-foreground">
+                    {unsynced.length} unsynced {unsynced.length === 1 ? "change" : "changes"}
+                    {hasConflicts ? " — including conflicts" : ""}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Closing the shift now will produce a Z-report that excludes these orders and payments until they finish syncing. Review them first on the{" "}
+                    <Link href="/pos-sync" className="underline font-medium">Sync Status</Link> page.
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground max-h-24 overflow-y-auto">
+                    {unsynced.slice(0, 5).map(e => (
+                      <li key={e.id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{e.label}</span>
+                        <Badge variant="outline" className="text-[10px] capitalize">{e.status}</Badge>
+                      </li>
+                    ))}
+                    {unsynced.length > 5 && <li className="italic">+{unsynced.length - 5} more…</li>}
+                  </ul>
+                </div>
+              </div>
+              {!hasConflicts && (
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={unsyncedAck}
+                    onChange={e => setUnsyncedAck(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-border"
+                  />
+                  I understand and want to close the shift anyway
+                </label>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3 p-3 bg-secondary/40 border border-border rounded-lg">
             <input
               id="blind-close"
@@ -354,7 +422,7 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border sticky bottom-0 bg-card">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={closeMut.isPending}>
+          <Button onClick={handleSubmit} disabled={closeMut.isPending || hasConflicts || (unsynced.length > 0 && !unsyncedAck)}>
             {closeMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
             Close Register
           </Button>

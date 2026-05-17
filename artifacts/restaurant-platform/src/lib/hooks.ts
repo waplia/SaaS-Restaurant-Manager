@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl } from "./api";
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl, wrapQueueable } from "./api";
 import type { StaffIncentiveRule, StaffIncentive, StaffIncentiveLeaderboardRow, Order } from "./types";
 import { useBranchContext } from "./branch";
 import { useAuth } from "./auth";
@@ -120,7 +120,7 @@ export function useCreateOrder() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data),
+    mutationFn: (data: CreateOrderInput) => wrapQueueable(() => apiPost(`/restaurants/${RESTAURANT_ID}/orders`, data)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -129,7 +129,7 @@ export function useUpdateOrder() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateOrderInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateOrderInput) => wrapQueueable(() => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -170,7 +170,7 @@ export function usePayOrder() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: PayOrderInput) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data),
+    mutationFn: ({ id, ...data }: PayOrderInput) => wrapQueueable(() => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/pay`, data)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
   });
 }
@@ -290,7 +290,7 @@ export function useSplitOrder() {
         razorpaySignature?: string;
       }>;
     }) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/split`, { splits }),
+      wrapQueueable(() => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/split`, { splits })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
       qc.invalidateQueries({ queryKey: ["tables", RESTAURANT_ID] });
@@ -312,7 +312,7 @@ export function useAddOrderItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, ...data }: import("./types").AddOrderItemInput) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items`, data),
+      wrapQueueable(() => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items`, data)),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
@@ -325,7 +325,7 @@ export function useRemoveOrderItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, itemId }: { orderId: number; itemId: number }) =>
-      apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items/${itemId}`),
+      wrapQueueable(() => apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/items/${itemId}`)),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
@@ -338,7 +338,7 @@ export function useApplyDiscountLine() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, ...body }: import("./types").ApplyDiscountLineInput) =>
-      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts`, body),
+      wrapQueueable(() => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts`, body)),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
@@ -351,7 +351,7 @@ export function useRemoveDiscountLine() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, discountId }: { orderId: number; discountId: number }) =>
-      apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts/${discountId}`),
+      wrapQueueable(() => apiDelete(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/discounts/${discountId}`)),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["orders", "detail", RESTAURANT_ID, vars.orderId] });
       qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
@@ -486,7 +486,7 @@ export function useUpdateTicketStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
-      apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, reason ? { status, reason } : { status }),
+      wrapQueueable(() => apiPatch(`/restaurants/${RESTAURANT_ID}/kitchen/tickets/${id}/status`, reason ? { status, reason } : { status })),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["kitchen"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -519,7 +519,7 @@ export function useUpdateTable() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateTableInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateTableInput) => wrapQueueable(() => apiPatch(`/restaurants/${RESTAURANT_ID}/tables/${id}`, data)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tables"] }),
   });
 }
