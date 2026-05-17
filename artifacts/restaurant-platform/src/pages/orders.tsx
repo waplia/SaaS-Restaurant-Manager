@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder } from "@/lib/hooks";
+import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, useCurbsideQueue, useCurbsideHandover, useCurbsideReport } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle, Car } from "lucide-react";
 import { OrderDetailDrawer } from "@/components/OrderDetailDrawer";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -162,10 +162,137 @@ function NewOrderModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function formatDurationSecs(s: number): string {
+  if (s <= 0) return "0s";
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  if (m === 0) return `${sec}s`;
+  return `${m}m ${sec}s`;
+}
+
+function CurbsideCard({ order, onHandover, handing }: { order: Order; onHandover: (id: number) => void; handing: boolean }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const prepSinceMs = order.curbsideAcceptedAt ? now - new Date(order.curbsideAcceptedAt).getTime() : null;
+  const waitSinceMs = order.curbsideArrivedAt ? now - new Date(order.curbsideArrivedAt).getTime() : null;
+  const arrived = !!order.curbsideArrivedAt;
+
+  return (
+    <div className={cn("bg-card border rounded-xl p-4 space-y-3 shadow-sm", arrived ? "border-orange-400 ring-2 ring-orange-100" : "border-border")}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground text-sm">{order.orderNumber}</p>
+            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full capitalize", STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground")}>
+              {order.status.replace(/_/g, " ")}
+            </span>
+          </div>
+          {order.customerName && <p className="text-xs text-muted-foreground mt-0.5">{order.customerName}</p>}
+        </div>
+        <p className="font-bold text-sm text-foreground">₹{Number(order.totalAmount).toLocaleString()}</p>
+      </div>
+
+      <div className="bg-muted/40 rounded-lg p-3 text-xs space-y-1">
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <Car className="w-3.5 h-3.5" />
+          {order.vehicleColor} {order.vehicleModel}
+        </div>
+        {order.vehicleNumber && <p className="text-muted-foreground">Plate: <span className="text-foreground font-medium">{order.vehicleNumber}</span></p>}
+        {order.parkingSpot && <p className="text-muted-foreground">Spot: <span className="text-foreground font-medium">{order.parkingSpot}</span></p>}
+      </div>
+
+      <div className="flex gap-3 text-xs">
+        {prepSinceMs !== null && (
+          <div className="flex-1">
+            <p className="text-muted-foreground">Prep timer</p>
+            <p className="font-mono font-semibold text-foreground">{formatDurationSecs(Math.floor(prepSinceMs / 1000))}</p>
+          </div>
+        )}
+        {waitSinceMs !== null && (
+          <div className="flex-1">
+            <p className="text-orange-600">Waiting at curb</p>
+            <p className="font-mono font-bold text-orange-600">{formatDurationSecs(Math.floor(waitSinceMs / 1000))}</p>
+          </div>
+        )}
+      </div>
+
+      <Button
+        size="sm"
+        className="w-full"
+        disabled={handing || !arrived}
+        onClick={() => onHandover(order.id)}
+      >
+        {arrived ? "Mark Handed Over" : "Waiting for customer arrival…"}
+      </Button>
+    </div>
+  );
+}
+
+function CurbsideTab() {
+  const { data: queue = [], isLoading } = useCurbsideQueue();
+  const handover = useCurbsideHandover();
+  const { toast } = useToast();
+
+  const { since, until } = useMemo(() => {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { since: start.toISOString(), until: end.toISOString() };
+  }, []);
+  const { data: report } = useCurbsideReport(since, until);
+
+  return (
+    <div className="space-y-4">
+      {report && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground">Curbside orders (30d)</p>
+            <p className="text-2xl font-bold text-foreground">{report.totalOrders}</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground">Handed over</p>
+            <p className="text-2xl font-bold text-green-600">{report.handedOver}</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground">Avg pickup time</p>
+            <p className="text-2xl font-bold text-foreground">{formatDurationSecs(report.avgPickupSeconds)}</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground">No-shows</p>
+            <p className="text-2xl font-bold text-red-600">{report.noShows}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {queue.map((o: Order) => (
+          <CurbsideCard
+            key={o.id}
+            order={o}
+            handing={handover.isPending}
+            onHandover={async (id) => {
+              try { await handover.mutateAsync(id); toast({ title: "Handed over" }); }
+              catch { toast({ title: "Failed to mark handover", variant: "destructive" }); }
+            }}
+          />
+        ))}
+        {!isLoading && queue.length === 0 && (
+          <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
+            <Car className="w-7 h-7 mx-auto opacity-50 mb-2" />
+            <p className="font-medium text-foreground/80">No active curbside orders</p>
+            <p className="text-xs mt-1">New curbside orders will appear here in real time.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
+  const [tab, setTab] = useState<"all" | "curbside">("all");
   const { data: ordersData } = useOrders(statusFilter !== "all" ? { status: statusFilter } : undefined);
 
   const orders: Order[] = ordersData?.data ?? [];
@@ -176,7 +303,7 @@ export default function OrdersPage() {
     <Layout>
       <PageHeader
         title="Orders & POS"
-        subtitle={`${orders.length} orders`}
+        subtitle={tab === "curbside" ? "Curbside pickup queue" : `${orders.length} orders`}
         actions={
           <Button onClick={() => setShowNewOrder(true)}>
             <Plus className="w-4 h-4 mr-2" /> New Order
@@ -184,27 +311,42 @@ export default function OrdersPage() {
         }
       />
       <div className="p-6">
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {statuses.map(s => (
-            <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">
-              {s}
-            </Button>
-          ))}
+        <div className="flex gap-2 mb-4 border-b border-border">
+          <button onClick={() => setTab("all")} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px", tab === "all" ? "border-primary text-primary" : "border-transparent text-muted-foreground")}>
+            All Orders
+          </button>
+          <button onClick={() => setTab("curbside")} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5", tab === "curbside" ? "border-primary text-primary" : "border-transparent text-muted-foreground")}>
+            <Car className="w-4 h-4" /> Curbside
+          </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {orders.map((order: Order) => (
-            <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} />
-          ))}
-          {orders.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center text-center py-20 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
-              <div className="w-14 h-14 rounded-full bg-muted/60 flex items-center justify-center mb-3">
-                <BagIcon className="w-7 h-7 opacity-50" />
-              </div>
-              <p className="font-medium text-foreground/80">No orders found</p>
-              <p className="text-xs mt-1">Try a different filter or create a new order</p>
+
+        {tab === "curbside" ? (
+          <CurbsideTab />
+        ) : (
+          <>
+            <div className="flex gap-2 mb-6 flex-wrap">
+              {statuses.map(s => (
+                <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">
+                  {s}
+                </Button>
+              ))}
             </div>
-          )}
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {orders.map((order: Order) => (
+                <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} />
+              ))}
+              {orders.length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center text-center py-20 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
+                  <div className="w-14 h-14 rounded-full bg-muted/60 flex items-center justify-center mb-3">
+                    <BagIcon className="w-7 h-7 opacity-50" />
+                  </div>
+                  <p className="font-medium text-foreground/80">No orders found</p>
+                  <p className="text-xs mt-1">Try a different filter or create a new order</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
       {showNewOrder && <NewOrderModal onClose={() => setShowNewOrder(false)} />}
       <OrderDetailDrawer orderId={openOrderId} onClose={() => setOpenOrderId(null)} />

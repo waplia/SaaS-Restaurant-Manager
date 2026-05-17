@@ -211,6 +211,13 @@ export interface Order {
   customerName: string | null;
   isPriority: boolean;
   createdAt: string;
+  vehicleColor?: string | null;
+  vehicleModel?: string | null;
+  vehicleNumber?: string | null;
+  parkingSpot?: string | null;
+  curbsideAcceptedAt?: string | null;
+  curbsideArrivedAt?: string | null;
+  curbsideHandedOverAt?: string | null;
 }
 
 export interface OrdersResponse {

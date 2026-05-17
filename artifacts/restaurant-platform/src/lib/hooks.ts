@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl } from "./api";
-import type { StaffIncentiveRule, StaffIncentive, StaffIncentiveLeaderboardRow } from "./types";
+import type { StaffIncentiveRule, StaffIncentive, StaffIncentiveLeaderboardRow, Order } from "./types";
 import { useBranchContext } from "./branch";
 import { useAuth } from "./auth";
 import { toast as notify } from "@/hooks/use-toast";
@@ -131,6 +131,38 @@ export function useUpdateOrder() {
   return useMutation({
     mutationFn: ({ id, ...data }: UpdateOrderInput) => apiPatch(`/restaurants/${RESTAURANT_ID}/orders/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] }),
+  });
+}
+
+export function useCurbsideQueue() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["curbside-queue", RESTAURANT_ID],
+    queryFn: () => apiGet<Order[]>(`/restaurants/${RESTAURANT_ID}/orders/curbside/queue`),
+    refetchInterval: 5000,
+  });
+}
+
+export function useCurbsideHandover() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/orders/${id}/curbside/handover`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["curbside-queue", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useCurbsideReport(from?: string, to?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  return useQuery({
+    queryKey: ["curbside-report", RESTAURANT_ID, from, to],
+    queryFn: () => apiGet<{ from: string; to: string; totalOrders: number; handedOver: number; noShows: number; avgPickupSeconds: number; revenue: string }>(`/restaurants/${RESTAURANT_ID}/reports/curbside?${q}`),
   });
 }
 

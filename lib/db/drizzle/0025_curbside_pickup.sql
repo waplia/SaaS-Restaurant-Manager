@@ -1,0 +1,9 @@
+-- Curbside pickup: vehicle details + lifecycle timestamps on orders.
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "vehicle_color" varchar(40);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "vehicle_model" varchar(80);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "vehicle_number" varchar(40);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "parking_spot" varchar(40);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "curbside_accepted_at" timestamp;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "curbside_arrived_at" timestamp;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "curbside_handed_over_at" timestamp;
+CREATE INDEX IF NOT EXISTS "orders_curbside_arrived_idx" ON "orders" ("restaurant_id", "curbside_arrived_at");

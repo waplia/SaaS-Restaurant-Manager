@@ -311,7 +311,16 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     tableId, orderType, notes, customerName, customerPhone, customerId, isPriority, items, branchId,
     hotelStayId, banquetEventId,
     brandId, channelKey, channelExternalOrderId,
+    vehicleColor, vehicleModel, vehicleNumber, parkingSpot,
   } = req.body;
+
+  if (orderType === "curbside") {
+    const okFeat = await restaurantHasFeature(restaurantId, "dlv_curbside_pickup");
+    if (!okFeat) return void res.status(403).json({ error: "Curbside pickup is not enabled on this plan." });
+    if (!customerPhone || !vehicleColor || !vehicleModel) {
+      return void res.status(400).json({ error: "Curbside orders require customer phone, vehicle color and model." });
+    }
+  }
 
   // ───── Cloud-kitchen pre-flight (only when brandId+channelKey present) ─────
   let ckContext: null | {
@@ -543,6 +552,10 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     channelCommissionPct: ckContext?.commissionPct ?? null,
     packagingSnapshot: ckContext?.packagingSnapshot ?? null,
     slaTargetAt: ckContext?.slaTargetAt ?? null,
+    vehicleColor: orderType === "curbside" ? String(vehicleColor).slice(0, 40) : null,
+    vehicleModel: orderType === "curbside" ? String(vehicleModel).slice(0, 80) : null,
+    vehicleNumber: orderType === "curbside" && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
+    parkingSpot: orderType === "curbside" && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
   }).returning();
 
   // Deduct packaging stock for cloud-kitchen orders
@@ -776,6 +789,10 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   // sequence required by the Smart Service Timer feature.
   if (status === "accepted" || status === "confirmed") {
     await recordTimerStage(restaurantId, updated.id, "accepted");
+    if (updated.orderType === "curbside" && !updated.curbsideAcceptedAt) {
+      await db.update(ordersTable).set({ curbsideAcceptedAt: new Date() })
+        .where(eq(ordersTable.id, updated.id));
+    }
   }
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
@@ -2353,5 +2370,122 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireR
   broadcastEvent(restaurantId, "ticket:priority", { id: updated.id, isPriority: updated.isPriority, orderId: updated.orderId });
   res.json(updated);
 });
+
+// ───── Curbside Pickup ─────────────────────────────────────────────────────
+// Queue: list active curbside orders (not yet handed over). Includes prep
+// timer fields so the client can render the live "since arrived" timer.
+router.get(
+  "/restaurants/:restaurantId/orders/curbside/queue",
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
+  requirePlanFeature("dlv_curbside_pickup"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const rows = await db.select({
+      id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status,
+      customerName: ordersTable.customerName, customerPhone: ordersTable.customerPhone,
+      totalAmount: ordersTable.totalAmount, createdAt: ordersTable.createdAt,
+      vehicleColor: ordersTable.vehicleColor, vehicleModel: ordersTable.vehicleModel,
+      vehicleNumber: ordersTable.vehicleNumber, parkingSpot: ordersTable.parkingSpot,
+      curbsideAcceptedAt: ordersTable.curbsideAcceptedAt,
+      curbsideArrivedAt: ordersTable.curbsideArrivedAt,
+      curbsideHandedOverAt: ordersTable.curbsideHandedOverAt,
+    }).from(ordersTable).where(and(
+      eq(ordersTable.restaurantId, restaurantId),
+      eq(ordersTable.orderType, "curbside"),
+      notInArray(ordersTable.status, ["completed", "cancelled"]),
+    )).orderBy(desc(ordersTable.curbsideArrivedAt), desc(ordersTable.createdAt));
+    res.json(rows);
+  },
+);
+
+// Hand-over: staff confirms the customer has received their order. Sets the
+// handover timestamp, completes the order, and emits notifications.
+router.post(
+  "/restaurants/:restaurantId/orders/:id/curbside/handover",
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
+  requirePlanFeature("dlv_curbside_pickup"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const orderId = Number(req.params.id);
+    const [order] = await db.select().from(ordersTable)
+      .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+    if (!order) return void res.status(404).json({ error: "Order not found" });
+    if (order.orderType !== "curbside") return void res.status(400).json({ error: "Not a curbside order" });
+    if (order.curbsideHandedOverAt) return void res.status(400).json({ error: "Already handed over" });
+    const now = new Date();
+    const [updated] = await db.update(ordersTable).set({
+      curbsideHandedOverAt: now,
+      status: "completed",
+      updatedAt: now,
+    }).where(eq(ordersTable.id, orderId)).returning();
+    broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", orderNumber: updated.orderNumber });
+    broadcastEvent(restaurantId, "curbside:handover", { id: updated.id, orderNumber: updated.orderNumber });
+    broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", curbsideHandedOverAt: now });
+    void emitWebhookEvent(restaurantId, "order.completed", { id: updated.id, orderNumber: updated.orderNumber, status: "completed" });
+    try {
+      await recordAuditLog({
+        req, module: "orders", action: "order.curbside_handover",
+        entity: "order", entityId: updated.id, restaurantId,
+        newValue: { handedOverAt: now },
+      });
+    } catch (err) { void err; }
+    res.json(updated);
+  },
+);
+
+// Report: counts + average pickup time + no-shows over a date range.
+// no-show = curbside order whose current status is "ready" (kitchen done,
+// waiting at curb) with no curbsideArrivedAt and older than 2 hours.
+router.get(
+  "/restaurants/:restaurantId/reports/curbside",
+  requireRole("owner", "manager", "super_admin"),
+  requirePlanFeature("dlv_curbside_pickup"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const fromStr = typeof req.query.from === "string" ? req.query.from : null;
+    const toStr = typeof req.query.to === "string" ? req.query.to : null;
+    const from = fromStr ? new Date(fromStr) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const to = toStr ? new Date(toStr) : new Date();
+
+    const rows = await db.select({
+      id: ordersTable.id, status: ordersTable.status,
+      createdAt: ordersTable.createdAt,
+      curbsideArrivedAt: ordersTable.curbsideArrivedAt,
+      curbsideHandedOverAt: ordersTable.curbsideHandedOverAt,
+      totalAmount: ordersTable.totalAmount,
+    }).from(ordersTable).where(and(
+      eq(ordersTable.restaurantId, restaurantId),
+      eq(ordersTable.orderType, "curbside"),
+      sql`${ordersTable.createdAt} >= ${from}`,
+      sql`${ordersTable.createdAt} <= ${to}`,
+    ));
+
+    let totalPickupMs = 0;
+    let pickupCount = 0;
+    let noShows = 0;
+    let revenue = 0;
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    for (const r of rows) {
+      if (r.curbsideArrivedAt && r.curbsideHandedOverAt) {
+        totalPickupMs += new Date(r.curbsideHandedOverAt).getTime() - new Date(r.curbsideArrivedAt).getTime();
+        pickupCount++;
+      }
+      if (r.status === "ready" && !r.curbsideArrivedAt && new Date(r.createdAt).getTime() < cutoff) {
+        noShows++;
+      }
+      if (r.status === "completed") revenue += Number(r.totalAmount ?? 0);
+    }
+
+    res.json({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      totalOrders: rows.length,
+      handedOver: pickupCount,
+      noShows,
+      avgPickupSeconds: pickupCount > 0 ? Math.round(totalPickupMs / pickupCount / 1000) : 0,
+      revenue: revenue.toFixed(2),
+    });
+  },
+);
 
 export default router;

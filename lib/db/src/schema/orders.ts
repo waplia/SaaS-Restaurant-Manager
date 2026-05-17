@@ -49,6 +49,15 @@ export const ordersTable = pgTable("orders", {
   channelCommissionPct: decimal("channel_commission_pct", { precision: 5, scale: 2 }),
   packagingSnapshot: jsonb("packaging_snapshot").$type<Array<{ packagingItemId: number; name: string; quantity: number; costPerUnit: string }>>(),
   slaTargetAt: timestamp("sla_target_at"),
+  // Curbside pickup (Task #423): vehicle/parking details captured at checkout
+  // and arrival/handover timestamps tracked through the dedicated queue.
+  vehicleColor: text("vehicle_color"),
+  vehicleModel: text("vehicle_model"),
+  vehicleNumber: text("vehicle_number"),
+  parkingSpot: text("parking_spot"),
+  curbsideAcceptedAt: timestamp("curbside_accepted_at"),
+  curbsideArrivedAt: timestamp("curbside_arrived_at"),
+  curbsideHandedOverAt: timestamp("curbside_handed_over_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -143,6 +143,15 @@ interface OrderStatus {
   totalAmount: string;
   items: Array<{ menuItemName: string; quantity: number; totalPrice: string }>;
   createdAt: string;
+  order?: {
+    orderType?: string;
+    vehicleColor?: string | null;
+    vehicleModel?: string | null;
+    vehicleNumber?: string | null;
+    parkingSpot?: string | null;
+    curbsideArrivedAt?: string | null;
+    curbsideHandedOverAt?: string | null;
+  };
 }
 
 interface RewardsLookup {
@@ -278,6 +287,13 @@ export default function CustomerMenuPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
   const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
+  const [orderMode, setOrderMode] = useState<"dine_in" | "curbside">("dine_in");
+  const [vehicleColor, setVehicleColor] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [parkingSpot, setParkingSpot] = useState("");
+  const [arriving, setArriving] = useState(false);
+  const [arriveError, setArriveError] = useState<string | null>(null);
 
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   const [cardNumber, setCardNumber] = useState("");
@@ -507,14 +523,23 @@ export default function CustomerMenuPage() {
 
   async function placeOrder() {
     if (cart.length === 0) return;
+    if (orderMode === "curbside") {
+      if (!customerPhone.trim()) { alert("Please enter your phone number — we use it to coordinate handover."); return; }
+      if (!vehicleColor.trim() || !vehicleModel.trim()) { alert("Please tell us your vehicle color and model so staff can find you."); return; }
+    }
     setPlacing(true);
     try {
       const result = await apiPublicPost<OrderResult>("/public/orders", {
         restaurantId: menu!.restaurantId,
-        tableId,
+        tableId: orderMode === "curbside" ? null : tableId,
+        orderType: orderMode === "curbside" ? "curbside" : undefined,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         notes: orderNotes.trim() || undefined,
+        vehicleColor: orderMode === "curbside" ? vehicleColor.trim() : undefined,
+        vehicleModel: orderMode === "curbside" ? vehicleModel.trim() : undefined,
+        vehicleNumber: orderMode === "curbside" ? (vehicleNumber.trim() || undefined) : undefined,
+        parkingSpot: orderMode === "curbside" ? (parkingSpot.trim() || undefined) : undefined,
         items: cart.map(c => ({
           menuItemId: c.menuItemId,
           quantity: c.quantity,
@@ -896,6 +921,48 @@ export default function CustomerMenuPage() {
             </div>
           </div>
 
+          {orderStatus.order?.orderType === "curbside" && !orderStatus.order?.curbsideHandedOverAt && (
+            <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+              <p className="font-semibold text-gray-800 mb-1">Curbside pickup</p>
+              <p className="text-xs text-gray-500 mb-3">
+                {orderStatus.order?.vehicleColor ?? ""} {orderStatus.order?.vehicleModel ?? ""}
+                {orderStatus.order?.vehicleNumber ? ` · ${orderStatus.order.vehicleNumber}` : ""}
+              </p>
+              <input
+                type="text"
+                placeholder="Parking spot (optional)"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                value={parkingSpot}
+                onChange={e => setParkingSpot(e.target.value)}
+              />
+              {orderStatus.order?.curbsideArrivedAt ? (
+                <div className="text-center bg-green-50 border border-green-200 text-green-700 rounded-xl py-3 text-sm font-medium">
+                  We've been notified you're here. A staff member will bring your order shortly.
+                </div>
+              ) : (
+                <button
+                  disabled={arriving}
+                  onClick={async () => {
+                    if (!orderResult) return;
+                    setArriving(true); setArriveError(null);
+                    try {
+                      await apiPublicPost(`/public/orders/${orderResult.orderId}/arrive`, { parkingSpot: parkingSpot.trim() || undefined }, orderResult.guestToken);
+                      const s = await apiPublicGet<OrderStatus>(`/public/orders/${orderResult.orderId}`, orderResult.guestToken);
+                      setOrderStatus(s);
+                    } catch (e: unknown) {
+                      setArriveError(e instanceof Error ? e.message : "Could not notify staff. Please try again.");
+                    } finally { setArriving(false); }
+                  }}
+                  className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
+                >
+                  {arriving ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                  I've Arrived
+                </button>
+              )}
+              {arriveError && <p className="text-xs text-red-500 mt-2">{arriveError}</p>}
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-2 mb-4">
             <button onClick={() => openWaiterModal("call_waiter")} className="flex flex-col items-center gap-1 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl py-3 text-xs hover:border-[#FF6B1A] hover:text-[#FF6B1A] transition">
               <Bell className="w-4 h-4" /> Call Waiter
@@ -992,10 +1059,43 @@ export default function CustomerMenuPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="font-semibold text-gray-800 mb-3">Your Details (optional)</p>
+            <p className="font-semibold text-gray-800 mb-3">How would you like your order?</p>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setOrderMode("dine_in")}
+                className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "dine_in" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}
+              >
+                {tableId ? "Dine-in" : "Pickup"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderMode("curbside")}
+                className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "curbside" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}
+              >
+                Curbside pickup
+              </button>
+            </div>
+            {orderMode === "curbside" && (
+              <div className="space-y-2 mb-3">
+                <p className="text-xs text-gray-500">Tell us about your vehicle so staff can find you.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Color *" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={vehicleColor} onChange={e => setVehicleColor(e.target.value)} />
+                  <input type="text" placeholder="Make/Model *" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={vehicleModel} onChange={e => setVehicleModel(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Plate number" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} />
+                  <input type="text" placeholder="Spot (optional)" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={parkingSpot} onChange={e => setParkingSpot(e.target.value)} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <p className="font-semibold text-gray-800 mb-3">Your Details {orderMode === "curbside" ? "" : "(optional)"}</p>
             <div className="space-y-3">
               <input type="text" placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-              <input type="tel" placeholder="Phone number" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+              <input type="tel" placeholder={orderMode === "curbside" ? "Phone number *" : "Phone number"} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
               <textarea placeholder="Special requests or notes" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" rows={2} value={orderNotes} onChange={e => setOrderNotes(e.target.value)} />
             </div>
           </div>

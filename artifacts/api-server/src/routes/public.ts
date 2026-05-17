@@ -140,15 +140,25 @@ router.get("/public/menu/:slug", async (req, res) => {
 });
 
 router.post("/public/orders", async (req, res) => {
-  const { restaurantId, tableId, customerName, customerPhone, notes, items } = req.body;
+  const { restaurantId, tableId, customerName, customerPhone, notes, items, orderType: rawOrderType, vehicleColor, vehicleModel, vehicleNumber, parkingSpot } = req.body;
 
   if (!restaurantId || !items || !Array.isArray(items) || items.length === 0) {
     return void res.status(400).json({ error: "restaurantId and items are required" });
   }
 
-  const featureKey = tableId ? "qr_ordering" : "online_ordering";
+  const isCurbside = rawOrderType === "curbside";
+  const featureKey = isCurbside ? "dlv_curbside_pickup" : (tableId ? "qr_ordering" : "online_ordering");
   const featureOk = await checkRestaurantFeature(restaurantId, featureKey);
   if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
+
+  if (isCurbside) {
+    if (!customerPhone || typeof customerPhone !== "string" || customerPhone.trim().length < 4) {
+      return void res.status(400).json({ error: "A contact phone is required for curbside pickup." });
+    }
+    if (!vehicleColor || !vehicleModel) {
+      return void res.status(400).json({ error: "Vehicle color and model/make are required for curbside pickup." });
+    }
+  }
 
   let subtotal = 0;
   const enrichedItems: Array<{ mi: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers: import("../lib/modifierEnrichment").EnrichedModifier[] }> = [];
@@ -215,12 +225,17 @@ router.post("/public/orders", async (req, res) => {
     }
   }
 
+  const resolvedOrderType = isCurbside ? "curbside" : (tableId ? "dine_in" : (rawOrderType ?? "pickup"));
   const [order] = await db.insert(ordersTable).values({
-    restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: "dine_in",
+    restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
     subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
     serviceCharge: "0.00", discountAmount: "0.00",
     totalAmount: totalAmount.toFixed(2), customerName: customerName ?? null, customerPhone: customerPhone ?? null, notes: notes ?? null,
     customerId: resolvedCustomerRow?.id ?? null,
+    vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
+    vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
+    vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
+    parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
   }).returning();
 
   for (const ei of enrichedItems) {
@@ -335,6 +350,14 @@ router.get("/public/orders/:orderId/track", async (req, res) => {
     createdAt: ordersTable.createdAt,
     updatedAt: ordersTable.updatedAt, restaurantId: ordersTable.restaurantId,
     tableId: ordersTable.tableId,
+    orderType: ordersTable.orderType,
+    vehicleColor: ordersTable.vehicleColor,
+    vehicleModel: ordersTable.vehicleModel,
+    vehicleNumber: ordersTable.vehicleNumber,
+    parkingSpot: ordersTable.parkingSpot,
+    curbsideAcceptedAt: ordersTable.curbsideAcceptedAt,
+    curbsideArrivedAt: ordersTable.curbsideArrivedAt,
+    curbsideHandedOverAt: ordersTable.curbsideHandedOverAt,
   }).from(ordersTable).where(eq(ordersTable.id, orderId));
   if (!order) return void res.status(404).json({ error: "Order not found" });
 
@@ -362,14 +385,118 @@ router.get("/public/orders/:orderId/track", async (req, res) => {
     quantity: orderItemsTable.quantity, status: orderItemsTable.status,
   }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
-  const timeline = [
+  const isCurbside = order.orderType === "curbside";
+  const baseTimeline = [
     { step: "placed", label: "Order placed", at: order.createdAt },
     { step: "preparing", label: "Preparing", at: tickets.some(t => t.status === "in_progress" || t.status === "ready") ? tickets[0]?.updatedAt : null },
     { step: "ready", label: "Ready", at: tickets.length > 0 && tickets.every(t => t.status === "ready" || t.status === "served") ? tickets[0]?.updatedAt : null },
-    { step: "served", label: "Served", at: order.status === "completed" || order.status === "served" ? order.updatedAt : null },
   ];
+  const timeline = isCurbside
+    ? [
+        ...baseTimeline,
+        { step: "arrived", label: "Arrived at curb", at: order.curbsideArrivedAt ?? null },
+        { step: "served", label: "Handed over", at: order.curbsideHandedOverAt ?? (order.status === "completed" ? order.updatedAt : null) },
+      ]
+    : [
+        ...baseTimeline,
+        { step: "served", label: "Served", at: order.status === "completed" || order.status === "served" ? order.updatedAt : null },
+      ];
 
   res.json({ order, tickets, items, timeline });
+});
+
+// Curbside arrival — guest taps "I've arrived" from the tracking page.
+// Tokenized; idempotent — the first arrival timestamp is preserved on re-tap,
+// but parking spot updates and broadcasts/notifications fire each time.
+router.post("/public/orders/:orderId/arrive", async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  const token = String(req.query.token ?? req.body?.token ?? "");
+  if (!orderId || !validateGuestToken(orderId, token)) {
+    return void res.status(403).json({ error: "Invalid order token" });
+  }
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.orderType !== "curbside") {
+    return void res.status(400).json({ error: "This isn't a curbside order." });
+  }
+  if (order.curbsideHandedOverAt) {
+    return void res.status(400).json({ error: "Order has already been handed over." });
+  }
+  const parkingSpotUpdate = typeof req.body?.parkingSpot === "string" && req.body.parkingSpot.trim().length > 0
+    ? req.body.parkingSpot.slice(0, 40)
+    : null;
+  const now = new Date();
+  const [updated] = await db.update(ordersTable).set({
+    curbsideArrivedAt: order.curbsideArrivedAt ?? now,
+    parkingSpot: parkingSpotUpdate ?? order.parkingSpot,
+    updatedAt: now,
+  }).where(eq(ordersTable.id, orderId)).returning();
+
+  // Best-effort notifications — never block the customer's "I've arrived" tap.
+  try {
+    const { broadcastEvent: bEvent, broadcastOrderUpdate: bOrder } = await import("../lib/socketio");
+    bEvent(order.restaurantId, "curbside:arrived", {
+      orderId: order.id, orderNumber: order.orderNumber,
+      vehicleColor: order.vehicleColor, vehicleModel: order.vehicleModel,
+      vehicleNumber: order.vehicleNumber, parkingSpot: updated.parkingSpot,
+    });
+    bOrder(order.id, { id: order.id, status: order.status, curbsideArrivedAt: updated.curbsideArrivedAt });
+    await db.insert(notificationsTable).values({
+      restaurantId: order.restaurantId,
+      type: "curbside_arrival",
+      title: `Curbside arrival: ${order.orderNumber}`,
+      message: `${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}`.trim(),
+      entityId: order.id, entityType: "order",
+    });
+  } catch (err) {
+    logger.error?.({ err, orderId }, "curbside arrival notification failed");
+  }
+  try {
+    const { pushToStaff } = await import("../lib/pushNotify");
+    await pushToStaff(
+      { restaurantId: order.restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
+      {
+        title: `Curbside guest arrived · ${order.orderNumber}`,
+        body: `${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${updated.parkingSpot ? ` at spot ${updated.parkingSpot}` : ""}`.trim(),
+        data: { orderId: order.id, kind: "curbside_arrival" },
+      },
+    );
+  } catch (err) {
+    logger.error?.({ err, orderId }, "curbside arrival push failed");
+  }
+  try {
+    const { sendWhatsApp, sendSms } = await import("../lib/notifications");
+    const [r] = await db.select({ phone: restaurantsTable.phone }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+    const body = `🚗 Curbside arrival for #${order.orderNumber}. ${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}.`.trim();
+    if (r?.phone) {
+      let waOk = false;
+      try {
+        await sendWhatsApp({ to: r.phone, body });
+        waOk = true;
+      } catch (err) {
+        logger.error?.({ err, orderId }, "curbside arrival WhatsApp failed; falling back to SMS");
+      }
+      if (!waOk) {
+        try {
+          await sendSms({ to: r.phone, body });
+        } catch (err) {
+          logger.error?.({ err, orderId }, "curbside arrival SMS fallback failed");
+        }
+      }
+    }
+  } catch (err) {
+    logger.error?.({ err, orderId }, "curbside arrival notification dispatch failed");
+  }
+  try {
+    await recordAuditLog({
+      req, module: "orders", action: "order.curbside_arrived",
+      entity: "order", entityId: order.id, restaurantId: order.restaurantId,
+      newValue: { arrivedAt: updated.curbsideArrivedAt, parkingSpot: updated.parkingSpot },
+    });
+  } catch (err) {
+    void err;
+  }
+  res.json({ ok: true, curbsideArrivedAt: updated.curbsideArrivedAt });
 });
 
 // ─── Public cart sessions (cust_abandoned_cart) ──────────────────────────
@@ -471,7 +598,20 @@ router.get("/public/orders/:id", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   if (!order) return void res.status(404).json({ error: "Not found" });
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
-  return void res.json({ id: order.id, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount, items, createdAt: order.createdAt });
+  return void res.json({
+    id: order.id, orderNumber: order.orderNumber, status: order.status,
+    paymentStatus: order.paymentStatus, totalAmount: order.totalAmount, items,
+    createdAt: order.createdAt,
+    order: {
+      orderType: order.orderType,
+      vehicleColor: order.vehicleColor,
+      vehicleModel: order.vehicleModel,
+      vehicleNumber: order.vehicleNumber,
+      parkingSpot: order.parkingSpot,
+      curbsideArrivedAt: order.curbsideArrivedAt,
+      curbsideHandedOverAt: order.curbsideHandedOverAt,
+    },
+  });
 });
 
 router.post("/public/orders/:id/payment-intent", async (req, res) => {
