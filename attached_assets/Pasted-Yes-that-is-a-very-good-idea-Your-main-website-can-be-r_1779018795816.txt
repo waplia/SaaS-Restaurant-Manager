@@ -1,0 +1,634 @@
+Yes, that is a **very good idea**.
+
+Your main website can be rich and detailed, but for ads you need a **separate fast mobile-first landing page** with only one goal: **lead/demo booking**.
+
+Use it for Meta ads, Google ads, WhatsApp campaigns, cold traffic, and retargeting.
+
+Best URL:
+
+```text
+/restaurant-pos-demo
+```
+
+or
+
+```text
+/book-restaurant-demo
+```
+
+or
+
+```text
+/ads/restaurant-os
+```
+
+My suggestion:
+
+```text
+/demo/restaurant-os
+```
+
+## Best landing page structure
+
+It should be short, fast, and conversion-focused:
+
+```text
+Hero
+Problem
+Product demo/mockup
+Key benefits
+Feature highlights
+Khana AI section
+QR + POS + Inventory + Payroll section
+Restaurant types
+Pricing teaser
+Lead form
+FAQ
+Final CTA
+```
+
+Use this prompt:
+
+```text
+Create a separate mobile-optimized ad landing page for KhanaLagao.
+
+Important:
+This page is specially for ads and lead generation.
+Do not show it directly in the main website navigation.
+Do not add it to the main header menu.
+Do not disturb the existing website, admin, dashboard, or app routes.
+This should be a separate high-converting landing page for paid ads.
+
+Page route:
+/ads/restaurant-os
+
+Alternative route if needed:
+/demo/restaurant-os
+
+Goal:
+Create a fast, modern, mobile-first landing page that converts restaurant owners into demo leads.
+
+Brand:
+KhanaLagao
+
+Tagline:
+Restaurant OS for Modern Food Businesses
+
+Positioning:
+POS, QR Menu, Kitchen/KDS, Inventory, Staff, Payroll, Customers, Growth Engine, Finance, Reports and Khana AI in one platform.
+
+Target audience:
+- Restaurant owners
+- Cafe owners
+- Cloud kitchen owners
+- Hotel restaurant managers
+- Food court operators
+- Tiffin service owners
+- Catering/banquet owners
+- Franchise/multi-outlet food businesses
+
+Design style:
+- Mobile-first
+- Premium SaaS
+- Modern food-tech
+- Fast loading
+- Orange/white/dark theme
+- Strong CTA
+- Real product mockups
+- Short sections
+- Sticky lead CTA
+- No heavy navigation
+- No unnecessary menu links
+- No long footer
+- No distractions
+
+Color theme:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Dark Navy: #0F172A
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+AI Purple Accent: #7C3AED
+Success Green: #16A34A
+Warning Amber: #F59E0B
+Danger Red: #EF4444
+
+====================================================
+1. LANDING PAGE HEADER
+====================================================
+
+Use a simple lightweight header.
+
+Header should include:
+- KhanaLagao logo
+- Short text: Restaurant OS
+- CTA button: Book Demo
+
+Do not show full website navigation.
+Do not show large mega menu.
+Do not show many links.
+
+Header should be sticky on mobile.
+
+====================================================
+2. HERO SECTION
+====================================================
+
+Hero should be very strong and conversion-focused.
+
+Headline:
+“Run Your Restaurant Smarter with KhanaLagao”
+
+Alternative headline:
+“POS, QR Menu, Inventory, Payroll & AI — All in One Restaurant OS”
+
+Subheadline:
+“Manage billing, kitchen, QR orders, stock, staff, customers, finance and growth from one powerful platform built for modern restaurants.”
+
+Hero badge:
+“Built for restaurants, cafes, cloud kitchens, hotels and food chains”
+
+CTA buttons:
+- Book Free Demo
+- Watch 60-sec Demo
+
+Hero visual:
+Create a realistic product mockup showing:
+- Today sales
+- Live orders
+- Kitchen status
+- Stock alert
+- Staff attendance
+- Khana AI insight
+
+Floating cards:
+- Today Sales ₹1,42,800
+- Live Orders 37
+- Kitchen 18 cooking
+- Stock Alert Cheese low
+- Khana AI: Send weekend offer
+- Rating 4.7
+
+Mobile:
+Hero should be compact.
+Mockup should fit properly.
+CTA should be visible above fold.
+
+====================================================
+3. TRUST / QUICK VALUE STRIP
+====================================================
+
+Add a short trust/value strip:
+
+“10+ modules • 50+ reports • AI growth tools • Multi-outlet ready”
+
+Or show icon row:
+POS • QR Menu • Kitchen • Inventory • Payroll • AI
+
+====================================================
+4. PAIN POINT SECTION
+====================================================
+
+Section title:
+“Still managing your restaurant with multiple tools?”
+
+Show pain cards:
+- Slow billing during rush hours
+- Kitchen order confusion
+- Stock leakage and wastage
+- Staff attendance and payroll issues
+- No customer repeat system
+- No clear profit report
+- Too much dependency on aggregators
+- No AI insights for growth
+
+Keep this section short and visual.
+
+====================================================
+5. SOLUTION SECTION
+====================================================
+
+Section title:
+“One platform to sell, serve, manage and grow.”
+
+Show 6 benefit cards:
+1. Faster billing
+2. Better kitchen control
+3. Smart QR ordering
+4. Stock and recipe tracking
+5. Staff and payroll management
+6. Growth with Khana AI
+
+Each card:
+- Icon
+- Short line
+- Small benefit text
+
+Mobile:
+Use 2-column compact grid or horizontal swipe cards.
+
+====================================================
+6. PRODUCT DEMO / LIVE FLOW SECTION
+====================================================
+
+Add a small animated product flow.
+
+Title:
+“See how KhanaLagao connects your restaurant”
+
+Show workflow:
+Customer Order → POS/QR → Kitchen/KDS → Inventory → Payment → CRM → Reports → Growth
+
+Create lightweight animated UI demo:
+- Order received
+- Sent to kitchen
+- Stock updated
+- Payment completed
+- Report updated
+
+If video is available, embed a short optimized video.
+If not, create animated HTML/CSS product cards.
+
+CTA:
+“Book a Live Demo”
+
+====================================================
+7. KEY FEATURES SECTION
+====================================================
+
+Section title:
+“Everything your restaurant needs in one system”
+
+Show compact feature grid:
+
+Core:
+- POS Billing
+- QR Menu
+- Online Orders
+- Kitchen/KDS
+- Table Management
+- Inventory
+- Staff & Payroll
+- Customers/CRM
+- Finance/P&L
+- Reports
+- Growth Engine
+- Khana AI
+
+Mobile:
+Do not show huge one-by-one cards.
+Use compact 2-column cards or tabs:
+- Sell
+- Manage
+- Grow
+- AI
+
+====================================================
+8. KHANA AI SECTION
+====================================================
+
+Make this section premium with orange + purple gradient.
+
+Title:
+“Meet Khana AI — Your Restaurant Growth Assistant”
+
+Content:
+“Khana AI helps you import menus, write item descriptions, create review drafts, generate campaigns, forecast demand and understand your sales.”
+
+Show AI features:
+- AI Menu Import
+- AI Review Booster
+- AI Campaign Generator
+- AI Sales Insights
+- AI Inventory Assistant
+- AI Chat Assistant
+
+Visual:
+AI chat mockup:
+“Paneer Tikka is trending tonight. Send a 10% offer to repeat customers?”
+
+CTA:
+“See Khana AI in Demo”
+
+====================================================
+9. RESTAURANT TYPES SECTION
+====================================================
+
+Section title:
+“Built for every food business”
+
+Show compact chips/cards:
+- Restaurants
+- Cafes
+- Cloud Kitchens
+- Hotels
+- Food Courts
+- Tiffin Services
+- Catering & Banquets
+- Franchise Chains
+
+Mobile:
+Use horizontal scroll chips.
+
+====================================================
+10. RESULTS / BENEFITS SECTION
+====================================================
+
+Section title:
+“What KhanaLagao helps you improve”
+
+Show results:
+- Reduce billing time
+- Reduce kitchen mistakes
+- Control food cost
+- Manage staff better
+- Get more repeat customers
+- Understand real profit
+- Grow with AI-powered campaigns
+- Manage multiple outlets
+
+Use realistic but avoid fake guaranteed numbers unless marked as examples.
+
+Example wording:
+“Designed to help reduce order confusion, improve stock visibility and increase repeat customer engagement.”
+
+====================================================
+11. PRICING TEASER SECTION
+====================================================
+
+Section title:
+“Plans for every restaurant size”
+
+Show 3 simple cards:
+Starter
+For small cafes and single outlets.
+
+Growth
+For growing restaurants.
+
+Enterprise
+For chains and multi-outlet brands.
+
+Do not show too much detail.
+CTA:
+“Get Pricing & Demo”
+
+====================================================
+12. LEAD FORM SECTION
+====================================================
+
+This is the most important part.
+
+Title:
+“Book your free KhanaLagao demo”
+
+Subtext:
+“See how KhanaLagao can work for your restaurant in a 30-minute walkthrough.”
+
+Form fields:
+- Full name
+- Restaurant name
+- Phone number
+- Email
+- City
+- Business type
+- Number of outlets
+- Interested features
+- Message optional
+
+Interested features options:
+- POS Billing
+- QR Menu
+- Inventory
+- Payroll
+- Khana AI
+- Growth Engine
+- Multi-outlet
+- Finance/P&L
+
+Submit button:
+“Book Free Demo”
+
+After submit:
+- Save lead in database/Super Admin leads
+- Include source_page = /ads/restaurant-os
+- Include campaign_source if URL has UTM parameters
+- Redirect to /thank-you or show success message:
+  “Thanks! Our team will contact you soon.”
+
+Form must work on mobile perfectly.
+
+====================================================
+13. FAQ SECTION
+====================================================
+
+Add short FAQ:
+
+1. What is KhanaLagao?
+Answer:
+KhanaLagao is a complete restaurant operating system for POS, QR menu, kitchen, inventory, staff, finance, growth and AI.
+
+2. Is it only for restaurants?
+Answer:
+No, it works for cafes, cloud kitchens, hotels, food courts, tiffin services, catering businesses and franchise chains.
+
+3. Does it support QR menu?
+Answer:
+Yes, customers can scan QR, view menu and place orders from the table.
+
+4. Does it support inventory?
+Answer:
+Yes, you can track stock, recipes, purchases, vendors, wastage and low-stock alerts.
+
+5. What is Khana AI?
+Answer:
+Khana AI helps with menu import, descriptions, review drafts, campaigns, insights and forecasting.
+
+6. Can I use it for multiple outlets?
+Answer:
+Yes, KhanaLagao supports multi-outlet and franchise-ready operations.
+
+7. How can I start?
+Answer:
+Book a free demo and our team will guide you.
+
+====================================================
+14. FINAL CTA SECTION
+====================================================
+
+Title:
+“Ready to run your restaurant smarter?”
+
+Text:
+“Book a free demo and see KhanaLagao in action.”
+
+Buttons:
+- Book Free Demo
+- Call/WhatsApp Us
+
+====================================================
+15. FOOTER FOR LANDING PAGE
+====================================================
+
+Use simple footer only.
+
+Footer should include:
+- KhanaLagao logo
+- Tagline
+- Contact email/phone
+- Privacy Policy
+- Terms
+- Copyright
+
+Do not use full large website footer on this ad landing page.
+
+====================================================
+16. MOBILE-FIRST REQUIREMENTS
+====================================================
+
+This page is mainly for ads, so mobile is priority.
+
+Mobile rules:
+- Fast loading
+- Compact hero
+- Sticky bottom CTA:
+  “Book Demo”
+- Click-to-call or WhatsApp button if available
+- No huge navigation
+- No endless grids
+- Use 2-column compact cards
+- Use carousels/chips where useful
+- Form should be easy to fill
+- Buttons should be full width where needed
+- No horizontal overflow
+- No overlapping visuals
+- No heavy animations
+- No large video autoplay unless optimized
+
+Sticky bottom CTA:
+Show on mobile:
+- Book Demo
+- WhatsApp
+
+Hide sticky CTA when user is inside the form area if it blocks inputs.
+
+====================================================
+17. PERFORMANCE REQUIREMENTS
+====================================================
+
+Because this is for ads, it must be very fast.
+
+- Keep JavaScript minimal
+- Do not load full website mega menu
+- Do not load heavy video above fold
+- Lazy load below-the-fold sections
+- Optimize images
+- Use WebP/AVIF
+- Use lightweight CSS animations
+- Do not load admin/dashboard code
+- Do not load unnecessary third-party scripts
+- Preload only important hero asset
+- Keep PageSpeed high
+
+Target:
+- Desktop performance 90+
+- Mobile performance 80+ minimum
+- No layout shift
+- Fast first load
+
+====================================================
+18. SEO / ADS TRACKING REQUIREMENTS
+====================================================
+
+SEO metadata:
+Title:
+KhanaLagao Restaurant OS | POS, QR Menu, Inventory, Payroll & AI
+
+Description:
+Book a free demo of KhanaLagao, a complete restaurant operating system for POS billing, QR menu, kitchen, inventory, payroll, finance, growth and Khana AI.
+
+Open Graph:
+Use same branding and description.
+
+Tracking:
+- Preserve UTM parameters when form submits.
+- Capture:
+  utm_source
+  utm_medium
+  utm_campaign
+  utm_content
+  utm_term
+  landing_page
+  referrer
+
+If analytics/pixels are installed:
+- Fire lead event only after successful form submit.
+- Do not slow down page.
+
+====================================================
+19. DESIGN REQUIREMENTS
+====================================================
+
+Visual design:
+- Modern SaaS ad landing page
+- Premium orange/white/dark theme
+- Product mockup driven
+- Clear CTA
+- Clean icons
+- Strong heading hierarchy
+- Trust-building
+- Mobile-first
+- Conversion-focused
+- Not too long
+- Not like a full website page
+- No generic template look
+
+Use visuals:
+- Dashboard mockup
+- Mobile QR menu mockup
+- Live order flow cards
+- Khana AI chat card
+- Stock alert card
+- Sales chart card
+
+====================================================
+20. TESTING
+====================================================
+
+Test:
+- /ads/restaurant-os loads
+- Mobile layout at 360px, 390px, 430px
+- Desktop layout
+- Header sticky
+- Sticky CTA
+- Form validation
+- Form submission
+- Lead saved with source_page and UTM values
+- Thank-you flow
+- All buttons work
+- No broken images
+- No console errors
+- Fast loading
+- No horizontal overflow
+
+====================================================
+21. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Separate ad landing page exists at /ads/restaurant-os.
+- It is not shown in main navigation.
+- It is fully mobile optimized.
+- It is fast loading.
+- It has strong hero, product mockup, benefits, Khana AI, features, FAQ and lead form.
+- It captures leads with source_page and UTM parameters.
+- Sticky mobile CTA works.
+- Form works.
+- Design matches KhanaLagao premium brand.
+- No broken links/images.
+- No admin/dashboard routes affected.
+```
+
+My recommendation: run ads to this page, not the homepage. Homepage is for exploring; this landing page is for **demo conversion**.
