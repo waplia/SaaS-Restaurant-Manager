@@ -1,5 +1,6 @@
 import { db } from "./lib/db";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
+import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
 import {
   subscriptionPlansTable,
   tenantsTable,
@@ -461,16 +462,11 @@ export async function seed(): Promise<void> {
   ]).onConflictDoNothing();
 
   console.log("✅ Marketing blog posts created");
-  // Default support ticket categories.
-  const { supportTicketCategoriesTable, supportSlaSettingsTable } = await import("./lib/db");
-  await db.insert(supportTicketCategoriesTable).values([
-    { name: "Billing", slug: "billing", description: "Invoices, payments, plan changes", defaultPriority: "normal", sortOrder: 10 },
-    { name: "Technical Issue", slug: "technical-issue", description: "Bugs, errors, performance problems", defaultPriority: "high", sortOrder: 20 },
-    { name: "Feature Request", slug: "feature-request", description: "Suggestions for new functionality", defaultPriority: "low", sortOrder: 30 },
-    { name: "Onboarding", slug: "onboarding", description: "Getting started, setup help, training", defaultPriority: "normal", sortOrder: 40 },
-    { name: "Other", slug: "other", description: "Anything else", defaultPriority: "normal", sortOrder: 99 },
-  ]).onConflictDoNothing();
+  // Default support ticket categories (idempotent: only inserts when the
+  // table is empty, so admin customisations are never overwritten).
+  await seedDefaultSupportCategories();
   // Ensure the singleton SLA settings row exists.
+  const { supportSlaSettingsTable } = await import("./lib/db");
   const existingSla = await db.select().from(supportSlaSettingsTable).limit(1);
   if (existingSla.length === 0) await db.insert(supportSlaSettingsTable).values({});
   console.log("✅ Support ticket defaults created");

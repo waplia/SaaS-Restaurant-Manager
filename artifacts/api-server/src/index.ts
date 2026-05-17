@@ -4,6 +4,7 @@ import { initSocketIO } from "./lib/socketio";
 import { startScheduler } from "./lib/scheduler";
 import { startBroadcastScheduler, seedDefaultTemplates } from "./lib/notificationCenter";
 import { seedDefaultAiCreditRules } from "./lib/aiCreditRulesSeeder";
+import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
 import { seedAddonCatalogue } from "./lib/addons";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
@@ -32,6 +33,7 @@ startScheduler();
 startBroadcastScheduler();
 seedDefaultTemplates().catch(err => console.error("Failed to seed default templates", err));
 seedDefaultAiCreditRules().catch(err => console.error("Failed to seed default AI credit rules", err));
+seedDefaultSupportCategories().catch(err => console.error("Failed to seed default support categories", err));
 seedAddonCatalogue().catch(err => console.error("Failed to seed add-on catalogue", err));
 runBootstrapPasswordReset().catch(err => console.error("Bootstrap password reset failed", err));
 
