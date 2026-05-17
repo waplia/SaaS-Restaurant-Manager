@@ -87,8 +87,8 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   const tenantId = req.user?.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant" });
 
-  const { planId, successUrl, cancelUrl, billingPeriod: bodyPeriod } = req.body as {
-    planId: number; successUrl: string; cancelUrl: string; billingPeriod?: "monthly" | "yearly";
+  const { planId, successUrl, cancelUrl, couponCode, billingPeriod: bodyPeriod } = req.body as {
+    planId: number; successUrl: string; cancelUrl: string; couponCode?: string; billingPeriod?: "monthly" | "yearly";
   };
 
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId));
@@ -106,13 +106,6 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
     });
   }
 
-  let customerId = tenant.stripeCustomerId;
-  if (!customerId) {
-    const customer = await stripe.customers.create({ name: tenant.name, metadata: { tenantId: String(tenantId) } });
-    customerId = customer.id;
-    await db.update(tenantsTable).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(tenantsTable.id, tenantId));
-  }
-
   // Resolve the chosen billing period and the right amount/price ID for it.
   const period: "monthly" | "yearly" = bodyPeriod === "yearly" || bodyPeriod === "monthly"
     ? bodyPeriod
@@ -121,25 +114,58 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
   if (period === "yearly" && !yearlyConfigured && plan.billingPeriod !== "yearly") {
     return void res.status(400).json({ error: "This plan does not offer yearly billing." });
   }
+  const listPrice = (period === "yearly" && yearlyConfigured) ? Number(plan.yearlyPrice) : Number(plan.price);
+
+  // Validate the coupon now so we charge the discounted amount through Stripe,
+  // matching the Cashfree/Razorpay peer flow.
+  let amountToCharge = listPrice;
+  let appliedCouponCode: string | null = null;
+  if (couponCode) {
+    const isFirst = (await countPriorPayments(tenantId, plan.id)) === 0;
+    const r = await validateCoupon({ code: couponCode, tenantId, plan: { id: plan.id, price: String(listPrice) }, action: "payment", isFirstCycle: isFirst });
+    if (!r.ok) return void res.status(400).json({ error: r.message, reason: r.reason });
+    amountToCharge = r.resolved.effectiveAmount;
+    appliedCouponCode = r.resolved.coupon.code;
+  }
+
+  // Coupon-zeroed payments skip Stripe entirely and activate immediately —
+  // mirrors the Cashfree/Razorpay free-activation branches.
+  if (amountToCharge <= 0) {
+    const externalRef = `coupon_free_stripe_${tenantId}_${planId}_${Date.now()}`;
+    await activateForTenant(tenantId, planId, externalRef, {
+      provider: "stripe", amount: "0.00", currency: (plan.currency ?? "INR").toUpperCase(),
+      couponCode: appliedCouponCode, redeemedBy: req.user?.id ?? null,
+      billingPeriod: period,
+    });
+    return void res.json({ url: null, freeActivation: true, couponCode: appliedCouponCode });
+  }
+
+  let customerId = tenant.stripeCustomerId;
+  if (!customerId) {
+    const customer = await stripe.customers.create({ name: tenant.name, metadata: { tenantId: String(tenantId) } });
+    customerId = customer.id;
+    await db.update(tenantsTable).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(tenantsTable.id, tenantId));
+  }
+
   const presetPriceId = period === "yearly" ? plan.stripeYearlyPriceId : plan.stripeMonthlyPriceId;
   const stripeCurrency = (plan.currency ?? "INR").toLowerCase();
 
+  // When a coupon discounts the amount, ignore the preset Stripe price ID and
+  // build an inline price_data line item at the discounted amount so the
+  // tenant sees the right total at checkout.
+  const useInlinePrice = appliedCouponCode != null || !presetPriceId;
   const lineItems: Stripe.Checkout.SessionCreateParams["line_items"] = [
-    presetPriceId
-      ? { price: presetPriceId, quantity: 1 }
-      : {
+    useInlinePrice
+      ? {
           price_data: {
             currency: stripeCurrency,
             product_data: { name: plan.name, description: (plan.features ?? []).join(", ") },
-            unit_amount: Math.round(
-              (period === "yearly" && yearlyConfigured
-                ? Number(plan.yearlyPrice)
-                : Number(plan.price)) * 100,
-            ),
+            unit_amount: Math.round(amountToCharge * 100),
             recurring: { interval: period === "yearly" ? "year" : "month" },
           },
           quantity: 1,
-        },
+        }
+      : { price: presetPriceId!, quantity: 1 },
   ];
 
   const session = await stripe.checkout.sessions.create({
@@ -147,12 +173,17 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
     payment_method_types: ["card"],
     mode: "subscription",
     line_items: lineItems,
-    metadata: { tenantId: String(tenantId), planId: String(planId), billingPeriod: period },
+    metadata: {
+      tenantId: String(tenantId),
+      planId: String(planId),
+      billingPeriod: period,
+      ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}),
+    },
     success_url: successUrl + "?session_id={CHECKOUT_SESSION_ID}",
     cancel_url: cancelUrl,
   });
 
-  res.json({ url: session.url, sessionId: session.id });
+  res.json({ url: session.url, sessionId: session.id, couponCode: appliedCouponCode });
 });
 
 router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", requireRole("owner", "super_admin"), async (req, res) => {

@@ -22,6 +22,8 @@ import {
   Landmark, Smartphone, Clock, Wallet, Sparkles, Loader2,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useAppSettings } from "@/lib/appSettings";
 import { ApiError } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch, apiAction } from "@/lib/api";
@@ -214,6 +216,8 @@ function CheckoutModal({
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const appSettings = useAppSettings();
   const createCheckout = useCreateCheckout();
   const createCashfree = useCreateCashfreeOrder();
   const createRazorpay = useCreateSubscriptionRazorpayOrder();
@@ -299,7 +303,11 @@ function CheckoutModal({
         if (r.url) { window.location.href = r.url; return; }
         throw new Error("Cashfree didn't return a checkout URL.");
       } else if (method === "stripe") {
-        const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl, billingPeriod });
+        const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl, couponCode: cc, billingPeriod });
+        if (r.activated || r.freeActivation) {
+          toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
+          onPaid(); return;
+        }
         if (r.url) { window.location.href = r.url; return; }
         throw new Error("Stripe didn't return a checkout URL.");
       } else if (method === "razorpay") {
@@ -404,8 +412,13 @@ function CheckoutModal({
   return (
     <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent
-        side="right"
-        className="w-full sm:max-w-md p-0 flex flex-col gap-0 sm:h-full"
+        side={isMobile ? "bottom" : "right"}
+        className={cn(
+          "p-0 flex flex-col gap-0",
+          isMobile
+            ? "h-[92vh] w-full rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
+            : "w-full sm:max-w-md sm:h-full",
+        )}
         data-testid="checkout-drawer"
       >
         <SheetHeader className="px-6 py-4 border-b border-border space-y-1 text-left">
@@ -436,6 +449,13 @@ function CheckoutModal({
               <p className="text-sm text-muted-foreground">
                 Online payments aren't set up yet. Please contact support to activate your plan.
               </p>
+              <a
+                href={`mailto:${appSettings.supportEmail}?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                Email {appSettings.supportEmail}
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
           ) : (
             <div>

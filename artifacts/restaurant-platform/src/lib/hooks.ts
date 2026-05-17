@@ -2156,8 +2156,11 @@ export function useSubscription(restaurantId: number) {
 
 export function useCreateCheckout() {
   return useMutation({
-    mutationFn: ({ restaurantId, planId, successUrl, cancelUrl, billingPeriod }: { restaurantId: number; planId: number; successUrl: string; cancelUrl: string; billingPeriod?: "monthly" | "yearly" }) =>
-      apiPost<{ url: string | null; sessionId?: string; mock?: boolean }>(`/restaurants/${restaurantId}/subscription/create-checkout`, { planId, successUrl, cancelUrl, billingPeriod }),
+    mutationFn: ({ restaurantId, planId, successUrl, cancelUrl, couponCode, billingPeriod }: { restaurantId: number; planId: number; successUrl: string; cancelUrl: string; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
+      apiPost<{ url: string | null; sessionId?: string; mock?: boolean; activated?: boolean; freeActivation?: boolean; couponCode?: string | null }>(
+        `/restaurants/${restaurantId}/subscription/create-checkout`,
+        { planId, successUrl, cancelUrl, couponCode, billingPeriod },
+      ),
   });
 }
 
