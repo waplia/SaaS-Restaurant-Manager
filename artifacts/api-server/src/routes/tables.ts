@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, or, inArray, gte, lte, ne, sql, desc, asc } from "drizzle-orm";
+import { eq, and, or, inArray, gte, lte, ne, sql, desc, asc, gt } from "drizzle-orm";
 import { db, floorTablesTable, reservationsTable, waitlistEntriesTable, customersTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable, notificationsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -132,11 +132,22 @@ router.post("/restaurants/:restaurantId/tables", requireRole("owner", "manager",
     if (restaurant?.tenantId) {
       const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, restaurant.tenantId));
       if (tenant?.planId) {
-        const [plan] = await db.select({ maxTables: subscriptionPlansTable.maxTables }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        const [plan] = await db.select({ name: subscriptionPlansTable.name, maxTables: subscriptionPlansTable.maxTables }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
         if (plan && plan.maxTables > 0) {
           const existing = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.restaurantId, restaurantId), eq(floorTablesTable.isActive, true)));
           if (existing.length >= plan.maxTables) {
-            return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxTables} table(s). Upgrade to add more.` });
+            const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+              .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxTables, plan.maxTables)))
+              .orderBy(subscriptionPlansTable.price).limit(1);
+            return void res.status(402).json({
+              code: "PLAN_LIMIT_REACHED",
+              error: `Your plan allows a maximum of ${plan.maxTables} table(s). Upgrade to add more.`,
+              feature: "maxTables",
+              currentPlan: plan.name,
+              currentLimit: plan.maxTables,
+              currentUsage: existing.length,
+              suggestedPlan: suggested[0]?.name ?? null,
+            });
           }
         }
       }

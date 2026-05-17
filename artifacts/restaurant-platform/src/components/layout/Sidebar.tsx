@@ -17,16 +17,21 @@ import { resolveImageUrl } from "@/components/ImageUploadField";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { isFeatureEnabled } from "@workspace/db/planFeatures";
 
 type IconType = typeof LayoutDashboard;
 /**
- * Legacy planGate values still supported, plus any boolean feature-flag key
- * from the `PLAN_BOOLEAN_FEATURES` catalogue (e.g. `ops_panic_button`,
- * `menu_heatmap`). Arbitrary keys are resolved by looking the flag up on
- * `subscription.plan.featureFlags`.
+ * A planGate is either one of the two AI pseudo-gates (which check the /ai/wallet
+ * response) or any boolean feature key from PLAN_BOOLEAN_FEATURES. Locked links
+ * deep-link to /pricing?feature=<resolved feature key>.
  */
-type PlanGate = "ai" | "ai_insights" | "cloud_kitchen" | (string & {});
+type PlanGate = string;
 type BadgeKind = "new" | "ai" | "premium" | "addon" | "beta";
+function gateToFeatureKey(gate: PlanGate): string {
+  if (gate === "ai") return "khana_ai_enabled";
+  if (gate === "ai_insights") return "khana_ai_insights_enabled";
+  return gate;
+}
 type LinkItem = {
   kind: "link";
   href: string;
@@ -39,6 +44,9 @@ type LinkItem = {
   requiresBarMode?: boolean;
   requiresCanteenMode?: boolean;
   badge?: BadgeKind;
+  /** Runtime flag set by passesPlanGate; when true the link points to /pricing. */
+  locked?: boolean;
+  lockedFeatureKey?: string;
 };
 type GroupItem = {
   kind: "group";
@@ -60,14 +68,14 @@ const navConfig: NavEntry[] = [
   {
     kind: "group", key: "sell", label: "Sell", icon: ShoppingCart,
     children: [
-      { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor },
+      { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor, planGate: "kitchen_display" },
       { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
-      { kind: "link", href: "/kitchen", label: "Kitchen / KDS", icon: ChefHat },
+      { kind: "link", href: "/kitchen", label: "Kitchen / KDS", icon: ChefHat, planGate: "kitchen_display" },
       { kind: "link", href: "/tables", label: "Tables", icon: Table2 },
-      { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays },
+      { kind: "link", href: "/reservations", label: "Reservations", icon: CalendarDays, planGate: "reservations" },
       { kind: "link", href: "/waiter-requests", label: "Waiter Requests", icon: BellRing, roles: ["owner", "manager", "waiter"] },
-      { kind: "link", href: "/delivery/executives", label: "Delivery Executives", icon: Truck, roles: ["owner", "manager"] },
-      { kind: "link", href: "/delivery/cod", label: "COD Monitoring", icon: Banknote, roles: ["owner", "manager"] },
+      { kind: "link", href: "/delivery/executives", label: "Delivery Executives", icon: Truck, roles: ["owner", "manager"], planGate: "delivery_module" },
+      { kind: "link", href: "/delivery/cod", label: "COD Monitoring", icon: Banknote, roles: ["owner", "manager"], planGate: "delivery_module" },
       { kind: "link", href: "/tokens", label: "Tokens", icon: BellRing, roles: ["owner", "manager", "waiter", "cashier", "kitchen"] },
     ],
   },
@@ -99,8 +107,8 @@ const navConfig: NavEntry[] = [
   {
     kind: "group", key: "inventory", label: "Inventory", icon: Package,
     children: [
-      { kind: "link", href: "/inventory", label: "Stock", icon: Package },
-      { kind: "link", href: "/waste", label: "Waste", icon: Trash2, roles: ["owner", "manager", "kitchen", "waiter", "cashier"] },
+      { kind: "link", href: "/inventory", label: "Stock", icon: Package, planGate: "inventory_management" },
+      { kind: "link", href: "/waste", label: "Waste", icon: Trash2, roles: ["owner", "manager", "kitchen", "waiter", "cashier"], planGate: "inventory_management" },
       { kind: "link", href: "/documents", label: "Documents", icon: Folder, requiresDocsAccess: true },
       // ── Inventory Control pack (Task #365) ──
       { kind: "link", href: "/inventory/packaging",       label: "Packaging Inventory",  icon: Package,    roles: ["owner", "manager"], planGate: "inv_packaging",         badge: "premium" },
@@ -116,10 +124,10 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/customers", label: "CRM", icon: Users },
       { kind: "link", href: "/surveys", label: "Feedback & Surveys", icon: MessageSquare, roles: ["owner", "manager"] },
-      { kind: "link", href: "/memberships", label: "Memberships", icon: Receipt, roles: ["owner", "manager", "waiter", "super_admin"] },
-      { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"] },
+      { kind: "link", href: "/memberships", label: "Memberships", icon: Receipt, roles: ["owner", "manager", "waiter", "super_admin"], planGate: "loyalty_program" },
+      { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"], planGate: "loyalty_program" },
       { kind: "link", href: "/ai/review-qrs", label: "Review Booster", icon: Sparkles, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
-      { kind: "link", href: "/settings/loyalty", label: "Loyalty Settings", icon: Award, roles: ["owner", "manager"] },
+      { kind: "link", href: "/settings/loyalty", label: "Loyalty Settings", icon: Award, roles: ["owner", "manager"], planGate: "loyalty_program" },
       // ── Customer Intelligence pack (Task #365) ──
       { kind: "link", href: "/customers/vip-alerts",       label: "VIP Alerts",            icon: BellRing,      roles: ["owner", "manager"], planGate: "cust_vip_alerts",          badge: "premium" },
       { kind: "link", href: "/customers/blacklist",        label: "Guest Blacklist",       icon: ShieldCheck,   roles: ["owner", "manager"], planGate: "cust_blacklist",           badge: "premium" },
@@ -138,9 +146,9 @@ const navConfig: NavEntry[] = [
     kind: "group", key: "growth", label: "Growth Engine", icon: Megaphone, badge: "premium",
     roles: ["owner", "manager"],
     children: [
-      { kind: "link", href: "/growth", label: "Campaigns", icon: Megaphone, roles: ["owner", "manager"] },
-      { kind: "link", href: "/settings/discounts", label: "Coupons & Discounts", icon: Percent, roles: ["owner", "manager"] },
-      { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"] },
+      { kind: "link", href: "/growth", label: "Campaigns", icon: Megaphone, roles: ["owner", "manager"], planGate: "advanced_reports" },
+      { kind: "link", href: "/settings/discounts", label: "Coupons & Discounts", icon: Percent, roles: ["owner", "manager"], planGate: "discounts_promotions" },
+      { kind: "link", href: "/loyalty/analytics", label: "Loyalty Analytics", icon: Award, roles: ["owner", "manager"], planGate: "loyalty_program" },
       { kind: "link", href: "/ai/feedback-wall", label: "Feedback Wall", icon: Sparkles, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
       { kind: "link", href: "/ai/feedback-recovery", label: "Recovery Campaigns", icon: AlertTriangle, roles: ["owner", "manager"], planGate: "ai", badge: "ai" },
       // ── Marketing pack (Task #365) ──
@@ -181,8 +189,8 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/staff-tasks", label: "Staff Tasks", icon: ClipboardCheck, roles: ["owner", "manager"] },
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
       { kind: "link", href: "/staff-incentives", label: "Incentives", icon: Wallet, roles: ["owner", "manager"] },
-      { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"] },
-      { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"] },
+      { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"], planGate: "sop_training" },
+      { kind: "link", href: "/mystery-audits", label: "Mystery Audits", icon: ClipboardCheck, roles: ["owner", "manager", "auditor", "super_admin"], planGate: "mystery_audits" },
       { kind: "link", href: "/my-training", label: "My Training", icon: GraduationCap, roles: ["cashier", "waiter", "kitchen", "delivery_executive"] },
       // ── Staff pack (Task #365) ──
       { kind: "link", href: "/staff/table-optimization", label: "Table Optimization", icon: Table2,   roles: ["owner", "manager"], planGate: "staff_table_optimization", badge: "premium" },
@@ -198,14 +206,14 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/payments", label: "Payments", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/due-payments", label: "Due Payments", icon: AlertCircle, roles: ["owner", "manager"] },
       { kind: "link", href: "/cash-register", label: "Cash Register", icon: Banknote, roles: ["owner", "manager", "waiter"] },
-      { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"] },
-      { kind: "link", href: "/pnl", label: "P&L Dashboard", icon: TrendingUp, roles: ["owner", "manager", "super_admin"] },
+      { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"], planGate: "expense_tracking" },
+      { kind: "link", href: "/pnl", label: "P&L Dashboard", icon: TrendingUp, roles: ["owner", "manager", "super_admin"], planGate: "smart_pnl" },
       { kind: "link", href: "/wallets", label: "Wallet", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/gift-cards", label: "Gift Cards", icon: Gift, roles: ["owner", "manager", "cashier"] },
       { kind: "link", href: "/settlements", label: "Settlements & Recon", icon: TrendingUp, roles: ["owner", "manager", "cashier"] },
       { kind: "link", href: "/aggregator-payouts", label: "Aggregator Payouts", icon: Truck, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/capital", label: "Capital & Insurance", icon: Banknote, roles: ["owner", "manager"] },
-      { kind: "link", href: "/compliance", label: "Compliance", icon: ScrollText, roles: ["owner", "manager"] },
+      { kind: "link", href: "/compliance", label: "Compliance", icon: ScrollText, roles: ["owner", "manager"], planGate: "compliance_manager" },
     ],
   },
 
@@ -213,7 +221,7 @@ const navConfig: NavEntry[] = [
   {
     kind: "group", key: "operations", label: "Operations", icon: Building2,
     children: [
-      { kind: "link", href: "/events", label: "Events & Catering", icon: PartyPopper, roles: ["owner", "manager", "waiter", "kitchen"] },
+      { kind: "link", href: "/events", label: "Events & Catering", icon: PartyPopper, roles: ["owner", "manager", "waiter", "kitchen"], planGate: "events_catering" },
       { kind: "link", href: "/hotel", label: "Hotel Mode", icon: BellRing, roles: ["owner", "manager", "cashier", "waiter", "staff"] },
       { kind: "link", href: "/food-courts", label: "Food Court", icon: UtensilsCrossed, roles: ["owner", "manager", "food_court_owner"] },
       { kind: "link", href: "/food-court/my-counter", label: "My Counter", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "staff"] },
@@ -267,8 +275,8 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/settings/token-display", label: "Token Display", icon: BellRing, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/kitchens", label: "Kitchen Stations", icon: ChefHat, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/accounting", label: "Accounting Integrations", icon: ScrollText, roles: ["owner", "manager"] },
-      { kind: "link", href: "/settings/webhooks", label: "Webhooks", icon: Settings, roles: ["owner", "manager"] },
-      { kind: "link", href: "/settings/api-keys", label: "API Keys", icon: Settings, roles: ["owner", "manager"] },
+      { kind: "link", href: "/settings/webhooks", label: "Webhooks", icon: Settings, roles: ["owner", "manager"], planGate: "api_access" },
+      { kind: "link", href: "/settings/api-keys", label: "API Keys", icon: Settings, roles: ["owner", "manager"], planGate: "api_access" },
     ],
   },
 
@@ -276,7 +284,7 @@ const navConfig: NavEntry[] = [
   {
     kind: "group", key: "reports", label: "Reports", icon: BarChart3,
     children: [
-      { kind: "link", href: "/reports/sales", label: "Sales", icon: TrendingUp },
+      { kind: "link", href: "/reports/sales", label: "Sales", icon: TrendingUp, planGate: "advanced_reports" },
       { kind: "link", href: "/reports/compare", label: "Compare Branches", icon: BarChart3, roles: ["owner", "manager", "super_admin"] },
       { kind: "link", href: "/reports/tax", label: "Tax", icon: Percent },
       { kind: "link", href: "/reports/staff", label: "Staff", icon: Users },
@@ -409,7 +417,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { data: subscription } = useQuery<{ plan: { featureFlags: Record<string, boolean> | null } | null }>({
     queryKey: ["subscription-features", restaurantId],
     queryFn: () => apiFetch(`/restaurants/${restaurantId}/subscription`),
-    enabled: !!restaurantId && !!user && (user.isSuperAdmin || ["owner", "manager"].includes(user.role ?? "")),
+    enabled: !!restaurantId && !!user,
     staleTime: 60_000,
   });
   const planFlags: Record<string, boolean> = subscription?.plan?.featureFlags ?? {};
@@ -452,13 +460,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     if (user?.isSuperAdmin) return true;
     if (gate === "ai") return aiPlanEnabled;
     if (gate === "ai_insights") return aiPlanEnabled && aiInsightsEnabled;
-    if (gate === "cloud_kitchen") return cloudKitchenPlanEnabled;
-    // Generic catalogue feature key: look it up on the plan's featureFlags.
-    // Items are shown when the flag is true OR when the plan hasn't loaded yet
-    // (so we never hide newly-introduced links from owners while the request
-    // is in flight). Clicking through still lands on the UpgradeRequiredPage.
-    if (!subscription) return true;
-    return planFlags[gate] === true;
+    return isFeatureEnabled(subscription?.plan?.featureFlags ?? null, gate);
   };
 
   const groupRoleAllowed = (g: GroupItem) => {
@@ -467,22 +469,38 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     return user?.role ? g.roles.includes(user.role) : false;
   };
 
+  // Lock (rather than hide) plan-gated entries: render them with a PRO badge
+  // and point them at /pricing?feature=KEY so users can see what they'd get.
+  const lockLinkIfGated = (l: LinkItem, parentGate?: PlanGate): LinkItem => {
+    const gate = l.planGate ?? parentGate;
+    if (!gate || passesPlanGate(gate)) return l;
+    const featureKey = gateToFeatureKey(gate);
+    return {
+      ...l,
+      locked: true,
+      lockedFeatureKey: featureKey,
+      href: `/pricing?feature=${encodeURIComponent(featureKey)}`,
+      badge: "premium",
+    };
+  };
+
   const visibleEntries: NavEntry[] = useMemo(() => {
     const out: NavEntry[] = [];
     for (const e of navConfig) {
       if (e.kind === "link") {
-        if (!passesPlanGate(e.planGate)) continue;
-        if (canSee(e)) out.push(e);
+        if (!canSee(e)) continue;
+        out.push(lockLinkIfGated(e));
       } else {
-        if (!passesPlanGate(e.planGate)) continue;
         if (!groupRoleAllowed(e)) continue;
-        const visibleChildren = e.children.filter((c) => canSee(c) && passesPlanGate(c.planGate));
+        const visibleChildren = e.children
+          .filter((c) => canSee(c))
+          .map((c) => lockLinkIfGated(c, e.planGate));
         if (visibleChildren.length > 0) out.push({ ...e, children: visibleChildren });
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, cloudKitchenPlanEnabled, docsHasAccess, bakeryModeOn, barModeOn, canteenModeOn, subscription]);
+  }, [user?.role, user?.isSuperAdmin, aiPlanEnabled, aiInsightsEnabled, subscription?.plan?.featureFlags, docsHasAccess, bakeryModeOn, barModeOn, canteenModeOn, subscription]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);

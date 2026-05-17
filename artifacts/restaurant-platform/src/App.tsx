@@ -43,6 +43,8 @@ import TokensPage from "@/pages/tokens";
 import TokensHistoryPage from "@/pages/tokens-history";
 import DisplayTokenPage from "@/pages/display-token";
 import SubscriptionPage from "@/pages/subscription";
+import PricingPage from "@/pages/pricing";
+import { PlanProtectedRoute } from "@/lib/planFeatures";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import OnboardingPage from "@/pages/onboarding";
@@ -266,8 +268,8 @@ function Router() {
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
-      <Route path="/sop-training" component={() => <RoleProtectedRoute component={SopTrainingPage} allow={["owner", "manager", "super_admin"]} />} />
-      <Route path="/mystery-audits" component={() => <RoleProtectedRoute component={MysteryAuditsPage} allow={["owner", "manager", "auditor", "super_admin"]} />} />
+      <Route path="/sop-training" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SopTrainingPage} feature="sop_training" />} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/mystery-audits" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={MysteryAuditsPage} feature="mystery_audits" />} allow={["owner", "manager", "auditor", "super_admin"]} />} />
       <Route path="/my-training" component={() => <ProtectedRoute component={MyTrainingPage} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
@@ -291,10 +293,10 @@ function Router() {
       <Route path="/portal/help" component={() => <ProtectedRoute component={PortalHelpPage} />} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/documents" component={() => <ProtectedRoute component={DocumentsPage} />} />
-      <Route path="/pos" component={() => <ProtectedRoute component={PosPage} />} />
+      <Route path="/pos" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={PosPage} feature="kitchen_display" />} />} />
       <Route path="/hotel" component={() => <RoleProtectedRoute component={HotelPage} allow={["owner", "manager", "cashier", "waiter", "kitchen", "staff"]} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
-      <Route path="/kitchen" component={() => <ProtectedRoute component={KitchenPage} />} />
+      <Route path="/kitchen" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={KitchenPage} feature="kitchen_display" />} />} />
       <Route path="/tables" component={() => <ProtectedRoute component={TablesPage} />} />
       <Route path="/menu" component={() => <ProtectedRoute component={MenuPage} />} />
       <Route path="/menu-management" component={() => <ProtectedRoute component={MenuPage} />} />
@@ -311,28 +313,30 @@ function Router() {
       <Route path="/menu/launches" component={() => <RoleProtectedRoute component={MenuLaunchesPage} allow={["owner", "manager"]} />} />
       <Route path="/menu/photo-approvals" component={() => <RoleProtectedRoute component={MenuPhotoApprovalsPage} allow={["owner", "manager"]} />} />
       <Route path="/menu/brand-assets" component={() => <RoleProtectedRoute component={MenuBrandAssetsPage} allow={["owner", "manager"]} />} />
-      <Route path="/growth" component={() => <RoleProtectedRoute component={GrowthEnginePage} allow={["owner", "manager"]} />} />
+      <Route path="/pricing" component={() => <ProtectedRoute component={PricingPage} />} />
+      <Route path="/growth" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={GrowthEnginePage} feature="advanced_reports" />} allow={["owner", "manager"]} />} />
       <Route path="/competitors" component={() => <RoleProtectedRoute component={CompetitorsPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/comparison" component={() => <RoleProtectedRoute component={CompetitorComparisonPage} allow={["owner", "manager"]} />} />
       <Route path="/competitors/:id" component={() => <RoleProtectedRoute component={CompetitorDetailPage} allow={["owner", "manager"]} />} />
-      <Route path="/loyalty/analytics" component={() => <RoleProtectedRoute component={LoyaltyAnalyticsPage} allow={["owner", "manager"]} />} />
-      <Route path="/inventory" component={() => <ProtectedRoute component={InventoryPage} />} />
+      <Route path="/loyalty/analytics" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={LoyaltyAnalyticsPage} feature="loyalty_program" />} allow={["owner", "manager"]} />} />
+      <Route path="/inventory" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={InventoryPage} feature="inventory_management" />} />} />
       <Route path="/inventory/packaging" component={() => <RoleProtectedRoute component={PackagingInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/condiments" component={() => <RoleProtectedRoute component={CondimentsInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/portion-drift" component={() => <RoleProtectedRoute component={PortionDriftPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/recipe-versions" component={() => <RoleProtectedRoute component={RecipeVersionsPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/kitchen/taste-testing" component={() => <RoleProtectedRoute component={TasteTestingPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/reservations" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={ReservationsPage} feature="reservations" />} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={PaymentsPage} />} />
       <Route path="/due-payments" component={() => <ProtectedRoute component={DuePaymentsPage} />} />
       <Route path="/cash-register" component={() => <RoleProtectedRoute component={CashRegisterPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/staff-tasks" component={() => <RoleProtectedRoute component={StaffTasksPage} allow={["owner", "manager"]} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={CustomersPage} />} />
-      <Route path="/expenses" component={() => <RoleProtectedRoute component={ExpensesPage} allow={["owner", "manager"]} />} />
-      <Route path="/waste" component={() => <RoleProtectedRoute component={WastePage} allow={["owner", "manager", "kitchen", "waiter", "cashier"]} />} />
-      <Route path="/pnl" component={() => <RoleProtectedRoute component={PnlPage} allow={["owner", "manager", "super_admin"]} />} />
-      <Route path="/compliance" component={() => <RoleProtectedRoute component={CompliancePage} allow={["owner", "manager"]} />} />
-      <Route path="/cloud-kitchen" component={() => <RoleProtectedRoute component={CloudKitchenPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/expenses" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ExpensesPage} feature="expense_tracking" />} allow={["owner", "manager"]} />} />
+      <Route path="/waste" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WastePage} feature="inventory_management" />} allow={["owner", "manager", "kitchen", "waiter", "cashier"]} />} />
+      <Route path="/pnl" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={PnlPage} feature="smart_pnl" />} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/compliance" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CompliancePage} feature="compliance_manager" />} allow={["owner", "manager"]} />} />
+      <Route path="/cloud-kitchen" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CloudKitchenPage} feature="cloud_kitchen" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/staff-incentives" component={() => <RoleProtectedRoute component={StaffIncentivesPage} allow={["owner", "manager"]} />} />
       <Route path="/wallets" component={() => <RoleProtectedRoute component={WalletsPage} allow={["owner", "manager"]} />} />
@@ -342,11 +346,11 @@ function Router() {
       <Route path="/capital" component={() => <RoleProtectedRoute component={CapitalInsurancePage} allow={["owner", "manager"]} />} />
       <Route path="/admin/fintech" component={() => <SuperAdminRoute component={AdminFintechPage} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
-      <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={FraudAlertsPage} allow={["owner", "manager", "super_admin"]} />} />
-      <Route path="/reports/health-score" component={() => <RoleProtectedRoute component={HealthScorePage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={FraudAlertsPage} feature="advanced_reports" />} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/reports/health-score" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={HealthScorePage} feature="advanced_reports" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/sustainability" component={() => <RoleProtectedRoute component={SustainabilityPage} allow={["owner", "manager", "super_admin"]} />} />
-      <Route path="/reports/:section" component={() => <ProtectedRoute component={ReportsPage} />} />
-      <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={DeliveryExecutivesPage} allow={["owner", "manager"]} />} />
+      <Route path="/reports/:section" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={ReportsPage} feature="advanced_reports" />} />} />
+      <Route path="/delivery/executives" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={DeliveryExecutivesPage} feature="delivery_module" />} allow={["owner", "manager"]} />} />
       <Route path="/corporate" component={() => <RoleProtectedRoute component={CorporateDashboardPage} allow={["owner", "manager"]} />} />
       <Route path="/corporate/companies" component={() => <RoleProtectedRoute component={CorporateCompaniesPage} allow={["owner", "manager"]} />} />
       <Route path="/corporate/companies/:id" component={() => <RoleProtectedRoute component={CorporateCompanyDetailPage} allow={["owner", "manager"]} />} />
@@ -366,7 +370,7 @@ function Router() {
       <Route path="/canteen/reports" component={() => <RoleProtectedRoute component={CanteenReportsPage} allow={["owner", "manager", "canteen_admin"]} />} />
       <Route path="/canteen/help" component={() => <ProtectedRoute component={CanteenHelpPage} />} />
       <Route path="/canteen/parent/:token" component={CanteenParentPage} />
-      <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={CodMonitoringPage} allow={["owner", "manager"]} />} />
+      <Route path="/delivery/cod" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CodMonitoringPage} feature="delivery_module" />} allow={["owner", "manager"]} />} />
       <Route path="/notifications" component={() => <ProtectedRoute component={NotificationsPage} />} />
       <Route path="/waiter-requests" component={() => <RoleProtectedRoute component={WaiterRequestsPage} allow={["owner", "manager", "waiter"]} />} />
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
@@ -377,10 +381,10 @@ function Router() {
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/display/token/:outletId" component={DisplayTokenPage} />
       <Route path="/settings/sessions" component={() => <ProtectedRoute component={SettingsSessionsPage} />} />
-      <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={ApiKeysPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/api-keys" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ApiKeysPage} feature="api_access" />} allow={["owner", "manager"]} />} />
       <Route path="/settings/accounting" component={() => <RoleProtectedRoute component={AccountingLandingPage} allow={["owner", "manager", "accountant"]} />} />
       <Route path="/settings/accounting/:target" component={() => <RoleProtectedRoute component={AccountingTargetPage} allow={["owner", "manager", "accountant"]} />} />
-      <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={WebhooksPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WebhooksPage} feature="api_access" />} allow={["owner", "manager"]} />} />
       <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={ApiLogsPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/developer-docs" component={() => <RoleProtectedRoute component={DeveloperDocsPage} allow={["owner", "manager"]} />} />
@@ -388,27 +392,26 @@ function Router() {
       <Route path="/settings/account" component={() => <ProtectedRoute component={SettingsAccountPage} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
-      <Route path="/reservations" component={() => <ProtectedRoute component={ReservationsPage} />} />
-      <Route path="/events" component={() => <Suspense fallback={null}><RoleProtectedRoute component={EventsPage} allow={["owner", "manager", "waiter", "kitchen"]} /></Suspense>} />
+      <Route path="/events" component={() => <Suspense fallback={null}><RoleProtectedRoute component={() => <PlanProtectedRoute component={EventsPage} feature="events_catering" />} allow={["owner", "manager", "waiter", "kitchen"]} /></Suspense>} />
       <Route path="/bakery" component={() => <RoleProtectedRoute component={BakeryPage} allow={["owner", "manager", "waiter", "kitchen", "cashier"]} />} />
       <Route path="/bar" component={() => <RoleProtectedRoute component={BarPage} allow={["owner", "manager", "waiter", "kitchen", "cashier"]} />} />
-      <Route path="/ai" component={() => <RoleProtectedRoute component={AiDashboardPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/descriptions" component={() => <RoleProtectedRoute component={AiDescriptionsPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/images" component={() => <RoleProtectedRoute component={AiImagesPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/inventory" component={() => <RoleProtectedRoute component={AiInventoryPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/upsell" component={() => <RoleProtectedRoute component={AiUpsellPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/forecast" component={() => <RoleProtectedRoute component={AiForecastPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/insights" component={() => <RoleProtectedRoute component={AiSalesInsightsPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/staff-insights" component={() => <RoleProtectedRoute component={AiStaffInsightsPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/menu-import/history" component={() => <RoleProtectedRoute component={AiMenuImportHistoryPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/menu-import/:id" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/menu-import" component={() => <RoleProtectedRoute component={AiMenuImportPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/usage" component={() => <RoleProtectedRoute component={AiUsagePage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/settings" component={() => <RoleProtectedRoute component={AiSettingsPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/review-qrs" component={() => <RoleProtectedRoute component={ReviewQrsPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/review-replies" component={() => <RoleProtectedRoute component={AiReviewRepliesPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/feedback-recovery" component={() => <RoleProtectedRoute component={FeedbackRecoveryPage} allow={["owner", "manager"]} />} />
-      <Route path="/ai/feedback-wall" component={() => <RoleProtectedRoute component={FeedbackWallPage} allow={["owner", "manager"]} />} />
+      <Route path="/ai" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiDashboardPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/descriptions" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiDescriptionsPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/images" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiImagesPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/inventory" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiInventoryPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/upsell" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiUpsellPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/forecast" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiForecastPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/insights" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiSalesInsightsPage} feature="khana_ai_insights_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/staff-insights" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiStaffInsightsPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import/history" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiMenuImportHistoryPage} feature="ai_menu_drafts" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import/:id" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiMenuImportPage} feature="ai_menu_drafts" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/menu-import" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiMenuImportPage} feature="ai_menu_drafts" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/usage" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiUsagePage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/settings" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiSettingsPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/review-qrs" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ReviewQrsPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/review-replies" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={AiReviewRepliesPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/feedback-recovery" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={FeedbackRecoveryPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
+      <Route path="/ai/feedback-wall" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={FeedbackWallPage} feature="khana_ai_enabled" />} allow={["owner", "manager"]} />} />
       <Route path="/wall/:slug" component={PublicFeedbackWallPage} />
       <Route path="/food-courts" component={() => <RoleProtectedRoute component={FoodCourtsPage} allow={["owner", "manager", "food_court_owner"]} />} />
       <Route path="/food-court/:id/overview" component={() => <RoleProtectedRoute component={FoodCourtOverviewPage} allow={["owner", "manager", "food_court_owner"]} />} />
@@ -420,7 +423,7 @@ function Router() {
       <Route path="/food-court/my-counter" component={() => <ProtectedRoute component={FoodCourtMyCounterPage} />} />
       <Route path="/site/:slug" component={PublicSitePage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
-      <Route path="/memberships" component={() => <RoleProtectedRoute component={MembershipsPage} allow={["owner", "manager", "waiter", "super_admin"]} />} />
+      <Route path="/memberships" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={MembershipsPage} feature="loyalty_program" />} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
       <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
       <Route path="/surveys" component={() => <RoleProtectedRoute component={SurveysPage} allow={["owner", "manager"]} />} />

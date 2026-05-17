@@ -299,6 +299,220 @@ function TenantModal({ tenant, plans, onClose, onSaved }: { tenant: Tenant | nul
 }
 
 // ─── Delete Confirmation ─────────────────────────────────────────
+interface TenantPaymentRow {
+  id: number; planId: number; planName: string | null;
+  amount: string; currency: string; provider: string; externalRef: string | null;
+  manualRequestId: number | null;
+  periodStart: string | null; periodEnd: string | null;
+  status: string; discountApplied: string | null;
+  couponCode: string | null;
+  createdAt: string;
+}
+interface TenantManualRequestRow {
+  id: number; planId: number; planName: string | null;
+  amount: string; currency: string; method: string;
+  reference: string | null; proofUrl: string | null; note: string | null;
+  status: string; reviewerNote: string | null; reviewedAt: string | null;
+  createdAt: string;
+}
+interface TenantBillingPayload {
+  tenant: { id: number; name: string; slug: string; planId: number | null; planStatus: string; trialEndsAt: string | null; subscriptionStartedAt: string | null; subscriptionEndsAt: string | null };
+  plan: Plan | null;
+  payments: TenantPaymentRow[];
+  manualRequests: TenantManualRequestRow[];
+}
+
+function fmtMoney(amount: string, currency: string) {
+  const sym = (currency ?? "INR").toUpperCase() === "USD" ? "$" : "₹";
+  const n = Number(amount);
+  return `${sym}${Number.isFinite(n) ? n.toLocaleString("en-IN") : amount}`;
+}
+function fmtDateTime(s: string | null) {
+  if (!s) return "—";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleString();
+}
+
+function TenantBillingModal({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading, error } = useQuery<TenantBillingPayload>({
+    queryKey: ["admin", "tenant-billing", tenant.id],
+    queryFn: () => apiFetch(`/admin/tenants/${tenant.id}/payments`),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/manual-payments/${id}/approve`, "POST", {}),
+    onSuccess: () => {
+      toast({ title: "Payment approved", description: "The tenant's subscription has been activated." });
+      qc.invalidateQueries({ queryKey: ["admin", "tenant-billing", tenant.id] });
+      qc.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: (e: Error) => toast({ title: "Approval failed", description: e.message, variant: "destructive" }),
+  });
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiAction(`/admin/manual-payments/${id}/reject`, "POST", { reason }),
+    onSuccess: () => {
+      toast({ title: "Payment rejected", description: "The tenant has been notified." });
+      qc.invalidateQueries({ queryKey: ["admin", "tenant-billing", tenant.id] });
+    },
+    onError: (e: Error) => toast({ title: "Rejection failed", description: e.message, variant: "destructive" }),
+  });
+  const handleReject = (id: number) => {
+    const reason = window.prompt("Reason for rejection (will be shown to the tenant):");
+    if (!reason || !reason.trim()) return;
+    rejectMutation.mutate({ id, reason: reason.trim() });
+  };
+  return (
+    <Modal title={`Billing · ${tenant.name}`} onClose={onClose} wide>
+      {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+      {error && <div className="text-sm text-destructive">Failed to load: {(error as Error).message}</div>}
+      {data && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-muted/30 rounded p-3">
+              <p className="text-muted-foreground">Plan</p>
+              <p className="font-medium text-foreground">{data.plan?.name ?? "No plan"}</p>
+              {data.plan && <p className="text-muted-foreground">{fmtPrice(data.plan)}</p>}
+            </div>
+            <div className="bg-muted/30 rounded p-3">
+              <p className="text-muted-foreground">Status</p>
+              <p className="font-medium text-foreground capitalize">{data.tenant.planStatus}</p>
+              <p className="text-muted-foreground">
+                {data.tenant.subscriptionEndsAt
+                  ? `Renews ${fmtDateTime(data.tenant.subscriptionEndsAt)}`
+                  : data.tenant.trialEndsAt
+                    ? `Trial ends ${fmtDateTime(data.tenant.trialEndsAt)}`
+                    : "—"}
+              </p>
+            </div>
+          </div>
+
+          <section>
+            <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <CreditCard className="w-4 h-4" /> Payment history ({data.payments.length})
+            </h4>
+            {data.payments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No payments recorded.</p>
+            ) : (
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Date</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Plan</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Provider</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Reference</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Period</th>
+                      <th className="text-right p-2 font-medium text-muted-foreground">Amount</th>
+                      <th className="text-right p-2 font-medium text-muted-foreground">Discount</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.payments.map((p) => (
+                      <tr key={p.id} className="border-t border-border">
+                        <td className="p-2 text-muted-foreground whitespace-nowrap">{fmtDateTime(p.createdAt)}</td>
+                        <td className="p-2 text-foreground">{p.planName ?? `#${p.planId}`}</td>
+                        <td className="p-2 capitalize text-muted-foreground">{p.provider}</td>
+                        <td className="p-2 text-muted-foreground font-mono text-[11px] break-all">{p.externalRef ?? (p.manualRequestId ? `manual #${p.manualRequestId}` : "—")}</td>
+                        <td className="p-2 text-muted-foreground whitespace-nowrap">
+                          {p.periodStart && p.periodEnd
+                            ? `${new Date(p.periodStart).toLocaleDateString()} → ${new Date(p.periodEnd).toLocaleDateString()}`
+                            : "—"}
+                        </td>
+                        <td className="p-2 text-right tabular-nums text-foreground">{fmtMoney(p.amount, p.currency)}</td>
+                        <td className="p-2 text-right tabular-nums text-muted-foreground">
+                          {p.discountApplied && Number(p.discountApplied) > 0 ? fmtMoney(p.discountApplied, p.currency) : "—"}
+                          {p.couponCode && <div className="text-[10px] uppercase mt-0.5 text-primary">{p.couponCode}</div>}
+                        </td>
+                        <td className="p-2"><Badge variant={p.status === "succeeded" ? "default" : "secondary"}>{p.status}</Badge></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <Landmark className="w-4 h-4" /> Manual payment requests ({data.manualRequests.length})
+            </h4>
+            {data.manualRequests.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No manual requests.</p>
+            ) : (
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Date</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Plan</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Method</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Reference</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Proof</th>
+                      <th className="text-right p-2 font-medium text-muted-foreground">Amount</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Status</th>
+                      <th className="text-right p-2 font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.manualRequests.map((r) => (
+                      <tr key={r.id} className="border-t border-border align-top">
+                        <td className="p-2 text-muted-foreground whitespace-nowrap">{fmtDateTime(r.createdAt)}</td>
+                        <td className="p-2 text-foreground">{r.planName ?? `#${r.planId}`}</td>
+                        <td className="p-2 uppercase text-muted-foreground">{r.method}</td>
+                        <td className="p-2 text-muted-foreground font-mono text-[11px] break-all">
+                          {r.reference ?? "—"}
+                          {r.note && <div className="text-[10px] mt-0.5 italic">"{r.note}"</div>}
+                          {r.reviewerNote && <div className="text-[10px] mt-0.5 text-destructive">Reviewer: {r.reviewerNote}</div>}
+                        </td>
+                        <td className="p-2">
+                          {r.proofUrl ? (
+                            <a href={r.proofUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" /> View
+                            </a>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="p-2 text-right tabular-nums text-foreground">{fmtMoney(r.amount, r.currency)}</td>
+                        <td className="p-2">
+                          <Badge variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}>
+                            {r.status}
+                          </Badge>
+                          {r.reviewedAt && <div className="text-[10px] text-muted-foreground mt-0.5">{fmtDateTime(r.reviewedAt)}</div>}
+                        </td>
+                        <td className="p-2 text-right whitespace-nowrap">
+                          {r.status === "pending" ? (
+                            <div className="inline-flex gap-1">
+                              <Button
+                                size="sm" variant="default"
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                onClick={() => approveMutation.mutate(r.id)}
+                                data-testid={`btn-approve-manual-${r.id}`}
+                              >Approve</Button>
+                              <Button
+                                size="sm" variant="outline"
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                onClick={() => handleReject(r.id)}
+                                data-testid={`btn-reject-manual-${r.id}`}
+                              >Reject</Button>
+                            </div>
+                          ) : <span className="text-muted-foreground text-[11px]">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: Tenant; onClose: () => void; onDeleted: () => void }) {
   const { toast } = useToast();
   const [confirm, setConfirm] = useState("");
@@ -764,6 +978,7 @@ export function TenantsTab() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [deleting, setDeleting] = useState<Tenant | null>(null);
+  const [billing, setBilling] = useState<Tenant | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
@@ -1020,6 +1235,9 @@ export function TenantsTab() {
                   <td className="px-6 py-4 text-muted-foreground text-xs">{new Date(tenant.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
                     <Button size="sm" variant="outline" onClick={() => setEditing(tenant)} className="gap-1"><Pencil className="w-3 h-3" />Edit</Button>
+                    <Button size="sm" variant="outline" onClick={() => setBilling(tenant)} className="gap-1" title="View payments and manual requests for this tenant">
+                      <CreditCard className="w-3 h-3" />Billing
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => void impersonate(tenant)} className="gap-1" title="Open this tenant's app as their owner (15-minute session)">
                       <Eye className="w-3 h-3" />View as
                     </Button>
@@ -1086,6 +1304,7 @@ export function TenantsTab() {
       {createOpen && <TenantModal tenant={null} plans={plans} onClose={() => setCreateOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin"] })} />}
       {editing && <TenantModal tenant={editing} plans={plans} onClose={() => setEditing(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin"] })} />}
       {deleting && <DeleteTenantModal tenant={deleting} onClose={() => setDeleting(null)} onDeleted={() => qc.invalidateQueries({ queryKey: ["admin"] })} />}
+      {billing && <TenantBillingModal tenant={billing} onClose={() => setBilling(null)} />}
     </div>
   );
 }

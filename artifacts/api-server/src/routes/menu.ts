@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import { eq, and, ilike } from "drizzle-orm";
+import { eq, and, ilike, gt } from "drizzle-orm";
 import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -116,11 +116,22 @@ router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", 
     if (restaurant?.tenantId) {
       const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, restaurant.tenantId));
       if (tenant?.planId) {
-        const [plan] = await db.select({ maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        const [plan] = await db.select({ name: subscriptionPlansTable.name, maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
         if (plan && plan.maxMenuItems > 0) {
           const existing = await db.select().from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
           if (existing.length >= plan.maxMenuItems) {
-            return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxMenuItems} menu item(s). Upgrade to add more.` });
+            const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+              .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxMenuItems, plan.maxMenuItems)))
+              .orderBy(subscriptionPlansTable.price).limit(1);
+            return void res.status(402).json({
+              code: "PLAN_LIMIT_REACHED",
+              error: `Your plan allows a maximum of ${plan.maxMenuItems} menu item(s). Upgrade to add more.`,
+              feature: "maxMenuItems",
+              currentPlan: plan.name,
+              currentLimit: plan.maxMenuItems,
+              currentUsage: existing.length,
+              suggestedPlan: suggested[0]?.name ?? null,
+            });
           }
         }
       }
@@ -516,21 +527,31 @@ router.post(
   };
 
   let planLimit: number | null = null;
+  let planName: string | null = null;
   if (!req.user!.isSuperAdmin) {
     const [restaurant] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     if (restaurant?.tenantId) {
       const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, restaurant.tenantId));
       if (tenant?.planId) {
-        const [plan] = await db.select({ maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
-        if (plan && plan.maxMenuItems > 0) planLimit = plan.maxMenuItems;
+        const [plan] = await db.select({ name: subscriptionPlansTable.name, maxMenuItems: subscriptionPlansTable.maxMenuItems }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        if (plan && plan.maxMenuItems > 0) { planLimit = plan.maxMenuItems; planName = plan.name; }
       }
     }
   }
   if (planLimit !== null) {
     const projected = existing.length + toCreate.length;
     if (projected > planLimit) {
+      const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+        .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxMenuItems, planLimit)))
+        .orderBy(subscriptionPlansTable.price).limit(1);
       return void res.status(402).json({
+        code: "PLAN_LIMIT_REACHED",
         error: `Your plan allows a maximum of ${planLimit} menu item(s). This import would result in ${projected}.`,
+        feature: "maxMenuItems",
+        currentPlan: planName,
+        currentLimit: planLimit,
+        currentUsage: existing.length,
+        suggestedPlan: suggested[0]?.name ?? null,
         summary,
         results,
       });

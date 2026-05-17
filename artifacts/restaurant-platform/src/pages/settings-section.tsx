@@ -10,6 +10,17 @@ import { useRestaurantInfo, useSubscription, useRestaurantId, useUpdateRestauran
 import { Trash2, ExternalLink, Lock, FileDown } from "lucide-react";
 import { Link } from "wouter";
 import { ImageUploadField } from "@/components/ImageUploadField";
+import { usePlanCapability } from "@/lib/planFeatures";
+import { ArrowRight } from "lucide-react";
+
+// Settings sections whose UI is itself a paid feature. When the tenant's plan
+// doesn't include the matching feature flag we render a locked card pointing
+// at /pricing instead of the section UI, so direct URL access can't bypass.
+const SECTION_PLAN_FEATURE: Partial<Record<SectionKey, string>> = {
+  loyalty: "loyalty_program",
+  discounts: "discounts_promotions",
+  reservation: "reservations",
+};
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
@@ -48,11 +59,43 @@ export default function SettingsSectionPage() {
   }
 
   const meta = findMeta(sectionParam);
+  const planFeatureKey = SECTION_PLAN_FEATURE[sectionParam];
 
   return (
     <SettingsLayout activeKey={sectionParam} title={meta?.label ?? "Settings"}>
-      {renderSection(sectionParam)}
+      {planFeatureKey ? (
+        <PlanGatedSection featureKey={planFeatureKey} sectionLabel={meta?.label ?? sectionParam}>
+          {renderSection(sectionParam)}
+        </PlanGatedSection>
+      ) : (
+        renderSection(sectionParam)
+      )}
     </SettingsLayout>
+  );
+}
+
+function PlanGatedSection({ featureKey, sectionLabel, children }: { featureKey: string; sectionLabel: string; children: React.ReactNode }) {
+  const cap = usePlanCapability(featureKey);
+  if (cap.isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (cap.enabled) return <>{children}</>;
+  return (
+    <div className="p-6">
+      <div className="max-w-md mx-auto bg-card border border-border rounded-2xl p-8 text-center shadow-sm">
+        <div className="w-14 h-14 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <Lock className="w-6 h-6 text-primary" />
+        </div>
+        <h2 className="text-lg font-semibold text-foreground mb-2">{sectionLabel}</h2>
+        <p className="text-sm text-muted-foreground mb-6">
+          {cap.planName
+            ? `${sectionLabel} is not included on your ${cap.planName} plan.`
+            : `${sectionLabel} requires a paid plan.`}{" "}
+          Upgrade to unlock this section.
+        </p>
+        <Link href={`/pricing?feature=${encodeURIComponent(featureKey)}`}>
+          <Button className="gap-2">See plans <ArrowRight className="w-4 h-4" /></Button>
+        </Link>
+      </div>
+    </div>
   );
 }
 

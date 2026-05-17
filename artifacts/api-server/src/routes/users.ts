@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import { db, usersTable, tenantsTable, subscriptionPlansTable, restaurantsTable, userDevicesTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { hashPassword } from "../lib/auth";
@@ -94,11 +94,22 @@ router.post("/users", requireRole("owner", "manager", "super_admin"), validate({
   if (!req.user!.isSuperAdmin && tenantId) {
     const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (tenant?.planId) {
-      const [plan] = await db.select({ maxStaff: subscriptionPlansTable.maxStaff }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+      const [plan] = await db.select({ name: subscriptionPlansTable.name, maxStaff: subscriptionPlansTable.maxStaff }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
       if (plan && plan.maxStaff > 0) {
         const existing = await db.select({ id: usersTable.id }).from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.isActive, true)));
         if (existing.length >= plan.maxStaff) {
-          return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxStaff} staff account(s). Upgrade to add more.` });
+          const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+            .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxStaff, plan.maxStaff)))
+            .orderBy(subscriptionPlansTable.price).limit(1);
+          return void res.status(402).json({
+            code: "PLAN_LIMIT_REACHED",
+            error: `Your plan allows a maximum of ${plan.maxStaff} staff account(s). Upgrade to add more.`,
+            feature: "maxStaff",
+            currentPlan: plan.name,
+            currentLimit: plan.maxStaff,
+            currentUsage: existing.length,
+            suggestedPlan: suggested[0]?.name ?? null,
+          });
         }
       }
     }

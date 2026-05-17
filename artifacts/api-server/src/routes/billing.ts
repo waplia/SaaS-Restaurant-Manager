@@ -595,6 +595,75 @@ router.get("/restaurants/:restaurantId/subscription/manual-payments", requireRol
   res.json({ data: rows });
 });
 
+// ─── Super admin: per-tenant billing & payment history ──────────
+router.get("/admin/tenants/:tenantId/payments", requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.tenantId);
+  if (!Number.isFinite(tenantId)) return void res.status(400).json({ error: "Invalid tenantId" });
+
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
+
+  const plan = tenant.planId
+    ? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId)).then(r => r[0] ?? null)
+    : null;
+
+  const payments = await db.select({
+    id: subscriptionPaymentsTable.id,
+    planId: subscriptionPaymentsTable.planId,
+    planName: subscriptionPlansTable.name,
+    amount: subscriptionPaymentsTable.amount,
+    currency: subscriptionPaymentsTable.currency,
+    provider: subscriptionPaymentsTable.provider,
+    externalRef: subscriptionPaymentsTable.externalRef,
+    manualRequestId: subscriptionPaymentsTable.manualRequestId,
+    periodStart: subscriptionPaymentsTable.periodStart,
+    periodEnd: subscriptionPaymentsTable.periodEnd,
+    status: subscriptionPaymentsTable.status,
+    discountApplied: subscriptionPaymentsTable.discountApplied,
+    couponCode: subscriptionPaymentsTable.couponCode,
+    createdAt: subscriptionPaymentsTable.createdAt,
+  })
+    .from(subscriptionPaymentsTable)
+    .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, subscriptionPaymentsTable.planId))
+    .where(eq(subscriptionPaymentsTable.tenantId, tenantId))
+    .orderBy(desc(subscriptionPaymentsTable.createdAt))
+    .limit(100);
+
+  const manualRequests = await db.select({
+    id: manualPaymentRequestsTable.id,
+    planId: manualPaymentRequestsTable.planId,
+    planName: subscriptionPlansTable.name,
+    amount: manualPaymentRequestsTable.amount,
+    currency: manualPaymentRequestsTable.currency,
+    method: manualPaymentRequestsTable.method,
+    reference: manualPaymentRequestsTable.reference,
+    proofUrl: manualPaymentRequestsTable.proofUrl,
+    note: manualPaymentRequestsTable.note,
+    status: manualPaymentRequestsTable.status,
+    reviewerNote: manualPaymentRequestsTable.reviewerNote,
+    reviewedAt: manualPaymentRequestsTable.reviewedAt,
+    createdAt: manualPaymentRequestsTable.createdAt,
+  })
+    .from(manualPaymentRequestsTable)
+    .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, manualPaymentRequestsTable.planId))
+    .where(eq(manualPaymentRequestsTable.tenantId, tenantId))
+    .orderBy(desc(manualPaymentRequestsTable.createdAt))
+    .limit(50);
+
+  res.json({
+    tenant: {
+      id: tenant.id, name: tenant.name, slug: tenant.slug,
+      planId: tenant.planId, planStatus: tenant.planStatus,
+      trialEndsAt: tenant.trialEndsAt,
+      subscriptionStartedAt: tenant.subscriptionStartedAt,
+      subscriptionEndsAt: tenant.subscriptionEndsAt,
+    },
+    plan,
+    payments,
+    manualRequests,
+  });
+});
+
 // ─── Super admin: manual payment approvals ───────────────────────
 router.get("/admin/manual-payments", requireSuperAdmin, async (req, res) => {
   const status = (req.query.status as string | undefined) ?? "pending";

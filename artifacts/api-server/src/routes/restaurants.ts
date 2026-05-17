@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import { db, restaurantsTable, branchesTable, subscriptionPlansTable, tenantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { seedDefaultExpenseCategories } from "./expenses";
@@ -41,7 +41,18 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
     if (plan && plan.maxRestaurants > 0) {
       const existing = await db.select().from(restaurantsTable).where(eq(restaurantsTable.tenantId, tenantId));
       if (existing.length >= plan.maxRestaurants) {
-        return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxRestaurants} restaurant(s). Upgrade to add more.` });
+        const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+          .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxRestaurants, plan.maxRestaurants)))
+          .orderBy(subscriptionPlansTable.price).limit(1);
+        return void res.status(402).json({
+          code: "PLAN_LIMIT_REACHED",
+          error: `Your plan allows a maximum of ${plan.maxRestaurants} restaurant(s). Upgrade to add more.`,
+          feature: "maxRestaurants",
+          currentPlan: plan.name,
+          currentLimit: plan.maxRestaurants,
+          currentUsage: existing.length,
+          suggestedPlan: suggested[0]?.name ?? null,
+        });
       }
     }
   }
@@ -128,7 +139,18 @@ router.post("/restaurants/:restaurantId/branches", requireRole("owner", "manager
     if (plan && plan.maxBranches > 0) {
       const branches = await db.select().from(branchesTable).where(eq(branchesTable.restaurantId, restaurantId));
       if (branches.length >= plan.maxBranches) {
-        return void res.status(402).json({ error: `Your plan allows a maximum of ${plan.maxBranches} branch(es). Upgrade to add more.` });
+        const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+          .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxBranches, plan.maxBranches)))
+          .orderBy(subscriptionPlansTable.price).limit(1);
+        return void res.status(402).json({
+          code: "PLAN_LIMIT_REACHED",
+          error: `Your plan allows a maximum of ${plan.maxBranches} branch(es). Upgrade to add more.`,
+          feature: "maxBranches",
+          currentPlan: plan.name,
+          currentLimit: plan.maxBranches,
+          currentUsage: branches.length,
+          suggestedPlan: suggested[0]?.name ?? null,
+        });
       }
     }
   }

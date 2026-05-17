@@ -201,11 +201,12 @@ function ManualForm({
 }
 
 function CheckoutModal({
-  plan, methods, initialMethod, onClose, onPaid,
+  plan, methods, initialMethod, initialBillingPeriod, onClose, onPaid,
 }: {
   plan: SubscriptionPlan & { currency?: string };
   methods: PaymentMethodsView;
   initialMethod?: PayMethod;
+  initialBillingPeriod?: "monthly" | "yearly";
   onClose: () => void;
   onPaid: () => void;
 }) {
@@ -267,7 +268,10 @@ function CheckoutModal({
   // and yearly right here.
   const planYearly = (plan as { yearlyPrice?: string | null }).yearlyPrice;
   const yearlyConfigured = planYearly != null && planYearly !== "" && Number(planYearly) > 0;
-  const initialPeriod: "monthly" | "yearly" = plan.billingPeriod === "yearly" ? "yearly" : "monthly";
+  const initialPeriod: "monthly" | "yearly" =
+    initialBillingPeriod === "yearly" && yearlyConfigured ? "yearly"
+    : initialBillingPeriod === "monthly" ? "monthly"
+    : plan.billingPeriod === "yearly" ? "yearly" : "monthly";
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">(initialPeriod);
   const periodPrice = billingPeriod === "yearly" && yearlyConfigured
     ? Number(planYearly)
@@ -785,6 +789,7 @@ export default function SubscriptionPage() {
   const { toast } = useToast();
   const [activePlan, setActivePlan] = useState<(SubscriptionPlan & { currency?: string }) | null>(null);
   const [initialMethod, setInitialMethod] = useState<PayMethod | undefined>(undefined);
+  const [initialBillingPeriod, setInitialBillingPeriod] = useState<"monthly" | "yearly" | undefined>(undefined);
 
   const { tenant, plan: currentPlan, plans = [], usage } = (data ?? {}) as {
     tenant?: { trialDaysLeft?: number | null; isTrialExpired?: boolean; planStatus?: string; trialEndsAt?: string | null; subscriptionEndsAt?: string | null };
@@ -793,6 +798,27 @@ export default function SubscriptionPage() {
     usage?: { staffCount: number; tableCount: number; menuItemCount: number };
   };
   const isOwner = !!(user?.role === "owner" || user?.isSuperAdmin);
+
+  // If the user arrived from /pricing with ?planId=&billing=, auto-open the
+  // checkout drawer prefilled to that plan/period so they can complete
+  // purchase without re-picking. Runs whenever plans load.
+  useEffect(() => {
+    if (!plans || plans.length === 0) return;
+    const sp = new URLSearchParams(window.location.search);
+    const planIdRaw = sp.get("planId");
+    if (!planIdRaw) return;
+    const planId = Number(planIdRaw);
+    const target = (plans as (SubscriptionPlan & { currency?: string })[]).find(p => p.id === planId);
+    if (!target) return;
+    const billingParam = sp.get("billing");
+    setInitialMethod(undefined);
+    setInitialBillingPeriod(billingParam === "yearly" ? "yearly" : billingParam === "monthly" ? "monthly" : undefined);
+    setActivePlan(target);
+    sp.delete("planId");
+    sp.delete("billing");
+    const ns = sp.toString();
+    window.history.replaceState({}, "", window.location.pathname + (ns ? `?${ns}` : ""));
+  }, [plans]);
 
   // If we returned from Cashfree (?cashfree_order_id=...), confirm it.
   useEffect(() => {
@@ -988,9 +1014,10 @@ export default function SubscriptionPage() {
         <CheckoutModal
           plan={activePlan}
           initialMethod={initialMethod}
+          initialBillingPeriod={initialBillingPeriod}
           methods={methods}
-          onClose={() => setActivePlan(null)}
-          onPaid={() => { setActivePlan(null); refetch(); }}
+          onClose={() => { setActivePlan(null); setInitialBillingPeriod(undefined); }}
+          onPaid={() => { setActivePlan(null); setInitialBillingPeriod(undefined); refetch(); }}
         />
       )}
     </Layout>
