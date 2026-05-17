@@ -1,0 +1,16 @@
+node_modules
+.env
+*.jks
+*.keystore
+
+# Build outputs from the native Android project (the project itself IS
+# committed so a fresh clone is build-ready).
+android/build
+android/.gradle
+android/app/build
+android/app/release
+android/local.properties
+android/captures
+android/.idea
+android/*.iml
+android/app/src/main/assets/public
