@@ -167,11 +167,18 @@ export default function OwnerDashboard() {
     enabled: !isAllOutlets,
   });
 
-  // ---- Approvals: the task spec calls for pending discount/void/refund
-  // manager approvals, but the API server does not yet expose a list
-  // endpoint for those (only the per-order POST path that records into
-  // discountApprovalsTable). Per the task definition we render a clearly
-  // labeled "Not available yet" placeholder until that endpoint lands.
+  // Manager approvals inbox: pending discount/void/refund + ops approvals.
+  // Backed by the unified /ops/approvals endpoint added on the API server,
+  // which merges ops_approvals and discount_approvals into one feed.
+  type ApprovalRow = { id: number; type: string; status: string };
+  const approvalsQ = useQuery({
+    queryKey: ["ops-approvals-pending", restaurantScopeId],
+    queryFn: () => customFetch<ApprovalRow[]>(
+      `/api/restaurants/${restaurantScopeId}/ops/approvals?status=pending`,
+    ),
+    enabled: !isAllOutlets,
+    refetchInterval: 60_000,
+  });
 
   // ---- Outlet comparison (multi-outlet owners) — fetches today and yesterday
   // in parallel so we can render a per-outlet day-over-day delta.
@@ -564,12 +571,23 @@ export default function OwnerDashboard() {
         </View>
       </View>
 
-      {/* Manager approvals (discount/void/refund) — no list endpoint yet. */}
-      <PlaceholderCard
-        title="Approvals"
-        icon="checkmark-done-outline"
-        message="Discount/void/refund approvals not available yet — coming soon"
-      />
+      {/* Manager approvals (discount/void/refund + ops). */}
+      {isAllOutlets ? (
+        <PlaceholderCard title="Approvals" icon="checkmark-done-outline" message="Pick an outlet to see pending approvals" />
+      ) : (
+        <MetricCard
+          title="Approvals"
+          icon="checkmark-done-outline"
+          value={String((approvalsQ.data ?? []).length)}
+          sub={(approvalsQ.data ?? []).length === 0 ? "No pending approvals" : "Pending sign-off"}
+          isLoading={approvalsQ.isLoading}
+          isError={approvalsQ.isError}
+          onRetry={() => approvalsQ.refetch()}
+          onPress={openApprovals}
+          actionLabel="Open inbox"
+          badge={(approvalsQ.data ?? []).length > 0 ? { text: "Pending", tone: "warn" } : undefined}
+        />
+      )}
 
       {/* Outlet comparison — sortable list backed by compare-branches */}
       {canSwitchScope && hasMultipleOutlets ? (
