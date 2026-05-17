@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
 import {
-  useSubscription, useCreateCheckout, useMockActivate,
+  useSubscription, useCreateCheckout,
   useCreateCashfreeOrder, useConfirmCashfreeOrder,
   usePaymentMethods, useCreateSubscriptionRazorpayOrder, useConfirmSubscriptionRazorpayOrder, useSubmitManualPayment,
   useValidateCoupon, type CouponValidationResult,
@@ -19,8 +19,10 @@ import { cn } from "@/lib/utils";
 import {
   Check, Crown, Zap, Building, Users, Table2, UtensilsCrossed,
   AlertTriangle, ExternalLink, RefreshCw, CreditCard, Minus,
-  Landmark, Smartphone, Clock, X, Wallet, Sparkles, Loader2,
+  Landmark, Smartphone, Clock, Wallet, Sparkles, Loader2,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { ApiError } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch, apiAction } from "@/lib/api";
 import type { SubscriptionPlan } from "@/lib/types";
@@ -217,7 +219,6 @@ function CheckoutModal({
   const createRazorpay = useCreateSubscriptionRazorpayOrder();
   const confirmRazorpay = useConfirmSubscriptionRazorpayOrder();
   const submitManual = useSubmitManualPayment();
-  const mockActivate = useMockActivate();
   const validateCoupon = useValidateCoupon();
   const [couponCode, setCouponCode] = useState("");
   const [couponResult, setCouponResult] = useState<CouponValidationResult | null>(null);
@@ -243,23 +244,24 @@ function CheckoutModal({
     setCouponCode(""); setCouponResult(null); setCouponError(null);
   }
 
-  // Build the list in the order tenants should see them, with the admin-configured
-  // default online provider first.
+  // Render every enabled gateway in canonical order — no provider gets
+  // visual priority. Super-admin's `methods.online.default` only determines
+  // which radio is pre-selected.
   const planCurrency = (plan.currency ?? "INR").toUpperCase();
   const manualAllowed = planCurrency === "INR";
   const available: PayMethod[] = [];
-  const defOnline = methods.online.default;
-  if (defOnline === "razorpay" && methods.online.razorpay.enabled) available.push("razorpay");
-  if (defOnline === "cashfree" && methods.online.cashfree.enabled) available.push("cashfree");
-  if (methods.online.cashfree.enabled && !available.includes("cashfree")) available.push("cashfree");
-  if (methods.online.razorpay.enabled && !available.includes("razorpay")) available.push("razorpay");
+  if (methods.online.cashfree.enabled) available.push("cashfree");
+  if (methods.online.razorpay.enabled) available.push("razorpay");
   if (methods.online.stripe.enabled) available.push("stripe");
-  if (manualAllowed && methods.manual.bank.enabled) available.push("bank");
   if (manualAllowed && methods.manual.upi.enabled) available.push("upi");
+  if (manualAllowed && methods.manual.bank.enabled) available.push("bank");
 
-  const [method, setMethod] = useState<PayMethod>(
-    initialMethod && available.includes(initialMethod) ? initialMethod : (available[0] ?? "cashfree"),
-  );
+  const defOnline = methods.online.default;
+  const defaultMethod: PayMethod | null =
+    initialMethod && available.includes(initialMethod) ? initialMethod
+    : defOnline && available.includes(defOnline) ? defOnline
+    : (available[0] ?? null);
+  const [method, setMethod] = useState<PayMethod>(defaultMethod ?? "cashfree");
   const [reference, setReference] = useState("");
   const [proofUrl, setProofUrl] = useState("");
   const [note, setNote] = useState("");
@@ -290,24 +292,16 @@ function CheckoutModal({
       const cc = couponResult?.code;
       if (method === "cashfree") {
         const r = await createCashfree.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, couponCode: cc, billingPeriod });
-        if (r.activated) {
+        if (r.activated || r.freeActivation) {
           toast({ title: "Subscription activated", description: cc ? `Coupon ${cc} covered the full amount.` : "Activated." });
           onPaid(); return;
         }
         if (r.url) { window.location.href = r.url; return; }
-        if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
-          toast({ title: "Plan activated (demo)", description: "Cashfree not configured — plan upgraded in demo mode." });
-          onPaid(); return;
-        }
+        throw new Error("Cashfree didn't return a checkout URL.");
       } else if (method === "stripe") {
         const r = await createCheckout.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, successUrl, cancelUrl, billingPeriod });
         if (r.url) { window.location.href = r.url; return; }
-        if (r.mock) {
-          await mockActivate.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
-          toast({ title: "Plan activated (demo)", description: "Stripe not configured — plan upgraded in demo mode." });
-          onPaid(); return;
-        }
+        throw new Error("Stripe didn't return a checkout URL.");
       } else if (method === "razorpay") {
         const order = await createRazorpay.mutateAsync({ restaurantId: RESTAURANT_ID, planId: plan.id, couponCode: cc, billingPeriod });
         if (order.activated) {
@@ -375,7 +369,17 @@ function CheckoutModal({
         onPaid();
       }
     } catch (err) {
-      toast({ title: "Payment could not start", description: (err as Error).message, variant: "destructive" });
+      const apiErr = err as ApiError & { data?: { code?: string; provider?: string } };
+      const code = apiErr?.data?.code;
+      if (code === "GATEWAY_DISABLED") {
+        toast({
+          title: "Payment method unavailable",
+          description: `${apiErr.data?.provider ?? "This provider"} isn't fully configured yet. Please pick another method or contact support.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Payment could not start", description: (err as Error).message, variant: "destructive" });
+      }
     } finally {
       if (method !== "razorpay") setBusy(false);
     }
@@ -398,45 +402,56 @@ function CheckoutModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div>
-            <h3 className="font-semibold text-lg">Pay for {plan.name}</h3>
-            <p className="text-sm text-muted-foreground">{sym}{periodPrice.toLocaleString()} / {billingPeriod === "yearly" ? "year" : "month"}</p>
-            {yearlyConfigured && plan.billingPeriod !== "yearly" && (
-              <div className="mt-2 inline-flex rounded-md border border-border bg-muted/40 p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => chooseBillingPeriod("monthly")}
-                  className={`px-2.5 py-1 rounded ${billingPeriod === "monthly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
-                >Monthly</button>
-                <button
-                  type="button"
-                  onClick={() => chooseBillingPeriod("yearly")}
-                  className={`px-2.5 py-1 rounded ${billingPeriod === "yearly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
-                >Yearly</button>
-              </div>
-            )}
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="px-6 py-5 space-y-5">
-          <div>
-            <p className="text-xs uppercase font-semibold tracking-wide text-muted-foreground mb-2">Choose a payment method</p>
-            <div className="flex flex-wrap gap-2">
-              {available.map(m => {
-                if (m === "cashfree") return <MethodChip key={m} id="cashfree" label="Cashfree" icon={CreditCard} selected={method === "cashfree"} onClick={() => setMethod("cashfree")} />;
-                if (m === "razorpay") return <MethodChip key={m} id="razorpay" label="Razorpay" icon={CreditCard} selected={method === "razorpay"} onClick={() => setMethod("razorpay")} />;
-                if (m === "stripe")   return <MethodChip key={m} id="stripe"   label="Stripe"   icon={CreditCard} selected={method === "stripe"}   onClick={() => setMethod("stripe")} />;
-                if (m === "bank")     return <MethodChip key={m} id="bank"     label="Bank transfer" icon={Landmark}   selected={method === "bank"}     onClick={() => setMethod("bank")} />;
-                if (m === "upi")      return <MethodChip key={m} id="upi"      label="UPI"      icon={Smartphone} selected={method === "upi"}      onClick={() => setMethod("upi")} />;
-                return null;
-              })}
-              {available.length === 0 && <p className="text-sm text-muted-foreground">No payment methods are currently enabled. Please contact support.</p>}
+    <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md p-0 flex flex-col gap-0 sm:h-full"
+        data-testid="checkout-drawer"
+      >
+        <SheetHeader className="px-6 py-4 border-b border-border space-y-1 text-left">
+          <SheetTitle>Pay for {plan.name}</SheetTitle>
+          <SheetDescription>
+            {sym}{periodPrice.toLocaleString()} / {billingPeriod === "yearly" ? "year" : "month"}
+          </SheetDescription>
+          {yearlyConfigured && plan.billingPeriod !== "yearly" && (
+            <div className="mt-2 inline-flex rounded-md border border-border bg-muted/40 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => chooseBillingPeriod("monthly")}
+                className={`px-2.5 py-1 rounded ${billingPeriod === "monthly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+              >Monthly</button>
+              <button
+                type="button"
+                onClick={() => chooseBillingPeriod("yearly")}
+                className={`px-2.5 py-1 rounded ${billingPeriod === "yearly" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+              >Yearly</button>
             </div>
-          </div>
+          )}
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {available.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center space-y-2">
+              <CreditCard className="w-6 h-6 mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Online payments aren't set up yet. Please contact support to activate your plan.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs uppercase font-semibold tracking-wide text-muted-foreground mb-2">Choose a payment method</p>
+              <div className="flex flex-wrap gap-2">
+                {available.map(m => {
+                  if (m === "cashfree") return <MethodChip key={m} id="cashfree" label="Cashfree" icon={CreditCard} selected={method === "cashfree"} onClick={() => setMethod("cashfree")} />;
+                  if (m === "razorpay") return <MethodChip key={m} id="razorpay" label="Razorpay" icon={CreditCard} selected={method === "razorpay"} onClick={() => setMethod("razorpay")} />;
+                  if (m === "stripe")   return <MethodChip key={m} id="stripe"   label="Stripe"   icon={CreditCard} selected={method === "stripe"}   onClick={() => setMethod("stripe")} />;
+                  if (m === "bank")     return <MethodChip key={m} id="bank"     label="Bank transfer" icon={Landmark}   selected={method === "bank"}     onClick={() => setMethod("bank")} />;
+                  if (m === "upi")      return <MethodChip key={m} id="upi"      label="UPI"      icon={Smartphone} selected={method === "upi"}      onClick={() => setMethod("upi")} />;
+                  return null;
+                })}
+              </div>
+            </div>
+          )}
 
           {method === "bank" && methods.manual.bank.enabled && (
             <div className="space-y-3">
@@ -532,13 +547,15 @@ function CheckoutModal({
 
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={handlePay} disabled={busy || available.length === 0}>
-            {busy ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
-            {method === "bank" || method === "upi" ? "Submit for review" : "Continue to payment"}
-          </Button>
+          {available.length > 0 && (
+            <Button onClick={handlePay} disabled={busy}>
+              {busy ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+              {method === "bank" || method === "upi" ? "Submit for review" : "Continue to payment"}
+            </Button>
+          )}
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

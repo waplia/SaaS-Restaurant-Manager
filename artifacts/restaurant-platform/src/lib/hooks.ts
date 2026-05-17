@@ -2164,7 +2164,7 @@ export function useCreateCheckout() {
 export function useCreateCashfreeOrder() {
   return useMutation({
     mutationFn: ({ restaurantId, planId, successUrl, couponCode, billingPeriod }: { restaurantId: number; planId: number; successUrl: string; couponCode?: string; billingPeriod?: "monthly" | "yearly" }) =>
-      apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean; activated?: boolean }>(
+      apiPost<{ url: string | null; orderId?: string; paymentSessionId?: string | null; mock?: boolean; activated?: boolean; freeActivation?: boolean; couponCode?: string | null }>(
         `/restaurants/${restaurantId}/subscription/create-cashfree-order`,
         { planId, successUrl, couponCode, billingPeriod },
       ),

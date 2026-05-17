@@ -145,7 +145,11 @@ router.post("/restaurants/:restaurantId/subscription/create-razorpay-order", req
 
   const { enabled, config } = await getEffectiveRazorpayConfig();
   if (!enabled || !config) {
-    return void res.status(400).json({ error: "Razorpay is not configured" });
+    return void res.status(503).json({
+      error: "Razorpay is not configured. Please pick another payment method or contact support.",
+      code: "GATEWAY_DISABLED",
+      provider: "razorpay",
+    });
   }
 
   // Resolve the chosen billing period and pick the matching list price.

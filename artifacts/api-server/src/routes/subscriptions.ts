@@ -99,7 +99,11 @@ router.post("/restaurants/:restaurantId/subscription/create-checkout", requireRo
 
   const stripe = getStripe();
   if (!stripe) {
-    return void res.json({ url: null, mock: true, message: "Stripe not configured — using mock checkout" });
+    return void res.status(503).json({
+      error: "Stripe is not configured. Please pick another payment method or contact support.",
+      code: "GATEWAY_DISABLED",
+      provider: "stripe",
+    });
   }
 
   let customerId = tenant.stripeCustomerId;
@@ -165,7 +169,11 @@ router.post("/restaurants/:restaurantId/subscription/create-cashfree-order", req
 
   const { enabled, config } = await getEffectiveCashfreeConfig();
   if (!enabled || !config) {
-    return void res.json({ url: null, mock: true, message: "Cashfree not configured — using mock checkout" });
+    return void res.status(503).json({
+      error: "Cashfree is not configured. Please pick another payment method or contact support.",
+      code: "GATEWAY_DISABLED",
+      provider: "cashfree",
+    });
   }
 
   // Resolve the chosen billing period and pick the matching list price.

@@ -75,6 +75,22 @@ A multi-tenant SaaS restaurant management platform — POS, table management, in
   strings (no Postgres enum), so domain tasks should import
   `NEW_AUDIT_ENTITIES` / `AUDIT_ACTIONS` instead of inlining literals.
 
+## Subscription upgrade drawer
+
+- `pages/subscription.tsx` `CheckoutModal` is a right-anchored shadcn `Sheet`
+  drawer (full width on mobile, ~440 px on `sm+`). No gateway is privileged
+  — every method the super-admin enables is rendered in the canonical order
+  Cashfree → Razorpay → Stripe → UPI → Bank with identical styling.
+- `methods.online.default` from `GET /restaurants/:id/billing/methods` is used
+  only to pre-select the initial radio button; tenants can switch freely.
+- When a gateway's credentials are missing the API now returns `503` with
+  `{ code: "GATEWAY_DISABLED", provider }` (see
+  `routes/subscriptions.ts` create-checkout / create-cashfree-order and
+  `routes/billing.ts` create-razorpay-order). The drawer shows a
+  "method temporarily unavailable" toast and the tenant picks another option.
+- When zero methods are enabled the drawer hides the Pay button and shows a
+  muted "Online payments aren't set up yet" message.
+
 ## Gotchas
 
 - Both workflows MUST include `PORT=...` in the command — the app throws if PORT is not set
