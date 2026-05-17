@@ -5,6 +5,7 @@ import {
   ArrowRight, ShieldCheck, IndianRupee, Activity, ChefHat, Sparkles,
   AlertTriangle, Users, Star, Wallet,
 } from "lucide-react";
+import { COMPANY } from "@/lib/company";
 
 export function HeroSection() {
   return (
@@ -28,7 +29,7 @@ export function HeroSection() {
             <span className="text-primary">KhanaLagao</span>
           </h1>
           <p className="text-lg md:text-2xl font-semibold text-foreground/90 leading-snug">
-            Restaurant OS for Modern Food Businesses
+            {COMPANY.productTagline}
           </p>
           <p className="text-base md:text-xl text-muted-foreground leading-relaxed">
             From the first order to the last rupee — billing, kitchen, tables, stock, staff,
