@@ -14,6 +14,19 @@ export interface PrintLineItem {
   notes?: string | null;
 }
 
+function resolveLogoUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  if (url.startsWith("/objects/")) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const base = typeof document !== "undefined"
+      ? (document.querySelector("base")?.getAttribute("href")?.replace(/\/$/, "") ?? "")
+      : "";
+    return `${origin}${base}/api/public/storage${url}`;
+  }
+  return url;
+}
+
 export interface PrintRestaurant {
   name?: string | null;
   logoUrl?: string | null;
@@ -231,7 +244,7 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
   const headerHtml = isThermal
     ? `
       <div class="header center">
-        ${restaurant?.logoUrl ? `<img src="${escapeHtml(restaurant.logoUrl)}" class="logo" alt=""/>` : ""}
+        ${resolveLogoUrl(restaurant?.logoUrl) ? `<img src="${escapeHtml(resolveLogoUrl(restaurant?.logoUrl)!)}" class="logo" alt=""/>` : ""}
         <div class="brand">${escapeHtml(restName)}</div>
         ${subHeaderBits.length ? `<div class="sub">${subHeaderBits.map(escapeHtml).join("<br/>")}</div>` : ""}
         <div class="doctype">${escapeHtml(docTitle)}</div>
@@ -246,7 +259,7 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
       <div class="header">
         <div class="brand-bar">
           <div class="brand-left">
-            ${restaurant?.logoUrl ? `<img src="${escapeHtml(restaurant.logoUrl)}" class="logo" alt=""/>` : ""}
+            ${resolveLogoUrl(restaurant?.logoUrl) ? `<img src="${escapeHtml(resolveLogoUrl(restaurant?.logoUrl)!)}" class="logo" alt=""/>` : ""}
             <div>
               <div class="brand">${escapeHtml(restName)}</div>
               ${subHeaderBits.length ? `<div class="sub">${subHeaderBits.map(escapeHtml).join(" · ")}</div>` : ""}
@@ -453,7 +466,7 @@ function buildEventQuotationHTML(args: EventQuotationArgs): string {
   <div style="max-width:760px;margin:0 auto">
     <header style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #f97316;padding-bottom:12px;margin-bottom:18px">
       <div>
-        ${args.restaurant?.logoUrl ? `<img src="${e(args.restaurant.logoUrl)}" alt="logo" style="max-height:48px;margin-bottom:6px" />` : ""}
+        ${resolveLogoUrl(args.restaurant?.logoUrl) ? `<img src="${e(resolveLogoUrl(args.restaurant?.logoUrl)!)}" alt="logo" style="max-height:48px;margin-bottom:6px" />` : ""}
         <h2 style="font-size:18px">${e(args.restaurant?.name ?? "")}</h2>
         ${args.restaurant?.address ? `<div class="muted">${e(args.restaurant.address)}</div>` : ""}
         ${args.restaurant?.phone ? `<div class="muted">${e(args.restaurant.phone)}</div>` : ""}

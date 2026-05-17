@@ -274,7 +274,9 @@ function TenantModal({ tenant, plans, onClose, onSaved }: { tenant: Tenant | nul
             <input className={inputCls} value={form.primaryColor} onChange={e => setForm({ ...form, primaryColor: e.target.value })} />
           </div>
         </Field>
-        <Field label="Logo URL" hint="Optional"><input className={inputCls} value={form.logoUrl} onChange={e => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://…" /></Field>
+        <div>
+          <ImageUploadField label="Logo (optional)" value={form.logoUrl} onChange={(v) => setForm({ ...form, logoUrl: v })} compact />
+        </div>
       </div>
       {!isEdit && (
         <>

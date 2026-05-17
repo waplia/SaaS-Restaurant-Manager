@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
@@ -475,7 +476,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
         {appSettings.logoUrl ? (
           <img
-            src={appSettings.logoUrl}
+            src={resolveImageUrl(appSettings.logoUrl)}
             alt={appSettings.appName}
             className="w-9 h-9 rounded-xl object-cover shadow-md shadow-primary/30 ring-1 ring-primary/20"
           />

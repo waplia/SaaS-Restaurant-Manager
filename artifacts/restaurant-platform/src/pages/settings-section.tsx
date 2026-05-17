@@ -9,6 +9,7 @@ import { SettingForm, Field, Row, Toggle, Select, ListEditor } from "@/component
 import { useRestaurantInfo, useSubscription, useRestaurantId, useUpdateRestaurant } from "@/lib/hooks";
 import { Trash2, ExternalLink, Lock, FileDown } from "lucide-react";
 import { Link } from "wouter";
+import { ImageUploadField } from "@/components/ImageUploadField";
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
@@ -699,9 +700,9 @@ function ThemeSection() {
               </div>
             </Field>
           </Row>
-          <Field label="Logo URL"><Input value={s.logoUrl} onChange={e => set(p => ({ ...p, logoUrl: e.target.value }))} placeholder="https://…/logo.png" /></Field>
-          <Field label="Favicon URL"><Input value={s.faviconUrl} onChange={e => set(p => ({ ...p, faviconUrl: e.target.value }))} /></Field>
-          <Field label="Login background image URL"><Input value={s.loginBgUrl} onChange={e => set(p => ({ ...p, loginBgUrl: e.target.value }))} /></Field>
+          <ImageUploadField label="Logo" value={s.logoUrl} onChange={(v) => set(p => ({ ...p, logoUrl: v }))} compact />
+          <ImageUploadField label="Favicon" value={s.faviconUrl} onChange={(v) => set(p => ({ ...p, faviconUrl: v }))} compact previewSize={64} />
+          <ImageUploadField label="Login background image" value={s.loginBgUrl} onChange={(v) => set(p => ({ ...p, loginBgUrl: v }))} />
         </>
       )}
     </SettingForm>
@@ -930,11 +931,23 @@ function AboutSection() {
         <>
           <Field label="Story"><Textarea rows={4} value={s.story} onChange={e => set(p => ({ ...p, story: e.target.value }))} /></Field>
           <Field label="Mission"><Textarea rows={2} value={s.mission} onChange={e => set(p => ({ ...p, mission: e.target.value }))} /></Field>
-          <Field label="Hero image URL"><Input value={s.heroImage} onChange={e => set(p => ({ ...p, heroImage: e.target.value }))} /></Field>
+          <ImageUploadField label="Hero image" value={s.heroImage} onChange={(v) => set(p => ({ ...p, heroImage: v }))} />
           <Field label="Awards & recognition"><Textarea rows={2} value={s.awards} onChange={e => set(p => ({ ...p, awards: e.target.value }))} /></Field>
-          <Field label="Photo gallery (one URL per line)">
-            <Textarea rows={4} value={s.gallery.join("\n")} onChange={e => set(p => ({ ...p, gallery: e.target.value.split("\n").map(x => x.trim()).filter(Boolean) }))} />
-          </Field>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Photo gallery</p>
+          <ListEditor
+            items={s.gallery.map(url => ({ url }))}
+            onChange={items => set(p => ({ ...p, gallery: items.map(x => x.url).filter(Boolean) }))}
+            addLabel="Add gallery image"
+            makeNew={() => ({ url: "" })}
+            render={(item, _i, update, remove) => (
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <ImageUploadField label="" value={item.url} onChange={(v) => update({ url: v })} compact previewSize={96} />
+                </div>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+              </div>
+            )}
+          />
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Team members</p>
           <ListEditor
             items={s.team}
@@ -942,11 +955,13 @@ function AboutSection() {
             addLabel="Add team member"
             makeNew={() => ({ name: "", role: "", photoUrl: "" })}
             render={(item, _i, update, remove) => (
-              <div className="flex items-center gap-2">
-                <Input className="flex-1" placeholder="Name" value={item.name} onChange={e => update({ name: e.target.value })} />
-                <Input className="flex-1" placeholder="Role" value={item.role} onChange={e => update({ role: e.target.value })} />
-                <Input className="flex-1" placeholder="Photo URL" value={item.photoUrl} onChange={e => update({ photoUrl: e.target.value })} />
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input className="flex-1" placeholder="Name" value={item.name} onChange={e => update({ name: e.target.value })} />
+                  <Input className="flex-1" placeholder="Role" value={item.role} onChange={e => update({ role: e.target.value })} />
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+                <ImageUploadField label="Photo" value={item.photoUrl} onChange={(v) => update({ photoUrl: v })} compact previewSize={72} />
               </div>
             )}
           />
@@ -957,23 +972,32 @@ function AboutSection() {
 }
 
 /* ---------------- 15. Customer Site ---------------- */
+interface Testimonial { name: string; quote: string; rating: number; avatarUrl: string }
 interface CustomerSiteCfg {
   enabled: boolean; subdomain: string;
   heroHeadline: string; heroSubcopy: string;
   featuredItemIds: number[];
-  socials: { instagram: string; facebook: string; twitter: string };
+  socials: { instagram: string; facebook: string; twitter: string; youtube: string; tiktok: string };
   mapEmbedUrl: string;
   seoTitle: string; seoDescription: string; ogImageUrl: string;
   accentColor: string;
+  ctaPrimaryLabel: string; ctaSecondaryLabel: string; ctaReserveLabel: string;
+  showOpenClosedPill: boolean;
+  testimonials: Testimonial[];
+  analyticsGa4: string; analyticsFbPixel: string;
 }
 function CustomerSiteSection() {
   const defaults: CustomerSiteCfg = {
     enabled: false, subdomain: "",
     heroHeadline: "", heroSubcopy: "",
     featuredItemIds: [],
-    socials: { instagram: "", facebook: "", twitter: "" },
+    socials: { instagram: "", facebook: "", twitter: "", youtube: "", tiktok: "" },
     mapEmbedUrl: "", seoTitle: "", seoDescription: "", ogImageUrl: "",
     accentColor: "#c2410c",
+    ctaPrimaryLabel: "", ctaSecondaryLabel: "", ctaReserveLabel: "",
+    showOpenClosedPill: true,
+    testimonials: [],
+    analyticsGa4: "", analyticsFbPixel: "",
   };
   return (
     <SettingForm section="customer-site" defaults={defaults}>
@@ -1014,9 +1038,13 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
         socials: s.socials, mapEmbedUrl: s.mapEmbedUrl,
         seoTitle: s.seoTitle, seoDescription: s.seoDescription,
         ogImageUrl: s.ogImageUrl, accentColor: s.accentColor,
+        ctaPrimaryLabel: s.ctaPrimaryLabel, ctaSecondaryLabel: s.ctaSecondaryLabel,
+        ctaReserveLabel: s.ctaReserveLabel,
+        showOpenClosedPill: s.showOpenClosedPill,
+        testimonials: s.testimonials,
       },
     }, window.location.origin);
-  }, [iframeReady, s.heroHeadline, s.heroSubcopy, s.socials, s.mapEmbedUrl, s.seoTitle, s.seoDescription, s.ogImageUrl, s.accentColor]);
+  }, [iframeReady, s.heroHeadline, s.heroSubcopy, s.socials, s.mapEmbedUrl, s.seoTitle, s.seoDescription, s.ogImageUrl, s.accentColor, s.ctaPrimaryLabel, s.ctaSecondaryLabel, s.ctaReserveLabel, s.showOpenClosedPill, s.testimonials]);
 
   function copyUrl() {
     if (!fullUrl) return;
@@ -1043,12 +1071,53 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
             <Field label="Instagram URL"><Input value={s.socials.instagram} onChange={e => set(p => ({ ...p, socials: { ...p.socials, instagram: e.target.value } }))} /></Field>
             <Field label="Facebook URL"><Input value={s.socials.facebook} onChange={e => set(p => ({ ...p, socials: { ...p.socials, facebook: e.target.value } }))} /></Field>
           </Row>
-          <Field label="Twitter / X URL"><Input value={s.socials.twitter} onChange={e => set(p => ({ ...p, socials: { ...p.socials, twitter: e.target.value } }))} /></Field>
+          <Row>
+            <Field label="Twitter / X URL"><Input value={s.socials.twitter} onChange={e => set(p => ({ ...p, socials: { ...p.socials, twitter: e.target.value } }))} /></Field>
+            <Field label="YouTube URL"><Input value={s.socials.youtube} onChange={e => set(p => ({ ...p, socials: { ...p.socials, youtube: e.target.value } }))} /></Field>
+          </Row>
+          <Field label="TikTok URL"><Input value={s.socials.tiktok} onChange={e => set(p => ({ ...p, socials: { ...p.socials, tiktok: e.target.value } }))} /></Field>
           <Field label="Google Maps embed URL"><Input value={s.mapEmbedUrl} onChange={e => set(p => ({ ...p, mapEmbedUrl: e.target.value }))} /></Field>
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">CTAs & hero</p>
+          <Row>
+            <Field label="Hero primary CTA label" hint='Default: "Reserve a table"'>
+              <Input value={s.ctaPrimaryLabel} onChange={e => set(p => ({ ...p, ctaPrimaryLabel: e.target.value }))} placeholder="Reserve a table" />
+            </Field>
+            <Field label="Hero secondary CTA label" hint='Default: "View menu"'>
+              <Input value={s.ctaSecondaryLabel} onChange={e => set(p => ({ ...p, ctaSecondaryLabel: e.target.value }))} placeholder="View menu" />
+            </Field>
+          </Row>
+          <Field label="Header reserve button label" hint='Default: "Book a table"'>
+            <Input value={s.ctaReserveLabel} onChange={e => set(p => ({ ...p, ctaReserveLabel: e.target.value }))} placeholder="Book a table" />
+          </Field>
+          <Toggle label='Show "Open now / Closed" pill in header'
+            hint="Auto-computed from today's hours under Reservation settings."
+            checked={s.showOpenClosedPill} onChange={v => set(p => ({ ...p, showOpenClosedPill: v }))} />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Testimonials</p>
+          <p className="text-xs text-muted-foreground -mt-1">Shown as a "What guests say" section. The section hides itself when empty.</p>
+          <ListEditor
+            items={s.testimonials}
+            onChange={items => set(p => ({ ...p, testimonials: items }))}
+            addLabel="Add testimonial"
+            makeNew={() => ({ name: "", quote: "", rating: 5, avatarUrl: "" })}
+            render={(item, _i, update, remove) => (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input className="flex-1" placeholder="Guest name" value={item.name} onChange={e => update({ name: e.target.value })} />
+                  <Input className="w-20" type="number" min={1} max={5} value={item.rating} onChange={e => update({ rating: Math.min(5, Math.max(1, Number(e.target.value) || 5)) })} />
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+                <Textarea rows={2} placeholder="Quote" value={item.quote} onChange={e => update({ quote: e.target.value })} />
+                <ImageUploadField label="Avatar (optional)" value={item.avatarUrl} onChange={(v) => update({ avatarUrl: v })} compact previewSize={56} />
+              </div>
+            )}
+          />
+
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">SEO</p>
           <Field label="SEO title"><Input value={s.seoTitle} onChange={e => set(p => ({ ...p, seoTitle: e.target.value }))} /></Field>
           <Field label="SEO description"><Textarea rows={2} value={s.seoDescription} onChange={e => set(p => ({ ...p, seoDescription: e.target.value }))} /></Field>
-          <Field label="OG image URL"><Input value={s.ogImageUrl} onChange={e => set(p => ({ ...p, ogImageUrl: e.target.value }))} /></Field>
+          <ImageUploadField label="OG / Twitter share image" value={s.ogImageUrl} onChange={(v) => set(p => ({ ...p, ogImageUrl: v }))} />
           <Field label="Accent color (hex)" hint="Used for buttons, headings and highlights on the public site.">
             <div className="flex items-center gap-2">
               <input type="color" value={s.accentColor || "#c2410c"} onChange={e => set(p => ({ ...p, accentColor: e.target.value }))}
@@ -1056,6 +1125,17 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
               <Input value={s.accentColor} onChange={e => set(p => ({ ...p, accentColor: e.target.value }))} className="flex-1" />
             </div>
           </Field>
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">Analytics (optional)</p>
+          <p className="text-xs text-muted-foreground -mt-1">Paste IDs to enable tracking on the public site. No analytics UI is built in.</p>
+          <Row>
+            <Field label="Google Analytics 4 measurement ID" hint="e.g. G-XXXXXXXXXX">
+              <Input value={s.analyticsGa4} onChange={e => set(p => ({ ...p, analyticsGa4: e.target.value }))} placeholder="G-XXXXXXXXXX" />
+            </Field>
+            <Field label="Facebook Pixel ID">
+              <Input value={s.analyticsFbPixel} onChange={e => set(p => ({ ...p, analyticsFbPixel: e.target.value }))} placeholder="1234567890" />
+            </Field>
+          </Row>
       </div>
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">

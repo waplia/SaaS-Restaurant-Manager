@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useAppSettings } from "@/lib/appSettings";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 import { cn } from "@/lib/utils";
 
 type IconType = typeof LayoutDashboard;
@@ -53,7 +54,7 @@ export function PortalLayout({ children }: { children: ReactNode }) {
       <aside className="hidden md:flex flex-col w-60 min-h-screen bg-sidebar border-r border-sidebar-border">
         <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
           {appSettings.logoUrl ? (
-            <img src={appSettings.logoUrl} alt={appSettings.appName} className="w-9 h-9 rounded-xl object-cover" />
+            <img src={resolveImageUrl(appSettings.logoUrl)} alt={appSettings.appName} className="w-9 h-9 rounded-xl object-cover" />
           ) : (
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
               <Flame className="w-5 h-5 text-white" />
@@ -114,7 +115,7 @@ export function PortalLayout({ children }: { children: ReactNode }) {
       <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card sticky top-0 z-30">
         <div className="flex items-center gap-2">
           {appSettings.logoUrl ? (
-            <img src={appSettings.logoUrl} alt="" className="w-7 h-7 rounded-md object-cover" />
+            <img src={resolveImageUrl(appSettings.logoUrl)} alt="" className="w-7 h-7 rounded-md object-cover" />
           ) : (
             <Flame className="w-6 h-6 text-primary" />
           )}

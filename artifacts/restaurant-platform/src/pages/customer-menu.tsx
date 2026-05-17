@@ -660,7 +660,7 @@ export default function CustomerMenuPage() {
     return (
       <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
         <div className="bg-orange-500 text-white px-4 py-4 flex items-center gap-3">
-          {menu.logoUrl && <img src={menu.logoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />}
+          {menu.logoUrl && <img src={resolveImg(menu.logoUrl)} alt="" className="w-8 h-8 rounded-full object-cover" />}
           <div>
             <p className="font-bold text-lg">{menu.restaurantName}</p>
             <p className="text-xs text-orange-100">Order Tracking</p>

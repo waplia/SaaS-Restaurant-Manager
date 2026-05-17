@@ -406,7 +406,7 @@ router.get("/public/site/:slug", async (req, res) => {
   const settingsRows = await db.select().from(restaurantSettingsTable)
     .where(and(
       eq(restaurantSettingsTable.restaurantId, restaurant.id),
-      inArray(restaurantSettingsTable.section, ["customer-site", "about-us", "reservation"]),
+      inArray(restaurantSettingsTable.section, ["customer-site", "about-us", "reservation", "open-close"]),
     ));
   const sections: Record<string, Record<string, unknown>> = {};
   for (const r of settingsRows) sections[r.section] = (r.data as Record<string, unknown>) ?? {};
@@ -416,7 +416,11 @@ router.get("/public/site/:slug", async (req, res) => {
   const reservation = sections["reservation"] ?? {};
 
   if (site.enabled !== true) {
-    return void res.status(404).json({ error: "Public site is not enabled for this restaurant" });
+    return void res.status(404).json({
+      error: "Public site is not enabled for this restaurant",
+      code: "site_not_published",
+      restaurantName: restaurant.name,
+    });
   }
 
   const safeUrl = (v: unknown): string | null => {
@@ -426,33 +430,69 @@ router.get("/public/site/:slug", async (req, res) => {
     if (!/^https?:\/\//i.test(t)) return null;
     return t;
   };
+  const safeImageOrObject = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    if (!t) return null;
+    if (/^https?:\/\//i.test(t)) return t;
+    if (t.startsWith("/objects/")) return t;
+    return null;
+  };
   const safeSocials = {
     instagram: safeUrl((site.socials as Record<string, unknown> | undefined)?.instagram),
     facebook: safeUrl((site.socials as Record<string, unknown> | undefined)?.facebook),
     twitter: safeUrl((site.socials as Record<string, unknown> | undefined)?.twitter),
+    youtube: safeUrl((site.socials as Record<string, unknown> | undefined)?.youtube),
+    tiktok: safeUrl((site.socials as Record<string, unknown> | undefined)?.tiktok),
   };
   const safeMap = safeUrl(site.mapEmbedUrl);
-  const safeOg = safeUrl(site.ogImageUrl);
+  const safeOg = safeImageOrObject(site.ogImageUrl);
   const safeAccent = typeof site.accentColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(site.accentColor) ? site.accentColor : "#c2410c";
 
+  type PublicMenuItem = {
+    id: number; name: string; description: string | null;
+    price: string; imageUrl: string | null;
+    isVeg: boolean; isVegan: boolean; containsGluten: boolean | null;
+    tags: string[]; allergens: string[];
+  };
+  function normalizeMenuItem(row: {
+    id: number; name: string; description: string | null;
+    price: string; imageUrl: string | null;
+    isVeg: boolean | null; isVegan: boolean | null; containsGluten: boolean | null;
+    tags: string[] | null; allergens: string[] | null;
+  }): PublicMenuItem {
+    return {
+      id: row.id, name: row.name, description: row.description,
+      price: row.price, imageUrl: row.imageUrl,
+      isVeg: row.isVeg === true,
+      isVegan: row.isVegan === true,
+      containsGluten: row.containsGluten,
+      tags: Array.isArray(row.tags) ? row.tags.filter(t => typeof t === "string") : [],
+      allergens: Array.isArray(row.allergens) ? row.allergens.filter(a => typeof a === "string") : [],
+    };
+  }
   const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
-  let categories: Array<{ id: number; name: string; items: Array<{ id: number; name: string; description: string | null; price: string; imageUrl: string | null }> }> = [];
-  let featured: Array<{ id: number; name: string; description: string | null; price: string; imageUrl: string | null }> = [];
+  let categories: Array<{ id: number; name: string; items: PublicMenuItem[] }> = [];
+  let featured: PublicMenuItem[] = [];
   if (menu) {
     const cats = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
+    const itemCols = {
+      id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
+      price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,
+      isVeg: menuItemsTable.isVeg, isVegan: menuItemsTable.isVegan,
+      containsGluten: menuItemsTable.containsGluten,
+      tags: menuItemsTable.tags, allergens: menuItemsTable.allergens,
+    } as const;
     categories = await Promise.all(cats.map(async (c) => {
-      const items = await db.select({
-        id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
-        price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,
-      }).from(menuItemsTable).where(and(eq(menuItemsTable.categoryId, c.id), eq(menuItemsTable.isAvailable, true)));
-      return { id: c.id, name: c.name, items };
+      const items = await db.select(itemCols).from(menuItemsTable)
+        .where(and(eq(menuItemsTable.categoryId, c.id), eq(menuItemsTable.isAvailable, true)));
+      return { id: c.id, name: c.name, items: items.map(normalizeMenuItem) };
     }));
     const featuredIds = Array.isArray(site.featuredItemIds) ? (site.featuredItemIds as unknown[]).map(Number).filter(n => Number.isFinite(n)) : [];
     if (featuredIds.length > 0) {
-      featured = await db.select({
-        id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
-        price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,
-      }).from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurant.id), inArray(menuItemsTable.id, featuredIds), eq(menuItemsTable.isAvailable, true)));
+      const rows = await db.select(itemCols).from(menuItemsTable)
+        .where(and(eq(menuItemsTable.restaurantId, restaurant.id), inArray(menuItemsTable.id, featuredIds), eq(menuItemsTable.isAvailable, true)));
+      featured = rows.map(normalizeMenuItem);
     }
   }
 
@@ -471,6 +511,97 @@ router.get("/public/site/:slug", async (req, res) => {
       : [],
   };
 
+  const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+  type DayKey = typeof DAY_KEYS[number];
+  type HoursEntry = { open: string; close: string; closed: boolean; breakOpen?: string; breakClose?: string };
+  const LONG_DAY_NAMES: Record<DayKey, string> = {
+    sun: "sunday", mon: "monday", tue: "tuesday", wed: "wednesday",
+    thu: "thursday", fri: "friday", sat: "saturday",
+  };
+  // openClose section is where the wizard stores hours; older deployments
+  // may have used the reservation section. Support both.
+  const openCloseSettings = sections["open-close"] ?? {};
+  const rawHoursA = (openCloseSettings.hours && typeof openCloseSettings.hours === "object")
+    ? openCloseSettings.hours as Record<string, unknown> : null;
+  const rawHoursB = (reservation.hours && typeof reservation.hours === "object")
+    ? reservation.hours as Record<string, unknown> : null;
+  function readHoursEntry(short: DayKey): HoursEntry {
+    const long = LONG_DAY_NAMES[short];
+    const raw = rawHoursA?.[long] ?? rawHoursA?.[short] ?? rawHoursB?.[long] ?? rawHoursB?.[short];
+    if (!raw || typeof raw !== "object") return { open: "", close: "", closed: true };
+    const o = raw as Record<string, unknown>;
+    // Legacy shape: { open: boolean, from, to, breakFrom?, breakTo? }
+    if (typeof o.open === "boolean") {
+      return {
+        open: typeof o.from === "string" ? o.from : "",
+        close: typeof o.to === "string" ? o.to : "",
+        closed: o.open !== true,
+        breakOpen: typeof o.breakFrom === "string" && o.breakFrom ? o.breakFrom : undefined,
+        breakClose: typeof o.breakTo === "string" && o.breakTo ? o.breakTo : undefined,
+      };
+    }
+    // New shape: { open: string, close: string, closed: boolean, breakOpen?, breakClose? }
+    return {
+      open: typeof o.open === "string" ? o.open : "",
+      close: typeof o.close === "string" ? o.close : "",
+      closed: o.closed === true,
+      breakOpen: typeof o.breakOpen === "string" && o.breakOpen ? o.breakOpen : (typeof o.breakFrom === "string" && o.breakFrom ? o.breakFrom : undefined),
+      breakClose: typeof o.breakClose === "string" && o.breakClose ? o.breakClose : (typeof o.breakTo === "string" && o.breakTo ? o.breakTo : undefined),
+    };
+  }
+  const normalizedHours: Record<DayKey, HoursEntry> = DAY_KEYS.reduce((acc, d) => {
+    acc[d] = readHoursEntry(d);
+    return acc;
+  }, {} as Record<DayKey, HoursEntry>);
+
+  const timezone = typeof restaurant.timezone === "string" && restaurant.timezone ? restaurant.timezone : "UTC";
+  let openStatus: { isOpen: boolean; today: HoursEntry; weekday: DayKey } = {
+    isOpen: false, today: { open: "", close: "", closed: true }, weekday: "sun",
+  };
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date());
+    const wd = (parts.find(p => p.type === "weekday")?.value ?? "Sun").toLowerCase().slice(0, 3) as DayKey;
+    const hh = parts.find(p => p.type === "hour")?.value ?? "00";
+    const mm = parts.find(p => p.type === "minute")?.value ?? "00";
+    const nowMin = parseInt(hh, 10) * 60 + parseInt(mm, 10);
+    const today = normalizedHours[wd];
+    const toMin = (s: string) => {
+      const m = /^(\d{1,2}):(\d{2})/.exec(s);
+      return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : -1;
+    };
+    const o = toMin(today.open);
+    const c = toMin(today.close);
+    const bo = today.breakOpen ? toMin(today.breakOpen) : -1;
+    const bc = today.breakClose ? toMin(today.breakClose) : -1;
+    const inMainWindow = o >= 0 && c >= 0
+      && (c > o ? nowMin >= o && nowMin < c : nowMin >= o || nowMin < c);
+    const inBreak = bo >= 0 && bc >= 0 && nowMin >= bo && nowMin < bc;
+    const isOpen = !today.closed && inMainWindow && !inBreak;
+    openStatus = { isOpen, today, weekday: wd };
+  } catch { /* keep default */ }
+
+  const orderingCheck = await checkRestaurantFeature(restaurant.id, "online_ordering");
+  const orderingEnabled = orderingCheck.ok === true && menu !== undefined;
+
+  const testimonialsSafe = Array.isArray(site.testimonials)
+    ? (site.testimonials as unknown[]).flatMap(t => {
+        if (!t || typeof t !== "object") return [];
+        const o = t as Record<string, unknown>;
+        const name = typeof o.name === "string" ? o.name.trim() : "";
+        const quote = typeof o.quote === "string" ? o.quote.trim() : "";
+        if (!name || !quote) return [];
+        const ratingN = Number(o.rating);
+        return [{
+          name, quote,
+          rating: Number.isFinite(ratingN) ? Math.min(5, Math.max(1, Math.round(ratingN))) : 5,
+          avatarUrl: typeof o.avatarUrl === "string" ? o.avatarUrl : "",
+        }];
+      })
+    : [];
+
   res.json({
     restaurant: {
       id: restaurant.id,
@@ -481,6 +612,7 @@ router.get("/public/site/:slug", async (req, res) => {
       address: restaurant.address ?? null,
       phone: restaurant.phone ?? null,
       email: restaurant.email ?? null,
+      timezone,
     },
     site: {
       heroHeadline: typeof site.heroHeadline === "string" ? site.heroHeadline : "",
@@ -491,9 +623,18 @@ router.get("/public/site/:slug", async (req, res) => {
       seoDescription: typeof site.seoDescription === "string" ? site.seoDescription : "",
       ogImageUrl: safeOg,
       accentColor: safeAccent,
+      ctaPrimaryLabel: typeof site.ctaPrimaryLabel === "string" ? site.ctaPrimaryLabel : "",
+      ctaSecondaryLabel: typeof site.ctaSecondaryLabel === "string" ? site.ctaSecondaryLabel : "",
+      ctaReserveLabel: typeof site.ctaReserveLabel === "string" ? site.ctaReserveLabel : "",
+      showOpenClosedPill: site.showOpenClosedPill !== false,
+      testimonials: testimonialsSafe,
+      analyticsGa4: typeof site.analyticsGa4 === "string" ? site.analyticsGa4 : "",
+      analyticsFbPixel: typeof site.analyticsFbPixel === "string" ? site.analyticsFbPixel : "",
+      orderingEnabled,
     },
     about: aboutSafe,
-    hours: reservation.hours && typeof reservation.hours === "object" ? reservation.hours : null,
+    hours: normalizedHours,
+    openStatus,
     menu: { categories, featured },
   });
 });

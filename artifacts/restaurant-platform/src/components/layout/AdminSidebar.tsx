@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { resolveImageUrl } from "@/components/ImageUploadField";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
@@ -189,7 +190,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
         {appSettings.logoUrl ? (
-          <img src={appSettings.logoUrl} alt={appSettings.appName} className="w-9 h-9 rounded-xl object-cover ring-1 ring-primary/20" />
+          <img src={resolveImageUrl(appSettings.logoUrl)} alt={appSettings.appName} className="w-9 h-9 rounded-xl object-cover ring-1 ring-primary/20" />
         ) : (
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/30 ring-1 ring-primary/20">
             <ShieldCheck className="w-5 h-5 text-white" />
