@@ -104,6 +104,7 @@ import menuPublicTrackingRouter from "./menu-public-tracking";
 import customerQualityRouter from "./customer-quality";
 import advancedGrowthRouter from "./advanced-growth";
 import operationsRouter from "./operations";
+import vendorInvoicesRouter from "./vendor-invoices";
 
 const router: IRouter = Router();
 
@@ -228,5 +229,6 @@ router.use(corporateRouter);
 router.use(menuIntelligenceRouter);
 router.use(advancedGrowthRouter);
 router.use(operationsRouter);
+router.use(vendorInvoicesRouter);
 
 export default router;

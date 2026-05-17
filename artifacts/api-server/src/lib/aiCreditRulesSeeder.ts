@@ -154,6 +154,15 @@ const DEFAULT_RULES: SeedRule[] = [
     pricingMode: "fixed",
   },
   {
+    featureSlug: "vendor_invoice_ocr",
+    featureLabel: "Vendor Invoice OCR",
+    description: "Extract vendor, invoice number, dates, totals and line items from an uploaded invoice (PDF or image). Charged per page.",
+    creditsPerUnit: "5",
+    minCharge: 5,
+    unitType: "page",
+    pricingMode: "per_unit",
+  },
+  {
     featureSlug: "ai_menu_import",
     featureLabel: "AI Menu Import",
     description: "Import an entire menu from a PDF, image, spreadsheet, URL, text or screenshot. Charged per page for PDFs, per image for image inputs, and per 50 items for spreadsheets / text / URL.",

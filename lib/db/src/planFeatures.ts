@@ -141,6 +141,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "inv_condiments",           label: "Condiment Tracking",          description: "Track condiment usage and waste per dish to plug a major leak source.",                category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/condiments" },
   { key: "inv_portion_drift",        label: "Portion Drift Alerts",        description: "Detect when actual ingredient usage drifts from recipe expectations.",                 category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/portion-drift" },
   { key: "inv_recipe_versioning",    label: "Recipe Versioning",           description: "Versioned recipes with rollback, approval and side-by-side diff.",                     category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/recipe-versions" },
+  { key: "inv_vendor_invoice_ocr",   label: "Vendor Invoice OCR",          description: "Upload supplier invoices as PDF or photos; AI extracts vendor, totals, line items, matches a PO, flags price variances and books the bill on approval.", category: "inventory_control",       defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/inventory/vendor-invoices" },
 
   // ──────────────────────────────────────────────────────────────────
   // Marketing pack (Growth, Delivery & Staff intelligence)

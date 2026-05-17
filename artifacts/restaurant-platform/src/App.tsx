@@ -18,6 +18,7 @@ import InventoryPage from "@/pages/inventory";
 import PackagingInventoryPage from "@/pages/inventory-packaging";
 import CondimentsInventoryPage from "@/pages/inventory-condiments";
 import PortionDriftPage from "@/pages/inventory-portion-drift";
+import VendorInvoicesPage from "@/pages/inventory-vendor-invoices";
 import RecipeVersionsPage from "@/pages/inventory-recipe-versions";
 import TasteTestingPage from "@/pages/kitchen-taste-testing";
 import StaffPage from "@/pages/staff";
@@ -351,6 +352,7 @@ function Router() {
       <Route path="/inventory/packaging" component={() => <RoleProtectedRoute component={PackagingInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/condiments" component={() => <RoleProtectedRoute component={CondimentsInventoryPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/inventory/portion-drift" component={() => <RoleProtectedRoute component={PortionDriftPage} allow={["owner", "manager", "kitchen"]} />} />
+      <Route path="/inventory/vendor-invoices" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={VendorInvoicesPage} feature="inv_vendor_invoice_ocr" />} allow={["owner", "manager"]} />} />
       <Route path="/inventory/recipe-versions" component={() => <RoleProtectedRoute component={RecipeVersionsPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/kitchen/taste-testing" component={() => <RoleProtectedRoute component={TasteTestingPage} allow={["owner", "manager", "kitchen"]} />} />
       <Route path="/reservations" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={ReservationsPage} feature="reservations" />} />} />

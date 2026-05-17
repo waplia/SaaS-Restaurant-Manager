@@ -4331,3 +4331,124 @@ export function useDeleteTasteTest() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["taste-tests"] }),
   });
 }
+
+// ─── Vendor Invoice OCR (Task #427) ───────────────────────────────────────────
+
+export type VendorInvoiceLine = {
+  id: number;
+  vendorInvoiceId: number;
+  lineNumber: number;
+  description: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  lineTotal: string;
+  matchedInventoryItemId: number | null;
+  matchedPoItemId: number | null;
+  priceVariancePct: string | null;
+  confidence: string;
+  createdAt: string;
+};
+export type VendorInvoice = {
+  id: number;
+  restaurantId: number;
+  supplierId: number | null;
+  purchaseOrderId: number | null;
+  expenseId: number | null;
+  status: "draft" | "matched" | "approved" | "rejected";
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  dueDate: string | null;
+  vendorName: string | null;
+  totalAmount: string;
+  taxAmount: string;
+  currency: string;
+  uploadObjectPath: string;
+  uploadMimeType: string | null;
+  extractedData: Record<string, unknown>;
+  confidenceScores: Record<string, number>;
+  hasPriceVariance: "true" | "false";
+  rejectionReason: string | null;
+  notes: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useVendorInvoices(status?: string) {
+  const RID = useRestaurantId();
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useQuery({
+    queryKey: ["vendor-invoices", RID, status ?? "all"],
+    queryFn: () => apiGet<VendorInvoice[]>(`/restaurants/${RID}/vendor-invoices${qs}`),
+  });
+}
+export function useVendorInvoice(id: number | null) {
+  const RID = useRestaurantId();
+  return useQuery({
+    queryKey: ["vendor-invoice", RID, id],
+    queryFn: () => apiGet<{ invoice: VendorInvoice; lines: VendorInvoiceLine[] }>(`/restaurants/${RID}/vendor-invoices/${id}`),
+    enabled: id != null,
+  });
+}
+export function useUploadVendorInvoice() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { objectPath: string; purchaseOrderId?: number; pageCountHint?: number; notes?: string }) =>
+      apiPost<{ id: number; hasPriceVariance: boolean; pages: number }>(`/restaurants/${RID}/vendor-invoices/upload`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-invoices"] }),
+  });
+}
+export function useCorrectVendorInvoice() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
+      apiPatch<VendorInvoice>(`/restaurants/${RID}/vendor-invoices/${id}/correct`, body),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["vendor-invoices"] });
+      qc.invalidateQueries({ queryKey: ["vendor-invoice", RID, v.id] });
+    },
+  });
+}
+export function useMatchVendorInvoicePo() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, purchaseOrderId }: { id: number; purchaseOrderId: number | null }) =>
+      apiPost<VendorInvoice>(`/restaurants/${RID}/vendor-invoices/${id}/match-po`, { purchaseOrderId }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["vendor-invoices"] });
+      qc.invalidateQueries({ queryKey: ["vendor-invoice", RID, v.id] });
+    },
+  });
+}
+export function useApproveVendorInvoice() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, expenseCategoryId, paymentMethod }: { id: number; expenseCategoryId: number; paymentMethod?: string }) =>
+      apiPost<{ id: number; expenseId: number; status: string }>(`/restaurants/${RID}/vendor-invoices/${id}/approve`, { expenseCategoryId, paymentMethod }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-invoices"] });
+      qc.invalidateQueries({ queryKey: ["vendor-invoice"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+    },
+  });
+}
+export function useRejectVendorInvoice() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiPost<{ id: number; status: string }>(`/restaurants/${RID}/vendor-invoices/${id}/reject`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-invoices"] });
+      qc.invalidateQueries({ queryKey: ["vendor-invoice"] });
+    },
+  });
+}
+export function useDeleteVendorInvoice() {
+  const RID = useRestaurantId(); const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RID}/vendor-invoices/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-invoices"] }),
+  });
+}

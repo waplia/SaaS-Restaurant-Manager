@@ -115,6 +115,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/inventory/condiments",      label: "Condiment Tracking",   icon: Soup,       roles: ["owner", "manager"], planGate: "inv_condiments",        badge: "premium" },
       { kind: "link", href: "/inventory/portion-drift",   label: "Portion Drift",        icon: AlertTriangle, roles: ["owner", "manager"], planGate: "inv_portion_drift", badge: "premium" },
       { kind: "link", href: "/inventory/recipe-versions", label: "Recipe Versions",      icon: History,    roles: ["owner", "manager"], planGate: "inv_recipe_versioning", badge: "premium" },
+      { kind: "link", href: "/inventory/vendor-invoices", label: "Vendor Invoices OCR",  icon: FileText,   roles: ["owner", "manager"], planGate: "inv_vendor_invoice_ocr", badge: "premium" },
     ],
   },
 

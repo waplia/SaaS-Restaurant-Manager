@@ -72,3 +72,4 @@ export * from "./menu-intelligence";
 export * from "./customer-quality";
 export * from "./advanced-growth";
 export * from "./operations";
+export * from "./vendor-invoices";
