@@ -4,6 +4,41 @@ import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
 import { usersTable } from "./users";
 
+/**
+ * Support SLA tier slug — drives per-plan SLA hour multipliers and the
+ * availability of POS emergency tickets, live phone callbacks, and the
+ * dedicated success contact.
+ */
+export type SupportTier = "standard" | "priority" | "enterprise";
+
+/**
+ * Per-priority escalation step. After `afterMinutes` past the relevant SLA
+ * due time, the SLA breach sweep emails each address in `notifyEmails`
+ * (in addition to the standard tenant/admin notifications) and bumps the
+ * ticket's `escalationLevel`.
+ */
+export interface SlaEscalationStep {
+  afterMinutes: number;
+  notifyEmails: string[];
+  label?: string;
+}
+export type SlaEscalationMatrix = Partial<Record<"low" | "normal" | "high" | "urgent", SlaEscalationStep[]>>;
+
+/** Multipliers applied to baseline priority hours per SLA tier. */
+export interface SlaTierConfig {
+  firstResponseMultiplier: number;
+  resolutionMultiplier: number;
+  emergencyEnabled: boolean;
+  callbackEnabled: boolean;
+}
+export type SlaTierMap = Partial<Record<SupportTier, SlaTierConfig>>;
+
+export const DEFAULT_TIER_CONFIG: Record<SupportTier, SlaTierConfig> = {
+  standard:   { firstResponseMultiplier: 1,    resolutionMultiplier: 1,    emergencyEnabled: false, callbackEnabled: false },
+  priority:   { firstResponseMultiplier: 0.5,  resolutionMultiplier: 0.5,  emergencyEnabled: true,  callbackEnabled: true  },
+  enterprise: { firstResponseMultiplier: 0.25, resolutionMultiplier: 0.25, emergencyEnabled: true,  callbackEnabled: true  },
+};
+
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
 export type TicketStatus =
   | "open"
@@ -51,6 +86,20 @@ export const supportTicketsTable = pgTable("support_tickets", {
   // Total time the ticket has spent in "Waiting for Customer" (ms).
   pausedMs: integer("paused_ms").notNull().default(0),
   pausedAt: timestamp("paused_at"),
+  // Task #436 — Support SLA & Emergency Support.
+  // True when the requester filed a POS emergency. Forces priority=urgent
+  // and is gated on the plan's SLA tier (`emergencyEnabled`).
+  isEmergency: boolean("is_emergency").notNull().default(false),
+  // Highest escalation level fired so far. The breach sweep walks the
+  // escalation matrix and uses this to skip steps that have already fired.
+  escalationLevel: integer("escalation_level").notNull().default(0),
+  lastEscalatedAt: timestamp("last_escalated_at"),
+  firstResponseBreachNotifiedAt: timestamp("first_response_breach_notified_at"),
+  resolutionBreachNotifiedAt: timestamp("resolution_breach_notified_at"),
+  // CSAT (1-5) collected after the ticket is resolved/closed.
+  satisfactionRating: integer("satisfaction_rating"),
+  satisfactionComment: text("satisfaction_comment"),
+  satisfactionAt: timestamp("satisfaction_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -88,7 +137,8 @@ export type TicketEventType =
   | "reply_posted"
   | "internal_note_added"
   | "attachment_added"
-  | "reopened";
+  | "reopened"
+  | "sla_breached";
 
 export const supportTicketEventsTable = pgTable("support_ticket_events", {
   id: serial("id").primaryKey(),
@@ -117,7 +167,75 @@ export const supportSlaSettingsTable = pgTable("support_sla_settings", {
   highResolutionHours: integer("high_resolution_hours").notNull().default(24),
   urgentResolutionHours: integer("urgent_resolution_hours").notNull().default(8),
   maxAttachmentMb: integer("max_attachment_mb").notNull().default(10),
+  // Task #436. Per-priority escalation steps. Each step fires once when
+  // (now - sla_due_at) >= afterMinutes and the ticket is still open.
+  escalationMatrix: jsonb("escalation_matrix").$type<SlaEscalationMatrix>().notNull().default({}),
+  // Per-tier multipliers + capability toggles. Falls back to DEFAULT_TIER_CONFIG.
+  tierConfig: jsonb("tier_config").$type<SlaTierMap>().notNull().default({}),
+  // Optional live-chat / WhatsApp URL shown to tenants whose tier enables it.
+  liveChatUrl: text("live_chat_url"),
+  // Public status page toggles + branding.
+  statusPageEnabled: boolean("status_page_enabled").notNull().default(true),
+  statusPageTitle: text("status_page_title").notNull().default("System Status"),
+  statusPageDescription: text("status_page_description").notNull().default("Current status of all TableTrack services."),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * POS emergency / phone-callback request raised by a tenant. Distinct from
+ * a regular ticket so the on-call rota can triage them in a dedicated queue
+ * without polluting the standard ticket SLA timers.
+ */
+export const supportCallbackRequestsTable = pgTable("support_callback_requests", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  requesterId: integer("requester_id").references(() => usersTable.id),
+  requesterName: text("requester_name"),
+  phone: text("phone").notNull(),
+  preferredTime: text("preferred_time"),
+  topic: text("topic"),
+  notes: text("notes"),
+  // pending | acknowledged | scheduled | completed | cancelled
+  status: text("status").notNull().default("pending"),
+  handlerId: integer("handler_id").references(() => usersTable.id),
+  handlerNote: text("handler_note"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  completedAt: timestamp("completed_at"),
+  ticketId: integer("ticket_id").references(() => supportTicketsTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type SupportIncidentStatus = "investigating" | "identified" | "monitoring" | "resolved";
+export type SupportIncidentSeverity = "minor" | "major" | "critical";
+
+/**
+ * Public status-page incident. Authored by super-admins; visible at
+ * `/status` without auth. Each `supportIncidentUpdatesTable` row appends a
+ * timestamped status update.
+ */
+export const supportIncidentsTable = pgTable("support_incidents", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  status: text("status").$type<SupportIncidentStatus>().notNull().default("investigating"),
+  severity: text("severity").$type<SupportIncidentSeverity>().notNull().default("minor"),
+  affectedComponents: text("affected_components").array().notNull().default([]),
+  isPublished: boolean("is_published").notNull().default(true),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  createdBy: integer("created_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const supportIncidentUpdatesTable = pgTable("support_incident_updates", {
+  id: serial("id").primaryKey(),
+  incidentId: integer("incident_id").notNull().references(() => supportIncidentsTable.id, { onDelete: "cascade" }),
+  status: text("status").$type<SupportIncidentStatus>().notNull(),
+  body: text("body").notNull(),
+  createdBy: integer("created_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertTicketCategorySchema = createInsertSchema(supportTicketCategoriesTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -132,3 +250,14 @@ export type SupportTicketReply = typeof supportTicketRepliesTable.$inferSelect;
 export type SupportTicketAttachment = typeof supportTicketAttachmentsTable.$inferSelect;
 export type SupportTicketEvent = typeof supportTicketEventsTable.$inferSelect;
 export type SupportSlaSettings = typeof supportSlaSettingsTable.$inferSelect;
+
+export type SupportCallbackRequest = typeof supportCallbackRequestsTable.$inferSelect;
+export const insertSupportCallbackRequestSchema = createInsertSchema(supportCallbackRequestsTable)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSupportCallbackRequest = z.infer<typeof insertSupportCallbackRequestSchema>;
+
+export type SupportIncident = typeof supportIncidentsTable.$inferSelect;
+export type SupportIncidentUpdate = typeof supportIncidentUpdatesTable.$inferSelect;
+export const insertSupportIncidentSchema = createInsertSchema(supportIncidentsTable)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSupportIncident = z.infer<typeof insertSupportIncidentSchema>;

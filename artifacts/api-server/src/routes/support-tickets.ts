@@ -8,6 +8,8 @@ import {
   supportTicketRepliesTable,
   supportTicketAttachmentsTable,
   supportTicketEventsTable,
+  supportCallbackRequestsTable,
+  supportSlaSettingsTable,
   notificationsTable,
   auditLogsTable,
   tenantsTable,
@@ -17,6 +19,9 @@ import {
   type TicketPriority,
   type TicketStatus,
   type TicketEventType,
+  type SupportCallbackRequest,
+  type SlaEscalationMatrix,
+  type SlaTierMap,
 } from "../lib/db";
 import { requireSuperAdmin, requireRole } from "../middleware/authorize";
 import { sanitizeStoredUpload, UploadValidationError, assertAllowedContentType } from "../lib/uploadSanitizer";
@@ -25,6 +30,10 @@ import {
   getCategoryById,
   getSlaSettings,
   resolveEffectiveSla,
+  getTenantSupportTier,
+  describeTierCapabilities,
+  getTierConfig,
+  escalationStepsFor,
   HOUR_MS,
   isOpenStatus,
 } from "../lib/supportSla";
@@ -268,20 +277,38 @@ router.get("/admin/support/sla-settings", requireSuperAdmin, async (_req, res) =
 
 router.put("/admin/support/sla-settings", requireSuperAdmin, async (req, res) => {
   const settings = await getSlaSettings();
-  const fields = [
+  const numFields = [
     "lowFirstResponseHours", "normalFirstResponseHours", "highFirstResponseHours", "urgentFirstResponseHours",
     "lowResolutionHours", "normalResolutionHours", "highResolutionHours", "urgentResolutionHours",
     "maxAttachmentMb",
   ] as const;
+  const body = req.body as Record<string, unknown>;
   const patch: Record<string, unknown> = { updatedAt: new Date() };
-  for (const f of fields) {
-    const v = (req.body as Record<string, unknown>)[f];
+  for (const f of numFields) {
+    const v = body[f];
     if (v === undefined) continue;
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) return void res.status(400).json({ error: `${f} must be a non-negative number` });
     patch[f] = Math.round(n);
   }
-  const { supportSlaSettingsTable } = await import("../lib/db");
+  // Task #436 — escalation matrix, tier multipliers, status page config.
+  if (body.escalationMatrix !== undefined) {
+    if (typeof body.escalationMatrix !== "object" || body.escalationMatrix === null) {
+      return void res.status(400).json({ error: "escalationMatrix must be an object" });
+    }
+    patch.escalationMatrix = body.escalationMatrix as SlaEscalationMatrix;
+  }
+  if (body.tierConfig !== undefined) {
+    if (typeof body.tierConfig !== "object" || body.tierConfig === null) {
+      return void res.status(400).json({ error: "tierConfig must be an object" });
+    }
+    patch.tierConfig = body.tierConfig as SlaTierMap;
+  }
+  if (body.liveChatUrl !== undefined) patch.liveChatUrl = body.liveChatUrl == null ? null : String(body.liveChatUrl).slice(0, 512);
+  if (body.statusPageEnabled !== undefined) patch.statusPageEnabled = Boolean(body.statusPageEnabled);
+  if (body.statusPageTitle !== undefined) patch.statusPageTitle = String(body.statusPageTitle).slice(0, 256);
+  if (body.statusPageDescription !== undefined) patch.statusPageDescription = String(body.statusPageDescription).slice(0, 2048);
+
   const [updated] = await db.update(supportSlaSettingsTable).set(patch).where(eq(supportSlaSettingsTable.id, settings.id)).returning();
   await recordAuditLog({
     req,
@@ -312,15 +339,27 @@ router.get("/support/tickets", requireRole("owner", "manager", "waiter", "kitche
 router.post("/support/tickets", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) return void res.status(403).json({ error: "No tenant scope" });
-  const { subject, description, categoryId, priority, attachments } = req.body as {
+  const { subject, description, categoryId, priority, attachments, isEmergency } = req.body as {
     subject?: string; description?: string; categoryId?: number; priority?: TicketPriority;
     attachments?: Array<{ objectPath: string; fileName: string; contentType: string; size: number }>;
+    isEmergency?: boolean;
   };
   if (!subject?.trim() || !description?.trim()) return void res.status(400).json({ error: "subject and description are required" });
   const cat = await getCategoryById(categoryId);
-  const effectivePriority: TicketPriority = isPriority(priority) ? priority : (cat?.defaultPriority ?? "normal");
   const settings = await getSlaSettings();
-  const sla = resolveEffectiveSla({ priority: effectivePriority, category: cat, ticketFirstResponseHours: null, ticketResolutionHours: null, settings });
+  // Resolve tier first so emergency / priority decisions can be gated on it.
+  const tier = await getTenantSupportTier(tenantId);
+  const tierCfg = getTierConfig(settings, tier);
+  let emergency = false;
+  let effectivePriority: TicketPriority = isPriority(priority) ? priority : (cat?.defaultPriority ?? "normal");
+  if (isEmergency === true) {
+    if (!tierCfg.emergencyEnabled) {
+      return void res.status(403).json({ error: "POS emergency tickets are not available on your current support tier." });
+    }
+    emergency = true;
+    effectivePriority = "urgent";
+  }
+  const sla = resolveEffectiveSla({ priority: effectivePriority, category: cat, ticketFirstResponseHours: null, ticketResolutionHours: null, settings, tier });
   const now = new Date();
   const ticketNumber = await nextTicketNumber();
   const [ticket] = await db.insert(supportTicketsTable).values({
@@ -332,6 +371,7 @@ router.post("/support/tickets", requireRole("owner", "manager", "waiter", "kitch
     description: description.trim(),
     status: "open",
     priority: effectivePriority,
+    isEmergency: emergency,
     firstResponseDueAt: new Date(now.getTime() + sla.firstResponseHours * HOUR_MS),
     resolutionDueAt: new Date(now.getTime() + sla.resolutionHours * HOUR_MS),
   }).returning();
@@ -794,6 +834,219 @@ router.get("/admin/support/tenants", requireSuperAdmin, async (_req, res) => {
     .orderBy(tenantsTable.name);
   res.json({ data: rows });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// Task #436 — Support tier / capabilities (tenant-visible)
+// ──────────────────────────────────────────────────────────────────
+router.get("/support/sla-tier", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) return void res.status(403).json({ error: "No tenant scope" });
+  const settings = await getSlaSettings();
+  const tier = await getTenantSupportTier(tenantId);
+  const caps = describeTierCapabilities(settings, tier);
+  res.json({
+    ...caps,
+    escalationMatrix: settings.escalationMatrix ?? {},
+    statusPageEnabled: settings.statusPageEnabled,
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Task #436 — Customer Satisfaction (CSAT)
+// ──────────────────────────────────────────────────────────────────
+router.post("/support/tickets/:id/satisfaction", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return void res.status(400).json({ error: "Invalid id" });
+  const ticket = await loadTicketForRequester(req, id, true);
+  if (!ticket) return void res.status(404).json({ error: "Not found" });
+  if (ticket.status !== "resolved" && ticket.status !== "closed") {
+    return void res.status(400).json({ error: "Ratings can only be left on resolved or closed tickets" });
+  }
+  if (ticket.satisfactionRating) {
+    return void res.status(409).json({ error: "A rating has already been submitted for this ticket" });
+  }
+  const { rating, comment } = req.body as { rating?: number; comment?: string };
+  const r = Number(rating);
+  if (!Number.isInteger(r) || r < 1 || r > 5) return void res.status(400).json({ error: "rating must be an integer between 1 and 5" });
+  const trimmedComment = typeof comment === "string" ? comment.trim().slice(0, 2000) : null;
+  const [updated] = await db.update(supportTicketsTable).set({
+    satisfactionRating: r,
+    satisfactionComment: trimmedComment || null,
+    satisfactionAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(supportTicketsTable.id, id)).returning();
+  const actor = actorInfo(req);
+  await logAudit({ userId: actor.id, action: "support.ticket.satisfaction", ticketId: id, details: `rating=${r}` });
+  res.json(await serializeTicket(updated));
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Task #436 — Phone callback queue (tenant)
+// ──────────────────────────────────────────────────────────────────
+router.get("/support/callback-requests", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) return void res.status(403).json({ error: "No tenant scope" });
+  const rows = await db.select().from(supportCallbackRequestsTable)
+    .where(eq(supportCallbackRequestsTable.tenantId, tenantId))
+    .orderBy(desc(supportCallbackRequestsTable.createdAt))
+    .limit(50);
+  res.json({ data: rows });
+});
+
+router.post("/support/callback-requests", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) return void res.status(403).json({ error: "No tenant scope" });
+  // Gate behind the tenant's tier.
+  const settings = await getSlaSettings();
+  const tier = await getTenantSupportTier(tenantId);
+  const tierCfg = getTierConfig(settings, tier);
+  if (!tierCfg.callbackEnabled) {
+    return void res.status(403).json({ error: "Phone callbacks are not available on your current support tier." });
+  }
+  const { phone, preferredTime, topic, notes } = req.body as { phone?: string; preferredTime?: string; topic?: string; notes?: string };
+  if (!phone?.trim()) return void res.status(400).json({ error: "phone is required" });
+  const actor = actorInfo(req);
+  const [created] = await db.insert(supportCallbackRequestsTable).values({
+    tenantId,
+    requesterId: actor.id,
+    requesterName: actor.name,
+    phone: phone.trim().slice(0, 64),
+    preferredTime: preferredTime?.trim().slice(0, 256) || null,
+    topic: topic?.trim().slice(0, 256) || null,
+    notes: notes?.trim().slice(0, 2000) || null,
+  }).returning();
+  await recordAuditLog({ req, module: "support", action: "callback.create", entity: "support_callback_request", entityId: created.id, newValue: created });
+  notifyAdmins(`New callback request from ${actor.name ?? "tenant"}`, `Phone: ${created.phone}. Preferred time: ${created.preferredTime ?? "ASAP"}. Topic: ${created.topic ?? "—"}`, created.id).catch(() => {});
+  res.status(201).json(created);
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Task #436 — Phone callback queue (super-admin)
+// ──────────────────────────────────────────────────────────────────
+router.get("/admin/support/callback-requests", requireSuperAdmin, async (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : "all";
+  const conds: SQL[] = [];
+  if (["pending", "acknowledged", "scheduled", "completed", "cancelled"].includes(status)) {
+    conds.push(eq(supportCallbackRequestsTable.status, status));
+  }
+  const rows: SupportCallbackRequest[] = await db.select().from(supportCallbackRequestsTable)
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(supportCallbackRequestsTable.createdAt))
+    .limit(200);
+  // Enrich with tenant name in one extra query.
+  const tenantIds = Array.from(new Set(rows.map(r => r.tenantId)));
+  const tenants = tenantIds.length
+    ? await db.select({ id: tenantsTable.id, name: tenantsTable.name }).from(tenantsTable).where(inArray(tenantsTable.id, tenantIds))
+    : [];
+  const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
+  res.json({ data: rows.map(r => ({ ...r, tenantName: tenantMap.get(r.tenantId) ?? null })) });
+});
+
+router.patch("/admin/support/callback-requests/:id", requireSuperAdmin, async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return void res.status(400).json({ error: "Invalid id" });
+  const [old] = await db.select().from(supportCallbackRequestsTable).where(eq(supportCallbackRequestsTable.id, id));
+  if (!old) return void res.status(404).json({ error: "Not found" });
+  const { status, handlerNote } = req.body as { status?: string; handlerNote?: string };
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (status !== undefined) {
+    if (!["pending", "acknowledged", "scheduled", "completed", "cancelled"].includes(status)) {
+      return void res.status(400).json({ error: "Invalid status" });
+    }
+    patch.status = status;
+    if (status === "acknowledged" && !old.acknowledgedAt) patch.acknowledgedAt = new Date();
+    if ((status === "completed" || status === "cancelled") && !old.completedAt) patch.completedAt = new Date();
+    const actor = actorInfo(req);
+    patch.handlerId = actor.id;
+  }
+  if (handlerNote !== undefined) patch.handlerNote = handlerNote == null ? null : String(handlerNote).slice(0, 2000);
+  const [updated] = await db.update(supportCallbackRequestsTable).set(patch).where(eq(supportCallbackRequestsTable.id, id)).returning();
+  await recordAuditLog({ req, module: "support", action: "callback.update", entity: "support_callback_request", entityId: id, oldValue: old, newValue: updated });
+  res.json(updated);
+});
+
+/* ------------------------------------------------------------------ *
+ * Task #436 — SLA breach escalation sweep.
+ *
+ * Called on a cron (every 5 min). For each open ticket:
+ *   1. If we've crossed first-response or resolution due time and haven't
+ *      yet logged a breach event, fire one and email the tenant + admins.
+ *   2. Walk the per-priority escalation matrix and fire each step whose
+ *      `afterMinutes` is reached, bumping `escalationLevel` once per step.
+ *
+ * Idempotent within a single sweep window thanks to the *_breach_notified_at
+ * + escalation_level columns.
+ * ------------------------------------------------------------------ */
+export async function runSupportSlaBreachSweep(now: Date = new Date()): Promise<{ scanned: number; breaches: number; escalations: number }> {
+  const settings = await getSlaSettings();
+  const rows = await db.select().from(supportTicketsTable).where(sql`${supportTicketsTable.status} NOT IN ('resolved','closed')`);
+  let breaches = 0;
+  let escalations = 0;
+  for (const t of rows) {
+    const info = computeSlaInfo(t, now);
+    const patch: Record<string, unknown> = {};
+
+    if (info.firstResponseBreached && !t.firstResponseBreachNotifiedAt) {
+      patch.firstResponseBreachNotifiedAt = now;
+      breaches++;
+      await logEvent({ ticketId: t.id, type: "sla_breached", actor: { id: null, isAdmin: true, name: "SLA monitor" }, toValue: "first_response" });
+      notifyTenant(t.tenantId, "support_ticket", `Ticket ${t.ticketNumber} — first-response SLA breached`,
+        `We've missed the first-response window on your ticket "${t.subject}". Our team has been alerted.`, t.id).catch(() => {});
+      notifyAdmins(`SLA breach (first response): ${t.ticketNumber}`, `Ticket "${t.subject}" exceeded its first-response SLA.`, t.id).catch(() => {});
+    }
+    if (info.resolutionBreached && !t.resolutionBreachNotifiedAt) {
+      patch.resolutionBreachNotifiedAt = now;
+      breaches++;
+      await logEvent({ ticketId: t.id, type: "sla_breached", actor: { id: null, isAdmin: true, name: "SLA monitor" }, toValue: "resolution" });
+      notifyTenant(t.tenantId, "support_ticket", `Ticket ${t.ticketNumber} — resolution SLA breached`,
+        `Resolution on your ticket "${t.subject}" is overdue. Our team has been alerted.`, t.id).catch(() => {});
+      notifyAdmins(`SLA breach (resolution): ${t.ticketNumber}`, `Ticket "${t.subject}" exceeded its resolution SLA.`, t.id).catch(() => {});
+    }
+
+    // Escalation steps — keyed on minutes past whichever due time is more overdue.
+    const overdueMs = Math.max(
+      info.firstResponseRemainingMs !== null ? -info.firstResponseRemainingMs : 0,
+      info.resolutionRemainingMs    !== null ? -info.resolutionRemainingMs    : 0,
+    );
+    const overdueMin = Math.floor(overdueMs / 60_000);
+    if (overdueMin > 0) {
+      const steps = escalationStepsFor(settings, t.priority);
+      // `escalationLevel` is the number of steps already fired for this ticket.
+      const nextStepIdx = t.escalationLevel ?? 0;
+      let firedThisRun = nextStepIdx;
+      for (let i = nextStepIdx; i < steps.length; i++) {
+        const step = steps[i];
+        if (overdueMin >= step.afterMinutes) {
+          for (const email of step.notifyEmails) {
+            sendEmail({
+              to: email,
+              subject: `SLA escalation L${i + 1}: ${t.ticketNumber} — ${t.subject}`,
+              html: `<p>Ticket <strong>${t.ticketNumber}</strong> is <strong>${overdueMin} min</strong> past its SLA window.</p>` +
+                    `<p>Priority: ${t.priority}${t.isEmergency ? " (POS emergency)" : ""}.</p>` +
+                    `<p>Step label: ${step.label ?? "(unlabelled)"}</p>` +
+                    `<p>Please review the ticket at once.</p>`,
+              text: `Ticket ${t.ticketNumber} is ${overdueMin} min past SLA (priority ${t.priority}). Step ${i + 1} (${step.label ?? "unlabelled"}).`,
+            }).catch(err => logger.warn({ err, ticketId: t.id, email }, "[support] escalation email failed"));
+          }
+          await logEvent({ ticketId: t.id, type: "sla_breached", actor: { id: null, isAdmin: true, name: "SLA monitor" }, toValue: `escalation_l${i + 1}` });
+          firedThisRun = i + 1;
+          escalations++;
+        } else {
+          break; // steps are sorted ascending; no further step is ready.
+        }
+      }
+      if (firedThisRun !== (t.escalationLevel ?? 0)) {
+        patch.escalationLevel = firedThisRun;
+        patch.lastEscalatedAt = now;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await db.update(supportTicketsTable).set({ ...patch, updatedAt: now }).where(eq(supportTicketsTable.id, t.id));
+    }
+  }
+  return { scanned: rows.length, breaches, escalations };
+}
 
 // Make TS happy with the unused import in production builds.
 void isOpenStatus;

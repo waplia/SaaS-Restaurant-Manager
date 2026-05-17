@@ -130,6 +130,7 @@ export function startScheduler(): void {
   registerCron("gift-card-expiry", "0 1 * * *", "Daily 01:00 IST: marks gift cards whose expiresAt has passed as expired");
   registerCron("orphan-upload-sweep", "0 4 * * *", "Daily 04:00 IST: deletes private-bucket uploads older than 24h with no ACL policy (abandoned presigned uploads)");
   registerCron("complaint-escalation", "*/5 * * * *", "Customer-Quality: SLA-based complaint escalation sweep (every 5 min)");
+  registerCron("support-sla-breach", "*/5 * * * *", "Support: SLA breach + escalation matrix sweep (every 5 min) — emails breach alerts to tenant/admins and fires per-priority escalation steps");
   registerCron("repeat-complaint-clusters", "30 3 * * *", "Customer-Quality: nightly rebuild of repeat complaint clusters (03:30 IST)");
   registerCron("abandoned-cart-detect", "*/10 * * * *", "Customer-Quality: detect & flag abandoned carts (every 10 min)");
   registerCron("ops-morning-briefings", "0 8 * * *", "Generates and sends per-restaurant owner morning briefings (Operations Intelligence) at 08:00 IST");
@@ -190,6 +191,17 @@ export function startScheduler(): void {
       const n = await runComplaintEscalationSweep();
       if (n > 0) logger.info({ fired: n }, "[customer-quality] complaint escalation fired");
     } catch (err) { logger.error({ err }, "[customer-quality] complaint escalation failed"); }
+  });
+
+  // Task #436 — Support SLA breach & escalation matrix sweep (every 5 min).
+  trackCron("support_sla_breach", "*/5 * * * *", async () => {
+    try {
+      const { runSupportSlaBreachSweep } = await import("../routes/support-tickets");
+      const r = await runSupportSlaBreachSweep();
+      if (r.breaches > 0 || r.escalations > 0) {
+        logger.info({ ...r }, "[support] SLA breach sweep fired");
+      }
+    } catch (err) { logger.error({ err }, "[support] SLA breach sweep failed"); }
   });
 
   trackCron("repeat_complaint_clusters", "30 3 * * *", async () => {

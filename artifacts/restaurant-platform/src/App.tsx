@@ -69,6 +69,7 @@ import AdminAuditLogsPage from "@/pages/admin-audit-logs";
 import AdminBlogPage from "@/pages/admin-blog";
 import AdminSupportPage from "@/pages/admin-support";
 import SupportPage from "@/pages/support";
+import StatusPage from "@/pages/status";
 import SystemHealthPage from "@/pages/system-health";
 import AdminApiSettingsPage from "@/pages/admin-api-settings";
 import ApiKeysPage from "@/pages/api-keys";
@@ -312,6 +313,7 @@ function Router() {
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />
+      <Route path="/status" component={StatusPage} />
       <Route path="/sop-training" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SopTrainingPage} feature="sop_training" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/mystery-audits" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={MysteryAuditsPage} feature="mystery_audits" />} allow={["owner", "manager", "auditor", "super_admin"]} />} />
       <Route path="/my-training" component={() => <ProtectedRoute component={MyTrainingPage} />} />

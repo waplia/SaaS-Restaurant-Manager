@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiAction } from "@/lib/api";
-import { LifeBuoy, ArrowLeft, Clock, AlertTriangle, Send, Loader2, Plus, Pencil, Trash2, Save, X, Paperclip, Settings2, Inbox } from "lucide-react";
+import { LifeBuoy, ArrowLeft, Clock, AlertTriangle, Send, Loader2, Plus, Pencil, Trash2, Save, X, Paperclip, Settings2, Inbox, Phone, Activity, Star, Zap, CheckCircle2 } from "lucide-react";
 
 type Priority = "low" | "normal" | "high" | "urgent";
 type Status = "open" | "pending" | "in_progress" | "waiting_customer" | "resolved" | "closed";
@@ -28,12 +28,37 @@ interface Ticket {
 interface Reply { id: number; body: string; createdAt: string; authorName: string | null; authorIsAdmin: boolean; isInternal: boolean; }
 interface Attachment { id: number; fileName: string; size: number; replyId: number | null; isInternal: boolean; }
 interface Event { id: number; type: string; createdAt: string; actorName: string | null; actorIsAdmin: boolean; fromValue: string | null; toValue: string | null; }
+type SupportTier = "standard" | "priority" | "enterprise";
+interface SlaEscalationStep { afterMinutes: number; level: number; notifyRole?: "support_agent" | "support_lead" | "support_manager" | "engineering_oncall" | "executive"; notifyEmails?: string[]; }
+interface SlaTierConfig {
+  firstResponseMultiplier: number;
+  resolutionMultiplier: number;
+  emergencyEnabled: boolean;
+  callbackEnabled: boolean;
+}
 interface SlaSettings {
   id: number;
   lowFirstResponseHours: number; normalFirstResponseHours: number; highFirstResponseHours: number; urgentFirstResponseHours: number;
   lowResolutionHours: number; normalResolutionHours: number; highResolutionHours: number; urgentResolutionHours: number;
   maxAttachmentMb: number;
+  escalationMatrix?: Partial<Record<Priority, SlaEscalationStep[]>> | null;
+  tierConfig?: Partial<Record<SupportTier, SlaTierConfig>> | null;
+  liveChatUrl?: string | null;
+  statusPageEnabled?: boolean;
+  statusPageTitle?: string | null;
+  statusPageDescription?: string | null;
 }
+interface CallbackRequest {
+  id: number; tenantId: number; phone: string; preferredTime: string | null; topic: string | null; notes: string | null;
+  status: "pending" | "acknowledged" | "completed" | "cancelled"; createdAt: string; acknowledgedAt: string | null; completedAt: string | null;
+  handlerNote: string | null;
+}
+interface Incident {
+  id: number; title: string; body: string; status: "investigating" | "identified" | "monitoring" | "resolved";
+  severity: "minor" | "major" | "critical"; affectedComponents: string[]; isPublished: boolean;
+  startedAt: string; resolvedAt: string | null;
+}
+interface IncidentUpdate { id: number; status: string; body: string; createdAt: string; }
 interface Tenant { id: number; name: string; slug: string; }
 interface AdminUser { id: number; name: string; email: string; }
 interface AttachmentDraft { objectPath: string; fileName: string; contentType: string; size: number; }
@@ -60,7 +85,7 @@ function formatRemaining(ms: number | null): string {
 }
 
 export default function AdminSupportPage() {
-  const [tab, setTab] = useState<"queue" | "categories" | "settings">("queue");
+  const [tab, setTab] = useState<"queue" | "categories" | "settings" | "callbacks" | "incidents">("queue");
   const [openTicketId, setOpenTicketId] = useState<number | null>(null);
 
   if (openTicketId !== null) {
@@ -78,10 +103,14 @@ export default function AdminSupportPage() {
         </div>
         <div className="flex gap-2 border-b">
           <TabBtn active={tab === "queue"} onClick={() => setTab("queue")} icon={Inbox} label="Tickets" />
+          <TabBtn active={tab === "callbacks"} onClick={() => setTab("callbacks")} icon={Phone} label="Callbacks" />
+          <TabBtn active={tab === "incidents"} onClick={() => setTab("incidents")} icon={Activity} label="Incidents" />
           <TabBtn active={tab === "categories"} onClick={() => setTab("categories")} icon={Pencil} label="Categories" />
           <TabBtn active={tab === "settings"} onClick={() => setTab("settings")} icon={Settings2} label="SLA Settings" />
         </div>
         {tab === "queue" && <TicketQueue onOpen={setOpenTicketId} />}
+        {tab === "callbacks" && <CallbackQueue />}
+        {tab === "incidents" && <IncidentManager />}
         {tab === "categories" && <CategoryManager />}
         {tab === "settings" && <SlaSettingsManager />}
       </div>
@@ -548,7 +577,7 @@ function SlaSettingsManager() {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["admin-support-sla"], queryFn: () => apiGet<SlaSettings>("/admin/support/sla-settings") });
   const [draft, setDraft] = useState<Partial<SlaSettings>>({});
-  const merged = { ...(settings.data ?? {}), ...draft } as SlaSettings;
+
   const save = useMutation({
     mutationFn: () => apiAction("/admin/support/sla-settings", "PUT", draft),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-support-sla"] }); setDraft({}); toast({ title: "Saved" }); },
@@ -556,6 +585,7 @@ function SlaSettingsManager() {
   });
 
   if (!settings.data) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
+  const merged = { ...settings.data, ...draft } as SlaSettings;
 
   const Field = ({ label, k }: { label: string; k: keyof SlaSettings }) => (
     <div>
@@ -564,8 +594,25 @@ function SlaSettingsManager() {
     </div>
   );
 
+  const tierConfig: Record<SupportTier, SlaTierConfig> = {
+    standard: { firstResponseMultiplier: 1, resolutionMultiplier: 1, emergencyEnabled: false, callbackEnabled: false },
+    priority: { firstResponseMultiplier: 0.5, resolutionMultiplier: 0.6, emergencyEnabled: true, callbackEnabled: true },
+    enterprise: { firstResponseMultiplier: 0.25, resolutionMultiplier: 0.4, emergencyEnabled: true, callbackEnabled: true },
+    ...(merged.tierConfig ?? {}),
+  } as Record<SupportTier, SlaTierConfig>;
+
+  const setTier = (tier: SupportTier, patch: Partial<SlaTierConfig>) => {
+    const next = { ...tierConfig, [tier]: { ...tierConfig[tier], ...patch } };
+    setDraft({ ...draft, tierConfig: next });
+  };
+
+  const matrix: Partial<Record<Priority, SlaEscalationStep[]>> = merged.escalationMatrix ?? {};
+  const setMatrix = (priority: Priority, steps: SlaEscalationStep[]) => {
+    setDraft({ ...draft, escalationMatrix: { ...matrix, [priority]: steps } });
+  };
+
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-4 max-w-4xl">
       <div className="border rounded-lg p-4">
         <h3 className="font-semibold mb-3">First Response SLA (hours)</h3>
         <div className="grid grid-cols-4 gap-3">
@@ -584,16 +631,375 @@ function SlaSettingsManager() {
           <Field label="Urgent" k="urgentResolutionHours" />
         </div>
       </div>
+
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-semibold">Plan Tiers</h3>
+        <p className="text-xs text-muted-foreground">SLA hours above are multiplied by these tier factors. Emergency & callback toggles gate the features per tier.</p>
+        <div className="space-y-2">
+          {(["standard", "priority", "enterprise"] as SupportTier[]).map(tier => {
+            const c = tierConfig[tier];
+            return (
+              <div key={tier} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end border rounded p-2">
+                <div className="md:col-span-1"><Badge variant="outline" className="capitalize">{tier}</Badge></div>
+                <div>
+                  <Label className="text-xs">1st-response ×</Label>
+                  <Input type="number" step="0.05" min={0} value={c.firstResponseMultiplier}
+                    onChange={e => setTier(tier, { firstResponseMultiplier: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Resolution ×</Label>
+                  <Input type="number" step="0.05" min={0} value={c.resolutionMultiplier}
+                    onChange={e => setTier(tier, { resolutionMultiplier: Number(e.target.value) })} />
+                </div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={c.emergencyEnabled}
+                  onChange={e => setTier(tier, { emergencyEnabled: e.target.checked })} />Emergency</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={c.callbackEnabled}
+                  onChange={e => setTier(tier, { callbackEnabled: e.target.checked })} />Callback</label>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-semibold">Escalation Matrix</h3>
+        <p className="text-xs text-muted-foreground">Per-priority escalation steps fired by the breach sweep. <em>afterMinutes</em> is measured from ticket creation.</p>
+        {(["urgent", "high", "normal", "low"] as Priority[]).map(p => {
+          const steps = matrix[p] ?? [];
+          return (
+            <div key={p} className="border rounded p-2">
+              <div className="flex items-center justify-between mb-2">
+                <Badge className={PRIORITY_COLORS[p]}>{p}</Badge>
+                <Button size="sm" variant="outline"
+                  onClick={() => setMatrix(p, [...steps, { afterMinutes: 60, level: steps.length + 1, notifyRole: "support_lead", notifyEmails: [] }])}>
+                  <Plus className="h-3 w-3 mr-1" />Add step
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {steps.length === 0 && <div className="text-xs text-muted-foreground italic">No escalation steps configured.</div>}
+                {steps.map((s, i) => (
+                  <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
+                    <div>
+                      <Label className="text-xs">After (min)</Label>
+                      <Input type="number" min={0} value={s.afterMinutes}
+                        onChange={e => setMatrix(p, steps.map((x, j) => j === i ? { ...x, afterMinutes: Number(e.target.value) } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Level</Label>
+                      <Input type="number" min={1} value={s.level}
+                        onChange={e => setMatrix(p, steps.map((x, j) => j === i ? { ...x, level: Number(e.target.value) } : x))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Notify role</Label>
+                      <select className="w-full border rounded-md px-2 py-1.5 bg-background text-sm" value={s.notifyRole ?? ""}
+                        onChange={e => setMatrix(p, steps.map((x, j) => j === i ? { ...x, notifyRole: (e.target.value || undefined) as SlaEscalationStep["notifyRole"] } : x))}>
+                        <option value="">—</option>
+                        <option value="support_agent">support_agent</option>
+                        <option value="support_lead">support_lead</option>
+                        <option value="support_manager">support_manager</option>
+                        <option value="engineering_oncall">engineering_oncall</option>
+                        <option value="executive">executive</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-1">
+                      <Label className="text-xs">Notify emails (comma)</Label>
+                      <Input value={(s.notifyEmails ?? []).join(", ")}
+                        onChange={e => setMatrix(p, steps.map((x, j) => j === i ? { ...x, notifyEmails: e.target.value.split(",").map(v => v.trim()).filter(Boolean) } : x))} />
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => setMatrix(p, steps.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-semibold">Live Chat & Status Page</h3>
+        <div>
+          <Label className="text-xs">Live chat URL (shown on user support page when set)</Label>
+          <Input value={merged.liveChatUrl ?? ""} placeholder="https://chat.example.com/widget"
+            onChange={e => setDraft({ ...draft, liveChatUrl: e.target.value })} />
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!merged.statusPageEnabled}
+            onChange={e => setDraft({ ...draft, statusPageEnabled: e.target.checked })} />
+          Public status page enabled at <code>/status</code>
+        </label>
+        <div>
+          <Label className="text-xs">Status page title</Label>
+          <Input value={merged.statusPageTitle ?? ""} placeholder="System Status"
+            onChange={e => setDraft({ ...draft, statusPageTitle: e.target.value })} />
+        </div>
+        <div>
+          <Label className="text-xs">Status page description</Label>
+          <Textarea rows={2} value={merged.statusPageDescription ?? ""} placeholder="Real-time status of our services."
+            onChange={e => setDraft({ ...draft, statusPageDescription: e.target.value })} />
+        </div>
+      </div>
+
       <div className="border rounded-lg p-4">
         <h3 className="font-semibold mb-3">Attachments</h3>
         <div className="grid grid-cols-4 gap-3">
           <Field label="Max attachment (MB)" k="maxAttachmentMb" />
         </div>
       </div>
+
       <div className="flex justify-end">
         <Button onClick={() => save.mutate()} disabled={Object.keys(draft).length === 0 || save.isPending}>
           {save.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}Save Changes
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function CallbackQueue() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["admin-callbacks"],
+    queryFn: () => apiGet<{ data: CallbackRequest[] }>("/admin/support/callback-requests"),
+    refetchInterval: 30_000,
+  });
+  const list = q.data?.data ?? [];
+
+  const update = useMutation({
+    mutationFn: (payload: { id: number; status: CallbackRequest["status"]; handlerNote?: string }) =>
+      apiAction(`/admin/support/callback-requests/${payload.id}`, "PATCH", { status: payload.status, handlerNote: payload.handlerNote }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-callbacks"] }); toast({ title: "Updated" }); },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold flex items-center gap-2"><Phone className="h-5 w-5" />Phone Callback Queue</h3>
+      {q.isLoading ? <div className="text-center py-8 text-muted-foreground">Loading…</div>
+        : list.length === 0 ? <div className="border rounded-lg p-8 text-center text-muted-foreground">No callback requests yet.</div>
+        : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted text-xs"><tr>
+                <th className="text-left px-3 py-2">Status</th>
+                <th className="text-left px-3 py-2">Phone</th>
+                <th className="text-left px-3 py-2">Preferred time</th>
+                <th className="text-left px-3 py-2">Topic</th>
+                <th className="text-left px-3 py-2">Requested</th>
+                <th className="text-right px-3 py-2">Actions</th>
+              </tr></thead>
+              <tbody>
+                {list.map(c => (
+                  <tr key={c.id} className="border-t">
+                    <td className="px-3 py-2"><Badge variant="outline">{c.status}</Badge></td>
+                    <td className="px-3 py-2 font-mono">{c.phone}</td>
+                    <td className="px-3 py-2">{c.preferredTime ?? "—"}</td>
+                    <td className="px-3 py-2">{c.topic ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right space-x-1">
+                      {c.status === "pending" && <Button size="sm" variant="outline" onClick={() => update.mutate({ id: c.id, status: "acknowledged" })}>Acknowledge</Button>}
+                      {c.status !== "completed" && c.status !== "cancelled" && (
+                        <Button size="sm" onClick={() => update.mutate({ id: c.id, status: "completed" })}><CheckCircle2 className="h-3 w-3 mr-1" />Complete</Button>
+                      )}
+                      {c.status !== "cancelled" && c.status !== "completed" && (
+                        <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: c.id, status: "cancelled" })}>Cancel</Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+    </div>
+  );
+}
+
+function IncidentManager() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["admin-incidents"],
+    queryFn: () => apiGet<{ data: Incident[] }>("/admin/support/incidents"),
+    refetchInterval: 30_000,
+  });
+  const list = q.data?.data ?? [];
+  const [showNew, setShowNew] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  const remove = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/support/incidents/${id}`, "DELETE", undefined),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-incidents"] }); toast({ title: "Deleted" }); },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-2"><Activity className="h-5 w-5" />Incidents (Status Page)</h3>
+        <Button size="sm" onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-2" />New Incident</Button>
+      </div>
+      {q.isLoading ? <div className="text-center py-8 text-muted-foreground">Loading…</div>
+        : list.length === 0 ? <div className="border rounded-lg p-8 text-center text-muted-foreground">No incidents yet.</div>
+        : (
+          <div className="space-y-2">
+            {list.map(i => (
+              <div key={i.id} className="border rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === i.id ? null : i.id)}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline">{i.status}</Badge>
+                      <Badge variant="outline">{i.severity}</Badge>
+                      {!i.isPublished && <Badge variant="outline">draft</Badge>}
+                      <span className="font-medium">{i.title}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Started {new Date(i.startedAt).toLocaleString()}
+                      {i.resolvedAt && <> · Resolved {new Date(i.resolvedAt).toLocaleString()}</>}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete incident?")) remove.mutate(i.id); }}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+                {expandedId === i.id && <IncidentDetail incident={i} />}
+              </div>
+            ))}
+          </div>
+        )}
+      {showNew && <IncidentDialog initial={null} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); qc.invalidateQueries({ queryKey: ["admin-incidents"] }); }} />}
+    </div>
+  );
+}
+
+function IncidentDetail({ incident }: { incident: Incident }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const updates = useQuery({
+    queryKey: ["admin-incident-updates", incident.id],
+    queryFn: () => apiGet<{ incident: Incident; updates: IncidentUpdate[] }>(`/admin/support/incidents/${incident.id}`),
+  });
+  const [body, setBody] = useState("");
+  const [status, setStatus] = useState<Incident["status"]>(incident.status);
+  const [editing, setEditing] = useState(false);
+
+  const post = useMutation({
+    mutationFn: () => apiPost(`/admin/support/incidents/${incident.id}/updates`, { body, status }),
+    onSuccess: () => {
+      setBody("");
+      qc.invalidateQueries({ queryKey: ["admin-incident-updates", incident.id] });
+      qc.invalidateQueries({ queryKey: ["admin-incidents"] });
+      toast({ title: "Update posted" });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="mt-3 border-t pt-3 space-y-3">
+      <div className="text-sm whitespace-pre-wrap">{incident.body}</div>
+      {incident.affectedComponents.length > 0 && (
+        <div className="text-xs"><span className="text-muted-foreground">Affected: </span>{incident.affectedComponents.map(c => <Badge key={c} variant="outline" className="mr-1">{c}</Badge>)}</div>
+      )}
+
+      <div className="space-y-2">
+        <div className="text-xs font-medium text-muted-foreground">Updates</div>
+        {(updates.data?.updates ?? []).map(u => (
+          <div key={u.id} className="border-l-2 pl-3 text-sm">
+            <div className="text-xs text-muted-foreground"><Badge variant="outline">{u.status}</Badge> {new Date(u.createdAt).toLocaleString()}</div>
+            <div className="whitespace-pre-wrap">{u.body}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t pt-3 space-y-2">
+        <div className="text-xs font-medium">Post update</div>
+        <div className="flex gap-2">
+          <select className="border rounded-md px-2 py-1.5 bg-background text-sm" value={status} onChange={e => setStatus(e.target.value as Incident["status"])}>
+            <option value="investigating">investigating</option>
+            <option value="identified">identified</option>
+            <option value="monitoring">monitoring</option>
+            <option value="resolved">resolved</option>
+          </select>
+          <Input value={body} onChange={e => setBody(e.target.value)} placeholder="Update message..." />
+          <Button size="sm" onClick={() => post.mutate()} disabled={!body.trim() || post.isPending}>
+            <Send className="h-4 w-4 mr-1" />Post
+          </Button>
+        </div>
+      </div>
+
+      <div>
+        <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil className="h-3 w-3 mr-1" />Edit incident</Button>
+      </div>
+      {editing && <IncidentDialog initial={incident} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); qc.invalidateQueries({ queryKey: ["admin-incidents"] }); }} />}
+    </div>
+  );
+}
+
+function IncidentDialog({ initial, onClose, onSaved }: { initial: Incident | null; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [status, setStatus] = useState<Incident["status"]>(initial?.status ?? "investigating");
+  const [severity, setSeverity] = useState<Incident["severity"]>(initial?.severity ?? "minor");
+  const [components, setComponents] = useState((initial?.affectedComponents ?? []).join(", "));
+  const [isPublished, setIsPublished] = useState(initial?.isPublished ?? true);
+
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
+        title, body, status, severity, isPublished,
+        affectedComponents: components.split(",").map(c => c.trim()).filter(Boolean),
+      };
+      return initial
+        ? apiAction(`/admin/support/incidents/${initial.id}`, "PATCH", payload)
+        : apiPost("/admin/support/incidents", payload);
+    },
+    onSuccess: () => { toast({ title: "Saved" }); onSaved(); },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-lg shadow-lg max-w-xl w-full max-h-[90vh] overflow-auto">
+        <div className="p-4 border-b flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{initial ? "Edit Incident" : "New Incident"}</h2>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div><Label>Title</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
+          <div><Label>Body</Label><Textarea rows={4} value={body} onChange={e => setBody(e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Status</Label>
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={status} onChange={e => setStatus(e.target.value as Incident["status"])}>
+                <option value="investigating">investigating</option>
+                <option value="identified">identified</option>
+                <option value="monitoring">monitoring</option>
+                <option value="resolved">resolved</option>
+              </select>
+            </div>
+            <div>
+              <Label>Severity</Label>
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={severity} onChange={e => setSeverity(e.target.value as Incident["severity"])}>
+                <option value="minor">minor</option>
+                <option value="major">major</option>
+                <option value="critical">critical</option>
+              </select>
+            </div>
+          </div>
+          <div><Label>Affected components (comma-separated)</Label><Input value={components} onChange={e => setComponents(e.target.value)} placeholder="POS, KDS, Dashboard" /></div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isPublished} onChange={e => setIsPublished(e.target.checked)} />Published on public status page
+          </label>
+        </div>
+        <div className="p-4 border-t flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => save.mutate()} disabled={!title.trim() || save.isPending}>
+            {save.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}Save
+          </Button>
+        </div>
       </div>
     </div>
   );
