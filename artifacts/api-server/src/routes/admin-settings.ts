@@ -12,11 +12,13 @@ const objectStorageService = new ObjectStorageService();
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const URL_OPTIONAL = z.string().trim().url().or(z.literal("")).nullish();
-// Accept absolute URLs OR internal storage paths returned by the upload finalize endpoint.
+// Accept absolute URLs OR any root-relative path (covers internal storage
+// paths returned by the upload finalize endpoint, as well as static bundled
+// assets like "/logo.png" and "/favicon.png").
 const ASSET_URL_OPTIONAL = z
   .union([
     z.string().trim().url(),
-    z.string().trim().regex(/^\/api\/public\/storage\/objects\/.+/, "Must be an absolute URL or an internal storage path"),
+    z.string().trim().regex(/^\/[^\s]*$/, "Must be an absolute URL or a root-relative path"),
     z.literal(""),
   ])
   .nullish();
