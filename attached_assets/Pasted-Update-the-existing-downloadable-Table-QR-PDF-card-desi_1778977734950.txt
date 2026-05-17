@@ -1,0 +1,106 @@
+Update the existing downloadable Table QR PDF/card design.
+
+Important:
+The table QR feature already exists. Do not rebuild QR generation, QR URL, table mapping, routes, or download logic. Only improve the visual design of the existing PDF/card output.
+
+Design decision:
+Restaurant name and restaurant logo should NOT be mandatory because the customer is already inside the restaurant. Keep restaurant branding optional. The main focus should be:
+1. Clear scan instruction
+2. Large QR code
+3. Table number
+4. KhanaLagao branding
+
+Goal:
+Make the existing table QR PDF look premium, clean, modern, and strongly branded by KhanaLagao.
+
+Brand:
+KhanaLagao
+
+Tagline:
+Restaurant OS for Modern Food Businesses
+
+Color theme:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+AI Purple Accent: #7C3AED
+
+Default layout:
+- No restaurant logo required
+- No restaurant name required
+- Show headline at top:
+  “Scan to Order”
+  or
+  “Scan. Order. Enjoy.”
+- Show short action line:
+  “View Menu • Order • Call Waiter • Review”
+- Show large QR code in center
+- Show table number clearly:
+  “Table 08”
+- Show footer:
+  “Powered by KhanaLagao”
+  “Smart QR Menu for Modern Restaurants”
+
+Optional restaurant branding:
+If restaurant logo/name already exists and user enables it, show it subtly.
+But default design should work perfectly without restaurant logo/name.
+
+Design style:
+- Premium food-tech
+- Minimal
+- Clean
+- Not crowded
+- Highly scannable
+- Print-ready
+- Modern orange/white/dark theme
+
+Visual details:
+- Warm white background
+- Orange accent border
+- Rounded card style
+- Subtle QR-pixel pattern or small “K” watermark in background
+- KhanaLagao logo at bottom
+- Use simple icons for:
+  Menu
+  Order
+  Waiter
+  Review
+- QR code must stay large with enough white space
+- Do not place pattern behind QR
+- Do not make card busy
+
+Text options:
+Option 1:
+“Scan to Order”
+“View Menu • Order • Call Waiter • Review”
+
+Option 2:
+“Scan. Order. Enjoy.”
+“Your table menu is one scan away.”
+
+Option 3:
+“Your Menu is One Scan Away”
+“Browse, order and request service from your table.”
+
+Print requirements:
+- High resolution
+- Clean margins
+- No overlap
+- No text cutoff
+- Works in PDF
+- Works in A4 multi-card layout if available
+- Works for small table stickers
+- Works for table card print
+
+Do not change:
+- Existing QR URL
+- Existing QR generation logic
+- Existing PDF download button
+- Existing admin flow
+- Existing table mapping
+- Existing database unless absolutely needed for optional design fields
+
+Final result:
+The downloaded table QR PDF should look like a premium KhanaLagao-powered QR card that can be placed directly on restaurant tables, even without restaurant logo/name.
