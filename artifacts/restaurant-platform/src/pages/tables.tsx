@@ -189,11 +189,12 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
     doc.setFontSize(11);
     doc.text("Your menu is one scan away.", W / 2, cursorY + 16, { align: "center" });
 
-    // Action line with 4 small icons + labels
+    // Action line with 4 small icons + labels, separated by bullets:
+    // "View Menu • Order • Call Waiter • Review"
     const labels: Array<{ key: keyof typeof QR_PDF_ICONS; text: string }> = [
-      { key: "menu", text: "Menu" },
+      { key: "menu", text: "View Menu" },
       { key: "order", text: "Order" },
-      { key: "waiter", text: "Waiter" },
+      { key: "waiter", text: "Call Waiter" },
       { key: "review", text: "Review" },
     ];
     const iconPngs = await Promise.all(labels.map(l => svgStringToPngDataUrl(QR_PDF_ICONS[l.key], 192)));
@@ -201,10 +202,14 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
     doc.setFont("helvetica", "normal");
     doc.setTextColor(KL_COLORS.charcoal);
     const iconSize = 5; // mm
-    const gap = 3; // mm between icon and label
-    const sep = 7; // mm between groups
+    const gap = 2.2; // mm between icon and label
+    const bulletSpace = 3.2; // mm padding on each side of the bullet
+    const bullet = "•";
     const labelWidths = labels.map(l => doc.getTextWidth(l.text));
-    const totalWidth = labels.reduce((s, _, i) => s + iconSize + gap + labelWidths[i], 0) + sep * (labels.length - 1);
+    const bulletWidth = doc.getTextWidth(bullet);
+    const groupWidth = (i: number) => iconSize + gap + labelWidths[i];
+    const totalWidth = labels.reduce((s, _, i) => s + groupWidth(i), 0)
+      + (labels.length - 1) * (bulletSpace * 2 + bulletWidth);
     let x = (W - totalWidth) / 2;
     const rowY = cursorY + 26;
     for (let i = 0; i < labels.length; i++) {
@@ -213,7 +218,13 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
         try { doc.addImage(png, "PNG", x, rowY - iconSize + 0.6, iconSize, iconSize); } catch { /* noop */ }
       }
       doc.text(labels[i].text, x + iconSize + gap, rowY);
-      x += iconSize + gap + labelWidths[i] + sep;
+      x += groupWidth(i);
+      if (i < labels.length - 1) {
+        doc.setTextColor(KL_COLORS.muted);
+        doc.text(bullet, x + bulletSpace, rowY);
+        doc.setTextColor(KL_COLORS.charcoal);
+        x += bulletSpace * 2 + bulletWidth;
+      }
     }
 
     // QR area — large, centered, with white card behind
@@ -227,22 +238,40 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
     doc.setLineWidth(0.5);
     doc.roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 3, 3, "FD");
 
-    const qrSourceSvg = svgData;
-    const qrPngDataUrl = qrSourceSvg
-      ? await svgStringToPngDataUrl(qrSourceSvg, 1400)
-      : await loadImageToPngDataUrl(
-          svgBlob || `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=1200x1200&margin=20`,
-          1400,
-        );
-    if (qrPngDataUrl) {
+    // Render QR as a true vector when SVG is available (crisp at any
+    // print size). Falls back to a high-res PNG only when no SVG is
+    // returned by the API and the remote PNG can be rasterized.
+    let qrRendered = false;
+    if (svgData) {
       try {
-        doc.addImage(qrPngDataUrl, "PNG", qrBoxX + qrPadding, qrBoxY + qrPadding, qrSize, qrSize);
-      } catch {
-        doc.setFontSize(9);
-        doc.setTextColor(KL_COLORS.muted);
-        doc.text(qrUrl, W / 2, qrBoxY + qrBoxSize / 2, { align: "center", maxWidth: qrSize });
+        const { svg2pdf } = await import("svg2pdf.js");
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgData, "image/svg+xml");
+        const svgEl = svgDoc.documentElement as unknown as Element;
+        if (svgEl && svgEl.nodeName.toLowerCase() === "svg") {
+          await svg2pdf(svgEl as SVGElement, doc, {
+            x: qrBoxX + qrPadding,
+            y: qrBoxY + qrPadding,
+            width: qrSize,
+            height: qrSize,
+          });
+          qrRendered = true;
+        }
+      } catch { /* fall through to PNG fallback */ }
+    }
+    if (!qrRendered) {
+      const fallbackPng = await loadImageToPngDataUrl(
+        svgBlob || `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrUrl)}&size=1200x1200&margin=20`,
+        1400,
+      );
+      if (fallbackPng) {
+        try {
+          doc.addImage(fallbackPng, "PNG", qrBoxX + qrPadding, qrBoxY + qrPadding, qrSize, qrSize);
+          qrRendered = true;
+        } catch { /* noop */ }
       }
-    } else {
+    }
+    if (!qrRendered) {
       doc.setFontSize(9);
       doc.setTextColor(KL_COLORS.muted);
       doc.text(qrUrl, W / 2, qrBoxY + qrBoxSize / 2, { align: "center", maxWidth: qrSize });
