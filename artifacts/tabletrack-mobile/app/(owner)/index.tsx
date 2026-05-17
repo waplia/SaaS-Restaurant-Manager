@@ -571,23 +571,45 @@ export default function OwnerDashboard() {
         </View>
       </View>
 
-      {/* Manager approvals (discount/void/refund + ops). */}
-      {isAllOutlets ? (
-        <PlaceholderCard title="Approvals" icon="checkmark-done-outline" message="Pick an outlet to see pending approvals" />
-      ) : (
-        <MetricCard
-          title="Approvals"
-          icon="checkmark-done-outline"
-          value={String((approvalsQ.data ?? []).length)}
-          sub={(approvalsQ.data ?? []).length === 0 ? "No pending approvals" : "Pending sign-off"}
-          isLoading={approvalsQ.isLoading}
-          isError={approvalsQ.isError}
-          onRetry={() => approvalsQ.refetch()}
-          onPress={openApprovals}
-          actionLabel="Open inbox"
-          badge={(approvalsQ.data ?? []).length > 0 ? { text: "Pending", tone: "warn" } : undefined}
-        />
-      )}
+      {/* Kitchen Queue + Manager approvals */}
+      <View style={styles.row2}>
+        <View style={{ flex: 1 }}>
+          <MetricCard
+            title="Kitchen Queue"
+            icon="restaurant-outline"
+            value={summaryQ.isLoading ? undefined : String(ds?.pendingTickets ?? 0)}
+            sub={
+              (ds?.pendingTickets ?? 0) > 0
+                ? "tickets in progress"
+                : "kitchen is clear"
+            }
+            isLoading={summaryQ.isLoading}
+            isError={summaryQ.isError}
+            onRetry={() => summaryQ.refetch()}
+            onPress={openKitchen}
+            actionLabel="View kitchen"
+            badge={(ds?.pendingTickets ?? 0) > 0 ? { text: "Busy", tone: "warn" } : undefined}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          {isAllOutlets ? (
+            <PlaceholderCard title="Approvals" icon="checkmark-done-outline" message="Pick an outlet to see pending approvals" />
+          ) : (
+            <MetricCard
+              title="Approvals"
+              icon="checkmark-done-outline"
+              value={String((approvalsQ.data ?? []).length)}
+              sub={(approvalsQ.data ?? []).length === 0 ? "No pending approvals" : "Pending sign-off"}
+              isLoading={approvalsQ.isLoading}
+              isError={approvalsQ.isError}
+              onRetry={() => approvalsQ.refetch()}
+              onPress={openApprovals}
+              actionLabel="Open inbox"
+              badge={(approvalsQ.data ?? []).length > 0 ? { text: "Pending", tone: "warn" } : undefined}
+            />
+          )}
+        </View>
+      </View>
 
       {/* Outlet comparison — sortable list backed by compare-branches */}
       {canSwitchScope && hasMultipleOutlets ? (

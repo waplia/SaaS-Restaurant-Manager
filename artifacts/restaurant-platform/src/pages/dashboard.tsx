@@ -130,15 +130,18 @@ export default function DashboardPage() {
 
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {s?.todayLabourCost != null && (
-            <StatCard
-              title="Labour (today)"
-              value={`₹${Number(s.todayLabourCost).toLocaleString()}`}
-              subtitle={`${s.todayLabourHours ?? "0.0"} hours${isAllBranches ? " · all branches" : ""}`}
-              icon={Users}
-              color="purple"
-            />
-          )}
+          <StatCard
+            title="Labour (today)"
+            value={
+              s?.todayLabourCost != null
+                ? `₹${Number(s.todayLabourCost).toLocaleString()}`
+                : "–"
+            }
+            subtitle={`${s?.todayLabourHours ?? "0.0"} hours${isAllBranches ? " · all branches" : ""}`}
+            icon={Users}
+            color="purple"
+          />
+
           <StatCard
             title="Today's Revenue"
             value={s ? `₹${Number(s.todayRevenue).toLocaleString()}` : "–"}

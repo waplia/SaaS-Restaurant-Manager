@@ -15,6 +15,7 @@ import {
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { generateDueRecurringExpenses } from "./expenses";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -163,6 +164,7 @@ router.get(
       return;
     }
 
+    try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today.getTime() - 86400000);
@@ -174,6 +176,18 @@ router.get(
       ids.map((id) => generateDueRecurringExpenses(id).catch(() => undefined)),
     );
 
+    // Narrow column selection: `db.select().from(ordersTable)` expands to
+    // every column declared in the schema, which throws an opaque 500 in
+    // any environment whose `orders` table hasn't received the latest
+    // schema-additive migrations (tip_amount, curbside_*, scheduled_for,
+    // etc). The dashboard only needs status + total + timestamps, so list
+    // them explicitly and keep this endpoint resilient to drift.
+    const orderCols = {
+      id: ordersTable.id,
+      status: ordersTable.status,
+      totalAmount: ordersTable.totalAmount,
+      createdAt: ordersTable.createdAt,
+    } as const;
     const [
       todayOrders,
       yesterdayOrders,
@@ -186,7 +200,7 @@ router.get(
       staffRates,
     ] = await Promise.all([
       db
-        .select()
+        .select(orderCols)
         .from(ordersTable)
         .where(
           and(
@@ -195,7 +209,7 @@ router.get(
           ),
         ),
       db
-        .select()
+        .select(orderCols)
         .from(ordersTable)
         .where(
           and(
@@ -223,7 +237,10 @@ router.get(
           ),
         ),
       db
-        .select()
+        .select({
+          currentStock: inventoryItemsTable.currentStock,
+          minStockLevel: inventoryItemsTable.minStockLevel,
+        })
         .from(inventoryItemsTable)
         .where(inArray(inventoryItemsTable.restaurantId, ids)),
       db
@@ -308,11 +325,17 @@ router.get(
     let labourCost = 0;
     const now = Date.now();
     for (const a of todayAttendance) {
+      // Skip rows with no clock-in timestamp at all — they would throw on
+      // `.getTime()` below. The schema marks clockIn as notNull, but stale
+      // / hand-edited rows in older tenants can still have it missing.
+      if (a.clockIn == null && a.totalHours == null) continue;
       const hours = a.totalHours != null
         ? Number(a.totalHours)
-        : a.clockOut
-          ? (a.clockOut.getTime() - a.clockIn.getTime()) / 3600000
-          : (now - a.clockIn.getTime()) / 3600000;
+        : a.clockIn == null
+          ? 0
+          : a.clockOut
+            ? (a.clockOut.getTime() - a.clockIn.getTime()) / 3600000
+            : (now - a.clockIn.getTime()) / 3600000;
       if (!Number.isFinite(hours) || hours <= 0) continue;
       labourHours += hours;
       labourCost += hours * (ratePerUser.get(a.userId) ?? 0);
@@ -340,6 +363,17 @@ router.get(
       todayLabourCost: labourCost.toFixed(2),
       branchCount: ids.length,
     });
+    } catch (err) {
+      // Pino's request-level logger only sees the status code, so without
+      // this the underlying DrizzleQueryError / TypeError is invisible and
+      // the dashboard just renders blank cards forever. Log the real cause
+      // and return a structured 500 so the client can show a useful error.
+      logger.error(
+        { err, tenantId: req.tenantIdNum, ids, userId: req.user?.id },
+        "tenant dashboard summary failed",
+      );
+      res.status(500).json({ error: "Failed to load dashboard summary" });
+    }
   },
 );
 
@@ -368,7 +402,10 @@ router.get(
 
     const groupBy = String(req.query.groupBy ?? "daily");
     const orders = await db
-      .select()
+      .select({
+        totalAmount: ordersTable.totalAmount,
+        createdAt: ordersTable.createdAt,
+      })
       .from(ordersTable)
       .where(
         and(

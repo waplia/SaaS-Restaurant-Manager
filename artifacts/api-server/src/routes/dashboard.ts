@@ -25,6 +25,16 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   // figures for users who don't visit the Expenses page first.
   await generateDueRecurringExpenses(restaurantId).catch(() => undefined);
 
+  // Narrow column selection: `db.select().from(ordersTable)` expands to
+  // every schema column, which 500s in any environment whose orders table
+  // hasn't received the newest schema-additive migrations. The dashboard
+  // only needs status + total + timestamps.
+  const orderCols = {
+    id: ordersTable.id,
+    status: ordersTable.status,
+    totalAmount: ordersTable.totalAmount,
+    createdAt: ordersTable.createdAt,
+  } as const;
   const [
     todayOrdersRows,
     allTables,
@@ -34,12 +44,12 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     yesterdayOrders,
     monthExpensesRow,
   ] = await Promise.all([
-    db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, today))),
+    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, today))),
     db.select().from(floorTablesTable).where(and(eq(floorTablesTable.restaurantId, restaurantId), eq(floorTablesTable.isActive, true))),
     db.select({ count: count() }).from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.restaurantId, restaurantId), sql`status IN ('new','preparing')`)),
-    db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.restaurantId, restaurantId)),
+    db.select({ currentStock: inventoryItemsTable.currentStock, minStockLevel: inventoryItemsTable.minStockLevel }).from(inventoryItemsTable).where(eq(inventoryItemsTable.restaurantId, restaurantId)),
     db.select({ count: count() }).from(notificationsTable).where(and(eq(notificationsTable.restaurantId, restaurantId), eq(notificationsTable.isRead, false))),
-    db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`)),
+    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`)),
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(and(eq(expensesTable.restaurantId, restaurantId), gte(expensesTable.expenseDate, monthStartStr))),
   ]);
 
@@ -95,7 +105,10 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
   from.setHours(0, 0, 0, 0);
 
   const groupBy = String(req.query.groupBy ?? "daily");
-  const orders = await db.select().from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from)));
+  const orders = await db
+    .select({ totalAmount: ordersTable.totalAmount, createdAt: ordersTable.createdAt })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from)));
 
   type Bucket = { revenue: number; orders: number };
   const buckets: Record<string, Bucket> = {};
