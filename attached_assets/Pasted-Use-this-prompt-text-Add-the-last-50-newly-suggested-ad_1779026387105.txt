@@ -1,0 +1,732 @@
+Use this prompt:
+
+```text
+Add the last 50 newly suggested advanced features to KhanaLagao, and make sure every new feature is linked with pricing, plans, permissions, and working functionality.
+
+Important:
+The platform is already built with many modules. Do not rebuild existing modules. First scan the full project and check which of these features already exist. If a feature already exists, do not duplicate it. Instead, improve it, connect it properly, fix bugs, and make sure it works with real data. If a feature is missing, add it properly.
+
+Goal:
+Make KhanaLagao more future-ready, unique, and investor-grade by adding the newly suggested advanced operational, customer, staff, analytics, and automation features.
+
+Brand:
+KhanaLagao
+
+Positioning:
+Restaurant OS for Modern Food Businesses
+
+Main requirement:
+Every new feature should be:
+- Fully working
+- Connected with real database
+- Connected with real APIs
+- Connected with restaurant admin UI
+- Connected with Super Admin plan/module control
+- Added into pricing plans
+- Added into feature flags/module permissions
+- Added into reports where needed
+- Added into audit logs where needed
+- Mobile responsive
+- Role-permission protected
+- Not mock-only
+
+====================================================
+1. FIRST SCAN EXISTING FEATURES
+====================================================
+
+Before building, scan existing modules and create a checklist:
+
+For each feature below, mark:
+- Already built and working
+- Already built but incomplete
+- Partially built
+- Missing
+- Duplicate risk
+- Needs pricing/plan connection
+- Needs permission connection
+- Needs API/database work
+- Needs UI work
+- Needs testing
+
+Do not create duplicate pages or duplicate tables if something already exists.
+
+====================================================
+2. ADD / COMPLETE THESE ADVANCED FEATURES
+====================================================
+
+Add or complete these features:
+
+1. Restaurant Digital Twin
+Live operational map showing tables, kitchen load, order flow, staff status, wait time, and bottlenecks.
+
+2. Menu Heatmap
+Track QR menu views, item clicks, add-to-cart, ignored items, and drop-off points.
+
+3. QR Menu A/B Testing
+Test different menu layouts, item names, prices, images, descriptions, and combo placements.
+
+4. Smart Menu Search Analytics
+Track customer searches in QR menu and show missing demand like “Momos searched 83 times.”
+
+5. Lost Sales Tracker
+Estimate lost revenue from out-of-stock items, cancelled orders, abandoned carts, unavailable delivery, slow service, and failed payments.
+
+6. Abandoned Cart Recovery
+Track online/QR cart abandonment and send recovery message if customer is known and opted in.
+
+7. Table Revenue Optimization
+Analyze table-wise revenue, seating time, turnover, waiter delays, and best-performing zones.
+
+8. Queue Management for Takeaway
+Generate queue number, estimated pickup time, live status, and pickup notifications.
+
+9. Pre-Order Scheduling
+Allow customers to order for future time/date, useful for bakery, office lunch, cloud kitchen, and tiffin.
+
+10. Smart Modifier Builder
+Create guided customization for pizza, burger, thali, bowl, sandwich, toppings, sides, spice level, and sauces.
+
+11. Customer Taste Profile
+Build profile such as spicy lover, veg-only, dessert lover, premium buyer, family orderer, discount seeker.
+
+12. Family / Group Ordering QR
+Multiple customers at same table can scan and add items to shared table cart.
+
+13. Split Cart by Person
+Let each person add items under their name for easier split billing.
+
+14. Smart Service Timer
+Track time from order placed → accepted → KOT → preparing → ready → served → billed.
+
+15. Staff Panic Button
+Staff can instantly alert manager for angry customer, emergency, kitchen issue, payment issue, or equipment failure.
+
+16. VIP Customer Alert
+Notify owner/manager when high-value or repeat VIP customer visits/orders.
+
+17. Customer Blacklist / Risk Flag
+Flag abusive customers, fake orders, unpaid customers, refund abuse, and troublemaker customers.
+
+18. Menu Item Lifecycle
+Track item lifecycle: draft, testing, active, bestseller, declining, discontinued.
+
+19. New Item Launch Tracker
+Track first 7/15/30 days of new item views, orders, repeat purchase, ratings, feedback, and profitability.
+
+20. Staff Tip Management
+Track cash/online tips by staff, order, table, shift, split rules, and payroll connection.
+
+21. Kitchen Equipment Maintenance
+Track ovens, fridge, fryer, printer, AC, generator, POS devices, repair history, reminders, and maintenance cost.
+
+22. Temperature Log
+Track fridge/freezer/kitchen temperature logs for food safety and alerts.
+
+23. Cleaning Proof Gallery
+Staff uploads cleaning proof photos for kitchen, tables, washroom, storage, before/after.
+
+24. Incident Reporting
+Log incidents such as customer complaint, staff conflict, equipment failure, food issue, accident, or safety issue.
+
+25. Daily Manager Handover
+End-of-shift notes for cash issue, stock issue, staff issue, pending orders, complaints, and tomorrow tasks.
+
+26. Owner Morning Briefing
+Daily morning summary: yesterday sales, cash, low stock, staff attendance, complaints, forecast, pending tasks.
+
+27. End-of-Day Auto Summary
+Auto daily close summary with sales, expenses, profit, orders, best items, issues, and alerts.
+
+28. Smart Closing Checklist
+Before closing, check unpaid bills, open tables, pending KOT, cash mismatch, low stock, and unsynced orders.
+
+29. Restaurant Timeline
+Chronological activity feed: orders, payments, stock changes, staff actions, campaigns, complaints, refunds, and setting changes.
+
+30. Owner Approval Inbox
+One screen for all approvals: refund, discount, stock adjustment, leave, purchase order, price change, campaign, expense.
+
+31. Customer Mood Tracking
+Collect customer mood/emojis and track by day, staff, item, outlet, and order type.
+
+32. Smart Complaint Escalation
+Escalate unresolved complaints to manager/owner after configured time.
+
+33. Repeat Complaint Detector
+Detect repeated complaints about same item, staff, outlet, delivery zone, or shift.
+
+34. Order Accuracy Score
+Track wrong items, missing items, cancelled KOT, corrections, complaints, and generate accuracy score.
+
+35. Packaging Control
+Track packaging items like boxes, spoons, tissues, bags, stickers, sauce sachets, and auto-deduct by order type.
+
+36. Sauce / Condiment Inventory
+Track ketchup, chutney, dips, sauces, disposable spoons, and small packaging items.
+
+37. Portion Control Tracker
+Compare expected recipe consumption vs actual stock consumption to detect over-portioning or leakage.
+
+38. Recipe Versioning
+Track old/new recipe versions, ingredient changes, cost difference, approval history, and taste notes.
+
+39. Taste Testing Notes
+Record tasting notes, staff rating, trial customer feedback, cost, and approval before launching new item.
+
+40. Menu Photo Approval
+For chains/franchises, outlet-uploaded menu photos require brand/admin approval.
+
+41. Brand Asset Library
+Store approved logos, food photos, banners, social creatives, QR designs, packaging artwork, and brand templates.
+
+42. Local Area Marketing Map
+Map customers/orders by area, city, pincode, delivery zone, strong/weak areas.
+
+43. Delivery Zone Profitability
+Show profit by delivery zone after delivery cost, discounts, refunds, failed delivery, and delays.
+
+44. Customer Visit Frequency Calendar
+Calendar view of regular customer visits and drop-off patterns.
+
+45. Festival Calendar for Restaurants
+Campaign calendar for Diwali, Holi, Eid, Christmas, IPL, Valentine’s Day, New Year, and local festivals.
+
+46. Offer Conflict Detector
+Warn if multiple offers/coupons overlap and reduce margin too much.
+
+47. Margin Guardrails
+Warn before discount/campaign if margin falls below configured threshold.
+
+48. Smart Upsell Script for Waiters
+Show waiter-friendly upsell lines and track acceptance rate.
+
+49. Staff Leaderboard TV Mode
+Display staff leaderboard for sales, upsells, reviews, fastest service, and attendance.
+
+50. Customer-Facing Order Status Screen
+Customer can see live order status: accepted, preparing, ready, served, delivered.
+
+====================================================
+3. PRICING / PLAN INTEGRATION
+====================================================
+
+Every feature above must be added into the pricing and plan system.
+
+Update Super Admin plan management:
+- Add each feature as a feature flag.
+- Allow enable/disable by plan.
+- Allow enable/disable by individual restaurant.
+- Add usage limits where needed.
+- Add upgrade screen if feature is locked.
+- Add module pricing/add-on pricing if feature is premium.
+
+Update Pricing Page:
+Add these new features in pricing comparison table under proper categories:
+
+Operations Intelligence:
+- Restaurant Digital Twin
+- Service Timer
+- Closing Checklist
+- Manager Handover
+- Morning Briefing
+- Restaurant Timeline
+- Approval Inbox
+
+Menu Intelligence:
+- Menu Heatmap
+- QR Menu A/B Testing
+- Search Analytics
+- Menu Lifecycle
+- New Item Launch Tracker
+- Smart Modifier Builder
+- Menu Photo Approval
+
+Customer Intelligence:
+- Taste Profile
+- VIP Alerts
+- Mood Tracking
+- Blacklist/Risk Flags
+- Visit Frequency Calendar
+- Customer Order Status Screen
+
+Kitchen & Quality:
+- Order Accuracy Score
+- Equipment Maintenance
+- Temperature Logs
+- Cleaning Proof
+- Incident Reports
+- Repeat Complaint Detector
+
+Inventory Control:
+- Packaging Control
+- Condiment Inventory
+- Portion Control
+- Recipe Versioning
+- Taste Testing Notes
+
+Marketing:
+- Local Area Marketing Map
+- Festival Calendar
+- Offer Conflict Detector
+- Margin Guardrails
+- Upsell Scripts
+- Lost Sales Tracker
+- Abandoned Cart Recovery
+
+Delivery:
+- Queue Management
+- Pre-Orders
+- Delivery Zone Profitability
+
+Staff:
+- Panic Button
+- Tip Management
+- Staff Leaderboard TV Mode
+
+Recommended plan mapping:
+
+Starter:
+- Customer-Facing Order Status
+- Queue Management basic
+- Pre-Order Scheduling basic
+- Smart Closing Checklist basic
+- Festival Calendar basic
+
+Growth:
+- Menu Heatmap
+- Lost Sales Tracker
+- Abandoned Cart Recovery
+- Smart Service Timer
+- VIP Customer Alert
+- Staff Tip Management
+- Packaging Control
+- Daily Manager Handover
+- Owner Morning Briefing
+- End-of-Day Summary
+- Owner Approval Inbox
+- Customer Taste Profile
+
+Pro:
+- QR Menu A/B Testing
+- Smart Menu Search Analytics
+- Table Revenue Optimization
+- Group Ordering QR
+- Split Cart by Person
+- Menu Item Lifecycle
+- New Item Launch Tracker
+- Kitchen Equipment Maintenance
+- Temperature Log
+- Cleaning Proof Gallery
+- Incident Reporting
+- Smart Complaint Escalation
+- Repeat Complaint Detector
+- Order Accuracy Score
+- Portion Control Tracker
+- Recipe Versioning
+- Local Area Marketing Map
+- Delivery Zone Profitability
+- Offer Conflict Detector
+- Margin Guardrails
+- Smart Upsell Scripts
+
+Enterprise:
+- Restaurant Digital Twin
+- Staff Panic Button
+- Customer Blacklist/Risk Flag
+- Taste Testing Notes
+- Menu Photo Approval
+- Brand Asset Library
+- Staff Leaderboard TV Mode
+- Advanced Table Revenue Optimization
+- Multi-outlet Digital Twin
+- Brand-level approvals
+- Custom feature limits
+
+Add-ons:
+- Restaurant Digital Twin
+- Advanced Menu Intelligence
+- Staff Leaderboard TV Mode
+- Brand Asset Library
+- Delivery Zone Profitability
+- Advanced Operations Intelligence
+
+====================================================
+4. UI / SIDEBAR PLACEMENT
+====================================================
+
+Place features inside existing modules, not as 50 new sidebar items.
+
+Operations:
+- Restaurant Digital Twin
+- Smart Service Timer
+- Staff Panic Button
+- Daily Manager Handover
+- Owner Morning Briefing
+- End-of-Day Summary
+- Closing Checklist
+- Restaurant Timeline
+- Approval Inbox
+- Incident Reporting
+- Cleaning Proof Gallery
+- Temperature Log
+- Equipment Maintenance
+
+Menu:
+- Menu Heatmap
+- QR Menu A/B Testing
+- Search Analytics
+- Smart Modifier Builder
+- Menu Item Lifecycle
+- New Item Launch Tracker
+- Menu Photo Approval
+- Brand Asset Library
+
+Customers:
+- Customer Taste Profile
+- VIP Customer Alert
+- Blacklist/Risk Flag
+- Mood Tracking
+- Visit Frequency Calendar
+- Customer-Facing Order Status Screen
+
+Inventory:
+- Packaging Control
+- Sauce/Condiment Inventory
+- Portion Control Tracker
+- Recipe Versioning
+- Taste Testing Notes
+
+Growth Engine:
+- Lost Sales Tracker
+- Abandoned Cart Recovery
+- Local Area Marketing Map
+- Festival Calendar
+- Offer Conflict Detector
+- Margin Guardrails
+- Smart Upsell Script for Waiters
+
+Delivery:
+- Queue Management
+- Pre-Order Scheduling
+- Delivery Zone Profitability
+
+Staff:
+- Staff Tip Management
+- Staff Leaderboard TV Mode
+
+Reports:
+Add reports for all relevant features.
+
+Settings:
+Add configuration pages:
+- Feature limits
+- Alert thresholds
+- Margin guardrails
+- Complaint escalation rules
+- Closing checklist rules
+- Temperature thresholds
+- Approval rules
+- Menu A/B testing rules
+- Blacklist rules
+- Notification rules
+
+====================================================
+5. DATABASE / API REQUIREMENTS
+====================================================
+
+Create or update database safely.
+
+Use existing naming style and tenant scoping.
+
+Every new table must include:
+- id
+- restaurant_id
+- outlet_id where needed
+- created_by where needed
+- created_at
+- updated_at
+- status where needed
+
+Required table groups:
+- menu_analytics
+- menu_ab_tests
+- menu_search_logs
+- lost_sales_events
+- abandoned_carts
+- table_revenue_metrics
+- queue_tickets
+- pre_orders
+- modifier_templates
+- customer_taste_profiles
+- group_orders
+- split_cart_items
+- service_timers
+- panic_alerts
+- vip_alerts
+- customer_risk_flags
+- menu_item_lifecycle_logs
+- item_launch_trackers
+- staff_tips
+- equipment_maintenance
+- temperature_logs
+- cleaning_proofs
+- incident_reports
+- manager_handovers
+- daily_summaries
+- closing_checklists
+- restaurant_timeline_events
+- approval_requests
+- customer_mood_logs
+- complaint_escalations
+- complaint_patterns
+- order_accuracy_logs
+- packaging_items
+- condiment_inventory
+- portion_control_logs
+- recipe_versions
+- taste_testing_notes
+- menu_photo_approvals
+- brand_assets
+- area_marketing_metrics
+- delivery_zone_profitability
+- customer_visit_calendar
+- festival_calendar
+- offer_conflicts
+- margin_guardrails
+- upsell_scripts
+- staff_leaderboard_metrics
+- customer_order_status_events
+
+If similar tables already exist, reuse and extend them instead of duplicating.
+
+Create APIs for:
+- list
+- create
+- update
+- delete where needed
+- status update
+- analytics/reporting
+- export where needed
+
+All APIs must enforce:
+- authentication
+- restaurant tenant isolation
+- role permissions
+- plan/module access
+- validation
+- audit logging for important actions
+
+====================================================
+6. NOTIFICATION REQUIREMENTS
+====================================================
+
+Add notifications for:
+- VIP customer arrived
+- Panic alert
+- Low margin offer warning
+- Complaint escalation
+- Repeat complaint detected
+- Equipment maintenance due
+- Temperature threshold issue
+- Closing checklist incomplete
+- Cash/order issue in handover
+- New approval request
+- Abandoned cart recovery trigger
+- Lost sales spike
+- Queue order ready
+- Pre-order due soon
+- Menu A/B test winner detected
+- Delivery zone profitability issue
+
+Notifications should work in:
+- Restaurant admin
+- Mobile app if available
+- Notification center
+- Email/SMS/WhatsApp only if configured and permitted
+
+====================================================
+7. REPORTING REQUIREMENTS
+====================================================
+
+Add reports:
+- Menu Heatmap Report
+- Menu A/B Test Report
+- Search Demand Report
+- Lost Sales Report
+- Abandoned Cart Report
+- Table Revenue Report
+- Queue Report
+- Pre-Order Report
+- Service Timer Report
+- VIP Customer Report
+- Customer Risk Report
+- Item Lifecycle Report
+- New Item Launch Report
+- Tip Report
+- Maintenance Report
+- Temperature Log Report
+- Cleaning Proof Report
+- Incident Report
+- Handover Report
+- Closing Checklist Report
+- Timeline Report
+- Approval Report
+- Mood Report
+- Complaint Escalation Report
+- Order Accuracy Report
+- Packaging Cost Report
+- Portion Control Report
+- Recipe Version Report
+- Local Area Marketing Report
+- Delivery Zone Profitability Report
+- Offer Conflict Report
+- Margin Guardrail Report
+- Staff Leaderboard Report
+
+Each report should support:
+- date filter
+- outlet filter
+- status filter where needed
+- export CSV/PDF/Excel where available
+- empty state
+- pagination
+
+====================================================
+8. MOBILE APP REQUIREMENTS
+====================================================
+
+If mobile app exists, add mobile access for key features:
+- Owner Morning Briefing
+- End-of-Day Summary
+- Approval Inbox
+- Panic Alerts
+- VIP Alerts
+- Incident Reports
+- Closing Checklist
+- Service Timer
+- Queue Management
+- Pre-Orders
+- Customer Order Status
+- Maintenance Alerts
+- Complaint Escalations
+- Staff Tip Summary
+- Lost Sales Alerts
+
+Do not add all 50 as separate mobile screens. Add compact mobile cards and alerts inside relevant modules.
+
+====================================================
+9. SUPER ADMIN REQUIREMENTS
+====================================================
+
+Super Admin must control:
+- Enable/disable each feature by plan
+- Enable/disable per restaurant
+- Pricing/add-on availability
+- Usage limits
+- Feature adoption
+- Feature usage analytics
+- Module revenue
+- Upgrade prompts
+- Coming soon flags
+- Beta access flags
+
+Super Admin reports:
+- Feature adoption report
+- Feature usage report
+- Plan-wise feature usage
+- Add-on revenue
+- Restaurant engagement score
+- Churn risk based on feature usage
+
+====================================================
+10. ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- Existing features are checked and not duplicated.
+- Missing features are added.
+- Incomplete existing features are fixed.
+- Every new feature is connected to pricing/plans.
+- Every new feature has Super Admin feature flag.
+- Every locked feature shows upgrade screen.
+- Every feature uses real database and APIs.
+- Every feature has role permissions.
+- Every feature is tenant-safe by restaurant_id.
+- Important actions are audit logged.
+- Key features have reports.
+- Notifications work where needed.
+- Mobile app shows key alerts if mobile exists.
+- Public pricing page includes new features.
+- No mock-only feature remains.
+- No broken routes.
+- No broken buttons.
+- Build passes.
+- Critical workflows are tested.
+
+====================================================
+11. IMPLEMENTATION ORDER
+====================================================
+
+Implement in phases:
+
+Phase 1: High-value operational intelligence
+- Restaurant Timeline
+- Owner Approval Inbox
+- Smart Service Timer
+- Smart Closing Checklist
+- Owner Morning Briefing
+- End-of-Day Summary
+- Daily Manager Handover
+
+Phase 2: Customer and menu intelligence
+- Menu Heatmap
+- Smart Menu Search Analytics
+- Lost Sales Tracker
+- Abandoned Cart Recovery
+- Customer Taste Profile
+- VIP Customer Alert
+- Customer Order Status Screen
+
+Phase 3: Kitchen, quality and staff
+- Order Accuracy Score
+- Incident Reporting
+- Complaint Escalation
+- Repeat Complaint Detector
+- Staff Tip Management
+- Panic Button
+- Cleaning Proof Gallery
+- Temperature Log
+- Equipment Maintenance
+
+Phase 4: Advanced menu and inventory
+- QR Menu A/B Testing
+- Smart Modifier Builder
+- Menu Lifecycle
+- New Item Launch Tracker
+- Packaging Control
+- Condiment Inventory
+- Portion Control Tracker
+- Recipe Versioning
+- Taste Testing Notes
+- Menu Photo Approval
+- Brand Asset Library
+
+Phase 5: Growth and delivery optimization
+- Local Area Marketing Map
+- Festival Calendar
+- Offer Conflict Detector
+- Margin Guardrails
+- Smart Upsell Scripts
+- Table Revenue Optimization
+- Queue Management
+- Pre-Order Scheduling
+- Delivery Zone Profitability
+
+Phase 6: Enterprise visual intelligence
+- Restaurant Digital Twin
+- Staff Leaderboard TV Mode
+- Advanced multi-outlet dashboards
+
+First scan existing code and produce feature status checklist. Then implement phase by phase and test each feature with real data.
+```
