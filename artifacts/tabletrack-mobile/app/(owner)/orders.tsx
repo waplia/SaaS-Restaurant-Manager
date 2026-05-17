@@ -29,7 +29,14 @@ export default function OrdersScreen() {
     queryFn: () => listOrders(restaurantId, params),
   });
 
-  const orders = ((data as { orders?: Order[] } | null)?.orders ?? (Array.isArray(data) ? data : [])) as Order[];
+  // API returns `{ data: Order[], total: number }` (see OrderList schema).
+  // Fall back to legacy/alt shapes defensively so the screen never goes blank
+  // if the contract drifts.
+  const orders = (
+    (data as { data?: Order[]; orders?: Order[] } | null)?.data
+    ?? (data as { orders?: Order[] } | null)?.orders
+    ?? (Array.isArray(data) ? (data as Order[]) : [])
+  ) as Order[];
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>

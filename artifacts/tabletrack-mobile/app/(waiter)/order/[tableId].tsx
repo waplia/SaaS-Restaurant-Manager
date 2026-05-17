@@ -166,7 +166,14 @@ export default function WaiterOrderScreen() {
   const itemList = (isOnline
     ? (Array.isArray(menuItems) ? menuItems : [])
     : offlineItems) as MenuItem[];
-  const activeOrders = ((ordersData as { orders?: Order[] } | null)?.orders ?? (Array.isArray(ordersData) ? ordersData : [])) as Order[];
+  // API returns `OrderList = { data: Order[], total }`; keep legacy shape
+  // fallbacks so the active-order banner doesn't disappear if the contract
+  // drifts.
+  const activeOrders = (
+    (ordersData as { data?: Order[]; orders?: Order[] } | null)?.data
+    ?? (ordersData as { orders?: Order[] } | null)?.orders
+    ?? (Array.isArray(ordersData) ? (ordersData as Order[]) : [])
+  ) as Order[];
   const activeOrder = activeOrders[0] ?? null;
 
   useEffect(() => {
