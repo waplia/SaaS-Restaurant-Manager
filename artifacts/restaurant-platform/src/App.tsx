@@ -39,6 +39,7 @@ import SettingsSectionPage from "@/pages/settings-section";
 import SettingsAccountPage from "@/pages/settings-account";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
+import SettingsTerminalsPage from "@/pages/settings-terminals";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
 import SettingsSessionsPage from "@/pages/settings-sessions";
 import TokensPage from "@/pages/tokens";
@@ -442,6 +443,7 @@ function Router() {
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
+      <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsTerminalsPage} feature="card_terminal" />} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
       <Route path="/tokens" component={() => <RoleProtectedRoute component={TokensPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />

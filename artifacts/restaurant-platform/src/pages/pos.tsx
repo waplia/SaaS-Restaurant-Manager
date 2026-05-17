@@ -9,6 +9,7 @@ import {
   useCreatePaymentIntent, useCreateRazorpayOrder,
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
   useCurrentCashRegister,
+  useTerminals, useTerminalCharge, useConfirmTerminalCharge, useTerminalRunOnReader,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,7 +53,7 @@ interface Totals {
   totalAmount: number;
 }
 
-type PayStage = "select" | "cash-confirm" | "card-form" | "upi-form" | "gift-card-form" | "processing";
+type PayStage = "select" | "cash-confirm" | "card-form" | "upi-form" | "gift-card-form" | "terminal-form" | "processing";
 
 function makeLineKey(menuItemId: number, modifiers: CartModifier[]): string {
   const modKey = [...modifiers].sort((a, b) => a.name.localeCompare(b.name)).map(m => m.name).join("|");
@@ -70,6 +71,7 @@ const PAYMENT_METHODS = [
   { value: "card", label: "Card", icon: CreditCard },
   { value: "upi", label: "UPI", icon: Smartphone },
   { value: "gift_card", label: "Gift Card", icon: Gift },
+  { value: "terminal", label: "Terminal", icon: CreditCard },
 ];
 
 const TABLE_STATUS_STYLE: Record<string, string> = {
@@ -638,15 +640,20 @@ function PaymentModal({
   orderId,
   onClose,
   onConfirm,
+  onTerminalConfirmed,
   isPending,
 }: {
   totals: Totals;
   orderId: number;
   onClose: () => void;
   onConfirm: (method: string, details?: PaymentConfirmDetails) => Promise<void>;
+  /** Called after a terminal charge has been verified + finalized server-side.
+   *  POS uses this to print and reset state WITHOUT going through
+   *  /orders/:id/pay (terminal /confirm is the sole finalizer). */
+  onTerminalConfirmed?: (info: { providerRef: string; receiptUrl: string | null }) => Promise<void>;
   isPending: boolean;
 }) {
-  const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card">("cash");
+  const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card" | "terminal">("cash");
   const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
   // Tip selection — drives both the displayed grand total and the value sent
@@ -675,6 +682,14 @@ function PaymentModal({
   const [upiId, setUpiId] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardError, setGiftCardError] = useState("");
+  const [terminalId, setTerminalId] = useState<number | null>(null);
+  const [terminalTip, setTerminalTip] = useState("");
+  const [terminalStatus, setTerminalStatus] = useState("");
+  const [terminalError, setTerminalError] = useState("");
+  const { data: terminals = [] } = useTerminals();
+  const terminalCharge = useTerminalCharge();
+  const terminalRunOnReader = useTerminalRunOnReader();
+  const confirmTerminalCharge = useConfirmTerminalCharge();
   const restaurantIdForGift = restaurantId;
   const [cardReady, setCardReady] = useState(false);
   const [stripeError, setStripeError] = useState("");
@@ -730,6 +745,10 @@ function PaymentModal({
     if (method === "card") { setStage("card-form"); return; }
     if (method === "upi") { setStage("upi-form"); return; }
     if (method === "gift_card") { setStage("gift-card-form"); return; }
+    if (method === "terminal") {
+      if (terminalId == null && terminals.length > 0) setTerminalId(terminals[0].id);
+      setStage("terminal-form"); return;
+    }
     setStage("cash-confirm");
   };
 
@@ -817,12 +836,47 @@ function PaymentModal({
           setStage("gift-card-form");
           return;
         }
+      } else if (method === "terminal") {
+        if (!terminalId) throw new Error("No terminal selected");
+        const tipMinor = Math.max(0, Math.round((Number(terminalTip) || 0) * 100));
+        const amountMinor = Math.round(totals.totalAmount * 100);
+        try {
+          // 1. Create a card_present PaymentIntent server-side.
+          setTerminalStatus("Creating payment…");
+          const charge = await terminalCharge.mutateAsync({ terminalId, orderId, amountMinor, tipMinor });
+          if (!charge.providerRef) throw new Error("Terminal did not return a payment reference");
+          // 2. Drive the physical reader. For Stripe Internet readers (e.g.
+          //    WisePOS E) the server uses Stripe Terminal's reader API to
+          //    push the PI to the device and polls until the customer taps;
+          //    this is the real "tap-to-pay" handshake (not a stub).
+          setTerminalStatus("Tap or insert card on the reader…");
+          await terminalRunOnReader.mutateAsync({ terminalId, providerRef: charge.providerRef });
+          // 3. Finalize. /confirm is the SOLE finalizer for terminal
+          //    payments — it re-verifies the PI status with Stripe before
+          //    writing. We never fall through to /orders/:id/pay.
+          setTerminalStatus("Confirming payment…");
+          const confirmed = await confirmTerminalCharge.mutateAsync({
+            terminalId, orderId,
+            providerRef: charge.providerRef,
+            amountMinor, tipMinor,
+            receiptUrl: charge.receiptUrl,
+          });
+          await onTerminalConfirmed?.({
+            providerRef: charge.providerRef,
+            receiptUrl: confirmed.receiptUrl ?? charge.receiptUrl,
+          });
+        } catch (err) {
+          setTerminalError(err instanceof Error ? err.message : "Terminal charge failed");
+          setTerminalStatus("");
+          setStage("terminal-form");
+          return;
+        }
       } else {
         await onConfirm("cash", { amountTendered: Number(amountTendered) || undefined, tipAmount });
       }
     } catch {
       toast({ title: "Payment failed", description: "Please try again.", variant: "destructive" });
-      setStage(method === "cash" ? "cash-confirm" : method === "card" ? "card-form" : method === "gift_card" ? "gift-card-form" : "upi-form");
+      setStage(method === "cash" ? "cash-confirm" : method === "card" ? "card-form" : method === "gift_card" ? "gift-card-form" : method === "terminal" ? "terminal-form" : "upi-form");
     }
   };
 
@@ -1116,13 +1170,97 @@ function PaymentModal({
             </>
           )}
 
+          {/* Terminal-form stage — pick a paired terminal, optional tip, then charge */}
+          {stage === "terminal-form" && (
+            <>
+              <TotalsSummary />
+              {terminals.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 px-4 py-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300 text-center">
+                  <CreditCard className="w-7 h-7" />
+                  <p className="font-semibold">Configuration required</p>
+                  <p className="text-xs">No card terminals are paired yet. Pair one in Settings → Card Terminals to accept tap-to-pay.</p>
+                  <a href="/settings/terminals" className="text-xs font-semibold text-primary hover:underline mt-1">Open Terminal Settings →</a>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Terminal</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {terminals.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { setTerminalId(t.id); setTerminalError(""); }}
+                          className={cn(
+                            "flex items-center justify-between px-3 py-2 rounded-lg border-2 text-sm transition-all",
+                            terminalId === t.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/40",
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-primary" />
+                            <span className="font-medium">{t.name}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{t.terminal?.provider}</span>
+                          </span>
+                          <span className={cn(
+                            "text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded",
+                            t.status === "online" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600",
+                          )}>{t.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Tip on terminal (optional)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={terminalTip}
+                      onChange={e => setTerminalTip(e.target.value)}
+                    />
+                  </div>
+                  {terminalError && (
+                    <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{terminalError}</span>
+                    </div>
+                  )}
+                  <div className="text-center py-1">
+                    <p className="text-xs text-muted-foreground">
+                      Charging: <span className="font-bold text-foreground text-base">
+                        ₹{(totals.totalAmount + (Number(terminalTip) || 0)).toFixed(2)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStage("select")}>Back</Button>
+                <Button
+                  className="flex-1 h-11"
+                  disabled={isPending || terminals.length === 0 || !terminalId || terminalCharge.isPending || terminalRunOnReader.isPending}
+                  onClick={handleProcessPayment}
+                >
+                  <CreditCard className="w-3.5 h-3.5 mr-2" />
+                  Charge Terminal
+                </Button>
+              </div>
+            </>
+          )}
+
           {/* Processing stage */}
           {stage === "processing" && (
             <div className="py-8 flex flex-col items-center gap-4">
               <Loader2 className="w-12 h-12 animate-spin text-primary" />
               <p className="text-base font-medium text-foreground">Processing payment…</p>
-              <p className="text-sm text-muted-foreground">
-                {method === "card" ? "Contacting payment gateway" : method === "upi" ? "Awaiting UPI confirmation" : method === "gift_card" ? "Redeeming gift card" : "Confirming payment"}
+              <p className="text-sm text-muted-foreground text-center">
+                {method === "terminal"
+                  ? (terminalStatus || "Communicating with reader…")
+                  : method === "card" ? "Contacting payment gateway"
+                  : method === "upi" ? "Awaiting UPI confirmation"
+                  : method === "gift_card" ? "Redeeming gift card"
+                  : "Confirming payment"}
               </p>
             </div>
           )}
@@ -1457,6 +1595,31 @@ export default function PosPage() {
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
       amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
+      restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
+      restaurantPhone: restaurant?.phone ?? undefined,
+      createdAt: placedOrder?.createdAt,
+      discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
+    });
+    handleNewOrder();
+  };
+
+  // Terminal payments are finalized server-side by /terminals/:id/confirm
+  // (it verifies the PaymentIntent with Stripe before writing). POS just
+  // handles the UI side effects here — no second call to /orders/:id/pay.
+  const handleTerminalConfirmed = async (info: { providerRef: string; receiptUrl: string | null }) => {
+    setShowPayModal(false);
+    toast({
+      title: "Terminal payment confirmed",
+      description: `${placedOrder?.orderNumber ?? "Order"} marked as paid${info.receiptUrl ? " — receipt available" : ""}.`,
+    });
+    const receiptItems = placedOrder
+      ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
+      : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
+    printReceipt({
+      orderNumber: placedOrder?.orderNumber ?? "",
+      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
+      orderType, items: receiptItems, totals: displayTotals, paymentMethod: "card",
+      customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
       restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
       restaurantPhone: restaurant?.phone ?? undefined,
       createdAt: placedOrder?.createdAt,
@@ -1987,6 +2150,7 @@ export default function PosPage() {
           orderId={placedOrder.id}
           onClose={() => setShowPayModal(false)}
           onConfirm={handleConfirmPayment}
+          onTerminalConfirmed={handleTerminalConfirmed}
           isPending={payOrder.isPending}
         />
       )}

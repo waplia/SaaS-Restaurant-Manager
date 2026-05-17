@@ -17,7 +17,8 @@ export type DeviceType =
   | "android_pos"
   | "tablet_menu"
   | "self_kiosk"
-  | "token_display";
+  | "token_display"
+  | "card_terminal";
 
 export type DeviceStatus = "online" | "offline" | "error" | "pairing";
 

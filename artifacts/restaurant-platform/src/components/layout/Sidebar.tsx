@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
-  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone,
+  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -275,6 +275,7 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/marketplace", label: "Vendor Marketplace", icon: Package, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/devices", label: "Hardware & Devices", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
+      { kind: "link", href: "/settings/terminals", label: "Card Terminals", icon: CreditCard, roles: ["owner", "manager", "cashier"], planGate: "card_terminal", badge: "premium" },
       { kind: "link", href: "/settings/token-display", label: "Token Display", icon: BellRing, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/kitchens", label: "Kitchen Stations", icon: ChefHat, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/accounting", label: "Accounting Integrations", icon: ScrollText, roles: ["owner", "manager"] },

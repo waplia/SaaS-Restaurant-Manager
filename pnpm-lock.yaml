@@ -693,6 +693,9 @@ importers:
       '@stripe/stripe-js':
         specifier: ^9.4.0
         version: 9.4.0
+      '@stripe/terminal-js':
+        specifier: ^0.26.0
+        version: 0.26.0
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
@@ -3257,6 +3260,9 @@ packages:
   '@stripe/stripe-js@9.4.0':
     resolution: {integrity: sha512-zXG86DnoLU5nH2U18tX5ApTE3IAm+txoiPm4YFyEtRS0K5y7ZDH9M8e1Le/cZyI6wvW3BkJn2daZe2FqZOrSSg==}
     engines: {node: '>=12.16'}
+
+  '@stripe/terminal-js@0.26.0':
+    resolution: {integrity: sha512-EQzTnS1q534lxdxRPRZvLT7m2BJ9BN6vJxmISb6+PsN09rHXWvFMCPOLnY0dnw0DRUmBQ3x9rP/32I0gtgmZug==}
 
   '@swc/helpers@0.5.21':
     resolution: {integrity: sha512-jI/VAmtdjB/RnI8GTnokyX7Ug8c+g+ffD6QRLa6XQewtnGyukKkKSk3wLTM3b5cjt1jNh9x0jfVlagdN2gDKQg==}
@@ -7181,6 +7187,10 @@ packages:
       '@types/node':
         optional: true
 
+  stripe@8.222.0:
+    resolution: {integrity: sha512-hrA79fjmN2Eb6K3kxkDzU4ODeVGGjXQsuVaAPSUro6I9MM3X+BvIsVqdphm3BXWfimAGFvUqWtPtHy25mICY1w==}
+    engines: {node: ^8.1 || >=10.*}
+
   strnum@2.3.0:
     resolution: {integrity: sha512-ums3KNd42PGyx5xaoVTO1mjU1bH3NpY4vsrVlnv9PNGqQj8wd7rJ6nEypLrJ7z5vxK5RP0yMLo6J/Gsm62DI5Q==}
 
@@ -10864,6 +10874,14 @@ snapshots:
   '@stardazed/streams-text-encoding@1.0.2': {}
 
   '@stripe/stripe-js@9.4.0': {}
+
+  '@stripe/terminal-js@0.26.0':
+    dependencies:
+      stripe: 8.222.0
+      ws: 6.2.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@swc/helpers@0.5.21':
     dependencies:
@@ -15552,6 +15570,11 @@ snapshots:
   stripe@22.1.1(@types/node@25.3.5):
     optionalDependencies:
       '@types/node': 25.3.5
+
+  stripe@8.222.0:
+    dependencies:
+      '@types/node': 25.3.5
+      qs: 6.15.0
 
   strnum@2.3.0: {}
 

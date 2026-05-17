@@ -15,10 +15,12 @@ import type { DeviceType, DeviceStatus } from "@workspace/db";
 export const PRINTER_TYPES: DeviceType[] = ["thermal_printer", "kot_printer"];
 export const KOT_TARGET_TYPES: DeviceType[] = ["kot_printer", "kitchen_display"];
 export const OFFLINE_TYPES: DeviceType[] = ["android_pos", "tablet_menu", "self_kiosk"];
+export const CARD_TERMINAL_TYPES: DeviceType[] = ["card_terminal"];
 export const ALL_DEVICE_TYPES: DeviceType[] = [
   "thermal_printer", "kot_printer", "kitchen_display", "customer_display",
   "barcode_scanner", "qr_scanner", "cash_drawer", "biometric",
   "android_pos", "tablet_menu", "self_kiosk", "token_display",
+  "card_terminal",
 ];
 
 export function isDeviceType(v: unknown): v is DeviceType {

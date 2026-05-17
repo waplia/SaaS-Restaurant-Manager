@@ -3396,7 +3396,8 @@ export function useBulkRetryAdminEmailLogs() {
 export type DeviceType =
   | "thermal_printer" | "kot_printer" | "kitchen_display" | "customer_display"
   | "barcode_scanner" | "qr_scanner" | "cash_drawer" | "biometric"
-  | "android_pos" | "tablet_menu" | "self_kiosk" | "token_display";
+  | "android_pos" | "tablet_menu" | "self_kiosk" | "token_display"
+  | "card_terminal";
 
 export type DeviceStatus = "online" | "offline" | "error" | "pairing";
 
@@ -3458,10 +3459,153 @@ export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
   tablet_menu: "Tablet Menu",
   self_kiosk: "Self-Service Kiosk",
   token_display: "Token Display",
+  card_terminal: "Card Terminal",
 };
 
 export const PRINTER_TYPES: DeviceType[] = ["thermal_printer", "kot_printer"];
 export const OFFLINE_CAPABLE_TYPES: DeviceType[] = ["android_pos", "tablet_menu", "self_kiosk"];
+export const CARD_TERMINAL_TYPES: DeviceType[] = ["card_terminal"];
+
+// ── Terminals (Task #420) ───────────────────────────────────────────────
+export type TerminalProviderId = "stripe" | "square" | "clover" | "custom";
+
+export interface TerminalRecord extends DeviceRecord {
+  terminal: {
+    provider?: TerminalProviderId;
+    externalId?: string | null;
+    serial?: string | null;
+    model?: string | null;
+  };
+}
+
+export interface TerminalProviderStatus {
+  id: TerminalProviderId;
+  label: string;
+  configured: boolean;
+}
+
+export function useTerminals() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["terminals", RESTAURANT_ID],
+    queryFn: () => apiGet<TerminalRecord[]>(`/restaurants/${RESTAURANT_ID}/terminals`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useTerminalProviders() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["terminal-providers", RESTAURANT_ID],
+    queryFn: () => apiGet<{ providers: TerminalProviderStatus[] }>(`/restaurants/${RESTAURANT_ID}/terminals/providers`),
+  });
+}
+
+export function usePairTerminal() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { name: string; provider: TerminalProviderId; externalId?: string | null; branchId?: number | null; serial?: string | null; model?: string | null }) =>
+      apiPost<TerminalRecord>(`/restaurants/${RESTAURANT_ID}/terminals/pair`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["terminals", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useUnpairTerminal() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiPost(`/restaurants/${RESTAURANT_ID}/terminals/${id}/unpair`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["terminals", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useTerminalCharge() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { terminalId: number; orderId: number; amountMinor: number; tipMinor?: number; currency?: string }) =>
+      apiPost<{ status: string; providerRef: string | null; receiptUrl: string | null; clientSecret: string | null; provider: TerminalProviderId; deviceId: number }>(
+        `/restaurants/${RESTAURANT_ID}/terminals/${data.terminalId}/charge`,
+        { orderId: data.orderId, amountMinor: data.amountMinor, tipMinor: data.tipMinor, currency: data.currency ?? "inr" },
+      ),
+  });
+}
+
+export function useTerminalRunOnReader() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { terminalId: number; providerRef: string }) =>
+      apiPost<{ status: string }>(
+        `/restaurants/${RESTAURANT_ID}/terminals/${data.terminalId}/run-on-reader`,
+        { providerRef: data.providerRef },
+      ),
+  });
+}
+
+export function useTerminalRecentPayments(terminalId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["terminal-recent-payments", RESTAURANT_ID, terminalId],
+    enabled: terminalId != null,
+    queryFn: () => apiGet<{ data: Array<{
+      id: number; amount: string; direction: "in" | "out";
+      paymentDate: string; referenceId: number | null;
+      terminalRefId: string | null; notes: string | null;
+    }> }>(`/restaurants/${RESTAURANT_ID}/terminals/${terminalId}/recent-payments`),
+  });
+}
+
+export function useConfirmTerminalCharge() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { terminalId: number; orderId: number; providerRef: string; amountMinor: number; tipMinor?: number; receiptUrl?: string | null }) =>
+      apiPost<{ payment: { id: number }; receiptUrl: string | null }>(
+        `/restaurants/${RESTAURANT_ID}/terminals/${data.terminalId}/confirm`,
+        data,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["payments", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useTerminalRefund() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: { terminalId: number; paymentId: number; amountMinor: number; reason?: string }) =>
+      apiPost<{ status: string; refund: { id: number } }>(
+        `/restaurants/${RESTAURANT_ID}/terminals/${data.terminalId}/refund`,
+        { paymentId: data.paymentId, amountMinor: data.amountMinor, reason: data.reason },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["terminal-payments", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useTerminalPaymentsByDevice(params?: { from?: string; to?: string }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const search = new URLSearchParams();
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  const q = search.toString() ? `?${search.toString()}` : "";
+  return useQuery({
+    queryKey: ["terminal-payments", RESTAURANT_ID, params ?? {}],
+    queryFn: () => apiGet<{ data: Array<{ deviceId: number; deviceName: string; provider: string | null; grossIn: string; refundsOut: string; net: string; txCount: number; refundCount: number }> }>(
+      `/restaurants/${RESTAURANT_ID}/terminals/payments-by-device${q}`,
+    ),
+  });
+}
 
 export function useDevices(filters?: { branchId?: number | null; type?: DeviceType; status?: DeviceStatus }) {
   const RESTAURANT_ID = useRestaurantId();

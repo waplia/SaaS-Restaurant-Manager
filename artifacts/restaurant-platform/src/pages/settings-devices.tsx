@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Pencil, Trash2, X, Printer, Monitor, Tablet, ScanLine, Smartphone,
   CircuitBoard, Hash, ShoppingCart, Fingerprint, RefreshCw, AlertCircle,
-  CheckCircle2, Clock, Activity, ChefHat, Copy,
+  CheckCircle2, Clock, Activity, ChefHat, Copy, CreditCard,
 } from "lucide-react";
 
 const STATUS_BADGE: Record<DeviceStatus, { label: string; cls: string; icon: typeof CheckCircle2 }> = {
@@ -39,6 +39,7 @@ const TYPE_ICONS: Record<DeviceType, typeof Printer> = {
   tablet_menu: Tablet,
   self_kiosk: CircuitBoard,
   token_display: Hash,
+  card_terminal: CreditCard,
 };
 
 interface DeviceForm {

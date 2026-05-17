@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
 import { usersTable } from "./users";
+import { devicesTable } from "./devices";
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
@@ -22,6 +23,11 @@ export const paymentsTable = pgTable("payments", {
   referenceId: integer("reference_id"),
   notes: text("notes"),
   recordedBy: integer("recorded_by").references(() => usersTable.id),
+  // Optional terminal/device tagging for card-present payments — populated by
+  // the terminal pay path so reports can break revenue down by device.
+  deviceId: integer("device_id").references(() => devicesTable.id, { onDelete: "set null" }),
+  terminalProvider: text("terminal_provider"),
+  terminalRefId: text("terminal_ref_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

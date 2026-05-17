@@ -85,6 +85,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "mystery_audits",        label: "Mystery Audits",              description: "Mystery-shopper audit templates, outlet assignments, scoring with photos, corrective actions and PDF reports.", category: "operations", defaultValue: false, defaultPlans: ["pro","enterprise"] },
   { key: "smart_pnl",             label: "Smart P&L Dashboard",         description: "Unified profit-and-loss dashboard with approval workflow and leak detection.", category: "growth", defaultValue: false, defaultPlans: ["pro","enterprise"] },
   { key: "handheld_pos",          label: "Handheld POS",                description: "Tableside ordering on phones and tablets for waiters with device-to-waiter assignment and per-device sales reports.", category: "operations", defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/sell/handheld-pos" },
+  { key: "card_terminal",         label: "Physical card terminals",     description: "Pair physical card terminals (Stripe Terminal / Square / Clover / Custom) and accept tap-to-pay with tip-on-terminal and partial refunds.", category: "operations", defaultValue: false, defaultPlans: ["pro","enterprise"] },
 
   // ──────────────────────────────────────────────────────────────────
   // Operations Intelligence pack (Task #365 plumbing)
