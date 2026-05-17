@@ -13,10 +13,6 @@ export const COMPANY = {
     "Restaurant Operating System + Growth Cloud + Finance + Khana AI",
   productShortDescription:
     "KhanaLagao is a complete restaurant operating system for POS billing, QR menu, kitchen/KDS, inventory, payroll, finance, growth, reports and Khana AI.",
-  productOgDescription:
-    "Run your restaurant smarter with KhanaLagao — POS, QR menu, inventory, payroll, finance, growth tools and Khana AI in one platform.",
-  productTwitterDescription:
-    "Complete Restaurant OS with POS, QR Menu, Inventory, Payroll, Finance, Growth Engine and Khana AI.",
   proudlyBuiltLine:
     "KhanaLagao is proudly built by Waplia Digital Solutions from Jaipur, India.",
 
