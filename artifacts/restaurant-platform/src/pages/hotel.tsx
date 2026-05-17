@@ -584,8 +584,15 @@ export default function HotelPage() {
             <p className="text-sm text-muted-foreground">Room charge, packages, mini-bar, banquet, housekeeping &amp; consolidated check-out.</p>
           </div>
           {enabled && (
-            <Button variant="outline" onClick={() => {
-              toggle.mutate(false, { onSuccess: () => { toast({ title: "Hotel mode disabled" }); qc.invalidateQueries(); } });
+            <Button variant="outline" disabled={toggle.isPending} onClick={() => {
+              toggle.mutate(false, {
+                onSuccess: () => { toast({ title: "Hotel mode disabled" }); qc.invalidateQueries(); },
+                onError: (e) => toast({
+                  title: "Couldn't disable Hotel Mode",
+                  description: (e as Error).message || "Only the restaurant owner or manager can change this. If you're using super-admin 'View as', switch back to your own login.",
+                  variant: "destructive",
+                }),
+              });
             }} data-testid="button-disable-hotel-mode">Disable Hotel Mode</Button>
           )}
         </div>
@@ -593,6 +600,11 @@ export default function HotelPage() {
         {!enabled && (
           <HotelDisabled onEnable={() => toggle.mutate(true, {
             onSuccess: () => { toast({ title: "Hotel mode enabled" }); qc.invalidateQueries(); },
+            onError: (e) => toast({
+              title: "Couldn't enable Hotel Mode",
+              description: (e as Error).message || "Only the restaurant owner or manager can change this. If you're using super-admin 'View as', switch back to your own login.",
+              variant: "destructive",
+            }),
           })} />
         )}
 
