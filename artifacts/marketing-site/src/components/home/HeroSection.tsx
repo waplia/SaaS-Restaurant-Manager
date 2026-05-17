@@ -6,7 +6,9 @@ import {
   AlertTriangle, Users, Star, Wallet,
 } from "lucide-react";
 import { COMPANY } from "@/lib/company";
-import { DashboardMockup as RealDashboardMockup } from "@/components/mockups";
+import { MOCKUPS } from "@/components/mockups";
+
+const RealDashboardMockup = MOCKUPS.dashboard;
 
 export function HeroSection() {
   return (

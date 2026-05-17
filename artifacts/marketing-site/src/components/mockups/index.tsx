@@ -6,6 +6,7 @@
  * is to look like a real screenshot (tables, charts, badges, status pills,
  * order cards, live metrics) rather than generic placeholder boxes.
  */
+import * as React from "react";
 import type { ReactNode } from "react";
 import {
   IndianRupee, ChefHat, Clock, AlertTriangle, TrendingUp, Users,
@@ -687,22 +688,71 @@ export function MobileAppMockup() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Real product screenshots                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Renders a real screenshot of the live KhanaLagao product inside the same
+ * BrowserFrame chrome used by the CSS mockups, so visuals stay consistent
+ * across the marketing site. Falls back to the CSS mockup if the image fails.
+ */
+export function ScreenshotMockup({
+  src, alt, title, fallback: Fallback,
+}: { src: string; alt: string; title?: string; fallback?: React.ComponentType }) {
+  const base = (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL ?? "/";
+  const url = `${base.replace(/\/$/, "")}${src.startsWith("/") ? src : `/${src}`}`;
+  const [failed, setFailed] = React.useState(false);
+  if (failed && Fallback) {
+    return <Fallback />;
+  }
+  return (
+    <BrowserFrame title={title}>
+      <div className="relative aspect-[16/10] bg-background overflow-hidden">
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover object-top"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    </BrowserFrame>
+  );
+}
+
+const DashboardScreenshot = () => <ScreenshotMockup src="screenshots/dashboard.jpg" alt="KhanaLagao live restaurant dashboard with revenue, orders and kitchen queue" title="Dashboard · KhanaLagao" fallback={DashboardMockup} />;
+const POSScreenshot = () => <ScreenshotMockup src="screenshots/pos.jpg" alt="KhanaLagao POS terminal with tables, menu grid and live order ticket" title="POS · KhanaLagao" fallback={POSMockup} />;
+const KDSScreenshot = () => <ScreenshotMockup src="screenshots/kitchen.jpg" alt="KhanaLagao Kitchen Display System showing live KOT tickets by status" title="Kitchen Display · KhanaLagao" fallback={KitchenKDSMockup} />;
+const InventoryScreenshot = () => <ScreenshotMockup src="screenshots/inventory.jpg" alt="KhanaLagao inventory tracker with stock levels, par levels and low-stock alerts" title="Inventory · KhanaLagao" fallback={InventoryMockup} />;
+const FinanceScreenshot = () => <ScreenshotMockup src="screenshots/pnl.jpg" alt="KhanaLagao P&L dashboard with revenue, costs and net profit statement" title="P&L Dashboard · KhanaLagao" fallback={FinanceMockup} />;
+const ReportsScreenshot = () => <ScreenshotMockup src="screenshots/reports.jpg" alt="KhanaLagao reports and analytics with revenue trend, AOV and tax" title="Reports · KhanaLagao" fallback={ReportsMockup} />;
+const OrdersScreenshot = () => <ScreenshotMockup src="screenshots/orders.jpg" alt="KhanaLagao orders board with pending, confirmed and completed tickets" title="Orders · KhanaLagao" fallback={POSMockup} />;
+const AIScreenshot = () => <ScreenshotMockup src="screenshots/ai.jpg" alt="Khana AI dashboard with credits, generations trend and feature mix" title="Khana AI · KhanaLagao" fallback={KhanaAIChatMockup} />;
+
+/* -------------------------------------------------------------------------- */
 /* Helper map used by template pages                                          */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Default mockups now point to real product screenshots for the modules where
+ * we have polished captures. The hand-built CSS components remain exported and
+ * are used as visual fallbacks (and for hover-only marketing flourishes /
+ * variants that don't have a screenshot, like qr, payroll, growth, superadmin).
+ */
 export const MOCKUPS = {
-  dashboard: DashboardMockup,
-  pos: POSMockup,
+  dashboard: DashboardScreenshot,
+  pos: POSScreenshot,
   qr: QRMenuMobileMockup,
-  kds: KitchenKDSMockup,
-  inventory: InventoryMockup,
+  kds: KDSScreenshot,
+  inventory: InventoryScreenshot,
   payroll: PayrollMockup,
-  finance: FinanceMockup,
+  finance: FinanceScreenshot,
   growth: GrowthCampaignMockup,
-  ai: KhanaAIChatMockup,
+  ai: AIScreenshot,
   superadmin: SuperAdminMockup,
-  reports: ReportsMockup,
+  reports: ReportsScreenshot,
   mobile: MobileAppMockup,
+  orders: OrdersScreenshot,
 } as const;
 
 export type MockupKey = keyof typeof MOCKUPS;

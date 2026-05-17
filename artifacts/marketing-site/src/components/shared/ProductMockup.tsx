@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import * as React from "react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
@@ -10,7 +11,25 @@ interface Props {
   accentBars?: number[];
 }
 
+/**
+ * Map of mockup kinds to real product screenshots (captured from the live
+ * KhanaLagao platform). When we have a screenshot for the kind, we render it
+ * inside the same browser-frame chrome; otherwise we fall back to the legacy
+ * skeleton/CSS body below.
+ */
+const SCREENSHOTS: Partial<Record<MockupKind, { src: string; alt: string }>> = {
+  dashboard: { src: "screenshots/dashboard.jpg", alt: "KhanaLagao live restaurant dashboard" },
+  pos: { src: "screenshots/pos.jpg", alt: "KhanaLagao POS terminal" },
+  kds: { src: "screenshots/kitchen.jpg", alt: "KhanaLagao Kitchen Display System" },
+  report: { src: "screenshots/reports.jpg", alt: "KhanaLagao reports and analytics" },
+};
+
 export function ProductMockup({ kind = "dashboard", title = "KhanaLagao", accentBars = [40, 65, 55, 80, 50, 90, 70, 60, 95, 75, 85, 55] }: Props) {
+  const shot = SCREENSHOTS[kind];
+  const base = (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL ?? "/";
+  const [imgFailed, setImgFailed] = React.useState(false);
+  React.useEffect(() => { setImgFailed(false); }, [kind]);
+  const showScreenshot = !!shot && !imgFailed;
   return (
     <div className="relative">
       <div className="aspect-[5/4] rounded-2xl overflow-hidden shadow-2xl border border-border bg-card relative">
@@ -22,12 +41,28 @@ export function ProductMockup({ kind = "dashboard", title = "KhanaLagao", accent
             <div className="ml-3 h-3 w-28 rounded bg-muted" />
             <div className="ml-auto text-[10px] text-muted-foreground font-medium">{title}</div>
           </div>
-          {kind === "dashboard" && <DashboardBody bars={accentBars} />}
-          {kind === "pos" && <POSBody />}
-          {kind === "mobile" && <MobileBody />}
-          {kind === "kds" && <KDSBody />}
-          {kind === "report" && <ReportBody bars={accentBars} />}
-          {kind === "chat" && <ChatBody />}
+          {showScreenshot && shot ? (
+            <div className="flex-1 relative bg-background overflow-hidden">
+              <img
+                src={`${base.replace(/\/$/, "")}/${shot.src}`}
+                alt={shot.alt}
+                loading="lazy"
+                className="absolute inset-0 w-full h-full object-cover object-top"
+                onError={() => setImgFailed(true)}
+              />
+            </div>
+          ) : (
+            <>
+              {kind === "mobile" && <MobileBody />}
+              {kind === "chat" && <ChatBody />}
+              {/* CSS fallbacks render when no screenshot is mapped, or when the
+                  screenshot image fails to load at runtime. */}
+              {kind === "dashboard" && <DashboardBody bars={accentBars} />}
+              {kind === "pos" && <POSBody />}
+              {kind === "kds" && <KDSBody />}
+              {kind === "report" && <ReportBody bars={accentBars} />}
+            </>
+          )}
         </div>
       </div>
     </div>
