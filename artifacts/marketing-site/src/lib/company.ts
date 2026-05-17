@@ -65,10 +65,11 @@ export const LEGAL_LINKS: { title: string; href: string }[] = [
  * Organization JSON-LD ready to drop into a <script type="application/ld+json"> tag.
  *
  * Per SEO direction: the user-visible Organization `name` is the brand "KhanaLagao".
- * The legal entity (Waplia) is intentionally NOT included here — structured data
- * is SEO-facing and surfaces in Google's Knowledge Graph, so the brand identity
- * stays consistent. Waplia remains only in the footer copyright row, legal
- * pages, and the About story.
+ * The legal entity (`legalName`) is intentionally surfaced ONLY via
+ * `parentOrganization` below — never as the top-level `name` — so Google's
+ * Knowledge Graph keeps the brand identity consistent. The legal entity is
+ * otherwise shown only in the footer copyright row, legal pages, and the
+ * About story.
  */
 export const ORG_JSON_LD = {
   "@context": "https://schema.org",
@@ -97,8 +98,8 @@ export const ORG_JSON_LD = {
     },
   ],
   // Legal entity relationship — kept in structured data so the corporate
-  // relationship is discoverable, but Waplia is never surfaced in the
-  // user-visible Organization `name` (which is the brand "KhanaLagao").
+  // relationship is discoverable, but the legal entity is never surfaced as
+  // the top-level Organization `name` (which is the brand "KhanaLagao").
   parentOrganization: {
     "@type": "Organization",
     name: COMPANY.legalName,
