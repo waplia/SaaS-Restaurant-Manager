@@ -122,7 +122,7 @@ export default function OwnerDashboard() {
     queryFn: () =>
       isAllOutlets
         ? customFetch<Array<{ date: string; revenue: string }>>(
-            `/tenants/${tenantId}/dashboard/revenue-trend?period=7d`,
+            `/api/tenants/${tenantId}/dashboard/revenue-trend?period=7d`,
           )
         : getRevenueTrend(restaurantScopeId, { period: "7d" }),
     enabled: !isAllOutlets || tenantId != null,
