@@ -3,9 +3,16 @@ import { z } from "zod";
 import { db, auditLogsTable, type AppSettings } from "../lib/db";
 import { requireSuperAdmin } from "../middleware/authorize";
 import { getAppSettings, updateAppSettings, toPublicAppSettings } from "../lib/appSettings";
-import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+  ObjectStorageNotConfiguredError,
+} from "../lib/objectStorage";
 import { setObjectAclPolicy } from "../lib/objectAcl";
-import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
+import {
+  sanitizeStoredUpload,
+  UploadValidationError,
+} from "../lib/uploadSanitizer";
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
@@ -134,7 +141,35 @@ router.put("/admin/app-settings", requireSuperAdmin, async (req, res) => {
 });
 
 // ─── Super-admin: presigned upload URL for logo/favicon ────────
-router.post("/admin/app-settings/uploads/request-url", requireSuperAdmin, async (_req, res) => {
+const RequestAdminUploadBody = z.object({
+  name: z.string().trim().min(1).max(256).optional(),
+  size: z.number().int().positive().optional(),
+  contentType: z.string().trim().min(1).max(128).optional(),
+}).optional();
+
+router.post("/admin/app-settings/uploads/request-url", requireSuperAdmin, async (req, res) => {
+  const parsed = RequestAdminUploadBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid upload request", details: parsed.error.flatten() });
+    return;
+  }
+  const meta = parsed.data ?? {};
+  // Reject obviously-wrong types up front so we don't waste a presigned URL on
+  // an HTML or text payload that will only fail re-encoding later.
+  if (meta.contentType) {
+    if (!ALLOWED_UPLOAD_MIME.has(meta.contentType.toLowerCase().split(";")[0].trim())) {
+      res.status(415).json({
+        error: `File type "${meta.contentType}" is not allowed here. Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}.`,
+      });
+      return;
+    }
+  }
+  if (meta.size != null && meta.size > MAX_UPLOAD_BYTES) {
+    res.status(413).json({
+      error: `File too large (${Math.round(meta.size / 1024)} KB). Max allowed is ${Math.round(MAX_UPLOAD_BYTES / 1024)} KB.`,
+    });
+    return;
+  }
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
@@ -145,19 +180,53 @@ router.post("/admin/app-settings/uploads/request-url", requireSuperAdmin, async 
       allowedMimeTypes: Array.from(ALLOWED_UPLOAD_MIME),
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to create upload URL", message: (err as Error).message });
+    if (err instanceof ObjectStorageNotConfiguredError) {
+      res.status(503).json({ error: err.message });
+      return;
+    }
+    req.log.error({ err }, "admin: failed to create upload URL");
+    res.status(500).json({ error: `Couldn't start the upload: ${(err as Error).message}` });
   }
 });
+
+/**
+ * Resolve the just-PUT object, retrying briefly because GCS occasionally
+ * surfaces a freshly-written object as "not found" for the first few hundred
+ * milliseconds. Without this the user sees a "URL error" on what was actually
+ * a successful upload.
+ */
+async function resolveObjectWithRetry(objectPath: string) {
+  let lastErr: unknown;
+  for (const delayMs of [0, 250, 500, 1000]) {
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      return await objectStorageService.getObjectEntityFile(objectPath);
+    } catch (e) {
+      lastErr = e;
+      if (!(e instanceof ObjectNotFoundError)) throw e;
+    }
+  }
+  throw lastErr;
+}
 
 // ─── Super-admin: finalize upload (validate size/type + set public ACL) ───
 router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (req, res) => {
   const { objectPath } = req.body as { objectPath?: string };
-  if (!objectPath || typeof objectPath !== "string") {
+  if (!objectPath || typeof objectPath !== "string" || !objectPath.startsWith("/objects/")) {
     res.status(400).json({ error: "objectPath is required" });
     return;
   }
   try {
-    const file = await objectStorageService.getObjectEntityFile(objectPath);
+    let file;
+    try {
+      file = await resolveObjectWithRetry(objectPath);
+    } catch (e) {
+      if (e instanceof ObjectNotFoundError) {
+        res.status(404).json({ error: "Upload didn't arrive in storage. Please try again." });
+        return;
+      }
+      throw e;
+    }
     let result;
     try {
       result = await sanitizeStoredUpload(file, {
@@ -174,7 +243,7 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
     if (!ALLOWED_UPLOAD_MIME.has(result.mime)) {
       await file.delete().catch(() => undefined);
       res.status(415).json({
-        error: `Unsupported file type "${result.mime}". Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}`,
+        error: `Unsupported file type "${result.mime}". Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}.`,
       });
       return;
     }
@@ -183,7 +252,8 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
     const publicUrl = `/api/public/storage/objects/${wildcardPath}`;
     res.json({ objectPath, publicUrl, contentType: result.mime, size: result.size });
   } catch (err) {
-    res.status(500).json({ error: "Failed to finalize upload", message: (err as Error).message });
+    req.log.error({ err }, "admin: failed to finalize upload");
+    res.status(500).json({ error: `Couldn't finalize the upload: ${(err as Error).message}` });
   }
 });
 

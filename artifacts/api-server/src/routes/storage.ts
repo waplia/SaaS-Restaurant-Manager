@@ -1,7 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+  ObjectStorageNotConfiguredError,
+} from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
 import {
   sanitizeStoredUpload,
@@ -54,10 +58,19 @@ router.post(
       // Note: ACL is written by the matching POST /finalize call AFTER the
       // client successfully PUTs the object. Pre-PUT setMetadata would fail
       // because the object does not yet exist.
-      res.json({ uploadURL, objectPath, metadata: { name, size, contentType } });
+      res.json({
+        uploadURL,
+        objectPath,
+        metadata: { name, size, contentType },
+        maxBytes: 10 * 1024 * 1024,
+      });
     } catch (error) {
+      if (error instanceof ObjectStorageNotConfiguredError) {
+        res.status(503).json({ error: error.message });
+        return;
+      }
       req.log.error({ err: error }, "Error generating upload URL");
-      res.status(500).json({ error: "Failed to generate upload URL" });
+      res.status(500).json({ error: `Failed to generate upload URL: ${(error as Error).message}` });
     }
   },
 );
@@ -65,6 +78,25 @@ router.post(
 const FinalizeUploadBody = z.object({
   objectPath: z.string().min(1),
 });
+
+/**
+ * GCS occasionally surfaces a freshly-PUT object as "not found" for a few
+ * hundred milliseconds. Retry a few times so the user doesn't see a spurious
+ * 404 on what was a successful upload.
+ */
+async function resolveObjectWithRetry(objectPath: string) {
+  let lastErr: unknown;
+  for (const delayMs of [0, 250, 500, 1000]) {
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      return await objectStorageService.getObjectEntityFile(objectPath);
+    } catch (e) {
+      lastErr = e;
+      if (!(e instanceof ObjectNotFoundError)) throw e;
+    }
+  }
+  throw lastErr;
+}
 
 /**
  * Called by the client AFTER a successful PUT to the presigned URL. Writes
@@ -88,7 +120,7 @@ router.post(
     }
     try {
       const restaurantId = Number(req.params.restaurantId);
-      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const objectFile = await resolveObjectWithRetry(objectPath);
       const existing = await getObjectAclPolicy(objectFile);
       if (existing && existing.restaurantId !== String(restaurantId)) {
         // Object already claimed by another tenant — refuse to overwrite.
@@ -115,11 +147,11 @@ router.post(
       res.json({ ok: true, objectPath });
     } catch (error) {
       if (error instanceof ObjectNotFoundError) {
-        res.status(404).json({ error: "Object not found — upload may not have completed" });
+        res.status(404).json({ error: "Upload didn't arrive in storage. Please try again." });
         return;
       }
       req.log.error({ err: error }, "Error finalizing upload");
-      res.status(500).json({ error: "Failed to finalize upload" });
+      res.status(500).json({ error: `Failed to finalize upload: ${(error as Error).message}` });
     }
   },
 );
@@ -145,7 +177,7 @@ router.post(
     }
     try {
       const restaurantId = Number(req.params.restaurantId);
-      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const objectFile = await resolveObjectWithRetry(objectPath);
       const existing = await getObjectAclPolicy(objectFile);
       if (existing && existing.restaurantId !== String(restaurantId)) {
         res.status(403).json({ error: "Object already owned by another tenant" });
@@ -171,11 +203,11 @@ router.post(
       res.json({ ok: true, objectPath });
     } catch (error) {
       if (error instanceof ObjectNotFoundError) {
-        res.status(404).json({ error: "Object not found — upload may not have completed" });
+        res.status(404).json({ error: "Upload didn't arrive in storage. Please try again." });
         return;
       }
       req.log.error({ err: error }, "Error finalizing public upload");
-      res.status(500).json({ error: "Failed to finalize upload" });
+      res.status(500).json({ error: `Failed to finalize upload: ${(error as Error).message}` });
     }
   },
 );

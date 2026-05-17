@@ -37,18 +37,54 @@ type Settings = {
 const SOCIALS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;
 
 async function uploadImage(file: File): Promise<string> {
-  const { uploadURL, objectPath } = await apiPost<{ uploadURL: string; objectPath: string }>(
-    "/admin/app-settings/uploads/request-url",
-    {},
-  );
-  const put = await fetch(uploadURL, {
+  const contentType = file.type || "application/octet-stream";
+  const presign = await apiPost<{
+    uploadURL: string;
+    objectPath: string;
+    maxBytes?: number;
+    allowedMimeTypes?: string[];
+  }>("/admin/app-settings/uploads/request-url", {
+    name: file.name,
+    size: file.size,
+    contentType,
+  });
+
+  // Client-side guards using the limits the server just told us about, so a
+  // user sees a clear message before we even attempt the (slow) PUT.
+  if (presign.maxBytes && file.size > presign.maxBytes) {
+    throw new Error(`Image is too large (${Math.round(file.size / 1024)} KB). Max ${Math.round(presign.maxBytes / 1024)} KB.`);
+  }
+  if (presign.allowedMimeTypes && presign.allowedMimeTypes.length > 0 && !presign.allowedMimeTypes.includes(contentType.toLowerCase())) {
+    throw new Error(`Image type "${contentType}" isn't allowed. Allowed: ${presign.allowedMimeTypes.join(", ")}.`);
+  }
+
+  const put = await fetch(presign.uploadURL, {
     method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": contentType },
     body: file,
   });
-  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-  const fin = await apiPost<{ publicUrl: string }>("/admin/app-settings/uploads/finalize", { objectPath });
-  return fin.publicUrl;
+  if (!put.ok) {
+    // Storage providers return XML; try to surface anything human-readable.
+    let detail = "";
+    try { detail = (await put.text()).slice(0, 200); } catch { /* ignore */ }
+    throw new Error(`Couldn't upload the file to storage (status ${put.status})${detail ? `: ${detail}` : ""}`);
+  }
+
+  // Finalize occasionally races GCS's read-your-write window. Retry a couple
+  // of times so a "not found" reply doesn't surface as a hard failure.
+  let lastErr: unknown;
+  for (const wait of [0, 400, 900]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      const fin = await apiPost<{ publicUrl: string }>("/admin/app-settings/uploads/finalize", { objectPath: presign.objectPath });
+      return fin.publicUrl;
+    } catch (e) {
+      lastErr = e;
+      const status = (e as { status?: number })?.status;
+      if (status !== 404) break;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Couldn't finalize the upload");
 }
 
 function ImagePicker({ label, value, onChange, accept = "image/*" }: { label: string; value: string | null; onChange: (url: string | null) => void; accept?: string }) {
@@ -149,7 +185,7 @@ export default function AdminSettingsPage() {
             <Input value={form.appName} onChange={(e) => set("appName", e.target.value)} maxLength={80} />
           </div>
           <ImagePicker label="Logo" value={form.logoUrl} onChange={(v) => set("logoUrl", v)} />
-          <ImagePicker label="Favicon" value={form.faviconUrl} onChange={(v) => set("faviconUrl", v)} accept="image/png,image/svg+xml,image/x-icon" />
+          <ImagePicker label="Favicon" value={form.faviconUrl} onChange={(v) => set("faviconUrl", v)} accept="image/png,image/jpeg,image/webp" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Primary color</Label>

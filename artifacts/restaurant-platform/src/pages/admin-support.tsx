@@ -379,11 +379,37 @@ function AttachmentPicker({ attachments, onChange }: { attachments: AttachmentDr
   const handle = async (file: File) => {
     setBusy(true);
     try {
-      const presign = await apiPost<{ uploadURL: string; objectPath: string }>(`/support/tickets/uploads/request-url`, { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" });
-      const put = await fetch(presign.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-      if (!put.ok) throw new Error("Upload failed");
-      await apiPost(`/support/tickets/uploads/finalize`, { objectPath: presign.objectPath });
-      onChange([...attachments, { objectPath: presign.objectPath, fileName: file.name, contentType: file.type || "application/octet-stream", size: file.size }]);
+      const contentType = file.type || "application/octet-stream";
+      const presign = await apiPost<{ uploadURL: string; objectPath: string; maxBytes?: number }>(
+        `/support/tickets/uploads/request-url`,
+        { name: file.name, size: file.size, contentType },
+      );
+      if (presign.maxBytes && file.size > presign.maxBytes) {
+        throw new Error(`File is too large (${Math.round(file.size / 1024)} KB). Max ${Math.round(presign.maxBytes / 1024)} KB.`);
+      }
+      const put = await fetch(presign.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": contentType } });
+      if (!put.ok) {
+        let detail = "";
+        try { detail = (await put.text()).slice(0, 200); } catch { /* ignore */ }
+        throw new Error(`Couldn't upload the file to storage (status ${put.status})${detail ? `: ${detail}` : ""}`);
+      }
+      // Finalize with a short retry window so a brief storage propagation
+      // delay doesn't surface as a hard error.
+      let lastErr: unknown;
+      for (const wait of [0, 400, 900]) {
+        if (wait) await new Promise(r => setTimeout(r, wait));
+        try {
+          await apiPost(`/support/tickets/uploads/finalize`, { objectPath: presign.objectPath });
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const status = (e as { status?: number })?.status;
+          if (status !== 404) break;
+        }
+      }
+      if (lastErr) throw lastErr;
+      onChange([...attachments, { objectPath: presign.objectPath, fileName: file.name, contentType, size: file.size }]);
     } catch (e) { toast({ title: "Upload failed", description: (e as Error).message, variant: "destructive" }); }
     finally { setBusy(false); }
   };

@@ -35,6 +35,24 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
+/**
+ * Thrown when the project hasn't been wired up to Replit Object Storage yet
+ * (missing PRIVATE_OBJECT_DIR / PUBLIC_OBJECT_SEARCH_PATHS, or the sidecar
+ * refuses to mint a signed URL). Routes catch this and surface a 503 with a
+ * clear, actionable message instead of a generic 500.
+ */
+export class ObjectStorageNotConfiguredError extends Error {
+  constructor(message = "Object storage is not configured for this environment.") {
+    super(message);
+    this.name = "ObjectStorageNotConfiguredError";
+    Object.setPrototypeOf(this, ObjectStorageNotConfiguredError.prototype);
+  }
+}
+
+export function isObjectStorageConfigured(): boolean {
+  return Boolean(process.env.PRIVATE_OBJECT_DIR && process.env.PUBLIC_OBJECT_SEARCH_PATHS);
+}
+
 export class ObjectStorageService {
   constructor() {}
 
@@ -105,13 +123,12 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
+    if (!isObjectStorageConfigured()) {
+      throw new ObjectStorageNotConfiguredError(
+        "Object storage is not configured. Ask an admin to enable Replit Object Storage and set PRIVATE_OBJECT_DIR and PUBLIC_OBJECT_SEARCH_PATHS for this environment.",
       );
     }
+    const privateObjectDir = this.getPrivateObjectDir();
 
     const objectId = randomUUID();
     const fullPath = `${privateObjectDir}/uploads/${objectId}`;
