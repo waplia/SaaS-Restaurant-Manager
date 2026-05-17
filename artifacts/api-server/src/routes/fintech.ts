@@ -73,6 +73,10 @@ import {
   restaurantCreditScoresTable, loanEligibilitySignalsTable,
   salesAdvanceRequestsTable, insuranceOffersTable, insuranceInterestsTable,
   vendorCreditLinesTable,
+  financePartnersTable, capitalOffersTable, capitalApplicationsTable,
+  capitalApplicationDocumentsTable, capitalRepaymentsTable,
+  ordersTable, paymentsTable,
+  subscriptionPlansTable, isFeatureEnabled,
   tenantsTable, restaurantsTable, usersTable, suppliersTable,
 } from "../lib/db";
 import { requireRole, requireSuperAdmin } from "../middleware/authorize";
@@ -861,6 +865,246 @@ router.post("/restaurants/:restaurantId/insurance/interest", requireRole("owner"
   res.json(row);
 });
 
+// ─── Capital / financing module (Toast/Square Capital style) ───────────────
+// Plan-gated behind `capital_financing` (Enterprise). Eligibility is
+// derived from on-platform sales history; nothing actually moves money —
+// status transitions, document uploads and a daily repayment % ledger are
+// the user-visible deliverables.
+
+async function capitalFeatureGate(restaurantId: number): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const [row] = await db
+    .select({ planId: tenantsTable.planId })
+    .from(restaurantsTable)
+    .innerJoin(tenantsTable, eq(restaurantsTable.tenantId, tenantsTable.id))
+    .where(eq(restaurantsTable.id, restaurantId));
+  if (!row) return { ok: false, status: 404, error: "Restaurant not found" };
+  if (!row.planId) return { ok: true };
+  const [plan] = await db.select({ flags: subscriptionPlansTable.featureFlags })
+    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, row.planId));
+  if (plan && !isFeatureEnabled(plan.flags, "capital_financing")) {
+    return { ok: false, status: 403, error: "Capital & Financing is available on the Enterprise plan." };
+  }
+  return { ok: true };
+}
+
+function capitalGated() {
+  return async (req: any, res: any, next: any) => {
+    const r = await capitalFeatureGate(rid(req));
+    if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
+    next();
+  };
+}
+
+async function computeEligibility(restaurantId: number) {
+  // Aggregate paid orders over the last 30/90 days.
+  const now = new Date();
+  const d30 = new Date(now); d30.setUTCDate(now.getUTCDate() - 30);
+  const d90 = new Date(now); d90.setUTCDate(now.getUTCDate() - 90);
+  const [last30] = await db.select({
+    salesRupees: sql<string>`COALESCE(SUM(${ordersTable.totalAmount}), 0)`.as("sales_rupees"),
+    orderCount: count(ordersTable.id),
+  }).from(ordersTable).where(and(
+    eq(ordersTable.restaurantId, restaurantId),
+    eq(ordersTable.paymentStatus, "paid"),
+    gte(ordersTable.createdAt, d30),
+  ));
+  const [last90] = await db.select({
+    salesRupees: sql<string>`COALESCE(SUM(${ordersTable.totalAmount}), 0)`.as("sales_rupees"),
+    orderCount: count(ordersTable.id),
+  }).from(ordersTable).where(and(
+    eq(ordersTable.restaurantId, restaurantId),
+    eq(ordersTable.paymentStatus, "paid"),
+    gte(ordersTable.createdAt, d90),
+  ));
+  const monthlyPaise = Math.round(Number(last30?.salesRupees ?? 0) * 100);
+  const trailingPaise = Math.round(Number(last90?.salesRupees ?? 0) * 100);
+  const avgMonthlyPaise = Math.round(trailingPaise / 3);
+  // Restaurant tenure: months since createdAt
+  const [r] = await db.select({ createdAt: restaurantsTable.createdAt })
+    .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const months = r?.createdAt
+    ? Math.max(0, Math.floor((now.getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30)))
+    : 0;
+  // Suggested cap: 50% of avg monthly sales.
+  const suggestedMaxPaise = Math.max(0, Math.round(avgMonthlyPaise * 0.5));
+  return {
+    last30dSalesPaise: monthlyPaise,
+    last90dSalesPaise: trailingPaise,
+    avgMonthlySalesPaise: avgMonthlyPaise,
+    last30dOrderCount: Number(last30?.orderCount ?? 0),
+    monthsOnPlatform: months,
+    suggestedMaxAdvancePaise: suggestedMaxPaise,
+    eligible: avgMonthlyPaise >= 50_000_00 && months >= 3, // ≥ ₹50k/mo and ≥ 3 months
+  };
+}
+
+router.get("/restaurants/:restaurantId/capital/eligibility", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  res.json(await computeEligibility(rid(req)));
+});
+
+router.get("/restaurants/:restaurantId/capital/offers", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const elig = await computeEligibility(rid(req));
+  const rows = await db.select({
+    offer: capitalOffersTable,
+    partner: financePartnersTable,
+  }).from(capitalOffersTable)
+    .innerJoin(financePartnersTable, eq(financePartnersTable.id, capitalOffersTable.partnerId))
+    .where(and(eq(capitalOffersTable.isActive, true), eq(financePartnersTable.isActive, true)));
+  const filtered = rows.filter(({ offer }) =>
+    elig.avgMonthlySalesPaise >= Number(offer.minMonthlySalesPaise ?? 0)
+    && elig.monthsOnPlatform >= (offer.minMonthsOnPlatform ?? 0),
+  );
+  res.json({ eligibility: elig, offers: filtered });
+});
+
+router.get("/restaurants/:restaurantId/capital/applications", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const rows = await db.select().from(capitalApplicationsTable)
+    .where(eq(capitalApplicationsTable.restaurantId, rid(req)))
+    .orderBy(desc(capitalApplicationsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/capital/applications", capitalGated(), requireRole("owner", "super_admin"), async (req, res) => {
+  const schema = z.object({
+    offerId: z.number().int().positive(),
+    requestedPaise: z.number().int().positive(),
+    contactName: z.string().min(1).optional(),
+    contactPhone: z.string().optional(),
+    contactEmail: z.string().email().optional(),
+    notes: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const d = parsed.data;
+  const [offer] = await db.select().from(capitalOffersTable).where(eq(capitalOffersTable.id, d.offerId));
+  if (!offer || !offer.isActive) { res.status(404).json({ error: "Offer not found or inactive" }); return; }
+  const elig = await computeEligibility(rid(req));
+  if (!elig.eligible) { res.status(403).json({ error: "Restaurant does not meet baseline eligibility (≥ ₹50k/mo, ≥ 3 months)." }); return; }
+  if (d.requestedPaise > Math.max(Number(offer.maxAdvanceAmount), elig.suggestedMaxAdvancePaise)) {
+    res.status(400).json({ error: "Requested amount exceeds the offer maximum." }); return;
+  }
+  const feeAmount = Math.round((d.requestedPaise * (offer.feeBps ?? 0)) / 10_000);
+  const now = new Date();
+  const timeline = [{ status: "submitted", at: now.toISOString(), by: uid(req), note: "Application submitted by restaurant" }];
+  const [row] = await db.insert(capitalApplicationsTable).values({
+    tenantId: tid(req), restaurantId: rid(req),
+    offerId: offer.id, partnerId: offer.partnerId,
+    requestedAmount: d.requestedPaise, approvedAmount: 0,
+    feeAmount, dailyRepaymentBps: offer.dailyRepaymentBps ?? 0,
+    currency: offer.currency ?? "INR",
+    status: "submitted", statusTimeline: timeline,
+    contactName: d.contactName, contactPhone: d.contactPhone, contactEmail: d.contactEmail,
+    notes: d.notes, submittedBy: uid(req),
+  }).returning();
+  await recordAuditLog({ req, module: "fintech", action: "capital_application_submitted", entity: "capital_application", entityId: row.id, restaurantId: rid(req), newValue: { offerId: offer.id, requestedPaise: d.requestedPaise } });
+  res.json(row);
+});
+
+router.post("/restaurants/:restaurantId/capital/applications/:id/cancel", capitalGated(), requireRole("owner", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const [app] = await db.select().from(capitalApplicationsTable)
+    .where(and(eq(capitalApplicationsTable.id, id), eq(capitalApplicationsTable.restaurantId, rid(req))));
+  if (!app) { res.status(404).json({ error: "Application not found" }); return; }
+  if (!["submitted", "reviewing"].includes(app.status)) {
+    res.status(400).json({ error: `Cannot cancel from status ${app.status}` }); return;
+  }
+  const timeline = [...(app.statusTimeline ?? []), { status: "cancelled", at: new Date().toISOString(), by: uid(req), note: "Cancelled by restaurant" }];
+  const [updated] = await db.update(capitalApplicationsTable).set({
+    status: "cancelled", statusTimeline: timeline, updatedAt: new Date(),
+  }).where(eq(capitalApplicationsTable.id, id)).returning();
+  await recordAuditLog({ req, module: "fintech", action: "capital_application_cancelled", entity: "capital_application", entityId: id, restaurantId: rid(req), oldValue: { status: app.status }, newValue: { status: "cancelled" } });
+  res.json(updated);
+});
+
+router.get("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const rows = await db.select().from(capitalApplicationDocumentsTable)
+    .where(and(eq(capitalApplicationDocumentsTable.applicationId, id), eq(capitalApplicationDocumentsTable.restaurantId, rid(req))))
+    .orderBy(desc(capitalApplicationDocumentsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const schema = z.object({
+    label: z.string().min(1),
+    fileName: z.string().min(1),
+    mimeType: z.string().min(1),
+    sizeBytes: z.number().int().nonnegative().default(0),
+    objectPath: z.string().min(1),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [app] = await db.select().from(capitalApplicationsTable)
+    .where(and(eq(capitalApplicationsTable.id, id), eq(capitalApplicationsTable.restaurantId, rid(req))));
+  if (!app) { res.status(404).json({ error: "Application not found" }); return; }
+  const [row] = await db.insert(capitalApplicationDocumentsTable).values({
+    applicationId: id, tenantId: tid(req), restaurantId: rid(req),
+    label: parsed.data.label, fileName: parsed.data.fileName,
+    mimeType: parsed.data.mimeType, sizeBytes: parsed.data.sizeBytes,
+    objectPath: parsed.data.objectPath, uploadedBy: uid(req),
+  }).returning();
+  await recordAuditLog({ req, module: "fintech", action: "capital_document_uploaded", entity: "capital_application", entityId: id, restaurantId: rid(req), newValue: { label: parsed.data.label, fileName: parsed.data.fileName } });
+  res.json(row);
+});
+
+router.get("/restaurants/:restaurantId/capital/applications/:id/repayments", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const rows = await db.select().from(capitalRepaymentsTable)
+    .where(and(eq(capitalRepaymentsTable.applicationId, id), eq(capitalRepaymentsTable.restaurantId, rid(req))))
+    .orderBy(desc(capitalRepaymentsTable.forDate))
+    .limit(200);
+  const [totals] = await db.select({
+    repaidPaise: sql<number>`COALESCE(SUM(${capitalRepaymentsTable.repaymentPaise}), 0)`.as("repaid"),
+    days: count(capitalRepaymentsTable.id),
+  }).from(capitalRepaymentsTable).where(eq(capitalRepaymentsTable.applicationId, id));
+  res.json({ entries: rows, totals });
+});
+
+router.post("/restaurants/:restaurantId/capital/applications/:id/repayments/run", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  // Placeholder: compute repayment entries from yesterday's sales back to the
+  // application's acceptance/disbursement date. Idempotent via the unique
+  // (applicationId, forDate) index.
+  const id = Number(req.params.id);
+  const [app] = await db.select().from(capitalApplicationsTable)
+    .where(and(eq(capitalApplicationsTable.id, id), eq(capitalApplicationsTable.restaurantId, rid(req))));
+  if (!app) { res.status(404).json({ error: "Application not found" }); return; }
+  if (!["accepted", "repaying"].includes(app.status)) {
+    res.status(400).json({ error: "Repayments only run for accepted applications." }); return;
+  }
+  const fromDate = app.disbursedAt ?? app.reviewedAt ?? app.updatedAt;
+  const start = new Date(fromDate); start.setUTCHours(0, 0, 0, 0);
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const bps = app.dailyRepaymentBps ?? 0;
+  let inserted = 0;
+  for (let day = new Date(start); day < today; day.setUTCDate(day.getUTCDate() + 1)) {
+    const dayStart = new Date(day);
+    const dayEnd = new Date(day); dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+    const [agg] = await db.select({
+      sales: sql<string>`COALESCE(SUM(${ordersTable.totalAmount}), 0)`.as("sales"),
+    }).from(ordersTable).where(and(
+      eq(ordersTable.restaurantId, rid(req)),
+      eq(ordersTable.paymentStatus, "paid"),
+      gte(ordersTable.createdAt, dayStart),
+      lte(ordersTable.createdAt, dayEnd),
+    ));
+    const salesPaise = Math.round(Number(agg?.sales ?? 0) * 100);
+    const repaymentPaise = Math.round((salesPaise * bps) / 10_000);
+    try {
+      await db.insert(capitalRepaymentsTable).values({
+        applicationId: id, tenantId: tid(req), restaurantId: rid(req),
+        forDate: new Date(dayStart), salesPaise, bps, repaymentPaise,
+        status: "placeholder",
+      });
+      inserted++;
+    } catch (e: any) {
+      // Unique violation → already recorded for that day; skip.
+      if (!String(e?.message ?? "").includes("duplicate key")) throw e;
+    }
+  }
+  res.json({ ok: true, insertedDays: inserted });
+});
+
 // ─── Public-ish: insurance offer catalogue ──────────────────────────────────
 
 router.get("/insurance/offers", async (_req, res) => {
@@ -995,6 +1239,178 @@ adminRouter.patch("/admin/fintech/tenant-settings/:tenantId", async (req, res) =
   await db.update(tenantsTable).set(patch as any).where(eq(tenantsTable.id, tenantId));
   await recordAuditLog({ req, module: "fintech", action: "tenant_settings_updated", entity: "tenant", entityId: tenantId, newValue: d });
   res.json({ ok: true });
+});
+
+// ─── Super-admin: Finance Partners & Capital Applications dashboard ────────
+
+adminRouter.get("/admin/finance-partners", async (_req, res) => {
+  const partners = await db.select().from(financePartnersTable).orderBy(desc(financePartnersTable.createdAt));
+  const offers = await db.select().from(capitalOffersTable);
+  const byPartner = new Map<number, any[]>();
+  for (const o of offers) {
+    const arr = byPartner.get(o.partnerId) ?? [];
+    arr.push(o);
+    byPartner.set(o.partnerId, arr);
+  }
+  res.json(partners.map(p => ({ ...p, offers: byPartner.get(p.id) ?? [] })));
+});
+
+adminRouter.post("/admin/finance-partners", async (req, res) => {
+  const schema = z.object({
+    slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+    name: z.string().min(1),
+    contactEmail: z.string().email().optional(),
+    contactPhone: z.string().optional(),
+    websiteUrl: z.string().url().optional(),
+    description: z.string().optional(),
+    isActive: z.boolean().default(true),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [existing] = await db.select().from(financePartnersTable).where(eq(financePartnersTable.slug, parsed.data.slug));
+  if (existing) { res.status(409).json({ error: "slug_in_use" }); return; }
+  const [row] = await db.insert(financePartnersTable).values(parsed.data).returning();
+  await recordAuditLog({ req, module: "fintech", action: "finance_partner_created", entity: "finance_partner", entityId: row.id, newValue: row });
+  res.json(row);
+});
+
+adminRouter.patch("/admin/finance-partners/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    contactEmail: z.string().email().optional(),
+    contactPhone: z.string().optional(),
+    websiteUrl: z.string().url().optional(),
+    description: z.string().optional(),
+    isActive: z.boolean().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [old] = await db.select().from(financePartnersTable).where(eq(financePartnersTable.id, id));
+  if (!old) { res.status(404).json({ error: "not_found" }); return; }
+  const [row] = await db.update(financePartnersTable).set({ ...parsed.data, updatedAt: new Date() }).where(eq(financePartnersTable.id, id)).returning();
+  await recordAuditLog({ req, module: "fintech", action: "finance_partner_updated", entity: "finance_partner", entityId: id, oldValue: old, newValue: row });
+  res.json(row);
+});
+
+adminRouter.post("/admin/finance-partners/:id/offers", async (req, res) => {
+  const partnerId = Number(req.params.id);
+  const schema = z.object({
+    title: z.string().min(1),
+    productType: z.enum(["sales_advance", "term_loan", "line_of_credit"]).default("sales_advance"),
+    minAdvanceAmount: z.number().int().nonnegative().default(0),
+    maxAdvanceAmount: z.number().int().nonnegative(),
+    feeBps: z.number().int().min(0).max(10000).default(0),
+    dailyRepaymentBps: z.number().int().min(0).max(10000).default(0),
+    minMonthlySalesPaise: z.number().int().nonnegative().default(0),
+    minMonthsOnPlatform: z.number().int().min(0).default(3),
+    description: z.string().optional(),
+    isActive: z.boolean().default(true),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [partner] = await db.select().from(financePartnersTable).where(eq(financePartnersTable.id, partnerId));
+  if (!partner) { res.status(404).json({ error: "partner_not_found" }); return; }
+  const [row] = await db.insert(capitalOffersTable).values({ ...parsed.data, partnerId }).returning();
+  await recordAuditLog({ req, module: "fintech", action: "capital_offer_created", entity: "capital_offer", entityId: row.id, newValue: row });
+  res.json(row);
+});
+
+adminRouter.patch("/admin/finance-partners/offers/:offerId", async (req, res) => {
+  const id = Number(req.params.offerId);
+  const schema = z.object({
+    title: z.string().min(1).optional(),
+    maxAdvanceAmount: z.number().int().nonnegative().optional(),
+    feeBps: z.number().int().min(0).max(10000).optional(),
+    dailyRepaymentBps: z.number().int().min(0).max(10000).optional(),
+    minMonthlySalesPaise: z.number().int().nonnegative().optional(),
+    minMonthsOnPlatform: z.number().int().min(0).optional(),
+    description: z.string().optional(),
+    isActive: z.boolean().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [old] = await db.select().from(capitalOffersTable).where(eq(capitalOffersTable.id, id));
+  if (!old) { res.status(404).json({ error: "not_found" }); return; }
+  const [row] = await db.update(capitalOffersTable).set({ ...parsed.data, updatedAt: new Date() }).where(eq(capitalOffersTable.id, id)).returning();
+  await recordAuditLog({ req, module: "fintech", action: "capital_offer_updated", entity: "capital_offer", entityId: id, oldValue: old, newValue: row });
+  res.json(row);
+});
+
+adminRouter.get("/admin/capital/applications", async (req, res) => {
+  const status = (req.query.status as string | undefined)?.trim();
+  const where = status && status !== "all" ? eq(capitalApplicationsTable.status, status) : undefined;
+  const rows = await db.select({
+    app: capitalApplicationsTable,
+    restaurantName: restaurantsTable.name,
+    partnerName: financePartnersTable.name,
+    offerTitle: capitalOffersTable.title,
+  }).from(capitalApplicationsTable)
+    .leftJoin(restaurantsTable, eq(restaurantsTable.id, capitalApplicationsTable.restaurantId))
+    .leftJoin(financePartnersTable, eq(financePartnersTable.id, capitalApplicationsTable.partnerId))
+    .leftJoin(capitalOffersTable, eq(capitalOffersTable.id, capitalApplicationsTable.offerId))
+    .where(where ?? sql`TRUE`)
+    .orderBy(desc(capitalApplicationsTable.createdAt))
+    .limit(500);
+  res.json(rows);
+});
+
+adminRouter.get("/admin/capital/applications/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const [app] = await db.select().from(capitalApplicationsTable).where(eq(capitalApplicationsTable.id, id));
+  if (!app) { res.status(404).json({ error: "not_found" }); return; }
+  const docs = await db.select().from(capitalApplicationDocumentsTable).where(eq(capitalApplicationDocumentsTable.applicationId, id));
+  const repayments = await db.select().from(capitalRepaymentsTable).where(eq(capitalRepaymentsTable.applicationId, id)).orderBy(desc(capitalRepaymentsTable.forDate)).limit(60);
+  res.json({ application: app, documents: docs, repayments });
+});
+
+adminRouter.post("/admin/capital/applications/:id/review", async (req, res) => {
+  const id = Number(req.params.id);
+  const schema = z.object({
+    action: z.enum(["mark_reviewing", "accept", "reject"]),
+    approvedAmount: z.number().int().nonnegative().optional(),
+    feeAmount: z.number().int().nonnegative().optional(),
+    dailyRepaymentBps: z.number().int().min(0).max(10000).optional(),
+    reason: z.string().max(2000).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
+  const [app] = await db.select().from(capitalApplicationsTable).where(eq(capitalApplicationsTable.id, id));
+  if (!app) { res.status(404).json({ error: "not_found" }); return; }
+  const allowedFrom: Record<string, string[]> = {
+    mark_reviewing: ["submitted"],
+    accept: ["submitted", "reviewing"],
+    reject: ["submitted", "reviewing"],
+  };
+  if (!allowedFrom[parsed.data.action].includes(app.status)) {
+    res.status(400).json({ error: `Cannot ${parsed.data.action} from status ${app.status}` }); return;
+  }
+  const now = new Date();
+  const newStatus = parsed.data.action === "mark_reviewing" ? "reviewing"
+                  : parsed.data.action === "accept" ? "accepted" : "rejected";
+  const timeline = [...(app.statusTimeline ?? []), { status: newStatus, at: now.toISOString(), by: uid(req), note: parsed.data.reason }];
+  const patch: Record<string, unknown> = {
+    status: newStatus, statusTimeline: timeline,
+    reviewedBy: uid(req), reviewedAt: now,
+    statusReason: parsed.data.reason ?? null,
+    updatedAt: now,
+  };
+  if (parsed.data.action === "accept") {
+    patch.approvedAmount = parsed.data.approvedAmount ?? app.requestedAmount;
+    if (parsed.data.feeAmount != null) patch.feeAmount = parsed.data.feeAmount;
+    if (parsed.data.dailyRepaymentBps != null) patch.dailyRepaymentBps = parsed.data.dailyRepaymentBps;
+    patch.disbursedAt = now;
+  }
+  const [updated] = await db.update(capitalApplicationsTable).set(patch as any).where(eq(capitalApplicationsTable.id, id)).returning();
+  await recordAuditLog({
+    req, module: "fintech",
+    action: `capital_application_${newStatus}`,
+    entity: "capital_application", entityId: id,
+    restaurantId: app.restaurantId,
+    oldValue: { status: app.status, approvedAmount: app.approvedAmount },
+    newValue: { status: newStatus, approvedAmount: patch.approvedAmount ?? app.approvedAmount, reason: parsed.data.reason },
+  });
+  res.json(updated);
 });
 
 router.use(adminRouter);

@@ -43,6 +43,7 @@ const NAV: NavEntry[] = [
     children: [
       { kind: "link", href: "/admin/payment-methods", label: "Payment Methods", icon: CreditCard },
       { kind: "link", href: "/admin/fintech", label: "Fintech", icon: Landmark },
+      { kind: "link", href: "/admin/finance-partners", label: "Finance Partners", icon: Landmark },
       { kind: "link", href: "/admin/addons", label: "Add-ons Marketplace", icon: Package },
     ],
   },

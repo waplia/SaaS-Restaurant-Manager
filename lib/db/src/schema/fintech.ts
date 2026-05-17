@@ -537,6 +537,110 @@ export const vendorCreditLinesTable = pgTable("fintech_vendor_credit_lines", {
   supplierIdx: index("fintech_vendor_credit_supplier_idx").on(t.supplierId),
 }));
 
+// ─── Capital / financing — finance partners, offers, applications, repayments ──
+// Real lender APIs are out of scope. Partners are contacted manually by
+// the platform team; on-platform we only track eligibility signals,
+// applications (with documents), status transitions, and a daily
+// repayment ledger that mirrors a small percent of sales — no money is
+// actually moved here.
+
+export const financePartnersTable = pgTable("fintech_finance_partners", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull(),
+  name: text("name").notNull(),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  websiteUrl: text("website_url"),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  uqSlug: uniqueIndex("fintech_finance_partner_uq_slug").on(t.slug),
+}));
+
+export const capitalOffersTable = pgTable("fintech_capital_offers", {
+  id: serial("id").primaryKey(),
+  partnerId: integer("partner_id").notNull().references(() => financePartnersTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  productType: text("product_type").notNull().default("sales_advance"), // sales_advance | term_loan | line_of_credit
+  minAdvanceAmount: bigint("min_advance_amount", { mode: "number" }).notNull().default(0),
+  maxAdvanceAmount: bigint("max_advance_amount", { mode: "number" }).notNull().default(0),
+  feeBps: integer("fee_bps").notNull().default(0), // flat factor fee in basis points (e.g. 1200 = 12%)
+  dailyRepaymentBps: integer("daily_repayment_bps").notNull().default(0), // % of daily sales used to repay (bps)
+  minMonthlySalesPaise: bigint("min_monthly_sales_paise", { mode: "number" }).notNull().default(0),
+  minMonthsOnPlatform: integer("min_months_on_platform").notNull().default(3),
+  currency: text("currency").notNull().default("INR"),
+  isActive: boolean("is_active").notNull().default(true),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  partnerIdx: index("fintech_capital_offer_partner_idx").on(t.partnerId),
+}));
+
+export const capitalApplicationsTable = pgTable("fintech_capital_applications", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  offerId: integer("offer_id").references(() => capitalOffersTable.id, { onDelete: "set null" }),
+  partnerId: integer("partner_id").references(() => financePartnersTable.id, { onDelete: "set null" }),
+  requestedAmount: bigint("requested_amount", { mode: "number" }).notNull().default(0),
+  approvedAmount: bigint("approved_amount", { mode: "number" }).notNull().default(0),
+  feeAmount: bigint("fee_amount", { mode: "number" }).notNull().default(0),
+  dailyRepaymentBps: integer("daily_repayment_bps").notNull().default(0),
+  currency: text("currency").notNull().default("INR"),
+  status: text("status").notNull().default("submitted"), // submitted | reviewing | accepted | rejected | cancelled | repaying | closed
+  statusReason: text("status_reason"),
+  statusTimeline: jsonb("status_timeline").$type<Array<{ status: string; at: string; by: number | null; note?: string }>>().notNull().default([]),
+  contactName: text("contact_name"),
+  contactPhone: text("contact_phone"),
+  contactEmail: text("contact_email"),
+  notes: text("notes"),
+  submittedBy: integer("submitted_by").references(() => usersTable.id, { onDelete: "set null" }),
+  reviewedBy: integer("reviewed_by").references(() => usersTable.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  disbursedAt: timestamp("disbursed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  restaurantIdx: index("fintech_capital_app_restaurant_idx").on(t.restaurantId),
+  statusIdx: index("fintech_capital_app_status_idx").on(t.status),
+}));
+
+export const capitalApplicationDocumentsTable = pgTable("fintech_capital_application_documents", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => capitalApplicationsTable.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  objectPath: text("object_path").notNull(),
+  uploadedBy: integer("uploaded_by").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  appIdx: index("fintech_capital_app_docs_app_idx").on(t.applicationId),
+}));
+
+export const capitalRepaymentsTable = pgTable("fintech_capital_repayments", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => capitalApplicationsTable.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  forDate: timestamp("for_date").notNull(),
+  salesPaise: bigint("sales_paise", { mode: "number" }).notNull().default(0),
+  bps: integer("bps").notNull().default(0),
+  repaymentPaise: bigint("repayment_paise", { mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("recorded"), // recorded | placeholder
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  uqAppDate: uniqueIndex("fintech_capital_repay_uq").on(t.applicationId, t.forDate),
+}));
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type Wallet = typeof walletsTable.$inferSelect;
