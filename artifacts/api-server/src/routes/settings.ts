@@ -32,6 +32,7 @@ const ALL_SECTIONS = new Set([
   "cancellation-reasons", "order-settings", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "kitchen-delay", "token-display",
   "direct-ordering", "customer-app",
+  "order-capacity",
 ]);
 
 function rolesForSection(section: string): AppRole[] {

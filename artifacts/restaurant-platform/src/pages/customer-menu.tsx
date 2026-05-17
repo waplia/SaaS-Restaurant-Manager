@@ -288,6 +288,7 @@ export default function CustomerMenuPage() {
   const [menu, setMenu] = useState<PublicMenu | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<{ accepting: boolean; reason: string | null; nextAvailableAt: string | null } | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [dietFilters, setDietFilters] = useState<{ vegan: boolean; jain: boolean; noDairy: boolean; noNuts: boolean; noGluten: boolean; spicyMax: number | null }>({
@@ -514,6 +515,22 @@ export default function CustomerMenuPage() {
       setTimeout(() => alert(`Some items are no longer available and were skipped:\n• ${missing.join("\n• ")}`), 100);
     }
   }
+
+  // Poll order availability (capacity / pause status) for "not accepting orders" banner.
+  useEffect(() => {
+    if (!slug) return;
+    const channel = tableId ? "qr" : "online";
+    const url = `/public/order-capacity/${slug}?channel=${channel}`;
+    let cancelled = false;
+    const tick = () => {
+      apiPublicGet<{ accepting: boolean; reason: string | null; nextAvailableAt: string | null }>(url)
+        .then(d => { if (!cancelled) setAvailability(d); })
+        .catch(() => { /* ignore */ });
+    };
+    tick();
+    const t = setInterval(tick, 30_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [slug, tableId]);
 
   const connectSocket = useCallback((orderId: number, token: string) => {
     const socket = io((import.meta.env.VITE_API_URL ?? ""), {
@@ -1382,6 +1399,15 @@ export default function CustomerMenuPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
+      {availability && !availability.accepting && (
+        <div className="bg-red-50 border-b border-red-200 text-red-800 px-4 py-3 text-sm">
+          <p className="font-semibold">Not accepting orders right now</p>
+          <p className="text-xs mt-0.5">{availability.reason ?? "We're temporarily paused."}</p>
+          {availability.nextAvailableAt && (
+            <p className="text-xs mt-1">Next available: {new Date(availability.nextAvailableAt).toLocaleTimeString()}</p>
+          )}
+        </div>
+      )}
       {showImages && menu.menuBannerUrl && (
         <img src={resolveImg(menu.menuBannerUrl)} alt="" className="w-full h-40 object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
       )}

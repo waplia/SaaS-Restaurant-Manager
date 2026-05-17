@@ -58,6 +58,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     items: [
       { key: "app", label: "POS Preferences", icon: Cog },
       { key: "order-settings", label: "Order Settings", icon: ListChecks },
+      { key: "order-capacity", label: "Order Capacity & Throttling", icon: ListChecks, href: "/settings/order-capacity" },
       { key: "kot", label: "KOT", icon: Utensils },
       { key: "receipt", label: "Invoice / Receipt", icon: Receipt },
       { key: "delivery", label: "Delivery Zones", icon: Truck },

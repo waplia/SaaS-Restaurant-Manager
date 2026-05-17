@@ -169,6 +169,7 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "dlv_zone_profitability",   label: "Delivery Zone Profitability", description: "Profit per delivery zone after distance, time and refund costs.",                        category: "delivery",                defaultValue: false, defaultPlans: ["pro","enterprise"],       sidebarHref: "/delivery/zone-profitability" },
   { key: "dlv_live_tracking_link",   label: "Live Delivery Tracking Link", description: "Public live-tracking link sent to customers with driver location and ETA.",            category: "delivery",                defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/delivery/tracking-links" },
   { key: "dlv_curbside_pickup",      label: "Curbside Pickup",             description: "Let guests choose curbside pickup with vehicle details, send arrival alerts to staff, and run a dedicated handoff queue with reports.", category: "delivery", defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/delivery/curbside" },
+  { key: "ops_order_capacity",       label: "Order Throttling & Kitchen Capacity", description: "Cap orders per slot/item/outlet/order-type, one-tap pause online & per-zone, auto-extend prep time during rush with manager alerts, and customer-facing 'next available' messaging.", category: "kitchen_quality", defaultValue: false, defaultPlans: ["growth","pro","enterprise"], sidebarHref: "/settings/order-capacity" },
 
   // ──────────────────────────────────────────────────────────────────
   // Staff pack

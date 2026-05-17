@@ -4,7 +4,10 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useKitchenTickets, useUpdateTicketStatus, useUpdateTicketPriority, useKitchens, useRestaurantInfo } from "@/lib/hooks";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefHat, X } from "lucide-react";
+import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefHat, X, Pause, Play, Gauge } from "lucide-react";
+import { useOrderCapacityConfig, useOrderCapacityStatus, usePauseOrders, useResumeOrders } from "@/lib/hooks-order-capacity";
+import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -447,6 +450,9 @@ export default function KitchenPage() {
         }
       />
 
+      <KitchenCapacityPanel activeCount={activeTickets.length} />
+
+
       {kitchens.length > 0 && (
         <div className="px-6 pt-4 border-b border-border">
           <div className="flex items-center gap-1 overflow-x-auto -mb-px">
@@ -485,5 +491,77 @@ export default function KitchenPage() {
         </div>
       </div>
     </Layout>
+  );
+}
+
+function KitchenCapacityPanel({ activeCount }: { activeCount: number }) {
+  const { user } = useAuth();
+  const canManage = user?.role === "owner" || user?.role === "manager" || user?.role === "super_admin";
+  // GET config is restricted to owner/manager/super_admin; skip the fetch for
+  // other roles to avoid noisy 403s in the kitchen view.
+  const { data: cfg } = useOrderCapacityConfig({ enabled: canManage });
+  const { data: status } = useOrderCapacityStatus({ enabled: canManage });
+  const pause = usePauseOrders();
+  const resume = useResumeOrders();
+  const { toast } = useToast();
+
+  if (!canManage) return null;
+  if (!cfg) return null;
+  if (!cfg.enabled && !cfg.pauseQrOrders && !cfg.pauseOnlineOrders) {
+    return (
+      <div className="px-6 py-2 text-xs text-muted-foreground border-b border-border flex items-center gap-2">
+        <Gauge className="w-3.5 h-3.5" />
+        Capacity controls are off.
+        <Link href="/settings/order-capacity" className="text-primary hover:underline">Configure</Link>
+      </div>
+    );
+  }
+
+  const utilization = status?.utilizationPct ?? 0;
+  const rush = utilization >= cfg.autoExtendThresholdPct;
+  const anyPaused = cfg.pauseQrOrders || cfg.pauseOnlineOrders;
+
+  async function togglePause(target: "qr" | "online" | "all", paused: boolean) {
+    try {
+      if (paused) await resume.mutateAsync({ target });
+      else await pause.mutateAsync({ target, minutes: 30 });
+      toast({ title: paused ? `Resumed ${target}` : `Paused ${target} for 30 min` });
+    } catch (e) {
+      toast({ title: "Action failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  return (
+    <div className={cn(
+      "px-6 py-3 border-b border-border flex flex-wrap items-center gap-3 text-sm",
+      rush ? "bg-amber-50 dark:bg-amber-950/30" : anyPaused ? "bg-red-50 dark:bg-red-950/30" : "bg-muted/30",
+    )}>
+      <div className="flex items-center gap-2 font-medium">
+        <Gauge className={cn("w-4 h-4", rush ? "text-amber-600" : "text-muted-foreground")} />
+        Capacity
+      </div>
+      <div className="text-muted-foreground">
+        {activeCount} active · slot {cfg.slotMinutes}m
+        {cfg.maxOrdersPerSlot != null && <> · {utilization}% of {cfg.maxOrdersPerSlot}/slot</>}
+      </div>
+      {rush && (
+        <div className="flex items-center gap-1 text-amber-700">
+          <AlertTriangle className="w-3.5 h-3.5" /> Rush — prep +{cfg.autoExtendPrepMinutes}m
+        </div>
+      )}
+      <div className="ml-auto flex items-center gap-2">
+        <Button size="sm" variant={cfg.pauseQrOrders ? "default" : "outline"}
+          onClick={() => togglePause("qr", cfg.pauseQrOrders)}>
+          {cfg.pauseQrOrders ? <Play className="w-3.5 h-3.5 mr-1.5" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
+          {cfg.pauseQrOrders ? "Resume QR" : "Pause QR"}
+        </Button>
+        <Button size="sm" variant={cfg.pauseOnlineOrders ? "default" : "outline"}
+          onClick={() => togglePause("online", cfg.pauseOnlineOrders)}>
+          {cfg.pauseOnlineOrders ? <Play className="w-3.5 h-3.5 mr-1.5" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
+          {cfg.pauseOnlineOrders ? "Resume Online" : "Pause Online"}
+        </Button>
+        <Link href="/settings/order-capacity" className="text-xs text-primary hover:underline">Settings</Link>
+      </div>
+    </div>
   );
 }

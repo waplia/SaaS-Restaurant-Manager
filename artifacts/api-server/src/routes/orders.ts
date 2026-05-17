@@ -324,6 +324,30 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     }
   }
 
+  // ───── Order capacity / throttle pre-flight ─────
+  {
+    const { evaluateOrderCapacity, maybeAlertManagersOnRush } = await import("../lib/orderCapacity");
+    const itemQuantities = Array.isArray(items)
+      ? (items as Array<{ menuItemId?: number; quantity?: number }>)
+          .filter((i) => i?.menuItemId && i?.quantity)
+          .map((i) => ({ menuItemId: Number(i.menuItemId), quantity: Number(i.quantity) }))
+      : [];
+    const capRes = await evaluateOrderCapacity({
+      restaurantId,
+      orderType: typeof orderType === "string" ? orderType : null,
+      branchId: typeof branchId === "number" ? branchId : null,
+      channel: "pos",
+      itemQuantities,
+    });
+    if (!capRes.allowed) {
+      return void res.status(429).json({ error: capRes.reason ?? "Order capacity reached", nextAvailableAt: capRes.nextAvailableAt ?? null });
+    }
+    if (capRes.autoExtendApplied) {
+      // fire-and-forget alert
+      void maybeAlertManagersOnRush(restaurantId);
+    }
+  }
+
   // ───── Cloud-kitchen pre-flight (only when brandId+channelKey present) ─────
   let ckContext: null | {
     brand: { id: number; name: string; branchId: number | null };

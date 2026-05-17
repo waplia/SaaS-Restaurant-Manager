@@ -83,8 +83,18 @@ export async function createKitchenTicketsForOrder(args: {
 
   const created: Array<{ ticketId: number; kitchenId: number }> = [];
   const now = new Date();
+  // During capacity rush, auto-extend expected prep so customer ETAs are honest.
+  let rushBumpMinutes = 0;
+  try {
+    const { getRushPrepBumpMinutes } = await import("./orderCapacity");
+    rushBumpMinutes = await getRushPrepBumpMinutes(restaurantId);
+  } catch (err) {
+    rushBumpMinutes = 0;
+    const { logger } = await import("./logger");
+    logger.warn({ err, restaurantId }, "rush prep bump lookup failed; falling back to 0");
+  }
   for (const [kid, preps] of itemsByKitchen) {
-    const expectedPrepMinutes = Math.max(...preps, 1);
+    const expectedPrepMinutes = Math.max(...preps, 1) + rushBumpMinutes;
     const expectedReadyAt = new Date(now.getTime() + expectedPrepMinutes * 60_000);
     const [t] = await db.insert(kitchenTicketsTable).values({
       orderId,

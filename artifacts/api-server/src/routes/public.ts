@@ -293,7 +293,7 @@ router.get("/public/sitemap.xml", async (req, res) => {
 });
 
 router.post("/public/orders", async (req, res) => {
-  const { restaurantId, tableId, customerName, customerPhone, notes, items, orderType: rawOrderType, vehicleColor, vehicleModel, vehicleNumber, parkingSpot, scheduledFor: rawScheduledFor, deliveryAddress: rawDeliveryAddress } = req.body;
+  const { restaurantId, tableId, customerName, customerPhone, notes, items, orderType: rawOrderType, vehicleColor, vehicleModel, vehicleNumber, parkingSpot, scheduledFor: rawScheduledFor, deliveryAddress: rawDeliveryAddress, deliveryZoneId: rawDeliveryZoneId, deliveryPincode } = req.body;
 
   if (!restaurantId || !items || !Array.isArray(items) || items.length === 0) {
     return void res.status(400).json({ error: "restaurantId and items are required" });
@@ -303,6 +303,40 @@ router.post("/public/orders", async (req, res) => {
   const featureKey = isCurbside ? "dlv_curbside_pickup" : (tableId ? "qr_ordering" : "online_ordering");
   const featureOk = await checkRestaurantFeature(restaurantId, featureKey);
   if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
+
+  // ───── Order capacity gate (pause + per-slot caps) ─────
+  {
+    const { evaluateOrderCapacity, maybeAlertManagersOnRush } = await import("../lib/orderCapacity");
+    const itemQuantities = Array.isArray(items)
+      ? (items as Array<{ menuItemId?: number; quantity?: number }>)
+          .filter((i) => i?.menuItemId && i?.quantity)
+          .map((i) => ({ menuItemId: Number(i.menuItemId), quantity: Number(i.quantity) }))
+      : [];
+    const channelForCap: "qr" | "online" = tableId ? "qr" : "online";
+    const resolvedType = isCurbside ? "curbside" : (tableId ? "dine_in" : (rawOrderType ?? "pickup"));
+    // Resolve delivery zone from explicit id or by pincode lookup. This ensures
+    // per-zone pause toggles actually block matching public/online orders.
+    let zoneIdForCap: number | null = typeof rawDeliveryZoneId === "number" ? rawDeliveryZoneId : null;
+    if (zoneIdForCap == null && typeof deliveryPincode === "string" && deliveryPincode.trim()) {
+      const { deliveryZonesTable } = await import("../lib/db");
+      const pin = deliveryPincode.trim();
+      const zones = await db.select({ id: deliveryZonesTable.id, pincodes: deliveryZonesTable.pincodes })
+        .from(deliveryZonesTable)
+        .where(and(eq(deliveryZonesTable.restaurantId, restaurantId), eq(deliveryZonesTable.isActive, true)));
+      const match = zones.find((z) => (z.pincodes ?? "").split(/[\s,]+/).map((p) => p.trim()).includes(pin));
+      if (match) zoneIdForCap = match.id;
+    }
+    const capRes = await evaluateOrderCapacity({
+      restaurantId, channel: channelForCap, orderType: resolvedType, itemQuantities, deliveryZoneId: zoneIdForCap,
+    });
+    if (!capRes.allowed) {
+      return void res.status(429).json({
+        error: capRes.reason ?? "We're not accepting orders right now.",
+        nextAvailableAt: capRes.nextAvailableAt ?? null,
+      });
+    }
+    if (capRes.autoExtendApplied) void maybeAlertManagersOnRush(restaurantId);
+  }
 
   if (isCurbside) {
     if (!customerPhone || typeof customerPhone !== "string" || customerPhone.trim().length < 4) {
