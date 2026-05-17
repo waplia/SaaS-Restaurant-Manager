@@ -16,7 +16,8 @@ export type AppRole =
   | "food_court_cashier"
   | "canteen_admin"
   | "counter_staff"
-  | "parent";
+  | "parent"
+  | "hr_officer";
 
 export function requireRole(...roles: AppRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {

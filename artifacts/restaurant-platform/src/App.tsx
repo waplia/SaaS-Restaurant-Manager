@@ -27,6 +27,7 @@ import ExpensesPage from "@/pages/expenses";
 import WastePage from "@/pages/waste";
 import PnlPage from "@/pages/pnl";
 import CompliancePage from "@/pages/compliance";
+import HrCompliancePage from "@/pages/hr-compliance";
 import CloudKitchenPage from "@/pages/cloud-kitchen";
 import PayrollPage from "@/pages/payroll";
 import StaffIncentivesPage from "@/pages/staff-incentives";
@@ -373,6 +374,7 @@ function Router() {
       <Route path="/waste" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WastePage} feature="inventory_management" />} allow={["owner", "manager", "kitchen", "waiter", "cashier"]} />} />
       <Route path="/pnl" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={PnlPage} feature="smart_pnl" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/compliance" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CompliancePage} feature="compliance_manager" />} allow={["owner", "manager"]} />} />
+      <Route path="/hr-compliance" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={HrCompliancePage} feature="hr_compliance" />} allow={["owner", "manager", "hr_officer"]} />} />
       <Route path="/cloud-kitchen" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={CloudKitchenPage} feature="cloud_kitchen" />} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/payroll" component={() => <RoleProtectedRoute component={PayrollPage} allow={["owner"]} />} />
       <Route path="/staff-incentives" component={() => <RoleProtectedRoute component={StaffIncentivesPage} allow={["owner", "manager"]} />} />

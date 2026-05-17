@@ -167,7 +167,7 @@ function buildStaffPatch(body: Record<string, unknown>): StaffPatch {
   return out;
 }
 
-const ALLOWED_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"];
+const ALLOWED_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"];
 const ALLOWED_SALARY_TYPES = ["fixed_monthly", "daily_wage", "hourly_wage", "commission", "custom"];
 
 router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "manager", "super_admin"), async (req, res) => {

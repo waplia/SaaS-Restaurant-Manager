@@ -14,8 +14,52 @@ import {
   usePayrollRuns, usePayrollRun, useCreatePayrollRun, usePatchPayrollItem,
   useFinalizePayrollRun, useRecordPayrollPayment, payrollSlipUrl, useRestaurantId,
 } from "@/lib/hooks";
+import { useQuery } from "@tanstack/react-query";
+import { apiGet } from "@/lib/api";
+import { Link } from "wouter";
 import type { PayrollItemRow, PayrollItemOverrideInput } from "@/lib/types";
-import { Calculator, CheckCircle2, FileText, Wallet, RefreshCw, Lock, AlertTriangle, Edit3 } from "lucide-react";
+import { Calculator, CheckCircle2, FileText, Wallet, RefreshCw, Lock, AlertTriangle, Edit3, ShieldAlert } from "lucide-react";
+
+interface PayrollHrBreach {
+  kind: string;
+  severity: "warning" | "violation";
+  userName: string | null;
+  detail: string;
+}
+function HrBreachBanner() {
+  const restaurantId = useRestaurantId();
+  const { data } = useQuery<{ breaches: PayrollHrBreach[] }>({
+    queryKey: ["payroll-hr-breaches", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/hr-compliance/breaches?days=45`),
+    retry: false,
+  });
+  const breaches = data?.breaches ?? [];
+  if (breaches.length === 0) return null;
+  const violations = breaches.filter(b => b.severity === "violation");
+  const warnings = breaches.length - violations.length;
+  return (
+    <div
+      data-testid="payroll-hr-breach-banner"
+      className="border rounded-lg p-3 flex items-start gap-3 bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-100"
+    >
+      <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+      <div className="flex-1 text-sm">
+        <div className="font-medium">
+          HR policy breaches in the last 45 days:&nbsp;
+          {violations.length > 0 && <span className="text-red-700 dark:text-red-300">{violations.length} violation{violations.length === 1 ? "" : "s"}</span>}
+          {violations.length > 0 && warnings > 0 && ", "}
+          {warnings > 0 && <span>{warnings} warning{warnings === 1 ? "" : "s"}</span>}
+        </div>
+        <div className="text-xs opacity-80 mt-0.5">
+          Review before finalizing payroll — wage floor, max-shift and overtime rules surface here from your HR policies.
+        </div>
+      </div>
+      <Link href="/hr-compliance">
+        <Button size="sm" variant="outline" className="bg-white dark:bg-transparent">Review</Button>
+      </Link>
+    </div>
+  );
+}
 
 function fmtMoney(v: string | number) {
   return `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -105,6 +149,7 @@ export default function PayrollPage() {
       />
 
       <div className="p-6 space-y-6">
+        <HrBreachBanner />
         {/* Month picker + actions */}
         <div className="bg-card border rounded-lg p-4 flex flex-wrap items-end gap-3">
           <div className="space-y-1">

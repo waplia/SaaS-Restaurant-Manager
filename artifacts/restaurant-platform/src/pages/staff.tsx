@@ -21,8 +21,11 @@ import {
   useStaffAdjustments, useCreateStaffAdjustment, useDeleteStaffAdjustment,
   usePerformanceNotes, useCreatePerformanceNote, useDeletePerformanceNote,
   RESTAURANT_ID,
+  useRestaurantId,
 } from "@/lib/hooks";
-import { apiPost } from "@/lib/api";
+import { apiPost, apiGet } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +61,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   kitchen: { label: "Kitchen", color: "bg-orange-100 text-orange-700" },
   cashier: { label: "Cashier", color: "bg-yellow-100 text-yellow-700" },
   delivery_executive: { label: "Delivery Executive", color: "bg-cyan-100 text-cyan-700" },
+  hr_officer: { label: "HR Officer", color: "bg-rose-100 text-rose-700" },
 };
 
 const ALL_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -187,6 +191,7 @@ function ProfileTab({ member }: { member: StaffMember }) {
               <option value="kitchen">Kitchen</option>
               <option value="cashier">Cashier</option>
               <option value="delivery_executive">Delivery Executive</option>
+              <option value="hr_officer">HR Officer</option>
             </select>
           </div>
         </div>
@@ -1104,14 +1109,14 @@ function TeamTab({
 
   const { user } = useAuth();
   const ALLOWED_ASSIGNABLE: Record<string, string[]> = {
-    owner: ["manager", "waiter", "kitchen", "cashier", "delivery_executive"],
-    manager: ["waiter", "kitchen", "cashier", "delivery_executive"],
+    owner: ["manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"],
+    manager: ["waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"],
   };
   const assignableRoles = user?.isSuperAdmin
-    ? ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"]
+    ? ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"]
     : (ALLOWED_ASSIGNABLE[user?.role ?? ""] ?? ["waiter", "kitchen", "cashier", "delivery_executive"]);
 
-  const roles = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive"];
+  const roles = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"];
   const byRole = (role: string) => staff.filter((s: StaffMember) => s.role === role).length;
 
   const handleAdd = async () => {
@@ -1353,6 +1358,51 @@ function TeamTab({
 
 function ShiftsTab({ staff }: { staff: StaffMember[] }) {
   const { data: shifts = [] } = useShifts();
+  return (
+    <div className="space-y-4">
+      <ShiftHrBreachBanner />
+      <ShiftsTabInner staff={staff} shifts={shifts} />
+    </div>
+  );
+}
+
+function ShiftHrBreachBanner() {
+  const rid = useRestaurantId();
+  const { data } = useShiftBreaches(rid);
+  const breaches = data?.breaches ?? [];
+  const relevant = breaches.filter(b =>
+    b.kind === "max_shift_exceeded" || b.kind === "break_required" || b.kind === "unrecorded_overtime"
+  );
+  if (relevant.length === 0) return null;
+  const violations = relevant.filter(b => b.severity === "violation").length;
+  return (
+    <div
+      data-testid="shifts-hr-breach-banner"
+      className="border rounded-lg p-3 flex items-start gap-3 bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-100"
+    >
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+      <div className="flex-1 text-sm">
+        <div className="font-medium">
+          {relevant.length} schedule policy {relevant.length === 1 ? "alert" : "alerts"}
+          {violations > 0 && <> · <span className="text-red-700 dark:text-red-300">{violations} violation{violations === 1 ? "" : "s"}</span></>}
+        </div>
+        <div className="text-xs opacity-80">Recent shifts exceed max-shift, miss required breaks, or have unrecorded overtime against your HR policies.</div>
+      </div>
+      <a href="/hr-compliance" className="text-sm font-medium underline shrink-0">Review</a>
+    </div>
+  );
+}
+
+function useShiftBreaches(rid: number | null) {
+  return useQuery<{ breaches: Array<{ kind: string; severity: "warning" | "violation" }> }>({
+    queryKey: ["shifts-hr-breaches", rid],
+    queryFn: () => apiGet(`/restaurants/${rid}/hr-compliance/breaches?days=14`),
+    enabled: !!rid,
+    retry: false,
+  });
+}
+
+function ShiftsTabInner({ staff, shifts }: { staff: StaffMember[]; shifts: Shift[] }) {
   const { data: staffShifts = [] } = useStaffShifts();
   const createShift = useCreateShift();
   const deleteShift = useDeleteShift();

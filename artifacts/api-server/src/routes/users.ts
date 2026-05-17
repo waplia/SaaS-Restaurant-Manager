@@ -9,7 +9,7 @@ import { z } from "zod";
 
 const router = Router();
 
-const USER_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "super_admin"] as const;
+const USER_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer", "super_admin"] as const;
 
 const CreateUserBody = z.object({
   name: z.string().trim().min(1).max(120),

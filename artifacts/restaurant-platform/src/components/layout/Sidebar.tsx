@@ -187,6 +187,7 @@ const navConfig: NavEntry[] = [
     children: [
       { kind: "link", href: "/staff", label: "Directory", icon: UserCheck },
       { kind: "link", href: "/staff-tasks", label: "Staff Tasks", icon: ClipboardCheck, roles: ["owner", "manager"] },
+      { kind: "link", href: "/hr-compliance", label: "HR Compliance", icon: ScrollText, roles: ["owner", "manager", "hr_officer"], planGate: "hr_compliance" },
       { kind: "link", href: "/payroll", label: "Payroll", icon: Wallet, roles: ["owner"] },
       { kind: "link", href: "/staff-incentives", label: "Incentives", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/sop-training", label: "SOP & Training", icon: BookOpen, roles: ["owner", "manager", "super_admin"], planGate: "sop_training" },

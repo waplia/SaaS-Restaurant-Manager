@@ -47,6 +47,7 @@ export * from "./health-scores";
 export * from "./tokens";
 export * from "./sop-training";
 export * from "./compliance";
+export * from "./hr-compliance";
 export * from "./events";
 export * from "./aggregator-payouts";
 export * from "./pricing-rules";
