@@ -1427,7 +1427,7 @@ export default function PosPage() {
 
   return (
     <Layout>
-      <div className="flex h-[calc(100vh-0px)] overflow-hidden bg-background">
+      <div className="flex flex-1 min-h-0 overflow-hidden bg-background">
 
         {/* Left panel */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -1497,28 +1497,30 @@ export default function PosPage() {
           </div>
 
           {/* Order type + customer name */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0 flex-wrap">
-            {ORDER_TYPES.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                onClick={() => {
-                  setOrderType(value);
-                  if (value !== "dine_in") setSelectedTableId(null);
-                }}
-                disabled={!!placedOrder}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0",
-                  orderType === value
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:border-primary/50",
-                  placedOrder && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <Icon className="w-3.5 h-3.5" />{label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0 bg-background">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto">
+              {ORDER_TYPES.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => {
+                    setOrderType(value);
+                    if (value !== "dine_in") setSelectedTableId(null);
+                  }}
+                  disabled={!!placedOrder}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0",
+                    orderType === value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/50",
+                    placedOrder && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />{label}
+                </button>
+              ))}
+            </div>
             <Input
-              className="h-8 text-xs flex-1 min-w-32 max-w-48 ml-auto"
+              className="h-8 text-xs w-32 sm:w-44 flex-shrink-0"
               placeholder="Customer name (optional)"
               value={customerName}
               onChange={e => setCustomerName(e.target.value)}
@@ -1554,13 +1556,15 @@ export default function PosPage() {
           )}
 
           {/* Category filter */}
-          <div className="flex gap-1.5 px-4 py-2 border-b border-border overflow-x-auto flex-shrink-0">
-            <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)} className="flex-shrink-0 h-7 text-xs px-3">All</Button>
-            {(categories as MenuCategory[]).map(c => (
-              <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">
-                {c.name}
-              </Button>
-            ))}
+          <div className="border-b border-border flex-shrink-0 bg-background overflow-x-auto">
+            <div className="flex gap-1.5 px-4 py-2 w-max min-w-full">
+              <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)} className="flex-shrink-0 h-7 text-xs px-3">All</Button>
+              {(categories as MenuCategory[]).map(c => (
+                <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">
+                  {c.name}
+                </Button>
+              ))}
+            </div>
           </div>
 
           {/* Menu grid */}
@@ -1622,7 +1626,7 @@ export default function PosPage() {
         </div>
 
         {/* Right panel — Order ticket */}
-        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border shadow-[-4px_0_16px_-8px_hsl(0_0%_0%/0.08)]">
+        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border shadow-[-4px_0_16px_-8px_hsl(0_0%_0%/0.08)] min-h-0">
 
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <div>
@@ -1715,7 +1719,7 @@ export default function PosPage() {
 
           {/* Totals + actions — sticky footer summary */}
           {(cart.length > 0 || placedOrder) && (
-            <div className="sticky bottom-0 border-t border-border px-4 py-4 space-y-3 flex-shrink-0 bg-card/80 backdrop-blur-md shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.08)]">
+            <div className="sticky bottom-0 z-50 border-t border-border px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 flex-shrink-0 bg-card shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.08)]">
               {/* Active discount lines (T4) — each ledger row shown with × remove */}
               {placedOrder && liveDiscounts.length > 0 && (
                 <div className="space-y-1">
@@ -2163,11 +2167,12 @@ function PosUpsellStrip({
 
   if (suggestions.length === 0) return null;
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2">
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2 overflow-hidden">
       <p className="text-xs font-semibold text-primary flex items-center gap-1">
         <Plus className="w-3 h-3" /> Suggested add-ons
       </p>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="overflow-x-auto -mx-2.5 px-2.5 pb-1">
+       <div className="flex gap-2 w-max min-w-full">
         {suggestions.flatMap(s => s.items.map(it => (
           <button
             key={`${s.ruleId}-${it.id}`}
@@ -2188,6 +2193,7 @@ function PosUpsellStrip({
             <Plus className="w-3.5 h-3.5 text-primary flex-shrink-0" />
           </button>
         )))}
+       </div>
       </div>
     </div>
   );

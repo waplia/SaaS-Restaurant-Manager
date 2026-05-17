@@ -13,16 +13,16 @@ export function Layout({ children }: { children: ReactNode }) {
   const isStaff = !!user && !user.isSuperAdmin && !!user.role && STAFF_ROLES.has(user.role);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <TrialPaywall />
       {/* Sidebar hidden on mobile for staff (replaced by bottom nav + drawer) */}
       <div className={isStaff ? "hidden md:flex" : "flex"}>
         <Sidebar />
       </div>
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <TrialBanner />
         <OnboardingBanner />
-        <main className={`flex-1 ${isStaff ? "pb-16 md:pb-0" : ""}`}>{children}</main>
+        <main className={`flex-1 min-h-0 flex flex-col overflow-auto ${isStaff ? "pb-16 md:pb-0" : ""}`}>{children}</main>
       </div>
       <AiChatAssistant />
       <BottomNav />
