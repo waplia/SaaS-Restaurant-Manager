@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useKitchenTickets, useUpdateTicketStatus, useUpdateTicketPriority, useKitchens, useRestaurantInfo } from "@/lib/hooks";
+import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefHat } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -212,6 +213,8 @@ function TicketCard({
           <p className="text-xs text-muted-foreground italic">No items</p>
         )}
       </div>
+
+      <ServiceTimerPanel orderId={ticket.orderId} />
 
       {cfg.next && (
         <button

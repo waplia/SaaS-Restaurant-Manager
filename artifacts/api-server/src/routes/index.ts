@@ -102,6 +102,7 @@ import menuIntelligenceRouter from "./menu-intelligence";
 import menuPublicTrackingRouter from "./menu-public-tracking";
 import customerQualityRouter from "./customer-quality";
 import advancedGrowthRouter from "./advanced-growth";
+import operationsRouter from "./operations";
 
 const router: IRouter = Router();
 
@@ -224,5 +225,6 @@ router.use(competitorTrackerRouter);
 router.use(corporateRouter);
 router.use(menuIntelligenceRouter);
 router.use(advancedGrowthRouter);
+router.use(operationsRouter);
 
 export default router;

@@ -10,6 +10,7 @@ import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Pri
 import { cn } from "@/lib/utils";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
 import type { KitchenTicket } from "@/lib/types";
+import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -228,6 +229,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
             </SheetHeader>
 
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <ServiceTimerPanel orderId={order.id} />
               <div>
                 <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Items</h4>
                 <div className="space-y-2">

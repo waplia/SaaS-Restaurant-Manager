@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, isFeatureEnabled } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
@@ -21,6 +21,26 @@ async function restaurantHasFeature(restaurantId: number, key: string): Promise<
   const ok = !plan ? true : isFeatureEnabled(plan.flags, key);
   _featureCache.set(cacheKey, { ok, at: Date.now() });
   return ok;
+}
+
+/**
+ * Record a service-timer stage transition for an order. Best-effort — any
+ * failure (e.g. ops_event_timeline not enabled / table missing) is logged
+ * but never blocks the operational write that triggered it. Computes the
+ * delta from the previous event so dashboards can chart per-stage SLAs.
+ */
+async function recordTimerStage(restaurantId: number, orderId: number, stage: string): Promise<void> {
+  try {
+    const [prev] = await db.select().from(serviceTimerEventsTable)
+      .where(and(eq(serviceTimerEventsTable.orderId, orderId), eq(serviceTimerEventsTable.restaurantId, restaurantId)))
+      .orderBy(desc(serviceTimerEventsTable.occurredAt)).limit(1);
+    const now = new Date();
+    const durationMs = prev ? now.getTime() - new Date(prev.occurredAt).getTime() : null;
+    await db.insert(serviceTimerEventsTable).values({ restaurantId, orderId, stage, occurredAt: now, durationMs });
+  } catch (err) {
+    // Swallow — operational writes never block on telemetry.
+    void err;
+  }
 }
 import { verifyManagerDiscountOtp } from "../lib/managerOtp";
 import { requireRole } from "../middleware/authorize";
@@ -621,6 +641,14 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     }
   }
 
+  // Service-timer: stage 1 (placed) when the order row is first written.
+  await recordTimerStage(restaurantId, order.id, "placed");
+  for (const t of createdTickets) {
+    await recordTimerStage(restaurantId, order.id, "kot_fired");
+    void t;
+    break; // single kot_fired event per order even when multiple kitchens.
+  }
+
   const createdItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
 
   const issuedToken = await issueTokenForOrder({
@@ -687,6 +715,13 @@ router.patch("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   if (status) updates.status = status;
   const [updated] = await db.update(ordersTable).set(updates).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  // Service-timer: emit `accepted` when an order's status transitions to
+  // accepted/confirmed via the generic order PATCH. This completes the
+  // placed → accepted → kot_fired → preparing → ready → served → billed
+  // sequence required by the Smart Service Timer feature.
+  if (status === "accepted" || status === "confirmed") {
+    await recordTimerStage(restaurantId, updated.id, "accepted");
+  }
 
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: updated.status, orderNumber: updated.orderNumber });
@@ -1936,6 +1971,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   }
 
   handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);
+  // Service-timer: order has been billed (final stage).
+  await recordTimerStage(restaurantId, updated.id, "billed");
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
 
@@ -2020,6 +2057,13 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", async (req
   if (status === "ready" || status === "served") updates.completedAt = now;
   const [updated] = await db.update(kitchenTicketsTable).set(updates).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // Service-timer: mirror the kitchen ticket transition onto the order so
+  // the per-stage SLA chart (preparing/ready/served) reflects the kitchen
+  // workflow, not just the front-of-house events.
+  if (status === "preparing" || status === "ready" || status === "served") {
+    await recordTimerStage(restaurantId, updated.orderId, status);
+  }
 
   // Mirror timing onto order_items for this ticket's kitchen so per-item analytics work.
   if (status === "preparing" || status === "ready" || status === "served") {

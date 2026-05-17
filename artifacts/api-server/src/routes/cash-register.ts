@@ -302,6 +302,30 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
 
     const trimmedReason = typeof varianceReason === "string" ? varianceReason.trim() : "";
 
+    // Operations Intelligence: enforce active closing checklist before allowing
+    // session close. Skipped entirely if no template has enforce_on_close=true.
+    try {
+      const { checkClosingChecklistEnforcement } = await import("./operations");
+      const check = await checkClosingChecklistEnforcement(restaurantId, sessionId);
+      if (check.blocked) {
+        return void res.status(400).json({
+          error: "Closing checklist is incomplete — submit it before closing the register.",
+          code: check.reason,
+          templateId: check.templateId,
+          missing: check.missing,
+        });
+      }
+    } catch (e) {
+      // Fail-closed: if the checklist enforcement helper itself throws, we
+      // refuse to close the shift rather than silently bypassing the
+      // configured policy. Managers can disable enforce_on_close on the
+      // template if the checklist itself is broken.
+      return void res.status(503).json({
+        error: "Closing checklist enforcement is currently unavailable. Try again or disable enforcement on the template.",
+        code: "OPS_CHECKLIST_ENFORCEMENT_UNAVAILABLE",
+      });
+    }
+
     try {
       const result = await db.transaction(async tx => {
         // Lock the session row; abort if it isn't ours / isn't open.

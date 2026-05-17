@@ -63,6 +63,26 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["waiter-requests", restaurantId] });
     });
 
+    // Operations Intelligence realtime channels.
+    socket.on("ops_approval:new", () => {
+      void qc.invalidateQueries({ queryKey: ["ops", "approvals"] });
+    });
+    socket.on("ops_approval:updated", () => {
+      void qc.invalidateQueries({ queryKey: ["ops", "approvals"] });
+    });
+    socket.on("panic:raised", () => {
+      void qc.invalidateQueries({ queryKey: ["ops", "panic"] });
+      void qc.invalidateQueries({ queryKey: ["ops", "digital-twin", restaurantId] });
+    });
+    socket.on("panic:updated", () => {
+      void qc.invalidateQueries({ queryKey: ["ops", "panic"] });
+      void qc.invalidateQueries({ queryKey: ["ops", "digital-twin", restaurantId] });
+    });
+    socket.on("service_timer:event", () => {
+      void qc.invalidateQueries({ queryKey: ["ops", "digital-twin", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["ops", "timeline", restaurantId] });
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

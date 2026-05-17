@@ -182,6 +182,18 @@ import TiffinSubscriptionsPage from "@/pages/tiffin-subscriptions";
 import TiffinDeliveriesPage from "@/pages/tiffin-deliveries";
 import TiffinBillingPage from "@/pages/tiffin-billing";
 import TiffinCustomerHistoryPage from "@/pages/tiffin-customer-history";
+import OpsDigitalTwinPage from "@/pages/ops-digital-twin";
+import OpsPanicPage from "@/pages/ops-panic";
+import OpsHandoverPage from "@/pages/ops-handover";
+import OpsBriefingsPage from "@/pages/ops-briefings";
+import OpsChecklistsPage from "@/pages/ops-checklists";
+import OpsTimelinePage from "@/pages/ops-timeline";
+import OpsReportsPage from "@/pages/ops-reports";
+import OpsApprovalsPage from "@/pages/ops-approvals";
+import OpsIncidentsPage from "@/pages/ops-incidents";
+import KitchenCleaningPage from "@/pages/kitchen-cleaning";
+import KitchenTemperaturesPage from "@/pages/kitchen-temperatures";
+import KitchenEquipmentPage from "@/pages/kitchen-equipment";
 import CompetitorsPage from "@/pages/competitors";
 import CompetitorDetailPage from "@/pages/competitor-detail";
 import CompetitorComparisonPage from "@/pages/competitor-comparison";
@@ -395,6 +407,18 @@ function Router() {
       <Route path="/corporate/scheduled" component={() => <RoleProtectedRoute component={CorporateScheduledPage} allow={["owner", "manager"]} />} />
       <Route path="/corporate/invoices" component={() => <RoleProtectedRoute component={CorporateInvoicesPage} allow={["owner", "manager"]} />} />
       <Route path="/corporate/invoices/:id" component={() => <RoleProtectedRoute component={CorporateInvoiceDetailPage} allow={["owner", "manager"]} />} />
+      <Route path="/ops/digital-twin" component={() => <RoleProtectedRoute component={OpsDigitalTwinPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/panic" component={() => <RoleProtectedRoute component={OpsPanicPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/handover" component={() => <RoleProtectedRoute component={OpsHandoverPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/briefings" component={() => <RoleProtectedRoute component={OpsBriefingsPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/checklists" component={() => <RoleProtectedRoute component={OpsChecklistsPage} allow={["owner", "manager", "waiter", "kitchen", "cashier", "super_admin"]} />} />
+      <Route path="/ops/timeline" component={() => <RoleProtectedRoute component={OpsTimelinePage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/reports" component={() => <RoleProtectedRoute component={OpsReportsPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/approvals" component={() => <RoleProtectedRoute component={OpsApprovalsPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/ops/incidents" component={() => <RoleProtectedRoute component={OpsIncidentsPage} allow={["owner", "manager", "super_admin"]} />} />
+      <Route path="/kitchen/cleaning" component={() => <RoleProtectedRoute component={KitchenCleaningPage} allow={["owner", "manager", "kitchen", "super_admin"]} />} />
+      <Route path="/kitchen/temperatures" component={() => <RoleProtectedRoute component={KitchenTemperaturesPage} allow={["owner", "manager", "kitchen", "super_admin"]} />} />
+      <Route path="/kitchen/equipment" component={() => <RoleProtectedRoute component={KitchenEquipmentPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/tiffin/plans" component={() => <RoleProtectedRoute component={TiffinPlansPage} allow={["owner", "manager"]} />} />
       <Route path="/tiffin/subscriptions" component={() => <RoleProtectedRoute component={TiffinSubscriptionsPage} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/tiffin/deliveries" component={() => <RoleProtectedRoute component={TiffinDeliveriesPage} allow={["owner", "manager", "delivery_executive"]} />} />

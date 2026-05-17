@@ -132,6 +132,57 @@ export function startScheduler(): void {
   registerCron("complaint-escalation", "*/5 * * * *", "Customer-Quality: SLA-based complaint escalation sweep (every 5 min)");
   registerCron("repeat-complaint-clusters", "30 3 * * *", "Customer-Quality: nightly rebuild of repeat complaint clusters (03:30 IST)");
   registerCron("abandoned-cart-detect", "*/10 * * * *", "Customer-Quality: detect & flag abandoned carts (every 10 min)");
+  registerCron("ops-morning-briefings", "0 8 * * *", "Generates and sends per-restaurant owner morning briefings (Operations Intelligence) at 08:00 IST");
+  registerCron("ops-end-of-day", "30 23 * * *", "Computes and persists per-restaurant end-of-day summary into timeline_events (Operations Intelligence) at 23:30 IST");
+
+  // Persisted nightly EOD artifact: at 23:30 IST we compute the day's
+  // orders/incidents/panic alerts/closing-checklist summary for every
+  // restaurant and write it as a timeline_events row (eventType=
+  // end_of_day_report). The on-demand /ops/end-of-day endpoint still
+  // works for ad-hoc lookups; this cron guarantees a stored artifact.
+  trackCron("ops_end_of_day", "30 23 * * *", async () => {
+    try {
+      const { db, restaurantsTable, ordersTable, incidentsTable, panicAlertsTable, closingChecklistRunsTable, timelineEventsTable } = await import("./db");
+      const { eq, and, sql, gte, lte } = await import("drizzle-orm");
+      const today = new Date().toISOString().slice(0, 10);
+      const start = new Date(`${today}T00:00:00.000Z`);
+      const end = new Date(start.getTime() + 24 * 3600 * 1000);
+      const restaurants = await db.select({ id: restaurantsTable.id }).from(restaurantsTable);
+      for (const r of restaurants) {
+        try {
+          const [orders] = await db.select({
+            count: sql<number>`count(*)::int`,
+            revenue: sql<number>`coalesce(sum(${ordersTable.totalAmount})::float,0)`,
+            cancelled: sql<number>`count(*) filter (where ${ordersTable.status} = 'cancelled')::int`,
+          }).from(ordersTable).where(and(eq(ordersTable.restaurantId, r.id), gte(ordersTable.createdAt, start), lte(ordersTable.createdAt, end)));
+          const [inc] = await db.select({ count: sql<number>`count(*)::int` }).from(incidentsTable)
+            .where(and(eq(incidentsTable.restaurantId, r.id), gte(incidentsTable.reportedAt, start), lte(incidentsTable.reportedAt, end)));
+          const [panic] = await db.select({ count: sql<number>`count(*)::int` }).from(panicAlertsTable)
+            .where(and(eq(panicAlertsTable.restaurantId, r.id), gte(panicAlertsTable.raisedAt, start), lte(panicAlertsTable.raisedAt, end)));
+          const [closing] = await db.select({ count: sql<number>`count(*)::int` }).from(closingChecklistRunsTable)
+            .where(and(eq(closingChecklistRunsTable.restaurantId, r.id), gte(closingChecklistRunsTable.submittedAt, start), lte(closingChecklistRunsTable.submittedAt, end)));
+          const summary = {
+            forDate: today,
+            orders: orders ?? { count: 0, revenue: 0, cancelled: 0 },
+            incidents: inc?.count ?? 0,
+            panicAlerts: panic?.count ?? 0,
+            closingRuns: closing?.count ?? 0,
+          };
+          await db.insert(timelineEventsTable).values({
+            restaurantId: r.id,
+            eventType: "end_of_day_report",
+            entity: "end_of_day",
+            summary: `EOD ${today}: ${summary.orders.count} orders, ₹${Number(summary.orders.revenue).toFixed(2)}, ${summary.incidents} incidents, ${summary.panicAlerts} panic, ${summary.closingRuns} checklist runs`,
+            metadata: summary,
+          });
+        } catch (err) {
+          logger.error({ err, restaurantId: r.id }, "[ops] end-of-day persistence failed");
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "[ops] end-of-day sweep failed");
+    }
+  });
 
   trackCron("complaint_escalation", "*/5 * * * *", async () => {
     try {
@@ -155,6 +206,112 @@ export function startScheduler(): void {
       const n = await detectAbandonedCarts();
       if (n > 0) logger.info({ carts: n }, "[customer-quality] carts abandoned");
     } catch (err) { logger.error({ err }, "[customer-quality] cart detect failed"); }
+  });
+
+  trackCron("ops_morning_briefings", "0 8 * * *", async () => {
+    try {
+      const { db, restaurantsTable, morningBriefingsTable, ordersTable, incidentsTable, panicAlertsTable, usersTable, attendanceTable, cashRegisterSessionsTable, inventoryItemsTable, opsApprovalsTable, customerFeedbackTable } = await import("./db");
+      const { eq, and, sql, gte, lte, inArray } = await import("drizzle-orm");
+      const { sendEmail, sendSms } = await import("./notifications");
+      const { sendWhatsAppMessage } = await import("./whatsapp");
+      const today = new Date().toISOString().slice(0, 10);
+      const start = new Date(`${today}T00:00:00.000Z`);
+      const prevStart = new Date(start.getTime() - 24 * 3600 * 1000);
+      const prevEnd = start;
+      const restaurants = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name, email: restaurantsTable.email }).from(restaurantsTable);
+      for (const r of restaurants) {
+        try {
+          const [orders] = await db.select({
+            count: sql<number>`count(*)::int`,
+            total: sql<number>`coalesce(sum(${ordersTable.totalAmount})::float,0)`,
+          }).from(ordersTable).where(and(eq(ordersTable.restaurantId, r.id), gte(ordersTable.createdAt, prevStart), lte(ordersTable.createdAt, prevEnd)));
+          const [inc] = await db.select({ count: sql<number>`count(*)::int` }).from(incidentsTable)
+            .where(and(eq(incidentsTable.restaurantId, r.id), sql`${incidentsTable.status} IN ('open','investigating')`));
+          const [panic] = await db.select({ count: sql<number>`count(*)::int` }).from(panicAlertsTable)
+            .where(and(eq(panicAlertsTable.restaurantId, r.id), gte(panicAlertsTable.raisedAt, prevStart)));
+          // Cash on hand yesterday (sum of closed session expected totals).
+          const [cash] = await db.select({ closed: sql<number>`coalesce(sum(coalesce(${cashRegisterSessionsTable.expectedCash}, 0)::float),0)` })
+            .from(cashRegisterSessionsTable)
+            .where(and(eq(cashRegisterSessionsTable.restaurantId, r.id), gte(cashRegisterSessionsTable.closedAt, prevStart), lte(cashRegisterSessionsTable.closedAt, prevEnd)))
+            .catch(() => [{ closed: 0 }] as Array<{ closed: number }>);
+          // Low-stock items (current stock at or below min level).
+          const lowStock = await db.select({ id: inventoryItemsTable.id, name: inventoryItemsTable.name, qty: inventoryItemsTable.currentStock, threshold: inventoryItemsTable.minStockLevel })
+            .from(inventoryItemsTable)
+            .where(and(eq(inventoryItemsTable.restaurantId, r.id), eq(inventoryItemsTable.isActive, true), sql`${inventoryItemsTable.currentStock} <= ${inventoryItemsTable.minStockLevel}`))
+            .limit(20)
+            .catch(() => [] as Array<{ id: number; name: string; qty: string | null; threshold: string | null }>);
+          // Attendance yesterday (count of unique users with clock-in).
+          const [att] = await db.select({ present: sql<number>`count(distinct ${attendanceTable.userId})::int` })
+            .from(attendanceTable)
+            .where(and(eq(attendanceTable.restaurantId, r.id), gte(attendanceTable.clockIn, prevStart), lte(attendanceTable.clockIn, prevEnd)))
+            .catch(() => [{ present: 0 }] as Array<{ present: number }>);
+          // Pending approvals snapshot.
+          const [pend] = await db.select({ count: sql<number>`count(*)::int` })
+            .from(opsApprovalsTable)
+            .where(and(eq(opsApprovalsTable.restaurantId, r.id), eq(opsApprovalsTable.status, "pending")))
+            .catch(() => [{ count: 0 }] as Array<{ count: number }>);
+          // Yesterday's negative-rated feedback as a complaint proxy.
+          const [comp] = await db.select({ count: sql<number>`count(*)::int` })
+            .from(customerFeedbackTable)
+            .where(and(eq(customerFeedbackTable.restaurantId, r.id), gte(customerFeedbackTable.createdAt, prevStart), lte(customerFeedbackTable.createdAt, prevEnd), sql`${customerFeedbackTable.rating} IS NOT NULL AND ${customerFeedbackTable.rating} <= 2`))
+            .catch(() => [{ count: 0 }] as Array<{ count: number }>);
+          // Forecast = today's expected revenue from prior 7-day average.
+          const sevenAgo = new Date(start.getTime() - 7 * 24 * 3600 * 1000);
+          const [fc] = await db.select({ avg: sql<number>`coalesce(avg(${ordersTable.totalAmount})::float,0)`, count: sql<number>`count(*)::int` })
+            .from(ordersTable).where(and(eq(ordersTable.restaurantId, r.id), gte(ordersTable.createdAt, sevenAgo), lte(ordersTable.createdAt, start)))
+            .catch(() => [{ avg: 0, count: 0 }] as Array<{ avg: number; count: number }>);
+          const forecastRevenue = (fc?.avg ?? 0) * ((fc?.count ?? 0) / 7);
+          const summary = {
+            yesterdayOrders: orders?.count ?? 0,
+            yesterdayRevenue: orders?.total ?? 0,
+            openIncidents: inc?.count ?? 0,
+            panicAlerts24h: panic?.count ?? 0,
+            cashClosed: cash?.closed ?? 0,
+            lowStock: lowStock.map(l => ({ id: l.id, name: l.name, qty: l.qty, threshold: l.threshold })),
+            attendancePresent: att?.present ?? 0,
+            complaints: comp?.count ?? 0,
+            pendingApprovals: pend?.count ?? 0,
+            forecastRevenueToday: Number(forecastRevenue.toFixed(2)),
+          };
+          await db.insert(morningBriefingsTable).values({ restaurantId: r.id, forDate: today, summary, sentAt: new Date() });
+
+          // Dispatch to owners via email + WhatsApp + SMS (each best-effort).
+          const owners = await db.select({ email: usersTable.email, phone: usersTable.phone })
+            .from(usersTable).where(and(eq(usersTable.restaurantId, r.id), eq(usersTable.isActive, true), inArray(usersTable.role, ["owner"])));
+          const subject = `Morning briefing — ${r.name} (${today})`;
+          const lowStockList = summary.lowStock.length > 0
+            ? `<ul>${summary.lowStock.map(l => `<li>${l.name} — ${l.qty ?? "0"} / ${l.threshold ?? "?"}</li>`).join("")}</ul>`
+            : "<i>none</i>";
+          const html = `<h3>${subject}</h3>
+<ul>
+  <li><b>Yesterday orders:</b> ${summary.yesterdayOrders}</li>
+  <li><b>Yesterday revenue:</b> ₹${summary.yesterdayRevenue.toFixed(2)}</li>
+  <li><b>Cash closed yesterday:</b> ₹${summary.cashClosed.toFixed(2)}</li>
+  <li><b>Attendance yesterday:</b> ${summary.attendancePresent} staff</li>
+  <li><b>Complaints yesterday:</b> ${summary.complaints}</li>
+  <li><b>Pending approvals:</b> ${summary.pendingApprovals}</li>
+  <li><b>Open incidents:</b> ${summary.openIncidents}</li>
+  <li><b>Panic alerts (24h):</b> ${summary.panicAlerts24h}</li>
+  <li><b>Today forecast revenue:</b> ₹${summary.forecastRevenueToday.toFixed(2)}</li>
+  <li><b>Low-stock items:</b> ${lowStockList}</li>
+</ul>`;
+          const text = `Morning briefing ${today}: ${summary.yesterdayOrders} orders, ₹${summary.yesterdayRevenue.toFixed(2)} rev, cash ₹${summary.cashClosed.toFixed(2)}, ${summary.attendancePresent} present, ${summary.complaints} complaints, ${summary.pendingApprovals} approvals pending, ${summary.openIncidents} incidents, ${summary.panicAlerts24h} panic, forecast ₹${summary.forecastRevenueToday.toFixed(2)}, low-stock ${summary.lowStock.length}.`;
+          const emails = [...new Set([r.email, ...owners.map(o => o.email)].filter((e): e is string => !!e))];
+          for (const to of emails) {
+            sendEmail({ to, subject, html, text }).catch(err => logger.warn({ err, to }, "[ops] briefing email failed"));
+          }
+          const phones = [...new Set(owners.map(o => o.phone).filter((p): p is string => !!p))];
+          for (const to of phones) {
+            sendWhatsAppMessage({ restaurantId: r.id, to, body: text }).catch(err => logger.warn({ err, to }, "[ops] briefing whatsapp failed"));
+            sendSms({ to, body: text }).catch(err => logger.warn({ err, to }, "[ops] briefing sms failed"));
+          }
+        } catch (err) {
+          logger.error({ err, restaurantId: r.id }, "[ops] morning briefing failed");
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "[ops] morning briefings sweep failed");
+    }
   });
 
   trackCron("orphan_upload_sweep", "0 4 * * *", async () => {

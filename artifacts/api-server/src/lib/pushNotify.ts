@@ -3,7 +3,7 @@ import { db, usersTable, userDevicesTable } from "./db";
 import { sendPush } from "./notifications";
 import { logger } from "./logger";
 
-export type PushType = "waiter_call" | "new_order" | "reservation" | "leave_decision" | "leave_request" | "payroll" | "fraud_alert" | "kitchen_delay";
+export type PushType = "waiter_call" | "new_order" | "reservation" | "leave_decision" | "leave_request" | "payroll" | "fraud_alert" | "kitchen_delay" | "panic_alert" | "approval_request" | "incident_reported" | "temperature_alert";
 
 interface PushTargetFilter {
   restaurantId: number;
