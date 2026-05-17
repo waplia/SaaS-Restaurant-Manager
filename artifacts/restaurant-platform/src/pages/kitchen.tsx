@@ -82,6 +82,7 @@ function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | nul
     unitPrice: 0,
     lineTotal: 0,
     notes: it.notes,
+    modifiers: (it.modifiers ?? []).map(m => ({ name: m.groupName ? `${m.groupName}: ${m.name}` : m.name, price: 0 })),
   }));
   const totalQty = items.reduce((s, i) => s + i.quantity, 0);
   printOrder({
@@ -193,20 +194,31 @@ function TicketCard({
 
       <div className="space-y-1 border-t border-border/40 pt-2">
         {(ticket.items ?? []).map((item: KitchenTicketItem) => (
-          <div key={item.id} className="flex items-center gap-2 text-sm">
-            <span className="font-bold w-6 shrink-0">{item.quantity}×</span>
-            {item.menuItemImageUrl ? (
-              <img
-                src={resolveImageUrl(item.menuItemImageUrl)}
-                alt=""
-                className="w-8 h-8 rounded object-cover flex-shrink-0 bg-muted"
-                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            ) : (
-              <div className="w-8 h-8 rounded bg-muted/40 flex-shrink-0" />
+          <div key={item.id} className="text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-bold w-6 shrink-0">{item.quantity}×</span>
+              {item.menuItemImageUrl ? (
+                <img
+                  src={resolveImageUrl(item.menuItemImageUrl)}
+                  alt=""
+                  className="w-8 h-8 rounded object-cover flex-shrink-0 bg-muted"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded bg-muted/40 flex-shrink-0" />
+              )}
+              <span className="font-medium">{item.menuItemName}</span>
+              {item.notes && <span className="text-xs opacity-70 italic ml-auto">({item.notes})</span>}
+            </div>
+            {item.modifiers && item.modifiers.length > 0 && (
+              <ul className="pl-10 mt-0.5 space-y-0.5">
+                {item.modifiers.map(m => (
+                  <li key={m.id} className="text-xs text-muted-foreground">
+                    + {m.groupName ? `${m.groupName}: ` : ""}{m.name}{m.quantity > 1 ? ` ×${m.quantity}` : ""}
+                  </li>
+                ))}
+              </ul>
             )}
-            <span className="font-medium">{item.menuItemName}</span>
-            {item.notes && <span className="text-xs opacity-70 italic ml-auto">({item.notes})</span>}
           </div>
         ))}
         {(!ticket.items || ticket.items.length === 0) && (

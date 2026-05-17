@@ -3,10 +3,17 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
+interface TicketItemModifier {
+  name: string;
+  groupName?: string | null;
+  quantity: number;
+}
+
 interface TicketItem {
   name: string;
   quantity: number;
   notes?: string | null;
+  modifiers?: TicketItemModifier[];
 }
 
 interface KitchenTicketCardProps {
@@ -73,10 +80,21 @@ export function KitchenTicketCard({
       </View>
       <View style={styles.items}>
         {items.map((item, i) => (
-          <View key={i} style={styles.itemRow}>
-            <Text style={[styles.qty, { color: colors.primary }]}>{item.quantity}×</Text>
-            <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
-            {item.notes ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{item.notes}</Text> : null}
+          <View key={i}>
+            <View style={styles.itemRow}>
+              <Text style={[styles.qty, { color: colors.primary }]}>{item.quantity}×</Text>
+              <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
+              {item.notes ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{item.notes}</Text> : null}
+            </View>
+            {item.modifiers && item.modifiers.length > 0 ? (
+              <View style={{ paddingLeft: 24, marginTop: 2 }}>
+                {item.modifiers.map((m, j) => (
+                  <Text key={j} style={[styles.notes, { color: colors.mutedForeground }]}>
+                    + {m.groupName ? `${m.groupName}: ` : ""}{m.name}{m.quantity > 1 ? ` ×${m.quantity}` : ""}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
           </View>
         ))}
       </View>

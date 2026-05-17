@@ -1230,7 +1230,7 @@ function CustomerSiteEditor({ s, set }: { s: CustomerSiteCfg; set: (updater: (p:
 /* ---------------- 16. Receipt ---------------- */
 interface ReceiptCfg {
   headerLogo: string; footerText: string;
-  showTaxBreakdown: boolean; showTipLine: boolean;
+  showTaxBreakdown: boolean; showTipLine: boolean; showModifiers: boolean;
   feedbackQrUrl: string;
   paperSize: "58mm" | "80mm" | "a5";
   fontSize: "small" | "medium" | "large";
@@ -1239,7 +1239,7 @@ interface ReceiptCfg {
 function ReceiptSection() {
   const defaults: ReceiptCfg = {
     headerLogo: "", footerText: "Thank you for dining with us!",
-    showTaxBreakdown: true, showTipLine: true,
+    showTaxBreakdown: true, showTipLine: true, showModifiers: true,
     feedbackQrUrl: "",
     paperSize: "80mm", fontSize: "medium", language: "en",
   };
@@ -1267,6 +1267,7 @@ function ReceiptSection() {
           <Field label="Language"><Input value={s.language} onChange={e => set(p => ({ ...p, language: e.target.value }))} /></Field>
           <Toggle label="Show GST / tax breakdown" checked={s.showTaxBreakdown} onChange={v => set(p => ({ ...p, showTaxBreakdown: v }))} />
           <Toggle label="Show tip line" checked={s.showTipLine} onChange={v => set(p => ({ ...p, showTipLine: v }))} />
+          <Toggle label="Show modifiers / add-ons on receipt" checked={s.showModifiers} onChange={v => set(p => ({ ...p, showModifiers: v }))} />
 
           <div className="border border-border rounded-lg p-4 bg-muted/20">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live preview</p>

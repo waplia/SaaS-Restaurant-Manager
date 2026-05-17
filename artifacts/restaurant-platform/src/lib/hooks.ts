@@ -2048,6 +2048,30 @@ export function useFoodCostReport(threshold: number = 65) {
   });
 }
 
+export interface AddonsReportRow {
+  modifierId: number | null;
+  name: string;
+  groupName: string | null;
+  totalQuantity: number;
+  totalRevenue: number;
+  orderCount: number;
+}
+export interface AddonsReport {
+  rows: AddonsReportRow[];
+  totalRevenue: number;
+  totalQuantity: number;
+}
+export function useAddonsReport(opts: { period?: string; custom?: { from: string; to: string } }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = new URLSearchParams();
+  if (opts.custom) { qs.set("from", opts.custom.from); qs.set("to", opts.custom.to); }
+  else qs.set("period", opts.period ?? "30d");
+  return useQuery({
+    queryKey: ["addons-report", RESTAURANT_ID, opts.period ?? null, opts.custom ?? null],
+    queryFn: () => apiGet<AddonsReport>(`/restaurants/${RESTAURANT_ID}/reports/addons?${qs.toString()}`),
+  });
+}
+
 export function useMenuEngineeringReport(opts: {
   period?: string;
   custom?: { from: string; to: string };

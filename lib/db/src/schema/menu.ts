@@ -74,9 +74,15 @@ export const modifierGroupsTable = pgTable("modifier_groups", {
   id: serial("id").primaryKey(),
   menuItemId: integer("menu_item_id").notNull().references(() => menuItemsTable.id),
   name: text("name").notNull(),
+  displayName: text("display_name"),
+  selectionType: text("selection_type").notNull().default("single"),
   isRequired: boolean("is_required").default(false),
   minSelections: integer("min_selections").default(0),
   maxSelections: integer("max_selections").default(1),
+  showOnPos: boolean("show_on_pos").notNull().default(true),
+  showOnQr: boolean("show_on_qr").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -85,9 +91,24 @@ export const modifiersTable = pgTable("modifiers", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => modifierGroupsTable.id),
   name: text("name").notNull(),
+  description: text("description"),
+  sku: text("sku"),
+  imageUrl: text("image_url"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull().default("0.00"),
   isDefault: boolean("is_default").default(false),
   isAvailable: boolean("is_available").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const modifierInventoryMappingsTable = pgTable("modifier_inventory_mappings", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  modifierId: integer("modifier_id").notNull().references(() => modifiersTable.id),
+  inventoryItemId: integer("inventory_item_id").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: text("unit"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -111,3 +132,7 @@ export type ModifierGroup = typeof modifierGroupsTable.$inferSelect;
 export const insertModifierSchema = createInsertSchema(modifiersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertModifier = z.infer<typeof insertModifierSchema>;
 export type Modifier = typeof modifiersTable.$inferSelect;
+
+export const insertModifierInventoryMappingSchema = createInsertSchema(modifierInventoryMappingsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertModifierInventoryMapping = z.infer<typeof insertModifierInventoryMappingSchema>;
+export type ModifierInventoryMapping = typeof modifierInventoryMappingsTable.$inferSelect;

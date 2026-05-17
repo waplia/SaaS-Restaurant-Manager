@@ -58,9 +58,35 @@ import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDisc
 import { loadDiscountsConfig, exceedsThreshold, exceedsRoleCap, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
 import { resolveOrderItemUnitPrice } from "../lib/pricingRules";
 import { pricingRuleApplicationsTable } from "../lib/db";
+import { enrichModifierSelections, deductInventoryForModifiers, type ModifierSelectionInput, type EnrichedModifier } from "../lib/modifierEnrichment";
 
 async function deductInventoryForOrder(orderId: number, restaurantId: number): Promise<void> {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  // Modifier-level deduction: gather all selected modifiers for this order and
+  // apply modifier_inventory_mappings against current stock. Mirrors menu-item
+  // recipe_mappings deduction below.
+  const itemIds = items.map(i => i.id);
+  const modRows = itemIds.length > 0
+    ? await db.select().from(orderItemModifiersTable).where(inArray(orderItemModifiersTable.orderItemId, itemIds))
+    : [];
+  const modsByOrderItem = new Map<number, typeof modRows>();
+  for (const m of modRows) {
+    const arr = modsByOrderItem.get(m.orderItemId) ?? [];
+    arr.push(m);
+    modsByOrderItem.set(m.orderItemId, arr);
+  }
+  await deductInventoryForModifiers(
+    restaurantId,
+    orderId,
+    items.map(it => ({
+      lineQty: it.quantity,
+      modifiers: (modsByOrderItem.get(it.id) ?? []).map(m => ({
+        modifierId: m.modifierId ?? null,
+        quantity: m.quantity ?? 1,
+      })),
+    })),
+  );
+
   for (const item of items) {
     const mappings = await db.select().from(recipeMappingsTable).where(
       and(eq(recipeMappingsTable.menuItemId, item.menuItemId), eq(recipeMappingsTable.restaurantId, restaurantId))
@@ -378,7 +404,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     menuItem: typeof menuItemsTable.$inferSelect;
     qty: number;
     notes?: string;
-    modifiers?: Array<{ name: string; price: string }>;
+    modifiers: EnrichedModifier[];
     unitPrice: number;
     originalPrice: number;
     appliedRule: { id: number; name: string; ruleType: string } | null;
@@ -388,10 +414,13 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
   const channel = (orderType ?? (ckContext ? "delivery" : "dine_in")) as string;
   const at = new Date();
 
-  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: Array<{ name: string; price: string }>; variantId?: number }>) {
+  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifiers?: ModifierSelectionInput[]; variantId?: number }>) {
     const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
-    const modTotal = (item.modifiers ?? []).reduce((s, m) => s + Number(m.price), 0);
+    const enrichRes = await enrichModifierSelections(mi.id, item.modifiers ?? []);
+    if (!enrichRes.ok) return void res.status(400).json({ error: enrichRes.error });
+    const lineModifiers = enrichRes.modifiers;
+    const modTotal = lineModifiers.reduce((s, m) => s + m.price * m.quantity, 0);
     // Cloud-kitchen brand pricing override takes precedence, 
     // followed by bar peg/bottle variants, and finally standard pricing rules.
     let unitPrice: number;
@@ -438,7 +467,7 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
       menuItem: mi,
       qty: item.quantity,
       notes: item.notes,
-      modifiers: item.modifiers,
+      modifiers: lineModifiers,
       unitPrice,
       originalPrice,
       appliedRule,
@@ -546,7 +575,15 @@ router.post("/restaurants/:restaurantId/orders", async (req, res) => {
     }
 
     for (const mod of ei.modifiers ?? []) {
-      await db.insert(orderItemModifiersTable).values({ orderItemId: oi.id, modifierName: mod.name, price: mod.price });
+      await db.insert(orderItemModifiersTable).values({
+        orderItemId: oi.id,
+        modifierId: mod.modifierId ?? null,
+        modifierGroupId: mod.modifierGroupId ?? null,
+        groupName: mod.groupName ?? null,
+        modifierName: mod.name,
+        quantity: mod.quantity,
+        price: mod.price.toFixed(2),
+      });
     }
 
     if (ei.appliedRule) {
@@ -671,11 +708,29 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const applications = itemIds.length > 0
     ? await db.select().from(pricingRuleApplicationsTable).where(inArray(pricingRuleApplicationsTable.orderItemId, itemIds))
     : [];
+  const modRows = itemIds.length > 0
+    ? await db.select().from(orderItemModifiersTable).where(inArray(orderItemModifiersTable.orderItemId, itemIds))
+    : [];
+  const modsByItem = new Map<number, typeof modRows>();
+  for (const m of modRows) {
+    const arr = modsByItem.get(m.orderItemId) ?? [];
+    arr.push(m);
+    modsByItem.set(m.orderItemId, arr);
+  }
   const appByItem = new Map(applications.map((a) => [a.orderItemId, a]));
   const items = itemsRaw.map((it) => {
     const app = appByItem.get(it.id);
     return {
       ...it,
+      modifiers: (modsByItem.get(it.id) ?? []).map(m => ({
+        id: m.id,
+        modifierId: m.modifierId ?? null,
+        modifierGroupId: m.modifierGroupId ?? null,
+        groupName: m.groupName ?? null,
+        name: m.modifierName,
+        quantity: m.quantity ?? 1,
+        price: m.price,
+      })),
       appliedRule: app
         ? {
             id: app.pricingRuleId,
@@ -735,7 +790,7 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   const orderId = Number(req.params.id);
   const { menuItemId, quantity, notes, modifiers, variantId } = req.body as {
     menuItemId: number; quantity: number; notes?: string;
-    modifiers?: Array<{ name: string; price: string }>; variantId?: number;
+    modifiers?: ModifierSelectionInput[]; variantId?: number;
   };
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
@@ -748,11 +803,12 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
   if (!mi) return void res.status(404).json({ error: "Menu item not found" });
 
   const qty = Number(quantity) || 1;
-  const hasModifiers = Array.isArray(modifiers) && modifiers.length > 0;
+  const enrichRes = await enrichModifierSelections(mi.id, modifiers ?? []);
+  if (!enrichRes.ok) return void res.status(400).json({ error: enrichRes.error });
+  const enrichedMods = enrichRes.modifiers;
+  const hasModifiers = enrichedMods.length > 0;
 
-  const modifierAdditional = hasModifiers
-    ? (modifiers as { name: string; price: string }[]).reduce((sum, m) => sum + Number(m.price ?? 0), 0)
-    : 0;
+  const modifierAdditional = enrichedMods.reduce((sum, m) => sum + m.price * m.quantity, 0);
 
   let unitPrice: number;
   let resolved: Awaited<ReturnType<typeof resolveOrderItemUnitPrice>> | null = null;
@@ -791,10 +847,14 @@ router.post("/restaurants/:restaurantId/orders/:id/items", async (req, res) => {
     }).returning();
     newItemId = newItem.id;
     await db.insert(orderItemModifiersTable).values(
-      (modifiers as { name: string; price: string }[]).map(m => ({
+      enrichedMods.map(m => ({
         orderItemId: newItemId!,
+        modifierId: m.modifierId ?? null,
+        modifierGroupId: m.modifierGroupId ?? null,
+        groupName: m.groupName ?? null,
         modifierName: m.name,
-        price: Number(m.price ?? 0).toFixed(2),
+        quantity: m.quantity,
+        price: m.price.toFixed(2),
       }))
     );
   } else {
@@ -2012,9 +2072,28 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
         return k === t.kitchenId;
       });
     }
+    const itemIds = items.map(i => i.id);
+    const ticketMods = itemIds.length > 0
+      ? await db.select().from(orderItemModifiersTable).where(inArray(orderItemModifiersTable.orderItemId, itemIds))
+      : [];
+    const modsByItemTicket = new Map<number, typeof ticketMods>();
+    for (const m of ticketMods) {
+      const arr = modsByItemTicket.get(m.orderItemId) ?? [];
+      arr.push(m);
+      modsByItemTicket.set(m.orderItemId, arr);
+    }
     const enrichedItems = items.map(i => ({
       ...i,
       menuItemImageUrl: i.menuItemId != null ? imageById.get(i.menuItemId) ?? null : null,
+      modifiers: (modsByItemTicket.get(i.id) ?? []).map(m => ({
+        id: m.id,
+        modifierId: m.modifierId ?? null,
+        modifierGroupId: m.modifierGroupId ?? null,
+        groupName: m.groupName ?? null,
+        name: m.modifierName,
+        quantity: m.quantity ?? 1,
+        price: m.price,
+      })),
     }));
 
     let tableNumber: string | null = null;

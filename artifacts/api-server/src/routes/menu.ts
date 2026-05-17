@@ -1,6 +1,6 @@
 import express, { Router } from "express";
-import { eq, and, ilike, gt } from "drizzle-orm";
-import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
+import { eq, and, ilike, gt, gte, lte, desc, sql, inArray } from "drizzle-orm";
+import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, modifierInventoryMappingsTable, inventoryItemsTable, orderItemsTable, orderItemModifiersTable, ordersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -608,11 +608,34 @@ router.post(
   res.json({ dryRun: false, committed: true, summary, results });
 });
 
+// ─── Modifier groups + options ──────────────────────────────────────────────
+// Permission scopes (all enforced via requireRole):
+//   modifier:view    → owner | manager | waiter | kitchen | super_admin
+//   modifier:write   → owner | manager | super_admin
+
+function pickGroupFields(body: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "displayName", "isRequired", "minSelections", "maxSelections", "selectionType", "showOnPos", "showOnQr", "sortOrder", "isActive"]) {
+    if (body[k] !== undefined) out[k] = body[k];
+  }
+  return out;
+}
+
+function pickModifierFields(body: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "price", "isDefault", "isAvailable", "description", "sku", "imageUrl", "sortOrder"]) {
+    if (body[k] !== undefined) out[k] = body[k];
+  }
+  return out;
+}
+
 router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
   const itemId = Number(req.params.itemId);
   const allowed = await resolveMenuItemTenantScope(itemId, req.user!);
   if (!allowed) return void res.status(403).json({ error: "Access denied" });
-  const rows = await db.select().from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, itemId));
+  const rows = await db.select().from(modifierGroupsTable)
+    .where(eq(modifierGroupsTable.menuItemId, itemId))
+    .orderBy(modifierGroupsTable.sortOrder, modifierGroupsTable.id);
   res.json(rows);
 });
 
@@ -620,16 +643,57 @@ router.post("/items/:itemId/modifier-groups", requireRole("owner", "manager", "s
   const itemId = Number(req.params.itemId);
   const allowed = await resolveMenuItemTenantScope(itemId, req.user!);
   if (!allowed) return void res.status(403).json({ error: "Access denied" });
-  const { name, isRequired, minSelections, maxSelections } = req.body;
-  const [group] = await db.insert(modifierGroupsTable).values({ menuItemId: itemId, name, isRequired, minSelections, maxSelections }).returning();
+  const [group] = await db.insert(modifierGroupsTable).values({
+    menuItemId: itemId,
+    name: String(req.body?.name ?? ""),
+    ...pickGroupFields(req.body ?? {}),
+  } as typeof modifierGroupsTable.$inferInsert).returning();
   res.status(201).json(group);
+});
+
+router.patch("/modifier-groups/:groupId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  const [updated] = await db.update(modifierGroupsTable)
+    .set(pickGroupFields(req.body ?? {}))
+    .where(eq(modifierGroupsTable.id, groupId))
+    .returning();
+  if (!updated) return void res.status(404).json({ error: "Not found" });
+  res.json(updated);
+});
+
+router.delete("/modifier-groups/:groupId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  await db.delete(modifiersTable).where(eq(modifiersTable.groupId, groupId));
+  await db.delete(modifierGroupsTable).where(eq(modifierGroupsTable.id, groupId));
+  res.json({ ok: true });
+});
+
+// List all modifier groups for a restaurant — used by add-on management UIs
+// that need a flat catalogue rather than per-item drilling.
+router.get("/restaurants/:restaurantId/modifier-groups", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const items = await db.select({ id: menuItemsTable.id, name: menuItemsTable.name })
+    .from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
+  if (items.length === 0) return void res.json([]);
+  const itemIds = items.map(i => i.id);
+  const groups = await db.select().from(modifierGroupsTable)
+    .where(inArray(modifierGroupsTable.menuItemId, itemIds))
+    .orderBy(modifierGroupsTable.menuItemId, modifierGroupsTable.sortOrder, modifierGroupsTable.id);
+  const nameById = new Map(items.map(i => [i.id, i.name] as const));
+  res.json(groups.map(g => ({ ...g, menuItemName: nameById.get(g.menuItemId) ?? null })));
 });
 
 router.get("/modifier-groups/:groupId/modifiers", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), async (req, res) => {
   const groupId = Number(req.params.groupId);
   const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
   if (!allowed) return void res.status(403).json({ error: "Access denied" });
-  const rows = await db.select().from(modifiersTable).where(eq(modifiersTable.groupId, groupId));
+  const rows = await db.select().from(modifiersTable)
+    .where(eq(modifiersTable.groupId, groupId))
+    .orderBy(modifiersTable.sortOrder, modifiersTable.id);
   res.json(rows);
 });
 
@@ -637,9 +701,127 @@ router.post("/modifier-groups/:groupId/modifiers", requireRole("owner", "manager
   const groupId = Number(req.params.groupId);
   const allowed = await resolveModifierGroupTenantScope(groupId, req.user!);
   if (!allowed) return void res.status(403).json({ error: "Access denied" });
-  const { name, price, isDefault } = req.body;
-  const [modifier] = await db.insert(modifiersTable).values({ groupId, name, price, isDefault }).returning();
+  const [modifier] = await db.insert(modifiersTable).values({
+    groupId,
+    name: String(req.body?.name ?? ""),
+    price: req.body?.price ?? "0.00",
+    ...pickModifierFields(req.body ?? {}),
+  } as typeof modifiersTable.$inferInsert).returning();
   res.status(201).json(modifier);
+});
+
+router.patch("/modifiers/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const [mod] = await db.select({ groupId: modifiersTable.groupId }).from(modifiersTable).where(eq(modifiersTable.id, id));
+  if (!mod) return void res.status(404).json({ error: "Not found" });
+  const allowed = await resolveModifierGroupTenantScope(mod.groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  const [updated] = await db.update(modifiersTable)
+    .set(pickModifierFields(req.body ?? {}))
+    .where(eq(modifiersTable.id, id))
+    .returning();
+  res.json(updated);
+});
+
+router.delete("/modifiers/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  const [mod] = await db.select({ groupId: modifiersTable.groupId }).from(modifiersTable).where(eq(modifiersTable.id, id));
+  if (!mod) return void res.status(404).json({ error: "Not found" });
+  const allowed = await resolveModifierGroupTenantScope(mod.groupId, req.user!);
+  if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  await db.delete(modifierInventoryMappingsTable).where(eq(modifierInventoryMappingsTable.modifierId, id));
+  await db.delete(modifiersTable).where(eq(modifiersTable.id, id));
+  res.json({ ok: true });
+});
+
+// ─── Modifier ↔ Inventory mappings ──────────────────────────────────────────
+// Per-restaurant join: deduct N units of an inventory item whenever this
+// modifier option is selected. Consumed by deductInventoryForModifiers().
+router.get("/restaurants/:restaurantId/modifiers/:id/inventory-mappings", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const rows = await db.select({
+    id: modifierInventoryMappingsTable.id,
+    modifierId: modifierInventoryMappingsTable.modifierId,
+    inventoryItemId: modifierInventoryMappingsTable.inventoryItemId,
+    quantity: modifierInventoryMappingsTable.quantity,
+    unit: modifierInventoryMappingsTable.unit,
+    inventoryItemName: inventoryItemsTable.name,
+  })
+    .from(modifierInventoryMappingsTable)
+    .innerJoin(inventoryItemsTable, eq(inventoryItemsTable.id, modifierInventoryMappingsTable.inventoryItemId))
+    .where(and(
+      eq(modifierInventoryMappingsTable.restaurantId, restaurantId),
+      eq(modifierInventoryMappingsTable.modifierId, id),
+    ));
+  res.json(rows);
+});
+
+router.post("/restaurants/:restaurantId/modifiers/:id/inventory-mappings", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const modifierId = Number(req.params.id);
+  const { inventoryItemId, quantity, unit } = req.body ?? {};
+  if (!inventoryItemId || !quantity) return void res.status(400).json({ error: "inventoryItemId and quantity are required" });
+  // Tenant isolation: inventory item must belong to this restaurant.
+  const [inv] = await db.select({ id: inventoryItemsTable.id, unit: inventoryItemsTable.unit })
+    .from(inventoryItemsTable)
+    .where(and(eq(inventoryItemsTable.id, Number(inventoryItemId)), eq(inventoryItemsTable.restaurantId, restaurantId)));
+  if (!inv) return void res.status(404).json({ error: "Inventory item not found in this restaurant" });
+  const [row] = await db.insert(modifierInventoryMappingsTable).values({
+    restaurantId, modifierId, inventoryItemId: inv.id,
+    quantity: String(quantity), unit: unit ?? inv.unit,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.delete("/restaurants/:restaurantId/modifier-inventory-mappings/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  await db.delete(modifierInventoryMappingsTable).where(and(
+    eq(modifierInventoryMappingsTable.id, id),
+    eq(modifierInventoryMappingsTable.restaurantId, restaurantId),
+  ));
+  res.json({ ok: true });
+});
+
+// ─── Add-ons (modifiers) sales report ────────────────────────────────────────
+// Aggregates modifier sales over a date range. Groups by modifierId when
+// available, falling back to (groupName, modifierName) for legacy rows that
+// were inserted before the snapshot fields existed.
+router.get("/restaurants/:restaurantId/reports/addons", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date(Date.now() - 30 * 86400_000);
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date();
+
+  const rows = await db
+    .select({
+      modifierId: orderItemModifiersTable.modifierId,
+      groupName: orderItemModifiersTable.groupName,
+      modifierName: orderItemModifiersTable.modifierName,
+      qty: sql<number>`cast(coalesce(sum(${orderItemModifiersTable.quantity} * ${orderItemsTable.quantity}), 0) as int)`,
+      revenue: sql<string>`cast(coalesce(sum(${orderItemModifiersTable.price}::numeric * ${orderItemModifiersTable.quantity} * ${orderItemsTable.quantity}), 0) as text)`,
+      orderCount: sql<number>`cast(count(distinct ${ordersTable.id}) as int)`,
+    })
+    .from(orderItemModifiersTable)
+    .innerJoin(orderItemsTable, eq(orderItemModifiersTable.orderItemId, orderItemsTable.id))
+    .innerJoin(ordersTable, and(
+      eq(orderItemsTable.orderId, ordersTable.id),
+      eq(ordersTable.restaurantId, restaurantId),
+      gte(ordersTable.createdAt, from),
+      lte(ordersTable.createdAt, to),
+    ))
+    .groupBy(orderItemModifiersTable.modifierId, orderItemModifiersTable.groupName, orderItemModifiersTable.modifierName)
+    .orderBy(desc(sql`coalesce(sum(${orderItemModifiersTable.price}::numeric * ${orderItemModifiersTable.quantity} * ${orderItemsTable.quantity}), 0)`));
+
+  res.json({
+    from: from.toISOString(),
+    to: to.toISOString(),
+    items: rows,
+    totals: {
+      quantity: rows.reduce((s, r) => s + Number(r.qty || 0), 0),
+      revenue: rows.reduce((s, r) => s + Number(r.revenue || 0), 0).toFixed(2),
+    },
+  });
 });
 
 export default router;

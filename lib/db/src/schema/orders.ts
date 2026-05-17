@@ -67,7 +67,11 @@ export const orderItemsTable = pgTable("order_items", {
 export const orderItemModifiersTable = pgTable("order_item_modifiers", {
   id: serial("id").primaryKey(),
   orderItemId: integer("order_item_id").notNull().references(() => orderItemsTable.id),
+  modifierId: integer("modifier_id"),
+  modifierGroupId: integer("modifier_group_id"),
   modifierName: text("modifier_name").notNull(),
+  groupName: text("group_name"),
+  quantity: integer("quantity").notNull().default(1),
   price: decimal("price", { precision: 10, scale: 2 }).notNull().default("0.00"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

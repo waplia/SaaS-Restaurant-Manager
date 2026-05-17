@@ -108,9 +108,17 @@ router.get("/public/menu/:slug", async (req, res) => {
   const enriched = await Promise.all(categories.map(async (cat) => {
     const items = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.categoryId, cat.id), eq(menuItemsTable.isAvailable, true)));
     const itemsWithMods = await Promise.all(items.map(async (item) => {
-      const groups = await db.select().from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, item.id));
+      const groups = await db.select().from(modifierGroupsTable)
+        .where(and(
+          eq(modifierGroupsTable.menuItemId, item.id),
+          eq(modifierGroupsTable.isActive, true),
+          eq(modifierGroupsTable.showOnQr, true),
+        ))
+        .orderBy(modifierGroupsTable.sortOrder, modifierGroupsTable.id);
       const groupsWithMods = await Promise.all(groups.map(async (g) => {
-        const mods = await db.select().from(modifiersTable).where(and(eq(modifiersTable.groupId, g.id), eq(modifiersTable.isAvailable, true)));
+        const mods = await db.select().from(modifiersTable)
+          .where(and(eq(modifiersTable.groupId, g.id), eq(modifiersTable.isAvailable, true)))
+          .orderBy(modifiersTable.sortOrder, modifiersTable.id);
         return { ...g, modifiers: mods };
       }));
       return { ...projectItem(item), modifierGroups: groupsWithMods };
@@ -143,27 +151,23 @@ router.post("/public/orders", async (req, res) => {
   if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
 
   let subtotal = 0;
-  const enrichedItems: Array<{ mi: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers: Array<{ id: number; name: string; price: string }> }> = [];
+  const enrichedItems: Array<{ mi: typeof menuItemsTable.$inferSelect; qty: number; notes?: string; modifiers: import("../lib/modifierEnrichment").EnrichedModifier[] }> = [];
 
-  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifierIds?: number[] }>) {
+  for (const item of items as Array<{ menuItemId: number; quantity: number; notes?: string; modifierIds?: number[]; modifiers?: import("../lib/modifierEnrichment").ModifierSelectionInput[] }>) {
     if (!item.menuItemId || !item.quantity) continue;
     const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, item.menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
     if (!mi) continue;
 
-    const modifierIds = item.modifierIds ?? [];
-    let resolvedMods: Array<{ id: number; name: string; price: string }> = [];
-    if (modifierIds.length > 0) {
-      const validGroups = await db.select({ id: modifierGroupsTable.id }).from(modifierGroupsTable).where(eq(modifierGroupsTable.menuItemId, mi.id));
-      const validGroupIds = validGroups.map(g => g.id);
-      if (validGroupIds.length > 0) {
-        const dbMods = await db.select().from(modifiersTable).where(
-          and(inArray(modifiersTable.id, modifierIds), inArray(modifiersTable.groupId, validGroupIds), eq(modifiersTable.isAvailable, true))
-        );
-        resolvedMods = dbMods.map(m => ({ id: m.id, name: m.name, price: m.price }));
-      }
-    }
+    // Public flow historically sent modifierIds: number[]. Accept that shape
+    // and also the richer {modifierId, quantity?} form used by POS.
+    const selections: import("../lib/modifierEnrichment").ModifierSelectionInput[] =
+      item.modifiers ?? (item.modifierIds ?? []).map(id => ({ modifierId: id }));
+    const { enrichModifierSelections } = await import("../lib/modifierEnrichment");
+    const r = await enrichModifierSelections(mi.id, selections);
+    if (!r.ok) return void res.status(400).json({ error: r.error });
+    const resolvedMods = r.modifiers;
 
-    const modTotal = resolvedMods.reduce((s, m) => s + Number(m.price), 0);
+    const modTotal = resolvedMods.reduce((s, m) => s + m.price * m.quantity, 0);
     subtotal += (Number(mi.price) + modTotal) * item.quantity;
     enrichedItems.push({ mi, qty: item.quantity, notes: item.notes, modifiers: resolvedMods });
   }
@@ -220,15 +224,34 @@ router.post("/public/orders", async (req, res) => {
   }).returning();
 
   for (const ei of enrichedItems) {
-    const modTotal = ei.modifiers.reduce((s, m) => s + Number(m.price), 0);
+    const modTotal = ei.modifiers.reduce((s, m) => s + m.price * m.quantity, 0);
     const unitPrice = Number(ei.mi.price) + modTotal;
     const [oi] = await db.insert(orderItemsTable).values({
       orderId: order.id, menuItemId: ei.mi.id, menuItemName: ei.mi.name,
       quantity: ei.qty, unitPrice: unitPrice.toFixed(2), totalPrice: (unitPrice * ei.qty).toFixed(2), notes: ei.notes ?? null,
     }).returning();
     for (const mod of ei.modifiers) {
-      await db.insert(orderItemModifiersTable).values({ orderItemId: oi.id, modifierName: mod.name, price: mod.price });
+      await db.insert(orderItemModifiersTable).values({
+        orderItemId: oi.id,
+        modifierId: mod.modifierId ?? null,
+        modifierGroupId: mod.modifierGroupId ?? null,
+        groupName: mod.groupName ?? null,
+        modifierName: mod.name,
+        quantity: mod.quantity,
+        price: mod.price.toFixed(2),
+      });
     }
+  }
+
+  // Modifier-driven inventory deduction (recipes are deducted elsewhere via deductInventoryForOrder).
+  try {
+    const { deductInventoryForModifiers } = await import("../lib/modifierEnrichment");
+    await deductInventoryForModifiers(restaurantId, order.id, enrichedItems.map(ei => ({
+      lineQty: ei.qty,
+      modifiers: ei.modifiers.map(m => ({ modifierId: m.modifierId, quantity: m.quantity })),
+    })));
+  } catch (err) {
+    console.error("[public order] modifier inventory deduction failed:", err);
   }
 
   const createdTickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId, isPriority: false });

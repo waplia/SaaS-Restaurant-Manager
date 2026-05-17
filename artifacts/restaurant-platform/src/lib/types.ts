@@ -114,6 +114,16 @@ export interface PopularItem {
   revenue: string;
 }
 
+export interface KitchenTicketItemModifier {
+  id: number;
+  modifierId: number | null;
+  modifierGroupId: number | null;
+  groupName: string | null;
+  name: string;
+  quantity: number;
+  price: string;
+}
+
 export interface KitchenTicketItem {
   id: number;
   menuItemId: number | null;
@@ -121,6 +131,7 @@ export interface KitchenTicketItem {
   menuItemImageUrl?: string | null;
   quantity: number;
   notes: string | null;
+  modifiers?: KitchenTicketItemModifier[];
 }
 
 export interface KitchenTicket {

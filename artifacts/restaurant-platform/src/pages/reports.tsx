@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Redirect, useParams } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, useMenuEngineeringReport, usePortionDriftEvents, useTasteTests, usePackagingItems, useCondimentItems, useRecipeVersions, type CompareBranchRow } from "@/lib/hooks";
+import { useFoodCostReport, useCashVarianceHistory, useBranchAwareReports, useCompareBranches, useKitchenPerformance, useKitchenPerformanceAiSummary, useDiscountInsights, useRestaurantId, useMenuEngineeringReport, usePortionDriftEvents, useTasteTests, usePackagingItems, useCondimentItems, useRecipeVersions, useAddonsReport, type CompareBranchRow } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
 import { MenuEngineeringTab } from "@/components/MenuEngineeringTab";
 import { cn } from "@/lib/utils";
@@ -50,10 +50,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering" | "inventory-control";
+type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering" | "inventory-control" | "addons";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering", "inventory-control"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering", "inventory-control", "addons"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -583,6 +583,7 @@ export default function ReportsPage() {
             { label: "Kitchen Performance", val: "kitchen-performance" as Tab },
             { label: "Menu Engineering", val: "menu-engineering" as Tab },
             { label: "Inventory Control", val: "inventory-control" as Tab },
+            { label: "Add-ons", val: "addons" as Tab },
           ]).map(({ label, val }) => (
             <Link
               key={val}
@@ -1201,6 +1202,13 @@ export default function ReportsPage() {
         )}
 
         {tab === "inventory-control" && <InventoryControlReport />}
+
+        {tab === "addons" && (
+          <AddonsReportTab
+            period={useCustom && customFrom && customTo ? null : period}
+            custom={useCustom && customFrom && customTo ? { from: customFrom, to: customTo } : null}
+          />
+        )}
       </div>
     </Layout>
   );
@@ -1625,6 +1633,75 @@ function DiscountInsightsBlock({ period, customFrom, customTo }: { period: strin
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function AddonsReportTab({ period, custom }: { period: string | null; custom: { from: string; to: string } | null }) {
+  const { data, isLoading } = useAddonsReport({
+    period: period ?? undefined,
+    custom: custom ?? undefined,
+  });
+  const rows = data?.rows ?? [];
+  function handleExport() {
+    exportCSV(
+      `addons-${new Date().toISOString().slice(0, 10)}.csv`,
+      rows.map(r => [r.name, r.groupName ?? "", String(r.totalQuantity), r.totalRevenue.toFixed(2), String(r.orderCount)]),
+      ["Modifier", "Group", "Quantity", "Revenue", "Orders"],
+    );
+  }
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Add-on Revenue</div>
+          <div className="text-2xl font-bold text-foreground mt-1">₹{Number(data?.totalRevenue ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Quantity Sold</div>
+          <div className="text-2xl font-bold text-foreground mt-1">{Number(data?.totalQuantity ?? 0).toLocaleString("en-IN")}</div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Unique Add-ons</div>
+          <div className="text-2xl font-bold text-foreground mt-1">{rows.length}</div>
+        </div>
+      </div>
+      <div className="bg-card border border-border rounded-xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h3 className="font-semibold text-foreground">Top Add-ons</h3>
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={!rows.length}>
+            <Download className="w-4 h-4 mr-1" /> Export CSV
+          </Button>
+        </div>
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">No add-on sales in this period.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase text-muted-foreground tracking-wide">
+                <th className="px-5 py-2.5 text-left">Modifier</th>
+                <th className="px-5 py-2.5 text-left">Group</th>
+                <th className="px-5 py-2.5 text-right">Quantity</th>
+                <th className="px-5 py-2.5 text-right">Revenue</th>
+                <th className="px-5 py-2.5 text-right">Orders</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.modifierId ?? "x"}-${i}`} className="border-t border-border hover:bg-muted/20">
+                  <td className="px-5 py-2.5 font-medium text-foreground">{r.name}</td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{r.groupName ?? "—"}</td>
+                  <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{r.totalQuantity}</td>
+                  <td className="px-5 py-2.5 text-right text-green-600 font-medium tabular-nums">₹{r.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</td>
+                  <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{r.orderCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
