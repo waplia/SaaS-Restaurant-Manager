@@ -22,6 +22,7 @@ const SECTION_PLAN_FEATURE: Partial<Record<SectionKey, string>> = {
   loyalty: "loyalty_program",
   discounts: "discounts_promotions",
   reservation: "reservations",
+  "direct-ordering": "online_ordering",
 };
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
@@ -36,6 +37,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "whatsapp",
+  "direct-ordering",
 ]);
 
 function findMeta(key: SectionKey) {
@@ -128,6 +130,7 @@ function renderSection(key: SectionKey) {
     case "cancellation-reasons": return <CancellationReasonsSection />;
     case "order-settings": return <OrderSettingsSection />;
     case "refund-reasons": return <RefundReasonsSection />;
+    case "direct-ordering": return <DirectOrderingSection />;
     case "ai": return <AiSection />;
     case "kiosk": return <KioskSection />;
     case "loyalty": return <LoyaltySection />;
@@ -1748,6 +1751,115 @@ function RefundReasonsSection() {
             </div>
           )}
         />
+      )}
+    </SettingForm>
+  );
+}
+
+/* ---------------- 25b. Direct Online Ordering (Task #432) ---------------- */
+interface DirectOrderingCfg {
+  orderingEnabled: boolean;
+  allowPickup: boolean;
+  allowDelivery: boolean;
+  allowScheduling: boolean;
+  minOrderValue: number;
+  deliveryFee: number;
+  freeDeliveryThreshold: number;
+  deliveryRadiusKm: number;
+  schemaEnabled: boolean;
+  seoTitle: string;
+  seoDescription: string;
+  ogImageUrl: string;
+  cuisine: string;
+  priceRange: string;
+  customOrderingLink: string;
+  holidayClosures: string[]; // YYYY-MM-DD list
+}
+function DirectOrderingSection() {
+  const { data: restaurant } = useRestaurantInfo();
+  const defaults: DirectOrderingCfg = {
+    orderingEnabled: true,
+    allowPickup: true, allowDelivery: false, allowScheduling: true,
+    minOrderValue: 0, deliveryFee: 0, freeDeliveryThreshold: 0, deliveryRadiusKm: 5,
+    schemaEnabled: true,
+    seoTitle: "", seoDescription: "", ogImageUrl: "",
+    cuisine: "", priceRange: "$$",
+    customOrderingLink: "",
+    holidayClosures: [],
+  };
+  const slug = restaurant?.slug ?? "";
+  const orderingUrl = slug ? `${window.location.origin}/menu/${slug}` : "";
+  const sitemapUrl = `${window.location.origin}/api/public/sitemap.xml`;
+  return (
+    <SettingForm section="direct-ordering" defaults={defaults}
+      description="SEO-friendly direct online ordering page (pickup & delivery). Lives at /menu/<slug>. Settings here power meta tags, schema.org markup, holiday closures, and delivery rules.">
+      {(s, set) => (
+        <>
+          <Toggle label="Direct online ordering enabled" hint="When off, customers see a friendly 'ordering closed' message and cannot place orders." checked={s.orderingEnabled} onChange={v => set(p => ({ ...p, orderingEnabled: v }))} />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-3">Ordering link</p>
+          <div className="space-y-2">
+            {slug ? (
+              <div className="flex items-center gap-2">
+                <Input value={orderingUrl} readOnly className="font-mono text-xs" />
+                <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(orderingUrl); }}>Copy</Button>
+                <a href={orderingUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">Open <ExternalLink className="w-3 h-3" /></a>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Set a restaurant slug under Restaurant Profile to enable a public ordering URL.</p>
+            )}
+            <Field label="Custom ordering link (optional)" hint="If you have a shorter vanity URL (e.g. order.yourdomain.com) paste it here. Shown to staff to share with guests.">
+              <Input value={s.customOrderingLink} placeholder="https://order.example.com" onChange={e => set(p => ({ ...p, customOrderingLink: e.target.value }))} />
+            </Field>
+            <div className="text-xs text-muted-foreground">
+              Search-engine sitemap: <a href={sitemapUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">{sitemapUrl}</a> — submit this to Google Search Console.
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-3">Order modes</p>
+          <Toggle label="Allow pickup" checked={s.allowPickup} onChange={v => set(p => ({ ...p, allowPickup: v }))} />
+          <Toggle label="Allow delivery" checked={s.allowDelivery} onChange={v => set(p => ({ ...p, allowDelivery: v }))} />
+          <Toggle label="Allow customers to schedule for later" checked={s.allowScheduling} onChange={v => set(p => ({ ...p, allowScheduling: v }))} />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-3">Order rules</p>
+          <Row>
+            <Field label="Minimum order value" hint="Cart subtotal must reach this amount before checkout."><Input type="number" value={s.minOrderValue} onChange={e => set(p => ({ ...p, minOrderValue: Number(e.target.value) }))} /></Field>
+            <Field label="Delivery radius (km)" hint="Display only — used in schema and on the customer page."><Input type="number" value={s.deliveryRadiusKm} onChange={e => set(p => ({ ...p, deliveryRadiusKm: Number(e.target.value) }))} /></Field>
+          </Row>
+          <Row>
+            <Field label="Flat delivery fee"><Input type="number" value={s.deliveryFee} onChange={e => set(p => ({ ...p, deliveryFee: Number(e.target.value) }))} /></Field>
+            <Field label="Free delivery above" hint="Subtotal at or above this waives the delivery fee. 0 = never free."><Input type="number" value={s.freeDeliveryThreshold} onChange={e => set(p => ({ ...p, freeDeliveryThreshold: Number(e.target.value) }))} /></Field>
+          </Row>
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-3">Holiday closures</p>
+          <p className="text-xs text-muted-foreground -mt-2">Dates listed here block new online orders for the entire day. Format YYYY-MM-DD.</p>
+          <ListEditor
+            items={s.holidayClosures.map((d, i) => ({ id: `c-${i}`, date: d }))}
+            onChange={items => set(p => ({ ...p, holidayClosures: items.map(i => i.date).filter(Boolean) }))}
+            addLabel="Add closed date"
+            makeNew={() => ({ id: `c-${Date.now()}`, date: new Date().toISOString().slice(0, 10) })}
+            render={(item, _i, update, remove) => (
+              <div className="flex items-center gap-2">
+                <Input type="date" className="w-48" value={item.date} onChange={e => update({ date: e.target.value })} />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="w-3.5 h-3.5" /></Button>
+              </div>
+            )}
+          />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-3">SEO & schema</p>
+          <Toggle label="Inject schema.org Restaurant + Menu JSON-LD" hint="Helps Google show your menu in rich results." checked={s.schemaEnabled} onChange={v => set(p => ({ ...p, schemaEnabled: v }))} />
+          <Field label="Page title (≤60 chars)"><Input maxLength={70} value={s.seoTitle} placeholder={`Order ${restaurant?.name ?? "your restaurant"} Online – Pickup & Delivery`} onChange={e => set(p => ({ ...p, seoTitle: e.target.value }))} /></Field>
+          <Field label="Meta description (≤160 chars)"><Textarea rows={2} maxLength={200} value={s.seoDescription} placeholder="Order online for pickup or delivery. Skip the line." onChange={e => set(p => ({ ...p, seoDescription: e.target.value }))} /></Field>
+          <Field label="Social share image (Open Graph)"><ImageUploadField value={s.ogImageUrl} onChange={url => set(p => ({ ...p, ogImageUrl: url ?? "" }))} /></Field>
+          <Row>
+            <Field label="Cuisine" hint="Used in schema.org servesCuisine (e.g. Italian, Indian)."><Input value={s.cuisine} onChange={e => set(p => ({ ...p, cuisine: e.target.value }))} /></Field>
+            <Field label="Price range" hint="Used in schema.org (e.g. $, $$, $$$).">
+              <Select value={s.priceRange} onChange={v => set(p => ({ ...p, priceRange: v }))} options={[
+                { value: "$", label: "$" }, { value: "$$", label: "$$" }, { value: "$$$", label: "$$$" }, { value: "$$$$", label: "$$$$" },
+              ]} />
+            </Field>
+          </Row>
+        </>
       )}
     </SettingForm>
   );

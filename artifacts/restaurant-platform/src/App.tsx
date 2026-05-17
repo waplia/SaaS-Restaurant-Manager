@@ -500,6 +500,7 @@ function Router() {
       <Route path="/book/:slug" component={PublicBookingPage} />
       <Route path="/memberships" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={MembershipsPage} feature="loyalty_program" />} allow={["owner", "manager", "waiter", "super_admin"]} />} />
       <Route path="/menu/:slug/:tableId" component={CustomerMenuPage} />
+      <Route path="/menu/:slug" component={CustomerMenuPage} />
       <Route path="/review/:qrCode" component={CustomerFeedbackPage} />
       <Route path="/surveys" component={() => <RoleProtectedRoute component={SurveysPage} allow={["owner", "manager"]} />} />
       <Route path="/survey/:slug" component={CustomerSurveyPage} />

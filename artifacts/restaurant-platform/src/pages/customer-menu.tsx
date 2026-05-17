@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock } from "lucide-react";
+import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = "/api";
@@ -93,6 +93,27 @@ interface PublicMenu {
   menuImageConfig?: MenuImageConfig;
   showNutritionOnQrMenu?: boolean;
   categories: PublicMenuCategory[];
+  // Direct online ordering (Task #432) — present whenever the customer hits
+  // /menu/:slug (no tableId). The API always populates it with defaults.
+  directOrdering?: {
+    orderingEnabled: boolean;
+    seoTitle: string;
+    seoDescription: string;
+    ogImageUrl: string | null;
+    schemaEnabled: boolean;
+    allowPickup: boolean;
+    allowDelivery: boolean;
+    allowScheduling: boolean;
+    minOrderValue: number;
+    deliveryFee: number;
+    freeDeliveryThreshold: number;
+    deliveryRadiusKm: number;
+    holidayClosures: string[];
+    closedToday: boolean;
+    customOrderingLink: string | null;
+    cuisine: string | null;
+    priceRange: string | null;
+  };
 }
 
 function resolveImg(url: string | null | undefined): string {
@@ -287,7 +308,14 @@ export default function CustomerMenuPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
   const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
-  const [orderMode, setOrderMode] = useState<"dine_in" | "curbside">("dine_in");
+  const [orderMode, setOrderMode] = useState<"dine_in" | "curbside" | "pickup" | "delivery">(tableId ? "dine_in" : "pickup");
+  // Direct online ordering (Task #432) – schedule + delivery address + reorder
+  const [scheduledFor, setScheduledFor] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [reorderPhone, setReorderPhone] = useState<string>("");
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const [reorderError, setReorderError] = useState<string | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Array<{ id: number; orderNumber: string; totalAmount: string; createdAt: string; items: Array<{ menuItemId: number; menuItemName: string; quantity: number }> }>>([]);
   const [vehicleColor, setVehicleColor] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
@@ -352,6 +380,141 @@ export default function CustomerMenuPage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  // Direct online ordering (Task #432): inject SEO meta tags and schema.org
+  // JSON-LD Restaurant + Menu so search engines can crawl /menu/:slug. Only
+  // applied when there is no tableId (i.e. public ordering page, not QR).
+  useEffect(() => {
+    if (!menu || tableId) return;
+    const cfg = menu.directOrdering;
+    const title = cfg?.seoTitle?.trim() || `Order ${menu.restaurantName} Online`;
+    const desc = cfg?.seoDescription?.trim() || `Order from ${menu.restaurantName} for pickup or delivery.`;
+    const ogImage = cfg?.ogImageUrl || menu.logoUrl || "";
+    document.title = title;
+    // Set explicit key/value attribute pairs so newly-created tags carry the
+    // correct identifying attribute (name="..." or property="...") — parsing
+    // attribute names from a CSS selector string was unreliable.
+    const upsertMeta = (key: "name" | "property", id: string, value: string) => {
+      let el = document.head.querySelector<HTMLMetaElement>(`meta[${key}="${id}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(key, id);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", value);
+    };
+    upsertMeta("name", "description", desc);
+    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:description", desc);
+    upsertMeta("property", "og:type", "restaurant.restaurant");
+    upsertMeta("property", "og:url", window.location.href);
+    if (ogImage) upsertMeta("property", "og:image", resolveImg(ogImage));
+    upsertMeta("name", "twitter:card", "summary_large_image");
+    // Canonical link
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement("link"); canonical.setAttribute("rel", "canonical"); document.head.appendChild(canonical); }
+    canonical.setAttribute("href", `${window.location.origin}/menu/${menu.restaurantSlug}`);
+
+    // JSON-LD Restaurant + Menu
+    const ldId = "tt-direct-ordering-jsonld";
+    document.getElementById(ldId)?.remove();
+    if (cfg?.schemaEnabled !== false) {
+      const menuSchema = {
+        "@type": "Menu",
+        name: `${menu.restaurantName} Menu`,
+        hasMenuSection: menu.categories.map(cat => ({
+          "@type": "MenuSection",
+          name: cat.name,
+          hasMenuItem: cat.items.map(it => ({
+            "@type": "MenuItem",
+            name: it.name,
+            description: it.description ?? undefined,
+            image: it.imageUrl ? resolveImg(it.imageUrl) : undefined,
+            offers: { "@type": "Offer", price: Number(it.price), priceCurrency: menu.currency },
+          })),
+        })),
+      };
+      const ld = {
+        "@context": "https://schema.org",
+        "@type": "Restaurant",
+        name: menu.restaurantName,
+        url: `${window.location.origin}/menu/${menu.restaurantSlug}`,
+        image: menu.logoUrl ? resolveImg(menu.logoUrl) : undefined,
+        servesCuisine: cfg?.cuisine || undefined,
+        priceRange: cfg?.priceRange || undefined,
+        acceptsReservations: false,
+        hasMenu: menuSchema,
+        potentialAction: {
+          "@type": "OrderAction",
+          target: `${window.location.origin}/menu/${menu.restaurantSlug}`,
+          deliveryMethod: [
+            cfg?.allowPickup !== false ? "http://purl.org/goodrelations/v1#PickUp" : null,
+            cfg?.allowDelivery ? "http://purl.org/goodrelations/v1#DeliveryModeOwnFleet" : null,
+          ].filter(Boolean),
+        },
+      };
+      const script = document.createElement("script");
+      script.id = ldId;
+      script.type = "application/ld+json";
+      script.text = JSON.stringify(ld);
+      document.head.appendChild(script);
+    }
+    return () => { document.getElementById(ldId)?.remove(); };
+  }, [menu, tableId]);
+
+  // Direct online ordering: reorder by phone — fetches up to 5 recent orders
+  // for this restaurant + phone so the customer can re-add items to cart.
+  async function fetchRecentOrders() {
+    if (reorderPhone.trim().length < 4) { setReorderError("Enter the phone number you used before."); return; }
+    // The reorder endpoint requires proof that the caller previously placed an
+    // order on this device — we read the order id + guest token saved in
+    // localStorage after each successful checkout. Without it, the server
+    // rejects the lookup to prevent phone-number enumeration of order PII.
+    const lastOrderRaw = localStorage.getItem(`tt_last_order_${slug}`);
+    if (!lastOrderRaw) {
+      setReorderError("Place an order on this device first — reorder is only available once you've checked out before.");
+      return;
+    }
+    let last: { orderId: number; token: string };
+    try { last = JSON.parse(lastOrderRaw); } catch { setReorderError("Couldn't read your previous order info. Try ordering again."); return; }
+    setReorderLoading(true); setReorderError(null);
+    try {
+      const data = await apiPublicPost<{ orders: typeof recentOrders }>("/public/orders/recent", {
+        slug, phone: reorderPhone.trim(),
+        lastOrderId: last.orderId, lastOrderToken: last.token,
+      });
+      setRecentOrders(data.orders);
+      if (data.orders.length === 0) setReorderError("No previous orders found for that phone number.");
+    } catch (e) {
+      setReorderError(e instanceof Error ? e.message : "Couldn't load recent orders. Please try again.");
+    } finally {
+      setReorderLoading(false);
+    }
+  }
+  function reorderItems(items: Array<{ menuItemId: number; menuItemName: string; quantity: number }>) {
+    if (!menu) return;
+    const lookup = new Map<number, PublicMenuItem>();
+    for (const c of menu.categories) for (const it of c.items) lookup.set(it.id, it);
+    const additions: CartItem[] = [];
+    const missing: string[] = [];
+    for (const it of items) {
+      const mi = lookup.get(it.menuItemId);
+      if (!mi) { missing.push(it.menuItemName); continue; }
+      additions.push({
+        menuItemId: mi.id, name: mi.name, basePrice: Number(mi.price), modifierTotal: 0,
+        quantity: it.quantity, notes: "", imageUrl: mi.imageUrl, modifiers: [],
+      });
+    }
+    if (additions.length === 0) {
+      alert("None of those items are available on the current menu.");
+      return;
+    }
+    setCart(prev => [...prev, ...additions]);
+    setShowCart(true);
+    if (missing.length > 0) {
+      setTimeout(() => alert(`Some items are no longer available and were skipped:\n• ${missing.join("\n• ")}`), 100);
+    }
+  }
+
   const connectSocket = useCallback((orderId: number, token: string) => {
     const socket = io((import.meta.env.VITE_API_URL ?? ""), {
       path: "/api/socket.io",
@@ -400,7 +563,13 @@ export default function CustomerMenuPage() {
     qs.set("order", String(orderResult.orderId));
     qs.set("token", orderResult.guestToken);
     window.history.replaceState({}, "", `${window.location.pathname}?${qs.toString()}`);
-  }, [orderResult, view]);
+    // Save the most recent order id+token for this restaurant so the
+    // /public/orders/recent reorder endpoint can verify this device placed a
+    // previous order (anti-enumeration). Cleared on logout / manual reset.
+    try {
+      localStorage.setItem(`tt_last_order_${slug}`, JSON.stringify({ orderId: orderResult.orderId, token: orderResult.guestToken }));
+    } catch { /* private mode / quota — non-fatal */ }
+  }, [orderResult, view, slug]);
 
   useEffect(() => {
     if (!orderResult) return;
@@ -523,6 +692,22 @@ export default function CustomerMenuPage() {
 
   async function placeOrder() {
     if (cart.length === 0) return;
+    const doCfg = menu?.directOrdering;
+    const isOnline = !tableId;
+    if (isOnline && doCfg?.orderingEnabled === false) {
+      alert("Online ordering is currently disabled. Please call the restaurant.");
+      return;
+    }
+    if (isOnline && doCfg?.closedToday) {
+      alert("We're closed today and not accepting online orders. Please try again tomorrow.");
+      return;
+    }
+    if (isOnline) {
+      if (!customerPhone.trim()) { alert("Please enter your phone number so we can reach you about your order."); return; }
+      const min = doCfg?.minOrderValue ?? 0;
+      if (min > 0 && cartTotal < min) { alert(`Minimum order is ${currSymbol}${min.toFixed(2)}. Add ${currSymbol}${(min - cartTotal).toFixed(2)} more to checkout.`); return; }
+      if (orderMode === "delivery" && !deliveryAddress.trim()) { alert("Please enter a delivery address."); return; }
+    }
     if (orderMode === "curbside") {
       if (!customerPhone.trim()) { alert("Please enter your phone number — we use it to coordinate handover."); return; }
       if (!vehicleColor.trim() || !vehicleModel.trim()) { alert("Please tell us your vehicle color and model so staff can find you."); return; }
@@ -531,11 +716,13 @@ export default function CustomerMenuPage() {
     try {
       const result = await apiPublicPost<OrderResult>("/public/orders", {
         restaurantId: menu!.restaurantId,
-        tableId: orderMode === "curbside" ? null : tableId,
-        orderType: orderMode === "curbside" ? "curbside" : undefined,
+        tableId: orderMode === "curbside" || isOnline ? null : tableId,
+        orderType: orderMode === "curbside" ? "curbside" : orderMode === "pickup" ? "takeaway" : orderMode === "delivery" ? "delivery" : undefined,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         notes: orderNotes.trim() || undefined,
+        scheduledFor: scheduledFor || undefined,
+        deliveryAddress: orderMode === "delivery" ? deliveryAddress.trim() : undefined,
         vehicleColor: orderMode === "curbside" ? vehicleColor.trim() : undefined,
         vehicleModel: orderMode === "curbside" ? vehicleModel.trim() : undefined,
         vehicleNumber: orderMode === "curbside" ? (vehicleNumber.trim() || undefined) : undefined,
@@ -1060,22 +1247,53 @@ export default function CustomerMenuPage() {
 
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <p className="font-semibold text-gray-800 mb-3">How would you like your order?</p>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <button
-                type="button"
-                onClick={() => setOrderMode("dine_in")}
-                className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "dine_in" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}
-              >
-                {tableId ? "Dine-in" : "Pickup"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderMode("curbside")}
-                className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "curbside" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}
-              >
-                Curbside pickup
-              </button>
-            </div>
+            {!tableId ? (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {menu.directOrdering?.allowPickup !== false && (
+                  <button type="button" onClick={() => setOrderMode("pickup")}
+                    className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "pickup" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}>
+                    Pickup
+                  </button>
+                )}
+                {menu.directOrdering?.allowDelivery && (
+                  <button type="button" onClick={() => setOrderMode("delivery")}
+                    className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "delivery" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}>
+                    Delivery {menu.directOrdering.deliveryFee > 0 ? `· ${currSymbol}${menu.directOrdering.deliveryFee.toFixed(2)}` : "· Free"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <button type="button" onClick={() => setOrderMode("dine_in")}
+                  className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "dine_in" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}>
+                  Dine-in
+                </button>
+                <button type="button" onClick={() => setOrderMode("curbside")}
+                  className={cn("border-2 rounded-xl py-3 text-sm font-semibold transition", orderMode === "curbside" ? "border-orange-400 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600")}>
+                  Curbside pickup
+                </button>
+              </div>
+            )}
+            {orderMode === "delivery" && (
+              <div className="mb-3">
+                <input type="text" placeholder="Delivery address *"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
+                {menu.directOrdering && menu.directOrdering.deliveryRadiusKm > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-1.5">We deliver within {menu.directOrdering.deliveryRadiusKm} km. Address will be confirmed before dispatch.</p>
+                )}
+                {menu.directOrdering?.freeDeliveryThreshold && menu.directOrdering.freeDeliveryThreshold > 0 ? (
+                  <p className="text-[11px] text-emerald-600 mt-1">Free delivery on orders {currSymbol}{menu.directOrdering.freeDeliveryThreshold.toFixed(2)}+</p>
+                ) : null}
+              </div>
+            )}
+            {!tableId && menu.directOrdering?.allowScheduling !== false && (
+              <div className="mb-3">
+                <label className="text-xs font-medium text-gray-600 block mb-1">Schedule for later (optional)</label>
+                <input type="datetime-local" value={scheduledFor} onChange={e => setScheduledFor(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
+              </div>
+            )}
             {orderMode === "curbside" && (
               <div className="space-y-2 mb-3">
                 <p className="text-xs text-gray-500">Tell us about your vehicle so staff can find you.</p>
@@ -1091,8 +1309,35 @@ export default function CustomerMenuPage() {
             )}
           </div>
 
+          {!tableId && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="font-semibold text-gray-800 mb-2 flex items-center gap-2"><RotateCcw className="w-4 h-4 text-orange-500" /> Reorder a recent order</p>
+              <p className="text-xs text-gray-500 mb-2">Enter the phone number you used last time and we'll show your past orders.</p>
+              <div className="flex gap-2">
+                <input type="tel" placeholder="Phone number" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={reorderPhone} onChange={e => setReorderPhone(e.target.value)} />
+                <button type="button" onClick={fetchRecentOrders} disabled={reorderLoading} className="px-4 py-2 rounded-xl bg-orange-100 text-orange-700 text-sm font-semibold disabled:opacity-50">
+                  {reorderLoading ? "…" : "Find"}
+                </button>
+              </div>
+              {reorderError && <p className="text-xs text-red-600 mt-2">{reorderError}</p>}
+              {recentOrders.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {recentOrders.map(o => (
+                    <div key={o.id} className="border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">#{o.orderNumber}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{o.items.map(i => `${i.quantity}× ${i.menuItemName}`).join(", ")}</p>
+                      </div>
+                      <button type="button" onClick={() => reorderItems(o.items)} className="text-xs font-semibold text-orange-600 hover:text-orange-700 px-2 py-1 rounded-lg bg-orange-50 flex-shrink-0">Reorder</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="font-semibold text-gray-800 mb-3">Your Details {orderMode === "curbside" ? "" : "(optional)"}</p>
+            <p className="font-semibold text-gray-800 mb-3">Your Details {orderMode === "curbside" || !tableId ? "" : "(optional)"}</p>
             <div className="space-y-3">
               <input type="text" placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerName} onChange={e => setCustomerName(e.target.value)} />
               <input type="tel" placeholder={orderMode === "curbside" ? "Phone number *" : "Phone number"} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
@@ -1148,7 +1393,7 @@ export default function CustomerMenuPage() {
               <p className="font-bold text-lg leading-tight truncate">{menu.restaurantName}</p>
               <p className="text-orange-50 text-xs flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 bg-green-300 rounded-full" /> Open</span>
-                <span>· Table {tableId}</span>
+                <span>{tableId ? `· Table ${tableId}` : "· Online Ordering"}</span>
               </p>
             </div>
           </div>
@@ -1175,6 +1420,16 @@ export default function CustomerMenuPage() {
           )}
         </div>
       </div>
+
+      {!tableId && menu.directOrdering && (menu.directOrdering.closedToday || !menu.directOrdering.orderingEnabled) && (
+        <div className="-mt-10 mx-4 mb-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs flex items-start gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">{menu.directOrdering.closedToday ? "We're closed today" : "Online ordering paused"}</p>
+            <p className="text-amber-800/80">You can still browse the menu. Online checkout will resume {menu.directOrdering.closedToday ? "tomorrow" : "shortly"}.</p>
+          </div>
+        </div>
+      )}
 
       <div className="-mt-12 mx-4 mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
         {([

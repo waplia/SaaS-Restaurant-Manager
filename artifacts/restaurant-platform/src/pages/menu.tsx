@@ -19,8 +19,9 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Pencil, Trash2, ChevronRight, Download, Upload,
   UtensilsCrossed, Settings2, X, Check, Tag, Clock, Flame, Leaf, ChefHat,
-  Sparkles, ImagePlus, Loader2, History, Activity,
+  Sparkles, ImagePlus, Loader2, History, Activity, Globe,
 } from "lucide-react";
+import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
@@ -1021,6 +1022,11 @@ export default function MenuPage() {
               <Upload className="w-3.5 h-3.5 mr-1.5" /> Import CSV
             </Button>
             <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
+            <Link href="/settings/direct-ordering">
+              <Button size="sm" variant="outline">
+                <Globe className="w-3.5 h-3.5 mr-1.5" /> Online Ordering
+              </Button>
+            </Link>
             <Button size="sm" onClick={() => { setEditItem(null); setItemForm(EMPTY_ITEM_FORM); setActiveTab("details"); setShowItemModal(true); }}>
               <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Item
             </Button>

@@ -10,7 +10,7 @@ import {
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
   Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash, Calculator, MonitorSmartphone,
-  Lock,
+  Lock, ShoppingBag,
 } from "lucide-react";
 
 export type SectionKey =
@@ -18,7 +18,7 @@ export type SectionKey =
   | "email" | "taxes" | "payment" | "theme" | "roles" | "billing"
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
-  | "cancellation-reasons" | "order-settings" | "refund-reasons"
+  | "cancellation-reasons" | "order-settings" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs"
   | "accounting" | "account" | "sessions";
@@ -62,6 +62,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "receipt", label: "Invoice / Receipt", icon: Receipt },
       { key: "delivery", label: "Delivery Zones", icon: Truck },
       { key: "customer-site", label: "QR Menu", icon: Globe },
+      { key: "direct-ordering", label: "Direct Ordering", icon: ShoppingBag },
       { key: "kiosk", label: "Kiosk", icon: Tablet },
       { key: "reservation", label: "Reservations", icon: CalendarRange },
       { key: "cancellation-reasons", label: "Cancellation Reasons", icon: Ban },

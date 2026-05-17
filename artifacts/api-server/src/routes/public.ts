@@ -126,6 +126,40 @@ router.get("/public/menu/:slug", async (req, res) => {
     return { ...cat, items: itemsWithMods };
   }));
 
+  // Direct online ordering (Task #432): expose SEO + ordering config so the
+  // public menu page can render correct meta tags, holiday closure banners,
+  // delivery rules and the schema.org Menu/Restaurant JSON-LD.
+  const [doRow] = await db.select().from(restaurantSettingsTable).where(and(
+    eq(restaurantSettingsTable.restaurantId, restaurant.id),
+    eq(restaurantSettingsTable.section, "direct-ordering"),
+  ));
+  const doCfg = (doRow?.data as Record<string, unknown> | undefined) ?? {};
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const closures = Array.isArray(doCfg.holidayClosures) ? (doCfg.holidayClosures as string[]) : [];
+  const directOrdering = {
+    orderingEnabled: doCfg.orderingEnabled !== false,
+    seoTitle: typeof doCfg.seoTitle === "string" && doCfg.seoTitle.trim()
+      ? doCfg.seoTitle.trim()
+      : `Order ${restaurant.name} Online – Pickup & Delivery`,
+    seoDescription: typeof doCfg.seoDescription === "string" && doCfg.seoDescription.trim()
+      ? doCfg.seoDescription.trim()
+      : `Order online from ${restaurant.name}. Skip the line and order ahead for pickup or delivery.`,
+    ogImageUrl: typeof doCfg.ogImageUrl === "string" ? doCfg.ogImageUrl : (restaurant.logoUrl ?? null),
+    schemaEnabled: doCfg.schemaEnabled !== false,
+    allowPickup: doCfg.allowPickup !== false,
+    allowDelivery: doCfg.allowDelivery === true,
+    allowScheduling: doCfg.allowScheduling !== false,
+    minOrderValue: typeof doCfg.minOrderValue === "number" ? doCfg.minOrderValue : 0,
+    deliveryFee: typeof doCfg.deliveryFee === "number" ? doCfg.deliveryFee : 0,
+    freeDeliveryThreshold: typeof doCfg.freeDeliveryThreshold === "number" ? doCfg.freeDeliveryThreshold : 0,
+    deliveryRadiusKm: typeof doCfg.deliveryRadiusKm === "number" ? doCfg.deliveryRadiusKm : 0,
+    holidayClosures: closures,
+    closedToday: closures.includes(todayKey),
+    customOrderingLink: typeof doCfg.customOrderingLink === "string" ? doCfg.customOrderingLink : null,
+    cuisine: typeof doCfg.cuisine === "string" ? doCfg.cuisine : null,
+    priceRange: typeof doCfg.priceRange === "string" ? doCfg.priceRange : null,
+  };
+
   res.json({
     restaurantId: restaurant.id,
     restaurantName: restaurant.name,
@@ -136,11 +170,130 @@ router.get("/public/menu/:slug", async (req, res) => {
     showNutritionOnQrMenu,
     menuBannerUrl: menu.imageUrl ?? null,
     categories: enriched,
+    directOrdering,
   });
 });
 
+// Direct online ordering (Task #432): per-customer reorder lookup. To prevent
+// trivial phone-enumeration scraping of order history, the caller must prove
+// ownership of a recent order on the same device by passing the previous
+// order's id + guest token (stored in localStorage after each successful
+// order). The token is HMAC-validated and must belong to an order on the
+// same restaurant whose customerPhone matches the requested phone. We also
+// rate-limit per IP+slug and add a uniform delay so timing can't be used to
+// distinguish "wrong phone" from "wrong token".
+const reorderAttempts = new Map<string, { count: number; resetAt: number }>();
+function checkReorderRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = reorderAttempts.get(key);
+  if (!entry || entry.resetAt < now) {
+    reorderAttempts.set(key, { count: 1, resetAt: now + 10 * 60_000 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= 5;
+}
+router.post("/public/orders/recent", async (req, res) => {
+  // Constant ~250ms response time prevents timing-based enumeration of which
+  // phone numbers exist. We deliberately await this even on early errors.
+  const respondAfter = new Promise<void>(r => setTimeout(r, 250));
+  const ip = (req.ip || req.socket.remoteAddress || "unknown").toString();
+  const { slug, phone, lastOrderId, lastOrderToken } = req.body as {
+    slug?: string; phone?: string; lastOrderId?: number; lastOrderToken?: string;
+  };
+  const generic = { error: "Couldn't verify your previous order. Place an order first to enable reorder on this device." };
+
+  if (!slug || typeof slug !== "string") {
+    await respondAfter; return void res.status(400).json(generic);
+  }
+  if (!checkReorderRateLimit(`${ip}:${slug}`)) {
+    await respondAfter; return void res.status(429).json({ error: "Too many attempts. Please try again later." });
+  }
+  if (!phone || typeof phone !== "string" || phone.trim().length < 4
+      || !lastOrderId || typeof lastOrderId !== "number"
+      || !lastOrderToken || typeof lastOrderToken !== "string") {
+    await respondAfter; return void res.status(400).json(generic);
+  }
+
+  const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, slug));
+  if (!restaurant) { await respondAfter; return void res.status(404).json(generic); }
+
+  // Authenticate caller: token must match an order belonging to this
+  // restaurant whose phone equals the requested phone. validateGuestToken
+  // returns the order id when the HMAC is valid.
+  if (!validateGuestToken(lastOrderId, lastOrderToken)) { await respondAfter; return void res.status(403).json(generic); }
+  const [authOrder] = await db.select({ id: ordersTable.id, phone: ordersTable.customerPhone, rid: ordersTable.restaurantId })
+    .from(ordersTable).where(eq(ordersTable.id, lastOrderId));
+  if (!authOrder || authOrder.rid !== restaurant.id || !authOrder.phone || authOrder.phone !== phone.trim()) {
+    await respondAfter; return void res.status(403).json(generic);
+  }
+
+  const orders = await db.select({
+    id: ordersTable.id, orderNumber: ordersTable.orderNumber, totalAmount: ordersTable.totalAmount,
+    createdAt: ordersTable.createdAt, orderType: ordersTable.orderType,
+  }).from(ordersTable).where(and(
+    eq(ordersTable.restaurantId, restaurant.id),
+    eq(ordersTable.customerPhone, phone.trim()),
+    sql`${ordersTable.status} <> 'cancelled'`,
+  )).orderBy(desc(ordersTable.createdAt)).limit(5);
+
+  const out: Array<{ id: number; orderNumber: string; totalAmount: string; createdAt: Date; orderType: string; items: Array<{ menuItemId: number; menuItemName: string; quantity: number }> }> = [];
+  for (const o of orders) {
+    const items = await db.select({
+      menuItemId: orderItemsTable.menuItemId,
+      menuItemName: orderItemsTable.menuItemName,
+      quantity: orderItemsTable.quantity,
+    }).from(orderItemsTable).where(eq(orderItemsTable.orderId, o.id));
+    out.push({ ...o, items });
+  }
+  await respondAfter;
+  res.json({ orders: out });
+});
+
+// Direct online ordering (Task #432): public sitemap.xml listing all
+// restaurant ordering pages so search engines can crawl and index them.
+router.get("/public/sitemap.xml", async (req, res) => {
+  const baseHost = (req.headers.host ?? "").toString();
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? req.protocol ?? "https";
+  const base = `${proto}://${baseHost}`;
+
+  // Only restaurants whose tenant is not suspended AND whose plan includes
+  // online_ordering get listed. Build the eligible set in two cheap queries
+  // and intersect in memory rather than per-row feature checks.
+  const rows = await db.select({
+    slug: restaurantsTable.slug, updatedAt: restaurantsTable.updatedAt,
+    tenantId: restaurantsTable.tenantId, planId: tenantsTable.planId,
+    isSuspended: tenantsTable.isSuspended,
+  }).from(restaurantsTable).innerJoin(tenantsTable, eq(restaurantsTable.tenantId, tenantsTable.id));
+
+  const planFlags = new Map<number, unknown>();
+  const planIds = Array.from(new Set(rows.map(r => r.planId).filter((x): x is number => x != null)));
+  if (planIds.length > 0) {
+    const plans = await db.select({ id: subscriptionPlansTable.id, featureFlags: subscriptionPlansTable.featureFlags })
+      .from(subscriptionPlansTable).where(inArray(subscriptionPlansTable.id, planIds));
+    for (const p of plans) planFlags.set(p.id, p.featureFlags);
+  }
+
+  const urls: Array<{ slug: string; updatedAt: Date }> = [];
+  for (const r of rows) {
+    if (!r.slug || r.isSuspended) continue;
+    if (r.planId != null && !isFeatureEnabled(planFlags.get(r.planId), "online_ordering")) continue;
+    urls.push({ slug: r.slug, updatedAt: r.updatedAt ?? new Date() });
+  }
+
+  const xml = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+    ...urls.map(u => `  <url><loc>${base}/menu/${u.slug}</loc><lastmod>${u.updatedAt.toISOString().slice(0, 10)}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`),
+    `</urlset>`,
+  ].join("\n");
+  res.set("Content-Type", "application/xml");
+  res.set("Cache-Control", "public, max-age=3600");
+  res.send(xml);
+});
+
 router.post("/public/orders", async (req, res) => {
-  const { restaurantId, tableId, customerName, customerPhone, notes, items, orderType: rawOrderType, vehicleColor, vehicleModel, vehicleNumber, parkingSpot } = req.body;
+  const { restaurantId, tableId, customerName, customerPhone, notes, items, orderType: rawOrderType, vehicleColor, vehicleModel, vehicleNumber, parkingSpot, scheduledFor: rawScheduledFor, deliveryAddress: rawDeliveryAddress } = req.body;
 
   if (!restaurantId || !items || !Array.isArray(items) || items.length === 0) {
     return void res.status(400).json({ error: "restaurantId and items are required" });
@@ -226,16 +379,92 @@ router.post("/public/orders", async (req, res) => {
   }
 
   const resolvedOrderType = isCurbside ? "curbside" : (tableId ? "dine_in" : (rawOrderType ?? "pickup"));
+
+  // Direct online ordering (Task #432): load direct-ordering config for
+  // min-order enforcement, delivery fee calculation, and holiday-closure
+  // blocking. Apply only to non-dine-in public orders.
+  let deliveryFeeAmount = 0;
+  let scheduledForDate: Date | null = null;
+  let deliveryAddressClean: string | null = null;
+  if (!tableId && !isCurbside) {
+    const [doRow] = await db.select().from(restaurantSettingsTable).where(and(
+      eq(restaurantSettingsTable.restaurantId, restaurantId),
+      eq(restaurantSettingsTable.section, "direct-ordering"),
+    ));
+    const doCfg = (doRow?.data ?? {}) as Record<string, unknown>;
+    if (doCfg.orderingEnabled === false) {
+      return void res.status(403).json({ error: "Online ordering is currently disabled by the restaurant." });
+    }
+    // Holiday closures: array of YYYY-MM-DD strings on which ordering is blocked.
+    const closures = Array.isArray(doCfg.holidayClosures) ? doCfg.holidayClosures as unknown[] : [];
+    const today = new Date().toISOString().slice(0, 10);
+    if (closures.includes(today)) {
+      return void res.status(403).json({ error: "Online ordering is closed today (holiday). Please try again tomorrow." });
+    }
+    // Minimum order
+    const minOrderValue = typeof doCfg.minOrderValue === "number" ? doCfg.minOrderValue : 0;
+    if (minOrderValue > 0 && subtotal < minOrderValue) {
+      return void res.status(400).json({ error: `Minimum order is ${minOrderValue.toFixed(2)}. Add a few more items to continue.` });
+    }
+    // Direct online ordering (Task #432): enforce mode toggles server-side
+    // — a malicious payload can't bypass settings by hand-crafting requests.
+    const allowPickup = doCfg.allowPickup !== false;
+    const allowDelivery = doCfg.allowDelivery === true;
+    const allowScheduling = doCfg.allowScheduling !== false;
+    const isPickupType = resolvedOrderType === "pickup" || resolvedOrderType === "takeaway";
+    if (isPickupType && !allowPickup) {
+      return void res.status(403).json({ error: "Pickup orders are not currently accepted online." });
+    }
+    if (resolvedOrderType === "delivery" && !allowDelivery) {
+      return void res.status(403).json({ error: "Delivery orders are not currently accepted online." });
+    }
+    if (!isPickupType && resolvedOrderType !== "delivery") {
+      // Anything other than pickup/takeaway/delivery on the direct ordering
+      // path (e.g. dine_in without a tableId) is rejected.
+      return void res.status(400).json({ error: "Invalid order type for online ordering." });
+    }
+    // Delivery fee (flat) — applied only on delivery
+    if (resolvedOrderType === "delivery") {
+      const flatFee = typeof doCfg.deliveryFee === "number" ? doCfg.deliveryFee : 0;
+      const freeAt = typeof doCfg.freeDeliveryThreshold === "number" ? doCfg.freeDeliveryThreshold : 0;
+      deliveryFeeAmount = freeAt > 0 && subtotal >= freeAt ? 0 : flatFee;
+      if (typeof rawDeliveryAddress === "string" && rawDeliveryAddress.trim()) {
+        deliveryAddressClean = rawDeliveryAddress.trim().slice(0, 500);
+      } else {
+        return void res.status(400).json({ error: "Delivery address is required for delivery orders." });
+      }
+    }
+    // Schedule
+    if (rawScheduledFor) {
+      if (!allowScheduling) {
+        return void res.status(403).json({ error: "Scheduling orders for later is not currently enabled." });
+      }
+      const d = new Date(rawScheduledFor);
+      if (Number.isNaN(d.getTime())) {
+        return void res.status(400).json({ error: "Invalid scheduled time." });
+      }
+      if (d.getTime() < Date.now() - 60_000) {
+        return void res.status(400).json({ error: "Scheduled time must be in the future." });
+      }
+      scheduledForDate = d;
+    }
+  }
+
+  const totalWithDelivery = totalAmount + deliveryFeeAmount;
+
   const [order] = await db.insert(ordersTable).values({
     restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
     subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
     serviceCharge: "0.00", discountAmount: "0.00",
-    totalAmount: totalAmount.toFixed(2), customerName: customerName ?? null, customerPhone: customerPhone ?? null, notes: notes ?? null,
+    totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: customerPhone ?? null, notes: notes ?? null,
     customerId: resolvedCustomerRow?.id ?? null,
     vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
     vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
     vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
     parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
+    scheduledFor: scheduledForDate,
+    deliveryAddress: deliveryAddressClean,
+    deliveryFee: deliveryFeeAmount.toFixed(2),
   }).returning();
 
   for (const ei of enrichedItems) {

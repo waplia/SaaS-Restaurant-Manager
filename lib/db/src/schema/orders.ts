@@ -58,6 +58,11 @@ export const ordersTable = pgTable("orders", {
   curbsideAcceptedAt: timestamp("curbside_accepted_at"),
   curbsideArrivedAt: timestamp("curbside_arrived_at"),
   curbsideHandedOverAt: timestamp("curbside_handed_over_at"),
+  // Direct online ordering (Task #432): scheduled pickup/delivery time, delivery
+  // address, and delivery fee charged. Null for dine-in and immediate orders.
+  scheduledFor: timestamp("scheduled_for"),
+  deliveryAddress: text("delivery_address"),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("0.00"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
