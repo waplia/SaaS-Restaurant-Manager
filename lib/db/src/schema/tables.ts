@@ -2,6 +2,7 @@ import { pgTable, text, serial, timestamp, integer, boolean, decimal, index } fr
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
+import { usersTable } from "./users";
 
 export const floorTablesTable = pgTable("floor_tables", {
   id: serial("id").primaryKey(),
@@ -48,12 +49,30 @@ export const reservationsTable = pgTable("reservations", {
   cleaningRequiredOnComplete: boolean("cleaning_required_on_complete").notNull().default(true),
   reminderSentAt: timestamp("reminder_sent_at"),
   noShowMarkedAt: timestamp("no_show_marked_at"),
+  // Task #431 — server (waiter) assigned to take care of the table.
+  serverId: integer("server_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, t => ({
   byRestaurantTime: index("reservations_restaurant_time_idx").on(t.restaurantId, t.scheduledAt),
   byStatus: index("reservations_status_idx").on(t.restaurantId, t.status),
 }));
+
+// Task #431 — Table-pacing rules. One row per restaurant, evaluated when a
+// reservation is created or rescheduled. Limits the number of party-arrivals
+// (covers) within a rolling slot to avoid overwhelming the kitchen/floor.
+export const reservationPacingRulesTable = pgTable("reservation_pacing_rules", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }).unique(),
+  enabled: boolean("enabled").notNull().default(false),
+  slotMinutes: integer("slot_minutes").notNull().default(15),
+  maxCovers: integer("max_covers").notNull().default(20),
+  maxReservations: integer("max_reservations").notNull().default(6),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type ReservationPacingRules = typeof reservationPacingRulesTable.$inferSelect;
 
 export const waitlistEntriesTable = pgTable("waitlist_entries", {
   id: serial("id").primaryKey(),

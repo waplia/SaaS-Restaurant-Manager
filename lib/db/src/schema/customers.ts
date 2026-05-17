@@ -24,6 +24,9 @@ export const customersTable = pgTable("customers", {
   dateOfBirth: text("date_of_birth"),
   noShowCount: integer("no_show_count").notNull().default(0),
   lastNoShowAt: timestamp("last_no_show_at"),
+  // Task #431 — guest CRM upgrade
+  allergies: text("allergies"),
+  preferredTableId: integer("preferred_table_id"),
   // Task #209 — CRM upgrade: contact preferences, milestones, derived activity.
   birthday: date("birthday"),
   anniversary: date("anniversary"),

@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { eq, and, or, inArray, gte, lte, ne, sql, desc, asc, gt } from "drizzle-orm";
-import { db, floorTablesTable, reservationsTable, waitlistEntriesTable, customersTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable, notificationsTable } from "../lib/db";
+import { db, floorTablesTable, reservationsTable, reservationPacingRulesTable, waitlistEntriesTable, customersTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable, notificationsTable, usersTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { idempotency } from "../middleware/idempotency";
-import { sendEmail, sendWhatsApp, reservationEmail } from "../lib/notifications";
+import { sendEmail, sendWhatsApp, sendSms, reservationEmail } from "../lib/notifications";
 import { pushToStaff } from "../lib/pushNotify";
+import { recordAuditLog } from "../lib/audit";
 import { validate } from "../middleware/validate";
 import { z } from "zod";
 
@@ -68,6 +69,7 @@ const ReservationBase = {
   sourceChannel: z.enum(SOURCE_CHANNELS).optional(),
   customerId: z.coerce.number().int().positive().nullable().optional(),
   cleaningRequiredOnComplete: z.boolean().optional(),
+  serverId: z.coerce.number().int().positive().nullable().optional(),
 };
 
 const CreateReservationBody = z.object(ReservationBase);
@@ -437,6 +439,16 @@ router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "man
     }
   }
 
+  const serverId = (req.body as { serverId?: number | null }).serverId;
+  if (serverId != null) {
+    const [srv] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, Number(serverId)));
+    if (!srv) return void res.status(400).json({ error: "Selected server not found" });
+  }
+
+  // Task #431 — table-pacing enforcement.
+  const pacingErr = await enforcePacing(restaurantId, dt, partySizeNum);
+  if (pacingErr) return void res.status(409).json({ error: pacingErr });
+
   const [reservation] = await db.insert(reservationsTable).values({
     restaurantId, guestName: guestName.trim(), guestPhone, guestEmail,
     tableId: tableId ?? null, partySize: partySizeNum,
@@ -453,6 +465,7 @@ router.post("/restaurants/:restaurantId/reservations", requireRole("owner", "man
     gracePeriodMinutes: Number(gracePeriodMinutes) || 15,
     sourceChannel: sourceChannel ?? "staff",
     cleaningRequiredOnComplete: cleaningRequiredOnComplete !== false,
+    serverId: serverId != null ? Number(serverId) : null,
   }).returning();
   res.status(201).json(reservation);
 
@@ -519,6 +532,16 @@ router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner",
   if (walkInArrivedAt !== undefined) updates.walkInArrivedAt = walkInArrivedAt ? new Date(walkInArrivedAt) : null;
   if (estimatedWaitMinutes !== undefined) updates.estimatedWaitMinutes = estimatedWaitMinutes == null ? null : Number(estimatedWaitMinutes);
   if (cleaningRequiredOnComplete !== undefined) updates.cleaningRequiredOnComplete = !!cleaningRequiredOnComplete;
+  const serverIdPatch = (req.body as { serverId?: number | null }).serverId;
+  if (serverIdPatch !== undefined) {
+    if (serverIdPatch == null) {
+      updates.serverId = null;
+    } else {
+      const [srv] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, Number(serverIdPatch)));
+      if (!srv) return void res.status(400).json({ error: "Selected server not found" });
+      updates.serverId = Number(serverIdPatch);
+    }
+  }
   if (status === "no_show") updates.noShowMarkedAt = new Date();
   if (partySize !== undefined) {
     const ps = Number(partySize);
@@ -552,8 +575,23 @@ router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner",
     if (conflict) return void res.status(409).json({ error: `Conflicts with ${conflict.guestName} at ${new Date(conflict.scheduledAt).toLocaleString()}`, conflict });
   }
 
+  // Re-check pacing when rescheduling an active booking to a new slot/party-size.
+  if (
+    ["pending", "confirmed"].includes(finalStatus) &&
+    (updates.scheduledAt !== undefined || updates.partySize !== undefined)
+  ) {
+    const pacingErr = await enforcePacing(restaurantId, finalScheduledAt, finalParty, id);
+    if (pacingErr) return void res.status(409).json({ error: pacingErr });
+  }
+
   const [updated] = await db.update(reservationsTable).set(updates).where(and(eq(reservationsTable.id, id), eq(reservationsTable.restaurantId, restaurantId))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  // Audit reservation changes for guest CRM traceability.
+  await recordAuditLog({
+    req, module: "reservations", action: "update", entity: "reservation", entityId: String(id), restaurantId,
+    oldValue: existing, newValue: updates,
+  }).catch(() => {});
 
   // Sync floor table status with reservation lifecycle.
   if (status === "seated" && updated.tableId) {
@@ -583,7 +621,16 @@ router.patch("/restaurants/:restaurantId/reservations/:id", requireRole("owner",
 });
 
 router.delete("/restaurants/:restaurantId/reservations/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
-  await db.delete(reservationsTable).where(eq(reservationsTable.id, Number(req.params.id)));
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const [existing] = await db.select().from(reservationsTable).where(and(eq(reservationsTable.id, id), eq(reservationsTable.restaurantId, restaurantId)));
+  await db.delete(reservationsTable).where(and(eq(reservationsTable.id, id), eq(reservationsTable.restaurantId, restaurantId)));
+  if (existing) {
+    await recordAuditLog({
+      req, module: "reservations", action: "delete", entity: "reservation", entityId: String(id), restaurantId,
+      oldValue: existing,
+    }).catch(() => {});
+  }
   res.status(204).send();
 });
 
@@ -699,6 +746,9 @@ router.post("/restaurants/:restaurantId/waitlist", requireRole("owner", "manager
       data: { screen: "reservations", waitlistId: entry.id },
     },
   ).catch(() => {});
+
+  // Task #431 — notify guest of their queue position via SMS/WhatsApp.
+  void notifyWaitlistPosition(restaurantId, entry.id).catch((err) => console.error("[Waitlist] position notify failed", err));
 });
 
 router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: WaitlistUpdateBody }), async (req, res) => {
@@ -706,6 +756,9 @@ router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "ma
   const id = Number(req.params.id);
   const { guestName, guestPhone, partySize, estimatedWaitMinutes, notes, occasion, isVip, status, seatedTableId } = req.body;
   if (status !== undefined && !WAITLIST_STATUSES.includes(status)) return void res.status(400).json({ error: "Invalid status" });
+
+  const [existing] = await db.select().from(waitlistEntriesTable).where(and(eq(waitlistEntriesTable.id, id), eq(waitlistEntriesTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Not found" });
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (guestName !== undefined) updates.guestName = guestName;
@@ -726,6 +779,20 @@ router.patch("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "ma
     .where(and(eq(waitlistEntriesTable.id, id), eq(waitlistEntriesTable.restaurantId, restaurantId)))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+
+  await recordAuditLog({
+    req, module: "waitlist", action: "update", entity: "waitlist_entry", entityId: String(id), restaurantId,
+    oldValue: existing, newValue: updates,
+  }).catch(() => {});
+
+  // Task #431 — "Your table is ready" SMS/WhatsApp when staff marks notified.
+  if (status === "notified" && existing.status !== "notified") {
+    void notifyWaitlistReady(restaurantId, updated).catch((err) => console.error("[Waitlist] ready notify failed", err));
+  }
+  // When someone is seated/cancelled, broadcast updated positions to the rest.
+  if (status && ["seated", "cancelled", "no_show"].includes(status) && existing.status !== status) {
+    void broadcastWaitlistPositions(restaurantId).catch(() => {});
+  }
   res.json(updated);
 });
 
@@ -771,11 +838,188 @@ router.post("/restaurants/:restaurantId/waitlist/:id/seat", requireRole("owner",
 });
 
 router.delete("/restaurants/:restaurantId/waitlist/:id", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
-  await db.delete(waitlistEntriesTable).where(and(
-    eq(waitlistEntriesTable.id, Number(req.params.id)),
-    eq(waitlistEntriesTable.restaurantId, Number(req.params.restaurantId)),
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const [existing] = await db.select().from(waitlistEntriesTable).where(and(
+    eq(waitlistEntriesTable.id, id),
+    eq(waitlistEntriesTable.restaurantId, restaurantId),
   ));
+  await db.delete(waitlistEntriesTable).where(and(
+    eq(waitlistEntriesTable.id, id),
+    eq(waitlistEntriesTable.restaurantId, restaurantId),
+  ));
+  if (existing) {
+    await recordAuditLog({
+      req, module: "waitlist", action: "delete", entity: "waitlist_entry", entityId: String(id), restaurantId,
+      oldValue: existing,
+    }).catch(() => {});
+    if (existing.status === "waiting" || existing.status === "notified") {
+      void broadcastWaitlistPositions(restaurantId).catch(() => {});
+    }
+  }
   res.status(204).send();
 });
+
+/* ---------- Task #431 — pacing rule management ---------- */
+const PacingRuleBody = z.object({
+  enabled: z.boolean().optional(),
+  slotMinutes: z.coerce.number().int().min(5).max(180).optional(),
+  maxCovers: z.coerce.number().int().min(1).max(2000).optional(),
+  maxReservations: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+router.get("/restaurants/:restaurantId/reservations/pacing-rules", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [row] = await db.select().from(reservationPacingRulesTable).where(eq(reservationPacingRulesTable.restaurantId, restaurantId));
+  if (row) return void res.json(row);
+  res.json({ restaurantId, enabled: false, slotMinutes: 15, maxCovers: 20, maxReservations: 6 });
+});
+
+router.put("/restaurants/:restaurantId/reservations/pacing-rules", requireRole("owner", "manager", "super_admin"), requirePlanFeature("reservations"), validate({ body: PacingRuleBody }), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const { enabled, slotMinutes, maxCovers, maxReservations } = req.body;
+  const [existing] = await db.select().from(reservationPacingRulesTable).where(eq(reservationPacingRulesTable.restaurantId, restaurantId));
+  const patch = {
+    enabled: enabled ?? existing?.enabled ?? false,
+    slotMinutes: slotMinutes ?? existing?.slotMinutes ?? 15,
+    maxCovers: maxCovers ?? existing?.maxCovers ?? 20,
+    maxReservations: maxReservations ?? existing?.maxReservations ?? 6,
+    updatedAt: new Date(),
+  };
+  let row;
+  if (existing) {
+    [row] = await db.update(reservationPacingRulesTable).set(patch).where(eq(reservationPacingRulesTable.restaurantId, restaurantId)).returning();
+  } else {
+    [row] = await db.insert(reservationPacingRulesTable).values({ restaurantId, ...patch }).returning();
+  }
+  await recordAuditLog({
+    req, module: "reservations", action: "update", entity: "pacing_rules", entityId: String(restaurantId), restaurantId,
+    oldValue: existing, newValue: patch,
+  }).catch(() => {});
+  res.json(row);
+});
+
+// ─── Internal helpers ─────────────────────────────────────────────────────
+async function enforcePacing(
+  restaurantId: number,
+  scheduledAt: Date,
+  partySize: number,
+  excludeId?: number,
+): Promise<string | null> {
+  const [rule] = await db.select().from(reservationPacingRulesTable).where(eq(reservationPacingRulesTable.restaurantId, restaurantId));
+  if (!rule || !rule.enabled) return null;
+  const slotMs = rule.slotMinutes * 60_000;
+  // Centered rolling window around the slot.
+  const windowStart = new Date(scheduledAt.getTime() - slotMs);
+  const windowEnd = new Date(scheduledAt.getTime() + slotMs);
+  const conds = [
+    eq(reservationsTable.restaurantId, restaurantId),
+    inArray(reservationsTable.status, ["pending", "confirmed", "seated"]),
+    gte(reservationsTable.scheduledAt, windowStart),
+    lte(reservationsTable.scheduledAt, windowEnd),
+  ];
+  if (excludeId) conds.push(ne(reservationsTable.id, excludeId));
+  const [agg] = await db
+    .select({ covers: sql<number>`coalesce(sum(${reservationsTable.partySize}), 0)::int`, bookings: sql<number>`count(*)::int` })
+    .from(reservationsTable)
+    .where(and(...conds));
+  const totalCovers = (agg?.covers ?? 0) + partySize;
+  const totalBookings = (agg?.bookings ?? 0) + 1;
+  if (totalCovers > rule.maxCovers) {
+    return `Pacing limit reached: ${rule.maxCovers} covers per ${rule.slotMinutes}m slot (this booking would push it to ${totalCovers}).`;
+  }
+  if (totalBookings > rule.maxReservations) {
+    return `Pacing limit reached: ${rule.maxReservations} bookings per ${rule.slotMinutes}m slot.`;
+  }
+  return null;
+}
+
+function pickChannel(preferred: string | null | undefined, phone: string | null | undefined, whatsappOptIn: boolean | null | undefined): "whatsapp" | "sms" | null {
+  if (!phone) return null;
+  if (preferred === "whatsapp" && whatsappOptIn) return "whatsapp";
+  if (preferred === "sms") return "sms";
+  if (whatsappOptIn) return "whatsapp";
+  return "sms";
+}
+
+async function sendGuestMessage(phone: string, body: string, channel: "whatsapp" | "sms"): Promise<void> {
+  try {
+    if (channel === "whatsapp") await sendWhatsApp({ to: phone, body });
+    else await sendSms({ to: phone, body });
+  } catch (err) {
+    console.error("[Notify] guest message failed", err);
+  }
+}
+
+async function loadEntryWithCustomer(restaurantId: number, entryId: number) {
+  const [row] = await db
+    .select({
+      entry: waitlistEntriesTable,
+      preferredChannel: customersTable.preferredChannel,
+      whatsappOptIn: customersTable.whatsappOptIn,
+      restaurantName: restaurantsTable.name,
+    })
+    .from(waitlistEntriesTable)
+    .leftJoin(customersTable, eq(customersTable.id, waitlistEntriesTable.customerId))
+    .leftJoin(restaurantsTable, eq(restaurantsTable.id, waitlistEntriesTable.restaurantId))
+    .where(and(eq(waitlistEntriesTable.id, entryId), eq(waitlistEntriesTable.restaurantId, restaurantId)));
+  return row;
+}
+
+async function computeWaitlistPosition(restaurantId: number, entryId: number, quotedAt: Date): Promise<number> {
+  const [agg] = await db
+    .select({ ahead: sql<number>`count(*)::int` })
+    .from(waitlistEntriesTable)
+    .where(and(
+      eq(waitlistEntriesTable.restaurantId, restaurantId),
+      eq(waitlistEntriesTable.status, "waiting"),
+      lte(waitlistEntriesTable.quotedAt, quotedAt),
+      ne(waitlistEntriesTable.id, entryId),
+    ));
+  return (agg?.ahead ?? 0) + 1;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+async function notifyWaitlistPosition(restaurantId: number, entryId: number): Promise<void> {
+  const row = await loadEntryWithCustomer(restaurantId, entryId);
+  if (!row || !row.entry.guestPhone) return;
+  const channel = pickChannel(row.preferredChannel, row.entry.guestPhone, row.whatsappOptIn);
+  if (!channel) return;
+  const position = await computeWaitlistPosition(restaurantId, entryId, row.entry.quotedAt);
+  const wait = row.entry.estimatedWaitMinutes ? ` Estimated wait ~${row.entry.estimatedWaitMinutes} min.` : "";
+  const body = `Hi ${row.entry.guestName}, you're ${ordinal(position)} in line at ${row.restaurantName ?? "the restaurant"}.${wait} We'll text when your table is ready.`;
+  await sendGuestMessage(row.entry.guestPhone, body, channel);
+}
+
+async function notifyWaitlistReady(restaurantId: number, entry: typeof waitlistEntriesTable.$inferSelect): Promise<void> {
+  if (!entry.guestPhone) return;
+  const row = entry.customerId
+    ? await loadEntryWithCustomer(restaurantId, entry.id)
+    : null;
+  const channel = pickChannel(row?.preferredChannel ?? null, entry.guestPhone, row?.whatsappOptIn ?? false);
+  if (!channel) return;
+  const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const body = `Hi ${entry.guestName}, your table is ready at ${restaurant?.name ?? "the restaurant"}. Please head to the host stand within the next 10 minutes.`;
+  await sendGuestMessage(entry.guestPhone, body, channel);
+}
+
+async function broadcastWaitlistPositions(restaurantId: number): Promise<void> {
+  const waiting = await db
+    .select()
+    .from(waitlistEntriesTable)
+    .where(and(eq(waitlistEntriesTable.restaurantId, restaurantId), eq(waitlistEntriesTable.status, "waiting")))
+    .orderBy(asc(waitlistEntriesTable.quotedAt));
+  // Only message guests whose position changed (positions 1-3) to avoid spam.
+  const top = waiting.slice(0, 3);
+  for (const e of top) {
+    if (!e.guestPhone) continue;
+    await notifyWaitlistPosition(restaurantId, e.id);
+  }
+}
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -6,6 +6,7 @@ import {
   useFloorTables, useRestaurantInfo,
   useWaitlist, useCreateWaitlistEntry, useUpdateWaitlistEntry, useSeatWaitlistEntry, useDeleteWaitlistEntry,
   useMarkTableClean, useCreateWalkIn,
+  useStaff, useReservationPacingRules, useUpdateReservationPacingRules,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import {
   Plus, X, CalendarDays, Clock, Users, Phone, Mail, Pencil, Trash2,
   CheckCircle2, UserCheck, XCircle, AlertCircle, Search, Link as LinkIcon, Copy, List, CalendarRange,
-  Star, Cake, Sparkles, Hourglass, Bell, Sparkle,
+  Star, Cake, Sparkles, Hourglass, Bell, Sparkle, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +70,7 @@ function ReservationForm({
   const create = useCreateReservation();
   const update = useUpdateReservation();
   const { toast } = useToast();
+  const { data: servers = [] } = useStaff("waiter");
 
   const [form, setForm] = useState<CreateReservationInput>({
     guestName: reservation?.guestName ?? "",
@@ -88,6 +90,7 @@ function ReservationForm({
     depositStatus: reservation?.depositStatus ?? "none",
     gracePeriodMinutes: reservation?.gracePeriodMinutes ?? 15,
     sourceChannel: reservation?.sourceChannel ?? "staff",
+    serverId: reservation?.serverId ?? null,
   });
 
   const handleSave = async () => {
@@ -146,16 +149,29 @@ function ReservationForm({
             <Label>Date & time *</Label>
             <Input type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
           </div>
-          <div>
-            <Label>Table</Label>
-            <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
-              value={form.tableId ?? ""}
-              onChange={e => setForm(f => ({ ...f, tableId: e.target.value ? Number(e.target.value) : undefined }))}>
-              <option value="">Any table</option>
-              {tables.map(t => (
-                <option key={t.id} value={t.id}>Table {t.tableNumber} · seats {t.capacity}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Table</Label>
+              <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
+                value={form.tableId ?? ""}
+                onChange={e => setForm(f => ({ ...f, tableId: e.target.value ? Number(e.target.value) : undefined }))}>
+                <option value="">Any table</option>
+                {tables.map(t => (
+                  <option key={t.id} value={t.id}>Table {t.tableNumber} · seats {t.capacity}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Server</Label>
+              <select className="w-full h-10 text-sm border border-input rounded-md px-3 bg-background"
+                value={form.serverId ?? ""}
+                onChange={e => setForm(f => ({ ...f, serverId: e.target.value ? Number(e.target.value) : null }))}>
+                <option value="">Unassigned</option>
+                {servers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name || s.email || `User ${s.id}`}</option>
+                ))}
+              </select>
+            </div>
           </div>
           {reservation && (
             <div>
@@ -410,6 +426,7 @@ export default function ReservationsPage() {
   const [editing, setEditing] = useState<Reservation | undefined>();
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
+  const [showPacing, setShowPacing] = useState(false);
 
   const { user } = useAuth();
   const canDelete = !!user && ["owner", "manager", "super_admin"].includes(user.role);
@@ -504,12 +521,16 @@ export default function ReservationsPage() {
             <Button variant="outline" onClick={() => setShowWaitlistForm(true)}>
               <Hourglass className="w-4 h-4 mr-1.5" /> Add to Waitlist
             </Button>
+            <Button variant="outline" onClick={() => setShowPacing(true)}>
+              <Settings className="w-4 h-4 mr-1.5" /> Pacing
+            </Button>
             <Button onClick={() => { setEditing(undefined); setShowForm(true); }}>
               <Plus className="w-4 h-4 mr-1.5" /> New Reservation
             </Button>
           </div>
         }
       />
+      {showPacing && <PacingSettingsDialog onClose={() => setShowPacing(false)} />}
 
       <div className="p-6 flex-1 overflow-auto">
         <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -798,6 +819,77 @@ function WaitlistPanel({ tables, onAdd }: { tables: FloorTable[]; onAdd: () => v
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function PacingSettingsDialog({ onClose }: { onClose: () => void }) {
+  const { data: rules } = useReservationPacingRules();
+  const update = useUpdateReservationPacingRules();
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    enabled: rules?.enabled ?? false,
+    slotMinutes: rules?.slotMinutes ?? 15,
+    maxCovers: rules?.maxCovers ?? 20,
+    maxReservations: rules?.maxReservations ?? 6,
+  });
+  // Sync once data loads.
+  useEffect(() => {
+    if (rules) setForm({
+      enabled: rules.enabled,
+      slotMinutes: rules.slotMinutes,
+      maxCovers: rules.maxCovers,
+      maxReservations: rules.maxReservations,
+    });
+  }, [rules]);
+
+  const save = async () => {
+    try {
+      await update.mutateAsync(form);
+      toast({ title: "Pacing rules saved" });
+      onClose();
+    } catch (err) {
+      toast({ title: "Save failed", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Table-pacing rules</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent"><X className="w-4 h-4" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Limit the number of covers and bookings that fall into the same rolling time slot.
+          Helps the kitchen and floor breathe between waves.
+        </p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />
+            Enable pacing limits
+          </label>
+          <div>
+            <Label>Slot length (minutes)</Label>
+            <Input type="number" min={5} max={180} value={form.slotMinutes}
+              onChange={e => setForm(f => ({ ...f, slotMinutes: Number(e.target.value) || 15 }))} />
+          </div>
+          <div>
+            <Label>Max covers per slot</Label>
+            <Input type="number" min={1} max={2000} value={form.maxCovers}
+              onChange={e => setForm(f => ({ ...f, maxCovers: Number(e.target.value) || 1 }))} />
+          </div>
+          <div>
+            <Label>Max bookings per slot</Label>
+            <Input type="number" min={1} max={500} value={form.maxReservations}
+              onChange={e => setForm(f => ({ ...f, maxReservations: Number(e.target.value) || 1 }))} />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-4">
+          <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" onClick={save} disabled={update.isPending}>Save</Button>
+        </div>
+      </div>
     </div>
   );
 }

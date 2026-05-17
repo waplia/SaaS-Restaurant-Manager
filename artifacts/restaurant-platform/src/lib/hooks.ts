@@ -1019,6 +1019,26 @@ export function useDeleteReservation() {
   });
 }
 
+// Task #431 — table-pacing rule management.
+export function useReservationPacingRules() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["reservations", "pacing-rules", RESTAURANT_ID],
+    queryFn: () => apiGet<import("./types").ReservationPacingRules>(`/restaurants/${RESTAURANT_ID}/reservations/pacing-rules`),
+    enabled: !!RESTAURANT_ID,
+  });
+}
+
+export function useUpdateReservationPacingRules() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<import("./types").ReservationPacingRules>) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/reservations/pacing-rules`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations", "pacing-rules", RESTAURANT_ID] }),
+  });
+}
+
 export function useUpdateTicketPriority() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();

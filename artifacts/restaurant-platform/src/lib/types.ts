@@ -1021,6 +1021,11 @@ export interface Customer {
   whatsappOptInSource: string | null;
   firstOrderAt: string | null;
   lastVisitAt: string | null;
+  // Task #431 — Guest CRM upgrade
+  allergies?: string | null;
+  preferredTableId?: number | null;
+  noShowCount?: number;
+  lastNoShowAt?: string | null;
   createdAt: string;
   updatedAt: string;
   // enriched (list/detail)
@@ -1105,6 +1110,8 @@ export interface UpdateCustomerInput {
   preferredChannel?: CustomerPreferredChannel;
   whatsappOptIn?: boolean;
   whatsappOptInSource?: string;
+  allergies?: string | null;
+  preferredTableId?: number | null;
 }
 
 export interface CustomerAddress {
@@ -1213,7 +1220,16 @@ export interface Reservation {
   cleaningRequiredOnComplete: boolean;
   reminderSentAt: string | null;
   noShowMarkedAt: string | null;
+  serverId: number | null;
   createdAt: string;
+}
+
+export interface ReservationPacingRules {
+  restaurantId: number;
+  enabled: boolean;
+  slotMinutes: number;
+  maxCovers: number;
+  maxReservations: number;
 }
 
 export interface CreateReservationInput {
@@ -1236,6 +1252,7 @@ export interface CreateReservationInput {
   sourceChannel?: ReservationSourceChannel;
   customerId?: number | null;
   cleaningRequiredOnComplete?: boolean;
+  serverId?: number | null;
 }
 
 export interface UpdateReservationInput {
@@ -1259,6 +1276,7 @@ export interface UpdateReservationInput {
   gracePeriodMinutes?: number;
   estimatedWaitMinutes?: number | null;
   cleaningRequiredOnComplete?: boolean;
+  serverId?: number | null;
 }
 
 export type WaitlistStatus = "waiting" | "notified" | "seated" | "cancelled" | "no_show";

@@ -305,6 +305,7 @@ router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "m
     name, email, phone, address, loyaltyPoints, isActive, isVip,
     preferredChannel, whatsappOptIn, whatsappOptInSource,
     birthday, anniversary,
+    allergies, preferredTableId,
   } = req.body as Record<string, unknown>;
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -317,6 +318,10 @@ router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "m
   // All freeform notes are now stored in customer_notes via /:id/notes.
   if (isActive !== undefined) updates.isActive = !!isActive;
   if (isVip !== undefined) updates.isVip = !!isVip;
+  if (allergies !== undefined) updates.allergies = allergies == null ? null : String(allergies).slice(0, 500);
+  if (preferredTableId !== undefined) {
+    updates.preferredTableId = preferredTableId == null || preferredTableId === "" ? null : Number(preferredTableId) || null;
+  }
 
   if (preferredChannel !== undefined) {
     if (!(PREFERRED_CHANNELS as readonly string[]).includes(String(preferredChannel))) {
@@ -358,7 +363,7 @@ router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "m
     .returning();
 
   // Audit any change touching opt-in/preferences/milestones for compliance traceability.
-  const auditedKeys = ["preferredChannel", "whatsappOptIn", "whatsappOptInAt", "whatsappOptInSource", "birthday", "anniversary"];
+  const auditedKeys = ["preferredChannel", "whatsappOptIn", "whatsappOptInAt", "whatsappOptInSource", "birthday", "anniversary", "allergies", "preferredTableId", "isVip"];
   if (auditedKeys.some(k => k in updates)) {
     await recordAuditLog({
       req,

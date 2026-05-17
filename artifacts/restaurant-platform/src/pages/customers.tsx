@@ -10,6 +10,7 @@ import {
   useCustomerProfile, useCustomerTags, useAddCustomerTag, useRemoveCustomerTag,
   useCustomerNotes, useCreateCustomerNote, useUpdateCustomerNote, useDeleteCustomerNote,
   useCustomerComplaints, useCreateCustomerComplaint, useUpdateCustomerComplaint,
+  useFloorTables,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,19 +94,44 @@ const COMPLAINT_STATUS_STYLES: Record<string, string> = {
 
 function OverviewPanel({ profile }: { profile: CustomerProfile }) {
   const { data: loyalty } = useCustomerLoyalty(profile.id);
+  const { data: tables = [] } = useFloorTables();
+  const preferredTable = profile.preferredTableId
+    ? tables.find(t => t.id === profile.preferredTableId)
+    : null;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Orders" value={String(profile.totalOrders)} />
-        <Stat label="Spent" value={`₹${Number(profile.totalSpent).toLocaleString()}`} />
+        <Stat label="LTV" value={`₹${Number(profile.totalSpent).toLocaleString()}`} />
         <Stat label="Points" value={String(loyalty?.balance ?? profile.loyaltyPoints)} accent="yellow" />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Avg Order" value={profile.averageOrderValue ? `₹${profile.averageOrderValue.toLocaleString()}` : "—"} />
         <Stat label="Visit Freq" value={profile.visitFrequencyDays != null ? `${profile.visitFrequencyDays}d` : "—"} />
-        <Stat label="Lifetime" value={profile.lifetimeDays != null ? `${profile.lifetimeDays}d` : "—"} />
+        <Stat
+          label="No-shows"
+          value={String(profile.noShowCount ?? 0)}
+          accent={(profile.noShowCount ?? 0) >= 2 ? "yellow" : undefined}
+        />
       </div>
+
+      {(profile.allergies || preferredTable) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1.5 text-xs">
+          {profile.allergies && (
+            <p className="flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+              <span><span className="font-semibold text-amber-800">Allergies:</span> {profile.allergies}</span>
+            </p>
+          )}
+          {preferredTable && (
+            <p className="flex items-center gap-2 text-amber-800">
+              <Star className="w-3.5 h-3.5" />
+              Preferred table: <span className="font-semibold">{preferredTable.tableNumber}</span> (seats {preferredTable.capacity})
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5 text-xs text-muted-foreground">
         {profile.email && <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{profile.email}</p>}
@@ -411,6 +437,71 @@ function NoteItem({ note, customerId }: { note: CustomerNote; customerId: number
   );
 }
 
+function AllergiesAndTablePanel({ profile }: { profile: CustomerProfile }) {
+  const update = useCustomerUpdate(profile.id);
+  const { data: tables = [] } = useFloorTables();
+  const { toast } = useToast();
+  const [allergies, setAllergies] = useState(profile.allergies ?? "");
+  const [tableId, setTableId] = useState<number | "">(profile.preferredTableId ?? "");
+
+  useEffect(() => { setAllergies(profile.allergies ?? ""); }, [profile.allergies]);
+  useEffect(() => { setTableId(profile.preferredTableId ?? ""); }, [profile.preferredTableId]);
+
+  const saveAllergies = async () => {
+    try {
+      await update({ allergies: allergies.trim() || null });
+      toast({ title: "Allergies saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+  const saveTable = async (v: string) => {
+    const next = v === "" ? null : Number(v);
+    setTableId(next ?? "");
+    try {
+      await update({ preferredTableId: next });
+      toast({ title: "Preferred table saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">Allergies & dietary notes</Label>
+        <Textarea
+          value={allergies}
+          onChange={e => setAllergies(e.target.value)}
+          onBlur={() => { if ((profile.allergies ?? "") !== allergies.trim()) void saveAllergies(); }}
+          placeholder="Peanut allergy, lactose intolerant, gluten-free…"
+          rows={2}
+          className="text-xs"
+        />
+      </div>
+      <div>
+        <Label className="text-xs">Preferred table</Label>
+        <select
+          className="w-full h-8 text-xs border border-input rounded-md px-2 bg-background"
+          value={tableId}
+          onChange={e => void saveTable(e.target.value)}
+        >
+          <option value="">No preference</option>
+          {tables.map(t => (
+            <option key={t.id} value={t.id}>Table {t.tableNumber} · seats {t.capacity}</option>
+          ))}
+        </select>
+      </div>
+      {(profile.noShowCount ?? 0) > 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          ⚠ {profile.noShowCount} no-show{(profile.noShowCount ?? 0) === 1 ? "" : "s"} on record
+          {profile.lastNoShowAt ? ` · last ${relativeTime(profile.lastNoShowAt)}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TagsPreferencesPanel({ profile }: { profile: CustomerProfile }) {
   const { data: tagDictionary = [] } = useCustomerTags();
   const addTag = useAddCustomerTag();
@@ -502,6 +593,10 @@ function TagsPreferencesPanel({ profile }: { profile: CustomerProfile }) {
             <Input type="date" value={profile.anniversary ?? ""} onChange={e => update({ anniversary: e.target.value || null })} className="h-8 text-xs" />
           </div>
         </div>
+      </Section>
+
+      <Section title="Allergies & seating">
+        <AllergiesAndTablePanel profile={profile} />
       </Section>
 
       <Section title="Communication preferences">
