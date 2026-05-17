@@ -55,6 +55,7 @@ import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import OnboardingPage from "@/pages/onboarding";
 import SetupWizardPage from "@/pages/setup-wizard";
+import SetupOnboardingPage from "@/pages/setup-onboarding";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
@@ -301,6 +302,8 @@ function Router() {
       <Route path="/admin/ai" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/health" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/metrics" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/implementations" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/setup/onboarding" component={() => <ProtectedRoute component={SetupOnboardingPage} />} />
       <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
       <Route path="/admin/audit-logs" component={() => <SuperAdminRoute component={AdminAuditLogsPage} />} />
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />

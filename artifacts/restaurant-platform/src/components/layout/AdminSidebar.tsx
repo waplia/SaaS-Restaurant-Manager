@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   ShieldCheck, LayoutDashboard, TrendingUp, Activity, History, Building2, Package, Tag, FileCheck2,
   CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Inbox, FileText, LifeBuoy,
-  Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X,
+  Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -35,6 +35,7 @@ const NAV: NavEntry[] = [
       { kind: "link", href: "/admin/plans", label: "Plans", icon: Package },
       { kind: "link", href: "/admin/coupons", label: "Coupons", icon: Tag },
       { kind: "link", href: "/admin/approvals", label: "Approvals", icon: FileCheck2, badgeKey: "approvals" },
+      { kind: "link", href: "/admin/implementations", label: "Implementations", icon: ListChecks },
     ],
   },
   {

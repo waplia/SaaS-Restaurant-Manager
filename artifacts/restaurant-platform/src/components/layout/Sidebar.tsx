@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
-  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw,
+  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -269,6 +269,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/delivery/pre-order",           label: "Pre-Order Window",     icon: CalendarDays,  roles: ["owner", "manager"], planGate: "dlv_pre_order",          badge: "premium" },
       { kind: "link", href: "/delivery/zone-profitability",  label: "Zone Profitability",   icon: TrendingUp,    roles: ["owner", "manager"], planGate: "dlv_zone_profitability", badge: "premium" },
       { kind: "link", href: "/delivery/tracking-links",      label: "Live Tracking Links",  icon: Truck,         roles: ["owner", "manager"], planGate: "dlv_live_tracking_link", badge: "premium" },
+      { kind: "link", href: "/setup/onboarding",             label: "Implementation & Go-Live", icon: Rocket,     roles: ["owner", "manager"], planGate: "dedicated_implementation", badge: "premium" },
     ],
   },
 

@@ -1312,7 +1312,7 @@ export function TenantsTab() {
 type AdminSection =
   | "tenants" | "plans" | "payment-methods" | "approvals" | "coupons"
   | "notifications" | "sms" | "email" | "maintenance" | "whatsapp"
-  | "ai" | "health" | "metrics";
+  | "ai" | "health" | "metrics" | "implementations";
 
 const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> = {
   "tenants": { title: "Tenants", subtitle: "Manage restaurant accounts, plans, and trial windows" },
@@ -1328,6 +1328,7 @@ const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> 
   "ai": { title: "AI Control Center", subtitle: "AI providers, prompts, and feature configuration" },
   "health": { title: "Restaurant Health", subtitle: "Operational health scores per tenant" },
   "metrics": { title: "Investor Metrics", subtitle: "MRR, ARR, retention, and growth KPIs" },
+  "implementations": { title: "Implementation Board", subtitle: "In-flight go-live projects, assigned onboarding managers and SLA timers" },
 };
 
 function parseSection(path: string): AdminSection {
@@ -1398,6 +1399,7 @@ export default function AdminPage() {
         {section === "ai" && <AdminAiTab />}
         {section === "health" && <AdminHealthScoreTab />}
         {section === "metrics" && <AdminMetricsTab />}
+        {section === "implementations" && <AdminImplementationsTab />}
       </div>
     </AdminLayout>
   );
@@ -2215,5 +2217,385 @@ export function AdminHealthScoreTab() {
         )}
       </div>
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Implementation board (Task #435) — super-admin view of every
+// in-flight go-live, the assigned onboarding manager, SLA timers,
+// per-step progress, post-launch follow-ups and stalled-step checks.
+// ────────────────────────────────────────────────────────────────
+
+type ImplBoardRow = {
+  id: number; tenantId: number; status: string;
+  managerId: number | null; goLiveDate: string | null;
+  startedAt: string | null; launchedAt: string | null;
+  slaHours: number; progressPct: number;
+  stepsTotal: number; stepsComplete: number; stalledStepCount: number;
+  slaRemainingHours: number | null; slaBreached: boolean;
+  tenant: { id: number; name: string; slug: string; onboardingCompletedAt: string | null } | null;
+  manager: { id: number; name: string; email: string } | null;
+  notes: string | null;
+};
+
+type ImplStep = {
+  id: number; stepKey: string; title: string; description: string | null;
+  ownerType: "restaurant" | "manager"; ownerUserId: number | null;
+  status: "not_started" | "in_progress" | "blocked" | "complete" | "skipped";
+  progressPct: number; dueDate: string | null; completedAt: string | null;
+  lastActivityAt: string;
+};
+
+type ImplPostLaunchTask = {
+  id: number; weekOffset: number; title: string; description: string | null;
+  dueDate: string; completedAt: string | null;
+};
+
+type ImplDetail = {
+  implementation: ImplBoardRow & { notes: string | null };
+  steps: ImplStep[];
+  postLaunchTasks: ImplPostLaunchTask[];
+  manager: { id: number; name: string; email: string } | null;
+  tenant: { id: number; name: string; slug: string };
+  progressPct: number;
+};
+
+function implStatusPill(status: string): string {
+  switch (status) {
+    case "complete": return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+    case "post_launch": return "bg-violet-500/15 text-violet-700 dark:text-violet-400";
+    case "launched": return "bg-blue-500/15 text-blue-700 dark:text-blue-400";
+    case "blocked": return "bg-destructive/15 text-destructive";
+    case "in_progress": return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+    default: return "bg-muted text-muted-foreground";
+  }
+}
+
+function AdminImplementationsTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<number | null>(null);
+
+  const { data, isLoading, refetch } = useQuery<{ implementations: ImplBoardRow[] }>({
+    queryKey: ["admin", "implementations"],
+    queryFn: () => apiFetch("/admin/implementations"),
+    refetchInterval: 60_000,
+  });
+
+  const checkStalls = useMutation({
+    mutationFn: () => apiAction<{ raised: number }>("/admin/implementations/check-stalls", "POST"),
+    onSuccess: (r) => {
+      toast({ title: `Stall check complete`, description: `${r.raised} notification(s) raised` });
+      qc.invalidateQueries({ queryKey: ["admin", "implementations"] });
+    },
+    onError: (e: Error) => toast({ title: "Stall check failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>;
+  }
+
+  const rows = data?.implementations ?? [];
+  const active = rows.filter(r => r.status !== "complete");
+  const breached = rows.filter(r => r.slaBreached).length;
+  const stalled = rows.reduce((acc, r) => acc + (r.stalledStepCount ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-card border border-border rounded-xl p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">In-flight</p>
+          <p className="text-2xl font-bold">{active.length}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Launched</p>
+          <p className="text-2xl font-bold">{rows.filter(r => r.status === "post_launch" || r.status === "complete").length}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">SLA breached</p>
+          <p className={`text-2xl font-bold ${breached > 0 ? "text-destructive" : ""}`}>{breached}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Stalled steps</p>
+          <p className={`text-2xl font-bold ${stalled > 0 ? "text-amber-600" : ""}`}>{stalled}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Only tenants on plans with <span className="font-medium">Dedicated implementation</span> appear here.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => refetch()}
+            className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted"
+          >Refresh</button>
+          <button
+            onClick={() => checkStalls.mutate()}
+            disabled={checkStalls.isPending}
+            className="text-xs px-3 py-1.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-50"
+          >
+            {checkStalls.isPending ? "Checking…" : "Run stall check"}
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          No tenants are entitled to dedicated implementation. Enable the <code>dedicated_implementation</code> feature on a plan to see customers here.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30">
+              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2">Tenant</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Onboarding manager</th>
+                <th className="px-3 py-2">Progress</th>
+                <th className="px-3 py-2">Go-live</th>
+                <th className="px-3 py-2">SLA</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map(r => (
+                <tr key={r.id} className="hover:bg-muted/20">
+                  <td className="px-3 py-2 font-medium">{r.tenant?.name ?? `Tenant #${r.tenantId}`}<div className="text-xs text-muted-foreground">{r.tenant?.slug}</div></td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${implStatusPill(r.status)}`}>
+                      {r.status.replace("_", " ")}
+                    </span>
+                    {r.stalledStepCount > 0 && (
+                      <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                        {r.stalledStepCount} stalled
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">{r.manager ? <span>{r.manager.name}<div className="text-xs text-muted-foreground">{r.manager.email}</div></span> : <span className="text-xs text-muted-foreground italic">Unassigned</span>}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary" style={{ width: `${r.progressPct}%` }} />
+                      </div>
+                      <span className="text-xs text-muted-foreground">{r.stepsComplete}/{r.stepsTotal}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-xs">{r.goLiveDate ? new Date(r.goLiveDate).toLocaleDateString() : "—"}</td>
+                  <td className="px-3 py-2 text-xs">
+                    {r.slaRemainingHours == null ? "—" : (
+                      <span className={r.slaBreached ? "text-destructive font-semibold" : r.slaRemainingHours < 24 ? "text-amber-600" : ""}>
+                        {r.slaRemainingHours < 0 ? `${Math.abs(r.slaRemainingHours)}h over` : `${r.slaRemainingHours}h left`}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => setSelected(r.tenantId)} className="text-xs px-2 py-1 rounded-md border border-border hover:bg-muted">Manage</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selected != null && (
+        <ImplementationDetailModal tenantId={selected} onClose={() => setSelected(null)} />
+      )}
+    </div>
+  );
+}
+
+function ImplementationDetailModal({ tenantId, onClose }: { tenantId: number; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading, refetch } = useQuery<ImplDetail>({
+    queryKey: ["admin", "implementation", tenantId],
+    queryFn: () => apiFetch(`/admin/implementations/${tenantId}`),
+  });
+  const { data: managerSearch } = useQuery<{ users: { id: number; name: string; email: string; role: string | null }[] }>({
+    queryKey: ["admin", "implementation-managers"],
+    queryFn: () => apiFetch(`/admin/implementations/managers/search`),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "implementation", tenantId] });
+    qc.invalidateQueries({ queryKey: ["admin", "implementations"] });
+  };
+
+  const updateImpl = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiAction(`/admin/implementations/${tenantId}`, "PATCH", body),
+    onSuccess: () => { toast({ title: "Saved" }); invalidate(); },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const updateStep = useMutation({
+    mutationFn: ({ stepId, body }: { stepId: number; body: Record<string, unknown> }) =>
+      apiAction(`/admin/implementations/${tenantId}/steps/${stepId}`, "PATCH", body),
+    onSuccess: () => { invalidate(); },
+    onError: (e: Error) => toast({ title: "Step update failed", description: e.message, variant: "destructive" }),
+  });
+
+  const launch = useMutation({
+    mutationFn: () => apiAction(`/admin/implementations/${tenantId}/launch`, "POST"),
+    onSuccess: () => { toast({ title: "Launched" }); invalidate(); refetch(); },
+    onError: (e: Error) => toast({ title: "Launch failed", description: e.message, variant: "destructive" }),
+  });
+
+  const completeTask = useMutation({
+    mutationFn: (taskId: number) => apiAction(`/admin/implementations/${tenantId}/post-launch/${taskId}/complete`, "POST"),
+    onSuccess: () => { invalidate(); },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Modal title={data ? `Implementation · ${data.tenant.name}` : "Implementation"} onClose={onClose} wide>
+      {isLoading || !data ? (
+        <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Onboarding manager">
+              <select
+                className={inputCls}
+                value={String(data.implementation.managerId ?? "")}
+                onChange={e => updateImpl.mutate({ managerId: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— Unassigned —</option>
+                {(managerSearch?.users ?? []).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Target go-live date">
+              <input
+                type="date"
+                className={inputCls}
+                defaultValue={data.implementation.goLiveDate ? data.implementation.goLiveDate.slice(0, 10) : ""}
+                onBlur={e => updateImpl.mutate({ goLiveDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              />
+            </Field>
+            <Field label="SLA (hours)">
+              <input
+                type="number" min={1} className={inputCls}
+                defaultValue={data.implementation.slaHours}
+                onBlur={e => updateImpl.mutate({ slaHours: Math.max(1, Number(e.target.value)) })}
+              />
+            </Field>
+            <Field label="Status">
+              <select
+                className={inputCls}
+                value={data.implementation.status}
+                onChange={e => updateImpl.mutate({ status: e.target.value })}
+              >
+                {["not_started", "in_progress", "blocked", "launched", "post_launch", "complete"].map(s => (
+                  <option key={s} value={s}>{s.replace("_", " ")}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Notes" hint="Internal — visible to super-admins only">
+              <textarea
+                className={inputCls + " min-h-[60px]"}
+                defaultValue={data.implementation.notes ?? ""}
+                onBlur={e => updateImpl.mutate({ notes: e.target.value })}
+              />
+            </Field>
+            <div className="flex items-end">
+              <button
+                onClick={() => launch.mutate()}
+                disabled={launch.isPending || !!data.implementation.launchedAt}
+                className="w-full text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {data.implementation.launchedAt ? "Already launched" : launch.isPending ? "Launching…" : "Mark launched & seed follow-ups"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-background/50">
+            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border">Checklist</div>
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">Step</th>
+                  <th className="px-3 py-2 text-left">Owner</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Progress</th>
+                  <th className="px-3 py-2 text-left">Due</th>
+                  <th className="px-3 py-2 text-left">Last activity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.steps.map(s => (
+                  <tr key={s.id}>
+                    <td className="px-3 py-2"><div className="font-medium">{s.title}</div>{s.description && <div className="text-xs text-muted-foreground">{s.description}</div>}</td>
+                    <td className="px-3 py-2">
+                      <select
+                        className="text-xs border border-border rounded-md px-1.5 py-1 bg-background"
+                        value={s.ownerType}
+                        onChange={e => updateStep.mutate({ stepId: s.id, body: { ownerType: e.target.value } })}
+                      >
+                        <option value="restaurant">Restaurant</option>
+                        <option value="manager">Manager</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className="text-xs border border-border rounded-md px-1.5 py-1 bg-background"
+                        value={s.status}
+                        onChange={e => updateStep.mutate({ stepId: s.id, body: { status: e.target.value } })}
+                      >
+                        {["not_started", "in_progress", "blocked", "complete", "skipped"].map(st => (
+                          <option key={st} value={st}>{st.replace("_", " ")}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number" min={0} max={100}
+                        defaultValue={s.progressPct}
+                        className="text-xs w-16 border border-border rounded-md px-1.5 py-1 bg-background"
+                        onBlur={e => updateStep.mutate({ stepId: s.id, body: { progressPct: Math.max(0, Math.min(100, Number(e.target.value))) } })}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="date"
+                        defaultValue={s.dueDate ? s.dueDate.slice(0, 10) : ""}
+                        className="text-xs border border-border rounded-md px-1.5 py-1 bg-background"
+                        onBlur={e => updateStep.mutate({ stepId: s.id, body: { dueDate: e.target.value ? new Date(e.target.value).toISOString() : null } })}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(s.lastActivityAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {data.postLaunchTasks.length > 0 && (
+            <div className="rounded-lg border border-border bg-background/50">
+              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border">Post-launch follow-ups</div>
+              <ul className="divide-y divide-border">
+                {data.postLaunchTasks.map(t => (
+                  <li key={t.id} className="px-3 py-2 flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={!!t.completedAt}
+                      disabled={!!t.completedAt || completeTask.isPending}
+                      onChange={() => completeTask.mutate(t.id)}
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">Week {t.weekOffset}: {t.title}</div>
+                      {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+                      <div className="text-xs text-muted-foreground">Due {new Date(t.dueDate).toLocaleDateString()}{t.completedAt ? ` · Done ${new Date(t.completedAt).toLocaleDateString()}` : ""}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
