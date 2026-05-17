@@ -416,7 +416,7 @@ function CheckoutModal({
         className={cn(
           "p-0 flex flex-col gap-0",
           isMobile
-            ? "h-[92vh] w-full rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
+            ? "h-[100dvh] max-h-[100dvh] w-full pb-[env(safe-area-inset-bottom)]"
             : "w-full sm:max-w-md sm:h-full",
         )}
         data-testid="checkout-drawer"

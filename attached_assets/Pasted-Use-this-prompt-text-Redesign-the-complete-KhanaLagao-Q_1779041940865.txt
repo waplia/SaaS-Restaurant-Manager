@@ -1,0 +1,524 @@
+Use this prompt:
+
+```text
+Redesign the complete KhanaLagao QR Menu customer ordering flow.
+
+Current issue:
+The QR menu/order flow looks basic. It should look like a modern food ordering app, with menu item images, category browsing, item customization, add-ons/toppings, cart, checkout, and live order status. Take UX inspiration from Swiggy/Zomato-style ordering flow, but do not copy their branding or design exactly.
+
+Important:
+- Do not rebuild the whole platform.
+- Do not break existing QR code/table mapping.
+- Do not break existing POS, Orders, Kitchen/KDS, billing, inventory, or admin flow.
+- Use real backend menu data.
+- Do not use mock data.
+- Connect with existing menu items, categories, item images, modifiers/add-ons, table QR, cart, order creation, KOT, and order status.
+- Make it fully mobile-first and fast.
+- Customer will mostly use this after scanning table QR from phone.
+
+Goal:
+Make the QR menu feel like a premium restaurant ordering app.
+
+====================================================
+1. QR MENU LANDING SCREEN
+====================================================
+
+When customer scans table QR, show a modern mobile-first restaurant menu screen.
+
+Top area:
+- Restaurant name
+- Table number
+- Open/closed status
+- Search bar
+- Veg / non-veg filter
+- Bestseller/recommended filter
+- Sticky category chips
+- Floating/sticky cart button
+
+Example top content:
+“Table 08”
+“Explore our menu”
+Search: “Search dishes, drinks, desserts…”
+
+Do not make the top too large.
+Keep it compact and app-like.
+
+====================================================
+2. CATEGORY BROWSING
+====================================================
+
+Redesign category browsing.
+
+Show:
+- Category chips at top
+- Category image if available
+- Category name
+- Item count
+- Smooth scroll to category
+- Active category highlight while scrolling
+
+Example categories:
+- Recommended
+- Starters
+- Pizza
+- Burgers
+- Main Course
+- Biryani
+- Desserts
+- Beverages
+
+On mobile:
+- Category chips should be horizontally scrollable.
+- Keep category bar sticky below header.
+
+====================================================
+3. MENU ITEM CARD DESIGN
+====================================================
+
+Redesign item cards similar to modern food ordering UX.
+
+Each item card should show:
+- Food image on right
+- Item name
+- Veg/non-veg icon
+- Short description
+- Price
+- Bestseller / Recommended tag
+- Customizable badge if add-ons exist
+- Out of stock badge if unavailable
+- Add or Customize button
+
+Layout:
+- Text on left
+- Food image on right
+- Add button below/over image
+- Clean card spacing
+- Rounded image corners
+- Soft shadow or border
+
+If item has image:
+- Show actual item image.
+
+If item has no image:
+- Show beautiful fallback food placeholder.
+
+If item has add-ons/modifiers:
+- Button text: “Customize”
+- Show small text: “Customizable”
+
+If item has no add-ons:
+- Button text: “Add”
+
+====================================================
+4. ITEM IMAGES
+====================================================
+
+Make sure item images work everywhere.
+
+Requirements:
+- Show item image in menu list.
+- Show larger item image in item detail/customization modal.
+- Use optimized image loading.
+- Lazy load below-the-fold images.
+- Use proper aspect ratio.
+- Use fallback image if missing.
+- No broken image icons.
+- Admin menu images should reflect on QR menu.
+
+If current item image field exists, use it.
+If not connected, connect it properly.
+
+====================================================
+5. ITEM CUSTOMIZATION / ADD-ONS FLOW
+====================================================
+
+When customer taps Customize or Add on item with add-ons, open a mobile bottom sheet.
+
+Bottom sheet should show:
+- Large food image
+- Item name
+- Description
+- Base price
+- Quantity selector
+- Add-on/modifier groups
+- Final price
+- Add to Cart button
+
+Add-on examples:
+- Extra cheese
+- Extra sauce
+- Extra onion
+- Without onion
+- Less spicy
+- Medium spicy
+- Extra spicy
+- Add dip
+- Extra paneer
+- Add fries
+- Add cold drink
+- Jain option
+- No garlic
+- No onion
+
+Support modifier group types:
+- Single select
+- Multi select
+- Required
+- Optional
+- Min/max selection
+- Free add-ons
+- Paid add-ons
+
+UI:
+- Required groups should show “Required”
+- Optional groups should show “Optional”
+- Show “Choose up to 3” if max selection exists
+- Show add-on prices clearly
+- Update final price live
+- Disable Add to Cart until required choices are selected
+- Show validation message if required choices are missing
+
+====================================================
+6. CART EXPERIENCE
+====================================================
+
+Redesign cart.
+
+Sticky cart bar:
+When items are added, show sticky bottom bar:
+“View Cart • 3 items • ₹420”
+
+Cart page/bottom sheet should show:
+- Item name
+- Item image thumbnail
+- Selected add-ons/modifiers
+- Quantity stepper
+- Item note
+- Edit button
+- Remove button
+- Price
+- Subtotal
+- Taxes/charges
+- Discount if any
+- Grand total
+
+If same item has different add-ons, show separate lines.
+
+Example:
+Burger
+- Extra cheese
+- No onion
+- Spicy sauce
+Qty 1
+₹180
+
+Allow:
+- Edit customization
+- Add more items
+- Remove item
+- Continue browsing
+
+====================================================
+7. CHECKOUT FLOW
+====================================================
+
+Make checkout simple and modern.
+
+Show:
+- Table number
+- Order summary
+- Customer name/phone if required by restaurant settings
+- Special instruction
+- Payment option if enabled
+- Place Order button
+
+If online payment is disabled:
+Button: “Place Order”
+
+If online payment is enabled:
+Show payment options:
+- Pay Now
+- Pay at Counter
+- Pay Later / Table Bill if allowed
+
+After order:
+- Send order to existing order system
+- Generate KOT
+- Show order success
+
+====================================================
+8. ORDER SUCCESS SCREEN
+====================================================
+
+After placing order, show nice success screen.
+
+Show:
+- Order placed successfully
+- Order number
+- Table number
+- Estimated preparation time if available
+- Order summary
+- Track Order button
+- Add More Items button
+- Call Waiter button
+- Request Bill button
+
+Keep it clean and reassuring.
+
+====================================================
+9. LIVE ORDER STATUS TRACKING
+====================================================
+
+Add/upgrade live order status page.
+
+Show status timeline:
+- Order Placed
+- Accepted
+- Preparing
+- Ready
+- Served
+
+If delivery/takeaway:
+- Order Placed
+- Accepted
+- Preparing
+- Ready for Pickup / Out for Delivery
+- Completed
+
+Customer should be able to:
+- View current order
+- Add more items if allowed
+- Call waiter
+- Request bill
+- Give feedback/review after order
+
+====================================================
+10. CUSTOMER ACTIONS
+====================================================
+
+Keep quick actions accessible:
+
+- Call Waiter
+- Request Water
+- Request Bill
+- Need Help
+- Give Review
+
+Use floating action button or bottom action section.
+Make sure these requests reach restaurant admin/staff if already supported.
+
+====================================================
+11. SEARCH AND FILTERS
+====================================================
+
+Add clean search/filter UX.
+
+Features:
+- Search item by name
+- Search category
+- Veg only toggle
+- Non-veg filter
+- Bestseller filter
+- Recommended filter
+- Spicy/new tags if available
+
+Search should be fast and mobile-friendly.
+
+====================================================
+12. RECOMMENDATIONS / UPSELL
+====================================================
+
+Add app-like recommendation sections.
+
+Sections:
+- Recommended for you
+- Bestsellers
+- Frequently ordered together
+- Add sides with this
+- Complete your meal
+- Popular today
+
+Examples:
+- Biryani → Add raita
+- Burger → Add fries/cold drink
+- Pizza → Add garlic bread
+- Main course → Add naan/rice
+
+If AI/recommendation logic exists, use it.
+If not, use admin-marked recommended/bestseller and add-on rules.
+
+====================================================
+13. DESIGN STYLE
+====================================================
+
+Design should feel like premium food ordering app.
+
+Style:
+- Modern
+- App-like
+- Mobile-first
+- Food image focused
+- Clean cards
+- Rounded corners
+- Strong add button
+- Sticky cart
+- Smooth bottom sheets
+- Clear typography
+- Fast interactions
+- Premium orange/white/dark KhanaLagao theme
+
+Do not make it look like admin dashboard.
+Do not make it plain list only.
+
+Use KhanaLagao colors:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+Success Green: #16A34A
+Warning Amber: #F59E0B
+Danger Red: #EF4444
+
+====================================================
+14. ADMIN CONNECTION
+====================================================
+
+Make sure QR menu uses real admin data.
+
+Connect:
+- Item name
+- Item image
+- Item description
+- Price
+- Category
+- Veg/non-veg
+- Bestseller tag
+- Recommended tag
+- Out-of-stock status
+- Add-ons/modifiers
+- Availability timing
+- Tax/charges
+- Table number
+- Restaurant settings
+
+If images/add-ons exist in admin but not showing in QR menu, fix that connection.
+
+====================================================
+15. ADD-ONS / MODIFIERS BACKEND CHECK
+====================================================
+
+Check if add-ons/modifiers are already built.
+
+If built:
+- Connect them to QR menu.
+- Show them in item customization modal.
+- Save selected modifiers in cart/order.
+- Show modifiers in KOT/invoice.
+
+If not built:
+- Add basic modifier support:
+  - Modifier groups
+  - Modifier options
+  - Price adjustment
+  - Required/optional
+  - Single/multi select
+  - Assign to menu item
+  - Save with order item
+
+Selected add-ons must show in:
+- Cart
+- Checkout
+- Order detail
+- Kitchen/KOT
+- Invoice
+
+====================================================
+16. PERFORMANCE REQUIREMENTS
+====================================================
+
+QR menu must be fast.
+
+- Lazy load images
+- Optimize images
+- Use skeleton loading
+- Avoid loading all heavy data at once
+- Keep cart state fast
+- Avoid layout shift
+- No broken image loading
+- No heavy animations
+- Smooth scroll
+- Works on low-end phones
+
+====================================================
+17. MOBILE RESPONSIVE TEST
+====================================================
+
+Test QR menu on:
+- 360px mobile
+- 390px mobile
+- 430px mobile
+- Tablet
+- Desktop fallback
+
+Check:
+- No horizontal overflow
+- Category chips scroll properly
+- Item cards look good
+- Images fit
+- Bottom sheet fits
+- Cart bar works
+- Checkout works
+- Buttons are tap-friendly
+
+====================================================
+18. FULL FLOW TESTING
+====================================================
+
+Test complete flow:
+
+1. Scan table QR
+2. QR menu opens correct restaurant/table
+3. Categories load
+4. Item images load
+5. Search works
+6. Add simple item
+7. Customize item with add-ons
+8. Required add-on validation works
+9. Cart updates
+10. Checkout works
+11. Order creates in backend
+12. KOT generated
+13. Admin/POS receives order
+14. Kitchen sees order with add-ons
+15. Customer sees order success
+16. Customer tracks order status
+17. Request waiter works
+18. Request bill works
+
+====================================================
+19. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- QR menu looks modern and visual.
+- Food images show on menu cards.
+- Category browsing is smooth.
+- Add-ons/modifiers work in QR ordering.
+- Cart is redesigned and clean.
+- Checkout is smooth.
+- Order creation works with real backend.
+- KOT shows selected add-ons.
+- Order status tracking works.
+- Mobile UX feels inspired by food ordering apps.
+- No mock data.
+- No broken flow.
+- No broken images.
+- No slow loading issue.
+```
+
+Add this short instruction too:
+
+```text
+The QR menu should feel like a real food-ordering app: image-rich menu cards, sticky categories, customization bottom sheets, add-ons, sticky cart, smooth checkout, and live order tracking.
+```
