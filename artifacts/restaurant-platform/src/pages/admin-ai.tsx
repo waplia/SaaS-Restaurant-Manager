@@ -1028,7 +1028,10 @@ function CreditRuleModal({ rule, onClose, onSaved }: { rule: CreditRule | null; 
 }
 function CreditRulesSubTab() {
   const qc = useQueryClient(); const { toast } = useToast();
-  const { data = [], isLoading } = useQuery<CreditRule[]>({ queryKey: ["admin-ai", "credit-rules"], queryFn: () => apiFetch("/admin/ai/credit-rules") });
+  const { data = [], isLoading } = useQuery<CreditRule[]>({ queryKey: ["admin-ai", "credit-rules"], queryFn: async () => {
+    const res = await apiFetch<{ rows: CreditRule[] } | CreditRule[]>("/admin/ai/credit-rules?limit=500");
+    return Array.isArray(res) ? res : (res?.rows ?? []);
+  } });
   const [editing, setEditing] = useState<CreditRule | null>(null);
   const [creating, setCreating] = useState(false);
   const remove = async (r: CreditRule) => {
@@ -1145,7 +1148,10 @@ function RechargePackageModal({ pkg, onClose, onSaved }: { pkg: RechargePackage 
 }
 function RechargePackagesSubTab() {
   const qc = useQueryClient(); const { toast } = useToast();
-  const { data = [], isLoading } = useQuery<RechargePackage[]>({ queryKey: ["admin-ai", "recharge-packages"], queryFn: () => apiFetch("/admin/ai/recharge-packages") });
+  const { data = [], isLoading } = useQuery<RechargePackage[]>({ queryKey: ["admin-ai", "recharge-packages"], queryFn: async () => {
+    const res = await apiFetch<{ rows: RechargePackage[] } | RechargePackage[]>("/admin/ai/recharge-packages?limit=500");
+    return Array.isArray(res) ? res : (res?.rows ?? []);
+  } });
   const [editing, setEditing] = useState<RechargePackage | null>(null);
   const [creating, setCreating] = useState(false);
   const remove = async (p: RechargePackage) => {

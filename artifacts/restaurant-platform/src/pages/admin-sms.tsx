@@ -445,7 +445,10 @@ function UsagePanel() {
   const qc = useQueryClient();
   const { data: usage, isLoading } = useQuery<UsageRow[]>({
     queryKey: ["admin", "sms", "usage"],
-    queryFn: () => apiFetch("/admin/sms/usage"),
+    queryFn: async () => {
+      const res = await apiFetch<{ rows: UsageRow[] } | UsageRow[]>("/admin/sms/usage?limit=200");
+      return Array.isArray(res) ? res : (res?.rows ?? []);
+    },
   });
   const { data: plans } = useQuery<{ id: number; name: string; smsMonthlyLimit: number }[]>({
     queryKey: ["admin", "subscription-plans"],

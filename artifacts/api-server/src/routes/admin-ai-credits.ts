@@ -50,9 +50,14 @@ function shapeRule(r: typeof aiFeatureCreditRulesTable.$inferSelect) {
   };
 }
 
-router.get("/admin/ai/credit-rules", async (_req, res) => {
-  const rows = await db.select().from(aiFeatureCreditRulesTable).orderBy(aiFeatureCreditRulesTable.featureSlug);
-  res.json(rows.map(shapeRule));
+router.get("/admin/ai/credit-rules", async (req: Request, res: Response) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const [rows, totalRow] = await Promise.all([
+    db.select().from(aiFeatureCreditRulesTable).orderBy(aiFeatureCreditRulesTable.featureSlug).limit(limit).offset(offset),
+    db.select({ c: sql<number>`count(*)::int` }).from(aiFeatureCreditRulesTable),
+  ]);
+  res.json({ rows: rows.map(shapeRule), total: Number(totalRow[0]?.c ?? 0), limit, offset });
 });
 
 router.post("/admin/ai/credit-rules", async (req: Request, res: Response) => {
@@ -126,9 +131,14 @@ router.delete("/admin/ai/credit-rules/:id", async (req: Request, res: Response) 
 
 // ─── Recharge Packages ───────────────────────────────────────────────────────
 
-router.get("/admin/ai/recharge-packages", async (_req, res) => {
-  const rows = await db.select().from(aiRechargePackagesTable).orderBy(aiRechargePackagesTable.sortOrder, aiRechargePackagesTable.price);
-  res.json(rows);
+router.get("/admin/ai/recharge-packages", async (req: Request, res: Response) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const [rows, totalRow] = await Promise.all([
+    db.select().from(aiRechargePackagesTable).orderBy(aiRechargePackagesTable.sortOrder, aiRechargePackagesTable.price).limit(limit).offset(offset),
+    db.select({ c: sql<number>`count(*)::int` }).from(aiRechargePackagesTable),
+  ]);
+  res.json({ rows, total: Number(totalRow[0]?.c ?? 0), limit, offset });
 });
 // schema already exposes isFeatured & showToRestaurants — UI consumes both.
 

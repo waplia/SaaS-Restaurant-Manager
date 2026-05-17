@@ -35,6 +35,12 @@ export default function WalletsPage() {
   const [giftOpen, setGiftOpen] = useState(false);
   const [topupAmt, setTopupAmt] = useState("");
   const [topupChannel, setTopupChannel] = useState("manual");
+  // Idempotency key is regenerated each time the dialog opens, then reused
+  // across retries of that single intended top-up. This prevents duplicate
+  // charges from rapid clicks while still allowing a new fresh attempt after
+  // the dialog is closed and re-opened.
+  const [topupIdemKey, setTopupIdemKey] = useState(() => idemKey());
+  const openTopup = () => { setTopupIdemKey(idemKey()); setTopupOpen(true); };
 
   const { data, refetch } = useQuery<{ restaurant: WalletRow; subscription: WalletRow; customerWalletsSample: WalletRow[] }>({
     queryKey: ["wallets", restaurantId],
@@ -91,7 +97,7 @@ export default function WalletsPage() {
               </div>
               {restaurantWallet?.isFrozen && <Badge variant="destructive" className="mt-2">Frozen</Badge>}
               <div className="flex gap-2 mt-4">
-                <Button size="sm" onClick={() => setTopupOpen(true)}><ArrowDownToLine className="w-4 h-4 mr-1" /> Top up</Button>
+                <Button size="sm" onClick={openTopup}><ArrowDownToLine className="w-4 h-4 mr-1" /> Top up</Button>
                 <Button size="sm" variant="outline" onClick={() => refetch()}><RefreshCw className="w-4 h-4" /></Button>
               </div>
             </CardContent>
@@ -217,7 +223,7 @@ export default function WalletsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTopupOpen(false)}>Cancel</Button>
-            <Button disabled={!topupAmt || topupMut.isPending} onClick={() => topupMut.mutate({ amountPaise: Math.round(parseFloat(topupAmt) * 100), channel: topupChannel, idempotencyKey: idemKey() })}>Top up</Button>
+            <Button disabled={!topupAmt || topupMut.isPending} onClick={() => topupMut.mutate({ amountPaise: Math.round(parseFloat(topupAmt) * 100), channel: topupChannel, idempotencyKey: topupIdemKey })}>Top up</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

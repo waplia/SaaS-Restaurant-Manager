@@ -50,20 +50,80 @@ export default function SettlementReconPage() {
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
+  // Tolerant CSV parser: handles header rows, quoted cells, gateway-specific
+  // column names (Razorpay: payment_id / amount; Cashfree: cf_payment_id /
+  // payment_amount; Stripe: id / amount). Falls back to the first two
+  // columns when no recognized headers are present.
+  function splitCsvLine(line: string): string[] {
+    const out: string[] = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQ = !inQ; }
+      } else if (ch === "," && !inQ) {
+        out.push(cur); cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  }
+  function parseAmount(raw: string): number {
+    // Strip currency symbols, commas, spaces. Treat (123.45) as negative.
+    const cleaned = raw.replace(/[₹$€£,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+    return parseFloat(cleaned);
+  }
   function parseCsv(): Array<{ externalRef: string; amountPaise: number }> {
-    return reconCsv.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
-      const [ref, amt] = line.split(/,/).map(s => s.trim());
-      return { externalRef: ref, amountPaise: Math.round(parseFloat(amt) * 100) };
-    }).filter(r => r.externalRef && Number.isFinite(r.amountPaise));
+    const lines = reconCsv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+    const refKeys = ["payment_id", "cf_payment_id", "transaction_id", "txn_id", "id", "reference", "ref", "order_id"];
+    const amtKeys = ["amount", "payment_amount", "transaction_amount", "amount_in_rupees", "amount_inr", "gross_amount", "captured_amount", "settled_amount"];
+    const first = splitCsvLine(lines[0]).map(c => c.toLowerCase().replace(/^"|"$/g, ""));
+    // Only treat the first line as a header when we recognise at least one
+    // known header keyword. Headerless rows like `pay_ABC123,1250` were
+    // previously misclassified and silently dropped.
+    const rIdx = first.findIndex(c => refKeys.includes(c));
+    const aIdx = first.findIndex(c => amtKeys.includes(c));
+    const looksLikeHeader = rIdx >= 0 || aIdx >= 0;
+    let refIdx = 0;
+    let amtIdx = 1;
+    let dataStart = 0;
+    if (looksLikeHeader) {
+      refIdx = rIdx >= 0 ? rIdx : 0;
+      amtIdx = aIdx >= 0 ? aIdx : (refIdx === 1 ? 0 : 1);
+      dataStart = 1;
+    }
+    const out: Array<{ externalRef: string; amountPaise: number }> = [];
+    for (let i = dataStart; i < lines.length; i++) {
+      const cells = splitCsvLine(lines[i]);
+      const ref = (cells[refIdx] ?? "").replace(/^"|"$/g, "").trim();
+      const amtRaw = (cells[amtIdx] ?? "").replace(/^"|"$/g, "").trim();
+      const amt = parseAmount(amtRaw);
+      if (ref && Number.isFinite(amt)) {
+        out.push({ externalRef: ref, amountPaise: Math.round(amt * 100) });
+      }
+    }
+    return out;
   }
 
   const [shiftDate, setShiftDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [shiftLabel, setShiftLabel] = useState("");
   const [expected, setExpected] = useState("");
   const [counted, setCounted] = useState("");
+  const [varianceReason, setVarianceReason] = useState("");
+  const variancePaise = (() => {
+    const e = parseFloat(expected); const c = parseFloat(counted);
+    if (!Number.isFinite(e) || !Number.isFinite(c)) return 0;
+    return Math.round((c - e) * 100);
+  })();
+  const requiresReason = variancePaise !== 0;
   const shiftMut = useMutation({
     mutationFn: (body: any) => apiPost(`/restaurants/${restaurantId}/cash-shifts`, body),
-    onSuccess: () => { toast({ title: "Shift recorded" }); qc.invalidateQueries({ queryKey: ["cash-shifts"] }); setExpected(""); setCounted(""); setShiftLabel(""); },
+    onSuccess: () => { toast({ title: "Shift recorded" }); qc.invalidateQueries({ queryKey: ["cash-shifts"] }); setExpected(""); setCounted(""); setShiftLabel(""); setVarianceReason(""); },
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
@@ -164,7 +224,28 @@ export default function SettlementReconPage() {
                   <div><Label>Expected (₹)</Label><Input type="number" value={expected} onChange={e => setExpected(e.target.value)} /></div>
                   <div><Label>Counted (₹)</Label><Input type="number" value={counted} onChange={e => setCounted(e.target.value)} /></div>
                 </div>
-                <Button disabled={!expected || !counted} onClick={() => shiftMut.mutate({ shiftDate: new Date(shiftDate).toISOString(), shiftLabel, expectedPaise: Math.round(parseFloat(expected) * 100), countedPaise: Math.round(parseFloat(counted) * 100) })}>Record shift</Button>
+                {requiresReason && (
+                  <div>
+                    <Label>Variance reason {variancePaise !== 0 ? <span className="text-xs text-muted-foreground">({variancePaise > 0 ? "+" : ""}{fmtINR(variancePaise)})</span> : null}</Label>
+                    <Textarea
+                      rows={2}
+                      value={varianceReason}
+                      onChange={e => setVarianceReason(e.target.value)}
+                      placeholder={variancePaise < 0 ? "e.g. ₹50 short — change owed to customer not collected" : "e.g. cashier overcharged & refunded later"}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">A short reason is required whenever counted cash does not match expected. This is recorded in the audit log.</p>
+                  </div>
+                )}
+                <Button
+                  disabled={!expected || !counted || (requiresReason && !varianceReason.trim())}
+                  onClick={() => shiftMut.mutate({
+                    shiftDate: new Date(shiftDate).toISOString(),
+                    shiftLabel,
+                    expectedPaise: Math.round(parseFloat(expected) * 100),
+                    countedPaise: Math.round(parseFloat(counted) * 100),
+                    notes: requiresReason ? `Variance reason: ${varianceReason.trim()}` : undefined,
+                  })}
+                >Record shift</Button>
               </CardContent>
             </Card>
             <Card><CardContent className="p-0">

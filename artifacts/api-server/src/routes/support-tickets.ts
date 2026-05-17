@@ -28,6 +28,7 @@ import {
   HOUR_MS,
   isOpenStatus,
 } from "../lib/supportSla";
+import { recordAuditLog } from "../lib/audit";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
@@ -185,6 +186,14 @@ router.post("/admin/support/categories", requireSuperAdmin, async (req, res) => 
       isActive: isActive === undefined ? true : Boolean(isActive),
       sortOrder: Number(sortOrder ?? 0),
     }).returning();
+    await recordAuditLog({
+      req,
+      module: "support",
+      action: "category.create",
+      entity: "support_ticket_category",
+      entityId: created.id,
+      newValue: created,
+    });
     res.status(201).json(created);
   } catch (err) {
     if ((err as { code?: string }).code === "23505") return void res.status(409).json({ error: "A category with this slug already exists" });
@@ -207,18 +216,37 @@ router.patch("/admin/support/categories/:id", requireSuperAdmin, async (req, res
   if (resolutionHours !== undefined) patch.resolutionHours = resolutionHours == null ? null : Number(resolutionHours);
   if (isActive !== undefined) patch.isActive = Boolean(isActive);
   if (sortOrder !== undefined) patch.sortOrder = Number(sortOrder);
+  const [old] = await db.select().from(supportTicketCategoriesTable).where(eq(supportTicketCategoriesTable.id, id));
   const [updated] = await db.update(supportTicketCategoriesTable).set(patch).where(eq(supportTicketCategoriesTable.id, id)).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  await recordAuditLog({
+    req,
+    module: "support",
+    action: "category.update",
+    entity: "support_ticket_category",
+    entityId: id,
+    oldValue: old,
+    newValue: updated,
+  });
   res.json(updated);
 });
 
 router.delete("/admin/support/categories/:id", requireSuperAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return void res.status(400).json({ error: "Invalid id" });
+  const [old] = await db.select().from(supportTicketCategoriesTable).where(eq(supportTicketCategoriesTable.id, id));
   // Detach tickets so we don't violate FK; then delete.
   await db.update(supportTicketsTable).set({ categoryId: null }).where(eq(supportTicketsTable.categoryId, id));
   const [removed] = await db.delete(supportTicketCategoriesTable).where(eq(supportTicketCategoriesTable.id, id)).returning();
   if (!removed) return void res.status(404).json({ error: "Not found" });
+  await recordAuditLog({
+    req,
+    module: "support",
+    action: "category.delete",
+    entity: "support_ticket_category",
+    entityId: id,
+    oldValue: old,
+  });
   res.json({ ok: true });
 });
 
@@ -255,6 +283,15 @@ router.put("/admin/support/sla-settings", requireSuperAdmin, async (req, res) =>
   }
   const { supportSlaSettingsTable } = await import("../lib/db");
   const [updated] = await db.update(supportSlaSettingsTable).set(patch).where(eq(supportSlaSettingsTable.id, settings.id)).returning();
+  await recordAuditLog({
+    req,
+    module: "support",
+    action: "sla_settings.update",
+    entity: "support_sla_settings",
+    entityId: settings.id,
+    oldValue: settings,
+    newValue: updated,
+  });
   res.json(updated);
 });
 

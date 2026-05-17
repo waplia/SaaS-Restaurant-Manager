@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   db,
   smsProvidersTable,
@@ -25,6 +25,66 @@ const router = Router();
 
 const VALID_PROVIDERS: SmsProviderType[] = ["twilio", "msg91", "textlocal", "fast2sms", "gupshup", "custom"];
 
+// Keys that must never leak in GET responses (mask everything that looks like
+// a credential, token, secret, key, password, signing key, etc).
+const SECRET_KEY_PATTERN = /(token|secret|password|apikey|api_key|auth|signature|signing|private|sender_?id_password|sid_?token)/i;
+function maskSecret(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v);
+  if (s.length === 0) return "";
+  if (s.length <= 4) return "****";
+  return `${s.slice(0, 2)}••••${s.slice(-2)}`;
+}
+function maskProviderConfig(config: unknown): unknown {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return config ?? {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config as Record<string, unknown>)) {
+    if (SECRET_KEY_PATTERN.test(k)) {
+      out[k] = maskSecret(v);
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = maskProviderConfig(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+function maskProviderRow<T extends { config?: unknown }>(row: T): T {
+  return { ...row, config: maskProviderConfig(row.config) } as T;
+}
+// Detects a value that was produced by maskSecret() — admins editing a
+// provider through the UI receive masked placeholders for secrets, and we
+// must NOT round-trip those back into the DB and clobber the real key.
+const MASK_PATTERN = /^(\*{2,}|.{0,2}•{2,}.{0,2})$/;
+function isMaskedValue(v: unknown): boolean {
+  return typeof v === "string" && MASK_PATTERN.test(v);
+}
+// Merge an incoming `config` patch onto the existing stored config:
+// - For any secret-looking key whose incoming value is a mask placeholder
+//   (or empty string when an existing real value is present), keep the
+//   stored value.
+// - Otherwise, take the incoming value.
+function mergeProviderConfig(existing: unknown, incoming: unknown): Record<string, unknown> {
+  const base: Record<string, unknown> = existing && typeof existing === "object" && !Array.isArray(existing)
+    ? { ...(existing as Record<string, unknown>) } : {};
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return base;
+  for (const [k, v] of Object.entries(incoming as Record<string, unknown>)) {
+    const isSecret = SECRET_KEY_PATTERN.test(k);
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      base[k] = mergeProviderConfig(base[k], v);
+      continue;
+    }
+    if (isSecret) {
+      // Preserve the stored secret when the client echoes back a mask
+      // placeholder, an empty string, or null — these all mean "no
+      // change" in the edit UI.
+      if (isMaskedValue(v) || v === "" || v === null || v === undefined) continue;
+    }
+    base[k] = v;
+  }
+  return base;
+}
+
 function audit(userId: number | null | undefined, action: string, entity: string, entityId: number | null, meta?: Record<string, unknown>) {
   return db.insert(auditLogsTable).values({
     userId: userId ?? null,
@@ -38,7 +98,7 @@ function audit(userId: number | null | undefined, action: string, entity: string
 // ───────── Providers ─────────
 router.get("/admin/sms/providers", requireSuperAdmin, async (_req, res) => {
   const rows = await db.select().from(smsProvidersTable).orderBy(desc(smsProvidersTable.isDefault), smsProvidersTable.id);
-  res.json(rows);
+  res.json(rows.map(maskProviderRow));
 });
 
 router.post("/admin/sms/providers", requireSuperAdmin, async (req, res) => {
@@ -55,7 +115,7 @@ router.post("/admin/sms/providers", requireSuperAdmin, async (req, res) => {
     type, name, isEnabled, isDefault, config, createdBy: req.user?.id ?? null,
   }).returning();
   await audit(req.user?.id, "sms.provider.created", "sms_provider", row.id, { type, name });
-  res.status(201).json(row);
+  res.status(201).json(maskProviderRow(row));
 });
 
 router.patch("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => {
@@ -69,11 +129,17 @@ router.patch("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => 
   if (typeof name === "string") update.name = name;
   if (typeof isEnabled === "boolean") update.isEnabled = isEnabled;
   if (typeof isDefault === "boolean") update.isDefault = isDefault;
-  if (config && typeof config === "object") update.config = config;
+  if (config && typeof config === "object") {
+    // Merge against stored config so masked secrets echoed back by the UI
+    // don't overwrite the real credentials in the DB.
+    const [existing] = await db.select({ config: smsProvidersTable.config })
+      .from(smsProvidersTable).where(eq(smsProvidersTable.id, id));
+    update.config = mergeProviderConfig(existing?.config, config);
+  }
   const [row] = await db.update(smsProvidersTable).set(update).where(eq(smsProvidersTable.id, id)).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   await audit(req.user?.id, "sms.provider.updated", "sms_provider", id, { fields: Object.keys(update) });
-  res.json(row);
+  res.json(maskProviderRow(row));
 });
 
 router.delete("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => {
@@ -207,44 +273,74 @@ router.patch("/admin/sms/tenants/:id/limit", requireSuperAdmin, async (req, res)
 router.get("/admin/sms/usage", requireSuperAdmin, async (req, res) => {
   const start = new Date();
   start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0);
-  const tenants = await db.select({
-    id: tenantsTable.id,
-    name: tenantsTable.name,
-    planId: tenantsTable.planId,
-    override: tenantsTable.smsMonthlyLimit,
-    planLimit: subscriptionPlansTable.smsMonthlyLimit,
-    planName: subscriptionPlansTable.name,
-  }).from(tenantsTable).leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, tenantsTable.planId));
 
-  const usageRows = await db.select({
-    tenantId: smsLogsTable.tenantId,
-    sent: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} IN ('sent','delivered'))::int`,
-    failed: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'failed')::int`,
-    blocked: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'blocked')::int`,
-  })
-    .from(smsLogsTable)
-    .where(gte(smsLogsTable.createdAt, start))
-    .groupBy(smsLogsTable.tenantId);
-
-  const byTenant = new Map(usageRows.map(r => [r.tenantId, r]));
+  // Single-tenant lookup is cheap and the existing /restaurant detail UI
+  // depends on it — kept unpaginated and short-circuited.
   if (req.query.tenantId) {
     const tid = Number(req.query.tenantId);
-    const t = tenants.find(x => x.id === tid);
+    if (!Number.isFinite(tid)) { res.status(400).json({ error: "Invalid tenantId" }); return; }
+    const [t] = await db.select({
+      id: tenantsTable.id, name: tenantsTable.name, planId: tenantsTable.planId,
+      override: tenantsTable.smsMonthlyLimit, planLimit: subscriptionPlansTable.smsMonthlyLimit,
+      planName: subscriptionPlansTable.name,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, tenantsTable.planId))
+      .where(eq(tenantsTable.id, tid));
     if (!t) { res.status(404).json({ error: "Tenant not found" }); return; }
-    const u = byTenant.get(tid) ?? { sent: 0, failed: 0, blocked: 0 };
+    const [u] = await db.select({
+      sent: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} IN ('sent','delivered'))::int`,
+      failed: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'failed')::int`,
+      blocked: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'blocked')::int`,
+    }).from(smsLogsTable).where(and(eq(smsLogsTable.tenantId, tid), gte(smsLogsTable.createdAt, start)));
     const limit = (t.override ?? t.planLimit ?? 0) || 0;
-    res.json({ tenantId: tid, name: t.name, planName: t.planName, limit, used: u.sent, failed: u.failed, blocked: u.blocked });
+    res.json({ tenantId: tid, name: t.name, planName: t.planName, limit, used: u?.sent ?? 0, failed: u?.failed ?? 0, blocked: u?.blocked ?? 0 });
     return;
   }
-  res.json(tenants.map(t => {
-    const u = byTenant.get(t.id) ?? { sent: 0, failed: 0, blocked: 0 };
-    const limit = (t.override ?? t.planLimit ?? 0) || 0;
-    return {
-      tenantId: t.id, name: t.name, planId: t.planId, planName: t.planName,
-      limit, used: u.sent, failed: u.failed, blocked: u.blocked,
-      remaining: limit > 0 ? Math.max(0, limit - u.sent) : null,
-    };
-  }));
+
+  // Paginated tenant list. Without pagination this query loads every tenant
+  // on the platform — fine for hundreds, broken at thousands.
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+
+  const [tenants, totalRow] = await Promise.all([
+    db.select({
+      id: tenantsTable.id, name: tenantsTable.name, planId: tenantsTable.planId,
+      override: tenantsTable.smsMonthlyLimit, planLimit: subscriptionPlansTable.smsMonthlyLimit,
+      planName: subscriptionPlansTable.name,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, tenantsTable.planId))
+      .orderBy(tenantsTable.id)
+      .limit(limit).offset(offset),
+    db.select({ c: sql<number>`count(*)::int` }).from(tenantsTable),
+  ]);
+  const tenantIds = tenants.map(t => t.id);
+
+  const usageRows = tenantIds.length > 0
+    ? await db.select({
+        tenantId: smsLogsTable.tenantId,
+        sent: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} IN ('sent','delivered'))::int`,
+        failed: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'failed')::int`,
+        blocked: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'blocked')::int`,
+      })
+        .from(smsLogsTable)
+        .where(and(gte(smsLogsTable.createdAt, start), inArray(smsLogsTable.tenantId, tenantIds)))
+        .groupBy(smsLogsTable.tenantId)
+    : [];
+  const byTenant = new Map(usageRows.map(r => [r.tenantId, r]));
+
+  res.json({
+    rows: tenants.map(t => {
+      const u = byTenant.get(t.id) ?? { sent: 0, failed: 0, blocked: 0 };
+      const lim = (t.override ?? t.planLimit ?? 0) || 0;
+      return {
+        tenantId: t.id, name: t.name, planId: t.planId, planName: t.planName,
+        limit: lim, used: u.sent, failed: u.failed, blocked: u.blocked,
+        remaining: lim > 0 ? Math.max(0, lim - u.sent) : null,
+      };
+    }),
+    total: Number(totalRow[0]?.c ?? 0),
+    limit, offset,
+  });
 });
 
 router.post("/admin/sms/check-quotas", requireSuperAdmin, async (_req, res) => {
