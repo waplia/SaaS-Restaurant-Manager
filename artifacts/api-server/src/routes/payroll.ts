@@ -21,6 +21,7 @@ import { computePayroll, monthBounds, formatMoney, type CalcSalaryStructure, typ
 import { getApprovedIncentiveTotals } from "../lib/incentives";
 import { pushToUserIds } from "../lib/pushNotify";
 import { logger } from "../lib/logger";
+import { triggerAutoPost } from "./accounting-books";
 
 const router = Router();
 
@@ -633,6 +634,18 @@ router.post("/restaurants/:restaurantId/payroll-runs/:runId/finalize", async (re
     res.status(result.status).json({ error: result.error });
     return;
   }
+
+  // Accounting auto-post: payroll finalize → ledger (fail-soft, idempotent by runId)
+  const payrollTotal = result.items.reduce((s, i) => s + Number((i as { netPay?: number | string }).netPay ?? 0), 0);
+  void triggerAutoPost({
+    restaurantId,
+    source: "payroll",
+    sourceRef: `payroll_run:${runId}`,
+    entryDate: new Date().toISOString().slice(0, 10),
+    amount: payrollTotal,
+    memo: `Payroll ${result.run.periodYear}-${String(result.run.periodMonth).padStart(2, "0")}`,
+    userId: callerId as number | null,
+  });
 
   // Push notify each staff member. Fire-and-forget — never block response.
   const userIds = result.items.map((i) => i.userId);

@@ -80,6 +80,7 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import * as wallet from "../lib/walletService";
 import { recordAuditLog } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { triggerAutoPost } from "./accounting-books";
 
 const router = Router();
 
@@ -370,6 +371,16 @@ router.post("/restaurants/:restaurantId/refunds", requireRole("owner", "manager"
     }).where(eq(refundsTable.id, row.id));
   }
   await recordAuditLog({ req, module: "fintech", action: "refund_created", entity: "refund", entityId: row.id, restaurantId: rid(req), newValue: row });
+  // Accounting auto-post: refund → ledger (fail-soft, idempotent by refund id)
+  void triggerAutoPost({
+    restaurantId: rid(req),
+    source: "refund",
+    sourceRef: `refund:${row.id}`,
+    entryDate: new Date().toISOString().slice(0, 10),
+    amount: Number(d.amountPaise) / 100,
+    memo: `Refund #${row.id}`,
+    userId: uid(req) as number | null,
+  });
   res.json({ refund: row, walletTransactionId: walletTxId });
 });
 

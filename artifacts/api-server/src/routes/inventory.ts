@@ -7,6 +7,7 @@ import { runAutoReorderForRestaurant } from "../lib/autoReorder";
 import { requireRole } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { triggerAutoPost } from "./accounting-books";
 
 const router = Router();
 
@@ -161,6 +162,34 @@ router.post("/restaurants/:restaurantId/inventory/:id/adjust", requireRole("owne
 
   const [updated] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
   await triggerLowStockNotification({ ...updated!, currentStock: finalStock.toFixed(3) }, restaurantId);
+
+  // Accounting auto-post: inventory purchase or adjustment → ledger
+  // (fail-soft, idempotent per item+timestamp; uses unit cost when known)
+  const unitCost = Number(updated?.costPerUnit ?? 0);
+  if (qtyNum > 0 && unitCost > 0) {
+    const value = qtyNum * unitCost;
+    const today = new Date().toISOString().slice(0, 10);
+    if (type === "add" || type === "receive") {
+      void triggerAutoPost({
+        restaurantId,
+        source: "inventory_purchase",
+        sourceRef: `inv_recv:${id}:${Date.now()}`,
+        entryDate: today,
+        amount: value,
+        memo: `Inventory receipt: ${updated?.name ?? `#${id}`} ×${qtyNum}`,
+      });
+    } else if (type === "remove" || type === "use" || type === "waste") {
+      void triggerAutoPost({
+        restaurantId,
+        source: "inventory_adjustment",
+        sourceRef: `inv_adj:${id}:${Date.now()}`,
+        entryDate: today,
+        amount: value,
+        matchKey: type,
+        memo: `Inventory ${type}: ${updated?.name ?? `#${id}`} ×${qtyNum}`,
+      });
+    }
+  }
 
   res.json({ ...updated!, isLowStock: finalStock <= Number(updated!.minStockLevel) });
 });

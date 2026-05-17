@@ -52,6 +52,7 @@ export * from "./events";
 export * from "./aggregator-payouts";
 export * from "./pricing-rules";
 export * from "./accounting";
+export * from "./accounting-books";
 export * from "./food-court";
 export * from "./bakery";
 export * from "./meal-plans";

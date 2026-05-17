@@ -211,6 +211,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/cash-register", label: "Cash Register", icon: Banknote, roles: ["owner", "manager", "waiter"] },
       { kind: "link", href: "/expenses", label: "Expenses", icon: Receipt, roles: ["owner", "manager", "super_admin"], planGate: "expense_tracking" },
       { kind: "link", href: "/pnl", label: "P&L Dashboard", icon: TrendingUp, roles: ["owner", "manager", "super_admin"], planGate: "smart_pnl" },
+      { kind: "link", href: "/finance/accounting-books", label: "Accounting Books", icon: ScrollText, roles: ["owner", "manager", "accountant", "super_admin"], planGate: "accounting_back_office" },
       { kind: "link", href: "/wallets", label: "Wallet", icon: Wallet, roles: ["owner", "manager"] },
       { kind: "link", href: "/gift-cards", label: "Gift Cards", icon: Gift, roles: ["owner", "manager", "cashier"] },
       { kind: "link", href: "/settlements", label: "Settlements & Recon", icon: TrendingUp, roles: ["owner", "manager", "cashier"] },

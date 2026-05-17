@@ -3,6 +3,7 @@ import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm"
 import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
+import { triggerAutoPost } from "./accounting-books";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
 // side effects so plans without the entitlement see no behavior change).
@@ -2151,6 +2152,16 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", async (req, res) => {
   }
 
   handleOrderCompletion(orderId, restaurantId, updated).catch(console.error);
+  // Accounting auto-post: POS sale → ledger (fail-soft, idempotent by orderNumber)
+  void triggerAutoPost({
+    restaurantId,
+    source: "pos_sales",
+    sourceRef: `order:${updated.id}`,
+    entryDate: new Date().toISOString().slice(0, 10),
+    amount: Number(updated.totalAmount ?? 0),
+    memo: `POS sale ${updated.orderNumber}`,
+    userId: (req.user?.sub ?? req.user?.id ?? null) as number | null,
+  });
   // Service-timer: order has been billed (final stage).
   await recordTimerStage(restaurantId, updated.id, "billed");
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
