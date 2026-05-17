@@ -27,10 +27,8 @@ const UNKNOWN_STATUS = { label: "Unknown", bg: "bg-muted", border: "border-borde
 
 const KL_COLORS = {
   primaryOrange: "#FF6B1A",
-  deepOrange: "#E85A0C",
   charcoal: "#111827",
   warmWhite: "#FFF8F1",
-  lightBg: "#FFFDF9",
   muted: "#6B7280",
   faintOrange: "#FFE5D2",
 } as const;
@@ -100,7 +98,7 @@ function formatTableLabel(tableNumber: string): string {
   return `Table ${trimmed}`;
 }
 
-function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClose }: { table: FloorTable; restaurantName: string; restaurantId: number | null; restaurantLogoUrl: string | null; onClose: () => void }) {
+function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, hasRealRestaurantName, onClose }: { table: FloorTable; restaurantName: string; restaurantId: number | null; restaurantLogoUrl: string | null; hasRealRestaurantName: boolean; onClose: () => void }) {
   const { data: qrData, isLoading } = useGetTableQr(table.id);
   const rawQrUrl = qrData?.qrUrl ?? "";
   const qrUrl = rawQrUrl.startsWith("/") ? `${window.location.origin}${rawQrUrl}` : rawQrUrl;
@@ -157,7 +155,7 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
     let cursorY = 32;
 
     // Optional restaurant branding (logo + name) — subtle, above the headline
-    if (showBranding && (restaurantLogoUrl || restaurantName)) {
+    if (showBranding && (restaurantLogoUrl || hasRealRestaurantName)) {
       if (restaurantLogoUrl) {
         const logoPng = await loadImageToPngDataUrl(restaurantLogoUrl, 256);
         if (logoPng) {
@@ -165,7 +163,7 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
           cursorY += 11;
         }
       }
-      if (restaurantName) {
+      if (hasRealRestaurantName) {
         doc.setTextColor(KL_COLORS.muted);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
@@ -308,7 +306,7 @@ function QrModal({ table, restaurantName, restaurantId, restaurantLogoUrl, onClo
     doc.save(`table-${table.tableNumber}-qr.pdf`);
   }
 
-  const canShowBranding = Boolean(restaurantLogoUrl || restaurantName);
+  const canShowBranding = Boolean(restaurantLogoUrl || hasRealRestaurantName);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -1110,6 +1108,7 @@ export default function TablesPage() {
         <QrModal
           table={qrTable}
           restaurantName={restaurantInfo?.name ?? "Restaurant"}
+          hasRealRestaurantName={Boolean(restaurantInfo?.name)}
           restaurantId={restaurantInfo?.id ?? null}
           restaurantLogoUrl={restaurantInfo?.logoUrl ?? null}
           onClose={() => setQrTable(null)}
