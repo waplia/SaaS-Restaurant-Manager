@@ -16,9 +16,15 @@ interface PageHeaderProps {
 
 function renderIcon(icon: PageHeaderProps["icon"]): ReactNode {
   if (icon == null || typeof icon === "boolean") return null;
-  if (typeof icon === "function") return createElement(icon as ComponentType<{ className?: string }>, { className: "w-5 h-5" });
   if (isValidElement(icon) || typeof icon === "string" || typeof icon === "number") return icon;
-  return icon as ReactNode;
+  // Plain function component, OR a forwardRef/memo component (object with
+  // $$typeof + render/type, e.g. every lucide-react icon). Both must be
+  // instantiated via createElement — rendering them as children directly
+  // throws "Objects are not valid as a React child".
+  if (typeof icon === "function" || (typeof icon === "object" && icon !== null && "$$typeof" in (icon as object))) {
+    return createElement(icon as ComponentType<{ className?: string }>, { className: "w-5 h-5" });
+  }
+  return null;
 }
 
 export function PageHeader({ title, subtitle, description, actions, action, icon, children }: PageHeaderProps) {
