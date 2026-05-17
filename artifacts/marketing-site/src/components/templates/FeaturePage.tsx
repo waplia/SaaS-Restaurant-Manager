@@ -7,7 +7,18 @@ import { Benefits, type Benefit } from "@/components/shared/Benefits";
 import { FAQSection, type FAQ } from "@/components/shared/FAQSection";
 import { CTASection } from "@/components/shared/CTASection";
 import { RelatedModules, type RelatedItem } from "@/components/shared/RelatedModules";
-import { ProductMockup, FloatingBadge, MetricBadge } from "@/components/shared/ProductMockup";
+import { FloatingBadge, MetricBadge } from "@/components/shared/ProductMockup";
+import { MOCKUPS, type MockupKey } from "@/components/mockups";
+import { LiveProductDemo, type DemoVariant } from "@/components/demos/LiveProductDemo";
+
+const LEGACY_MOCKUP_MAP: Record<string, MockupKey> = {
+  dashboard: "dashboard",
+  pos: "pos",
+  mobile: "mobile",
+  kds: "kds",
+  report: "reports",
+  chat: "ai",
+};
 import { useSeo } from "@/lib/seo";
 import { Sparkles, type LucideIcon as LIcon } from "lucide-react";
 
@@ -25,8 +36,11 @@ export interface FeaturePageContent {
   features: FeatureItem[];
   howItWorks: { title?: string; subtitle?: string; steps: Step[] };
   benefits: { title: string; items: Benefit[] };
-  mockup?: "dashboard" | "pos" | "mobile" | "kds" | "report" | "chat";
+  /** Legacy kinds (dashboard/pos/mobile/kds/report/chat) or new mockup keys. */
+  mockup?: MockupKey | "report" | "chat";
   mockupBadges?: { icon: LIcon; label: string; value: string; pos: string }[];
+  /** Optional animated live-demo variant rendered under the hero. */
+  demoVariant?: DemoVariant;
   useCases: string[];
   related: RelatedItem[];
   faqs: FAQ[];
@@ -77,17 +91,32 @@ export function FeaturePage({ content }: { content: FeaturePageContent }) {
         subtitle={content.tagline}
         primaryCta={{ label: "Book a free demo", href: "/book-demo" }}
         secondaryCta={{ label: "See pricing", href: "/pricing" }}
-        visual={
-          <div className="relative">
-            <ProductMockup kind={content.mockup ?? "dashboard"} title={content.title} />
-            {content.mockupBadges?.map((b, i) => (
-              <FloatingBadge key={i} className={b.pos} delay={0.3 + i * 0.12}>
-                <MetricBadge icon={b.icon} label={b.label} value={b.value} />
-              </FloatingBadge>
-            ))}
-          </div>
-        }
+        visual={(() => {
+          const rawKey = content.mockup ?? "dashboard";
+          const key: MockupKey = (LEGACY_MOCKUP_MAP[rawKey] ?? (rawKey as MockupKey));
+          const MockupComp = MOCKUPS[key] ?? MOCKUPS.dashboard;
+          const isPhone = key === "mobile" || key === "qr";
+          return (
+            <div className={`relative ${isPhone ? "max-w-xs mx-auto" : ""}`}>
+              <MockupComp />
+              {content.mockupBadges?.map((b, i) => (
+                <FloatingBadge key={i} className={b.pos} delay={0.3 + i * 0.12}>
+                  <MetricBadge icon={b.icon} label={b.label} value={b.value} />
+                </FloatingBadge>
+              ))}
+            </div>
+          );
+        })()}
       />
+
+      {/* Animated live product demo */}
+      {content.demoVariant && (
+        <section className="py-10 md:py-20">
+          <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+            <LiveProductDemo variant={content.demoVariant} />
+          </div>
+        </section>
+      )}
 
       {/* Problem */}
       <section className="py-10 md:py-20 bg-muted/30">

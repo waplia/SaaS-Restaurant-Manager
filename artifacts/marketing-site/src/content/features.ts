@@ -34,6 +34,7 @@ const COMMON_FAQ = (name: string): { q: string; a: string }[] => [
 export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
   "pos-terminal": {
     slug: "pos-terminal",
+    demoVariant: "pos",
     category: "Sell",
     eyebrow: "Restaurant POS",
     title: "The fastest restaurant POS you'll ever touch",
@@ -175,6 +176,7 @@ export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
 
   "kitchen-display": {
     slug: "kitchen-display",
+    demoVariant: "kitchen",
     category: "Sell",
     title: "A Kitchen Display System chefs actually like",
     tagline: "Color-coded tickets, automatic course pacing, station-aware routing, and timers that turn into alarms before food gets late.",
@@ -559,6 +561,7 @@ export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
 
   "qr-menu": {
     slug: "qr-menu",
+    demoVariant: "qr",
     category: "Menu",
     title: "QR menu that becomes your second sales channel",
     tagline: "Beautiful mobile menu, full ordering, payments, waiter calls and reviews — without a single app download.",
@@ -806,7 +809,7 @@ export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
   },
 
   "inventory-management": {
-    slug: "inventory-management", category: "Inventory",
+    slug: "inventory-management", demoVariant: "inventory", category: "Inventory",
     title: "Real-time inventory built for restaurant reality",
     tagline: "Track stock by ingredient, recipe-deduct on every sale, get low-stock alerts and slash waste — without spreadsheets.",
     description: "Restaurant inventory management software. Real-time stock, recipe deduction, low-stock alerts, multi-outlet transfers and waste tracking.",
@@ -1585,7 +1588,7 @@ export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
   },
 
   "finance": {
-    slug: "finance", category: "Finance",
+    slug: "finance", demoVariant: "finance", category: "Finance",
     title: "Finance built for restaurant reality",
     tagline: "P&L, payments, settlements, wallet, expenses, invoices — designed for restaurants, not generic accounting tools.",
     description: "Restaurant finance software. P&L, payments, settlements, wallet, expenses and invoices designed for restaurant operations.",
@@ -2026,6 +2029,49 @@ export const FEATURE_CONTENT: Record<string, FeaturePageContent> = {
       { title: "Finance", href: "/features/finance", desc: "Finance integrations.", icon: PieChart },
     ],
     faqs: COMMON_FAQ("Integrations"),
+  },
+
+  "multi-outlet": {
+    slug: "multi-outlet", category: "Operations",
+    title: "Multi-outlet management for restaurant groups",
+    tagline: "Run 2 outlets or 200 from one console. Centralized menus, consolidated reporting, branch-level overrides, role-based access — without losing local autonomy.",
+    description: "Multi-outlet restaurant management software. Centralized menus, consolidated P&L, branch-level pricing, inter-outlet transfers, RBAC and outlet-comparison analytics.",
+    seoTitle: "Multi-Outlet Restaurant Management Software | KhanaLagao",
+    seoDesc: "Scale across locations with centralized control. Push menu changes everywhere, compare outlet P&L, manage transfers, and govern access with RBAC.",
+    problem: { title: "Scaling outlets multiplies your problems, not your profit", points: ["Every menu price change is a manual, error-prone rollout across outlets.", "Group P&L is glued together from spreadsheets days after month-end.", "Inter-outlet stock transfers are invisible and unauditable.", "Local managers either have too much access or none at all."]},
+    solution: { title: "One control plane for every outlet — with local autonomy where it counts", body: "Push menu, pricing and recipe changes from HQ in seconds. Roll up sales, food cost and labor across the group with live outlet-level drill-down. Manage central kitchen, transfers and approvals end-to-end. Grant exact, role-based access per outlet, per region, per function." },
+    features: [
+      { title: "Centralized menus", desc: "Push menu, modifiers and pricing to all outlets; allow branch overrides.", icon: BookOpen },
+      { title: "Consolidated reporting", desc: "Group P&L with outlet, region, daypart and channel drill-down.", icon: BarChart3 },
+      { title: "Inter-outlet transfers", desc: "Stock movement between outlets and central kitchen with audit trail.", icon: Repeat },
+      { title: "Central kitchen", desc: "Plan production, distribute to satellite outlets, track yield.", icon: Soup },
+      { title: "Branch-level pricing", desc: "Region-specific prices, taxes and promos without forking menus.", icon: Tag },
+      { title: "Role-based access", desc: "Granular permissions per outlet, region and function.", icon: Lock },
+      { title: "Outlet benchmarking", desc: "Compare outlets on revenue, AOV, food cost %, labor %, NPS.", icon: ChartBar },
+      { title: "Multi-region & multi-currency", desc: "Localize taxes, currencies, languages by outlet.", icon: Globe },
+    ],
+    howItWorks: { steps: [
+      { title: "Model your hierarchy", desc: "Define brands, regions, outlets, central kitchens, roles." },
+      { title: "Push from HQ", desc: "Update menus, prices, recipes, promos to all (or some) outlets." },
+      { title: "Operate locally", desc: "Outlet teams run service with the right level of autonomy." },
+      { title: "Roll up insights", desc: "Compare and act on consolidated and outlet-level analytics." },
+    ]},
+    benefits: { title: "Built for restaurant groups", items: [
+      { title: "Hours saved on rollouts", desc: "Menu and price changes ship to every outlet in seconds, not days." },
+      { title: "True group P&L", desc: "Live consolidated and outlet-level financials in one place." },
+      { title: "Inventory leakage cut", desc: "Auditable transfers and central-kitchen flows reduce shrinkage." },
+      { title: "Faster new openings", desc: "Clone an outlet template and launch in days, not months." },
+    ]},
+    mockup: "superadmin",
+    mockupBadges: b([{ icon: Store, label: "Outlets", value: "42" }, { icon: TrendingUp, label: "Group MRR", value: "₹ 3.2 Cr" }, { icon: BarChart3, label: "Top outlet", value: "Bandra" }, { icon: ShieldCheck, label: "RBAC roles", value: "12" }]),
+    useCases: ["Restaurant chains rolling out new outlets each quarter.", "Cloud kitchens with multiple satellite locations.", "Franchise networks with central + franchisee outlets.", "Multi-brand groups under one parent company."],
+    related: [
+      { title: "Reports & Analytics", href: "/features/reports-analytics", desc: "Cross-outlet analytics and benchmarking.", icon: BarChart3 },
+      { title: "Inventory", href: "/features/inventory-management", desc: "Stock and transfers across outlets.", icon: Boxes },
+      { title: "Finance", href: "/features/finance", desc: "Consolidated and outlet-level financials.", icon: IndianRupee },
+      { title: "Super Admin", href: "/features/super-admin", desc: "If you also run a SaaS for restaurants.", icon: Building2 },
+    ],
+    faqs: COMMON_FAQ("Multi-Outlet"),
   },
 
   "super-admin": {

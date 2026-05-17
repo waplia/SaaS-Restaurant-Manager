@@ -6,6 +6,7 @@ import {
   AlertTriangle, Users, Star, Wallet,
 } from "lucide-react";
 import { COMPANY } from "@/lib/company";
+import { DashboardMockup as RealDashboardMockup } from "@/components/mockups";
 
 export function HeroSection() {
   return (
@@ -68,45 +69,7 @@ export function HeroSection() {
 function DashboardMockup() {
   return (
     <div className="relative">
-      <div className="aspect-[5/4] rounded-2xl overflow-hidden shadow-2xl border border-border bg-card relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-card via-background to-accent/30 flex flex-col">
-          <div className="h-9 border-b border-border/60 flex items-center px-4 gap-2 bg-background/60 backdrop-blur">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-            <div className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-            <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-            <div className="ml-3 h-3 w-28 rounded bg-muted" />
-          </div>
-          <div className="flex-1 p-5 grid grid-cols-3 gap-4">
-            <div className="col-span-1 space-y-3">
-              <div className="h-6 w-3/4 rounded bg-primary/20" />
-              <div className="h-3 w-full rounded bg-muted" />
-              <div className="h-3 w-5/6 rounded bg-muted" />
-              <div className="h-3 w-2/3 rounded bg-muted" />
-              <div className="h-16 w-full rounded-lg bg-primary/10 border border-primary/20" />
-              <div className="h-16 w-full rounded-lg bg-muted" />
-            </div>
-            <div className="col-span-2 space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="h-14 rounded-lg bg-background border border-border/60 p-2 flex flex-col justify-center">
-                    <div className="h-2 w-10 rounded bg-muted mb-1.5" />
-                    <div className="h-3 w-14 rounded bg-foreground/70" />
-                  </div>
-                ))}
-              </div>
-              <div className="h-32 rounded-lg bg-background border border-border/60 p-3 flex items-end gap-1.5">
-                {[40, 65, 55, 80, 50, 90, 70, 60, 95, 75, 85, 55].map((h, i) => (
-                  <div key={i} style={{ height: `${h}%` }} className="flex-1 rounded-t bg-gradient-to-t from-primary/60 to-primary" />
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="h-16 rounded-lg bg-background border border-border/60" />
-                <div className="h-16 rounded-lg bg-background border border-border/60" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RealDashboardMockup />
 
       {/* Floating cards */}
       <FloatCard className="-top-4 -left-2 sm:-top-6 sm:-left-6" delay={0.4}>

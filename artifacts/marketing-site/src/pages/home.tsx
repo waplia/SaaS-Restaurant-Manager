@@ -12,6 +12,9 @@ import { ProblemSection } from "@/components/home/ProblemSection";
 // only when it scrolls into view, so it stays out of the initial JS payload
 // and doesn't run animations or render expensive subtrees on first paint.
 const SolutionSection = lazy(() => import("@/components/home/SolutionSection").then(m => ({ default: m.SolutionSection })));
+const ProductTour = lazy(() => import("@/components/home/ProductTour").then(m => ({ default: m.ProductTour })));
+const WorkflowDiagram = lazy(() => import("@/components/home/WorkflowDiagram").then(m => ({ default: m.WorkflowDiagram })));
+const ComparisonStrip = lazy(() => import("@/components/home/ComparisonStrip").then(m => ({ default: m.ComparisonStrip })));
 const PlatformModules = lazy(() => import("@/components/home/PlatformModules").then(m => ({ default: m.PlatformModules })));
 const KhanaAIHighlight = lazy(() => import("@/components/home/KhanaAIHighlight").then(m => ({ default: m.KhanaAIHighlight })));
 const GrowthEngineSection = lazy(() => import("@/components/home/GrowthEngineSection").then(m => ({ default: m.GrowthEngineSection })));
@@ -48,6 +51,8 @@ export default function Home() {
         <TrustStrip />
         <ProblemSection />
         <Deferred><SolutionSection /></Deferred>
+        <Deferred minHeight={600}><ProductTour /></Deferred>
+        <Deferred><WorkflowDiagram /></Deferred>
         <Deferred><PlatformModules /></Deferred>
         <Deferred><KhanaAIHighlight /></Deferred>
         <Deferred><GrowthEngineSection /></Deferred>
@@ -57,6 +62,7 @@ export default function Home() {
         <Deferred><MarketplaceSection /></Deferred>
         <Deferred><ReportsSection /></Deferred>
         <Deferred><WhyChooseUs /></Deferred>
+        <Deferred><ComparisonStrip /></Deferred>
         <Deferred minHeight={600}><PricingPreview /></Deferred>
         <Deferred><Testimonials /></Deferred>
         <Deferred><HomeFAQ /></Deferred>
