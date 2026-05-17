@@ -1,0 +1,1245 @@
+Perform a complete live feature check of KhanaLagao and fix every missing, broken, incomplete, or disconnected basic feature.
+
+Important:
+The platform is already built. Do not rebuild from scratch. Do not only check UI. Test every feature live with real data, real APIs, real database, real permissions, and real user flows. If a feature already exists, verify it is fully working. If it is missing, add it. If it is partially working, complete and fix it.
+
+Goal:
+Every important basic feature/add-on should work from start to end across Public Website, Super Admin, Restaurant Admin, POS, QR Menu, Kitchen, Inventory, Staff, Payroll, Customers, Growth, Khana AI, Finance, Reports, Mobile App, Notifications, and Settings.
+
+For every feature below, perform this process:
+
+1. Check if feature exists.
+2. Check if route/page exists.
+3. Check if UI is usable.
+4. Check if backend API exists.
+5. Check if database table/model exists.
+6. Check if create/read/update/delete works where needed.
+7. Check if data loads correctly.
+8. Check if role permissions work.
+9. Check if plan/module lock works.
+10. Check if mobile responsive.
+11. Check if notifications/logs/reports work where needed.
+12. Fix bugs.
+13. Retest after fixing.
+14. Mark status:
+   - Working
+   - Fixed
+   - Partially Fixed
+   - Missing
+   - Needs Configuration
+
+Create a final report with:
+- Feature name
+- Status
+- Bugs found
+- Fix applied
+- Retest result
+
+====================================================
+1. CORE RESTAURANT FEATURES LIVE CHECK
+====================================================
+
+Check and fix:
+
+Dashboard
+- Sales cards load real data.
+- Live orders show.
+- Kitchen status shows.
+- Tables status shows.
+- Inventory alerts show.
+- Staff attendance shows.
+- Finance summary shows.
+- AI insights show if enabled.
+- Date/outlet filters work.
+
+POS Terminal
+- POS loads menu items.
+- Item images show if available.
+- Add item works.
+- Variants/add-ons/toppings work.
+- Discounts work.
+- Taxes/service charges calculate correctly.
+- Payment works.
+- Invoice generates.
+- KOT generates.
+- Inventory deducts.
+- Customer saves.
+- Reports update.
+
+Dine-in Orders
+- Select table.
+- Add items.
+- Send to kitchen.
+- Table status changes.
+- Bill and close table.
+
+Takeaway Orders
+- Create takeaway order.
+- KOT generated.
+- Payment and invoice work.
+
+Delivery Orders
+- Add customer/address.
+- Delivery charge works.
+- Delivery status updates.
+
+QR Menu Orders
+- Scan table QR.
+- Menu opens.
+- Item images show.
+- Add-ons work.
+- Cart works.
+- Checkout works.
+- Order reaches admin/POS/Kitchen.
+
+Kitchen / KDS
+- KOT appears.
+- Status changes work.
+- Item-wise status works.
+- Kitchen delay shown.
+- Modifiers/add-ons visible.
+
+KOT Management
+- KOT print/download if supported.
+- KOT cancel with reason.
+- KOT logs saved.
+
+Table Management
+- Floors/tables load.
+- Table status works.
+- Transfer/merge table works.
+- Assign waiter works.
+
+Reservations
+- Create/edit/cancel reservation.
+- Assign table.
+- Status update.
+- Reminder if configured.
+
+Waiter Requests
+- QR customer can call waiter/request bill/water/help.
+- Request reaches admin/mobile.
+- Resolve request works.
+
+Order Status Tracking
+- Customer can see order placed/accepted/preparing/ready/served.
+
+Bill / Invoice
+- Invoice totals correct.
+- Tax/discount/add-ons shown.
+- PDF/download/print works.
+
+Split Bill
+- Split by item/amount if available.
+- Totals correct.
+
+Merge Table
+- Merge table orders correctly.
+
+Transfer Table
+- Transfer order to another table correctly.
+
+Refund / Void Bill
+- Refund/void works with reason.
+- Permission required.
+- Audit log saved.
+
+Day Opening / Day Closing
+- Opening cash.
+- Closing cash.
+- Cash mismatch.
+- Settlement report.
+
+Cashier Settlement
+- Cash/card/UPI split.
+- Cashier report correct.
+
+====================================================
+2. MENU FEATURES LIVE CHECK
+====================================================
+
+Check and fix:
+
+Menu Categories
+- Create/edit/delete.
+- Sort order.
+- Show in QR/POS.
+
+Subcategories
+- Create/edit/delete.
+- Assign to categories.
+
+Menu Items
+- Create/edit/delete item.
+- Price, tax, category, image, tags save correctly.
+- POS and QR show item.
+
+Item Images
+- Upload works.
+- Image shows in admin, POS, QR menu.
+- Fallback image works.
+
+Item Descriptions
+- Show in QR menu.
+- AI description if enabled.
+
+Veg / Non-Veg / Egg Tags
+- Correct icon appears.
+- Filter works.
+
+Bestseller Tag
+- Tag shows in QR menu.
+- Filter/section works.
+
+Recommended Tag
+- Recommended items show.
+
+Item Availability ON/OFF
+- Toggle works.
+- POS/QR updates.
+- Out-of-stock behavior correct.
+
+Out of Stock Status
+- Item hidden or disabled based on settings.
+
+QR Menu
+- Public menu works.
+- Table mapping works.
+
+Category Images
+- Upload and display if available.
+
+Combos
+- Combo create/edit.
+- Combo price.
+- POS/QR add combo.
+
+Variants
+- Size/variant selection.
+- Price updates.
+- KOT/invoice shows variant.
+
+Sizes
+- Size options work.
+
+Add-ons
+- Add-ons create/assign.
+- Price added.
+- POS/QR/KOT/invoice show.
+
+Toppings
+- Toppings work like add-ons.
+- Required/optional logic works.
+
+Modifiers
+- Single/multi select.
+- Required/min/max.
+- Item-specific assignment.
+- Server validation.
+
+Spice Level
+- Less/medium/extra spicy options.
+- Shows in kitchen.
+
+Remove Ingredients
+- No onion/no garlic/no sauce.
+- Shows in kitchen.
+
+Item Notes
+- Customer/cashier note works.
+- KOT shows note.
+
+Dynamic Pricing
+- Time/day/outlet pricing works if enabled.
+- Locked if plan does not allow.
+
+Menu Scheduling
+- Breakfast/lunch/dinner schedule works.
+- Hidden outside time if configured.
+
+Bulk Menu Import
+- Excel/CSV import works.
+- Preview/validation works.
+
+Excel / CSV Menu Import
+- Correct mapping.
+- Duplicate handling.
+
+AI Menu Import
+- Upload PDF/image/text/URL.
+- AI extracts menu.
+- Preview and import.
+- Credits deduct.
+
+====================================================
+3. QR MENU / CUSTOMER ORDERING LIVE CHECK
+====================================================
+
+Check and fix:
+
+Table QR Code
+- QR opens correct restaurant/table.
+- QR URL valid.
+- Table number correct.
+
+QR Menu Page
+- Mobile-first.
+- Loads fast.
+- No broken images.
+
+Food Images in QR Menu
+- Item card images visible.
+- Detail modal image visible.
+- Lazy loading works.
+
+Search Menu
+- Search by item/category works.
+
+Category Filter
+- Sticky category chips.
+- Active category highlight.
+
+Veg / Non-Veg Filter
+- Filter correct.
+
+Add to Cart
+- Simple add works.
+
+Customize Item
+- Bottom sheet/modal works.
+
+Add-ons / Toppings
+- Required validation.
+- Price update.
+- Saved in cart/order.
+
+Special Instructions
+- Note saved.
+- KOT shows note.
+
+Sticky Cart
+- Shows item count/total.
+- Opens cart.
+
+Checkout
+- Table/order summary.
+- Customer details if required.
+- Place order works.
+
+Order Success Page
+- Order number.
+- Table number.
+- Track order button.
+
+Live Order Status
+- Status updates from backend/KDS.
+
+Call Waiter
+- Request created.
+
+Request Water
+- Request created.
+
+Request Bill
+- Request created.
+
+Need Help
+- Request created.
+
+Give Review
+- Review QR/feedback flow opens.
+
+Table QR PDF Download
+- PDF downloads.
+- QR scans.
+- Table number correct.
+
+QR Design PDF
+- KhanaLagao branding.
+- Print-ready.
+- No restaurant logo required by default.
+
+Review QR
+- Rating → tags → AI review draft → copy → Google review link.
+- No Google API required.
+
+====================================================
+4. INVENTORY FEATURES LIVE CHECK
+====================================================
+
+Check and fix:
+
+Raw Material Management
+- Create/edit/delete raw material.
+- Unit/category works.
+
+Stock Management
+- Stock in/out.
+- Current stock correct.
+
+Recipe Mapping
+- Menu item linked to ingredients.
+
+Auto Stock Deduction
+- Sale deducts recipe stock.
+- Add-on mapped ingredients deduct.
+
+Low Stock Alerts
+- Alert appears.
+- Notification works if configured.
+
+Out-of-Stock Alerts
+- Item availability reacts if configured.
+
+Purchase Orders
+- Create/approve/receive PO.
+
+Goods Received
+- Stock increases after receiving.
+
+Vendor Management
+- Vendor create/edit.
+- Vendor ledger.
+
+Stock Adjustment
+- Add/deduct with reason.
+- Audit log.
+
+Stock Transfer
+- Outlet-to-outlet transfer.
+
+Wastage Entry
+- Waste reduces stock.
+- Waste report.
+
+Expiry Tracking
+- Expiry date alerts.
+
+Inventory Valuation
+- Value report correct.
+
+Food Cost Calculation
+- Recipe cost and margin.
+
+Packaging Inventory
+- Boxes/bags/spoons auto-deduct if configured.
+
+Sauce / Condiment Inventory
+- Sauce/dip/chutney stock works.
+
+Portion Control
+- Expected vs actual usage.
+
+====================================================
+5. STAFF / HR / PAYROLL LIVE CHECK
+====================================================
+
+Check and fix:
+
+Staff Directory
+- Add/edit staff.
+- Role, outlet, salary data.
+
+Roles & Permissions
+- Role access correct.
+- Direct URL blocked.
+
+Attendance
+- Punch in/out.
+- Manual correction if allowed.
+
+Shift Management
+- Assign shift.
+- Late/absent detection.
+
+Leave Management
+- Request/approve/reject leave.
+
+Payroll
+- Generate payroll.
+- Attendance impact.
+
+Salary Calculation
+- Base salary correct.
+
+Overtime
+- Overtime calculation.
+
+Bonus
+- Bonus included.
+
+Deduction
+- Deduction included.
+
+Advance Salary
+- Advance tracking.
+
+Salary Slip PDF
+- Download/print works.
+
+Staff Tasks
+- Create/assign/complete.
+
+SOP & Training
+- Checklist/training works.
+
+Staff Performance
+- Metrics show.
+
+Staff Tip Management
+- Tips tracked and payroll/report linked.
+
+Staff Incentives
+- Incentive rules/report.
+
+Internal Announcements
+- Announcement visible to staff.
+
+====================================================
+6. CUSTOMER / CRM LIVE CHECK
+====================================================
+
+Check and fix:
+
+Customer Database
+- Customer created from order/QR/manual.
+
+Customer Profile
+- Details load.
+
+Order History
+- Shows customer orders.
+
+Total Spend
+- Correct calculation.
+
+Last Visit
+- Correct date.
+
+Favorite Items
+- Based on order history.
+
+Customer Tags
+- Add/edit tags.
+
+Customer Notes
+- Add notes.
+
+Birthday
+- Saved and campaign-ready.
+
+Anniversary
+- Saved and campaign-ready.
+
+Loyalty Points
+- Earn/redeem works.
+
+Wallet / Cashback
+- Credit/debit ledger.
+
+Coupons
+- Apply/redeem works.
+
+Memberships
+- Plans/subscriptions work.
+
+Gift Cards
+- Issue/redeem/balance.
+
+Feedback
+- Save and show.
+
+Surveys
+- Survey response saved.
+
+Review Booster
+- Review QR analytics.
+
+Customer Risk Flag / Blacklist
+- Flag customer.
+- Warning on order.
+
+VIP Customer Alert
+- Alert on VIP customer order/visit.
+
+Customer Taste Profile
+- Preferences from order history.
+
+====================================================
+7. GROWTH / MARKETING LIVE CHECK
+====================================================
+
+Check and fix:
+
+Growth Engine
+- Dashboard loads.
+
+WhatsApp Campaigns
+- Create/preview/send if configured.
+- Configuration message if not configured.
+
+SMS Campaigns
+- Create/preview/send if configured.
+
+Email Campaigns
+- Create/preview/send if configured.
+
+Push Notifications
+- Send if configured.
+
+Coupons
+- Create/apply/track.
+
+Referrals
+- Referral code/link and reward.
+
+Birthday Campaigns
+- Customer birthday targeting.
+
+Anniversary Campaigns
+- Customer anniversary targeting.
+
+Win-back Campaigns
+- Inactive customers.
+
+Inactive Customer Campaigns
+- Segment works.
+
+Festival Campaigns
+- Festival calendar.
+
+Customer Segments
+- Segment filters correct.
+
+Campaign Calendar
+- Calendar view.
+
+Campaign Analytics
+- Sent/open/click/conversion if available.
+
+Loyalty Analytics
+- Loyalty usage.
+
+Abandoned Cart Recovery
+- Abandoned cart capture and recovery.
+
+Lost Sales Tracker
+- Lost sales events report.
+
+Offer Conflict Detector
+- Warn conflicting offers.
+
+Margin Guardrails
+- Warn low margin campaign/discount.
+
+====================================================
+8. KHANA AI LIVE CHECK
+====================================================
+
+Check and fix:
+
+Khana AI Dashboard
+- Credits, usage, feature cards.
+
+AI Menu Import
+- Upload/extract/preview/import.
+
+AI PDF Menu Scanner
+- PDF parsing.
+
+AI Image Menu Scanner
+- OCR/image parsing.
+
+AI Website Menu Import
+- URL import if supported.
+
+AI Item Descriptions
+- Generate and save.
+
+AI Food Image Generator
+- Works if provider configured.
+- Configuration message if not.
+
+AI Menu Translation
+- Translates menu fields.
+
+AI Review Draft Generator
+- Review QR draft generation.
+
+AI Review Reply Generator
+- Owner reply generator.
+
+AI Campaign Generator
+- Campaign content generated.
+
+AI Sales Insights
+- Uses restaurant data.
+
+AI Inventory Assistant
+- Purchase suggestions.
+
+AI Forecasting
+- Demand/sales forecast.
+
+AI Chat Assistant
+- Answers from restaurant data.
+
+AI Customer Segmentation
+- Segment suggestions.
+
+AI Upsell Engine
+- Suggestions/rules.
+
+AI Staff Insights
+- Staff analysis.
+
+AI Fraud Alerts
+- Suspicious actions.
+
+AI Kitchen Delay Alerts
+- Delay analysis.
+
+AI Credits
+- Balance, deduct, recharge.
+
+AI Usage Logs
+- Logs provider/model/tokens/credits.
+
+AI Provider Settings in Super Admin
+- Provider config only in Super Admin.
+
+OpenAI / Claude / Gemini API Settings
+- Keys masked/encrypted.
+- Test connection.
+
+====================================================
+9. FINANCE LIVE CHECK
+====================================================
+
+Check and fix:
+
+Payments
+- Payment records correct.
+
+Cash Payments
+- Cash total correct.
+
+UPI Payments
+- UPI records.
+
+Card Payments
+- Card records.
+
+Mixed Payments
+- Split payment correct.
+
+Payment Gateway Settings
+- Razorpay/Cashfree/PayU/etc. config state.
+
+Expenses
+- Create/edit/delete expense.
+
+Expense Categories
+- Categories work.
+
+Vendor Payments
+- Vendor ledger.
+
+Wallet
+- Wallet balance/ledger.
+
+Settlements
+- Settlement reports.
+
+Invoices
+- Generate/download.
+
+Tax / GST Reports
+- Tax calculations correct.
+
+Refund Tracking
+- Refund records.
+
+P&L Dashboard
+- Profit/loss correct.
+
+Food Cost
+- From recipe/inventory.
+
+Staff Cost
+- From payroll.
+
+Wastage Cost
+- From waste entries.
+
+Net Profit
+- Sales minus costs.
+
+Break-even Report
+- Shows correctly if data available.
+
+Petty Cash
+- In/out ledger.
+
+Cash Drop
+- Safe cash drop record.
+
+Cashier Shift Handover
+- Opening/closing cash.
+
+====================================================
+10. REPORTS LIVE CHECK
+====================================================
+
+Check and fix all reports:
+
+Sales Report
+Order Report
+Item-wise Sales
+Category Sales
+Payment Report
+Tax Report
+Discount Report
+Cancelled Order Report
+Inventory Report
+Waste Report
+Purchase Report
+Vendor Report
+Staff Report
+Attendance Report
+Payroll Report
+Customer Report
+Loyalty Report
+Campaign Report
+Review Report
+Finance / P&L Report
+AI Usage Report
+Outlet Report
+
+For each report:
+- Data loads.
+- Date filter works.
+- Outlet filter works.
+- Totals correct.
+- Charts correct.
+- Empty state.
+- Pagination.
+- Export PDF.
+- Export CSV.
+- Export Excel.
+
+====================================================
+11. OPERATIONS ADD-ONS LIVE CHECK
+====================================================
+
+Check and fix:
+
+Events & Catering
+- Event booking, quote, payment schedule.
+
+Banquet Management
+- Guest count, packages, quotation.
+
+Hotel Mode
+- Room charge, guest profile if enabled.
+
+Food Court Management
+- Vendor settlement, token.
+
+Corporate Ordering
+- Company account, monthly invoice.
+
+Tiffin / Meal Plan
+- Meal plan, pause/skip, monthly billing.
+
+Cloud Kitchen Mode
+- Multi-brand, shared inventory.
+
+Multi-Brand Kitchen
+- Brand-wise reports.
+
+Bar Mode
+- Peg/ml inventory, happy hour.
+
+Bakery Production Mode
+- Batch, expiry, cake booking.
+
+Queue Management
+- Queue token, estimated pickup.
+
+Pre-Order Scheduling
+- Future order scheduling.
+
+Token Display
+- TV/display status.
+
+Self-Ordering Kiosk
+- Kiosk ordering flow.
+
+Delivery Fleet Management
+- Rider assignment/status.
+
+====================================================
+12. MARKETPLACE / ECOSYSTEM LIVE CHECK
+====================================================
+
+Check and fix:
+
+Vendor Marketplace
+- Vendor listing/order/approval.
+
+Add-on Marketplace
+- Install/activate/locked modules.
+
+Hardware Marketplace
+- Hardware catalog/settings.
+
+Printer Integration
+- Test print/settings.
+
+KOT Printer
+- KOT routing.
+
+Thermal Printer
+- Invoice print.
+
+Kitchen Display
+- KDS view.
+
+Customer Display
+- Customer-facing display if enabled.
+
+Barcode Scanner
+- Scanner support if available.
+
+QR Scanner
+- QR scanning.
+
+Cash Drawer
+- Open drawer if supported/configured.
+
+Biometric Attendance
+- Device/config placeholder if not connected.
+
+Tablet Menu
+- Tablet menu mode.
+
+Kiosk Device
+- Kiosk mode.
+
+Accounting Integrations
+- Configuration/export.
+
+Tally Integration
+- Export/mapping.
+
+Zoho Books
+- Config/export.
+
+QuickBooks
+- Config/export.
+
+Webhooks
+- Endpoint, logs, retries.
+
+Developer API
+- API keys, docs, usage logs.
+
+====================================================
+13. SUPER ADMIN LIVE CHECK
+====================================================
+
+Check and fix:
+
+Super Admin Dashboard
+Restaurant Management
+Plan Management
+Subscription Management
+Payment Management
+Invoice Management
+Feature Flags
+Module Enable/Disable
+Plan Limits
+Restaurant Usage Logs
+Leads
+CMS
+Website Content Management
+Blog Management
+Pricing Page Control
+Support Tickets
+Admin Users
+Roles & Permissions
+Audit Logs
+System Settings
+Payment Gateway Settings
+SMS Settings
+WhatsApp Settings
+Email / SMTP Settings
+Notification Center
+Backup
+System Health
+API Logs
+AI Control Center
+AI Credit Wallets
+AI Recharge Packages
+
+For each:
+- Page loads.
+- CRUD works.
+- Data saves.
+- Filters/pagination.
+- Audit logs.
+- Permission checks.
+- No exposed secrets.
+
+====================================================
+14. NOTIFICATIONS LIVE CHECK
+====================================================
+
+Check and fix:
+
+New Order Notification
+QR Order Notification
+Kitchen Delay Alert
+Order Ready Alert
+Waiter Request Alert
+Reservation Reminder
+Low Stock Alert
+Payment Alert
+Expense Approval Alert
+Staff Attendance Alert
+Leave Request Alert
+Payroll Alert
+Negative Feedback Alert
+Campaign Alert
+AI Insight Alert
+Support Ticket Alert
+Super Admin Announcement
+Push Notifications
+In-App Notifications
+SMS Notifications
+WhatsApp Notifications
+Email Notifications
+
+For each:
+- Trigger works.
+- Recipient correct.
+- Role permission respected.
+- Click opens correct page.
+- Read/unread works.
+- Configuration message if channel not configured.
+
+====================================================
+15. MOBILE APP LIVE CHECK
+====================================================
+
+Check and fix mobile app:
+
+Owner Dashboard
+Live Orders
+Kitchen / KDS
+Tables
+Alerts
+Notifications
+Inventory Alerts
+Staff Attendance
+Finance Summary
+Reports
+Khana AI
+Growth Campaigns
+Review Feedback
+Approvals
+Support Tickets
+Push Notifications
+Role-Based Mobile Access
+Offline/Error State
+Pull to Refresh
+
+For each:
+- Loads real backend data.
+- No mock data.
+- Create/update works where applicable.
+- Role-based access.
+- Notifications.
+- Error/empty/loading states.
+
+====================================================
+16. SETTINGS LIVE CHECK
+====================================================
+
+Check and fix:
+
+Restaurant Profile
+Outlet Settings
+Business Hours
+Currency
+Timezone
+Tax / GST Settings
+POS Settings
+KOT Settings
+Invoice Settings
+QR Menu Settings
+Table Settings
+Delivery Zone Settings
+Payment Settings
+Printer Settings
+Notification Settings
+SMS Settings
+WhatsApp Settings
+Email Settings
+AI Settings
+Roles & Permissions
+Audit Logs
+Branding Settings
+Theme Color
+Logo Upload
+Legal Pages
+Module Settings
+Plan Limits
+
+For each:
+- Save works.
+- Data applied in actual module.
+- Validation works.
+- Audit log created for important changes.
+
+====================================================
+17. WEBSITE / LANDING PAGE LIVE CHECK
+====================================================
+
+Check and fix:
+
+Home Page
+Platform Page
+Features Page
+All Feature Detail Pages
+Khana AI Page
+Pricing Page
+Solutions Pages
+Blog
+Contact Page
+Book Demo Page
+Partner Page
+About Page
+Security Page
+Comparison Page
+FAQ Page
+Privacy Policy
+Terms & Conditions
+Refund Policy
+Cookie Policy
+Ad Landing Page
+Lead Capture
+UTM Tracking
+SEO Metadata
+Sitemap
+Robots.txt
+Mobile Responsive Design
+Fast PageSpeed Optimization
+
+For each:
+- Page loads.
+- Content complete.
+- Header/footer.
+- CTA works.
+- Forms save leads.
+- SEO correct.
+- Mobile responsive.
+- No broken links/images.
+
+====================================================
+18. 20 MUST-HAVE BASICS FINAL CHECK
+====================================================
+
+These 20 must be fully working:
+
+1. POS billing
+2. QR menu ordering
+3. Item images
+4. Add-ons/toppings
+5. KOT/KDS
+6. Table management
+7. Inventory auto deduction
+8. Low stock alerts
+9. Staff attendance
+10. Payroll
+11. Customer CRM
+12. Loyalty/coupons
+13. Review QR
+14. Growth campaigns
+15. Khana AI credits
+16. Finance/P&L
+17. Reports/export
+18. Super Admin plans
+19. Notifications
+20. Mobile app live data
+
+Test each from start to end with real data.
+
+====================================================
+19. TEST DATA FOR LIVE CHECK
+====================================================
+
+Create or use one test restaurant with:
+
+- 1 outlet
+- 3 tables
+- 5 menu items
+- Item images
+- 2 add-on groups
+- 2 staff users
+- 1 chef user
+- 1 cashier user
+- 2 raw materials
+- 1 recipe
+- 1 customer
+- 1 coupon
+- 1 loyalty rule
+- 1 QR table code
+- 1 review QR
+- AI credits
+- Payment modes
+- Low stock item
+
+Run live test:
+1. Login Super Admin.
+2. Create/verify restaurant.
+3. Login restaurant owner.
+4. Add menu item with image and add-ons.
+5. Open POS.
+6. Create dine-in order.
+7. KOT appears in kitchen.
+8. Inventory deducts.
+9. Payment completes.
+10. Invoice downloads.
+11. QR menu order works.
+12. Review QR works.
+13. Reports update.
+14. Mobile app shows live order/data.
+15. Notification appears.
+
+====================================================
+20. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- Every listed feature is checked.
+- Existing features are not duplicated.
+- Missing basics are added.
+- Broken features are fixed.
+- Each feature status is documented.
+- All 20 must-have basics work perfectly.
+- No mock data.
+- No broken pages.
+- No broken buttons.
+- No broken APIs.
+- No exposed secrets.
+- Mobile app loads real data.
+- POS → KOT → Inventory → Payment → Reports works.
+- QR Menu → Cart → Add-ons → Order → KOT works.
+- Super Admin plans/module locks work.
+- Pricing includes locked/premium features.
+- Website and landing pages work.
+- Build passes.
+- Critical and high bugs are fixed and retested.
