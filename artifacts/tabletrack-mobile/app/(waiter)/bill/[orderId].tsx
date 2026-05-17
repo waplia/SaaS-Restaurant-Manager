@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView, Platform,
+  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView, Platform, Share,
 } from "react-native";
 import { useLocalSearchParams, useNavigation, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -87,8 +87,31 @@ export default function BillScreen() {
     );
   };
 
-  const handlePrintBill = () => {
-    Alert.alert("Print Bill", "Bill printing is not yet connected to a hardware printer. You can share a digital summary instead.");
+  const handlePrintBill = async () => {
+    if (!order) return;
+    type BillItem = { id: number; menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string };
+    const items = (order.items ?? []) as BillItem[];
+    const lines = items.map(it => `• ${it.menuItemName} x${it.quantity}  ₹${Number(it.totalPrice ?? it.unitPrice).toLocaleString()}`).join("\n");
+    const orderNumber = (order as { orderNumber?: string }).orderNumber ?? id;
+    const subtotal = Number(order.subtotal ?? order.totalAmount);
+    const tax = Number((order as { taxAmount?: string }).taxAmount ?? 0);
+    const discount = Number((order as { discountAmount?: string }).discountAmount ?? 0);
+    const total = Number(order.totalAmount);
+    const message =
+      `Order #${orderNumber}\n` +
+      `------------------------------\n` +
+      `${lines}\n` +
+      `------------------------------\n` +
+      `Subtotal: ₹${subtotal.toLocaleString()}\n` +
+      (tax > 0 ? `Tax: ₹${tax.toFixed(2)}\n` : "") +
+      (discount > 0 ? `Discount: -₹${discount.toFixed(2)}\n` : "") +
+      `Total: ₹${total.toLocaleString()}\n\n` +
+      `Thank you for dining with us!`;
+    try {
+      await Share.share({ message, title: `Bill — Order #${orderNumber}` });
+    } catch {
+      Alert.alert("Share Bill", "Could not open the share sheet.");
+    }
   };
 
   if (isLoading) {

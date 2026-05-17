@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
-import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable, ticketDelayAlertsTable } from "../lib/db";
+import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable, ticketDelayAlertsTable, devicesTable } from "../lib/db";
 import { AIProviderService } from "../lib/aiProviderService";
 import { loadKitchenDelayConfig } from "../lib/kitchenDelay";
 import { generateDueRecurringExpenses } from "./expenses";
@@ -390,9 +390,52 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
     count: Number(r.count),
   }));
 
+  const devicePerfRows = await db.execute<{
+    device_id: number | null;
+    device_name: string;
+    device_type: string;
+    is_handheld: boolean;
+    assigned_user_id: number | null;
+    assigned_user_name: string | null;
+    order_count: string;
+    total_revenue: string;
+  }>(sql`
+    SELECT
+      d.id AS device_id,
+      d.name AS device_name,
+      d.type AS device_type,
+      d.is_handheld AS is_handheld,
+      d.assigned_user_id AS assigned_user_id,
+      u.name AS assigned_user_name,
+      COALESCE(COUNT(o.id), 0)::text AS order_count,
+      COALESCE(SUM(o.total_amount), 0)::text AS total_revenue
+    FROM ${devicesTable} d
+    LEFT JOIN ${usersTable} u ON u.id = d.assigned_user_id
+    LEFT JOIN ${ordersTable} o
+      ON o.waiter_id = d.assigned_user_id
+     AND o.restaurant_id = ${restaurantId}
+     AND o.created_at >= ${from}
+     ${fromStr && toStr ? sql`AND o.created_at <= ${to}` : sql``}
+    WHERE d.restaurant_id = ${restaurantId}
+      AND d.assigned_user_id IS NOT NULL
+    GROUP BY d.id, d.name, d.type, d.is_handheld, d.assigned_user_id, u.name
+    ORDER BY SUM(o.total_amount) DESC NULLS LAST
+  `);
+  const devicePerformance = devicePerfRows.rows.map(r => ({
+    deviceId: r.device_id,
+    deviceName: r.device_name,
+    deviceType: r.device_type,
+    isHandheld: !!r.is_handheld,
+    assignedUserId: r.assigned_user_id,
+    assignedUserName: r.assigned_user_name,
+    orderCount: Number(r.order_count),
+    totalRevenue: r.total_revenue,
+  }));
+
   res.json({
     paymentsByMethod,
     discountsByCashier,
+    devicePerformance,
     totalDiscounts,
     totalRevenue: totalRevenue.toFixed(2),
     totalOrders: orders.length,

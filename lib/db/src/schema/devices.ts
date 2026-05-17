@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable, branchesTable } from "./restaurants";
 import { kitchensTable } from "./kitchens";
+import { usersTable } from "./users";
 
 export type DeviceType =
   | "thermal_printer"
@@ -37,6 +38,8 @@ export const devicesTable = pgTable(
     pairedAt: timestamp("paired_at"),
     paperSize: text("paper_size"),
     consecutiveErrors: integer("consecutive_errors").notNull().default(0),
+    assignedUserId: integer("assigned_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    isHandheld: boolean("is_handheld").notNull().default(false),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -46,6 +49,7 @@ export const devicesTable = pgTable(
     index("devices_restaurant_idx").on(t.restaurantId),
     index("devices_branch_idx").on(t.branchId),
     index("devices_kitchen_idx").on(t.kitchenId),
+    index("devices_assigned_user_idx").on(t.assignedUserId),
   ],
 );
 

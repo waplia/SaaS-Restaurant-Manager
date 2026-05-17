@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { TrendingUp, ShoppingBag, Receipt, DollarSign, Download, Users, Percent, Flame, ArrowUpDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, PaymentsByMethodItem, DiscountsByCashierItem, FoodCostItem } from "@/lib/types";
+import type { RevenueByDayItem, TaxByDayItem, TopItem, StaffPerformanceItem, DevicePerformanceItem, PaymentsByMethodItem, DiscountsByCashierItem, FoodCostItem } from "@/lib/types";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -50,10 +50,10 @@ function fmtTableDate(d: string, viewMode: string): string {
   } catch { return d; }
 }
 
-type Tab = "sales" | "tax" | "staff" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering" | "inventory-control" | "addons";
+type Tab = "sales" | "tax" | "staff" | "devices" | "payments" | "discounts" | "food-cost" | "cash-variance" | "compare" | "kitchen-performance" | "menu-engineering" | "inventory-control" | "addons";
 type ViewMode = "daily" | "monthly" | "yearly";
 
-const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering", "inventory-control", "addons"] as const;
+const VALID_TABS: readonly Tab[] = ["sales", "tax", "staff", "devices", "payments", "discounts", "food-cost", "cash-variance", "compare", "kitchen-performance", "menu-engineering", "inventory-control", "addons"] as const;
 
 function exportCSV(filename: string, rows: string[][], headers: string[]) {
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -163,6 +163,19 @@ export default function ReportsPage() {
         (reports.taxByDay ?? []).map((r: TaxByDayItem) => [r.date, r.tax, r.revenue, String(r.orders), `${r.effectiveRate}%`]),
         ["Date", "Tax Collected", "Revenue", "Orders", "Effective Rate"],
       );
+    } else if (tab === "devices") {
+      exportCSV(
+        `devices-report-${new Date().toISOString().slice(0, 10)}.csv`,
+        (reports.devicePerformance ?? []).map((d: DevicePerformanceItem) => [
+          d.deviceName,
+          d.deviceType,
+          d.isHandheld ? "Yes" : "No",
+          d.assignedUserName ?? "—",
+          String(d.orderCount),
+          d.totalRevenue,
+        ]),
+        ["Device", "Type", "Handheld", "Assigned Waiter", "Orders", "Revenue"],
+      );
     } else if (tab === "staff") {
       exportCSV(
         `staff-report-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -248,6 +261,18 @@ export default function ReportsPage() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), "Staff Performance");
       XLSX.writeFile(wb, `staff-report-${dateStamp}.xlsx`);
+    } else if (tab === "devices") {
+      const deviceRows = (reports.devicePerformance ?? []).map((d: DevicePerformanceItem) => ({
+        Device: d.deviceName,
+        Type: d.deviceType,
+        Handheld: d.isHandheld ? "Yes" : "No",
+        "Assigned Waiter": d.assignedUserName ?? "—",
+        Orders: d.orderCount,
+        Revenue: Number(d.totalRevenue),
+        "Revenue / Order": d.orderCount > 0 ? Number((Number(d.totalRevenue) / d.orderCount).toFixed(2)) : 0,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(deviceRows), "Devices");
+      XLSX.writeFile(wb, `devices-report-${dateStamp}.xlsx`);
     } else if (tab === "payments") {
       const paymentRows = (reports.paymentsByMethod ?? []).map((p: PaymentsByMethodItem) => ({
         Direction: p.direction === "in" ? "Money In" : "Money Out",
@@ -283,6 +308,7 @@ export default function ReportsPage() {
       tab === "sales" ? "Sales Report"
       : tab === "tax" ? "Tax Report"
       : tab === "staff" ? "Staff Performance Report"
+      : tab === "devices" ? "Device Sales Report"
       : tab === "discounts" ? "Discounts Report"
       : tab === "food-cost" ? "Food Cost Report"
       : "Payments Report";
@@ -372,6 +398,21 @@ export default function ReportsPage() {
           `₹${Number(s.totalRevenue).toLocaleString()}`,
           `${s.totalHours}h`,
           s.orderCount > 0 ? `₹${(Number(s.totalRevenue) / s.orderCount).toFixed(0)}` : "–",
+        ]),
+      });
+    } else if (tab === "devices") {
+      doc.setFontSize(13);
+      doc.text("Device Sales (by assigned waiter)", 14, 36);
+      autoTable(doc, {
+        startY: 40,
+        head: [["Device", "Type", "Handheld", "Assigned Waiter", "Orders", "Revenue"]],
+        body: (reports.devicePerformance ?? []).map((d: DevicePerformanceItem) => [
+          d.deviceName,
+          d.deviceType,
+          d.isHandheld ? "Yes" : "No",
+          d.assignedUserName ?? "—",
+          String(d.orderCount),
+          `₹${Number(d.totalRevenue).toLocaleString()}`,
         ]),
       });
     } else if (tab === "food-cost") {
@@ -576,6 +617,7 @@ export default function ReportsPage() {
             ...(hasMultipleBranches ? [{ label: "Compare Branches", val: "compare" as Tab }] : []),
             { label: "Tax", val: "tax" as Tab },
             { label: "Staff Performance", val: "staff" as Tab },
+            { label: "Devices", val: "devices" as Tab },
             { label: "Payments", val: "payments" as Tab },
             { label: "Discounts", val: "discounts" as Tab },
             { label: "Food Cost", val: "food-cost" as Tab },
@@ -907,6 +949,57 @@ export default function ReportsPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "devices" && (
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-foreground">Device Sales</h3>
+              <span className="text-xs text-muted-foreground ml-2">Sales attributed via assigned waiter</span>
+            </div>
+            {(reports?.devicePerformance?.length ?? 0) === 0 ? (
+              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+                No assigned devices for this period. Assign waiters to devices in Settings → Devices.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Device</th>
+                      <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Type</th>
+                      <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Assigned Waiter</th>
+                      <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Orders</th>
+                      <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Revenue</th>
+                      <th className="text-right px-5 py-2.5 text-muted-foreground font-medium">Rev/Order</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(reports?.devicePerformance ?? []).map((d: DevicePerformanceItem) => (
+                      <tr key={d.deviceId} className="border-t border-border hover:bg-muted/20">
+                        <td className="px-5 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">{d.deviceName}</span>
+                            {d.isHandheld && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/10 text-primary">Handheld</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-2.5 text-muted-foreground">{d.deviceType}</td>
+                        <td className="px-5 py-2.5 text-foreground">{d.assignedUserName ?? "—"}</td>
+                        <td className="px-5 py-2.5 text-right text-foreground">{d.orderCount}</td>
+                        <td className="px-5 py-2.5 text-right font-medium text-foreground">₹{Number(d.totalRevenue).toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground">
+                          {d.orderCount > 0 ? `₹${(Number(d.totalRevenue) / d.orderCount).toFixed(0)}` : "–"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

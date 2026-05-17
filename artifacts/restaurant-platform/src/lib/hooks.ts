@@ -3378,6 +3378,8 @@ export interface DeviceRecord {
   paperSize: string | null;
   consecutiveErrors: number;
   metadata: Record<string, unknown>;
+  assignedUserId: number | null;
+  isHandheld: boolean;
   createdAt: string;
   updatedAt: string;
   sync?: { lastSyncAt: string | null; pendingCount: number } | null;
@@ -3460,7 +3462,7 @@ export function useCreateDevice() {
   const qc = useQueryClient();
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
-    mutationFn: (data: { name: string; type: DeviceType; branchId?: number | null; kitchenId?: number | null; paperSize?: string | null }) =>
+    mutationFn: (data: { name: string; type: DeviceType; branchId?: number | null; kitchenId?: number | null; paperSize?: string | null; assignedUserId?: number | null; isHandheld?: boolean }) =>
       apiPost<DeviceRecord>(`/restaurants/${RESTAURANT_ID}/devices`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] }),
   });
@@ -3470,7 +3472,7 @@ export function useUpdateDevice() {
   const qc = useQueryClient();
   const RESTAURANT_ID = useRestaurantId();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<{ name: string; branchId: number | null; kitchenId: number | null; paperSize: string | null; status: DeviceStatus; metadata: Record<string, unknown> }>) =>
+    mutationFn: ({ id, ...data }: { id: number } & Partial<{ name: string; branchId: number | null; kitchenId: number | null; paperSize: string | null; status: DeviceStatus; metadata: Record<string, unknown>; assignedUserId: number | null; isHandheld: boolean }>) =>
       apiPatch<DeviceRecord>(`/restaurants/${RESTAURANT_ID}/devices/${id}`, data),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["devices", RESTAURANT_ID] });

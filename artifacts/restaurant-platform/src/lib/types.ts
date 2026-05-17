@@ -1337,6 +1337,17 @@ export interface StaffPerformanceItem {
   totalHours: string;
 }
 
+export interface DevicePerformanceItem {
+  deviceId: number;
+  deviceName: string;
+  deviceType: string;
+  isHandheld: boolean;
+  assignedUserId: number | null;
+  assignedUserName: string | null;
+  orderCount: number;
+  totalRevenue: string;
+}
+
 export interface TaxByDayItem {
   date: string;
   tax: string;
@@ -1362,6 +1373,7 @@ export interface ReportsData {
   taxByDay: TaxByDayItem[];
   topItems: TopItem[];
   staffPerformance: StaffPerformanceItem[];
+  devicePerformance?: DevicePerformanceItem[];
   totalExpenses?: string;
   netProfit?: string;
   expensesByCategory?: { categoryId: number; categoryName: string; color: string; total: string }[];

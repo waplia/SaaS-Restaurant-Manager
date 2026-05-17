@@ -74,6 +74,7 @@ import DeveloperDocsPage from "@/pages/developer-docs";
 import AdminSettingsPage from "@/pages/admin-settings";
 import { AppSettingsProvider } from "@/lib/appSettings";
 import PosPage from "@/pages/pos";
+import HandheldPosPage from "@/pages/handheld-pos";
 import HotelPage from "@/pages/hotel";
 import CustomerMenuPage from "@/pages/customer-menu";
 import PaymentsPage from "@/pages/payments";
@@ -323,6 +324,7 @@ function Router() {
       <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
       <Route path="/documents" component={() => <ProtectedRoute component={DocumentsPage} />} />
       <Route path="/pos" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={PosPage} feature="kitchen_display" />} />} />
+      <Route path="/sell/handheld-pos" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={HandheldPosPage} feature="handheld_pos" />} allow={["owner", "manager", "waiter", "cashier"]} />} />
       <Route path="/hotel" component={() => <RoleProtectedRoute component={HotelPage} allow={["owner", "manager", "cashier", "waiter", "kitchen", "staff"]} />} />
       <Route path="/orders" component={() => <ProtectedRoute component={OrdersPage} />} />
       <Route path="/kitchen" component={() => <ProtectedRoute component={() => <PlanProtectedRoute component={KitchenPage} feature="kitchen_display" />} />} />

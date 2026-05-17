@@ -9,6 +9,7 @@ import {
   deviceSyncStateTable,
   branchesTable,
   kitchensTable,
+  usersTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -28,6 +29,39 @@ const router = Router();
 
 const READ_ROLES = ["owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"] as const;
 const WRITE_ROLES = ["owner", "manager", "super_admin"] as const;
+
+const HANDHELD_ASSIGNABLE_ROLES = new Set(["waiter", "cashier", "manager", "owner"]);
+
+async function validateAssignedUser(
+  assignedUserId: unknown,
+  restaurantId: number,
+): Promise<{ ok: true; value: number | null } | { ok: false; status: number; error: string }> {
+  if (assignedUserId === undefined || assignedUserId === null || assignedUserId === "") {
+    return { ok: true, value: null };
+  }
+  const uid = Number(assignedUserId);
+  if (!Number.isFinite(uid) || uid <= 0) {
+    return { ok: false, status: 400, error: "assignedUserId must be a positive integer" };
+  }
+  const [u] = await db
+    .select({
+      id: usersTable.id,
+      restaurantId: usersTable.restaurantId,
+      role: usersTable.role,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, uid));
+  if (!u) return { ok: false, status: 400, error: "assignedUserId: user not found" };
+  if (u.restaurantId !== restaurantId) {
+    return { ok: false, status: 403, error: "assignedUserId: user does not belong to this restaurant" };
+  }
+  if (!u.isActive) return { ok: false, status: 400, error: "assignedUserId: user is not active" };
+  if (!HANDHELD_ASSIGNABLE_ROLES.has(u.role)) {
+    return { ok: false, status: 400, error: "assignedUserId: user role cannot be assigned to a device" };
+  }
+  return { ok: true, value: uid };
+}
 
 router.use(
   "/restaurants/:restaurantId/devices",
@@ -106,7 +140,7 @@ router.post(
   requireRole(...WRITE_ROLES),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
-    const { name, type, branchId, kitchenId, paperSize, metadata } = req.body ?? {};
+    const { name, type, branchId, kitchenId, paperSize, metadata, assignedUserId, isHandheld } = req.body ?? {};
     if (!name?.trim()) return void res.status(400).json({ error: "name is required" });
     if (!isDeviceType(type)) return void res.status(400).json({ error: "invalid type" });
 
@@ -121,6 +155,9 @@ router.post(
       if (!k) return void res.status(400).json({ error: "kitchenId not found in this restaurant" });
     }
 
+    const assignCheck = await validateAssignedUser(assignedUserId, restaurantId);
+    if (!assignCheck.ok) return void res.status(assignCheck.status).json({ error: assignCheck.error });
+
     const token = generateRegistrationToken();
     const [d] = await db.insert(devicesTable).values({
       restaurantId,
@@ -132,6 +169,8 @@ router.post(
       registrationToken: token,
       paperSize: paperSize ?? null,
       metadata: metadata ?? {},
+      assignedUserId: assignCheck.value,
+      isHandheld: !!isHandheld,
     }).returning();
 
     if ((PRINTER_TYPES as string[]).includes(type) && kitchenId != null) {
@@ -161,7 +200,7 @@ router.patch(
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const id = Number(req.params.id);
-    const { name, branchId, kitchenId, paperSize, metadata, status } = req.body ?? {};
+    const { name, branchId, kitchenId, paperSize, metadata, status, assignedUserId, isHandheld } = req.body ?? {};
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (name !== undefined) updates.name = String(name).trim();
     if (branchId !== undefined) updates.branchId = branchId == null ? null : Number(branchId);
@@ -169,6 +208,12 @@ router.patch(
     if (paperSize !== undefined) updates.paperSize = paperSize;
     if (metadata !== undefined) updates.metadata = metadata;
     if (status !== undefined) updates.status = status;
+    if (assignedUserId !== undefined) {
+      const assignCheck = await validateAssignedUser(assignedUserId, restaurantId);
+      if (!assignCheck.ok) return void res.status(assignCheck.status).json({ error: assignCheck.error });
+      updates.assignedUserId = assignCheck.value;
+    }
+    if (isHandheld !== undefined) updates.isHandheld = !!isHandheld;
 
     const [updated] = await db.update(devicesTable).set(updates).where(and(
       eq(devicesTable.id, id), eq(devicesTable.restaurantId, restaurantId),

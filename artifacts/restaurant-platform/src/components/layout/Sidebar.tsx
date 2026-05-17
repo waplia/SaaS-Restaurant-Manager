@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
-  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus,
+  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone,
 } from "lucide-react";
 import { useWaiterRequests } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,7 @@ const navConfig: NavEntry[] = [
     kind: "group", key: "sell", label: "Sell", icon: ShoppingCart,
     children: [
       { kind: "link", href: "/pos", label: "POS Terminal", icon: Monitor, planGate: "kitchen_display" },
+      { kind: "link", href: "/sell/handheld-pos", label: "Handheld POS", icon: Smartphone, roles: ["owner", "manager", "waiter", "cashier"], planGate: "handheld_pos", badge: "premium" },
       { kind: "link", href: "/orders", label: "Orders", icon: ShoppingCart },
       { kind: "link", href: "/kitchen", label: "Kitchen / KDS", icon: ChefHat, planGate: "kitchen_display" },
       { kind: "link", href: "/tables", label: "Tables", icon: Table2 },

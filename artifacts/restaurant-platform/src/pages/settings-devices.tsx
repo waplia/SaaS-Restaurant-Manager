@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import {
   useDevices, useDevice, useDeviceLogs, useCreateDevice, useUpdateDevice, useDeleteDevice,
   useTestPrintDevice, useUpdateDeviceStations, useSyncDevice, useDeviceHeartbeat,
-  useKitchens, DEVICE_TYPE_LABELS, PRINTER_TYPES, OFFLINE_CAPABLE_TYPES,
+  useKitchens, useStaff, DEVICE_TYPE_LABELS, PRINTER_TYPES, OFFLINE_CAPABLE_TYPES,
   type DeviceType, type DeviceStatus, type DeviceRecord,
 } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
@@ -46,15 +46,20 @@ interface DeviceForm {
   type: DeviceType;
   kitchenId: number | null;
   paperSize: string;
+  assignedUserId: number | null;
+  isHandheld: boolean;
 }
 
-const EMPTY_FORM: DeviceForm = { name: "", type: "kot_printer", kitchenId: null, paperSize: "" };
+const EMPTY_FORM: DeviceForm = { name: "", type: "kot_printer", kitchenId: null, paperSize: "", assignedUserId: null, isHandheld: false };
+
+const HANDHELD_CAPABLE_TYPES: DeviceType[] = ["android_pos", "tablet_menu"];
 
 export default function SettingsDevicesPage() {
   const { user } = useAuth();
   const canWrite = !!user && (user.isSuperAdmin || user.role === "owner" || user.role === "manager");
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: kitchens = [] } = useKitchens();
+  const { data: waiterStaff = [] } = useStaff("waiter");
   const create = useCreateDevice();
   const update = useUpdateDevice();
   const del = useDeleteDevice();
@@ -92,7 +97,14 @@ export default function SettingsDevicesPage() {
 
   const openEdit = (d: DeviceRecord) => {
     setEditing(d);
-    setForm({ name: d.name, type: d.type, kitchenId: d.kitchenId, paperSize: d.paperSize ?? "" });
+    setForm({
+      name: d.name,
+      type: d.type,
+      kitchenId: d.kitchenId,
+      paperSize: d.paperSize ?? "",
+      assignedUserId: d.assignedUserId ?? null,
+      isHandheld: !!d.isHandheld,
+    });
     setPairingToken(null);
     setShowModal(true);
   };
@@ -109,6 +121,8 @@ export default function SettingsDevicesPage() {
           name: form.name.trim(),
           kitchenId: form.kitchenId,
           paperSize: form.paperSize.trim() || null,
+          assignedUserId: form.assignedUserId,
+          isHandheld: form.isHandheld,
         });
         toast({ title: "Device updated" });
         setShowModal(false);
@@ -118,6 +132,8 @@ export default function SettingsDevicesPage() {
           type: form.type,
           kitchenId: form.kitchenId,
           paperSize: form.paperSize.trim() || undefined,
+          assignedUserId: form.assignedUserId,
+          isHandheld: form.isHandheld,
         });
         setPairingToken(created.pairingToken ?? created.registrationToken ?? null);
         toast({ title: "Device registered", description: "Share the pairing token with the device agent to bring it online." });
@@ -343,6 +359,37 @@ export default function SettingsDevicesPage() {
                         <option value="a4">A4</option>
                       </select>
                     </div>
+                  )}
+                  {HANDHELD_CAPABLE_TYPES.includes(form.type) && (
+                    <>
+                      <div className="border-t border-border pt-3">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={form.isHandheld}
+                            onChange={e => setForm(p => ({ ...p, isHandheld: e.target.checked }))}
+                          />
+                          <span>Use as <strong>Handheld POS</strong> (tableside ordering)</span>
+                        </label>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Waiters sign in on this device to take orders at the table.
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Assigned Waiter</Label>
+                        <select
+                          className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background"
+                          value={form.assignedUserId ?? ""}
+                          onChange={e => setForm(p => ({ ...p, assignedUserId: e.target.value ? Number(e.target.value) : null }))}
+                        >
+                          <option value="">— Unassigned —</option>
+                          {waiterStaff.map(s => <option key={s.id} value={s.id}>{s.name ?? s.email}</option>)}
+                        </select>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Sales from this device count towards the assigned waiter in reports.
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
                 <div className="px-6 pb-5 flex gap-3">
