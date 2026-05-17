@@ -283,6 +283,7 @@ export default function AggregatorReconPage() {
           <Card>
             <CardHeader><CardTitle>Per aggregator</CardTitle></CardHeader>
             <CardContent>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Aggregator</TableHead><TableHead>Sheets</TableHead>
@@ -320,6 +321,7 @@ export default function AggregatorReconPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -411,6 +413,7 @@ export default function AggregatorReconPage() {
                 </Select>
               </CardTitle></CardHeader>
               <CardContent>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>Issue</TableHead><TableHead>Order</TableHead>
@@ -449,6 +452,7 @@ export default function AggregatorReconPage() {
                     {(sheetRowsQ.data ?? []).length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">No rows.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}

@@ -50,6 +50,7 @@ export default function FoodCourtReportsPage() {
       </Card>
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -74,6 +75,7 @@ export default function FoodCourtReportsPage() {
               {(data?.rows ?? []).length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">No data</TableCell></TableRow>}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </Layout>

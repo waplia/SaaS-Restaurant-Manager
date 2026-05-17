@@ -215,6 +215,7 @@ function PriceComparison({
     <Card>
       <CardHeader><CardTitle className="text-base">Price comparison vs my menu</CardTitle></CardHeader>
       <CardContent>
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -261,6 +262,7 @@ function PriceComparison({
             })}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );

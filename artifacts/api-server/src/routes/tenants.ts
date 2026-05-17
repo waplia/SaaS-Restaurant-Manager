@@ -431,7 +431,8 @@ router.post("/tenants/:id/impersonate", requireSuperAdmin, async (req, res) => {
 });
 
 // Optional explicit "end impersonation" event so audit trail captures the bracket.
-router.post("/impersonate/end", async (req, res) => {
+// Authenticated only — prevents anonymous pollution of the audit log.
+router.post("/impersonate/end", requireRole("owner", "manager", "waiter", "kitchen", "cashier", "super_admin"), async (req, res) => {
   await recordAuditLog({
     req, module: "impersonation", action: "impersonate.end", entity: "session",
     details: "Impersonation ended",

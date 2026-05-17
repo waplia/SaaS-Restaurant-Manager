@@ -99,7 +99,7 @@ function routeForNotification(data: Record<string, unknown> | undefined, role: s
     case "waiter_requests":
       return "/(waiter)/(tabs)/notifications";
     case "kitchen":
-      return role === "kitchen" ? "/(owner)/kitchen" : "/(owner)/kitchen";
+      return "/(owner)/kitchen";
     case "reservations":
       return role === "waiter" ? "/(waiter)/(tabs)" : "/(owner)";
     default:
