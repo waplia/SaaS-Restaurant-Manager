@@ -69,6 +69,18 @@ function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
 }
 
 export default function Pricing() {
+  const { plans, getDisplayPlans, hasDerivedYearly, isLoading, error } = usePublicPlans();
+
+  // Build AggregateOffer schema dynamically from live plans so SEO data
+  // never drifts from super-admin configuration.
+  const offerPrices = plans
+    .map((p) => Number(p.price))
+    .filter((n) => Number.isFinite(n));
+  const lowPrice = offerPrices.length ? String(Math.min(...offerPrices)) : "0";
+  const highPrice = offerPrices.length ? String(Math.max(...offerPrices)) : undefined;
+  const offerCount = String(Math.max(plans.length, 1));
+  const priceCurrency = plans[0]?.currency ?? "INR";
+
   useSeo({
     title: "Pricing | KhanaLagao",
     description: "Simple, transparent monthly pricing for restaurants, cafes, cloud kitchens and chains. No setup fee, no lock-in. 14-day free trial on every plan.",
@@ -94,16 +106,15 @@ export default function Pricing() {
         brand: { "@type": "Brand", name: "KhanaLagao" },
         offers: {
           "@type": "AggregateOffer",
-          priceCurrency: "INR",
-          lowPrice: "0",
-          offerCount: "4",
+          priceCurrency,
+          lowPrice,
+          ...(highPrice ? { highPrice } : {}),
+          offerCount,
           availability: "https://schema.org/InStock",
         },
       },
     ],
   });
-
-  const { plans, getDisplayPlans, hasDerivedYearly, isLoading, error } = usePublicPlans();
   const [view, setView] = useState<BillingView>("monthly");
   const displayPlans = useMemo(() => getDisplayPlans(view), [getDisplayPlans, view]);
   const popularIdx = displayPlans.length >= 2 ? Math.floor(displayPlans.length / 2) : -1;

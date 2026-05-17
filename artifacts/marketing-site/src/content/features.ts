@@ -25,7 +25,7 @@ function b(items: { icon: LucideIcon; label: string; value: string }[]) {
 }
 
 const COMMON_FAQ = (name: string): { q: string; a: string }[] => [
-  { q: `Is ${name} included in all plans?`, a: `Core ${name.toLowerCase()} capabilities are included in Growth, Pro and Enterprise plans. Starter includes the essentials so you can begin immediately and upgrade as you scale.` },
+  { q: `Is ${name} included in all plans?`, a: `Core ${name.toLowerCase()} capabilities are included in our paid plans, with the essentials available on entry tiers so you can start immediately and upgrade as you scale. See the Pricing page for the current plan-by-plan breakdown.` },
   { q: "Does it work offline?", a: "Yes. KhanaLagao keeps working during internet outages — billing, KOTs and orders continue locally and sync automatically once you're back online." },
   { q: "How long does setup take?", a: "Most single outlets are live in under a week, including menu setup, hardware configuration and staff training. Our onboarding team supports you through your first service." },
   { q: "Do you support multi-outlet brands?", a: "Yes — centralized menus with outlet-level overrides, consolidated reporting, role-based access and branch-specific pricing are all built in." },

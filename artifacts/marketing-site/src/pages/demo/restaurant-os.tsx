@@ -1415,7 +1415,7 @@ function FAQ() {
     },
     {
       q: "What does pricing look like?",
-      a: "Starter, Growth and Enterprise plans — we'll share exact pricing on the demo based on your outlets and add-ons. No hidden fees.",
+      a: "Multiple plans for every stage — from solo cafes to multi-outlet chains. See the Pricing section above for current options, or we'll walk you through it on the demo based on your outlets and add-ons. No hidden fees.",
     },
   ];
   return (

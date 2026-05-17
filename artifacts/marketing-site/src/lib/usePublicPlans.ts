@@ -133,11 +133,22 @@ export function usePublicPlans(): UsePublicPlansResult {
   const { data, isLoading, error } = useQuery<PublicPlan[]>({
     queryKey: ["public-plans"],
     queryFn: async () => {
-      const res = await fetch("/api/marketing/plans");
+      const res = await fetch("/api/marketing/plans", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch plans");
       return res.json();
     },
-    staleTime: 60_000,
+    // Plans are super-admin-edited and must propagate to every marketing
+    // surface as soon as possible. Keep the data considered stale immediately,
+    // refetch on mount and on tab focus, and poll once a minute while the
+    // tab is visible. React Query dedupes concurrent fetches so multiple
+    // pricing sections on the same page still hit the API only once.
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const plans = (data ?? [])
