@@ -2,17 +2,13 @@ import { useState, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiGet, apiPost } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Minus, Trash2, ShoppingCart } from "lucide-react";
+import { Plus, Minus, ShoppingCart } from "lucide-react";
 
 interface VendorOpt { id: number; restaurantId: number; stallName: string; counterNumber: string | null; cuisineTags: string[] }
 interface MenuOpt { id: number; restaurantId: number; name: string; price: string; categoryId: number | null; isAvailable: boolean }
@@ -103,25 +99,38 @@ export default function FoodCourtPosPage() {
 
   return (
     <Layout>
-      <PageHeader title="Food Court POS" description="Common-billing counter — one cart, many vendors." />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-3">
-          {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> : (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {vendors.map(v => (
-                  <Button
-                    key={v.id}
-                    variant={visibleVendor === v.id ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setActiveVendor(v.id)}
-                    data-testid={`vendor-tab-${v.id}`}
-                  >
-                    {v.counterNumber ? `#${v.counterNumber} ` : ""}{v.stallName}
-                  </Button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      <div className="flex flex-1 min-h-0 overflow-hidden bg-background">
+        {/* Left panel: vendors + items */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <div className="px-4 py-3 border-b border-border flex-shrink-0">
+            <h1 className="text-lg font-semibold text-foreground">Food Court POS</h1>
+            <p className="text-xs text-muted-foreground">Common-billing counter — one cart, many vendors.</p>
+          </div>
+
+          {/* Vendor strip — horizontal scroll, no white seam */}
+          <div className="border-b border-border flex-shrink-0 bg-background overflow-x-auto">
+            <div className="flex gap-2 px-4 py-2 w-max min-w-full">
+              {vendors.map(v => (
+                <Button
+                  key={v.id}
+                  variant={visibleVendor === v.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveVendor(v.id)}
+                  data-testid={`vendor-tab-${v.id}`}
+                  className="flex-shrink-0 whitespace-nowrap"
+                >
+                  {v.counterNumber ? `#${v.counterNumber} ` : ""}{v.stallName}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Menu grid — scrollable */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading…</div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
                 {visibleItems.map(it => (
                   <Card key={it.id} className="cursor-pointer hover:shadow" onClick={() => addToCart(it)} data-testid={`menu-${it.id}`}>
                     <CardContent className="p-3">
@@ -130,58 +139,63 @@ export default function FoodCourtPosPage() {
                     </CardContent>
                   </Card>
                 ))}
-                {visibleItems.length === 0 && <div className="col-span-3 text-sm text-muted-foreground p-4">No items</div>}
+                {visibleItems.length === 0 && <div className="col-span-full text-sm text-muted-foreground p-4">No items</div>}
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
-        <div className="space-y-3">
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Cart</CardTitle></CardHeader>
-            <CardContent>
-              <ScrollArea className="h-72">
-                {groupedCart.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Cart is empty</div>
-                ) : groupedCart.map(([vendorId, g]) => (
-                  <div key={vendorId} className="mb-3">
-                    <div className="text-xs uppercase font-semibold text-muted-foreground mb-1">{g.stall}</div>
-                    {g.lines.map(({ ix, line }) => (
-                      <div key={ix} className="flex items-center justify-between text-sm py-1">
-                        <span className="flex-1">{line.name}</span>
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQty(ix, -1)}><Minus className="w-3 h-3" /></Button>
-                          <span className="w-6 text-center">{line.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQty(ix, 1)}><Plus className="w-3 h-3" /></Button>
-                          <span className="w-16 text-right">₹{(line.price * line.quantity).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-right text-xs text-muted-foreground border-t pt-1">Subtotal ₹{g.subtotal.toFixed(2)}</div>
+
+        {/* Right panel: cart with sticky checkout footer */}
+        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-card border-l border-border shadow-[-4px_0_16px_-8px_hsl(0_0%_0%/0.08)] min-h-0">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border flex-shrink-0">
+            <ShoppingCart className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold text-foreground">Cart</h2>
+          </div>
+
+          {/* Cart list — scrollable */}
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            {groupedCart.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Cart is empty</div>
+            ) : groupedCart.map(([vendorId, g]) => (
+              <div key={vendorId} className="mb-3">
+                <div className="text-xs uppercase font-semibold text-muted-foreground mb-1">{g.stall}</div>
+                {g.lines.map(({ ix, line }) => (
+                  <div key={ix} className="flex items-center justify-between text-sm py-1">
+                    <span className="flex-1">{line.name}</span>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQty(ix, -1)}><Minus className="w-3 h-3" /></Button>
+                      <span className="w-6 text-center">{line.quantity}</span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQty(ix, 1)}><Plus className="w-3 h-3" /></Button>
+                      <span className="w-16 text-right">₹{(line.price * line.quantity).toFixed(2)}</span>
+                    </div>
                   </div>
                 ))}
-              </ScrollArea>
-              <div className="border-t pt-2 space-y-2">
-                <div className="flex justify-between font-semibold"><span>Total</span><span>₹{cartTotal.toFixed(2)}</span></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Table" value={tableNumber} onChange={e => setTableNumber(e.target.value)} />
-                  <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as typeof paymentMethod)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="upi">UPI</SelectItem>
-                      <SelectItem value="gateway">Gateway</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Input placeholder="Customer name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                <Input placeholder="Phone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
-                <Button className="w-full" onClick={() => checkout.mutate()} disabled={cart.length === 0 || checkout.isPending} data-testid="checkout">
-                  {checkout.isPending ? "Placing…" : `Checkout ₹${cartTotal.toFixed(2)}`}
-                </Button>
+                <div className="text-right text-xs text-muted-foreground border-t pt-1">Subtotal ₹{g.subtotal.toFixed(2)}</div>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+
+          {/* Sticky checkout footer */}
+          <div className="sticky bottom-0 z-50 border-t border-border px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-2 flex-shrink-0 bg-card shadow-[0_-4px_12px_-4px_hsl(0_0%_0%/0.08)]">
+            <div className="flex justify-between font-semibold"><span>Total</span><span>₹{cartTotal.toFixed(2)}</span></div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Table" value={tableNumber} onChange={e => setTableNumber(e.target.value)} />
+              <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as typeof paymentMethod)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="gateway">Gateway</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Input placeholder="Customer name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+            <Input placeholder="Phone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+            <Button className="w-full" onClick={() => checkout.mutate()} disabled={cart.length === 0 || checkout.isPending} data-testid="checkout">
+              {checkout.isPending ? "Placing…" : `Checkout ₹${cartTotal.toFixed(2)}`}
+            </Button>
+          </div>
         </div>
       </div>
     </Layout>
