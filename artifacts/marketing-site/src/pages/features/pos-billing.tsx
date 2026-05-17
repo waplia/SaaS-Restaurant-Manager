@@ -8,9 +8,13 @@ export default function POSBilling() {
     description: "Fast, reliable point of sale designed for high-volume environments.",
     schema: {
       "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "KhanaLagao POS",
-      "description": "Fast, reliable point of sale designed for high-volume environments."
+      "@type": "SoftwareApplication",
+      "name": "KhanaLagao",
+      "description": "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+      "brand": { "@type": "Brand", "name": "KhanaLagao" }
     }
   });
 

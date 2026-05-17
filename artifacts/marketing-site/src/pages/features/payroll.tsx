@@ -8,9 +8,13 @@ export default function Payroll() {
     description: "Manage shifts, calculate wages, and track staff performance.",
     schema: {
       "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "KhanaLagao Payroll",
-      "description": "Manage shifts, calculate wages, and track staff performance."
+      "@type": "SoftwareApplication",
+      "name": "KhanaLagao",
+      "description": "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+      "brand": { "@type": "Brand", "name": "KhanaLagao" }
     }
   });
 

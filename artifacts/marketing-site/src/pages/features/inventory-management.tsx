@@ -8,9 +8,13 @@ export default function InventoryManagement() {
     description: "Real-time stock tracking and automated reordering alerts.",
     schema: {
       "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "KhanaLagao Inventory",
-      "description": "Real-time stock tracking and automated reordering alerts."
+      "@type": "SoftwareApplication",
+      "name": "KhanaLagao",
+      "description": "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+      "brand": { "@type": "Brand", "name": "KhanaLagao" }
     }
   });
 

@@ -8,9 +8,13 @@ export default function OnlineOrdering() {
     description: "Direct delivery & takeout without the massive commission fees.",
     schema: {
       "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "KhanaLagao Online Ordering",
-      "description": "Direct delivery & takeout without the massive commission fees."
+      "@type": "SoftwareApplication",
+      "name": "KhanaLagao",
+      "description": "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+      "brand": { "@type": "Brand", "name": "KhanaLagao" }
     }
   });
 

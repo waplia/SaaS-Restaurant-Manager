@@ -8,9 +8,13 @@ export default function QRMenu() {
     description: "Contactless dining experience that increases average order value.",
     schema: {
       "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "KhanaLagao QR Menu",
-      "description": "Contactless dining experience that increases average order value."
+      "@type": "SoftwareApplication",
+      "name": "KhanaLagao",
+      "description": "Complete restaurant operating system for POS, QR menu, inventory, payroll, finance, growth and AI.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+      "brand": { "@type": "Brand", "name": "KhanaLagao" }
     }
   });
 
