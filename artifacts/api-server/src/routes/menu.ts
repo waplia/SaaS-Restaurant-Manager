@@ -633,8 +633,16 @@ router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "wa
   const itemId = Number(req.params.itemId);
   const allowed = await resolveMenuItemTenantScope(itemId, req.user!);
   if (!allowed) return void res.status(403).json({ error: "Access denied" });
+  // Owners/managers see all groups (admin editing). Waiter/kitchen are
+  // operating the POS, so only return groups marked active + showOnPos.
+  const role = req.user?.role;
+  const conds = [eq(modifierGroupsTable.menuItemId, itemId)];
+  if (role === "waiter" || role === "kitchen") {
+    conds.push(eq(modifierGroupsTable.isActive, true));
+    conds.push(eq(modifierGroupsTable.showOnPos, true));
+  }
   const rows = await db.select().from(modifierGroupsTable)
-    .where(eq(modifierGroupsTable.menuItemId, itemId))
+    .where(and(...conds))
     .orderBy(modifierGroupsTable.sortOrder, modifierGroupsTable.id);
   res.json(rows);
 });

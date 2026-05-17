@@ -154,6 +154,61 @@ router.get("/restaurants/:restaurantId/review-qrs/:qrId/qr.svg", async (req: Req
   res.send(svg);
 });
 
+// Branded, print-ready review QR card with KhanaLagao header. HTML page
+// designed for A6 portrait — open in browser and print or save as PDF.
+router.get("/restaurants/:restaurantId/review-qrs/:qrId/qr-print", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const qrId = Number(req.params.qrId);
+  const [row] = await db.select().from(reviewQrsTable).where(and(eq(reviewQrsTable.id, qrId), eq(reviewQrsTable.restaurantId, restaurantId)));
+  if (!row) return void res.status(404).send("Not found");
+  const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const baseUrl = process.env.PUBLIC_URL?.replace(/\/$/, "") ?? `${req.protocol}://${req.get("host")}`;
+  const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
+  const url = `${baseUrl}${webBase}/review/${row.qrCode}`;
+  let svg = "";
+  try {
+    const QRCode = await import("qrcode");
+    svg = await QRCode.toString(url, { type: "svg", margin: 1, width: 320 });
+  } catch { /* qrcode unavailable */ }
+  const autoPrint = req.query.print === "1";
+  const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  const rname = esc(restaurant?.name ?? "Restaurant");
+  const title = esc(row.title ?? "We'd love your feedback");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title} – ${rname}</title>
+<style>
+  @page { size: A6 portrait; margin: 6mm; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #FFF8F1; color: #111827; }
+  .card { width: 105mm; min-height: 148mm; margin: 0 auto; background: #fff; border-radius: 12px; padding: 12mm 10mm; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .brand { font-size: 11pt; font-weight: 800; color: #FF6B1A; letter-spacing: .8px; text-transform: uppercase; }
+  .rname { font-size: 15pt; font-weight: 800; margin: 4mm 0 1mm; }
+  .title { font-size: 11pt; color: #374151; margin-bottom: 4mm; }
+  .stars { font-size: 18pt; letter-spacing: 3pt; color: #FBBF24; margin: 2mm 0; }
+  .qr { background: #fff; padding: 4mm; border: 2px solid #FFE7D4; border-radius: 10px; display: inline-block; margin: 3mm 0; }
+  .qr svg { width: 56mm; height: 56mm; display: block; }
+  .scan { font-size: 11pt; font-weight: 700; margin-top: 3mm; }
+  .hint { font-size: 8.5pt; color: #6B7280; margin-top: 2mm; line-height: 1.4; }
+  .foot { margin-top: auto; font-size: 7pt; color: #9CA3AF; padding-top: 6mm; }
+  .powered { font-weight: 700; color: #FF6B1A; }
+  @media print { body { background: #fff; } .card { box-shadow: none; } }
+</style></head>
+<body>
+  <div class="card">
+    <div class="brand">KhanaLagao</div>
+    <div class="rname">${rname}</div>
+    <div class="title">${title}</div>
+    <div class="stars">★ ★ ★ ★ ★</div>
+    <div class="qr">${svg || ""}</div>
+    <div class="scan">Scan to rate &amp; review</div>
+    <div class="hint">Your feedback helps us serve you better.<br/>Takes less than a minute.</div>
+    <div class="foot">Powered by <span class="powered">KhanaLagao</span></div>
+  </div>
+  ${autoPrint ? "<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>" : ""}
+</body></html>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
 // ─── Analytics ───────────────────────────────────────────────────────────────
 
 router.get("/restaurants/:restaurantId/review-qrs/analytics", async (req: Request, res: Response) => {

@@ -1522,6 +1522,9 @@ export interface ModifierGroup {
   isRequired: boolean;
   minSelections: number;
   maxSelections: number;
+  showOnPos?: boolean;
+  showOnQr?: boolean;
+  isActive?: boolean;
 }
 
 export interface Modifier {

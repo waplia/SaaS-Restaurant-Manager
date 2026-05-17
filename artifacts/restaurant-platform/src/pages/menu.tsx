@@ -141,7 +141,7 @@ function ModifierGroupPanel({ itemId }: { itemId: number }) {
   const { data: groups = [] } = useModifierGroups(itemId);
   const createGroup = useCreateModifierGroup(itemId);
   const [showAdd, setShowAdd] = useState(false);
-  const [groupForm, setGroupForm] = useState({ name: "", isRequired: false, minSelections: 0, maxSelections: 1 });
+  const [groupForm, setGroupForm] = useState({ name: "", isRequired: false, minSelections: 0, maxSelections: 1, showOnPos: true, showOnQr: true });
   const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
   const { toast } = useToast();
 
@@ -149,7 +149,7 @@ function ModifierGroupPanel({ itemId }: { itemId: number }) {
     if (!groupForm.name) return;
     try {
       await createGroup.mutateAsync(groupForm);
-      setGroupForm({ name: "", isRequired: false, minSelections: 0, maxSelections: 1 });
+      setGroupForm({ name: "", isRequired: false, minSelections: 0, maxSelections: 1, showOnPos: true, showOnQr: true });
       setShowAdd(false);
       toast({ title: "Modifier group added" });
     } catch {
@@ -178,6 +178,16 @@ function ModifierGroupPanel({ itemId }: { itemId: number }) {
             <Input type="number" value={groupForm.minSelections} onChange={e => setGroupForm(p => ({ ...p, minSelections: Number(e.target.value) }))} className="h-6 w-12 text-xs" />
             <span>Max:</span>
             <Input type="number" value={groupForm.maxSelections} onChange={e => setGroupForm(p => ({ ...p, maxSelections: Number(e.target.value) }))} className="h-6 w-12 text-xs" />
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={groupForm.showOnPos} onChange={e => setGroupForm(p => ({ ...p, showOnPos: e.target.checked }))} />
+              Show on POS
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={groupForm.showOnQr} onChange={e => setGroupForm(p => ({ ...p, showOnQr: e.target.checked }))} />
+              Show on QR
+            </label>
           </div>
           <div className="flex gap-2">
             <Button size="sm" className="h-6 text-xs flex-1" onClick={handleAddGroup} disabled={createGroup.isPending}>Save</Button>
@@ -221,6 +231,8 @@ function ModifierGroupRow({ group, isExpanded, onToggle }: { group: ModifierGrou
         <ChevronRight className={cn("w-3 h-3 text-muted-foreground transition-transform", isExpanded && "rotate-90")} />
         <span className="text-xs font-medium flex-1">{group.name}</span>
         {group.isRequired && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Required</span>}
+        {group.showOnPos === false && <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">POS off</span>}
+        {group.showOnQr === false && <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">QR off</span>}
         <span className="text-[10px] text-muted-foreground">{group.minSelections}–{group.maxSelections}</span>
       </button>
 

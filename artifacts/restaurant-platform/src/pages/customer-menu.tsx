@@ -375,6 +375,17 @@ export default function CustomerMenuPage() {
       .catch(() => {});
   }, []);
 
+  // Persist orderId+token in URL while the customer is on success/tracking
+  // so refreshing the tab restores the order view (recovered by the
+  // Stripe-return handler above which already accepts ?order=&token=).
+  useEffect(() => {
+    if (!orderResult || (view !== "success" && view !== "tracking")) return;
+    const qs = new URLSearchParams(window.location.search);
+    qs.set("order", String(orderResult.orderId));
+    qs.set("token", orderResult.guestToken);
+    window.history.replaceState({}, "", `${window.location.pathname}?${qs.toString()}`);
+  }, [orderResult, view]);
+
   useEffect(() => {
     if (!orderResult) return;
     const cleanup = connectSocket(orderResult.orderId, orderResult.guestToken);

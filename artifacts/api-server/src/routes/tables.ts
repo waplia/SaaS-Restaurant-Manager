@@ -195,6 +195,68 @@ router.get("/restaurants/:restaurantId/tables/:id/qr", requirePlanFeature("qr_or
   res.json({ qrUrl, tableNumber: table.tableNumber, svgData });
 });
 
+// Branded, print-ready QR page for table cards. Returns standalone HTML
+// that prints to a credit-card-sized table tent with KhanaLagao branding,
+// the restaurant name, table number, and the QR. Designed for `?print=1`
+// auto-print or saving to PDF via browser.
+router.get("/restaurants/:restaurantId/tables/:id/qr-print", requirePlanFeature("qr_ordering"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const [table] = await db.select().from(floorTablesTable).where(and(eq(floorTablesTable.id, Number(req.params.id)), eq(floorTablesTable.restaurantId, restaurantId)));
+  if (!table) return void res.status(404).send("Not found");
+  const [restaurant] = await db.select({ slug: restaurantsTable.slug, name: restaurantsTable.name, logoUrl: restaurantsTable.logoUrl }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  const slug = restaurant?.slug ?? String(restaurantId);
+  const envBase = process.env.PUBLIC_URL?.replace(/\/$/, "");
+  const forwardedProto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
+  const forwardedHost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
+  const host = forwardedHost ?? req.get("host") ?? "";
+  const proto = forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+  const baseUrl = envBase || (host ? `${proto}://${host}` : "");
+  const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
+  const qrUrl = `${baseUrl}${webBase}/menu/${slug}/${table.id}`;
+  let svg = "";
+  try {
+    const QRCode = await import("qrcode");
+    svg = await QRCode.toString(qrUrl, { type: "svg", margin: 1, width: 320 });
+  } catch { /* qrcode unavailable */ }
+  const autoPrint = req.query.print === "1";
+  const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  const rname = esc(restaurant?.name ?? "Restaurant");
+  const tnum = esc(String(table.tableNumber));
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Table ${tnum} – ${rname}</title>
+<style>
+  @page { size: A6 portrait; margin: 6mm; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #FFF8F1; color: #111827; }
+  .card { width: 105mm; min-height: 148mm; margin: 0 auto; background: #fff; border-radius: 12px; padding: 14mm 10mm; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); display: flex; flex-direction: column; align-items: center; }
+  .brand { font-size: 11pt; font-weight: 800; color: #FF6B1A; letter-spacing: .8px; text-transform: uppercase; }
+  .rname { font-size: 16pt; font-weight: 800; margin: 4mm 0 1mm; }
+  .tlabel { font-size: 9pt; color: #6B7280; letter-spacing: .6px; text-transform: uppercase; }
+  .tnum { font-size: 32pt; font-weight: 900; color: #FF6B1A; line-height: 1; margin: 1mm 0 4mm; }
+  .qr { background: #fff; padding: 4mm; border: 2px solid #FFE7D4; border-radius: 10px; display: inline-block; }
+  .qr svg { width: 56mm; height: 56mm; display: block; }
+  .scan { font-size: 11pt; font-weight: 700; margin-top: 5mm; }
+  .hint { font-size: 8.5pt; color: #6B7280; margin-top: 2mm; line-height: 1.4; }
+  .foot { margin-top: auto; font-size: 7pt; color: #9CA3AF; padding-top: 6mm; }
+  .powered { font-weight: 700; color: #FF6B1A; }
+  @media print { body { background: #fff; } .card { box-shadow: none; } }
+</style></head>
+<body>
+  <div class="card">
+    <div class="brand">KhanaLagao</div>
+    <div class="rname">${rname}</div>
+    <div class="tlabel">Table</div>
+    <div class="tnum">${tnum}</div>
+    <div class="qr">${svg || ""}</div>
+    <div class="scan">Scan to view menu &amp; order</div>
+    <div class="hint">Point your phone camera at the QR code,<br/>then tap the link that appears.</div>
+    <div class="foot">Powered by <span class="powered">KhanaLagao</span></div>
+  </div>
+  ${autoPrint ? "<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>" : ""}
+</body></html>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
 router.post("/restaurants/:restaurantId/tables/merge", requireRole("owner", "manager", "waiter", "super_admin"), validate({ body: MergeTablesBody }), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { sourceTableId, targetTableId } = req.body as { sourceTableId: number; targetTableId: number };
