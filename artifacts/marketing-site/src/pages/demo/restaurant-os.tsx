@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,11 +20,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useSeo } from "@/lib/seo";
 import { COMPANY, LEGAL_LINKS } from "@/lib/company";
 import { useAppSettings } from "@/lib/appSettings";
 import { cn } from "@/lib/utils";
+import { usePublicPlans, type PublicPlan, type DisplayPlan } from "@/lib/usePublicPlans";
+import {
+  PLAN_BOOLEAN_FEATURES, PLAN_QUANTITY_FEATURES,
+  isFeatureEnabled, formatQuantity,
+} from "@workspace/db/planFeatures";
+
+/** Where the "Start free trial" CTAs go. Kept as a constant so it's
+ * easy to change across the whole ads page in one place. */
+const REGISTER_URL = "/app/register";
 
 const BRAND = {
   primary: "#FF6B1A",
@@ -142,16 +155,29 @@ function AdsHeader({ appName }: { appName: string }) {
             Restaurant OS
           </span>
         </div>
-        <a href="#lead-form">
-          <Button
-            size="sm"
-            className="h-9 md:h-10 px-3 md:px-5 text-xs md:text-sm font-semibold text-white"
-            style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
-            data-testid="btn-header-demo"
-          >
-            Book Demo <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
-        </a>
+        <div className="flex items-center gap-2">
+          <a href={REGISTER_URL} className="hidden sm:inline-flex">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 md:h-10 px-3 md:px-4 text-xs md:text-sm font-semibold border-2"
+              style={{ borderColor: BRAND.primary, color: BRAND.deep }}
+              data-testid="btn-header-trial"
+            >
+              Start free trial
+            </Button>
+          </a>
+          <a href="#lead-form">
+            <Button
+              size="sm"
+              className="h-9 md:h-10 px-3 md:px-5 text-xs md:text-sm font-semibold text-white"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+              data-testid="btn-header-demo"
+            >
+              Book Demo <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </a>
+        </div>
       </div>
     </header>
   );
@@ -290,19 +316,29 @@ function Hero() {
                 Book Free Demo <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
-            <a href={COMPANY.whatsappUrl} target="_blank" rel="noreferrer" className="sm:w-auto">
+            <a href={REGISTER_URL} className="sm:w-auto">
               <Button
                 size="lg"
                 variant="outline"
                 className="w-full sm:w-auto h-12 px-6 text-base font-semibold border-2"
                 style={{ borderColor: BRAND.primary, color: BRAND.deep }}
-                data-testid="btn-hero-whatsapp"
+                data-testid="btn-hero-trial"
               >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                Chat on WhatsApp
+                Start free trial <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
           </div>
+          <a
+            href={COMPANY.whatsappUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold"
+            style={{ color: BRAND.deep }}
+            data-testid="btn-hero-whatsapp"
+          >
+            <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
+            Or chat with us on WhatsApp
+          </a>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs md:text-sm pt-1" style={{ color: "#4B5563" }}>
             <span className="inline-flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" style={{ color: BRAND.primary }} /> No card required</span>
@@ -856,80 +892,274 @@ function Results() {
 /* Pricing teaser                                                     */
 /* ------------------------------------------------------------------ */
 
+/** Number of highlighted features per plan card before "more" is hidden. */
+const MINIMAL_FEATURE_COUNT = 5;
+
+/** Build a short, opinionated feature list per plan: the quantity limits +
+ * up to MINIMAL_FEATURE_COUNT enabled boolean features. Used in the
+ * collapsed card view. */
+function minimalFeatureList(plan: PublicPlan): string[] {
+  const out: string[] = [];
+  // Quantity limits + trial are always-on context rows; they don't count
+  // towards the boolean cap.
+  for (const q of PLAN_QUANTITY_FEATURES.slice(0, 3)) {
+    const v = plan[q.key] ?? 0;
+    const label = formatQuantity(q, v);
+    if (label) out.push(label);
+  }
+  if (plan.trialDays > 0) out.push(`${plan.trialDays}-day free trial`);
+  // Hard-cap enabled boolean features at MINIMAL_FEATURE_COUNT, regardless
+  // of how many quantity rows above were populated.
+  let added = 0;
+  for (const f of PLAN_BOOLEAN_FEATURES) {
+    if (added >= MINIMAL_FEATURE_COUNT) break;
+    if (isFeatureEnabled(plan.featureFlags, f.key)) {
+      out.push(f.label);
+      added++;
+    }
+  }
+  return out;
+}
+
 function PricingTeaser() {
-  const plans = [
-    {
-      name: "Starter",
-      tagline: "Single outlet, fast start",
-      bullets: ["POS billing & KOT", "QR menu", "Basic reports", "Email support"],
-    },
-    {
-      name: "Growth",
-      tagline: "Most popular",
-      featured: true,
-      bullets: ["Everything in Starter", "Inventory & recipes", "CRM + WhatsApp campaigns", "Khana AI insights", "Priority support"],
-    },
-    {
-      name: "Enterprise",
-      tagline: "Chains & multi-outlet",
-      bullets: ["Everything in Growth", "Multi-outlet console", "Finance / P&L", "Custom integrations", "Dedicated success manager"],
-    },
-  ];
+  const { plans, getDisplayPlans, isLoading, error } = usePublicPlans();
+  const displayPlans = getDisplayPlans("monthly");
+  const popularIdx = displayPlans.length >= 2 ? Math.floor(displayPlans.length / 2) : -1;
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <Section title="Plans that grow with you" eyebrow="Pricing">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[380px] rounded-2xl" />
+          ))}
+        </div>
+      </Section>
+    );
+  }
+
+  if (error || plans.length === 0) {
+    // Fallback: stay useful even if the public plans API is down.
+    return (
+      <Section title="Plans that grow with you" eyebrow="Pricing">
+        <div className="max-w-xl mx-auto text-center rounded-2xl border p-6 bg-white" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
+          <p className="text-sm text-muted-foreground mb-4">
+            Talk to our team for a personalized quote based on your outlets and add-ons.
+          </p>
+          <a href="#lead-form">
+            <Button
+              className="font-semibold text-white"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+            >
+              Book a demo <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </a>
+        </div>
+      </Section>
+    );
+  }
+
   return (
-    <Section title="Plans that grow with you" eyebrow="Pricing">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {plans.map((p) => (
-          <div
-            key={p.name}
-            className={cn(
-              "rounded-2xl border p-5 md:p-6 flex flex-col",
-              p.featured && "shadow-xl scale-[1.02]",
-            )}
-            style={{
-              borderColor: p.featured ? BRAND.primary : "rgba(17,24,39,0.08)",
-              backgroundColor: "white",
-              borderWidth: p.featured ? 2 : 1,
-            }}
-          >
-            {p.featured && (
-              <div
-                className="inline-block self-start text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full mb-2 text-white"
-                style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
-              >
-                Most popular
-              </div>
-            )}
-            <h3 className="font-serif text-xl md:text-2xl font-bold">{p.name}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{p.tagline}</p>
-            <ul className="space-y-2 text-sm flex-1">
-              {p.bullets.map((b) => (
-                <li key={b} className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" style={{ color: BRAND.primary }} />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-            <a href="#lead-form" className="mt-5">
-              <Button
-                className="w-full font-semibold"
-                variant={p.featured ? "default" : "outline"}
-                style={
-                  p.featured
-                    ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})`, color: "white" }
-                    : { borderColor: BRAND.primary, color: BRAND.deep, borderWidth: 2 }
-                }
-                data-testid={`btn-plan-${p.name.toLowerCase()}`}
-              >
-                Get this plan
-              </Button>
-            </a>
-          </div>
+    <Section title="Plans that grow with you" eyebrow="Pricing" subtitle="Start free for 14 days — no card needed. Upgrade or cancel any time.">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+        {displayPlans.slice(0, 3).map((dp, i) => (
+          <MinimalPlanCard
+            key={dp.plan.id}
+            dp={dp}
+            featured={i === popularIdx}
+          />
         ))}
       </div>
-      <p className="text-xs text-center mt-5 text-muted-foreground">
-        Final pricing is shared on the demo, based on your outlets and add-ons.
-      </p>
+      <div className="flex flex-col items-center gap-2 mt-6">
+        <Button
+          variant="outline"
+          className="font-semibold border-2"
+          style={{ borderColor: BRAND.primary, color: BRAND.deep }}
+          onClick={() => setCompareOpen(true)}
+          data-testid="btn-compare-plans"
+        >
+          Compare all features <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+        <p className="text-xs text-muted-foreground text-center">
+          All plans include free onboarding, training and chat support.
+        </p>
+      </div>
+      <PricingCompareDialog
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        displayPlans={displayPlans}
+      />
     </Section>
+  );
+}
+
+function MinimalPlanCard({ dp, featured }: { dp: DisplayPlan; featured: boolean }) {
+  const plan = dp.plan;
+  const isFree = Number(plan.price) === 0;
+  const features = minimalFeatureList(plan);
+  const tagline = plan.description ??
+    (isFree ? "Try the full platform free" : featured ? "Most popular" : "");
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border p-5 md:p-6 flex flex-col",
+        featured && "shadow-xl md:scale-[1.02]",
+      )}
+      style={{
+        borderColor: featured ? BRAND.primary : "rgba(17,24,39,0.08)",
+        backgroundColor: "white",
+        borderWidth: featured ? 2 : 1,
+      }}
+      data-testid={`card-plan-${plan.name.toLowerCase().replace(/\s+/g, "-")}`}
+    >
+      {featured && (
+        <div
+          className="inline-block self-start text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full mb-2 text-white"
+          style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+        >
+          Most popular
+        </div>
+      )}
+      <h3 className="font-serif text-xl md:text-2xl font-bold">{plan.name}</h3>
+      <div className="flex items-baseline gap-1 mt-1 mb-1">
+        <span className="text-3xl md:text-4xl font-bold">{dp.displayPrice}</span>
+        {!isFree && <span className="text-sm text-muted-foreground">/mo</span>}
+      </div>
+      {tagline && <p className="text-xs md:text-sm text-muted-foreground mb-4">{tagline}</p>}
+      <ul className="space-y-2 text-sm flex-1">
+        {features.map((b) => (
+          <li key={b} className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" style={{ color: BRAND.primary }} />
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+      <a href={REGISTER_URL} className="mt-5">
+        <Button
+          className="w-full font-semibold"
+          variant={featured ? "default" : "outline"}
+          style={
+            featured
+              ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})`, color: "white" }
+              : { borderColor: BRAND.primary, color: BRAND.deep, borderWidth: 2 }
+          }
+          data-testid={`btn-plan-${plan.name.toLowerCase().replace(/\s+/g, "-")}-trial`}
+        >
+          Start free trial <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+      </a>
+      <a href="#lead-form" className="block text-center mt-2 text-xs font-medium text-muted-foreground hover:underline">
+        Or book a demo
+      </a>
+    </div>
+  );
+}
+
+function PricingCompareDialog({
+  open, onOpenChange, displayPlans,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  displayPlans: DisplayPlan[];
+}) {
+  // Group rows by category for readability.
+  const groups = PLAN_BOOLEAN_FEATURES.reduce<Record<string, typeof PLAN_BOOLEAN_FEATURES>>((acc, f) => {
+    (acc[f.category] ||= []).push(f);
+    return acc;
+  }, {});
+  const categoryOrder: { key: string; label: string }[] = [
+    { key: "core", label: "Core" },
+    { key: "operations", label: "Operations" },
+    { key: "growth", label: "Growth" },
+    { key: "platform", label: "Platform" },
+  ];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="p-5 md:p-6 pb-3 border-b" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
+          <DialogTitle className="font-serif text-2xl md:text-3xl">Compare all features</DialogTitle>
+          <DialogDescription>
+            Every plan includes a free trial, onboarding and chat support. Upgrade or downgrade any time.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="p-3 md:p-6 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
+                <th className="text-left font-semibold py-3 pr-3 w-[40%]">Feature</th>
+                {displayPlans.map((dp) => (
+                  <th key={dp.plan.id} className="text-center font-semibold py-3 px-2">
+                    <div className="font-serif text-base md:text-lg">{dp.plan.name}</div>
+                    <div className="text-xs text-muted-foreground font-normal">{dp.displayPrice}{Number(dp.plan.price) === 0 ? "" : "/mo"}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Quantity rows first */}
+              {PLAN_QUANTITY_FEATURES.map((q) => (
+                <tr key={`q-${q.key}`} className="border-b" style={{ borderColor: "rgba(17,24,39,0.05)" }}>
+                  <td className="py-2.5 pr-3 text-muted-foreground">{q.label}</td>
+                  {displayPlans.map((dp) => {
+                    const v = dp.plan[q.key] ?? 0;
+                    const label = formatQuantity(q, v) ?? "—";
+                    return (
+                      <td key={dp.plan.id} className="text-center py-2.5 px-2 font-medium">{label.replace(/^\d+\s*/, (m) => m.trim() + " ")}</td>
+                    );
+                  })}
+                </tr>
+              ))}
+              {/* Boolean rows grouped by category */}
+              {categoryOrder.map(({ key, label }) => {
+                const rows = groups[key] ?? [];
+                if (!rows.length) return null;
+                return (
+                  <Fragment key={key}>
+                    <tr className="bg-muted/40">
+                      <td colSpan={displayPlans.length + 1} className="py-2 pr-3 pl-0 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {label}
+                      </td>
+                    </tr>
+                    {rows.map((f) => (
+                      <tr key={f.key} className="border-b" style={{ borderColor: "rgba(17,24,39,0.05)" }}>
+                        <td className="py-2.5 pr-3">{f.label}</td>
+                        {displayPlans.map((dp) => {
+                          const on = isFeatureEnabled(dp.plan.featureFlags, f.key);
+                          return (
+                            <td key={dp.plan.id} className="text-center py-2.5 px-2">
+                              {on
+                                ? <CheckCircle2 className="inline h-4 w-4" style={{ color: BRAND.primary }} />
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="p-4 md:p-6 pt-3 border-t flex flex-col sm:flex-row gap-2 sm:justify-end" style={{ borderColor: "rgba(17,24,39,0.08)" }}>
+          <a href="#lead-form" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" className="w-full sm:w-auto border-2" style={{ borderColor: BRAND.primary, color: BRAND.deep }}>
+              Book a demo
+            </Button>
+          </a>
+          <a href={REGISTER_URL}>
+            <Button
+              className="w-full sm:w-auto font-semibold text-white"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.deep})` }}
+              data-testid="btn-compare-trial"
+            >
+              Start free trial <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </a>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1242,17 +1472,26 @@ function FinalCTA() {
                 Book Free Demo <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
-            <a href={COMPANY.whatsappUrl} target="_blank" rel="noreferrer" className="w-full sm:w-auto">
+            <a href={REGISTER_URL} className="w-full sm:w-auto">
               <Button
                 size="lg"
                 variant="outline"
                 className="w-full sm:w-auto h-12 px-7 text-base font-bold bg-transparent text-white border-2 border-white hover:bg-white/10"
-                data-testid="btn-final-whatsapp"
+                data-testid="btn-final-trial"
               >
-                <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp us
+                Start free trial <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
           </div>
+          <a
+            href={COMPANY.whatsappUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 mt-4 text-sm text-white/90 hover:text-white font-semibold"
+            data-testid="btn-final-whatsapp"
+          >
+            <MessageCircle className="h-4 w-4" /> Or message us on WhatsApp
+          </a>
         </div>
       </div>
     </section>
