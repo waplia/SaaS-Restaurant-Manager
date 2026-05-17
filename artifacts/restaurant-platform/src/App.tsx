@@ -77,6 +77,7 @@ import WebhooksPage from "@/pages/webhooks";
 import WebhookLogsPage from "@/pages/webhook-logs";
 import ApiLogsPage from "@/pages/api-logs";
 import DeveloperDocsPage from "@/pages/developer-docs";
+import OauthAppsPage from "@/pages/oauth-apps";
 import AdminSettingsPage from "@/pages/admin-settings";
 import { AppSettingsProvider } from "@/lib/appSettings";
 import PosPage from "@/pages/pos";
@@ -466,9 +467,10 @@ function Router() {
       <Route path="/settings/accounting" component={() => <RoleProtectedRoute component={AccountingLandingPage} allow={["owner", "manager", "accountant"]} />} />
       <Route path="/settings/accounting/:target" component={() => <RoleProtectedRoute component={AccountingTargetPage} allow={["owner", "manager", "accountant"]} />} />
       <Route path="/settings/webhooks" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WebhooksPage} feature="api_access" />} allow={["owner", "manager"]} />} />
-      <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={WebhookLogsPage} allow={["owner", "manager"]} />} />
-      <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={ApiLogsPage} allow={["owner", "manager"]} />} />
-      <Route path="/settings/developer-docs" component={() => <RoleProtectedRoute component={DeveloperDocsPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/webhook-logs" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={WebhookLogsPage} feature="api_access" />} allow={["owner", "manager"]} />} />
+      <Route path="/settings/api-logs" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={ApiLogsPage} feature="api_access" />} allow={["owner", "manager"]} />} />
+      <Route path="/settings/developer-docs" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={DeveloperDocsPage} feature="api_access" />} allow={["owner", "manager"]} />} />
+      <Route path="/settings/oauth-apps" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={OauthAppsPage} feature="api_access" />} allow={["owner", "manager"]} />} />
       <Route path="/admin/api-settings" component={() => <SuperAdminRoute component={AdminApiSettingsPage} />} />
       <Route path="/settings/account" component={() => <ProtectedRoute component={SettingsAccountPage} />} />
       <Route path="/settings/:section" component={() => <RoleProtectedRoute component={SettingsSectionPage} allow={["owner", "manager"]} />} />

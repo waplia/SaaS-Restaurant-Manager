@@ -8,13 +8,17 @@ import {
   apiRequestLogsTable,
   type ApiGlobalSettings,
   type ApiKey,
+  type ApiKeyEnvironment,
+  type RestaurantApiOverride,
 } from "./db";
 
-const KEY_PREFIX = "kl_live_";
+const LIVE_PREFIX = "kl_live_";
+const SANDBOX_PREFIX = "kl_test_";
 
-export function generateApiKey(): { fullKey: string; prefix: string; hashed: string } {
+export function generateApiKey(env: ApiKeyEnvironment = "live"): { fullKey: string; prefix: string; hashed: string } {
   const random = crypto.randomBytes(32).toString("base64url");
-  const fullKey = `${KEY_PREFIX}${random}`;
+  const base = env === "sandbox" ? SANDBOX_PREFIX : LIVE_PREFIX;
+  const fullKey = `${base}${random}`;
   const prefix = fullKey.slice(0, 12);
   const hashed = hashKey(fullKey);
   return { fullKey, prefix, hashed };
@@ -37,12 +41,17 @@ export async function getGlobalSettings(): Promise<ApiGlobalSettings> {
   return reread!;
 }
 
-export async function getEffectiveRateLimit(restaurantId: number, key: ApiKey): Promise<number> {
-  if (key.rateLimitPerMin && key.rateLimitPerMin > 0) return key.rateLimitPerMin;
-  const [override] = await db
+export async function getRestaurantOverride(restaurantId: number): Promise<RestaurantApiOverride | null> {
+  const [row] = await db
     .select()
     .from(restaurantApiOverridesTable)
     .where(eq(restaurantApiOverridesTable.restaurantId, restaurantId));
+  return row ?? null;
+}
+
+export async function getEffectiveRateLimit(restaurantId: number, key: ApiKey): Promise<number> {
+  if (key.rateLimitPerMin && key.rateLimitPerMin > 0) return key.rateLimitPerMin;
+  const override = await getRestaurantOverride(restaurantId);
   if (override?.rateLimitPerMin && override.rateLimitPerMin > 0) return override.rateLimitPerMin;
   const settings = await getGlobalSettings();
   return settings.defaultRateLimitPerMin;
@@ -78,4 +87,14 @@ export async function logRequest(args: {
   } catch {
     // log table failure must never break the request flow
   }
+}
+
+/**
+ * Returns true when the key has the given scope. A key with an empty scope list
+ * is treated as legacy "full access" (backward compatible with keys created
+ * before scope support shipped).
+ */
+export function keyHasScope(key: Pick<ApiKey, "scopes">, scope: string): boolean {
+  if (!key.scopes || key.scopes.length === 0) return true;
+  return key.scopes.includes(scope);
 }

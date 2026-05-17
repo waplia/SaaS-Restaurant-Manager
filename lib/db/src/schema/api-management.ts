@@ -22,9 +22,14 @@ export const restaurantApiOverridesTable = pgTable("restaurant_api_overrides", {
     .primaryKey()
     .references(() => restaurantsTable.id, { onDelete: "cascade" }),
   rateLimitPerMin: integer("rate_limit_per_min"),
+  /** Super-admin kill-switch: when true all API requests for this tenant are rejected with 503. */
+  apiDisabled: boolean("api_disabled").notNull().default(false),
+  apiDisabledReason: text("api_disabled_reason"),
   updatedBy: integer("updated_by").references(() => usersTable.id),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export type ApiKeyEnvironment = "live" | "sandbox";
 
 export const apiKeysTable = pgTable(
   "api_keys",
@@ -34,8 +39,15 @@ export const apiKeysTable = pgTable(
     name: text("name").notNull(),
     prefix: text("prefix").notNull(),
     hashedKey: text("hashed_key").notNull().unique(),
+    /** "live" or "sandbox" — sandbox keys are intended for non-production traffic. */
+    environment: text("environment").$type<ApiKeyEnvironment>().notNull().default("live"),
+    /** Granted scopes; empty array = legacy full access (pre-scopes behaviour). */
+    scopes: text("scopes").array().$type<string[]>().notNull().default([]),
     rateLimitPerMin: integer("rate_limit_per_min"), // optional per-key override
     lastUsedAt: timestamp("last_used_at"),
+    /** If this key superseded an earlier rotated key, the previous key's id. */
+    rotatedFromId: integer("rotated_from_id"),
+    rotatedAt: timestamp("rotated_at"),
     revokedAt: timestamp("revoked_at"),
     revokedBy: integer("revoked_by").references(() => usersTable.id),
     createdBy: integer("created_by").references(() => usersTable.id),
@@ -131,8 +143,39 @@ export const webhookDeliveriesTable = pgTable(
   }),
 );
 
+/**
+ * OAuth Application placeholder. This is the stub model for a future third-party
+ * OAuth 2.0 flow — only the metadata is implemented today; tokens and the auth
+ * code exchange are out of scope for #434.
+ */
+export const oauthAppsTable = pgTable(
+  "oauth_apps",
+  {
+    id: serial("id").primaryKey(),
+    restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    clientId: text("client_id").notNull().unique(),
+    /** SHA-256 of the client secret; full secret is shown once at creation. */
+    clientSecretHash: text("client_secret_hash").notNull(),
+    clientSecretPrefix: text("client_secret_prefix").notNull(),
+    redirectUris: text("redirect_uris").array().$type<string[]>().notNull().default([]),
+    scopes: text("scopes").array().$type<string[]>().notNull().default([]),
+    homepageUrl: text("homepage_url"),
+    status: text("status").$type<"draft" | "published" | "suspended">().notNull().default("draft"),
+    createdBy: integer("created_by").references(() => usersTable.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  t => ({
+    byRestaurant: index("oauth_apps_restaurant_idx").on(t.restaurantId),
+  }),
+);
+
 export type ApiGlobalSettings = typeof apiGlobalSettingsTable.$inferSelect;
 export type ApiKey = typeof apiKeysTable.$inferSelect;
 export type ApiRequestLog = typeof apiRequestLogsTable.$inferSelect;
 export type WebhookEndpoint = typeof webhookEndpointsTable.$inferSelect;
 export type WebhookDelivery = typeof webhookDeliveriesTable.$inferSelect;
+export type OauthApp = typeof oauthAppsTable.$inferSelect;
+export type RestaurantApiOverride = typeof restaurantApiOverridesTable.$inferSelect;

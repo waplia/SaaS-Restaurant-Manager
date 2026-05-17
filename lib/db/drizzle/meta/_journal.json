@@ -113,6 +113,13 @@
       "when": 1779056286240,
       "tag": "0025_devices_handheld_pos",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1779999000000,
+      "tag": "0026_developer_portal_scopes",
+      "breakpoints": true
     }
   ]
 }

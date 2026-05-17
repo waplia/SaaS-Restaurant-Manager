@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, ordersTable, menuItemsTable, customersTable } from "../lib/db";
-import { apiKeyAuth } from "../middleware/apiKeyAuth";
+import { db, ordersTable, menuItemsTable, customersTable, API_SCOPES } from "../lib/db";
+import { apiKeyAuth, requireScope } from "../middleware/apiKeyAuth";
 
 /**
  * Public, key-authenticated API surface. Mounted under /api/v1/* and
@@ -13,11 +13,20 @@ const router = Router();
 
 router.use("/v1", apiKeyAuth);
 
-router.get("/v1/restaurant", (req, res) => {
-  res.json({ restaurantId: req.apiKey!.restaurantId });
+router.get("/v1/restaurant", requireScope("restaurant.read"), (req, res) => {
+  res.json({
+    restaurantId: req.apiKey!.restaurantId,
+    environment: req.apiKey!.environment,
+    scopes: req.apiKey!.scopes,
+  });
 });
 
-router.get("/v1/orders", async (req, res) => {
+/** Catalog of all scopes — handy for SDK builders. Available with any key. */
+router.get("/v1/scopes", (_req, res) => {
+  res.json({ data: API_SCOPES });
+});
+
+router.get("/v1/orders", requireScope("orders.read"), async (req, res) => {
   const restaurantId = req.apiKey!.restaurantId;
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
   const status = typeof req.query.status === "string" ? req.query.status : null;
@@ -28,7 +37,7 @@ router.get("/v1/orders", async (req, res) => {
   res.json({ data: rows });
 });
 
-router.get("/v1/orders/:id", async (req, res) => {
+router.get("/v1/orders/:id", requireScope("orders.read"), async (req, res) => {
   const restaurantId = req.apiKey!.restaurantId;
   const id = Number(req.params.id);
   const [row] = await db.select().from(ordersTable)
@@ -37,14 +46,14 @@ router.get("/v1/orders/:id", async (req, res) => {
   res.json({ data: row });
 });
 
-router.get("/v1/menu-items", async (req, res) => {
+router.get("/v1/menu-items", requireScope("menu.read"), async (req, res) => {
   const restaurantId = req.apiKey!.restaurantId;
   const rows = await db.select().from(menuItemsTable)
     .where(eq(menuItemsTable.restaurantId, restaurantId)).limit(500);
   res.json({ data: rows });
 });
 
-router.get("/v1/customers", async (req, res) => {
+router.get("/v1/customers", requireScope("customers.read"), async (req, res) => {
   const restaurantId = req.apiKey!.restaurantId;
   const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
   const rows = await db.select().from(customersTable)

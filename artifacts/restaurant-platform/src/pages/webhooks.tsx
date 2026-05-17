@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useRestaurantId } from "@/lib/hooks";
 import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from "@/lib/api";
-import { Plus, Trash2, RefreshCw, Copy, Webhook, Pencil } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Copy, Webhook, Pencil, Activity, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 const EVENT_TYPES = [
   "order.created", "order.updated", "order.completed", "order.cancelled",
@@ -39,6 +39,25 @@ export default function WebhooksPage() {
     queryKey: ["webhooks", restaurantId],
     queryFn: () => apiGet<WebhookRow[]>(`/restaurants/${restaurantId}/webhooks`),
   });
+
+  interface HealthRow {
+    endpoint_id: number;
+    url: string;
+    active: boolean;
+    total_24h: number;
+    delivered_24h: number;
+    failed_24h: number;
+    dead_24h: number;
+    pending: number;
+    last_delivered_at: string | null;
+    last_failure_at: string | null;
+  }
+  const { data: health } = useQuery({
+    queryKey: ["webhook-health", restaurantId],
+    queryFn: () => apiGet<{ endpoints: HealthRow[] }>(`/restaurants/${restaurantId}/webhook-health`),
+    refetchInterval: 30000,
+  });
+  const healthRows = health?.endpoints ?? [];
 
   const reset = () => { setUrl(""); setEvents(new Set()); setActive(true); setEditing(null); setShowForm(false); };
 
@@ -101,6 +120,43 @@ export default function WebhooksPage() {
           <p className="text-sm text-muted-foreground">Endpoints receive signed POST payloads. Verify signatures using the secret with HMAC-SHA256.</p>
           {!showForm && <Button onClick={() => setShowForm(true)}><Plus className="w-4 h-4 mr-1.5" /> Add endpoint</Button>}
         </div>
+
+        {healthRows.length > 0 && (
+          <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              <h3 className="text-sm font-semibold">Health at a glance · last 24 hours</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
+              {healthRows.map(h => {
+                const successRate = h.total_24h > 0 ? Math.round((h.delivered_24h / h.total_24h) * 100) : null;
+                const tone = h.dead_24h > 0 ? "destructive" : h.failed_24h > 0 ? "amber" : h.total_24h > 0 ? "green" : "muted";
+                const toneCls = tone === "destructive" ? "border-destructive/40 bg-destructive/5"
+                  : tone === "amber" ? "border-amber-500/40 bg-amber-500/5"
+                  : tone === "green" ? "border-green-500/40 bg-green-500/5" : "border-border";
+                return (
+                  <div key={h.endpoint_id} className={`rounded border p-3 ${toneCls}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <code className="text-xs font-mono truncate flex-1 min-w-0">{h.url}</code>
+                      {h.active
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-400">on</span>
+                        : <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">paused</span>}
+                    </div>
+                    <div className="mt-2 grid grid-cols-4 gap-2 text-center">
+                      <div><p className="text-[10px] uppercase text-muted-foreground">Success</p><p className="text-sm font-semibold">{successRate != null ? `${successRate}%` : "—"}</p></div>
+                      <div><p className="text-[10px] uppercase text-muted-foreground flex items-center gap-0.5 justify-center"><CheckCircle2 className="w-2.5 h-2.5" /> OK</p><p className="text-sm font-semibold">{h.delivered_24h}</p></div>
+                      <div><p className="text-[10px] uppercase text-muted-foreground flex items-center gap-0.5 justify-center"><XCircle className="w-2.5 h-2.5" /> Fail</p><p className="text-sm font-semibold text-destructive">{h.failed_24h + h.dead_24h}</p></div>
+                      <div><p className="text-[10px] uppercase text-muted-foreground flex items-center gap-0.5 justify-center"><Clock className="w-2.5 h-2.5" /> Pend</p><p className="text-sm font-semibold">{h.pending}</p></div>
+                    </div>
+                    {h.last_failure_at && (
+                      <p className="text-[10px] text-destructive mt-2">Last failure {new Date(h.last_failure_at).toLocaleString()}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {showForm && (
           <div className="rounded-lg border border-border bg-card/40 p-5 space-y-4">

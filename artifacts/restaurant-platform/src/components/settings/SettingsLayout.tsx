@@ -20,7 +20,7 @@ export type SectionKey =
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
-  | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs"
+  | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
   | "accounting" | "account" | "sessions";
 
 type IconType = typeof Building2;
@@ -97,6 +97,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "webhooks", label: "Webhooks", icon: Webhook, ownerOnly: true, href: "/settings/webhooks" },
       { key: "webhook-logs", label: "Webhook Logs", icon: ScrollText, ownerOnly: true, href: "/settings/webhook-logs" },
       { key: "api-logs", label: "API Usage Logs", icon: Activity, ownerOnly: true, href: "/settings/api-logs" },
+      { key: "oauth-apps", label: "OAuth Apps", icon: Lock, ownerOnly: true, href: "/settings/oauth-apps" },
       { key: "developer-docs", label: "Developer Docs", icon: BookOpen, href: "/settings/developer-docs" },
     ],
   },

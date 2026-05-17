@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPut, ApiError } from "@/lib/api";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Ban, BookOpen } from "lucide-react";
+
+interface ScopeDef { key: string; label: string; description: string; category: string; write: boolean }
+interface TenantOverride { restaurantId: number; rateLimitPerMin: number | null; apiDisabled: boolean; apiDisabledReason: string | null }
 
 interface GlobalSettings {
   apiEnabled: boolean;
@@ -59,6 +62,25 @@ export default function AdminApiSettingsPage() {
       if (statusFilter) qs.set("statusCode", statusFilter);
       return apiGet<{ rows: LogRow[]; total: number; pageSize: number }>(`/admin/api-logs?${qs}`);
     },
+  });
+
+  const { data: scopeCatalog } = useQuery({
+    queryKey: ["admin-api-scopes"],
+    queryFn: () => apiGet<{ data: ScopeDef[] }>("/admin/api-scopes"),
+  });
+
+  const [killRestaurantId, setKillRestaurantId] = useState("");
+  const [killReason, setKillReason] = useState("");
+  const killId = Number(killRestaurantId) || 0;
+  const { data: killOverride } = useQuery({
+    queryKey: ["admin-kill-switch", killId],
+    queryFn: () => apiGet<TenantOverride>(`/admin/restaurants/${killId}/api-rate-limit`),
+    enabled: killId > 0,
+  });
+  const setKillSwitch = useMutation({
+    mutationFn: (body: { apiDisabled: boolean; reason: string | null }) => apiPut(`/admin/restaurants/${killId}/api-kill-switch`, body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-kill-switch", killId] }); toast({ title: "Kill switch updated" }); },
+    onError: (e: unknown) => toast({ title: "Failed", description: e instanceof ApiError ? e.message : "", variant: "destructive" }),
   });
 
   if (!form) return <Layout><div className="p-8">Loading…</div></Layout>;
@@ -115,6 +137,50 @@ export default function AdminApiSettingsPage() {
           <div className="flex justify-end">
             <Button onClick={() => save.mutate(form)} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save settings"}</Button>
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card/40 p-5 space-y-4">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Ban className="w-4 h-4" /> Per-restaurant kill switch <span className="text-xs font-normal text-muted-foreground">(scoped to a single restaurant ID; use the Global toggle above to halt all tenants at once)</span></h3>
+          <p className="text-xs text-muted-foreground">Instantly block all public-API traffic for one restaurant. Existing keys stay alive but every request returns <code>503 tenant_api_disabled</code>. Action is recorded in the audit log.</p>
+          <div className="flex gap-2 items-end">
+            <div className="space-y-1.5"><Label className="text-xs">Restaurant ID</Label><Input className="w-32" type="number" value={killRestaurantId} onChange={e => setKillRestaurantId(e.target.value)} placeholder="e.g. 42" /></div>
+            <div className="flex-1 space-y-1.5"><Label className="text-xs">Reason (shown to caller)</Label><Input value={killReason} onChange={e => setKillReason(e.target.value)} placeholder="Suspended pending billing resolution" /></div>
+          </div>
+          {killId > 0 && killOverride && (
+            <div className="rounded border border-border bg-background p-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm">Current state: {killOverride.apiDisabled
+                  ? <span className="font-semibold text-destructive">API DISABLED</span>
+                  : <span className="font-semibold text-green-700 dark:text-green-400">enabled</span>}</p>
+                {killOverride.apiDisabledReason && <p className="text-xs text-muted-foreground">Reason: {killOverride.apiDisabledReason}</p>}
+              </div>
+              <div className="flex gap-2">
+                {killOverride.apiDisabled ? (
+                  <Button size="sm" variant="outline" onClick={() => setKillSwitch.mutate({ apiDisabled: false, reason: null })}>Re-enable</Button>
+                ) : (
+                  <Button size="sm" variant="destructive" onClick={() => { if (confirm(`Disable all API access for restaurant ${killId}?`)) setKillSwitch.mutate({ apiDisabled: true, reason: killReason.trim() || null }); }}>Disable API</Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card/40 p-5 space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><BookOpen className="w-4 h-4" /> Scope catalog ({scopeCatalog?.data.length ?? 0})</h3>
+          <p className="text-xs text-muted-foreground">Scopes published in the platform-wide catalog. Tenants attach these to API keys and OAuth apps.</p>
+          {scopeCatalog && (
+            <table className="w-full text-xs border border-border rounded">
+              <thead className="bg-muted/30"><tr><th className="text-left px-3 py-1.5">Scope</th><th className="text-left px-3 py-1.5">Category</th><th className="text-left px-3 py-1.5">Write</th><th className="text-left px-3 py-1.5">Description</th></tr></thead>
+              <tbody>{scopeCatalog.data.map(s => (
+                <tr key={s.key} className="border-t border-border">
+                  <td className="px-3 py-1.5 font-mono">{s.key}</td>
+                  <td className="px-3 py-1.5">{s.category}</td>
+                  <td className="px-3 py-1.5">{s.write ? "yes" : "no"}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{s.description}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
