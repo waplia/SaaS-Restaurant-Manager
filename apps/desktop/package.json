@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "node-thermal-printer": "^4.4.5"
   },
   "build": {
     "appId": "com.khanalagao.desktop",

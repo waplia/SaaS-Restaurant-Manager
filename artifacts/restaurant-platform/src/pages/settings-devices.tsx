@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -177,6 +177,7 @@ export default function SettingsDevicesPage() {
       />
 
       <div className="p-6 max-w-6xl">
+        <DesktopPrintBridgePanel />
         {/* Summary tiles */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           <SummaryTile label="Total devices" value={summary.total} icon={CircuitBoard} />
@@ -405,6 +406,254 @@ export default function SettingsDevicesPage() {
         </div>
       )}
     </Layout>
+  );
+}
+
+// ─────────────────────────── Desktop print bridge ───────────────────────────
+// Renders only inside the Khana Lagao Electron wrapper, where
+// `window.khanalagao.printer` is exposed by the preload script.
+
+type LocalPrinterKind = "network" | "usb";
+type LocalPrinterInterfaceType = "epson" | "star";
+
+interface LocalPrinter {
+  id: string;
+  kind: LocalPrinterKind;
+  name: string;
+  interfaceType: LocalPrinterInterfaceType;
+  width: number;
+  host?: string;
+  port?: number;
+  vendorId?: string;
+  productId?: string;
+}
+
+interface DesktopBridge {
+  isDesktop?: boolean;
+  printer?: {
+    list: () => Promise<{ printers: LocalPrinter[]; defaultId: string | null }>;
+    save: (p: Partial<LocalPrinter>) => Promise<{ printer: LocalPrinter; error?: string }>;
+    remove: (id: string) => Promise<{ ok: boolean; defaultId: string | null }>;
+    setDefault: (id: string) => Promise<{ defaultId: string }>;
+    test: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  };
+}
+
+function getBridge(): DesktopBridge | null {
+  if (typeof window === "undefined") return null;
+  const b = (window as unknown as { khanalagao?: DesktopBridge }).khanalagao;
+  return b && b.isDesktop && b.printer ? b : null;
+}
+
+const EMPTY_PRINTER: Partial<LocalPrinter> = {
+  kind: "network",
+  name: "",
+  interfaceType: "epson",
+  width: 48,
+  host: "",
+  port: 9100,
+  vendorId: "",
+  productId: "",
+};
+
+function DesktopPrintBridgePanel() {
+  const [bridge] = useState<DesktopBridge | null>(() => getBridge());
+  const [printers, setPrinters] = useState<LocalPrinter[]>([]);
+  const [defaultId, setDefaultId] = useState<string | null>(null);
+  const [form, setForm] = useState<Partial<LocalPrinter>>(EMPTY_PRINTER);
+  const [showForm, setShowForm] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const reload = async () => {
+    if (!bridge?.printer) return;
+    const res = await bridge.printer.list();
+    setPrinters(res.printers || []);
+    setDefaultId(res.defaultId || null);
+  };
+
+  useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  if (!bridge) return null;
+
+  const startAdd = () => { setForm(EMPTY_PRINTER); setShowForm(true); };
+  const startEdit = (p: LocalPrinter) => { setForm(p); setShowForm(true); };
+
+  const save = async () => {
+    if (!bridge.printer) return;
+    if (!form.name?.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
+    if (form.kind === "network" && !form.host?.trim()) {
+      toast({ title: "Host or IP required", variant: "destructive" }); return;
+    }
+    const r = await bridge.printer.save(form);
+    if (r.error) {
+      toast({ title: "Could not save printer", description: r.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Printer saved" });
+    setShowForm(false);
+    await reload();
+  };
+
+  const remove = async (id: string) => {
+    if (!bridge.printer) return;
+    if (!confirm("Remove this printer?")) return;
+    await bridge.printer.remove(id);
+    await reload();
+  };
+
+  const makeDefault = async (id: string) => {
+    if (!bridge.printer) return;
+    await bridge.printer.setDefault(id);
+    await reload();
+  };
+
+  const test = async (id: string) => {
+    if (!bridge.printer) return;
+    setBusyId(id);
+    try {
+      const r = await bridge.printer.test(id);
+      toast({
+        title: r.ok ? "Test print sent" : "Test print failed",
+        description: r.ok ? undefined : r.error,
+        variant: r.ok ? "default" : "destructive",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="mb-5 bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-amber-50/60">
+        <div>
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Printer className="w-4 h-4" /> Local thermal printers (this computer)
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Configure ESC/POS printers attached to this desktop. Receipts and kitchen tickets print
+            directly without the browser dialog.
+          </p>
+        </div>
+        <Button size="sm" onClick={startAdd}><Plus className="w-3.5 h-3.5 mr-1" /> Add printer</Button>
+      </div>
+
+      {printers.length === 0 ? (
+        <div className="p-5 text-sm text-muted-foreground">
+          No local printers configured yet. Add a network or USB ESC/POS printer to enable direct printing.
+        </div>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Name</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Connection</th>
+              <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Width</th>
+              <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printers.map(p => (
+              <tr key={p.id} className="border-b border-border last:border-0">
+                <td className="px-4 py-2 text-sm">
+                  <div className="font-medium flex items-center gap-2">
+                    {p.name}
+                    {p.id === defaultId && (
+                      <span className="text-[10px] font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">DEFAULT</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">{p.interfaceType.toUpperCase()}</div>
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {p.kind === "network"
+                    ? `Network · ${p.host}:${p.port ?? 9100}`
+                    : `USB${p.vendorId && p.productId ? ` · ${p.vendorId}/${p.productId}` : " · auto"}`}
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">{p.width} chars</td>
+                <td className="px-4 py-2">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button size="sm" variant="ghost" disabled={busyId === p.id} onClick={() => test(p.id)}>
+                      <Printer className="w-3.5 h-3.5 mr-1" /> Test
+                    </Button>
+                    {p.id !== defaultId && (
+                      <Button size="sm" variant="ghost" onClick={() => makeDefault(p.id)}>
+                        Set default
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => remove(p.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showForm && (
+        <div className="border-t border-border p-5 bg-muted/20 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Name</Label>
+              <Input value={form.name ?? ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Counter Printer" />
+            </div>
+            <div>
+              <Label>Connection</Label>
+              <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background"
+                value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value as LocalPrinterKind }))}>
+                <option value="network">Network (TCP)</option>
+                <option value="usb">USB</option>
+              </select>
+            </div>
+            <div>
+              <Label>Driver</Label>
+              <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background"
+                value={form.interfaceType} onChange={e => setForm(f => ({ ...f, interfaceType: e.target.value as LocalPrinterInterfaceType }))}>
+                <option value="epson">Epson / generic ESC/POS</option>
+                <option value="star">Star</option>
+              </select>
+            </div>
+            <div>
+              <Label>Width (chars)</Label>
+              <Input type="number" min={24} max={64} value={form.width ?? 48}
+                onChange={e => setForm(f => ({ ...f, width: Number(e.target.value) || 48 }))} />
+            </div>
+            {form.kind === "network" ? (
+              <>
+                <div>
+                  <Label>Host / IP</Label>
+                  <Input value={form.host ?? ""} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} placeholder="192.168.1.50" />
+                </div>
+                <div>
+                  <Label>Port</Label>
+                  <Input type="number" value={form.port ?? 9100}
+                    onChange={e => setForm(f => ({ ...f, port: Number(e.target.value) || 9100 }))} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label>USB Vendor ID (optional)</Label>
+                  <Input value={form.vendorId ?? ""} onChange={e => setForm(f => ({ ...f, vendorId: e.target.value }))} placeholder="0x04b8" />
+                </div>
+                <div>
+                  <Label>USB Product ID (optional)</Label>
+                  <Input value={form.productId ?? ""} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))} placeholder="0x0202" />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button onClick={save}>Save printer</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

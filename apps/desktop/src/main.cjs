@@ -1,7 +1,8 @@
 // Electron main process for the Khana Lagao desktop wrapper.
 // Loads the production Restaurant Platform web app in a native window.
-const { app, BrowserWindow, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, shell, session, ipcMain } = require("electron");
 const path = require("path");
+const { createBridge } = require("./print-bridge.cjs");
 
 // Load apps/desktop/.env (if present) so APP_URL / API_URL overrides work
 // without requiring the user to export them in the shell first.
@@ -24,6 +25,7 @@ const API_URL = process.env.API_URL || "";
 
 let mainWindow = null;
 let splashWindow = null;
+let printBridge = null;
 
 function createSplash() {
   splashWindow = new BrowserWindow({
@@ -111,6 +113,26 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function registerPrinterIpc() {
+  printBridge = createBridge(app.getPath("userData"));
+
+  const wrap = (fn) => async (_event, payload) => {
+    try {
+      return await fn(payload);
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  };
+
+  ipcMain.handle("khanalagao:printer:describe", wrap(async () => printBridge.describe()));
+  ipcMain.handle("khanalagao:printer:list", wrap(async () => printBridge.listPrinters()));
+  ipcMain.handle("khanalagao:printer:save", wrap(async (p) => printBridge.savePrinter(p)));
+  ipcMain.handle("khanalagao:printer:remove", wrap(async (id) => printBridge.removePrinter(id)));
+  ipcMain.handle("khanalagao:printer:setDefault", wrap(async (id) => printBridge.setDefaultPrinter(id)));
+  ipcMain.handle("khanalagao:printer:test", wrap(async (id) => printBridge.testPrint(id)));
+  ipcMain.handle("khanalagao:printer:print", wrap(async (args) => printBridge.print(args || {})));
+}
+
 app.whenReady().then(async () => {
   // Persist cookies + localStorage across launches.
   await session.defaultSession.cookies
@@ -118,6 +140,7 @@ app.whenReady().then(async () => {
     .catch(() => undefined);
 
   buildMenu();
+  registerPrinterIpc();
   createSplash();
   createMainWindow();
 

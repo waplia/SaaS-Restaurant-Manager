@@ -355,11 +355,120 @@ ${footerHtml}
 </html>`;
 }
 
+// ─────────────────────────── Desktop bridge ───────────────────────────
+// The Electron wrapper (apps/desktop) exposes `window.khanalagao.print(...)`
+// which talks to USB / network ESC/POS printers directly. When present we
+// route thermal receipts and kitchen tickets through it; otherwise we fall
+// back to the browser's print dialog so the same call site keeps working in
+// a regular web tab.
+
+interface KhanaLagaoBridge {
+  isDesktop?: boolean;
+  printer?: { describe?: () => Promise<{ printerCount?: number } | undefined> };
+  print?: (args: {
+    template: "receipt" | "kot" | "raw";
+    payload: unknown;
+    printerId?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+}
+
+function getBridge(): KhanaLagaoBridge | null {
+  if (typeof window === "undefined") return null;
+  const b = (window as unknown as { khanalagao?: KhanaLagaoBridge }).khanalagao;
+  return b && b.isDesktop && typeof b.print === "function" ? b : null;
+}
+
+export function isDesktopPrintBridgeAvailable(): boolean {
+  return getBridge() !== null;
+}
+
 export function printOrder(args: PrintOrderArgs): void {
+  const bridge = getBridge();
+  // Only thermal jobs go through the native bridge — A5/A4 stays in the
+  // browser since those use a regular OS printer dialog anyway.
+  if (bridge && args.size === "thermal-80mm") {
+    bridge.print!({ template: "receipt", payload: args }).then((r) => {
+      if (!r?.ok) {
+        // Fall back to the browser path if the bridge couldn't print, so
+        // the cashier still gets a receipt out instead of losing the job.
+        // eslint-disable-next-line no-console
+        console.warn("[printOrder] desktop bridge failed, using browser fallback:", r?.error);
+        openBrowserPrint(args);
+      }
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn("[printOrder] desktop bridge threw, using browser fallback:", err);
+      openBrowserPrint(args);
+    });
+    return;
+  }
+  openBrowserPrint(args);
+}
+
+function openBrowserPrint(args: PrintOrderArgs): void {
   const html = buildOrderPrintHTML(args);
   const isThermal = args.size === "thermal-80mm";
   const features = isThermal ? "width=380,height=720" : "width=720,height=900";
   const w = window.open("", "_blank", features);
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+export interface KitchenTicketArgs {
+  orderNumber: string;
+  createdAt?: string | Date;
+  tableLabel?: string;
+  orderType?: string;
+  kitchenName?: string;
+  items: PrintLineItem[];
+}
+
+/**
+ * Print a kitchen order ticket (KOT). Routes through the desktop bridge when
+ * available, falls back to a minimal print-styled HTML window otherwise.
+ */
+export function printKitchenTicket(args: KitchenTicketArgs): void {
+  const bridge = getBridge();
+  if (bridge) {
+    bridge.print!({ template: "kot", payload: args }).then((r) => {
+      if (!r?.ok) openKitchenTicketFallback(args);
+    }).catch(() => openKitchenTicketFallback(args));
+    return;
+  }
+  openKitchenTicketFallback(args);
+}
+
+function openKitchenTicketFallback(args: KitchenTicketArgs): void {
+  const rows = (args.items || []).map((it) => {
+    const mods = (it.modifiers || []).map((m) => `<div class="mod">+ ${escapeHtml(m.name)}</div>`).join("");
+    const notes = it.notes ? `<div class="notes">* ${escapeHtml(it.notes)}</div>` : "";
+    return `<div class="item"><span class="qty">${it.quantity}×</span><span class="name">${escapeHtml(it.name)}</span></div>${mods}${notes}`;
+  }).join("");
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>KOT ${escapeHtml(args.orderNumber)}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; padding: 6mm 4mm; }
+  .center { text-align: center; }
+  .sep { border-top: 1px dashed #555; margin: 6px 0; }
+  .title { font-size: 16px; font-weight: 700; }
+  .item { display: flex; gap: 6px; font-size: 14px; font-weight: 700; margin-top: 4px; }
+  .qty { min-width: 28px; }
+  .mod { padding-left: 32px; font-size: 11px; }
+  .notes { padding-left: 32px; font-size: 11px; font-style: italic; }
+</style></head><body>
+  <div class="center title">KITCHEN ORDER</div>
+  ${args.kitchenName ? `<div class="center">${escapeHtml(args.kitchenName)}</div>` : ""}
+  <div class="sep"></div>
+  <div><strong>#${escapeHtml(args.orderNumber)}</strong></div>
+  ${args.tableLabel ? `<div>Table: ${escapeHtml(args.tableLabel)}</div>` : args.orderType ? `<div>Type: ${escapeHtml(args.orderType.replace(/_/g, " "))}</div>` : ""}
+  <div>Time: ${formatDate(args.createdAt)}</div>
+  <div class="sep"></div>
+  ${rows}
+  <script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 200); });</script>
+</body></html>`;
+  const w = window.open("", "_blank", "width=380,height=720");
   if (!w) return;
   w.document.open();
   w.document.write(html);

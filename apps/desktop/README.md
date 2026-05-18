@@ -39,5 +39,23 @@ before shipping signed updates.
 
 ## Local print bridge
 
-`src/print-bridge.cjs` is a stub for a future ESC/POS print bridge — it is
-not wired up.
+`src/print-bridge.cjs` talks to USB and network ESC/POS thermal printers via
+[`node-thermal-printer`](https://www.npmjs.com/package/node-thermal-printer)
+and exposes a small RPC surface to the renderer through `preload.cjs`:
+
+```js
+await window.khanalagao.printer.list();
+await window.khanalagao.printer.save({ kind: "network", name: "Counter",
+                                       host: "192.168.1.50", port: 9100 });
+await window.khanalagao.printer.test(printerId);
+await window.khanalagao.print({ template: "receipt", payload: orderArgs });
+```
+
+Configured printers persist in `<userData>/printer-config.json`. The web app
+detects the bridge via `window.khanalagao.isDesktop` and routes its existing
+print buttons (receipts, kitchen tickets) through it, falling back to the
+browser print dialog when running in a regular tab.
+
+Cashiers manage printers from **Settings → Devices & Hardware** — a
+"Local thermal printers (this computer)" panel appears at the top of that
+page only when the app is opened in the desktop wrapper.

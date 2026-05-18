@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import type { KitchenTicket, KitchenTicketItem, Kitchen } from "@/lib/types";
 import { io } from "socket.io-client";
-import { printOrder, type PrintSize } from "@/lib/printOrder";
+import { printOrder, printKitchenTicket as printKitchenTicketNative, isDesktopPrintBridgeAvailable, type PrintSize } from "@/lib/printOrder";
 import { resolveImageUrl } from "@/components/ImageUploadField";
 
 const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; badge: string; next?: string; nextLabel?: string; nextClass?: string }> = {
@@ -88,6 +88,23 @@ function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | nul
     modifiers: (it.modifiers ?? []).map(m => ({ name: m.groupName ? `${m.groupName}: ${m.name}` : m.name, price: 0 })),
   }));
   const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+
+  // Prefer the native "kot" template on the desktop bridge — it produces a
+  // proper kitchen ticket (no totals, big quantities) instead of the receipt
+  // layout. Falls back to the receipt-shaped browser print for A5 tickets
+  // and for browser-only sessions.
+  if (size === "thermal-80mm" && isDesktopPrintBridgeAvailable()) {
+    printKitchenTicketNative({
+      orderNumber: ticket.orderNumber,
+      createdAt: ticket.createdAt,
+      tableLabel: ticket.tableNumber ? `Table ${ticket.tableNumber}` : undefined,
+      orderType: ticket.orderType,
+      kitchenName: ticket.kitchen?.name,
+      items,
+    });
+    return;
+  }
+
   printOrder({
     size,
     documentTitle: ticket.kitchen?.printerName
