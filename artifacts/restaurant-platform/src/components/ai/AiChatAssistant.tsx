@@ -134,7 +134,7 @@ export function AiChatAssistant() {
       <Button
         onClick={() => setOpen(true)}
         size="icon"
-        className="fixed bottom-5 right-5 h-12 w-12 rounded-full shadow-lg z-40"
+        className="fixed bottom-20 right-5 h-12 w-12 rounded-full shadow-lg z-40"
         data-testid="button-open-ai-chat"
         aria-label="Open AI assistant"
       >
@@ -142,7 +142,7 @@ export function AiChatAssistant() {
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col !top-20 !h-[calc(100vh-5rem)]">
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
           <SheetHeader className="px-4 py-3 border-b">
             <SheetTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" /> Dashboard Assistant
