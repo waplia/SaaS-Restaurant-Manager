@@ -489,10 +489,11 @@ export class AIProviderService {
 
     if (!primaryId) {
       // Pick any enabled text-capable provider as last-ditch.
-      // Skip image-only providers (e.g. Stability) which cannot serve chat/text.
+      // Skip image-only providers (e.g. Stability) which cannot serve chat/text,
+      // and skip providers without a usable default model.
       const TEXT_KINDS = ["openai", "anthropic", "gemini", "groq", "mistral", "openrouter", "perplexity", "replicate", "custom"];
       const candidates = await db.select().from(aiProvidersTable).where(eq(aiProvidersTable.isEnabled, true));
-      const first = candidates.find((p) => TEXT_KINDS.includes(p.kind));
+      const first = candidates.find((p) => TEXT_KINDS.includes(p.kind) && !!p.defaultModel);
       if (first) { primaryId = first.id; primaryModel = first.defaultModel; }
     }
     if (!primaryId || !primaryModel) {

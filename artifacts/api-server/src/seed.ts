@@ -479,6 +479,46 @@ export async function seed(): Promise<void> {
   await seedDefaultEmailTemplates();
   console.log("✅ Default email templates ensured");
 
+  // ── AI feature → provider/model assignment defaults ──────────
+  // Ensure the Dashboard Assistant chat is wired to a text-capable
+  // provider. Without this row, generateText() falls back to "any
+  // enabled provider" which can pick an image-only one (Stability)
+  // and break chat. Only inserts when the row is missing, so admin
+  // customisations are preserved.
+  const { aiFeatureModelAssignmentsTable, aiProvidersTable } = await import("./lib/db");
+  const existingChatAssign = await db
+    .select({ id: aiFeatureModelAssignmentsTable.id })
+    .from(aiFeatureModelAssignmentsTable)
+    .where(eq(aiFeatureModelAssignmentsTable.featureSlug, "dashboard_chat_assistant"))
+    .limit(1);
+  if (existingChatAssign.length === 0) {
+    const openaiProvider = await db
+      .select({ id: aiProvidersTable.id, defaultModel: aiProvidersTable.defaultModel })
+      .from(aiProvidersTable)
+      .where(eq(aiProvidersTable.kind, "openai"))
+      .limit(1)
+      .then((r) => r[0]);
+    if (openaiProvider) {
+      await db.insert(aiFeatureModelAssignmentsTable).values({
+        featureSlug: "dashboard_chat_assistant",
+        featureLabel: "Dashboard Assistant",
+        category: "chat",
+        modality: "text",
+        primaryProviderId: openaiProvider.id,
+        primaryModel: openaiProvider.defaultModel ?? "gpt-4o-mini",
+        temperature: "0.30",
+        maxTokens: 1024,
+        jsonMode: false,
+        visionEnabled: false,
+        imageGenEnabled: false,
+        isEnabled: true,
+      }).onConflictDoNothing();
+      console.log("✅ Dashboard Assistant assigned to OpenAI");
+    } else {
+      console.log("⚠️  No OpenAI provider found; Dashboard Assistant assignment skipped");
+    }
+  }
+
   console.log("🎉 Seed complete!");
   console.log("Restaurant ID (Spice Garden):", spiceRestId);
 }
