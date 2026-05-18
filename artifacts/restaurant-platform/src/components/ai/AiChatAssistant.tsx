@@ -142,7 +142,7 @@ export function AiChatAssistant() {
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col !top-20 !h-[calc(100vh-5rem)]">
           <SheetHeader className="px-4 py-3 border-b">
             <SheetTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" /> Dashboard Assistant
