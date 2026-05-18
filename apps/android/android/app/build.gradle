@@ -16,11 +16,57 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    // Release signing config sourced entirely from environment variables so
+    // the keystore never lives in the repo. CI provides these via secrets
+    // (see .github/workflows/android-release.yml + docs/app-builds.md); local
+    // developers can export them from apps/android/.env before running
+    // `pnpm --filter @workspace/android build:aab`.
+    def keystorePath = System.getenv("KEYSTORE_PATH")
+    def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    def keyAlias = System.getenv("KEY_ALIAS")
+    def keyPassword = System.getenv("KEY_PASSWORD")
+    def hasReleaseSigning = keystorePath?.trim() && keystorePassword?.trim() && keyAlias?.trim() && keyPassword?.trim()
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keyAlias
+                keyPassword keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+}
+
+// Fail fast when a release task is requested without signing material so we
+// never ship an unsigned .aab to the Play Console.
+gradle.taskGraph.whenReady { graph ->
+    def needsSigning = graph.allTasks.any { task ->
+        def n = task.name.toLowerCase()
+        n.contains('release') && (n.contains('bundle') || n.contains('assemble'))
+    }
+    def haveSigning = System.getenv("KEYSTORE_PATH")?.trim() &&
+        System.getenv("KEYSTORE_PASSWORD")?.trim() &&
+        System.getenv("KEY_ALIAS")?.trim() &&
+        System.getenv("KEY_PASSWORD")?.trim()
+    if (needsSigning && !haveSigning) {
+        throw new GradleException(
+            "Release build requested but signing env vars are not set. " +
+            "Export KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD " +
+            "(see apps/android/keystore.example and docs/app-builds.md)."
+        )
     }
 }
 

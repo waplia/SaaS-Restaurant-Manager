@@ -266,3 +266,100 @@ Replit cannot reliably build:
 - iOS `.ipa` (needs macOS + Xcode + Apple Developer account).
 
 Run those on a developer workstation or a dedicated CI runner.
+
+---
+
+## 5. CI release pipelines (GitHub Actions)
+
+Two workflows live in `.github/workflows/` and turn a tag push into a
+one-click release. Both attach their outputs to the matching GitHub
+Release so the team can download installers without a developer in the
+loop.
+
+### Desktop — `.github/workflows/desktop-release.yml`
+
+- **Triggered by:** pushing a tag matching `v*` or `desktop-v*`, or a
+  manual `workflow_dispatch`.
+- **Runners:** `windows-latest`, `macos-latest`, and `ubuntu-latest` in a
+  matrix.
+- **Build commands:**
+  - Windows → `pnpm --filter @workspace/desktop build:win`
+  - macOS   → `pnpm --filter @workspace/desktop build:mac`
+  - Linux   → `pnpm --filter @workspace/desktop build:linux`
+- **Outputs:** installers from `apps/desktop/dist/` uploaded as workflow
+  artifacts and attached to the GitHub Release (NSIS `.exe`, `.dmg`,
+  AppImage, plus electron-updater `latest*.yml` metadata).
+
+Required CI secrets (Repo → Settings → Secrets and variables → Actions):
+
+| Secret name                   | Used by  | Purpose                                                 |
+| ----------------------------- | -------- | ------------------------------------------------------- |
+| `CSC_LINK`                    | Windows  | Base64 or HTTPS URL of the Windows code-signing `.pfx`  |
+| `CSC_KEY_PASSWORD`            | Windows  | Password for the Windows `.pfx`                         |
+| `MAC_CSC_LINK`                | macOS    | Base64 or HTTPS URL of the macOS Developer ID `.p12`    |
+| `MAC_CSC_KEY_PASSWORD`        | macOS    | Password for the macOS `.p12`                           |
+| `APPLE_ID`                    | macOS    | Apple ID used for notarisation                          |
+| `APPLE_APP_SPECIFIC_PASSWORD` | macOS    | App-specific password for the Apple ID                  |
+| `APPLE_TEAM_ID`               | macOS    | Apple Developer team ID for notarisation                |
+| `GITHUB_TOKEN`                | release  | Provided automatically; uploads assets to the release   |
+
+The macOS job uses `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` (mapped onto
+`CSC_LINK` / `CSC_KEY_PASSWORD` for electron-builder at run-time) so the
+Windows and macOS certificates never collide in one secret.
+
+### Android — `.github/workflows/android-release.yml`
+
+- **Triggered by:** pushing a tag matching `v*` or `android-v*`, or a
+  manual `workflow_dispatch`.
+- **Runner:** `ubuntu-latest` with JDK 17 (`actions/setup-java`) and the
+  Android SDK (`android-actions/setup-android`).
+- **Build commands:**
+  - `pnpm --filter @workspace/android build:aab` (signed release bundle)
+  - `pnpm --filter @workspace/android build:apk` (debug `.apk` for QA)
+- **Outputs:** `app-release.aab` and `app-debug.apk` uploaded as workflow
+  artifacts and attached to the GitHub Release, ready to drag into the
+  Play Console.
+
+The keystore is delivered to CI as a base64-encoded secret, decoded into
+`$RUNNER_TEMP` for the build, and deleted in an `always()` cleanup step.
+The build fails fast if `ANDROID_KEYSTORE_BASE64` is missing — we never
+ship an unsigned release bundle.
+
+Required CI secrets:
+
+| Secret name                | Purpose                                                |
+| -------------------------- | ------------------------------------------------------ |
+| `ANDROID_KEYSTORE_BASE64`  | Base64-encoded contents of the release `.jks` keystore |
+| `KEYSTORE_PASSWORD`        | Password for the keystore                              |
+| `KEY_ALIAS`                | Alias of the signing key inside the keystore           |
+| `KEY_PASSWORD`             | Password for the signing key alias                     |
+| `GITHUB_TOKEN`             | Provided automatically; uploads assets to the release  |
+
+To encode the keystore for the secret:
+
+```bash
+base64 -w0 khanalagao-release.jks   # Linux
+base64 -i khanalagao-release.jks    # macOS
+```
+
+Paste the result into the `ANDROID_KEYSTORE_BASE64` secret. The
+workflow writes it back out to `release.jks` and exports
+`KEYSTORE_PATH`. `apps/android/android/app/build.gradle` reads
+`KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`
+from the environment and applies them as `signingConfigs.release`,
+bound to `buildTypes.release.signingConfig`. A guard in the same file
+aborts any `bundleRelease` / `assembleRelease` task graph when those
+env vars are missing, so an unsigned `.aab` cannot accidentally ship.
+
+### Cutting a release
+
+```bash
+git tag v1.4.0
+git push origin v1.4.0
+```
+
+Both workflows run in parallel. Once they finish, the release at
+`https://github.com/<org>/<repo>/releases/tag/v1.4.0` will have the
+Windows, macOS, Linux installers plus the Android `.aab` and debug
+`.apk` attached. Use `desktop-v*` or `android-v*` prefixes if you want
+to ship only one platform.
