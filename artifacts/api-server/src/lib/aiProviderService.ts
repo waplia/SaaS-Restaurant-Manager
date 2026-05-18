@@ -488,8 +488,11 @@ export class AIProviderService {
     let fallbackModel = assignment?.fallbackModel ?? null;
 
     if (!primaryId) {
-      // Pick any enabled provider as last-ditch
-      const [first] = await db.select().from(aiProvidersTable).where(eq(aiProvidersTable.isEnabled, true)).limit(1);
+      // Pick any enabled text-capable provider as last-ditch.
+      // Skip image-only providers (e.g. Stability) which cannot serve chat/text.
+      const TEXT_KINDS = ["openai", "anthropic", "gemini", "groq", "mistral", "openrouter", "perplexity", "replicate", "custom"];
+      const candidates = await db.select().from(aiProvidersTable).where(eq(aiProvidersTable.isEnabled, true));
+      const first = candidates.find((p) => TEXT_KINDS.includes(p.kind));
       if (first) { primaryId = first.id; primaryModel = first.defaultModel; }
     }
     if (!primaryId || !primaryModel) {
