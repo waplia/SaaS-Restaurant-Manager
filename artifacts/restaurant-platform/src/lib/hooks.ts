@@ -5046,6 +5046,27 @@ export function useBulkCreateStaffShifts() {
   });
 }
 
+export function useAddManualQuote() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, supplierId, leadTimeDays, notes, items }: {
+      id: number;
+      supplierId: number;
+      leadTimeDays?: number;
+      notes?: string;
+      items: Array<{ requestItemId: number; pricePerUnit: number; available: boolean }>;
+    }) =>
+      apiPost<{ quoteId: number }>(`/restaurants/${RESTAURANT_ID}/purchase-requests/${id}/quotes`, {
+        supplierId, leadTimeDays, notes, items,
+      }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["purchase-requests"] });
+      qc.invalidateQueries({ queryKey: ["purchase-request", RESTAURANT_ID, v.id] });
+    },
+  });
+}
+
 export function useAwardPurchaseRequest() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();

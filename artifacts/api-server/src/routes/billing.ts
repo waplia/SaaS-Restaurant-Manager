@@ -654,7 +654,7 @@ router.get("/admin/tenants/:tenantId/payments", requireSuperAdmin, async (req, r
     periodEnd: subscriptionPaymentsTable.periodEnd,
     status: subscriptionPaymentsTable.status,
     discountApplied: subscriptionPaymentsTable.discountApplied,
-    couponCode: subscriptionPaymentsTable.couponCode,
+    couponId: subscriptionPaymentsTable.couponId,
     createdAt: subscriptionPaymentsTable.createdAt,
   })
     .from(subscriptionPaymentsTable)

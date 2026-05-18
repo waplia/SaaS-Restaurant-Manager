@@ -777,19 +777,21 @@ router.get(
       .groupBy(sql`TO_CHAR(${attendanceTable.clockIn}, 'YYYY-MM-DD'), ${attendanceTable.userId}`);
 
     // Build daily labor cost = Σ (hours * effectiveHourlyCost). Use defaultHourlyCost as fallback.
+    // NOTE: users.salary / users.salaryType were removed from the schema; we
+    // currently apply defaultHourlyCost uniformly. When per-user payroll
+    // data lands (HR-compliance module), reintroduce the join here.
     const userIds = Array.from(new Set(attRows.map(r => r.userId)));
     let hourlyByUser = new Map<number, number>();
     if (userIds.length > 0) {
       const users = await db
-        .select({ id: usersTable.id, salary: usersTable.salary, salaryType: usersTable.salaryType })
+        .select({ id: usersTable.id })
         .from(usersTable)
         .where(inArray(usersTable.id, userIds));
       for (const u of users) {
-        const salary = Number(u.salary ?? 0);
+        const salary = 0;
         if (!salary) continue;
-        // Convert to hourly approximation
         let hourly = defaultHourlyCost;
-        switch (u.salaryType) {
+        switch ("" as string) {
           case "hourly": hourly = salary; break;
           case "fixed_monthly": hourly = salary / (4 * 40); break;
           case "fixed_weekly": hourly = salary / 40; break;
@@ -908,8 +910,8 @@ router.post(
       return;
     }
     // Validate every userId and shiftId belongs to this restaurant before any insert.
-    const userIds = Array.from(new Set(assignments.map((a: { userId?: number }) => Number(a.userId)).filter((n: number) => Number.isFinite(n) && n > 0)));
-    const shiftIds = Array.from(new Set(assignments.map((a: { shiftId?: number }) => Number(a.shiftId)).filter((n: number) => Number.isFinite(n) && n > 0)));
+    const userIds: number[] = Array.from(new Set(assignments.map((a: { userId?: number }) => Number(a.userId)).filter((n: number) => Number.isFinite(n) && n > 0)));
+    const shiftIds: number[] = Array.from(new Set(assignments.map((a: { shiftId?: number }) => Number(a.shiftId)).filter((n: number) => Number.isFinite(n) && n > 0)));
     if (userIds.length === 0 || shiftIds.length === 0) {
       res.status(400).json({ error: "Each assignment requires userId, shiftId, and date" });
       return;

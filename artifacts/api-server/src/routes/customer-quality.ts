@@ -378,15 +378,15 @@ router.get(`${BASE}/visit-calendar`, gated("cust_visit_calendar"), async (req, r
     .from(reservationsTable)
     .where(and(
       eq(reservationsTable.restaurantId, restaurantId),
-      gte(reservationsTable.reservationDate, from),
-      lte(reservationsTable.reservationDate, to),
+      gte(reservationsTable.scheduledAt, from),
+      lte(reservationsTable.scheduledAt, to),
     ))
     .limit(500);
 
   // Birthdays & anniversaries
   const customers = await db.select({
     id: customersTable.id, name: customersTable.name, phone: customersTable.phone,
-    dateOfBirth: customersTable.dateOfBirth, anniversaryDate: customersTable.anniversaryDate,
+    dateOfBirth: customersTable.dateOfBirth, anniversaryDate: customersTable.anniversary,
   })
     .from(customersTable)
     .where(and(
@@ -634,10 +634,10 @@ export async function runComplaintEscalationSweep(): Promise<number> {
     const restaurant = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable)
       .where(eq(restaurantsTable.id, rule.restaurantId));
     if (!restaurant.length) continue;
-    const openTicketStatuses: Array<"open" | "in_progress" | "waiting_internal"> = ["open", "in_progress", "waiting_internal"];
+    const openTicketStatuses = ["open", "in_progress", "waiting_internal"] as const;
     const openTickets = await db.select().from(supportTicketsTable)
       .where(and(eq(supportTicketsTable.tenantId, restaurant[0].tenantId),
-        inArray(supportTicketsTable.status, openTicketStatuses)));
+        inArray(supportTicketsTable.status, openTicketStatuses as unknown as readonly string[] as never)));
     for (const t of openTickets) {
       const breachAt = t.resolutionDueAt ?? t.firstResponseDueAt;
       if (!breachAt) continue;

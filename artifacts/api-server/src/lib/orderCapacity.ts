@@ -172,18 +172,13 @@ export async function evaluateOrderCapacity(input: CapacityCheckInput): Promise<
   }
 
   // Per-outlet cap
-  if (input.branchId != null) {
-    const cap = cfg.outletCaps.find((c) => c.branchId === input.branchId);
-    if (cap) {
-      const [{ c }] = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(ordersTable)
-        .where(and(...conds, eq(ordersTable.branchId, input.branchId)));
-      if (Number(c) >= cap.maxPerSlot) {
-        return { allowed: false, reason: "Outlet capacity reached.", nextAvailableAt: end.toISOString() };
-      }
-    }
-  }
+  // NOTE: the orders table does not currently carry a `branchId` column, so we
+  // cannot scope the per-slot count to a specific outlet. Until a real outlet
+  // column is added (or a branches→orders join table is introduced), this cap
+  // intentionally degrades to a no-op rather than silently aliasing onto an
+  // unrelated column (e.g. `brandId`) and misapplying capacity.
+  void input.branchId;
+  void cfg.outletCaps;
 
   // Per-item cap
   if (input.itemQuantities && input.itemQuantities.length > 0 && cfg.itemCaps.length > 0) {

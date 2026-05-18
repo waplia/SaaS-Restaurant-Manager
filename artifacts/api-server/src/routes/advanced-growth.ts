@@ -590,7 +590,7 @@ router.post(`${BASE}/preorder-bookings`, requireRole(...SERVICE_ROLES), requireP
           WHERE id = ${Number(slotId)} AND restaurant_id = ${restaurantId}
           FOR UPDATE`,
     );
-    const rows = (locked as { rows?: Array<{ id: number; capacity: number }> }).rows
+    const rows = (locked as unknown as { rows?: Array<{ id: number; capacity: number }> }).rows
       ?? (locked as unknown as Array<{ id: number; capacity: number }>);
     const slotRow = Array.isArray(rows) ? rows[0] : undefined;
     if (!slotRow) return { kind: "missing" };

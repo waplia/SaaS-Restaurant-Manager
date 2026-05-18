@@ -121,7 +121,7 @@ export default function RecipeVersionsPage() {
             <Button onClick={async () => {
               if (!createMenuItem) return;
               try {
-                const v = await createV.mutateAsync({ menuItemId: Number(createMenuItem), notes: createNotes });
+                const v = await createV.mutateAsync({ menuItemId: Number(createMenuItem), notes: createNotes }) as { id: number };
                 setCreateOpen(false); setCreateMenuItem(""); setCreateNotes("");
                 setOpenVersionId(v.id);
                 toast({ title: "Draft created" });

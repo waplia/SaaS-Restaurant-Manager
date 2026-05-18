@@ -194,7 +194,7 @@ publicRouter.get("/public/customer-app/:slug", async (req, res) => {
   let coupons: Array<{ code: string; description: string | null; discountType: string; discountValue: string }> = [];
   if (codes.length > 0) {
     const rows = await db.select({
-      code: couponsTable.code, description: couponsTable.description,
+      code: couponsTable.code,
       discountType: couponsTable.discountType, discountValue: couponsTable.discountValue,
       isActive: couponsTable.isActive,
     }).from(couponsTable).where(and(
@@ -202,7 +202,7 @@ publicRouter.get("/public/customer-app/:slug", async (req, res) => {
       inArray(couponsTable.code, codes),
     ));
     coupons = rows.filter(r => r.isActive).map(r => ({
-      code: r.code, description: r.description,
+      code: r.code, description: null,
       discountType: r.discountType, discountValue: r.discountValue,
     }));
   }

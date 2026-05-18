@@ -1427,7 +1427,7 @@ export default function CustomerMenuPage() {
             <button onClick={openRewards} className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full transition">
               <Gift className="w-3.5 h-3.5" /> Rewards
             </button>
-            <button onClick={openWaiterModal} className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full transition">
+            <button onClick={() => openWaiterModal()} className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full transition">
               <Bell className="w-3.5 h-3.5" /> Waiter
             </button>
           </div>

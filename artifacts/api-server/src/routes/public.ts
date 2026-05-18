@@ -277,7 +277,7 @@ router.get("/public/sitemap.xml", async (req, res) => {
   const urls: Array<{ slug: string; updatedAt: Date }> = [];
   for (const r of rows) {
     if (!r.slug || r.isSuspended) continue;
-    if (r.planId != null && !isFeatureEnabled(planFlags.get(r.planId), "online_ordering")) continue;
+    if (r.planId != null && !isFeatureEnabled(planFlags.get(r.planId) as Record<string, unknown> | null | undefined, "online_ordering")) continue;
     urls.push({ slug: r.slug, updatedAt: r.updatedAt ?? new Date() });
   }
 
@@ -780,7 +780,7 @@ router.post("/public/carts", async (req, res) => {
     eq(cartSessionsTable.restaurantId, Number(restaurantId)),
     eq(cartSessionsTable.sessionToken, String(token)),
   ));
-  const itemsJson = items as Record<string, unknown>[];
+  const itemsJson = items as unknown as Array<{ menuItemId: number; name: string; quantity: number; price: string }>;
   if (existing) {
     const [updated] = await db.update(cartSessionsTable).set({
       items: itemsJson, subtotal: String(subtotal ?? "0.00"),
@@ -2249,7 +2249,7 @@ router.post("/public/restaurants/:restaurantId/preorder/bookings", async (req, r
             WHERE id = ${Number(slotId)} AND restaurant_id = ${restaurantId} AND is_active = true
             FOR UPDATE`,
       );
-      const rows = (locked as { rows?: Array<{ id: number; capacity: number; slotDate: string; startMinutes: number }> }).rows
+      const rows = (locked as unknown as { rows?: Array<{ id: number; capacity: number; slotDate: string; startMinutes: number }> }).rows
         ?? (locked as unknown as Array<{ id: number; capacity: number; slotDate: string; startMinutes: number }>);
       const slotRow = Array.isArray(rows) ? rows[0] : undefined;
       if (!slotRow) return { kind: "missing" };

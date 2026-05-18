@@ -98,7 +98,7 @@ export interface AuditInput {
   module: string;
   action: string;
   entity?: string;
-  entityId?: number | null;
+  entityId?: number | string | null;
   restaurantId?: number | null;
   targetRestaurantId?: number | null;
   oldValue?: unknown;
@@ -149,7 +149,7 @@ export async function recordAuditLog(input: AuditInput): Promise<void> {
       module: input.module,
       action: input.action,
       entity: input.entity ?? input.module,
-      entityId: input.entityId ?? null,
+      entityId: input.entityId == null ? null : (typeof input.entityId === "number" ? input.entityId : Number(input.entityId)) || null,
       details: input.details ?? null,
       // drizzle jsonb expects unknown — cast through unknown for safety
       oldValue: oldValue as never,

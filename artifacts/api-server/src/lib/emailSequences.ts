@@ -14,6 +14,7 @@ import {
   emailSequencesTable,
   emailSequenceStepsTable,
   emailSequenceEnrollmentsTable,
+  restaurantsTable,
   type EmailSequence,
   type EmailSequenceStep,
   type EmailSequenceEnrollment,
@@ -206,7 +207,24 @@ export async function stopEnrollmentsByEmail(
     eq(emailSequenceEnrollmentsTable.recipientEmail, email.trim().toLowerCase()),
     eq(emailSequenceEnrollmentsTable.status, "active"),
   ];
-  if (scope.restaurantId) conds.push(eq(emailSequenceEnrollmentsTable.restaurantId, scope.restaurantId));
+  // Honor restaurant-scoped unsubscribe by resolving restaurant → tenant and
+  // scoping the stop to that tenant's enrollments only. The enrollments table
+  // tracks tenantId (not restaurantId), so cross-restaurant enrollments inside
+  // the same tenant will still be stopped — the alternative (no scope) is
+  // strictly worse since it would stop unrelated tenants too.
+  if (scope.restaurantId) {
+    const [rest] = await db
+      .select({ tenantId: restaurantsTable.tenantId })
+      .from(restaurantsTable)
+      .where(eq(restaurantsTable.id, scope.restaurantId))
+      .limit(1);
+    if (rest?.tenantId) {
+      conds.push(eq(emailSequenceEnrollmentsTable.tenantId, rest.tenantId));
+    } else {
+      // Unknown restaurant → refuse to stop anything rather than going global.
+      return;
+    }
+  }
   await db.update(emailSequenceEnrollmentsTable)
     .set({ status: "stopped", stopReason: reason, lastRunAt: new Date(), completedAt: new Date() })
     .where(and(...conds));

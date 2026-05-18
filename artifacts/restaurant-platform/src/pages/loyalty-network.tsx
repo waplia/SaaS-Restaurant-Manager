@@ -90,7 +90,7 @@ export default function LoyaltyNetworkPage() {
         status: (member.status as "active" | "paused") ?? "active",
       });
     }
-  }, [member?.id, member?.updatedAt as unknown as string]);
+  }, [member?.id]);
 
   const save = useMutation({
     mutationFn: () => apiPut<{ member: Member }>(`/restaurants/${rid}/loyalty-network`, form),

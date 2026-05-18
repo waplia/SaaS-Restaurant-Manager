@@ -27,7 +27,7 @@ export default function PortionDriftPage() {
     <Layout>
       <PageHeader title="Portion Drift" subtitle="When actual usage drifts >10% from recipe expectations." icon={AlertTriangle}>
         <Button onClick={async () => {
-          try { const r = await sweep.mutateAsync(7); toast({ title: `Scan complete`, description: `${r.created} new alerts from ${r.checked} ingredients` }); }
+          try { const r = await sweep.mutateAsync(7) as { created: number; checked: number }; toast({ title: `Scan complete`, description: `${r.created} new alerts from ${r.checked} ingredients` }); }
           catch (e) { toast({ title: "Failed", description: String(e), variant: "destructive" }); }
         }} disabled={sweep.isPending} data-testid="button-run-sweep">
           <RefreshCw className={`w-4 h-4 mr-1 ${sweep.isPending ? "animate-spin" : ""}`} /> Re-scan last 7d

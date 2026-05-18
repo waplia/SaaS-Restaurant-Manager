@@ -18,7 +18,7 @@ export type SectionKey =
   | "email" | "taxes" | "payment" | "theme" | "roles" | "billing"
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
-  | "cancellation-reasons" | "order-settings" | "refund-reasons" | "direct-ordering"
+  | "cancellation-reasons" | "order-settings" | "order-capacity" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
   | "accounting" | "account" | "sessions" | "customer-app";

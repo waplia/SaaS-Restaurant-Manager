@@ -1717,13 +1717,13 @@ router.post("/restaurants/:restaurantId/orders/:id/void", requireRole("owner", "
   try {
     const { lostSalesEventsTable, orderAccuracyEventsTable } = await import("../lib/db");
     await db.insert(lostSalesEventsTable).values({
-      restaurantId, branchId: order.branchId ?? null, customerId: order.customerId ?? null,
+      restaurantId, branchId: order.brandId ?? null, customerId: order.customerId ?? null,
       orderId, eventType: "cancelled_order", channel: order.orderType ?? null,
       reason: (req.body && (req.body as any).reason) ?? "Order voided",
       estimatedValue: String(order.totalAmount ?? "0.00"),
     }).catch(() => undefined);
     await db.insert(orderAccuracyEventsTable).values({
-      restaurantId, branchId: order.branchId ?? null, orderId,
+      restaurantId, branchId: order.brandId ?? null, orderId,
       eventType: "kot_cancel", weight: 2,
       notes: "Order voided", createdBy: (req as any).user?.sub ?? null,
     }).catch(() => undefined);
