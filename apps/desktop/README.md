@@ -33,9 +33,17 @@ Artifacts land in `apps/desktop/dist/`.
 
 ## Auto-updates
 
-The `electron-updater` feed URL in `package.json` is a placeholder
-(`updates.khanalagao.example.com/desktop`). Replace it with a real feed
-before shipping signed updates.
+`electron-updater` ships updates via **GitHub Releases** (see
+`build.publish` in `package.json`, provider `github`, repo
+`khanalagao/khanalagao`, `releaseType: "draft"`). CI runs
+`electron-builder --publish always` via the `release:win` /
+`release:mac` / `release:linux` scripts on every tag push, uploading
+installers + `latest*.yml` into a shared draft release; a final job
+promotes the draft live once all three OSes succeed so installed apps
+only ever see complete releases. Manual `workflow_dispatch` runs use
+the `build:*` scripts (`--publish never`) and never touch the live
+feed. See `docs/app-builds.md` for how to retarget a different repo or
+swap in an S3/generic feed.
 
 ## Local print bridge
 

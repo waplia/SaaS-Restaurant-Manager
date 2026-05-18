@@ -33,20 +33,23 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: build:win
+            publish_script: release:win
+            dryrun_script: build:win
             artifact_glob: |
               apps/desktop/dist/*.exe
               apps/desktop/dist/*.blockmap
               apps/desktop/dist/latest*.yml
           - os: macos-latest
-            script: build:mac
+            publish_script: release:mac
+            dryrun_script: build:mac
             artifact_glob: |
               apps/desktop/dist/*.dmg
               apps/desktop/dist/*.zip
               apps/desktop/dist/*.blockmap
               apps/desktop/dist/latest*.yml
           - os: ubuntu-latest
-            script: build:linux
+            publish_script: release:linux
+            dryrun_script: build:linux
             artifact_glob: |
               apps/desktop/dist/*.AppImage
               apps/desktop/dist/latest*.yml
@@ -88,13 +91,17 @@ jobs:
           mkdir -p apps/desktop/build
           cp artifacts/restaurant-platform/public/logo.png apps/desktop/build/icon.png
 
+      # Tag pushes publish to the GitHub Release draft via
+      # `electron-builder --publish always`. Manual `workflow_dispatch` runs
+      # use `--publish never` so they exercise the build pipeline without
+      # ever touching the live update feed.
       - name: Build installer (Windows)
         if: matrix.os == 'windows-latest'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm --filter @workspace/desktop ${{ matrix.script }}
+        run: pnpm --filter @workspace/desktop ${{ startsWith(github.ref, 'refs/tags/') && matrix.publish_script || matrix.dryrun_script }}
 
       - name: Build installer (macOS)
         if: matrix.os == 'macos-latest'
@@ -105,13 +112,13 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm --filter @workspace/desktop ${{ matrix.script }}
+        run: pnpm --filter @workspace/desktop ${{ startsWith(github.ref, 'refs/tags/') && matrix.publish_script || matrix.dryrun_script }}
 
       - name: Build installer (Linux)
         if: matrix.os == 'ubuntu-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm --filter @workspace/desktop ${{ matrix.script }}
+        run: pnpm --filter @workspace/desktop ${{ startsWith(github.ref, 'refs/tags/') && matrix.publish_script || matrix.dryrun_script }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -122,21 +129,22 @@ jobs:
           retention-days: 14
 
   release:
-    name: Publish GitHub Release
+    name: Finalize GitHub Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-
-      - name: Attach installers to release
+      # electron-builder uploads installers + latest*.yml to a draft release
+      # (or a release matching the tag) on every matrix job via
+      # `--publish always`. This step just promotes that release out of draft
+      # and adds auto-generated release notes so it becomes the live feed
+      # electron-updater reads from.
+      - name: Promote draft release and add notes
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/**/*
-          fail_on_unmatched_files: false
+          draft: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

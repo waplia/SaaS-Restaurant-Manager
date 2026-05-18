@@ -99,10 +99,26 @@ Artifacts land in `apps/desktop/dist/`.
 
 ### Auto-updates
 
-`electron-updater` is wired up to a placeholder feed
-(`updates.khanalagao.example.com/desktop` in `apps/desktop/package.json` →
-`build.publish[].url`). Replace it with a real generic feed (S3 bucket,
-GitHub Releases, etc.) before shipping signed updates.
+`electron-updater` is wired to **GitHub Releases** as the update feed
+(`apps/desktop/package.json` → `build.publish[]`, provider `github`,
+owner `khanalagao`, repo `khanalagao`, `releaseType: "draft"`). On every
+tag push, the desktop CI workflow runs `electron-builder --publish always`
+(`release:win` / `release:mac` / `release:linux` scripts) so each matrix
+job uploads its installer, blockmap, and `latest*.yml` metadata into a
+shared **draft** release. A final job promotes the draft live once all
+three OSes succeed, so partial releases never reach users. Already-
+installed desktop apps poll the latest published release on next launch
+and self-update — no manual download required.
+
+To point the feed at a different repo (e.g. a private mirror), edit
+`build.publish[0].owner` and `repo` in `apps/desktop/package.json` and
+re-tag. For a non-GitHub feed (S3 bucket, generic HTTPS), swap the
+provider block per the
+[electron-builder publish docs](https://www.electron.build/configuration/publish)
+and adjust the CI credentials accordingly (`AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` for S3, etc.). `GH_TOKEN` (the default
+`secrets.GITHUB_TOKEN`) is enough for the GitHub provider; no extra
+secret to configure.
 
 ### Local print bridge
 
@@ -246,7 +262,9 @@ called from the WebView. Apple will reject the binary without them.
   - [ ] Windows code-signing certificate (`.pfx`).
   - [ ] Apple Developer ID + App Store Connect API key.
   - [ ] Android release keystore (`.jks`) — store off-repo.
-- [ ] Replace the placeholder `electron-updater` feed URL.
+- [ ] Confirm the `electron-updater` feed (GitHub Releases on
+  `khanalagao/khanalagao` by default — change `build.publish` in
+  `apps/desktop/package.json` if you ship from a different repo).
 - [ ] Wire signing env vars into your CI secrets, **not** the repo.
 
 ---
@@ -282,13 +300,20 @@ loop.
   manual `workflow_dispatch`.
 - **Runners:** `windows-latest`, `macos-latest`, and `ubuntu-latest` in a
   matrix.
-- **Build commands:**
-  - Windows → `pnpm --filter @workspace/desktop build:win`
-  - macOS   → `pnpm --filter @workspace/desktop build:mac`
-  - Linux   → `pnpm --filter @workspace/desktop build:linux`
+- **Build commands** (the workflow auto-selects per trigger):
+  - **Tag push** → `release:win` / `release:mac` / `release:linux`
+    (`electron-builder --publish always`, uploads installers +
+    `latest*.yml` to a GitHub Release **draft** on each matrix job)
+  - **Manual `workflow_dispatch`** → `build:win` / `build:mac` /
+    `build:linux` (`--publish never`, dry-run that exercises the build
+    pipeline without touching the live update feed)
 - **Outputs:** installers from `apps/desktop/dist/` uploaded as workflow
-  artifacts and attached to the GitHub Release (NSIS `.exe`, `.dmg`,
-  AppImage, plus electron-updater `latest*.yml` metadata).
+  artifacts on every run. On tag pushes, electron-builder also publishes
+  to the GitHub Release draft (NSIS `.exe`, `.dmg`, AppImage, blockmaps,
+  plus electron-updater `latest*.yml` metadata). A final `release` job
+  then flips the draft live and appends auto-generated release notes —
+  the release is published atomically once all three matrix jobs
+  succeed, so a partial build never reaches installed desktop apps.
 
 Required CI secrets (Repo → Settings → Secrets and variables → Actions):
 
