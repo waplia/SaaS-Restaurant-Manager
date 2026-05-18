@@ -134,7 +134,7 @@ export function AiChatAssistant() {
       <Button
         onClick={() => setOpen(true)}
         size="icon"
-        className="fixed bottom-20 right-5 h-12 w-12 rounded-full shadow-lg z-40"
+        className="fixed bottom-2 right-5 h-12 w-12 rounded-full shadow-lg z-[60]"
         data-testid="button-open-ai-chat"
         aria-label="Open AI assistant"
       >
