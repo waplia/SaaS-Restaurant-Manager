@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Save, Send, RefreshCw, Download, Repeat } from "lucide-react";
+import { MessageCircle, Save, Send, RefreshCw, Download, Repeat, QrCode, Power, AlertTriangle, ShieldCheck } from "lucide-react";
+import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,41 @@ interface SettingsResp { settings: WaSettings | null; webhookUrl: string; platfo
 interface Template { id: number; name: string; language: string; status: string; category: string | null; bodyPreview: string | null; defaultForEvent: string | null }
 interface LogRow { id: number; recipient: string; templateName: string | null; status: string; reason: string | null; createdAt: string }
 interface UsageResp { sent: number; success: number; failure: number; blocked: number; limit: number; remaining: number }
+type ProviderType = "cloud_api" | "web_qr" | "disabled";
+interface ProviderSettingsResp {
+  providerType: ProviderType;
+  webQrAllowed: boolean;
+  webQrAllowedReason: string | null;
+  webQrLibraryAvailable: boolean;
+  replitDevWarning: string | null;
+}
+interface SessionView {
+  status: "disconnected" | "starting" | "qr_pending" | "connected" | "reconnecting" | "logged_out" | "error" | "library_unavailable";
+  phone: string | null;
+  profileName: string | null;
+  qrPayload: string | null;
+  qrExpiresAt: string | null;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastError: string | null;
+}
+interface WebQrStatusResp {
+  session: SessionView | null;
+  allowed: boolean;
+  reason: string | null;
+  libraryAvailable: boolean;
+  replitDevWarning: string | null;
+}
+interface SafeSendResp {
+  safeSendDailyCap: number;
+  safeSendHourlyCap: number;
+  safeSendMinDelaySec: number;
+  safeSendQuietStart: string | null;
+  safeSendQuietEnd: string | null;
+  safeSendDuplicateWindowSec: number;
+  marketingAllowed: boolean;
+  marketingOptInRequired: boolean;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
@@ -88,10 +124,14 @@ function SettingsTab() {
 
   return (
     <div className="space-y-5">
+      <ProviderSelectorCard />
+      <WebQrConnectionCard />
+      <SafeSendingCard />
+
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Provider</h3>
+            <h3 className="font-semibold text-sm">Cloud API account</h3>
             <Badge variant={merged.isEnabled ? "default" : "outline"}>{merged.isEnabled ? "Enabled" : "Disabled"}</Badge>
           </div>
           <label className="flex items-center gap-2 text-sm">
@@ -333,6 +373,233 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "gr
     <div className="bg-muted/30 border border-border rounded-lg p-3">
       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function ProviderSelectorCard() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<ProviderSettingsResp>({
+    queryKey: ["whatsapp", "provider-settings", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/provider-settings`),
+  });
+  const change = useMutation({
+    mutationFn: (providerType: ProviderType) =>
+      apiAction(`/restaurants/${rid}/whatsapp/provider-settings`, "PATCH", { providerType }),
+    onSuccess: () => {
+      toast({ title: "Provider updated" });
+      qc.invalidateQueries({ queryKey: ["whatsapp", "provider-settings", rid] });
+      qc.invalidateQueries({ queryKey: ["whatsapp", "web-qr", "status", rid] });
+    },
+    onError: e => toast({ title: "Update failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading || !data) return null;
+  const current = data.providerType;
+  const opts: { value: ProviderType; label: string; desc: string; disabled?: string }[] = [
+    { value: "cloud_api", label: "Meta Cloud API (recommended)", desc: "Official, stable, requires a Meta WABA. Use for production." },
+    {
+      value: "web_qr",
+      label: "WhatsApp Web QR (Baileys, experimental)",
+      desc: "Pair via QR code — uses your own WhatsApp number. Not officially supported by Meta; account risk applies.",
+      disabled: !data.webQrAllowed
+        ? data.webQrAllowedReason ?? "Web QR is not enabled for your plan."
+        : !data.webQrLibraryAvailable
+          ? "Baileys is not installed on the server."
+          : undefined,
+    },
+    { value: "disabled", label: "Disabled", desc: "Do not send any WhatsApp messages." },
+  ];
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold text-sm">Provider</h3>
+        <Badge variant="outline" className="text-[10px]">{current === "cloud_api" ? "Cloud API" : current === "web_qr" ? "Web QR" : "Disabled"}</Badge>
+      </div>
+      {data.replitDevWarning && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/40 text-amber-800 dark:text-amber-200 rounded-lg p-3 text-xs">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{data.replitDevWarning}</span>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {opts.map(o => (
+          <button
+            key={o.value}
+            type="button"
+            disabled={!!o.disabled || change.isPending}
+            onClick={() => change.mutate(o.value)}
+            className={`text-left rounded-lg border p-3 transition ${current === o.value ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30"} ${o.disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+          >
+            <p className="text-sm font-medium">{o.label}</p>
+            <p className="text-xs text-muted-foreground mt-1">{o.desc}</p>
+            {o.disabled && <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">{o.disabled}</p>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WebQrConnectionCard() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: provider } = useQuery<ProviderSettingsResp>({
+    queryKey: ["whatsapp", "provider-settings", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/provider-settings`),
+  });
+  const isWebQr = provider?.providerType === "web_qr";
+  const { data } = useQuery<WebQrStatusResp>({
+    queryKey: ["whatsapp", "web-qr", "status", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/web-qr/status`),
+    enabled: isWebQr,
+    refetchInterval: () => (isWebQr ? 3000 : false),
+  });
+  const start = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/whatsapp/web-qr/start`, "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["whatsapp", "web-qr", "status", rid] }),
+    onError: e => toast({ title: "Start failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const reconnect = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/whatsapp/web-qr/reconnect`, "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["whatsapp", "web-qr", "status", rid] }),
+    onError: e => toast({ title: "Reconnect failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const disconnect = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/whatsapp/web-qr/disconnect`, "POST"),
+    onSuccess: () => { toast({ title: "Disconnected" }); qc.invalidateQueries({ queryKey: ["whatsapp", "web-qr", "status", rid] }); },
+    onError: e => toast({ title: "Disconnect failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  const [qrImg, setQrImg] = useState<string | null>(null);
+  useEffect(() => {
+    const payload = data?.session?.qrPayload;
+    if (!payload) { setQrImg(null); return; }
+    QRCode.toDataURL(payload, { width: 240, margin: 1 })
+      .then(setQrImg)
+      .catch(() => setQrImg(null));
+  }, [data?.session?.qrPayload]);
+
+  if (!isWebQr) return null;
+
+  const session = data?.session;
+  const status = session?.status ?? "disconnected";
+  const statusColor: Record<string, string> = {
+    connected: "bg-green-500/15 text-green-700 dark:text-green-300",
+    starting: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+    qr_pending: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+    reconnecting: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+    disconnected: "bg-muted text-foreground",
+    logged_out: "bg-red-500/15 text-red-700 dark:text-red-300",
+    error: "bg-red-500/15 text-red-700 dark:text-red-300",
+    library_unavailable: "bg-red-500/15 text-red-700 dark:text-red-300",
+  };
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <QrCode className="w-4 h-4" />
+          <h3 className="font-semibold text-sm">WhatsApp Web connection</h3>
+          <span className={`text-[10px] px-2 py-0.5 rounded ${statusColor[status] ?? ""}`}>{status.replace(/_/g, " ")}</span>
+        </div>
+        <div className="flex gap-2">
+          {status !== "connected" && (
+            <Button size="sm" onClick={() => start.mutate()} disabled={start.isPending || !data?.libraryAvailable} className="gap-1.5">
+              <QrCode className="w-3.5 h-3.5" /> {status === "qr_pending" ? "Refresh QR" : "Generate QR"}
+            </Button>
+          )}
+          {status === "connected" && (
+            <Button size="sm" variant="outline" onClick={() => reconnect.mutate()} disabled={reconnect.isPending} className="gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5" /> Reconnect
+            </Button>
+          )}
+          {(status === "connected" || status === "qr_pending" || status === "starting" || status === "reconnecting") && (
+            <Button size="sm" variant="outline" onClick={() => disconnect.mutate()} disabled={disconnect.isPending} className="gap-1.5">
+              <Power className="w-3.5 h-3.5" /> Disconnect
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {!data?.libraryAvailable && (
+        <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/40 text-red-800 dark:text-red-200 rounded-lg p-3 text-xs">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>WhatsApp Web library (Baileys) is not installed on the server. Ask your administrator to install <code>@whiskeysockets/baileys</code> and restart the API to enable Web QR.</span>
+        </div>
+      )}
+      {data?.replitDevWarning && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/40 text-amber-800 dark:text-amber-200 rounded-lg p-3 text-xs">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{data.replitDevWarning}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 items-start">
+        <div className="bg-white border border-border rounded-lg p-3 flex items-center justify-center min-h-[240px]">
+          {status === "qr_pending" && qrImg
+            ? <img src={qrImg} alt="WhatsApp QR" width={240} height={240} />
+            : status === "connected"
+              ? <div className="text-center"><ShieldCheck className="w-12 h-12 text-green-600 mx-auto" /><p className="text-xs mt-2 text-muted-foreground">Linked to {session?.phone ?? "—"}</p></div>
+              : <p className="text-xs text-muted-foreground text-center">{status === "starting" ? "Generating QR…" : "Click Generate QR to begin pairing."}</p>}
+        </div>
+        <div className="text-xs space-y-2">
+          <p><span className="text-muted-foreground">How to pair:</span> Open WhatsApp on your phone → Settings → Linked Devices → Link a Device → scan this QR.</p>
+          {session?.phone && <p><span className="text-muted-foreground">Phone:</span> {session.phone}</p>}
+          {session?.profileName && <p><span className="text-muted-foreground">Profile:</span> {session.profileName}</p>}
+          {session?.lastConnectedAt && <p><span className="text-muted-foreground">Last connected:</span> {new Date(session.lastConnectedAt).toLocaleString()}</p>}
+          {session?.lastDisconnectedAt && status !== "connected" && <p><span className="text-muted-foreground">Last disconnected:</span> {new Date(session.lastDisconnectedAt).toLocaleString()}</p>}
+          {session?.lastError && <p className="text-red-700 dark:text-red-300">Error: {session.lastError}</p>}
+          {data?.reason && !data.allowed && <p className="text-amber-700 dark:text-amber-300">{data.reason}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SafeSendingCard() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<SafeSendResp>({
+    queryKey: ["whatsapp", "safe-send", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/safe-send`),
+  });
+  const [form, setForm] = useState<Partial<SafeSendResp>>({});
+  const merged: SafeSendResp = { ...(data as SafeSendResp ?? {} as SafeSendResp), ...form };
+  const set = <K extends keyof SafeSendResp>(k: K, v: SafeSendResp[K]) => setForm(p => ({ ...p, [k]: v }));
+
+  const save = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/whatsapp/safe-send`, "PATCH", form),
+    onSuccess: () => { toast({ title: "Safe-sending updated" }); setForm({}); qc.invalidateQueries({ queryKey: ["whatsapp", "safe-send", rid] }); },
+    onError: e => toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  if (isLoading || !data) return null;
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4 text-primary" />
+        <h3 className="font-semibold text-sm">Safe-sending guards</h3>
+      </div>
+      <p className="text-xs text-muted-foreground">Caps and quiet hours protect your number from spam-style behaviour. Apply to both providers. 0 means unlimited.</p>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <Field label="Daily cap (msgs)"><Input type="number" min={0} value={merged.safeSendDailyCap ?? 0} onChange={e => set("safeSendDailyCap", Math.max(0, Number(e.target.value)))} /></Field>
+        <Field label="Hourly cap (msgs)"><Input type="number" min={0} value={merged.safeSendHourlyCap ?? 0} onChange={e => set("safeSendHourlyCap", Math.max(0, Number(e.target.value)))} /></Field>
+        <Field label="Min delay between sends (sec)"><Input type="number" min={0} value={merged.safeSendMinDelaySec ?? 0} onChange={e => set("safeSendMinDelaySec", Math.max(0, Number(e.target.value)))} /></Field>
+        <Field label="Quiet hours start (HH:MM)"><Input placeholder="22:00" value={merged.safeSendQuietStart ?? ""} onChange={e => set("safeSendQuietStart", e.target.value || null)} /></Field>
+        <Field label="Quiet hours end (HH:MM)"><Input placeholder="08:00" value={merged.safeSendQuietEnd ?? ""} onChange={e => set("safeSendQuietEnd", e.target.value || null)} /></Field>
+        <Field label="Duplicate-suppress window (sec)" hint="Block re-sending the same body to the same number within this window."><Input type="number" min={0} value={merged.safeSendDuplicateWindowSec ?? 0} onChange={e => set("safeSendDuplicateWindowSec", Math.max(0, Number(e.target.value)))} /></Field>
+      </div>
+      <div className="flex flex-wrap gap-4 pt-1">
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={merged.marketingAllowed ?? true} onChange={e => set("marketingAllowed", e.target.checked)} /> Allow marketing/broadcast messages</label>
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={merged.marketingOptInRequired ?? true} onChange={e => set("marketingOptInRequired", e.target.checked)} /> Require explicit customer opt-in for marketing</label>
+      </div>
+      <div className="flex justify-end pt-2">
+        <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || Object.keys(form).length === 0} className="gap-1.5"><Save className="w-3.5 h-3.5" /> Save</Button>
+      </div>
     </div>
   );
 }

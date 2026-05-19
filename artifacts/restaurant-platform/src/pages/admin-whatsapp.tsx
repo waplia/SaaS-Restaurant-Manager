@@ -39,21 +39,181 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminWhatsAppTab() {
-  const [tab, setTab] = useState<"settings" | "templates" | "logs" | "usage">("settings");
+  const [tab, setTab] = useState<"settings" | "templates" | "logs" | "usage" | "providers">("settings");
+  const TABS = [
+    { k: "settings", label: "Settings" },
+    { k: "providers", label: "Communication providers" },
+    { k: "templates", label: "Templates" },
+    { k: "logs", label: "Logs" },
+    { k: "usage", label: "Usage" },
+  ] as const;
   return (
     <div className="space-y-4">
       <div className="border-b border-border flex gap-1">
-        {(["settings", "templates", "logs", "usage"] as const).map(k => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px capitalize ${tab === k ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-            {k}
+        {TABS.map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px ${tab === t.k ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            {t.label}
           </button>
         ))}
       </div>
       {tab === "settings" && <SettingsTab />}
+      {tab === "providers" && <ProvidersTab />}
       {tab === "templates" && <TemplatesTab />}
       {tab === "logs" && <LogsTab />}
       {tab === "usage" && <UsageTab />}
+    </div>
+  );
+}
+
+interface WebQrConfig {
+  globalEnabled: boolean;
+  allowedPlans: string[];
+  plans: Array<{ id: number; slug: string; name: string; webQrEnabled: boolean; webQrDailyCap: number; webQrMonthlyCap: number; webQrMaxSessions: number }>;
+  libraryAvailable: boolean;
+  replitDevWarning: string | null;
+}
+interface WebQrSession {
+  id: number; restaurantId: number; restaurantName: string | null; tenantId: number | null; tenantName: string | null;
+  status: string; phone: string | null; profileName: string | null;
+  lastConnectedAt: string | null; lastDisconnectedAt: string | null; lastHeartbeatAt: string | null; lastError: string | null; live: boolean;
+}
+interface WebQrUsage {
+  period: { year: number; month: number };
+  summary: Record<string, { sent: number; failed: number; blocked: number; total: number }>;
+}
+
+function ProvidersTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const cfg = useQuery<WebQrConfig>({ queryKey: ["admin", "wa", "web-qr", "config"], queryFn: () => apiFetch("/admin/whatsapp/web-qr/config") });
+  const sessions = useQuery<{ data: WebQrSession[] }>({ queryKey: ["admin", "wa", "web-qr", "sessions"], queryFn: () => apiFetch("/admin/whatsapp/web-qr/sessions"), refetchInterval: 10000 });
+  const usage = useQuery<WebQrUsage>({ queryKey: ["admin", "wa", "web-qr", "usage"], queryFn: () => apiFetch("/admin/whatsapp/web-qr/usage") });
+
+  const saveCfg = useMutation({
+    mutationFn: (body: Partial<{ globalEnabled: boolean; allowedPlans: string[] }>) => apiAction("/admin/whatsapp/web-qr/config", "PATCH", body),
+    onSuccess: () => { toast({ title: "Updated" }); qc.invalidateQueries({ queryKey: ["admin", "wa", "web-qr", "config"] }); },
+    onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const savePlan = useMutation({
+    mutationFn: ({ planId, ...body }: { planId: number } & Record<string, unknown>) => apiAction(`/admin/whatsapp/web-qr/plans/${planId}`, "PATCH", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "wa", "web-qr", "config"] }); },
+    onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const kick = useMutation({
+    mutationFn: (id: number) => apiAction(`/admin/whatsapp/web-qr/sessions/${id}/disconnect`, "POST"),
+    onSuccess: () => { toast({ title: "Disconnected" }); qc.invalidateQueries({ queryKey: ["admin", "wa", "web-qr", "sessions"] }); },
+    onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  if (cfg.isLoading || !cfg.data) return <div className="text-sm text-muted-foreground p-6">Loading…</div>;
+  const c = cfg.data;
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="font-semibold text-sm">WhatsApp Web QR (Baileys)</h3>
+            <p className="text-xs text-muted-foreground">Global switch for the experimental QR-pairing provider. Restaurants can only enable it if their plan allows it and the library is installed.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={c.globalEnabled} onChange={e => saveCfg.mutate({ globalEnabled: e.target.checked })} />
+            <span>{c.globalEnabled ? "Globally enabled" : "Globally disabled"}</span>
+          </label>
+        </div>
+        {!c.libraryAvailable && (
+          <div className="bg-red-500/10 border border-red-500/40 text-red-800 dark:text-red-200 rounded-lg p-3 text-xs">
+            <strong>Library not installed.</strong> The <code>@whiskeysockets/baileys</code> package is missing on the server. Install it and restart the API to enable Web QR.
+          </div>
+        )}
+        {c.replitDevWarning && (
+          <div className="bg-amber-500/10 border border-amber-500/40 text-amber-800 dark:text-amber-200 rounded-lg p-3 text-xs">{c.replitDevWarning}</div>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Per-plan Web QR limits</h3>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 border-b border-border">
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Plan</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Enabled</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Daily cap</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Monthly cap</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Max sessions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {c.plans.map(p => (
+              <tr key={p.id} className="hover:bg-muted/20">
+                <td className="px-3 py-2 text-sm">{p.name} <span className="text-[11px] text-muted-foreground">({p.slug})</span></td>
+                <td className="px-3 py-2 text-center">
+                  <input type="checkbox" defaultChecked={p.webQrEnabled} onChange={e => savePlan.mutate({ planId: p.id, webQrEnabled: e.target.checked })} />
+                </td>
+                <td className="px-3 py-2"><input type="number" min={0} defaultValue={p.webQrDailyCap} className="text-xs border border-border rounded px-2 py-1 bg-background w-24" onBlur={e => { const v = Number(e.target.value); if (v !== p.webQrDailyCap) savePlan.mutate({ planId: p.id, webQrDailyCap: v }); }} /></td>
+                <td className="px-3 py-2"><input type="number" min={0} defaultValue={p.webQrMonthlyCap} className="text-xs border border-border rounded px-2 py-1 bg-background w-24" onBlur={e => { const v = Number(e.target.value); if (v !== p.webQrMonthlyCap) savePlan.mutate({ planId: p.id, webQrMonthlyCap: v }); }} /></td>
+                <td className="px-3 py-2"><input type="number" min={0} defaultValue={p.webQrMaxSessions} className="text-xs border border-border rounded px-2 py-1 bg-background w-24" onBlur={e => { const v = Number(e.target.value); if (v !== p.webQrMaxSessions) savePlan.mutate({ planId: p.id, webQrMaxSessions: v }); }} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border">
+          <h3 className="font-semibold text-sm">Active Web QR sessions</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Live = currently held by this API process. Sessions are restored on restart.</p>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 border-b border-border">
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Restaurant</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Tenant</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Last heartbeat</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {(sessions.data?.data ?? []).map(s => (
+              <tr key={s.id} className="hover:bg-muted/20">
+                <td className="px-3 py-2 text-sm">{s.restaurantName ?? `#${s.restaurantId}`}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{s.tenantName ?? "—"}</td>
+                <td className="px-3 py-2 text-xs">
+                  <span className={`px-1.5 py-0.5 rounded ${s.status === "connected" ? "bg-green-500/15 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground"}`}>{s.status}</span>
+                  {s.live && <span className="ml-1.5 text-[10px] text-green-700 dark:text-green-300">● live</span>}
+                </td>
+                <td className="px-3 py-2 text-xs">{s.phone ?? "—"}{s.profileName ? <span className="text-muted-foreground"> · {s.profileName}</span> : null}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{s.lastHeartbeatAt ? new Date(s.lastHeartbeatAt).toLocaleString() : "—"}</td>
+                <td className="px-3 py-2 text-right">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => kick.mutate(s.id)} disabled={kick.isPending}>Force disconnect</Button>
+                </td>
+              </tr>
+            ))}
+            {(sessions.data?.data ?? []).length === 0 && <tr><td colSpan={6} className="px-3 py-10 text-center text-muted-foreground text-sm">No Web QR sessions yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+        <h3 className="font-semibold text-sm">Sends by provider — {usage.data?.period ? `${usage.data.period.year}-${String(usage.data.period.month).padStart(2, "0")}` : "this month"}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(["cloud_api", "web_qr"] as const).map(p => {
+            const s = usage.data?.summary?.[p] ?? { sent: 0, failed: 0, blocked: 0, total: 0 };
+            return (
+              <div key={p} className="border border-border rounded-lg p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{p === "cloud_api" ? "Cloud API" : "Web QR"}</p>
+                <p className="text-2xl font-semibold tabular-nums">{s.sent}</p>
+                <p className="text-[11px] text-muted-foreground">delivered · {s.failed} failed · {s.blocked} blocked · {s.total} total</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

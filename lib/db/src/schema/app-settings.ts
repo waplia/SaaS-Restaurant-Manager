@@ -1,4 +1,5 @@
 import { pgTable, integer, text, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Singleton table holding platform-wide app settings.
@@ -34,6 +35,11 @@ export const appSettingsTable = pgTable("app_settings", {
   webPushPublicKey: text("web_push_public_key"),
   webPushPrivateKey: text("web_push_private_key"),
   webPushSubject: text("web_push_subject"),
+  // Task #506 — WhatsApp Web QR global feature flag (platform kill-switch).
+  // When false, no restaurant can use Web QR regardless of plan.
+  whatsappWebQrGlobalEnabled: boolean("whatsapp_web_qr_global_enabled").notNull().default(false),
+  /** Optional set of plan slugs that may use Web QR. Empty array = plan flag is the only gate. */
+  whatsappWebQrAllowedPlans: text("whatsapp_web_qr_allowed_plans").array().notNull().default(sql`ARRAY[]::text[]`),
   // Footer & Social
   footerText: text("footer_text"),
   socialLinks: jsonb("social_links").$type<Record<string, string>>().notNull().default({}),

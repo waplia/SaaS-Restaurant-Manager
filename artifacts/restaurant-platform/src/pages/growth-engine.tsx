@@ -542,6 +542,7 @@ function CampaignEditor({ campaign, onChange, onSave, saving }: {
           </Select>
         </Field>
       </div>
+      {campaign.channel === "whatsapp" && <WhatsAppProviderBanner />}
       {(campaign.channel === "email" || campaign.channel === "push") && (
         <Field label="Subject / title">
           <Input value={content.subject ?? ""} onChange={e => patchContent({ subject: e.target.value })} data-testid="input-subject" />
@@ -688,6 +689,40 @@ function BreakdownCard({ title, icon: Icon, data, labelFor }: {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function WhatsAppProviderBanner() {
+  const rid = useRestaurantId();
+  type ProviderInfo = { providerType: "cloud_api" | "web_qr" | "disabled" };
+  type SessionInfo = { session: { status: string } | null };
+  const provider = useQuery<ProviderInfo>({
+    queryKey: ["wa-provider", rid],
+    queryFn: () => apiGet<ProviderInfo>(`/restaurants/${rid}/whatsapp/provider-settings`),
+    enabled: !!rid,
+  });
+  const session = useQuery<SessionInfo>({
+    queryKey: ["wa-web-qr-status", rid],
+    queryFn: () => apiGet<SessionInfo>(`/restaurants/${rid}/whatsapp/web-qr/status`),
+    enabled: !!rid && provider.data?.providerType === "web_qr",
+    refetchInterval: 10000,
+  });
+  if (!provider.data) return null;
+  const p = provider.data.providerType;
+  if (p === "disabled") {
+    return <div className="rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs p-2.5">WhatsApp is disabled for this restaurant. Enable a provider in Settings → WhatsApp before scheduling this campaign.</div>;
+  }
+  if (p === "cloud_api") {
+    return <div className="rounded-md border border-border bg-muted/30 text-xs p-2.5">Provider: <strong>Meta Cloud API</strong> — campaigns use approved templates and respect plan monthly limits.</div>;
+  }
+  const status = session.data?.session?.status;
+  const connected = status === "connected";
+  return (
+    <div className={`rounded-md border text-xs p-2.5 ${connected ? "border-border bg-muted/30" : "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200"}`}>
+      Provider: <strong>WhatsApp Web QR</strong> — {connected
+        ? "session is connected. Campaign will send with safe-send caps and quiet hours applied."
+        : `session is "${status ?? "disconnected"}". Campaign sends will be paused until the QR session reconnects (Settings → WhatsApp).`}
+    </div>
   );
 }
 

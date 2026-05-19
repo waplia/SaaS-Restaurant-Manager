@@ -28,7 +28,21 @@ import {
   findWebhookCredsForVerify,
   processWebhookEvent,
   getWebhookUrl,
+  isWebQrAllowed,
+  resolveProviderType,
 } from "../lib/whatsapp";
+import {
+  startSession as startWebQrSession,
+  disconnectSession as disconnectWebQrSession,
+  getPublicSessionView as getWebQrSessionView,
+  listAllSessions as listAllWebQrSessions,
+  isWebQrLibraryAvailable,
+} from "../lib/whatsappWebQr";
+import {
+  appSettingsTable,
+  whatsappSessionsTable,
+  whatsappSessionLogsTable,
+} from "../lib/db";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -512,6 +526,309 @@ router.post("/restaurants/:restaurantId/whatsapp/announce", requireRole("owner",
     details: `sent=${sent} failed=${failed} blocked=${blocked}`,
   });
   res.json({ sent, failed, blocked, total: recipients.length });
+});
+
+// ─── Provider settings (Task #506) ────────────────────────────────────
+
+const REPLIT_DEV_WARNING = process.env.REPLIT_DEV_DOMAIN
+  ? "Heads up: this is a Replit dev environment. Long-running WhatsApp Web sessions need a persistent server process and may not survive a sleep/restart cycle. Use the Cloud API provider for production, or deploy to a host that guarantees long-lived processes."
+  : null;
+
+const VALID_PROVIDER_TYPES = new Set(["cloud_api", "web_qr", "disabled"]);
+
+router.get("/restaurants/:restaurantId/whatsapp/provider-settings", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const row = await getRestaurantSettings(rid);
+  const allowance = await isWebQrAllowed(rid);
+  const libAvail = await isWebQrLibraryAvailable();
+  res.json({
+    providerType: row?.providerType ?? "cloud_api",
+    webQrAllowed: allowance.allowed,
+    webQrAllowedReason: allowance.allowed ? null : allowance.reason ?? null,
+    webQrLibraryAvailable: libAvail,
+    replitDevWarning: REPLIT_DEV_WARNING,
+  });
+});
+
+router.patch("/restaurants/:restaurantId/whatsapp/provider-settings", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const { providerType } = req.body as { providerType?: string };
+  if (!providerType || !VALID_PROVIDER_TYPES.has(providerType)) {
+    return void res.status(400).json({ error: "providerType must be one of cloud_api | web_qr | disabled" });
+  }
+  if (providerType === "web_qr") {
+    const allowance = await isWebQrAllowed(rid);
+    if (!allowance.allowed && !req.user?.isSuperAdmin) {
+      return void res.status(403).json({ error: allowance.reason ?? "Web QR provider is not available for this restaurant" });
+    }
+  }
+  const row = await upsertSettings("restaurant", rid, { providerType } as never, req.user?.sub ?? null);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: rid,
+    action: "whatsapp.provider.changed",
+    entity: "whatsapp_settings",
+    entityId: row.id,
+    details: `providerType=${providerType}`,
+  });
+  res.json({ providerType: row.providerType });
+});
+
+router.get("/restaurants/:restaurantId/whatsapp/safe-send", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const row = await getRestaurantSettings(rid);
+  res.json({
+    safeSendDailyCap: row?.safeSendDailyCap ?? 0,
+    safeSendHourlyCap: row?.safeSendHourlyCap ?? 0,
+    safeSendMinDelaySec: row?.safeSendMinDelaySec ?? 0,
+    safeSendQuietStart: row?.safeSendQuietStart ?? null,
+    safeSendQuietEnd: row?.safeSendQuietEnd ?? null,
+    safeSendDuplicateWindowSec: row?.safeSendDuplicateWindowSec ?? 0,
+    marketingAllowed: row?.marketingAllowed ?? true,
+    marketingOptInRequired: row?.marketingOptInRequired ?? true,
+  });
+});
+
+router.patch("/restaurants/:restaurantId/whatsapp/safe-send", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const b = req.body as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  const numKeys = ["safeSendDailyCap", "safeSendHourlyCap", "safeSendMinDelaySec", "safeSendDuplicateWindowSec"];
+  for (const k of numKeys) {
+    if (k in b) {
+      const v = Number(b[k]);
+      if (!Number.isFinite(v) || v < 0) return void res.status(400).json({ error: `${k} must be a non-negative integer` });
+      patch[k] = Math.floor(v);
+    }
+  }
+  for (const k of ["safeSendQuietStart", "safeSendQuietEnd"]) {
+    if (k in b) {
+      const v = b[k];
+      if (v !== null && (typeof v !== "string" || (v !== "" && !/^\d{1,2}:\d{2}$/.test(v)))) {
+        return void res.status(400).json({ error: `${k} must be "HH:MM" or null` });
+      }
+      patch[k] = v === "" ? null : v;
+    }
+  }
+  for (const k of ["marketingAllowed", "marketingOptInRequired"]) {
+    if (k in b) patch[k] = !!b[k];
+  }
+  const row = await upsertSettings("restaurant", rid, patch as never, req.user?.sub ?? null);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: rid,
+    action: "whatsapp.safe_send.updated",
+    entity: "whatsapp_settings",
+    entityId: row.id,
+  });
+  res.json({ ok: true });
+});
+
+// ─── Web QR session (Task #506) ───────────────────────────────────────
+
+// Per-restaurant minimum interval (sec) between QR start attempts to keep callers honest.
+const QR_START_MIN_INTERVAL_SEC = 5;
+const lastQrStartAt = new Map<number, number>();
+
+router.get("/restaurants/:restaurantId/whatsapp/web-qr/status", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const allowance = await isWebQrAllowed(rid);
+  const libAvail = await isWebQrLibraryAvailable();
+  const session = await getWebQrSessionView(rid);
+  res.json({
+    session,
+    allowed: allowance.allowed,
+    reason: allowance.reason ?? null,
+    libraryAvailable: libAvail,
+    replitDevWarning: REPLIT_DEV_WARNING,
+  });
+});
+
+router.post("/restaurants/:restaurantId/whatsapp/web-qr/start", requireRole("owner", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const allowance = await isWebQrAllowed(rid);
+  if (!allowance.allowed && !req.user?.isSuperAdmin) {
+    return void res.status(403).json({ error: allowance.reason ?? "Web QR is not available for this restaurant" });
+  }
+  const last = lastQrStartAt.get(rid) ?? 0;
+  if (Date.now() - last < QR_START_MIN_INTERVAL_SEC * 1000) {
+    return void res.status(429).json({ error: `Please wait ${QR_START_MIN_INTERVAL_SEC}s between QR generation attempts.` });
+  }
+  lastQrStartAt.set(rid, Date.now());
+  const session = await startWebQrSession(rid, req.user?.sub ?? null);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: rid,
+    action: "whatsapp.web_qr.start",
+    entity: "whatsapp_sessions",
+    details: `status=${session.status}`,
+  });
+  res.json(session);
+});
+
+router.post("/restaurants/:restaurantId/whatsapp/web-qr/reconnect", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const session = await startWebQrSession(rid, req.user?.sub ?? null);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: rid,
+    action: "whatsapp.web_qr.reconnect",
+    entity: "whatsapp_sessions",
+    details: `status=${session.status}`,
+  });
+  res.json(session);
+});
+
+router.post("/restaurants/:restaurantId/whatsapp/web-qr/disconnect", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  await disconnectWebQrSession(rid, req.user?.sub ?? null, false);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: rid,
+    action: "whatsapp.web_qr.disconnect",
+    entity: "whatsapp_sessions",
+  });
+  res.json({ ok: true });
+});
+
+router.get("/restaurants/:restaurantId/whatsapp/web-qr/logs", requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
+  const rid = Number(req.params.restaurantId);
+  const rows = await db.select().from(whatsappSessionLogsTable)
+    .where(eq(whatsappSessionLogsTable.restaurantId, rid))
+    .orderBy(desc(whatsappSessionLogsTable.createdAt))
+    .limit(100);
+  res.json({ data: rows });
+});
+
+// ─── Super-admin: Communication Providers (Task #506) ─────────────────
+
+router.get("/admin/whatsapp/web-qr/config", requireSuperAdmin, async (_req, res) => {
+  const [app] = await db.select({
+    enabled: appSettingsTable.whatsappWebQrGlobalEnabled,
+    allowedPlans: appSettingsTable.whatsappWebQrAllowedPlans,
+  }).from(appSettingsTable).where(eq(appSettingsTable.id, 1));
+  const plans = await db.select({
+    id: subscriptionPlansTable.id,
+    slug: subscriptionPlansTable.slug,
+    name: subscriptionPlansTable.name,
+    webQrEnabled: subscriptionPlansTable.whatsappWebQrEnabled,
+    webQrDailyCap: subscriptionPlansTable.whatsappWebQrDailyCap,
+    webQrMonthlyCap: subscriptionPlansTable.whatsappWebQrMonthlyCap,
+    webQrMaxSessions: subscriptionPlansTable.whatsappWebQrMaxSessions,
+  }).from(subscriptionPlansTable).orderBy(subscriptionPlansTable.name);
+  const libAvail = await isWebQrLibraryAvailable();
+  res.json({
+    globalEnabled: !!app?.enabled,
+    allowedPlans: app?.allowedPlans ?? [],
+    plans,
+    libraryAvailable: libAvail,
+    replitDevWarning: REPLIT_DEV_WARNING,
+  });
+});
+
+router.patch("/admin/whatsapp/web-qr/config", requireSuperAdmin, async (req, res) => {
+  const { globalEnabled, allowedPlans } = req.body as { globalEnabled?: boolean; allowedPlans?: string[] };
+  const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: req.user?.sub ?? null };
+  if (typeof globalEnabled === "boolean") patch.whatsappWebQrGlobalEnabled = globalEnabled;
+  if (Array.isArray(allowedPlans)) patch.whatsappWebQrAllowedPlans = allowedPlans.filter(s => typeof s === "string");
+  await db.update(appSettingsTable).set(patch).where(eq(appSettingsTable.id, 1));
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    action: "whatsapp.web_qr_global.updated",
+    entity: "app_settings",
+    details: `globalEnabled=${globalEnabled ?? "(unchanged)"}`,
+  });
+  res.json({ ok: true });
+});
+
+router.patch("/admin/whatsapp/web-qr/plans/:planId", requireSuperAdmin, async (req, res) => {
+  const planId = parseInt1(req.params.planId);
+  if (!planId) return void res.status(400).json({ error: "Invalid planId" });
+  const b = req.body as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  if ("webQrEnabled" in b) patch.whatsappWebQrEnabled = !!b.webQrEnabled;
+  for (const [src, dst] of [["webQrDailyCap", "whatsappWebQrDailyCap"], ["webQrMonthlyCap", "whatsappWebQrMonthlyCap"], ["webQrMaxSessions", "whatsappWebQrMaxSessions"]] as const) {
+    if (src in b) {
+      const v = Number(b[src]);
+      if (!Number.isFinite(v) || v < 0) return void res.status(400).json({ error: `${src} must be a non-negative integer` });
+      patch[dst] = Math.floor(v);
+    }
+  }
+  await db.update(subscriptionPlansTable).set(patch).where(eq(subscriptionPlansTable.id, planId));
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    action: "whatsapp.web_qr_plan.updated",
+    entity: "subscription_plans",
+    entityId: planId,
+  });
+  res.json({ ok: true });
+});
+
+router.get("/admin/whatsapp/web-qr/sessions", requireSuperAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: whatsappSessionsTable.id,
+    restaurantId: whatsappSessionsTable.restaurantId,
+    restaurantName: restaurantsTable.name,
+    tenantId: restaurantsTable.tenantId,
+    tenantName: tenantsTable.name,
+    status: whatsappSessionsTable.status,
+    phone: whatsappSessionsTable.phone,
+    profileName: whatsappSessionsTable.profileName,
+    lastConnectedAt: whatsappSessionsTable.lastConnectedAt,
+    lastDisconnectedAt: whatsappSessionsTable.lastDisconnectedAt,
+    lastHeartbeatAt: whatsappSessionsTable.lastHeartbeatAt,
+    lastError: whatsappSessionsTable.lastError,
+  })
+    .from(whatsappSessionsTable)
+    .leftJoin(restaurantsTable, eq(restaurantsTable.id, whatsappSessionsTable.restaurantId))
+    .leftJoin(tenantsTable, eq(tenantsTable.id, restaurantsTable.tenantId))
+    .orderBy(desc(whatsappSessionsTable.updatedAt))
+    .limit(500);
+  // Annotate liveness from the in-process map.
+  const live = await listAllWebQrSessions();
+  const liveMap = new Map(live.map(s => [s.restaurantId, s.live]));
+  res.json({ data: rows.map(r => ({ ...r, live: !!liveMap.get(r.restaurantId) })) });
+});
+
+router.post("/admin/whatsapp/web-qr/sessions/:id/disconnect", requireSuperAdmin, async (req, res) => {
+  const id = parseInt1(req.params.id);
+  if (!id) return void res.status(400).json({ error: "Invalid id" });
+  const [row] = await db.select({ rid: whatsappSessionsTable.restaurantId }).from(whatsappSessionsTable).where(eq(whatsappSessionsTable.id, id));
+  if (!row) return void res.status(404).json({ error: "Session not found" });
+  await disconnectWebQrSession(row.rid, req.user?.sub ?? null, true);
+  await db.insert(auditLogsTable).values({
+    userId: req.user?.sub ?? null,
+    restaurantId: row.rid,
+    action: "whatsapp.web_qr.force_disconnect",
+    entity: "whatsapp_sessions",
+    entityId: id,
+  });
+  res.json({ ok: true });
+});
+
+router.get("/admin/whatsapp/web-qr/usage", requireSuperAdmin, async (_req, res) => {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  // Per-provider breakdown for the current month.
+  const rows = await db.select({
+    provider: whatsappLogsTable.provider,
+    status: whatsappLogsTable.status,
+    count: sql<number>`count(*)::int`,
+  })
+    .from(whatsappLogsTable)
+    .where(sql`extract(year from ${whatsappLogsTable.createdAt}) = ${year} AND extract(month from ${whatsappLogsTable.createdAt}) = ${month}`)
+    .groupBy(whatsappLogsTable.provider, whatsappLogsTable.status);
+  const summary: Record<string, { sent: number; failed: number; blocked: number; total: number }> = {};
+  for (const r of rows) {
+    const p = r.provider ?? "cloud_api";
+    if (!summary[p]) summary[p] = { sent: 0, failed: 0, blocked: 0, total: 0 };
+    if (r.status === "sent" || r.status === "delivered" || r.status === "read") summary[p].sent += Number(r.count);
+    else if (r.status === "failed") summary[p].failed += Number(r.count);
+    else if (r.status === "blocked") summary[p].blocked += Number(r.count);
+    summary[p].total += Number(r.count);
+  }
+  res.json({ period: { year, month }, summary });
 });
 
 export default router;

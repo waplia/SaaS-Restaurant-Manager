@@ -28,6 +28,11 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   trialDays: integer("trial_days").notNull().default(14),
   smsMonthlyLimit: integer("sms_monthly_limit").notNull().default(0),
   whatsappMonthlyLimit: integer("whatsapp_monthly_limit").notNull().default(0),
+  // Task #506 — WhatsApp Web QR provider plan limits.
+  whatsappWebQrEnabled: boolean("whatsapp_web_qr_enabled").notNull().default(false),
+  whatsappWebQrDailyCap: integer("whatsapp_web_qr_daily_cap").notNull().default(0),
+  whatsappWebQrMonthlyCap: integer("whatsapp_web_qr_monthly_cap").notNull().default(0),
+  whatsappWebQrMaxSessions: integer("whatsapp_web_qr_max_sessions").notNull().default(1),
   // Task #414 — Email Center plan limits.
   emailMonthlyLimit: integer("email_monthly_limit").notNull().default(1000),
   emailMarketingMonthlyLimit: integer("email_marketing_monthly_limit").notNull().default(0),

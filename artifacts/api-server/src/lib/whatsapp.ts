@@ -8,10 +8,14 @@ import {
   restaurantsTable,
   tenantsTable,
   subscriptionPlansTable,
+  appSettingsTable,
   type WhatsAppSetting,
   type WhatsAppLog,
 } from "./db";
 import { logger } from "./logger";
+import { applySafeSendGuards, type SafeSendCategory } from "./whatsappSafeSend";
+import { sendTextViaWebQr, isSessionConnected } from "./whatsappWebQr";
+import type { WhatsAppProviderType } from "./whatsappProviders";
 
 export type WhatsAppScope = "platform" | "restaurant";
 
@@ -87,6 +91,18 @@ export async function upsertSettings(
     }
   }
 
+  // Safe-send + provider type columns. These are optional; we only update
+  // fields that were explicitly provided in `patch` so callers can PATCH a
+  // subset without wiping unrelated settings.
+  const safeSendKeys = [
+    "providerType",
+    "safeSendDailyCap", "safeSendHourlyCap", "safeSendMinDelaySec",
+    "safeSendQuietStart", "safeSendQuietEnd", "safeSendDuplicateWindowSec",
+    "marketingAllowed", "marketingOptInRequired",
+  ] as const;
+  const safePatch: Record<string, unknown> = {};
+  for (const k of safeSendKeys) if (k in patch) safePatch[k] = (patch as Record<string, unknown>)[k];
+
   if (existing) {
     const [row] = await db.update(whatsappSettingsTable).set({
       isEnabled: merged.isEnabled as boolean ?? existing.isEnabled,
@@ -97,6 +113,7 @@ export async function upsertSettings(
       wabaId: merged.wabaId as string | null ?? null,
       businessId: merged.businessId as string | null ?? null,
       webhookVerifyToken: merged.webhookVerifyToken as string | null ?? null,
+      ...safePatch,
       updatedBy: userId,
       updatedAt: new Date(),
     }).where(eq(whatsappSettingsTable.id, existing.id)).returning();
@@ -113,6 +130,7 @@ export async function upsertSettings(
     wabaId: (patch.wabaId as string | null) ?? null,
     businessId: (patch.businessId as string | null) ?? null,
     webhookVerifyToken: (patch.webhookVerifyToken as string | null) ?? null,
+    ...safePatch,
     updatedBy: userId,
   }).returning();
   return row;
@@ -353,6 +371,10 @@ export interface SendOptions {
   sentBy?: number | null;
   /** When true, skip the quota enforcement (super-admin test sends, system messages). */
   skipQuota?: boolean;
+  /** Classify the send so safe-send guards (opt-in, quiet hours, marketing flag) apply correctly. Defaults to "transactional". */
+  category?: SafeSendCategory;
+  /** Override the provider pipeline (used by campaign retries and tests). Falls back to the restaurant's whatsapp_settings.providerType. */
+  providerOverride?: WhatsAppProviderType;
 }
 
 export interface SendResult {
@@ -362,94 +384,153 @@ export interface SendResult {
   error?: string;
 }
 
+/** Resolve the provider pipeline for a restaurant; defaults to "cloud_api". */
+export async function resolveProviderType(restaurantId: number | null): Promise<WhatsAppProviderType> {
+  if (!restaurantId) return "cloud_api";
+  const row = await getRestaurantSettings(restaurantId);
+  const t = (row?.providerType ?? "cloud_api") as WhatsAppProviderType;
+  if (t === "cloud_api" || t === "web_qr" || t === "disabled") return t;
+  return "cloud_api";
+}
+
+/** Returns true when Web QR is globally enabled AND the tenant's plan permits it. */
+export async function isWebQrAllowed(restaurantId: number): Promise<{ allowed: boolean; reason?: string }> {
+  const [app] = await db.select({
+    on: appSettingsTable.whatsappWebQrGlobalEnabled,
+    allowedPlans: appSettingsTable.whatsappWebQrAllowedPlans,
+  }).from(appSettingsTable).where(eq(appSettingsTable.id, 1));
+  if (!app?.on) return { allowed: false, reason: "Web QR is disabled platform-wide." };
+  const [r] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  if (!r) return { allowed: false, reason: "Unknown restaurant." };
+  const [tenant] = await db.select({ planId: tenantsTable.planId }).from(tenantsTable).where(eq(tenantsTable.id, r.tenantId));
+  if (!tenant?.planId) return { allowed: false, reason: "No active plan." };
+  const [plan] = await db.select({
+    slug: subscriptionPlansTable.slug,
+    on: subscriptionPlansTable.whatsappWebQrEnabled,
+  }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+  if (!plan) return { allowed: false, reason: "Plan not found." };
+  const list = app.allowedPlans ?? [];
+  if (list.length > 0 && !list.includes(plan.slug)) return { allowed: false, reason: "Your plan is not on the Web QR allow-list." };
+  if (!plan.on) return { allowed: false, reason: "Your plan does not include WhatsApp Web QR." };
+  return { allowed: true };
+}
+
+async function insertLog(opts: SendOptions, provider: WhatsAppProviderType, status: SendResult["status"], extra: { providerMessageId?: string | null; reason?: string | null }): Promise<number> {
+  const [row] = await db.insert(whatsappLogsTable).values({
+    restaurantId: opts.restaurantId,
+    tenantId: opts.tenantId ?? null,
+    provider,
+    recipient: opts.to,
+    templateName: opts.templateName ?? null,
+    templateLanguage: opts.templateLanguage ?? null,
+    body: opts.body ?? null,
+    status,
+    providerMessageId: extra.providerMessageId ?? null,
+    reason: extra.reason ?? null,
+    meta: opts.meta ?? {},
+    sentBy: opts.sentBy ?? null,
+  }).returning({ id: whatsappLogsTable.id });
+  return row.id;
+}
+
 /**
- * Unified send entrypoint. Resolves credentials, enforces enable + monthly
- * limit, performs the Meta API call, writes a log row, and updates usage.
+ * Unified send entrypoint. Resolves provider, enforces enable + monthly
+ * limit + safe-send guards, performs the send via the chosen provider,
+ * writes a log row, and updates usage. The Cloud API path is byte-for-byte
+ * the same Meta Graph call as before — restaurants still on `cloud_api`
+ * see no behavioural change.
  */
 export async function sendWhatsAppMessage(opts: SendOptions): Promise<SendResult> {
   const restaurantId = opts.restaurantId;
-  let creds: ResolvedWhatsAppCreds;
-  if (restaurantId) {
-    creds = await resolveCredsForRestaurant(restaurantId);
-  } else {
-    creds = await platformAsCreds();
-  }
+  const category = opts.category ?? "transactional";
 
-  // Enforce enabled.
-  if (!creds.enabled) {
-    const [logRow] = await db.insert(whatsappLogsTable).values({
-      restaurantId,
-      tenantId: opts.tenantId ?? null,
-      recipient: opts.to,
-      templateName: opts.templateName ?? null,
-      templateLanguage: opts.templateLanguage ?? null,
-      body: opts.body ?? null,
-      status: "blocked",
-      reason: "disabled",
-      meta: opts.meta ?? {},
-      sentBy: opts.sentBy ?? null,
-    }).returning();
+  // Resolve provider pipeline. Restaurant-less platform sends (super-admin
+  // tests, owner-tenant announcements) always use Cloud API.
+  const providerType: WhatsAppProviderType = opts.providerOverride
+    ?? (restaurantId ? await resolveProviderType(restaurantId) : "cloud_api");
+
+  if (providerType === "disabled") {
+    const logId = await insertLog(opts, "cloud_api", "blocked", { reason: "disabled" });
     if (restaurantId) await bumpUsage(restaurantId, "blocked");
-    return { status: "blocked", logId: logRow.id, providerMessageId: null, error: "WhatsApp is not enabled" };
+    return { status: "blocked", logId, providerMessageId: null, error: "WhatsApp provider is set to Disabled" };
   }
 
-  // Enforce quota for restaurant-scoped sends.
+  // Quota enforcement (universal, both providers).
   if (restaurantId && !opts.skipQuota) {
     const usage = await getUsage(restaurantId);
     if (usage.limit > 0 && usage.sent >= usage.limit) {
-      const [logRow] = await db.insert(whatsappLogsTable).values({
-        restaurantId,
-        tenantId: opts.tenantId ?? null,
-        recipient: opts.to,
-        templateName: opts.templateName ?? null,
-        templateLanguage: opts.templateLanguage ?? null,
-        body: opts.body ?? null,
-        status: "blocked",
-        reason: "quota",
-        meta: opts.meta ?? {},
-        sentBy: opts.sentBy ?? null,
-      }).returning();
+      const logId = await insertLog(opts, providerType, "blocked", { reason: "quota" });
       await bumpUsage(restaurantId, "blocked");
-      return { status: "blocked", logId: logRow.id, providerMessageId: null, error: "Monthly WhatsApp quota exceeded" };
+      return { status: "blocked", logId, providerMessageId: null, error: "Monthly WhatsApp quota exceeded" };
     }
   }
 
-  // Send via Meta.
+  // Safe-send guards (rate limits, opt-in, marketing, quiet hours, dup-window).
+  // Skipped only when callers explicitly bypass quota (system pings, tests).
+  if (restaurantId && !opts.skipQuota) {
+    const settings = await getRestaurantSettings(restaurantId);
+    if (settings) {
+      const verdict = await applySafeSendGuards({
+        restaurantId, settings, to: opts.to, body: opts.body ?? null, templateName: opts.templateName ?? null, category,
+      });
+      if (!verdict.ok) {
+        const logId = await insertLog(opts, providerType, "blocked", { reason: verdict.reason ?? "safe_send" });
+        await bumpUsage(restaurantId, "blocked");
+        return { status: "blocked", logId, providerMessageId: null, error: `Blocked by safe-send rule: ${verdict.reason}` };
+      }
+    }
+  }
+
+  if (providerType === "web_qr") {
+    if (!restaurantId) {
+      const logId = await insertLog(opts, "web_qr", "blocked", { reason: "no_session" });
+      return { status: "blocked", logId, providerMessageId: null, error: "Web QR requires a restaurant context" };
+    }
+    if (!isSessionConnected(restaurantId)) {
+      const logId = await insertLog(opts, "web_qr", "blocked", { reason: "no_session" });
+      await bumpUsage(restaurantId, "blocked");
+      return { status: "blocked", logId, providerMessageId: null, error: "WhatsApp Web session is not connected" };
+    }
+    try {
+      const res = await sendTextViaWebQr(restaurantId, opts.to, opts.body ?? "");
+      const logId = await insertLog(opts, "web_qr", "sent", { providerMessageId: res.messageId });
+      await bumpUsage(restaurantId, "success");
+      return { status: "sent", logId, providerMessageId: res.messageId };
+    } catch (err) {
+      const message = (err as Error).message;
+      logger.error({ err, to: opts.to, restaurantId }, "WhatsApp Web QR send failed");
+      const reason = message === "no_session" ? "no_session" : message;
+      const status: SendResult["status"] = message === "no_session" ? "blocked" : "failed";
+      const logId = await insertLog(opts, "web_qr", status, { reason });
+      if (status === "blocked") await bumpUsage(restaurantId, "blocked"); else await bumpUsage(restaurantId, "failure");
+      return { status, logId, providerMessageId: null, error: message };
+    }
+  }
+
+  // ─── Cloud API path (unchanged) ─────────────────────────────────────
+  const creds: ResolvedWhatsAppCreds = restaurantId
+    ? await resolveCredsForRestaurant(restaurantId)
+    : await platformAsCreds();
+
+  if (!creds.enabled) {
+    const logId = await insertLog(opts, "cloud_api", "blocked", { reason: "disabled" });
+    if (restaurantId) await bumpUsage(restaurantId, "blocked");
+    return { status: "blocked", logId, providerMessageId: null, error: "WhatsApp is not enabled" };
+  }
+
   try {
     const res = opts.templateName
       ? await metaSendTemplate(creds, opts.to, opts.templateName, opts.templateLanguage ?? "en", opts.templateVariables ?? [])
       : await metaSendText(creds, opts.to, opts.body ?? "");
-    const [logRow] = await db.insert(whatsappLogsTable).values({
-      restaurantId,
-      tenantId: opts.tenantId ?? null,
-      recipient: opts.to,
-      templateName: opts.templateName ?? null,
-      templateLanguage: opts.templateLanguage ?? null,
-      body: opts.body ?? null,
-      status: "sent",
-      providerMessageId: res.messageId,
-      meta: opts.meta ?? {},
-      sentBy: opts.sentBy ?? null,
-    }).returning();
+    const logId = await insertLog(opts, "cloud_api", "sent", { providerMessageId: res.messageId });
     if (restaurantId) await bumpUsage(restaurantId, "success");
-    return { status: "sent", logId: logRow.id, providerMessageId: res.messageId };
+    return { status: "sent", logId, providerMessageId: res.messageId };
   } catch (err) {
     const message = (err as Error).message;
     logger.error({ err, to: opts.to }, "WhatsApp send failed");
-    const [logRow] = await db.insert(whatsappLogsTable).values({
-      restaurantId,
-      tenantId: opts.tenantId ?? null,
-      recipient: opts.to,
-      templateName: opts.templateName ?? null,
-      templateLanguage: opts.templateLanguage ?? null,
-      body: opts.body ?? null,
-      status: "failed",
-      reason: message,
-      meta: opts.meta ?? {},
-      sentBy: opts.sentBy ?? null,
-    }).returning();
+    const logId = await insertLog(opts, "cloud_api", "failed", { reason: message });
     if (restaurantId) await bumpUsage(restaurantId, "failure");
-    return { status: "failed", logId: logRow.id, providerMessageId: null, error: message };
+    return { status: "failed", logId, providerMessageId: null, error: message };
   }
 }
 
