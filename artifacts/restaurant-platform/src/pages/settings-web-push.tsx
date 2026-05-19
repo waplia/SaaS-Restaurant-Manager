@@ -31,7 +31,8 @@ interface Settings {
   lastTestError: string | null;
 }
 interface Limits { dailyCap?: number | null; monthlyCap?: number | null; allowRichImages?: boolean; allowedFeatures?: string[] }
-interface SettingsResp { settings: Settings; limits: Limits; knownFeatures: string[]; knownEvents: string[] }
+interface FeatureMeta { key: string; label: string; description?: string }
+interface SettingsResp { settings: Settings; limits: Limits; knownFeatures: FeatureMeta[]; knownEvents: string[] }
 interface Template { id: number; eventKey: string; name: string; title: string; body: string; iconUrl: string | null; imageUrl: string | null; clickUrl: string | null; variables: string[]; isActive: boolean }
 interface Campaign { id: number; name: string; title: string; body: string; status: string; scheduledAt: string | null; sentAt: string | null; targetedCount: number; sentCount: number; failedCount: number; clickedCount: number }
 interface Subscriber { id: number; audience: string; status: string; browser: string | null; device: string | null; customerId: number | null; marketingOptIn: boolean; orderUpdatesOptIn: boolean; lastSentAt: string | null; failureCount: number; createdAt: string }
@@ -116,11 +117,17 @@ function SettingsTab() {
         <div className="font-medium">Trigger events</div>
         <div className="text-xs text-muted-foreground">Choose which events should send a Web Push notification.</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {data.knownFeatures.map(k => {
+          {data.knownFeatures.map(f => {
+            const k = typeof f === "string" ? f : f.key;
+            const label = typeof f === "string" ? k.replace(/_/g, " ").replace(/\./g, " · ") : f.label;
+            const description = typeof f === "string" ? undefined : f.description;
             const allowed = !limits.allowedFeatures || limits.allowedFeatures.includes(k);
             return (
               <label key={k} className={`flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 ${allowed ? "" : "opacity-60"}`}>
-                <span className="text-sm">{k.replace(/_/g, " ").replace(/\./g, " · ")}</span>
+                <span className="text-sm">
+                  <span>{label}</span>
+                  {description && <span className="block text-xs text-muted-foreground">{description}</span>}
+                </span>
                 <Switch disabled={!allowed} checked={!!features[k]} onCheckedChange={v => setFeature(k, v)} />
               </label>
             );
