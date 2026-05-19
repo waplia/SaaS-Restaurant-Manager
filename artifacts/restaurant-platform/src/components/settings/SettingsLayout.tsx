@@ -49,12 +49,10 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "currencies", label: "Currency & Locale", icon: Coins, ownerOnly: true },
       { key: "taxes", label: "Tax / GST", icon: Receipt, ownerOnly: true },
       { key: "about-us", label: "About Us", icon: Info },
-      { key: "billing", label: "Billing", icon: BadgeDollarSign, ownerOnly: true },
-      { key: "subscription", label: "Subscription & Plan", icon: BadgeDollarSign, href: "/settings/subscription" },
     ],
   },
   {
-    label: "Order",
+    label: "Orders",
     items: [
       { key: "app", label: "POS Preferences", icon: Cog },
       { key: "order-settings", label: "Order Settings", icon: ListChecks },
@@ -62,20 +60,23 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "kot", label: "KOT", icon: Utensils },
       { key: "receipt", label: "Invoice / Receipt", icon: Receipt },
       { key: "delivery", label: "Delivery Zones", icon: Truck },
-      { key: "customer-site", label: "QR Menu", icon: Globe },
       { key: "direct-ordering", label: "Direct Ordering", icon: ShoppingBag },
-      { key: "kiosk", label: "Kiosk", icon: Tablet },
       { key: "reservation", label: "Reservations", icon: CalendarRange },
       { key: "cancellation-reasons", label: "Cancellation Reasons", icon: Ban },
       { key: "refund-reasons", label: "Refund Reasons", icon: RefreshCw },
+      { key: "printer", label: "Printer", icon: Printer },
+      { key: "devices", label: "Devices & Hardware", icon: Printer, href: "/settings/devices" },
+      { key: "kitchens", label: "Kitchens & Stations", icon: ChefHat, href: "/settings/kitchens" },
+      { key: "token-display", label: "Token Display", icon: Hash, href: "/settings/token-display" },
     ],
   },
   {
-    label: "User & Security",
+    label: "QR Menu",
     items: [
-      { key: "account", label: "Account & Password", icon: Lock, href: "/settings/account" },
-      { key: "roles", label: "Roles & Permissions", icon: Shield, ownerOnly: true },
-      { key: "sessions", label: "Active Sessions", icon: MonitorSmartphone, href: "/settings/sessions" },
+      { key: "customer-site", label: "QR Menu", icon: Globe },
+      { key: "menu-image", label: "Menu Item Images", icon: ImageIcon },
+      { key: "allergens", label: "Allergens (EU 1169/2011)", icon: Wheat },
+      { key: "kiosk", label: "Kiosk", icon: Tablet },
     ],
   },
   {
@@ -86,25 +87,27 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     ],
   },
   {
-    label: "Hardware & Integrations",
+    label: "Payments",
     items: [
-      { key: "printer", label: "Printer", icon: Printer },
-      { key: "devices", label: "Devices & Hardware", icon: Printer, href: "/settings/devices" },
-      { key: "kitchens", label: "Kitchens & Stations", icon: ChefHat, href: "/settings/kitchens" },
-      { key: "token-display", label: "Token Display", icon: Hash, href: "/settings/token-display" },
       { key: "payment", label: "Payment Gateway", icon: CreditCard, ownerOnly: true },
       { key: "accounting", label: "Accounting", icon: Calculator, href: "/settings/accounting" },
-      { key: "api-keys", label: "API Keys", icon: KeyRound, ownerOnly: true, href: "/settings/api-keys" },
-      { key: "webhooks", label: "Webhooks", icon: Webhook, ownerOnly: true, href: "/settings/webhooks" },
-      { key: "webhook-logs", label: "Webhook Logs", icon: ScrollText, ownerOnly: true, href: "/settings/webhook-logs" },
-      { key: "api-logs", label: "API Usage Logs", icon: Activity, ownerOnly: true, href: "/settings/api-logs" },
-      { key: "oauth-apps", label: "OAuth Apps", icon: Lock, ownerOnly: true, href: "/settings/oauth-apps" },
-      { key: "developer-docs", label: "Developer Docs", icon: BookOpen, href: "/settings/developer-docs" },
+      { key: "billing", label: "Billing", icon: BadgeDollarSign, ownerOnly: true },
+      { key: "subscription", label: "Subscription & Plan", icon: BadgeDollarSign, href: "/settings/subscription" },
     ],
   },
   {
-    label: "AI Settings",
+    label: "Users & Security",
     items: [
+      { key: "account", label: "Account & Password", icon: Lock, href: "/settings/account" },
+      { key: "roles", label: "Roles & Permissions", icon: Shield, ownerOnly: true },
+      { key: "sessions", label: "Active Sessions", icon: MonitorSmartphone, href: "/settings/sessions" },
+    ],
+  },
+  {
+    label: "Modules",
+    items: [
+      { key: "loyalty", label: "Loyalty Program", icon: Heart, ownerOnly: true },
+      { key: "discounts", label: "Discounts & Coupons", icon: BadgeDollarSign, ownerOnly: true },
       { key: "ai", label: "Khana AI Preferences", icon: Sparkles, ownerOnly: true },
     ],
   },
@@ -113,16 +116,18 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     items: [
       { key: "theme", label: "Theme & Branding", icon: Palette, ownerOnly: true },
       { key: "customer-app", label: "Customer App", icon: MonitorSmartphone, ownerOnly: true, href: "/settings/customer-app" },
-      { key: "menu-image", label: "Menu Item Images", icon: ImageIcon },
       { key: "downloads", label: "Downloads / Apps", icon: Download },
-      { key: "allergens", label: "Allergens (EU 1169/2011)", icon: Wheat },
     ],
   },
   {
-    label: "Module Management",
+    label: "Developer",
     items: [
-      { key: "loyalty", label: "Loyalty Program", icon: Heart, ownerOnly: true },
-      { key: "discounts", label: "Discounts & Coupons", icon: BadgeDollarSign, ownerOnly: true },
+      { key: "api-keys", label: "API Keys", icon: KeyRound, ownerOnly: true, href: "/settings/api-keys" },
+      { key: "webhooks", label: "Webhooks", icon: Webhook, ownerOnly: true, href: "/settings/webhooks" },
+      { key: "webhook-logs", label: "Webhook Logs", icon: ScrollText, ownerOnly: true, href: "/settings/webhook-logs" },
+      { key: "api-logs", label: "API Usage Logs", icon: Activity, ownerOnly: true, href: "/settings/api-logs" },
+      { key: "oauth-apps", label: "OAuth Apps", icon: Lock, ownerOnly: true, href: "/settings/oauth-apps" },
+      { key: "developer-docs", label: "Developer Docs", icon: BookOpen, href: "/settings/developer-docs" },
     ],
   },
 ];
@@ -214,6 +219,32 @@ export function SettingsLayout({ activeKey, title, subtitle, actions, children }
         <div className="flex-1 overflow-auto">
           <div className="border-b border-border px-8 py-5 flex items-start justify-between gap-4 bg-background sticky top-0 z-10">
             <div>
+              {(() => {
+                const currentGroup = SETTINGS_GROUPS.find(g =>
+                  g.items.some(it => it.key === activeKey),
+                );
+                const currentItem = currentGroup?.items.find(it => it.key === activeKey);
+                return (
+                  <nav
+                    aria-label="Breadcrumb"
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5"
+                  >
+                    <span>Settings</span>
+                    {currentGroup && (
+                      <>
+                        <span aria-hidden>›</span>
+                        <span>{currentGroup.label}</span>
+                      </>
+                    )}
+                    {currentItem && (
+                      <>
+                        <span aria-hidden>›</span>
+                        <span className="text-foreground font-medium">{currentItem.label}</span>
+                      </>
+                    )}
+                  </nav>
+                );
+              })()}
               <h1 className="text-xl font-semibold text-foreground">{title}</h1>
               {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
             </div>

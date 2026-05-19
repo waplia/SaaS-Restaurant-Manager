@@ -18,37 +18,52 @@ type LinkItem = { kind: "link"; href: string; label: string; icon: IconType; bad
 type GroupItem = { kind: "group"; key: string; label: string; icon: IconType; children: LinkItem[] };
 type NavEntry = LinkItem | GroupItem;
 
+// Super-admin sidebar — 11 spec sections (Task #492).
 const NAV: NavEntry[] = [
+  // 1. Dashboard
+  { kind: "link", href: "/admin/tenants", label: "Dashboard", icon: LayoutDashboard },
+  // 2. Restaurants
   {
-    kind: "group", key: "overview", label: "Overview", icon: LayoutDashboard,
+    kind: "group", key: "restaurants", label: "Restaurants", icon: Building2,
     children: [
-      { kind: "link", href: "/admin/tenants", label: "Dashboard", icon: LayoutDashboard },
-      { kind: "link", href: "/admin/metrics", label: "Investor Metrics", icon: TrendingUp },
-      { kind: "link", href: "/admin/health", label: "Restaurant Health", icon: Activity },
+      { kind: "link", href: "/admin/tenants", label: "Tenants", icon: Building2 },
+      { kind: "link", href: "/admin/approvals", label: "Approvals", icon: FileCheck2, badgeKey: "approvals" },
+      { kind: "link", href: "/admin/implementations", label: "Implementations", icon: ListChecks },
       { kind: "link", href: "/admin/audit-logs", label: "Audit Logs", icon: History },
     ],
   },
+  // 3. Plans & Billing
   {
-    kind: "group", key: "tenants", label: "Tenants & Plans", icon: Building2,
+    kind: "group", key: "plans_billing", label: "Plans & Billing", icon: CreditCard,
     children: [
-      { kind: "link", href: "/admin/tenants", label: "Tenants", icon: Building2 },
       { kind: "link", href: "/admin/plans", label: "Plans", icon: Package },
       { kind: "link", href: "/admin/coupons", label: "Coupons", icon: Tag },
-      { kind: "link", href: "/admin/approvals", label: "Approvals", icon: FileCheck2, badgeKey: "approvals" },
-      { kind: "link", href: "/admin/implementations", label: "Implementations", icon: ListChecks },
-    ],
-  },
-  {
-    kind: "group", key: "finance", label: "Payments & Finance", icon: CreditCard,
-    children: [
       { kind: "link", href: "/admin/payment-methods", label: "Payment Methods", icon: CreditCard },
       { kind: "link", href: "/admin/fintech", label: "Fintech", icon: Landmark },
       { kind: "link", href: "/admin/finance-partners", label: "Finance Partners", icon: Landmark },
-      { kind: "link", href: "/admin/addons", label: "Add-ons Marketplace", icon: Package },
     ],
   },
+  // 4. Feature Control
   {
-    kind: "group", key: "comm", label: "Communication", icon: Megaphone,
+    kind: "group", key: "feature_control", label: "Feature Control", icon: Settings,
+    children: [
+      { kind: "link", href: "/admin/settings", label: "App Settings", icon: Settings },
+      { kind: "link", href: "/admin/maintenance", label: "System Maintenance", icon: Wrench },
+    ],
+  },
+  // 5. AI Control Center
+  { kind: "link", href: "/admin/ai", label: "AI Control Center", icon: Brain },
+  // 6. Website & Leads
+  {
+    kind: "group", key: "website_leads", label: "Website & Leads", icon: Inbox,
+    children: [
+      { kind: "link", href: "/admin/leads", label: "Marketing Leads", icon: Inbox, badgeKey: "leads" },
+      { kind: "link", href: "/admin/blog", label: "Blog Posts", icon: FileText },
+    ],
+  },
+  // 7. Email Center
+  {
+    kind: "group", key: "email_center", label: "Email Center", icon: Mail,
     children: [
       { kind: "link", href: "/admin/notifications", label: "Notifications", icon: Megaphone },
       { kind: "link", href: "/admin/email", label: "Email", icon: Mail },
@@ -56,22 +71,24 @@ const NAV: NavEntry[] = [
       { kind: "link", href: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
     ],
   },
+  // 8. Marketplace
+  { kind: "link", href: "/admin/addons", label: "Marketplace", icon: Package },
+  // 9. Support
+  { kind: "link", href: "/admin/support", label: "Support", icon: LifeBuoy },
+  // 10. Reports
   {
-    kind: "group", key: "growth", label: "Growth", icon: Inbox,
+    kind: "group", key: "reports", label: "Reports", icon: TrendingUp,
     children: [
-      { kind: "link", href: "/admin/leads", label: "Marketing Leads", icon: Inbox, badgeKey: "leads" },
-      { kind: "link", href: "/admin/blog", label: "Blog Posts", icon: FileText },
-      { kind: "link", href: "/admin/support", label: "Support Tickets", icon: LifeBuoy },
+      { kind: "link", href: "/admin/metrics", label: "Investor Metrics", icon: TrendingUp },
+      { kind: "link", href: "/admin/health", label: "Restaurant Health", icon: Activity },
     ],
   },
+  // 11. System
   {
     kind: "group", key: "system", label: "System", icon: Wrench,
     children: [
-      { kind: "link", href: "/admin/maintenance", label: "System Maintenance", icon: Wrench },
       { kind: "link", href: "/admin/system-health", label: "System Health", icon: Activity },
       { kind: "link", href: "/admin/api-settings", label: "API & Webhooks", icon: Settings },
-      { kind: "link", href: "/admin/settings", label: "App Settings", icon: Settings },
-      { kind: "link", href: "/admin/ai", label: "AI Control Center", icon: Brain },
     ],
   },
 ];
