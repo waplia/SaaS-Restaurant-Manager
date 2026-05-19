@@ -16,6 +16,7 @@
  * production deployments unless your hosting guarantees long-lived
  * processes (and even then, treat Web QR as best-effort).
  */
+import { rm } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import {
   db,
@@ -25,6 +26,15 @@ import {
 } from "./db";
 import { logger } from "./logger";
 import { broadcastEvent } from "./socketio";
+
+function authDirFor(restaurantId: number): string {
+  return `${process.env.WA_WEB_QR_AUTH_DIR ?? ".wa-sessions"}/restaurant-${restaurantId}`;
+}
+
+async function clearAuthDir(restaurantId: number): Promise<void> {
+  try { await rm(authDirFor(restaurantId), { recursive: true, force: true }); }
+  catch (err) { logger.warn({ err, restaurantId }, "[whatsapp:web-qr] failed to clear auth dir"); }
+}
 
 export type WebQrStatus =
   | "disconnected"
@@ -181,8 +191,16 @@ export async function startSession(restaurantId: number, actorUserId: number | n
     if (typeof makeWASocket !== "function" || typeof useAuthState !== "function") {
       throw new Error("Baileys module is missing expected exports");
     }
-    const authDir = `${process.env.WA_WEB_QR_AUTH_DIR ?? ".wa-sessions"}/restaurant-${restaurantId}`;
-    const { state, saveCreds } = await useAuthState(authDir);
+    // If the previous attempt ended in a hard failure or the device was
+    // unlinked from the phone, the cached creds will keep producing
+    // "Connection Failure" forever. Clear them before re-pairing.
+    const prevRow = await loadRow(restaurantId);
+    if (prevRow && (prevRow.status === "failed" || prevRow.status === "force_disconnected"
+      || (prevRow.status === "disconnected" && prevRow.lastError && /connection failure|logged.?out|401/i.test(prevRow.lastError)))) {
+      await clearAuthDir(restaurantId);
+      await upsertRow(restaurantId, { deviceId: null, phone: null, profileName: null });
+    }
+    const { state, saveCreds } = await useAuthState(authDirFor(restaurantId));
     const sock = makeWASocket({ auth: state, printQRInTerminal: false });
     setLive(restaurantId, { client: sock, endClient: async () => {
       const end = (sock as { end?: (err?: Error) => void }).end;
@@ -214,9 +232,23 @@ export async function startSession(restaurantId: number, actorUserId: number | n
         emit(restaurantId, "whatsapp:status", { status: "connected", phone, profileName });
       }
       if (u.connection === "close") {
-        const errMsg = u.lastDisconnect?.error?.message ?? "closed";
+        const errInfo = u.lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
+        const errMsg = errInfo?.message ?? "closed";
+        const statusCode = errInfo?.output?.statusCode;
+        // 401 = loggedOut, 403 = forbidden, 405 = unauthorized device — all
+        // permanent: the cached creds are dead and any reconnect attempt
+        // will repeat "Connection Failure". Clear the auth dir so the next
+        // user-initiated start can issue a fresh QR.
+        const isPermanent = statusCode === 401 || statusCode === 403 || statusCode === 405
+          || /connection failure|logged.?out/i.test(errMsg);
+        if (isPermanent) await clearAuthDir(restaurantId);
         setLive(restaurantId, { status: "disconnected", lastError: errMsg });
-        const row = await upsertRow(restaurantId, { status: "disconnected", lastError: errMsg, lastDisconnectedAt: new Date() });
+        const row = await upsertRow(restaurantId, {
+          status: "disconnected",
+          lastError: errMsg,
+          lastDisconnectedAt: new Date(),
+          ...(isPermanent ? { deviceId: null, phone: null, profileName: null } : {}),
+        });
         await logEvent(restaurantId, row.id, "disconnected", errMsg);
         emit(restaurantId, "whatsapp:status", { status: "disconnected", error: errMsg });
       }
