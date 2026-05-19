@@ -1,0 +1,689 @@
+Add complete WhatsApp QR Web account connection feature inside KhanaLagao provider/settings system.
+
+Current requirement:
+In restaurant settings/provider options, add an option where a restaurant can connect its own WhatsApp account using WhatsApp Web QR scan. After connecting, the platform should use that connected WhatsApp session for restaurant communication features where allowed.
+
+Important:
+- Do not break existing WhatsApp Cloud API provider if already built.
+- Keep WhatsApp Cloud API and WhatsApp Web QR as separate provider options.
+- WhatsApp Web QR should be optional and restaurant-controlled.
+- Show clear warning that WhatsApp Web QR is unofficial/risk-based compared to official WhatsApp Cloud API.
+- Do not send spam.
+- Add limits, consent checks, logs, and safe sending rules.
+- Do not use mock data.
+- Build the complete flow with real connection status, QR generation, session storage, reconnect, disconnect, sending, logs, and failure handling.
+
+Feature name:
+WhatsApp Web QR Provider
+
+Placement:
+Restaurant Admin:
+Settings → Providers → WhatsApp
+or
+Settings → Communication → WhatsApp
+
+Super Admin:
+System → Communication Providers
+Feature Control → WhatsApp Web QR
+Plan Limits → WhatsApp Web QR
+
+Provider options:
+1. WhatsApp Cloud API
+2. WhatsApp Web QR
+3. Custom WhatsApp Provider if already available
+
+====================================================
+1. WHATSAPP PROVIDER SETTINGS UI
+====================================================
+
+Create a clean WhatsApp provider settings page.
+
+Restaurant Admin should see:
+
+WhatsApp Provider
+- Select Provider:
+  - WhatsApp Cloud API
+  - WhatsApp Web QR
+  - Disabled
+
+If WhatsApp Web QR selected, show:
+
+Connection Card:
+- Status: Not Connected / QR Required / Connecting / Connected / Disconnected / Expired / Error
+- Connected phone number
+- WhatsApp profile name if available
+- Last connected time
+- Last seen/session heartbeat
+- Device/session ID
+- Reconnect button
+- Disconnect button
+- Generate QR button
+- Refresh QR button
+- Test Message button
+
+Warning text:
+“WhatsApp Web QR uses your scanned WhatsApp session. For high-volume or official business messaging, WhatsApp Cloud API is recommended. Use only for opted-in contacts and avoid spam.”
+
+====================================================
+2. QR SCAN CONNECTION FLOW
+====================================================
+
+Build complete QR connection flow.
+
+Flow:
+1. Restaurant owner opens Settings → WhatsApp.
+2. Selects WhatsApp Web QR.
+3. Clicks “Generate QR”.
+4. System starts a WhatsApp Web session.
+5. QR code appears on screen.
+6. Owner scans QR from WhatsApp mobile app.
+7. Platform detects successful login.
+8. Status changes to Connected.
+9. Connected phone number/profile is shown.
+10. Test message can be sent.
+11. Session is stored securely.
+12. If session expires, show reconnect required.
+
+UI:
+- QR should auto-refresh when expired.
+- Show countdown timer for QR expiry.
+- Show “Waiting for scan…” state.
+- Show “Connected successfully” state.
+- Show “QR expired, refresh” state.
+- Show clear errors.
+
+====================================================
+3. SESSION MANAGEMENT
+====================================================
+
+Implement proper WhatsApp Web session management.
+
+Required:
+- Unique session per restaurant
+- Session linked with restaurant_id and outlet_id optional
+- Secure session storage
+- Session reconnect on server restart if possible
+- Session health check
+- Session status heartbeat
+- Manual reconnect
+- Manual logout/disconnect
+- Clear session data on disconnect
+- Prevent one restaurant from accessing another restaurant session
+
+Statuses:
+- not_connected
+- qr_pending
+- connecting
+- connected
+- disconnected
+- expired
+- failed
+- banned_or_blocked
+- logged_out
+
+Database tables suggested:
+whatsapp_sessions
+- id
+- restaurant_id
+- outlet_id nullable
+- provider_type: web_qr/cloud_api
+- session_key
+- phone_number
+- profile_name
+- status
+- qr_code_latest nullable
+- last_qr_generated_at
+- last_connected_at
+- last_heartbeat_at
+- disconnected_at
+- error_message
+- created_by
+- created_at
+- updated_at
+
+whatsapp_session_logs
+- id
+- restaurant_id
+- session_id
+- event_type
+- message
+- metadata
+- created_at
+
+====================================================
+4. BACKEND WHATSAPP WEB SERVICE
+====================================================
+
+Add backend service for WhatsApp Web QR connection.
+
+Use a WhatsApp Web automation library suitable for the existing stack, such as:
+- whatsapp-web.js
+- Baileys
+- Venom Bot
+or another stable library compatible with current backend.
+
+Important:
+- Keep implementation behind a provider adapter interface.
+- Do not mix WhatsApp Web code directly into business logic.
+- Create provider abstraction:
+  WhatsAppProvider
+  - connect()
+  - generateQR()
+  - getStatus()
+  - sendMessage()
+  - sendMedia()
+  - logout()
+  - reconnect()
+  - getLogs()
+
+Provider adapters:
+- WhatsAppCloudApiProvider
+- WhatsAppWebQrProvider
+
+====================================================
+5. SENDING MESSAGE FLOW
+====================================================
+
+Once connected, WhatsApp Web QR should support sending:
+
+Message types:
+- Plain text
+- Template-like text
+- Order notification
+- Payment reminder
+- Reservation reminder
+- Review request
+- Campaign message if allowed
+- Image/media if supported
+- PDF invoice if supported
+
+Basic send API:
+POST /api/whatsapp/send
+
+Payload:
+- restaurant_id from auth/session, not frontend trust
+- recipient_phone
+- message
+- message_type
+- source_module
+- reference_id
+- media_url optional
+- metadata optional
+
+Before sending:
+- Check provider enabled
+- Check session connected
+- Check plan/module permission
+- Check sending limits
+- Check customer consent for marketing
+- Validate phone number
+- Validate message content
+- Add to queue if needed
+
+After sending:
+- Save message log
+- Update status sent/failed
+- Show error if failed
+
+====================================================
+6. MESSAGE LOGS
+====================================================
+
+Create WhatsApp logs page.
+
+Restaurant Admin:
+Settings → Communication → WhatsApp Logs
+or
+Growth Engine → WhatsApp Logs
+
+Logs should show:
+- Recipient
+- Message preview
+- Source module
+- Status
+- Sent time
+- Failed reason
+- Provider used
+- Retry button if failed
+- Search/filter/date filter
+
+Statuses:
+- queued
+- sending
+- sent
+- delivered if available
+- read if available
+- failed
+- cancelled
+
+Database:
+whatsapp_message_logs
+- id
+- restaurant_id
+- session_id/provider_id
+- recipient_phone
+- recipient_type
+- message_type
+- source_module
+- reference_id
+- message_body
+- media_url
+- provider
+- status
+- provider_message_id
+- error_message
+- sent_at
+- delivered_at
+- read_at
+- created_at
+
+====================================================
+7. SAFE SENDING LIMITS
+====================================================
+
+Add safety limits to avoid spam and account risk.
+
+Restaurant settings:
+- Daily WhatsApp send limit
+- Hourly send limit
+- Minimum delay between messages
+- Marketing message allowed yes/no
+- Require customer opt-in yes/no
+- Quiet hours
+- Block duplicate message within X hours
+
+Super Admin plan limits:
+- WhatsApp Web QR enabled yes/no
+- Daily message limit
+- Campaign message limit
+- Bulk campaign enabled yes/no
+- Media message enabled yes/no
+- Number of connected WhatsApp sessions
+
+Example:
+Starter:
+- WhatsApp Web QR disabled or 100 messages/day
+
+Growth:
+- 500 messages/day
+
+Pro:
+- 2,000 messages/day
+
+Enterprise:
+- Custom
+
+If limit reached:
+Show:
+“Daily WhatsApp limit reached. Upgrade plan or wait until tomorrow.”
+
+====================================================
+8. CUSTOMER CONSENT AND MARKETING RULES
+====================================================
+
+For marketing messages:
+- Send only to customers with WhatsApp opt-in.
+- Do not send to opted-out customers.
+- Respect customer unsubscribe/STOP status if implemented.
+- Add opt-out handling if possible.
+
+Customer fields:
+- whatsapp_opt_in
+- whatsapp_opt_in_source
+- whatsapp_opt_in_at
+- whatsapp_opt_out
+- whatsapp_opt_out_at
+
+Transactional messages:
+Allowed only for genuine restaurant operation:
+- Order confirmation
+- Reservation confirmation
+- Payment reminder
+- Support update
+- Review request after visit if allowed
+
+Marketing messages:
+- Campaigns
+- Offers
+- Win-back
+- Festival promotions
+
+Marketing must require opt-in and restaurant setting enabled.
+
+====================================================
+9. MODULE INTEGRATIONS
+====================================================
+
+Integrate WhatsApp Web QR provider across platform modules.
+
+A. Orders
+- Send order confirmation
+- Send order ready notification
+- Send takeaway pickup notification
+- Send delivery update
+
+B. QR Menu
+- Optional customer order confirmation
+- Request bill notification to staff should be internal, not customer WhatsApp unless needed
+
+C. Reservations
+- Booking confirmation
+- Reminder
+- Cancellation
+
+D. Review Booster
+- Send review link/request after order if enabled
+- Use simple review QR flow link
+
+E. Growth Engine
+- WhatsApp campaigns using connected QR session if enabled
+- Respect limits and opt-in
+- Queue campaign messages
+- Campaign analytics
+
+F. Customers/CRM
+- Send message to customer from profile
+- WhatsApp conversation shortcut
+- Log communication
+
+G. Finance
+- Payment reminder
+- Invoice link/PDF
+- Subscription/payment due for customer if applicable
+
+H. Support
+- Support update message if enabled
+
+I. Staff
+- Staff shift notification if staff WhatsApp enabled
+- Attendance alert to owner/manager
+
+J. Super Admin
+- Super Admin can view provider usage and errors
+- Super Admin can disable WhatsApp Web QR globally
+
+====================================================
+10. CAMPAIGN SENDING WITH QR PROVIDER
+====================================================
+
+Growth Engine → WhatsApp Campaigns should support WhatsApp Web QR.
+
+Campaign flow:
+1. Select campaign.
+2. Select segment.
+3. Select sending provider: WhatsApp Web QR / Cloud API.
+4. Show connected session status.
+5. Show estimated recipients.
+6. Remove non-opted-in customers.
+7. Show daily limit and estimated time.
+8. Send test message.
+9. Schedule/send campaign.
+10. Queue messages with safe delay.
+11. Track sent/failed.
+
+Important:
+- Do not blast all messages instantly.
+- Add delay and queue.
+- Respect opt-in.
+- Stop campaign if session disconnects.
+- Resume option after reconnect.
+
+====================================================
+11. NOTIFICATIONS / ALERTS
+====================================================
+
+Add internal notifications:
+- WhatsApp session connected
+- WhatsApp session disconnected
+- QR expired
+- WhatsApp send failed
+- Daily limit reached
+- Campaign paused due to disconnected session
+- Reconnect required
+- Provider error
+- Account risk warning
+
+Show in:
+- Notification center
+- WhatsApp settings page
+- Growth campaign page
+
+====================================================
+12. ROLE PERMISSIONS
+====================================================
+
+Add permissions:
+- View WhatsApp settings
+- Connect WhatsApp Web QR
+- Disconnect WhatsApp session
+- Send test WhatsApp
+- View WhatsApp logs
+- Send one-to-one WhatsApp
+- Create WhatsApp campaign
+- Send WhatsApp campaign
+- Manage WhatsApp limits
+- View provider errors
+
+Default:
+Owner/Admin can connect/disconnect.
+Marketing manager can create/send campaigns if allowed.
+Staff/cashier cannot manage provider settings.
+
+====================================================
+13. SUPER ADMIN CONTROL
+====================================================
+
+Super Admin should control:
+
+Feature flags:
+- Enable WhatsApp Web QR globally
+- Enable per plan
+- Enable per restaurant
+- Enable bulk campaigns
+- Enable media messages
+- Max sessions per restaurant
+- Daily/hourly message limits
+- Safety delay between messages
+
+Super Admin reports:
+- Total connected sessions
+- Active sessions
+- Disconnected sessions
+- Messages sent today/month
+- Failed messages
+- Top sending restaurants
+- Provider errors
+- Risky usage alerts
+
+Super Admin actions:
+- Force disconnect restaurant session
+- Disable WhatsApp Web QR for restaurant
+- View logs
+- Adjust limits
+
+====================================================
+14. FRONTEND UX REQUIREMENTS
+====================================================
+
+WhatsApp settings page should be very clear.
+
+States:
+
+Not connected:
+- Show “Connect WhatsApp”
+- Explain QR scan process
+
+QR pending:
+- Show QR code
+- Show refresh button
+- Show expiry countdown
+
+Connected:
+- Show connected number
+- Show connected profile
+- Show green status
+- Show test message
+- Show disconnect/reconnect
+
+Disconnected:
+- Show red/yellow status
+- Show reconnect button
+- Show last error
+
+Configuration required:
+- Show clear instructions
+
+Campaign page:
+- Show connected provider status before sending
+- If not connected, show “Connect WhatsApp first”
+
+====================================================
+15. TECHNICAL RELIABILITY
+====================================================
+
+Important backend requirements:
+- WhatsApp Web sessions should run in a long-running server process.
+- Handle server restarts.
+- Handle session expired/logout.
+- Handle QR regeneration.
+- Handle message queue.
+- Handle rate limits.
+- Avoid duplicate sends.
+- Store logs.
+- Avoid blocking main request thread.
+- Use background queue if available.
+- Use WebSocket/SSE/polling to update QR and connection status in UI.
+
+If Replit/server environment does not support persistent WhatsApp sessions well:
+- Add warning.
+- Document production VPS requirements.
+- Provide PM2/Docker process instructions.
+
+====================================================
+16. SECURITY REQUIREMENTS
+====================================================
+
+- Session files/tokens must be stored securely.
+- Tenant isolation must be strict.
+- Do not expose session credentials.
+- Do not expose QR/session data to other restaurants.
+- Validate all recipient numbers.
+- Sanitize message inputs.
+- Add audit log for connect/disconnect/send campaign/settings change.
+- Rate limit QR generation and test messages.
+- Prevent unauthorized direct API access.
+
+====================================================
+17. DATABASE / API REQUIREMENTS
+====================================================
+
+Create APIs:
+
+GET /api/whatsapp/provider-settings
+PATCH /api/whatsapp/provider-settings
+
+POST /api/whatsapp/web-qr/start
+GET /api/whatsapp/web-qr/status
+GET /api/whatsapp/web-qr/qr
+POST /api/whatsapp/web-qr/reconnect
+POST /api/whatsapp/web-qr/disconnect
+POST /api/whatsapp/web-qr/test-message
+
+POST /api/whatsapp/send
+GET /api/whatsapp/logs
+POST /api/whatsapp/logs/:id/retry
+
+POST /api/whatsapp/campaigns/send
+GET /api/whatsapp/campaigns/:id/status
+
+Super Admin:
+GET /api/super-admin/whatsapp/sessions
+PATCH /api/super-admin/whatsapp/feature-control
+POST /api/super-admin/whatsapp/sessions/:id/force-disconnect
+
+Use existing API naming conventions if different.
+
+====================================================
+18. TESTING CHECKLIST
+====================================================
+
+Test full flow:
+
+A. Connection
+- Open WhatsApp settings.
+- Select WhatsApp Web QR.
+- Generate QR.
+- QR appears.
+- Scan from phone.
+- Status becomes connected.
+- Phone number/profile shows.
+- Session persists after refresh.
+
+B. Test message
+- Enter test phone number.
+- Send test message.
+- Message received.
+- Log saved.
+
+C. Order notification
+- Create order.
+- WhatsApp order confirmation sends if enabled.
+- Log saved.
+
+D. Review request
+- Complete order.
+- Send review link if enabled.
+- Log saved.
+
+E. Campaign
+- Create customer segment.
+- Select opted-in customers.
+- Send test campaign.
+- Send/schedule campaign.
+- Queue sends with delay.
+- Logs update.
+- Failed numbers show.
+
+F. Disconnect/reconnect
+- Disconnect session.
+- Sending fails with clear message.
+- Reconnect QR works.
+- Campaign pauses if disconnected.
+
+G. Limits
+- Daily/hourly limit enforced.
+- Plan lock works.
+- Upgrade screen shown if feature disabled.
+
+H. Permissions
+- Only owner/admin can connect.
+- Marketing role can campaign if allowed.
+- Unauthorized direct URL/API blocked.
+
+I. Multi-tenant
+- Restaurant A cannot see Restaurant B session/logs.
+
+====================================================
+19. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- WhatsApp Web QR provider appears in restaurant provider settings.
+- QR generation works.
+- Scan and connection status works.
+- Session is stored securely.
+- Reconnect/disconnect works.
+- Test message works.
+- Platform can send WhatsApp messages through connected session.
+- Message logs are saved.
+- Campaigns can use WhatsApp Web QR with limits and opt-in.
+- Order/review/payment/reservation modules can use provider if enabled.
+- Super Admin can control access and limits.
+- Permissions are enforced.
+- No mock-only screen remains.
+- Clear error states exist.
+- No infinite loading.
+- No exposed secrets.
+- Build passes.
+- Full flow is tested live.

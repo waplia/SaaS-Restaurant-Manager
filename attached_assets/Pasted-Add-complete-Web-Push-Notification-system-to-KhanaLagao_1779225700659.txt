@@ -1,0 +1,1050 @@
+Add complete Web Push Notification system to KhanaLagao with Super Admin provider control, restaurant enable/disable, marketing campaigns, rich images, subscriber counts, consent, logs, analytics, and full platform integration.
+
+Important:
+- All provider configuration must be in Super Admin only.
+- Restaurant admin must not enter or manage VAPID keys, Firebase keys, OneSignal keys, API keys, or any provider secrets.
+- Restaurant admin should only enable/disable allowed notification features, manage templates/campaigns, view subscribers, view logs, and use limits allowed by plan.
+- Do not break existing notification system.
+- Do not send marketing notifications unless restaurant enables it and customer/browser subscriber has opted in.
+- Use real browser push notification technology, not mock UI.
+- Add full support for image notifications, especially marketing campaign images.
+- Add total subscriber counts and opt-in analytics.
+- Add logs, consent, limits, templates, campaign analytics, and Super Admin controls.
+- Make it work across QR menu, online ordering, customer pages, restaurant admin, Super Admin, and PWA where supported.
+
+Feature name:
+Web Push Notifications / Browser Notifications
+
+Brand:
+KhanaLagao
+
+====================================================
+1. SUPER ADMIN PROVIDER CENTER
+====================================================
+
+All Web Push provider setup must be inside:
+
+Super Admin → Provider Center → Web Push
+
+Supported provider options:
+- Native Web Push with VAPID
+- Firebase FCM
+- OneSignal
+- Custom Provider
+
+Super Admin should configure:
+- Provider type
+- Provider name
+- Enable/disable
+- Public VAPID key
+- Private VAPID key
+- Firebase config / FCM keys if used
+- OneSignal App ID/API key if used
+- Default provider
+- Fallback provider
+- Default notification icon
+- Default notification badge
+- Default fallback marketing image
+- Default click URL
+- Test connection
+- Send test notification
+- Usage limits
+- Plan availability
+- Restaurant availability
+- Error logs
+
+Security:
+- Encrypt private keys and API keys.
+- Mask secrets in UI.
+- Never expose private keys or secrets to restaurant admin or frontend.
+- Audit log every provider setting change.
+
+====================================================
+2. RESTAURANT ADMIN WEB PUSH SETTINGS
+====================================================
+
+Restaurant Admin should only see simple settings.
+
+Route:
+Restaurant Admin → Settings → Communication → Web Notifications
+
+Restaurant admin can see:
+- Web Push feature status
+- Provider configured by Super Admin: Yes/No
+- Included in current plan: Yes/No
+- Restaurant toggle: On/Off
+- Usage limit
+- Usage consumed
+- Subscribers count
+- Logs
+- Test notification if allowed
+- Template/campaign access if plan allows
+
+Restaurant admin can enable/disable:
+- Customer order updates
+- Marketing push notifications
+- Review reminders
+- Loyalty/coupon notifications
+- Staff/admin web notifications
+- AI insight notifications
+- Support notifications
+
+Restaurant admin cannot see or edit:
+- VAPID private key
+- Firebase server key
+- OneSignal API key
+- Provider secrets
+- Global provider rules
+
+If provider is not configured:
+Show:
+“Web Push provider is not configured by Super Admin. Please contact support.”
+
+If plan does not allow:
+Show:
+“This feature is not included in your current plan. Upgrade to use Web Push Notifications.”
+
+====================================================
+3. PROVIDER STATUS MODEL
+====================================================
+
+Use clear provider states:
+
+- available
+- active
+- disabled_by_super_admin
+- not_configured
+- locked_by_plan
+- disabled_by_restaurant
+- error
+- limit_reached
+- consent_required
+- unsupported_browser
+
+Do not show broken forms.
+Do not keep loading forever.
+Always show clear status and next action.
+
+====================================================
+4. CUSTOMER OPT-IN FLOW
+====================================================
+
+Build proper customer/browser opt-in.
+
+Where opt-in can appear:
+- QR menu customer page
+- Online ordering page
+- Customer loyalty/profile page
+- Review page after order
+- Direct ordering website
+- Customer web app
+- PWA install flow if supported
+
+Use soft prompt before browser permission.
+
+For order updates:
+Text:
+“Get notified when your order is ready?”
+
+Buttons:
+- Allow Updates
+- Not Now
+
+For marketing:
+Text:
+“Get special offers from this restaurant?”
+
+Buttons:
+- Allow Offers
+- No Thanks
+
+Flow:
+1. Customer sees custom soft prompt.
+2. If user clicks Allow, request browser notification permission.
+3. If browser permission granted, save subscription.
+4. Store order update opt-in and/or marketing opt-in.
+5. If denied, store denied/blocked state.
+6. If unsupported browser, show graceful message.
+
+Do not force notification permission immediately.
+Do not ask repeatedly after user says Not Now.
+Add cooldown for re-prompting.
+
+====================================================
+5. PUSH SUBSCRIPTION DATABASE
+====================================================
+
+Create/update table:
+
+web_push_subscriptions
+- id
+- restaurant_id
+- outlet_id nullable
+- customer_id nullable
+- anonymous_session_id nullable
+- endpoint
+- p256dh_key
+- auth_key
+- fcm_token nullable
+- onesignal_player_id nullable
+- user_agent
+- browser
+- device_type
+- permission_status: granted/denied/default
+- order_updates_opt_in boolean
+- marketing_opt_in boolean
+- opt_in_source
+- opt_in_at
+- opt_out_at nullable
+- status: active/unsubscribed/expired/failed/inactive
+- last_seen_at
+- created_at
+- updated_at
+
+Important:
+- Active subscribers only count if status = active and permission granted.
+- Marketing campaigns only send to marketing_opt_in = true.
+- Transactional/order notifications send to order_updates_opt_in = true.
+- Expired/failed subscriptions should not be counted as active.
+
+APIs:
+POST /api/web-push/subscribe
+POST /api/web-push/unsubscribe
+GET /api/web-push/subscription-status
+PATCH /api/web-push/subscription
+
+Use existing API naming style if different.
+
+====================================================
+6. SERVICE WORKER / PWA SUPPORT
+====================================================
+
+Add or improve service worker support.
+
+Required:
+- service-worker.js
+- Push event listener
+- Notification click listener
+- Background notification display
+- Click opens correct URL
+- Focus existing tab if already open
+- Track click event
+- Handles notification actions if supported
+- Works with PWA install where supported
+- Graceful fallback for unsupported browsers
+
+Notification payload:
+{
+  title,
+  body,
+  icon,
+  badge,
+  image,
+  data: {
+    url,
+    type,
+    restaurant_id,
+    reference_id,
+    campaign_id,
+    notification_id
+  }
+}
+
+On notification click:
+- Open target URL
+- Track click
+- Mark notification clicked
+- Focus existing tab if possible
+
+====================================================
+7. RICH IMAGE NOTIFICATION SUPPORT
+====================================================
+
+Add image support for marketing and rich notifications.
+
+Support fields:
+- title
+- body
+- icon
+- badge
+- image / hero image
+- click URL
+- CTA/action buttons if browser supports
+
+Image types:
+1. Icon
+Small restaurant or KhanaLagao icon.
+
+2. Badge
+Small simple badge for Android notification bar.
+
+3. Large Marketing Image
+Hero image for offers, food banners, festival campaigns, coupons, new item launch.
+
+Marketing campaign builder should include:
+- Title
+- Body
+- Icon
+- Badge
+- Large image
+- Click URL
+- CTA label if supported
+- Preview
+- Send test notification
+
+Image rules:
+- Images must be HTTPS URLs.
+- Images should be optimized.
+- Support upload/select image.
+- Do not break notification if image fails.
+- If browser/device does not support image, fallback to icon + title + body.
+- Store image_url in templates, campaigns, logs, and payload.
+
+Recommended sizes:
+- Icon: 192x192 or 512x512 PNG/WebP
+- Badge: 96x96 PNG
+- Marketing image: 1200x630 or 1024x512 WebP/JPG
+
+Preview should show:
+- Standard notification preview
+- Rich image notification preview
+- Android-style preview
+- Fallback text-only preview
+
+====================================================
+8. WEB PUSH TEMPLATE SYSTEM
+====================================================
+
+Add editable notification templates.
+
+Super Admin:
+Provider Center / Notification Center → Global Web Push Templates
+
+Restaurant Admin:
+Growth Engine → Notification Templates
+
+Template fields:
+- Template name
+- Template type
+- Title
+- Body
+- Icon URL
+- Badge URL
+- Image URL
+- Click URL
+- CTA label
+- Variables
+- Enable/disable
+- Preview
+- Send test notification
+
+Template types:
+- Order accepted
+- Order preparing
+- Order ready
+- Order served/completed
+- Takeaway ready
+- Delivery update
+- Reservation confirmation
+- Reservation reminder
+- Review request
+- Loyalty points earned
+- Coupon reminder
+- Birthday offer
+- Win-back offer
+- Festival offer
+- New item launch
+- Staff/admin alert
+- Low stock internal alert
+- AI insight ready
+- Support ticket update
+- System announcement
+
+Variables:
+{{restaurant_name}}
+{{customer_name}}
+{{order_number}}
+{{table_number}}
+{{order_status}}
+{{estimated_time}}
+{{coupon_code}}
+{{coupon_expiry}}
+{{review_link}}
+{{reservation_time}}
+{{campaign_title}}
+{{support_ticket_id}}
+{{dashboard_url}}
+{{order_status_url}}
+{{ordering_url}}
+
+====================================================
+9. TRANSACTIONAL WEB NOTIFICATIONS
+====================================================
+
+Add transactional/customer service notifications.
+
+Customer notifications:
+- Order accepted
+- Order preparing
+- Order ready
+- Order served/completed
+- Takeaway ready
+- Delivery status update
+- Reservation confirmed
+- Reservation reminder
+- Review request after order
+- Loyalty points earned
+- Coupon expiring soon if enabled
+
+Internal restaurant notifications:
+- New QR order
+- New online order
+- Waiter request
+- Request bill
+- Kitchen delay
+- Low stock
+- Staff absent/late
+- Negative feedback
+- Payment failed
+- Support ticket update
+- AI insight ready
+
+Super Admin notifications:
+- New restaurant signup
+- New demo lead
+- Payment failed
+- Subscription expired
+- Support ticket created
+- WhatsApp provider disconnected
+- Web push provider error
+- High notification failure rate
+
+====================================================
+10. MARKETING WEB PUSH CAMPAIGNS
+====================================================
+
+Add marketing campaign feature.
+
+Restaurant Admin:
+Growth Engine → Web Push Campaigns
+
+Campaign flow:
+1. Create campaign.
+2. Select template or start blank.
+3. Write title/body.
+4. Add icon/image.
+5. Add click URL.
+6. Select customer segment.
+7. Preview notification.
+8. Send test notification.
+9. Show recipient count and opt-in breakdown.
+10. Schedule or send now.
+11. Track analytics.
+
+Customer segments:
+- All push subscribers
+- Marketing opt-in subscribers
+- VIP customers
+- Inactive customers
+- Birthday customers
+- Anniversary customers
+- Loyalty customers
+- Coupon users
+- Customers who ordered specific item
+- Customers who abandoned cart
+- Recent QR menu users
+- Review customers
+- Outlet-wise customers
+
+Campaign types:
+- Weekend offer
+- Festival offer
+- Birthday offer
+- New item launch
+- Win-back offer
+- Loyalty reward
+- Flash sale
+- Happy hour
+- Tiffin plan promotion
+- Catering promotion
+- Review request
+
+Marketing rules:
+- Send only to marketing opt-in subscribers.
+- Do not send to unsubscribed users.
+- Respect quiet hours.
+- Respect daily/monthly limits.
+- Respect frequency caps.
+- Allow unsubscribe/disable notifications.
+- Do not send marketing pushes if restaurant toggle is off.
+
+====================================================
+11. SUBSCRIBER COUNTS AND OPT-IN ANALYTICS
+====================================================
+
+Show subscriber counts clearly.
+
+Restaurant Admin dashboard / Web Push Campaign page should show:
+- Total push subscribers
+- Active subscribers
+- Marketing opt-in subscribers
+- Order update subscribers
+- Anonymous subscribers
+- Linked customer subscribers
+- Unsubscribed users
+- Expired/invalid subscriptions
+- Failed subscriptions
+- New subscribers today
+- New subscribers this month
+- Subscribers by browser
+- Subscribers by device
+- Subscribers by outlet
+- Subscriber growth chart
+
+Campaign builder should show before sending:
+- Selected customers
+- Push enabled users
+- Marketing opt-in users
+- Order update opt-in users
+- Excluded because not opted-in
+- Excluded because unsubscribed
+- Excluded because expired/failed
+- Final recipients
+- Monthly plan limit remaining
+- Estimated sends
+
+Example:
+Selected customers: 2,500
+Push enabled: 1,430
+Marketing opt-in: 1,120
+Unsubscribed: 80
+Expired/Failed: 54
+Final recipients: 1,120
+Plan remaining: 8,450 pushes
+
+Display:
+“Audience Ready: 1,120 subscribers”
+
+====================================================
+12. PUSH SUBSCRIBERS PAGE
+====================================================
+
+Create page:
+Customers → Push Subscribers
+
+Show:
+- Customer name if known
+- Phone/email if linked
+- Browser
+- Device type
+- Opt-in source
+- Permission status
+- Order update opt-in
+- Marketing opt-in
+- Last seen
+- Subscribed date
+- Unsubscribed date
+- Status: Active / Unsubscribed / Expired / Failed
+
+Filters:
+- Active
+- Marketing opt-in
+- Order updates only
+- Unsubscribed
+- Failed/expired
+- Browser
+- Device
+- Outlet
+- Date range
+
+Actions:
+- View customer
+- Unsubscribe manually
+- Export list
+- Clean failed subscriptions
+
+====================================================
+13. CAMPAIGN ANALYTICS
+====================================================
+
+After campaign send, show:
+- Targeted subscribers
+- Final recipients
+- Sent
+- Failed
+- Clicked
+- Click-through rate
+- Unsubscribed
+- Orders generated if trackable
+- Revenue generated if trackable
+- Failed reason breakdown
+- Device/browser breakdown
+
+Tables:
+web_push_campaigns
+- id
+- restaurant_id
+- title
+- body
+- icon_url
+- badge_url
+- image_url
+- click_url
+- segment_json
+- status
+- scheduled_at
+- sent_at
+- created_by
+- created_at
+- updated_at
+
+web_push_campaign_recipients
+- id
+- campaign_id
+- subscription_id
+- customer_id nullable
+- status
+- sent_at
+- clicked_at
+- failed_reason
+- created_at
+
+web_push_logs
+- id
+- restaurant_id
+- recipient_type
+- customer_id nullable
+- subscription_id
+- template_id nullable
+- campaign_id nullable
+- title
+- body
+- icon_url
+- image_url
+- click_url
+- status
+- error_message
+- sent_at
+- clicked_at
+- created_at
+
+====================================================
+14. SAFE LIMITS AND FREQUENCY CAPPING
+====================================================
+
+Restaurant settings:
+- Enable customer push notifications yes/no
+- Enable order update pushes yes/no
+- Enable marketing web push yes/no
+- Daily push limit
+- Monthly push limit
+- Max notifications per customer per day
+- Quiet hours
+- Minimum delay between campaigns
+- Allow rich image notifications yes/no
+- Require marketing opt-in yes/no
+
+Super Admin plan limits:
+- Web Push enabled yes/no
+- Monthly push limit
+- Daily push limit
+- Max active subscribers
+- Campaign scheduling enabled yes/no
+- Rich image notifications enabled yes/no
+- Segmentation enabled yes/no
+- Analytics enabled yes/no
+
+Suggested plan mapping:
+Starter:
+- Basic order update notifications only
+- Limited subscribers
+- No marketing campaigns
+
+Growth:
+- Marketing web push
+- 2,000 pushes/month
+- Basic segments
+
+Pro:
+- 20,000 pushes/month
+- Rich images
+- Scheduling
+- Advanced segments
+- Analytics
+
+Enterprise:
+- Custom limits
+- Advanced analytics
+- Multi-outlet campaigns
+- Dedicated rules
+
+If limit reached:
+Show:
+“Web Push limit reached. Upgrade plan or wait until next cycle.”
+
+====================================================
+15. NOTIFICATION CENTER IN WEB APP
+====================================================
+
+Add in-app notification center.
+
+Restaurant Admin:
+- Bell icon in header
+- Unread count
+- Notification list
+- Filter by category
+- Mark as read
+- Mark all as read
+- Click opens related page
+
+Categories:
+- Orders
+- Kitchen
+- Inventory
+- Staff
+- Customers
+- Finance
+- AI
+- Support
+- System
+
+Super Admin:
+- Global notification center
+- Leads
+- Payments
+- Support
+- Provider errors
+- System alerts
+- Restaurant issues
+
+Customer QR page:
+- Show order status updates inside the page
+- Browser push optional
+
+====================================================
+16. MODULE INTEGRATIONS
+====================================================
+
+Connect Web Push across platform.
+
+Orders:
+- Customer order status updates
+- Restaurant admin new order alert
+
+QR Menu:
+- Customer subscribe for order updates
+- Push when order accepted/preparing/ready
+
+Online Ordering:
+- Order confirmation and pickup/delivery update
+
+Reservations:
+- Confirmation/reminder
+
+Review Booster:
+- Review request after order
+
+Growth Engine:
+- Marketing push campaigns
+
+Customers:
+- Send push to customer from profile if subscribed
+- View subscriber status
+
+Staff:
+- Web notifications for tasks, shifts, alerts
+
+Inventory:
+- Low stock push
+
+Finance:
+- Payment failed/payment due alerts
+
+Khana AI:
+- AI insight ready
+- Campaign suggestion ready
+
+Support:
+- Ticket reply
+- SLA breach
+
+Super Admin:
+- Announcements to restaurant admins
+
+====================================================
+17. SUPER ADMIN CONTROL
+====================================================
+
+Super Admin should control:
+- Enable/disable Web Push globally
+- Enable/disable by plan
+- Enable/disable per restaurant
+- Provider configuration
+- Monthly/daily limits
+- Subscriber limits
+- Rich notification image access
+- Campaign access
+- Quiet hour defaults
+- Frequency caps
+- Usage reports
+- Failed notification reports
+- Force disable restaurant if abuse
+
+Super Admin reports:
+- Total subscribers across platform
+- Active subscribers
+- Marketing opt-in users
+- Subscriber growth
+- Restaurant-wise subscribers
+- Push usage by restaurant
+- Failed notifications
+- Top sending restaurants
+- Marketing opt-in rate
+- Unsubscribe rate
+- Provider health
+
+====================================================
+18. RESTAURANT ADMIN UI
+====================================================
+
+Add/upgrade UI screens:
+
+Settings → Communication → Web Notifications:
+- Enable/disable
+- Provider status
+- Plan status
+- Opt-in prompt settings
+- Quiet hours
+- Limits
+- Test notification
+
+Customers → Push Subscribers:
+- Subscriber list
+- Counts
+- Filters
+- Export
+- Status
+
+Growth Engine → Web Push Campaigns:
+- Campaign list
+- Create campaign
+- Templates
+- Segment selection
+- Preview
+- Rich image upload/select
+- Send test
+- Schedule/send
+- Analytics
+
+Reports:
+- Push usage report
+- Campaign report
+- Subscriber growth report
+
+====================================================
+19. CUSTOMER UX
+====================================================
+
+Customer QR/ordering page opt-in should be simple.
+
+Order update prompt:
+“Want order updates?”
+“Get notified when your food is ready.”
+
+Buttons:
+- Allow Updates
+- Not Now
+
+Marketing prompt:
+“Get offers from this restaurant?”
+“Receive special offers and loyalty updates.”
+
+Buttons:
+- Allow Offers
+- No Thanks
+
+Customer should be able to unsubscribe/disable from:
+- Notification settings link
+- Customer profile page
+- Unsubscribe page if clicked
+
+====================================================
+20. SECURITY AND PRIVACY
+====================================================
+
+Requirements:
+- Store push subscriptions securely.
+- Do not expose VAPID private key.
+- Do not expose FCM/OneSignal secrets.
+- Respect opt-in/opt-out.
+- Do not send marketing without consent.
+- Tenant isolation by restaurant_id.
+- Role permission for campaigns.
+- Audit log campaign sending and provider changes.
+- Rate limit campaign creation/sending.
+- Validate click URLs to prevent abuse.
+- Sanitize notification content.
+- Remove invalid subscriptions after repeated failures.
+
+====================================================
+21. API REQUIREMENTS
+====================================================
+
+Create APIs:
+
+Super Admin provider/settings:
+GET /api/super-admin/web-push/provider
+PATCH /api/super-admin/web-push/provider
+POST /api/super-admin/web-push/test
+GET /api/super-admin/web-push/usage
+PATCH /api/super-admin/web-push/feature-control
+
+Restaurant settings:
+GET /api/web-notifications/settings
+PATCH /api/web-notifications/settings
+POST /api/web-notifications/test
+
+Subscription:
+POST /api/web-push/subscribe
+POST /api/web-push/unsubscribe
+GET /api/web-push/status
+
+Templates:
+GET /api/web-notification-templates
+POST /api/web-notification-templates
+PATCH /api/web-notification-templates/:id
+DELETE /api/web-notification-templates/:id
+
+Campaigns:
+GET /api/web-push-campaigns
+POST /api/web-push-campaigns
+PATCH /api/web-push-campaigns/:id
+POST /api/web-push-campaigns/:id/test
+POST /api/web-push-campaigns/:id/send
+GET /api/web-push-campaigns/:id/analytics
+
+Subscribers:
+GET /api/web-push/subscribers
+GET /api/web-push/subscriber-counts
+PATCH /api/web-push/subscribers/:id/unsubscribe
+
+Logs:
+GET /api/web-push/logs
+POST /api/web-push/logs/:id/retry
+
+Notification center:
+GET /api/notifications
+PATCH /api/notifications/:id/read
+PATCH /api/notifications/read-all
+
+Use existing API naming style if different.
+
+====================================================
+22. TESTING CHECKLIST
+====================================================
+
+Test:
+
+A. Super Admin provider setup
+- Add VAPID/FCM/OneSignal config.
+- Save settings.
+- Keys are masked.
+- Send test notification.
+- Provider status works.
+
+B. Restaurant enable/disable
+- Restaurant sees provider status.
+- Restaurant cannot see secrets.
+- Restaurant toggles Web Push on/off.
+- Plan lock works.
+
+C. Customer subscribe
+- Open QR menu.
+- Soft prompt appears.
+- Click Allow Updates.
+- Browser permission appears.
+- Subscription saved.
+- Subscriber count updates.
+
+D. Transactional order notification
+- Customer places QR order.
+- Order accepted/preparing/ready.
+- Customer receives browser notification.
+- Click opens order status page.
+
+E. Rich image campaign
+- Create marketing campaign.
+- Upload/select image.
+- Preview rich image notification.
+- Send test.
+- Send campaign.
+- Image displays where supported.
+- Fallback works where unsupported.
+
+F. Subscriber counts
+- Total subscribers show.
+- Active subscribers show.
+- Marketing opt-in count shows.
+- Excluded users shown before campaign.
+- Final recipients count is correct.
+
+G. Marketing campaign
+- Select opted-in segment.
+- Send campaign.
+- Logs saved.
+- Click tracked.
+- Unsubscribed users excluded.
+
+H. Limits
+- Daily/monthly limits enforced.
+- Frequency cap works.
+- Quiet hours works.
+
+I. Opt-out
+- Customer unsubscribes.
+- Future marketing notification not sent.
+
+J. Notification center
+- New order alert appears.
+- Inventory alert appears.
+- Read/unread works.
+
+K. Super Admin reports
+- Platform subscriber counts.
+- Restaurant-wise usage.
+- Failed notifications.
+- Top senders.
+
+L. Browser/device
+- Chrome desktop
+- Android Chrome
+- PWA installed mode
+- Unsupported browser graceful message
+
+====================================================
+23. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Web Push provider is configured only in Super Admin.
+- Restaurant admin has no provider secret fields.
+- Customer opt-in works.
+- Subscriber counts show correctly.
+- Active/marketing/order subscriber counts are accurate.
+- Service worker receives notifications.
+- Transactional order notifications work.
+- Marketing push campaigns work only with opt-in.
+- Rich image notifications are supported with fallback.
+- Notification templates are editable.
+- Logs are saved.
+- Click tracking works.
+- Unsubscribe works.
+- Super Admin controls limits and access.
+- Plan/pricing integration exists.
+- Notification center works.
+- No mock-only screens.
+- No infinite loading.
+- No exposed secrets.
+- Build passes.
+- Full flow is tested live.
