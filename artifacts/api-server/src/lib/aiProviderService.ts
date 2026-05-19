@@ -762,6 +762,20 @@ export class AIProviderService {
           const out = await callReplicateImage(provider, model, req.prompt);
           return { ...out, providerSlug: provider.slug, model };
         }
+        case "openai": {
+          if (!provider.apiKey) throw new Error(`OpenAI provider ${provider.slug} has no API key`);
+          const { default: OpenAI } = await import("openai");
+          const client = new OpenAI({ apiKey: provider.apiKey });
+          const result = await client.images.generate({
+            model: model || "gpt-image-1",
+            prompt: req.prompt,
+            size: "1024x1024",
+            n: 1,
+          });
+          const b64 = result.data?.[0]?.b64_json;
+          if (!b64) throw new Error("OpenAI returned no image data");
+          return { b64_json: b64, mimeType: "image/png", providerSlug: provider.slug, model };
+        }
         default:
           throw new Error(`Image generation not implemented for provider kind ${provider.kind}`);
       }
