@@ -1,0 +1,853 @@
+Use this prompt:
+
+```text
+Perform a complete bug-fix, live testing, and UX/navigation reorganization of the KhanaLagao platform.
+
+Current problems:
+1. Many pages keep loading forever.
+2. Many Save/Add/Create buttons do not work after filling details.
+3. Examples: failed to add customer, stock save does nothing, forms submit but no data is saved.
+4. Some APIs may be broken, disconnected, or missing validation.
+5. Some features are placed in confusing menus like Operations, making the platform difficult to understand.
+6. The full platform needs to be rearranged into a more user-friendly, easy-to-use, workflow-based structure.
+
+Important:
+- Do not rebuild the whole project.
+- Do not remove existing working features.
+- First scan the complete project.
+- Find all loading, save, create, update, delete, API, form, database, validation, permission, and route bugs.
+- Fix all bugs properly.
+- Then reorganize the platform navigation/sidebar to make it simple and user-friendly.
+- No mock fixes.
+- No fake success messages.
+- Every Save/Add/Create button must actually save data to database and reload/update UI correctly.
+- Every feature should use real APIs and real database data.
+- Every page should have loading, error, empty, and success states.
+
+Brand:
+KhanaLagao
+
+Product:
+Restaurant OS for Modern Food Businesses
+
+====================================================
+1. FIRST DO FULL BUG AUDIT
+====================================================
+
+Scan the full platform and create a bug report before fixing.
+
+Check:
+- Frontend console errors
+- Backend/API errors
+- Failed network requests
+- Infinite loading screens
+- Broken forms
+- Broken Save/Add/Create buttons
+- Broken Edit/Delete actions
+- Missing API endpoints
+- Wrong API URLs
+- Wrong request payloads
+- Wrong response handling
+- Database insert/update errors
+- Validation errors
+- Permission errors
+- Tenant/restaurant_id/outlet_id missing
+- Role-based access issues
+- Plan/module access issues
+- Toast/success/error messages
+- Page reload/update after save
+- Empty state problems
+- Broken redirects
+- Broken routes
+- Broken imports
+- Build errors
+
+For every issue found, document:
+- Page/module
+- Action performed
+- Error shown
+- Console/API error
+- Root cause
+- Fix applied
+- Retest result
+
+====================================================
+2. FIX GLOBAL FORM/SAVE SYSTEM
+====================================================
+
+Many Save/Add/Create actions are not working. Fix this globally.
+
+For every form:
+- Customer add/edit
+- Stock add/edit
+- Inventory add/edit
+- Vendor add/edit
+- Menu item add/edit
+- Category add/edit
+- Add-ons/modifiers
+- Staff add/edit
+- Payroll save
+- Expense add/edit
+- Payment save
+- Reservation add/edit
+- Campaign create
+- Coupon create
+- Settings save
+- AI provider save
+- Email template save
+- Plan save
+- Restaurant create/edit
+- Support ticket create
+- Any other Add/Save/Create form
+
+Check:
+- Submit button triggers correct function
+- Form validation works
+- API endpoint exists
+- Payload fields match backend schema
+- Required restaurant_id/outlet_id/user_id are included
+- Backend validates and saves correctly
+- Database insert/update works
+- Success response is handled correctly
+- UI shows success toast
+- Modal closes only after success
+- List refreshes after save
+- Form errors show clearly
+- Failed request shows error message
+- Loading state stops after success/failure
+- Button is not stuck in loading state
+
+Important:
+If API fails, show real error message from backend.
+Do not silently fail.
+Do not show success if data did not save.
+
+====================================================
+3. FIX INFINITE LOADING ISSUES
+====================================================
+
+Find all pages that keep loading.
+
+For every loading page:
+- Check API call
+- Check authentication/token
+- Check route params
+- Check restaurant_id/outlet_id
+- Check loading state handling
+- Check try/catch/finally
+- Check backend response
+- Check empty data handling
+- Check permission/plan lock handling
+
+Every page must support:
+- Loading skeleton
+- Empty state
+- Error state with retry button
+- Permission denied state
+- Feature locked/upgrade state
+- Configuration required state
+
+Do not allow infinite spinner forever.
+
+====================================================
+4. FIX CUSTOMER MODULE BUGS
+====================================================
+
+Customer add is failing. Fix fully.
+
+Check:
+- Add customer form
+- Required fields
+- Phone/email uniqueness if applicable
+- Customer tags
+- Customer notes
+- Birthday/anniversary
+- Restaurant/outlet relation
+- API endpoint
+- Database schema
+- CRM list refresh
+- Customer detail page
+- Customer order history
+
+Test:
+- Add customer manually
+- Edit customer
+- Delete/archive customer
+- Search customer
+- Add customer from POS order
+- Add customer from QR order
+- Customer appears in CRM
+- Customer appears in reports
+
+====================================================
+5. FIX STOCK / INVENTORY SAVE BUGS
+====================================================
+
+Stock save does nothing. Fix fully.
+
+Check:
+- Raw material create/edit
+- Stock adjustment
+- Stock in
+- Stock out
+- Purchase order
+- Vendor selection
+- Unit selection
+- Recipe mapping
+- Low stock threshold
+- Wastage entry
+- Stock transfer
+- Inventory API
+- Database transaction
+- UI refresh after save
+
+Test:
+- Add raw material
+- Add opening stock
+- Save stock adjustment
+- Create purchase order
+- Receive stock
+- Add recipe
+- Create POS order
+- Inventory deducts
+- Low stock alert appears
+- Inventory report updates
+
+====================================================
+6. FIX MENU / POS / QR ORDER FLOW
+====================================================
+
+Check and fix:
+- Menu items load in POS
+- Item images load
+- Add-ons/modifiers load
+- Add to cart works
+- Price calculation works
+- POS order creation works
+- QR order creation works
+- KOT generation works
+- Kitchen receives order
+- Table status updates
+- Payment works
+- Invoice works
+- Reports update
+
+Test full flow:
+Menu item with image + add-ons → POS order → KOT → payment → inventory deduction → report update.
+
+Test QR flow:
+Scan table QR → item image visible → customize add-ons → cart → checkout → order reaches admin/KDS.
+
+====================================================
+7. FIX API AND BACKEND CONSISTENCY
+====================================================
+
+Audit backend routes.
+
+For every module:
+- Check route exists
+- Check method is correct
+- Check request body schema
+- Check validation
+- Check authentication
+- Check role permission
+- Check plan/module permission
+- Check restaurant_id isolation
+- Check database query
+- Check error response
+- Check success response format
+
+Create consistent API response format:
+Success:
+{
+  success: true,
+  data: ...,
+  message: "Saved successfully"
+}
+
+Error:
+{
+  success: false,
+  message: "Clear error message",
+  errors: ...
+}
+
+Frontend should handle this consistently.
+
+====================================================
+8. REORGANIZE PLATFORM NAVIGATION / SIDEBAR
+====================================================
+
+Current issue:
+Too many features are placed randomly, and features like Tiffin/Hotel/Food Court inside Operations can confuse normal restaurant users.
+
+Goal:
+Make navigation simple, clean, workflow-based, and easy for restaurant owners/staff.
+
+Do not show everything as main menus.
+Use:
+- Core daily menus visible by default
+- Advanced features inside grouped modules
+- Industry-specific features hidden unless enabled
+- Settings/configuration inside Settings
+- Add-ons/premium features inside Marketplace/Add-ons
+
+====================================================
+9. FINAL RESTAURANT ADMIN SIDEBAR STRUCTURE
+====================================================
+
+Use this new sidebar:
+
+Dashboard
+
+Sell
+- POS Terminal
+- Orders
+- Kitchen / KDS
+- Tables
+- QR Orders
+- Reservations
+- Waiter Requests
+- Delivery
+- Handheld POS
+- Curbside Pickup
+
+Menu
+- Menu Items
+- Categories
+- Combos
+- Add-ons / Modifiers
+- QR Menu
+- Item Images
+- Availability
+- Dynamic Pricing
+- Menu Analytics
+
+Inventory
+- Stock
+- Raw Materials
+- Recipes
+- Purchase Orders
+- Vendors
+- Wastage
+- Stock Transfers
+- Low Stock Alerts
+- Vendor Invoice OCR
+- Auto Reorder
+
+Customers
+- CRM
+- Feedback
+- Reviews
+- Loyalty
+- Gift Cards
+- Memberships
+- Guestbook
+- Customer Segments
+- VIP / Risk Flags
+
+Growth Engine
+- Campaigns
+- Coupons
+- Referrals
+- Email Campaigns
+- WhatsApp / SMS Campaigns
+- Festival Calendar
+- Abandoned Cart
+- Lost Sales
+- Local Area Marketing
+
+Khana AI
+- AI Dashboard
+- AI Menu Import
+- AI Descriptions
+- AI Images
+- AI Review Booster
+- AI Campaigns
+- AI Insights
+- AI Forecasting
+- AI Chat
+- AI Usage & Credits
+
+Staff
+- Staff Directory
+- Attendance
+- Shifts
+- Payroll
+- Tips
+- Staff Tasks
+- SOP & Training
+- Scheduling
+- Labor Forecasting
+- HR Compliance
+
+Finance
+- Payments
+- Expenses
+- Invoices
+- Settlements
+- Wallet
+- P&L
+- Accounting
+- Vendor Bills
+- Capital / Financing
+- Petty Cash
+- Cashier Closing
+
+Reports
+- Sales Reports
+- Order Reports
+- Menu Reports
+- Inventory Reports
+- Staff Reports
+- Customer Reports
+- Campaign Reports
+- Finance Reports
+- AI Usage Reports
+- Export Center
+
+Industry Modules
+- Tiffin / Meal Plans
+- Catering & Banquet
+- Hotel Mode
+- Food Court
+- Cloud Kitchen
+- Bakery Mode
+- Bar Mode
+- Corporate Ordering
+
+Marketplace
+- Add-ons
+- Supplier Catalog
+- White Label App
+- Integrations
+- Developer API
+
+Support
+- Tickets
+- Emergency Support
+- Help Center
+- Implementation Checklist
+
+Settings
+- Restaurant Profile
+- Outlets
+- Business Hours
+- Tax / GST
+- POS Settings
+- KOT Settings
+- QR Menu Settings
+- Table Settings
+- Delivery Settings
+- Payment Settings
+- Email / SMS / WhatsApp Settings
+- Notification Settings
+- Roles & Permissions
+- Module Settings
+- Branding
+- Audit Logs
+
+====================================================
+10. SIDEBAR UX RULES
+====================================================
+
+Make sidebar easy to use:
+
+- Keep “Sell” menu always open by default.
+- Group related features together.
+- Do not show disabled industry modules unless enabled or owner/admin is viewing add-ons.
+- Cashier should not see Finance/Settings/Staff Payroll.
+- Chef should mainly see Kitchen/KDS.
+- Waiter should see Tables, Orders, Waiter Requests.
+- Inventory manager should see Inventory only.
+- Accountant should see Finance/Reports.
+- Marketing manager should see Customers/Growth/Khana AI campaign tools.
+- Owner/admin can see all enabled modules.
+
+Add:
+- Sidebar search
+- Favorites / Quick actions
+- Collapsible groups
+- Clear icons
+- Premium badges:
+  AI
+  Premium
+  Add-on
+  Beta
+  Locked
+
+Quick actions at top:
+- New Bill
+- New Order
+- Add Menu Item
+- Add Customer
+- Add Stock
+- Create Campaign
+- Import Menu with AI
+
+====================================================
+11. INDUSTRY MODULE VISIBILITY
+====================================================
+
+Industry Modules should not confuse normal restaurants.
+
+Default:
+Hide advanced industry modules unless enabled.
+
+Industry modules:
+- Tiffin
+- Catering/Banquet
+- Hotel Mode
+- Food Court
+- Cloud Kitchen
+- Bakery
+- Bar
+- Corporate Ordering
+
+Show them only if:
+- Restaurant plan includes it
+- Super Admin enabled it
+- Restaurant owner enabled it from Add-ons/Module Settings
+
+If locked:
+Show upgrade screen with explanation, not broken page.
+
+====================================================
+12. SETTINGS REORGANIZATION
+====================================================
+
+Move configuration items into Settings.
+
+Settings groups:
+
+Business
+- Restaurant Profile
+- Outlets
+- Business Hours
+- Currency / Timezone
+- Tax / GST
+
+Orders
+- POS Settings
+- KOT Settings
+- Invoice Settings
+- Table Settings
+- Delivery Settings
+- Order Capacity
+
+QR Menu
+- QR Menu Settings
+- QR Design
+- Review QR
+- Customer Actions
+- Online Ordering
+
+Communication
+- Email Settings
+- SMS Settings
+- WhatsApp Settings
+- Notification Settings
+- Templates
+
+Payments
+- Payment Methods
+- Payment Gateway
+- Card Terminals
+- Refund Rules
+
+Users & Security
+- Roles
+- Permissions
+- Staff Access
+- Login Security
+- Audit Logs
+
+Modules
+- Enabled Modules
+- Add-ons
+- Plan Limits
+- Upgrade Options
+
+Branding
+- Logo
+- Theme Color
+- Invoice Branding
+- QR Branding
+- Customer App Branding
+
+Developer
+- API Keys
+- Webhooks
+- Integrations
+
+====================================================
+13. SUPER ADMIN NAVIGATION CLEANUP
+====================================================
+
+Rearrange Super Admin too:
+
+Dashboard
+
+Restaurants
+- All Restaurants
+- Add Restaurant
+- Onboarding
+- Usage
+- Suspended Accounts
+
+Plans & Billing
+- Plans
+- Subscriptions
+- Payments
+- Invoices
+- Add-ons
+- AI Credits
+
+Feature Control
+- Modules
+- Feature Flags
+- Plan Limits
+- Upgrade Screens
+- Beta Access
+
+AI Control Center
+- Providers
+- Models
+- API Keys
+- Credit Rules
+- Usage Logs
+- Cost Reports
+- Prompt Templates
+
+Website & Leads
+- CMS
+- Pages
+- Blog
+- Pricing Page
+- Leads
+- Demo Requests
+- Ad Landing Pages
+
+Email Center
+- Templates
+- Automations
+- Follow-up Sequences
+- Campaign Templates
+- Email Logs
+- Provider Settings
+
+Marketplace
+- Supplier Catalog
+- Add-ons
+- Integrations
+- Vendor Approvals
+
+Support
+- Tickets
+- SLA
+- Emergency Support
+- Status Page
+- Announcements
+
+Reports
+- SaaS Metrics
+- Revenue
+- Restaurant Usage
+- Feature Adoption
+- AI Usage
+- Churn Risk
+
+System
+- Admin Users
+- Roles
+- Audit Logs
+- API Logs
+- Backups
+- System Health
+- Settings
+
+====================================================
+14. ROLE-BASED MENU TEST
+====================================================
+
+Test all roles after rearranging:
+
+Owner/Admin:
+Full enabled platform.
+
+Cashier:
+Dashboard limited, Sell, POS, Orders, Tables, Customers limited.
+
+Waiter:
+Tables, Orders, Waiter Requests, Menu view.
+
+Chef:
+Kitchen/KDS only, order details limited.
+
+Inventory Manager:
+Inventory, Vendors, Purchase Orders, Wastage, Inventory Reports.
+
+HR/Payroll:
+Staff, Attendance, Scheduling, Payroll, Staff Reports.
+
+Marketing:
+Customers, Growth Engine, Email Campaigns, Khana AI campaign tools.
+
+Accountant:
+Finance, Payments, Expenses, Invoices, Reports.
+
+Super Admin:
+Full SaaS control.
+
+Direct URL access must still respect permissions.
+
+====================================================
+15. UX FIXES ACROSS ALL PAGES
+====================================================
+
+Apply these globally:
+
+- Every page should have clear title and description.
+- Every form should have required field indicators.
+- Every dropdown should load real options.
+- No raw IDs should be typed manually; use dropdown/search picker.
+- Every list should have search/filter/pagination.
+- Every empty page should show helpful empty state.
+- Every locked feature should show upgrade screen.
+- Every unconfigured integration should show configuration required state.
+- Every save action should show loading, success, or error.
+- Destructive actions need confirmation modal.
+- Tables should be responsive.
+- Mobile layout should not break.
+- Use consistent button labels:
+  Save
+  Create
+  Update
+  Cancel
+  Delete
+  Retry
+  Export
+
+====================================================
+16. NO RAW ID INPUT RULE
+====================================================
+
+Remove raw ID inputs everywhere.
+
+Instead of asking user to type:
+- customer_id
+- item_id
+- vendor_id
+- table_id
+- outlet_id
+- staff_id
+- category_id
+- plan_id
+
+Use:
+- Searchable dropdown
+- Record picker
+- Autocomplete
+- Select from real data
+- “Create new” shortcut where useful
+
+This applies to all modules.
+
+====================================================
+17. LIVE TESTING CHECKLIST
+====================================================
+
+After fixing bugs and navigation, test these live flows:
+
+A. Customer creation
+- Add customer
+- Save
+- Customer appears in list
+- Customer detail opens
+- Edit works
+
+B. Stock creation
+- Add raw material
+- Save stock
+- Stock appears
+- Adjustment works
+- Low stock alert works
+
+C. Menu + POS
+- Add menu item with image
+- Add modifiers
+- POS loads item
+- Add to cart
+- Create order
+- KOT generated
+
+D. QR Menu
+- Scan QR
+- Item images show
+- Add modifiers
+- Place order
+- Admin receives order
+
+E. Inventory deduction
+- Recipe mapped
+- POS sale deducts stock
+- Report updates
+
+F. Staff
+- Add staff
+- Attendance
+- Payroll generation
+
+G. Finance
+- Add expense
+- Payment record
+- P&L update
+
+H. Reports
+- Filters work
+- Exports work
+
+I. Super Admin
+- Create restaurant
+- Assign plan
+- Enable/disable feature
+- Locked feature upgrade screen
+
+J. Mobile app
+- Login
+- Dashboard loads real data
+- Orders load
+- Notifications show
+
+====================================================
+18. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Do not mark complete until:
+
+- No infinite loading pages remain.
+- Customer add works.
+- Stock save works.
+- All major Save/Add/Create buttons work.
+- API errors are fixed.
+- UI shows real errors when something fails.
+- Forms refresh data after save.
+- Restaurant/outlet/tenant scoping works.
+- Role permissions work.
+- Sidebar is reorganized and easy to understand.
+- Operations/industry modules are not confusing.
+- Disabled/locked modules show upgrade screen.
+- No raw ID fields remain.
+- Mobile responsive layout works.
+- Build passes.
+- Console has no major errors.
+- All critical flows are retested with real data.
+
+First produce a bug and navigation audit report, then fix bugs module by module, then reorganize navigation, then retest all key flows.
+```
+
+Add this short strict instruction too:
+
+```text
+Do not only redesign navigation. First fix real broken Save/Add/Create and loading bugs across the platform, then reorganize the sidebar and module placement for better usability.
+```
