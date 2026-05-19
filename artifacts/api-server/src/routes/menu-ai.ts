@@ -20,6 +20,7 @@ import { requireAiCredits, reserveCredits, commitReservation, refundReservation,
 import { ObjectStorageService } from "../lib/objectStorage";
 import { setObjectAclPolicy } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
+import { buildImageFilename } from "../lib/aiFoodImage";
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -227,12 +228,18 @@ router.post(
       const buffer = Buffer.from(result.b64_json, "base64");
       const contentType = result.mimeType || "image/png";
 
+      const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg"
+        : contentType.includes("webp") ? "webp" : "png";
+      const filename = buildImageFilename(item.name, ext);
       const uploadURL = await objectStorage.getObjectEntityUploadURL();
       const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
       const put = await fetch(uploadURL, {
         method: "PUT",
         body: buffer,
-        headers: { "Content-Type": contentType },
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": `inline; filename="${filename}"`,
+        },
       });
       if (!put.ok) {
         if (reservation) await refundReservation(reservation, "object storage put failed");
@@ -245,6 +252,11 @@ router.post(
         uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
         visibility: "public",
       });
+      try {
+        await objectFile.setMetadata({ contentDisposition: `inline; filename="${filename}"` });
+      } catch {
+        /* non-fatal */
+      }
 
       const payload: PhotoDraftPayload = { imageUrl: objectPath };
       const [draft] = await db

@@ -30,9 +30,10 @@ import {
   reserveCredits,
   type AiCreditReservation,
 } from "../lib/aiCredits";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService, isObjectStorageConfigured } from "../lib/objectStorage";
 import { getObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
+import { generateAndAttachItemPhoto } from "../lib/aiFoodImage";
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -643,6 +644,17 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
 
   const menuName = importRow.fileName?.replace(/\.[^.]+$/, "") || `AI Import — ${new Date(importRow.createdAt).toLocaleDateString()}`;
   const created: number[] = [];
+  // Collected inside the tx and processed after commit so a slow / failing
+  // image provider can never roll back the menu save.
+  const photoQueue: Array<{
+    draftId: number;
+    itemId: number;
+    name: string;
+    categoryName: string | null;
+    isVeg: boolean;
+    cuisine: string | null;
+    ingredients: string | null;
+  }> = [];
 
   try {
   await db.transaction(async (tx) => {
@@ -733,12 +745,25 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
           menuItemId: item.id,
           savedAt: now,
           structured: merged as unknown as Record<string, unknown>,
+          imageStatus: "queued",
+          imageError: null,
         }).where(and(eq(aiMenuImportItemsTable.id, draft.id), eq(aiMenuImportItemsTable.status, "draft")))
           .returning({ id: aiMenuImportItemsTable.id });
         if (upd.length === 0) {
           throw new Error(`Row ${draft.id} was no longer draft when saving`);
         }
         created.push(item.id);
+        // Remember the draft row + item context so we can backfill its AI
+        // photo *outside* the transaction (see post-commit block below).
+        photoQueue.push({
+          draftId: draft.id,
+          itemId: item.id,
+          name: merged.name,
+          categoryName: merged.categoryName ?? null,
+          isVeg,
+          cuisine: (merged as { cuisineType?: string }).cuisineType ?? null,
+          ingredients: merged.description ?? (merged.allergens ?? []).join(", "),
+        });
     }
 
     const remaining = await tx.select({ id: aiMenuImportItemsTable.id }).from(aiMenuImportItemsTable)
@@ -763,8 +788,117 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
     newValue: { phase: "save", source: importRow.source, savedCount: created.length, fileName: importRow.fileName },
   });
 
+  // Kick off AI image generation for every newly-saved item, in the
+  // background with a small concurrency cap so the HTTP response returns
+  // immediately. Each image takes 5-15s; we don't want to block the user.
+  if (photoQueue.length > 0) {
+    const tenantId = req.user?.tenantId ?? null;
+    const userId = req.user?.sub ?? null;
+    if (!isObjectStorageConfigured()) {
+      // Mark every row as skipped so the import history shows why no
+      // photos appeared.
+      await db.update(aiMenuImportItemsTable)
+        .set({ imageStatus: "skipped_no_storage", imageError: "Object storage not configured" })
+        .where(inArray(aiMenuImportItemsTable.id, photoQueue.map(p => p.draftId)));
+    } else {
+      setImmediate(() => {
+        backfillPhotos(id, restaurantId, tenantId, userId, photoQueue)
+          .catch((err) => req.log.error({ err, importId: id }, "menu-import photo backfill failed"));
+      });
+    }
+  }
+
   res.json({ savedCount: created.length, savedItemIds: created, errors: [] });
 });
+
+/**
+ * Process the photoQueue with a small concurrency cap, updating each draft
+ * row's imageStatus as it progresses. Runs after the save transaction has
+ * committed so a slow / failing provider can never undo the menu save.
+ */
+async function backfillPhotos(
+  importId: number,
+  restaurantId: number,
+  tenantId: number | null,
+  userId: number | null,
+  queue: Array<{
+    draftId: number;
+    itemId: number;
+    name: string;
+    categoryName: string | null;
+    isVeg: boolean;
+    cuisine: string | null;
+    ingredients: string | null;
+  }>,
+): Promise<void> {
+  const CONCURRENCY = 3;
+  let cursor = 0;
+  let done = 0;
+  let failed = 0;
+  let skippedCredits = 0;
+
+  async function worker() {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= queue.length) return;
+      const job = queue[idx];
+      try {
+        await db.update(aiMenuImportItemsTable)
+          .set({ imageStatus: "generating", imageError: null })
+          .where(eq(aiMenuImportItemsTable.id, job.draftId));
+        const result = await generateAndAttachItemPhoto({
+          tenantId,
+          restaurantId,
+          userId,
+          itemId: job.itemId,
+          inputs: {
+            name: job.name,
+            categoryName: job.categoryName,
+            isVeg: job.isVeg,
+            cuisine: job.cuisine,
+            ingredients: job.ingredients,
+          },
+        });
+        if (result.ok) {
+          await db.update(aiMenuImportItemsTable)
+            .set({ imageStatus: "done", imageError: null })
+            .where(eq(aiMenuImportItemsTable.id, job.draftId));
+          done++;
+        } else if (result.code === "INSUFFICIENT_CREDITS") {
+          await db.update(aiMenuImportItemsTable)
+            .set({ imageStatus: "skipped_credits", imageError: result.reason })
+            .where(eq(aiMenuImportItemsTable.id, job.draftId));
+          skippedCredits++;
+        } else {
+          await db.update(aiMenuImportItemsTable)
+            .set({ imageStatus: "failed", imageError: result.reason.slice(0, 500) })
+            .where(eq(aiMenuImportItemsTable.id, job.draftId));
+          failed++;
+        }
+      } catch (err) {
+        failed++;
+        await db.update(aiMenuImportItemsTable)
+          .set({ imageStatus: "failed", imageError: ((err as Error).message ?? "unknown").slice(0, 500) })
+          .where(eq(aiMenuImportItemsTable.id, job.draftId))
+          .catch(() => {});
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, () => worker()));
+
+  // Persist a compact summary so the import-history page can show
+  // "Generated photos for X of Y items."
+  const [row] = await db.select({ summary: aiMenuImportsTable.summary })
+    .from(aiMenuImportsTable).where(eq(aiMenuImportsTable.id, importId));
+  await db.update(aiMenuImportsTable).set({
+    summary: {
+      ...(row?.summary ?? {}),
+      photos: { total: queue.length, done, failed, skippedCredits },
+    },
+    updatedAt: new Date(),
+  }).where(eq(aiMenuImportsTable.id, importId));
+}
 
 router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/rollback", async (req: Request, res: Response) => {
   const restaurantId = Number(req.params.restaurantId);

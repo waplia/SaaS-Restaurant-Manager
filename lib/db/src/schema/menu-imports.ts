@@ -56,6 +56,12 @@ export const aiMenuImportItemsTable = pgTable(
     needsReview: boolean("needs_review").notNull().default(false),
     duplicateMatchId: integer("duplicate_match_id"),
     menuItemId: integer("menu_item_id").references(() => menuItemsTable.id, { onDelete: "set null" }),
+    // Tracks the per-item AI-photo backfill kicked off after save. Lives on
+    // the draft row (rather than menu_items) so it survives rollback and
+    // history pages can show a per-import "photos: 8/10" counter.
+    // Values: queued | generating | done | failed | skipped_credits | skipped_no_storage
+    imageStatus: text("image_status").notNull().default("queued"),
+    imageError: text("image_error"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     savedAt: timestamp("saved_at"),
   },
