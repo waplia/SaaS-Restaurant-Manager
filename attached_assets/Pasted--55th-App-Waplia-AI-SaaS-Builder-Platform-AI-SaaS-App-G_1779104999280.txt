@@ -1,0 +1,1702 @@
+# 55th App: Waplia AI SaaS Builder Platform
+
+## AI SaaS App Generator + Multi-Tenant SaaS OS + Modules + Auth + Billing + Admin + Deployment Builder
+
+This app is for:
+
+* SaaS founders
+* agencies building SaaS for clients
+* internal product teams
+* no-code/low-code SaaS builders
+* software resellers
+* white-label SaaS businesses
+* startup studios
+* Waplia internal app generation
+* client portal builders
+* business software builders
+
+It should let users plan, create, configure, and manage SaaS products with:
+
+**SaaS idea → app structure → modules → database schema → roles → pricing → onboarding → dashboard → billing integration → tenant setup → launch checklist → analytics → AI product manager**
+
+---
+
+# Strict Replit Prompt
+
+```text
+Build the fifty-fifth active app inside Waplia.ai: Waplia AI SaaS Builder Platform.
+
+Current platform stack:
+React + Vite + Express + Drizzle + Clerk + PostgreSQL.
+
+Important:
+- Build Waplia AI SaaS Builder Platform as an independent app module inside Waplia.ai.
+- It must open independently at /apps/saas-builder/dashboard or /apps/ai-saas-builder/dashboard depending on the existing app registry slug.
+- If both slugs exist, prefer /apps/saas-builder/dashboard and keep /apps/ai-saas-builder as an alias/redirect.
+- It must use its own independent SaaSBuilderLayout.
+- It must NOT open as a submenu inside the main Waplia dashboard.
+- Do not build Super Admin in this phase.
+- Do not build unrelated apps in this task.
+- Do not duplicate App Builder, No-Code Automation, White-Label SaaS, Plugin/App Store, Workflow Marketplace, or Website Builder. This app is specifically for creating, configuring, managing, and launching SaaS products with tenants, modules, roles, pricing, onboarding, billing, dashboards, product analytics, and AI SaaS planning.
+- Do not block this task waiting for other app modules.
+- If integration data from Subscription/Membership, Accounting, CRM, Website Builder, App Builder, White-Label SaaS, API Marketplace, Plugin Store, File Storage, Email, WhatsApp, SMS, Voice AI, Payment Gateway, Auth provider, Analytics, Deployment provider, Git provider, Monitoring provider, or AI providers is unavailable, build provider-ready connection screens and internal link tables, then show “Connect Provider” or “Configure Integration”.
+- Continue building SaaS Builder fully even if other app modules are incomplete.
+
+VERY STRICT RULES:
+- Do not leave any internal SaaS Builder feature as Coming Soon.
+- Do not use mock data.
+- Do not use fake/demo data.
+- Do not create non-working buttons.
+- Do not create placeholder pages for internal modules.
+- Every internal feature must be fully functional with real database tables, real CRUD APIs, real UI, validation, loading states, error states, empty states, permissions, and audit logs.
+- External integrations such as subscription billing, payment gateway, auth provider, file storage, email/WhatsApp/SMS sending, deployment provider, Git provider, monitoring provider, analytics provider, domain provider, and AI providers must have complete configuration screens and provider-ready architecture.
+- If credentials are not configured, show “Connect Provider” or “Configure Integration”, not “Coming Soon”.
+- Internal SaaS products, tenants, modules, feature flags, roles, permissions, pricing models, onboarding flows, dashboards, app pages, database schemas, API endpoints metadata, forms, workflows, settings, launch checklists, reports, automations, and audit must work without external providers.
+- AI features must be provider-ready, but the UI, settings, prompts, saved AI requests, AI outputs, approval workflow, and audit logs must exist.
+- SaaS safety rule: AI-generated schema changes, pricing changes, role permissions, deployment suggestions, tenant isolation changes, API exposure, and billing changes must show: “AI-generated SaaS builder suggestions must be reviewed by an authorized product manager before execution.”
+- Technical safety rule: Do not auto-deploy, auto-change database schema, auto-change pricing, auto-change permissions, auto-expose API keys, auto-delete tenant data, or auto-change billing only because of AI output. Always require authorized human approval.
+- Run a full feature audit after implementation and create a visible audit page.
+
+Positioning:
+Waplia AI SaaS Builder Platform is an AI SaaS App Generator + Multi-Tenant SaaS OS + Modules + Auth + Billing + Admin + Deployment Builder like Bubble/Softr-style app builders, Retool/Appsmith-style internal app builders, SaaS boilerplate systems, no-code SaaS launch tools, and product operating systems, but built as a Waplia.ai module with provider-ready connections to Subscription/Membership, Accounting, CRM, Website Builder, App Builder, White-Label SaaS, API Marketplace, Plugin Store, Payments, Auth, File Storage, Git, Deployment, Monitoring, Analytics, Communication, and AI.
+
+Core purpose:
+- Help users create and manage SaaS platforms faster.
+- Handle SaaS products, tenants, modules, app pages, dashboards, forms, database models, roles, permissions, feature flags, pricing, subscription links, onboarding flows, settings, API metadata, integrations, launch checklists, product analytics, customer feedback, changelog, roadmap, reports, and AI SaaS planning.
+- Provide AI SaaS Architect, AI Product Manager, AI Database Schema Builder, AI Role & Permission Designer, AI Pricing Strategy Builder, and AI Launch Readiness Auditor.
+
+Main routes:
+- /apps/saas-builder/dashboard
+- /apps/saas-builder/command-center
+- /apps/saas-builder/products
+- /apps/saas-builder/products/:id
+- /apps/saas-builder/saas-ideas
+- /apps/saas-builder/product-blueprints
+- /apps/saas-builder/modules
+- /apps/saas-builder/module-builder
+- /apps/saas-builder/page-builder
+- /apps/saas-builder/dashboard-builder
+- /apps/saas-builder/form-builder
+- /apps/saas-builder/table-builder
+- /apps/saas-builder/database-schema
+- /apps/saas-builder/entities
+- /apps/saas-builder/fields
+- /apps/saas-builder/relationships
+- /apps/saas-builder/api-endpoints
+- /apps/saas-builder/authentication
+- /apps/saas-builder/tenants
+- /apps/saas-builder/tenant-management
+- /apps/saas-builder/tenant-isolation
+- /apps/saas-builder/users
+- /apps/saas-builder/roles-permissions
+- /apps/saas-builder/feature-flags
+- /apps/saas-builder/pricing-models
+- /apps/saas-builder/plans-packages
+- /apps/saas-builder/billing-integration
+- /apps/saas-builder/trials-onboarding
+- /apps/saas-builder/customer-onboarding
+- /apps/saas-builder/in-app-guides
+- /apps/saas-builder/settings-builder
+- /apps/saas-builder/notification-builder
+- /apps/saas-builder/email-templates
+- /apps/saas-builder/whatsapp-templates
+- /apps/saas-builder/webhooks
+- /apps/saas-builder/integration-builder
+- /apps/saas-builder/plugin-connections
+- /apps/saas-builder/app-templates
+- /apps/saas-builder/component-library
+- /apps/saas-builder/theme-branding
+- /apps/saas-builder/white-label-settings
+- /apps/saas-builder/domain-settings
+- /apps/saas-builder/deployment-checklist
+- /apps/saas-builder/environment-settings
+- /apps/saas-builder/git-repository
+- /apps/saas-builder/deployment-provider
+- /apps/saas-builder/monitoring-logs
+- /apps/saas-builder/error-tracking
+- /apps/saas-builder/api-keys-secrets
+- /apps/saas-builder/security-center
+- /apps/saas-builder/compliance-center
+- /apps/saas-builder/customer-feedback
+- /apps/saas-builder/feature-requests
+- /apps/saas-builder/roadmap
+- /apps/saas-builder/changelog
+- /apps/saas-builder/release-management
+- /apps/saas-builder/product-analytics
+- /apps/saas-builder/usage-analytics
+- /apps/saas-builder/revenue-analytics
+- /apps/saas-builder/ai-saas-architect
+- /apps/saas-builder/ai-product-manager
+- /apps/saas-builder/ai-database-schema-builder
+- /apps/saas-builder/ai-role-permission-designer
+- /apps/saas-builder/ai-pricing-strategy-builder
+- /apps/saas-builder/ai-launch-readiness-auditor
+- /apps/saas-builder/reports
+- /apps/saas-builder/analytics
+- /apps/saas-builder/automations
+- /apps/saas-builder/integrations
+- /apps/saas-builder/settings
+- /apps/saas-builder/settings/audit
+
+====================================================
+1. Independent SaaS Builder Layout
+====================================================
+
+Create SaaSBuilderLayout separate from the main Waplia dashboard layout.
+
+Sidebar:
+- SaaS Builder Dashboard
+- Command Center
+- Products
+- SaaS Ideas
+- Product Blueprints
+- Modules
+- Module Builder
+- Page Builder
+- Dashboard Builder
+- Form Builder
+- Table Builder
+- Database Schema
+- Entities
+- Fields
+- Relationships
+- API Endpoints
+- Authentication
+- Tenants
+- Tenant Management
+- Tenant Isolation
+- Users
+- Roles / Permissions
+- Feature Flags
+- Pricing Models
+- Plans / Packages
+- Billing Integration
+- Trials / Onboarding
+- Customer Onboarding
+- In-App Guides
+- Settings Builder
+- Notification Builder
+- Email Templates
+- WhatsApp Templates
+- Webhooks
+- Integration Builder
+- Plugin Connections
+- App Templates
+- Component Library
+- Theme / Branding
+- White-Label Settings
+- Domain Settings
+- Deployment Checklist
+- Environment Settings
+- Git Repository
+- Deployment Provider
+- Monitoring / Logs
+- Error Tracking
+- API Keys / Secrets
+- Security Center
+- Compliance Center
+- Customer Feedback
+- Feature Requests
+- Roadmap
+- Changelog
+- Release Management
+- Product Analytics
+- Usage Analytics
+- Revenue Analytics
+- AI SaaS Architect
+- AI Product Manager
+- AI Database Schema Builder
+- AI Role & Permission Designer
+- AI Pricing Strategy Builder
+- AI Launch Readiness Auditor
+- Reports
+- Analytics
+- Automations
+- Integrations
+- Settings
+- Feature Audit
+
+Topbar:
+- SaaS product selector
+- Tenant selector
+- Module selector
+- Environment selector
+- Search product/module/page/schema
+- Create product button
+- Create module button
+- Create tenant button
+- Open launch checklist button
+- AI SaaS Architect button
+- Build alerts
+- Security alerts
+- Tenant alerts
+- Billing alerts
+- Deployment alerts
+- Feedback alerts
+- Notifications
+- User profile
+- Back to Waplia Apps button
+
+====================================================
+2. SaaS Builder Dashboard
+====================================================
+
+Build dashboard using real PostgreSQL data.
+
+Cards:
+- Total SaaS products
+- Active products
+- Draft products
+- Total tenants
+- Active tenants
+- Modules created
+- Pages created
+- Database entities
+- API endpoints
+- Feature flags
+- Plans created
+- Trial users metadata
+- Billing integration status
+- Launch readiness score
+- Security issues
+- Feedback items
+- AI recommendations
+
+Charts:
+- SaaS products created trend
+- Tenant growth trend
+- Module creation trend
+- Feature request trend
+- Roadmap progress trend
+- Launch readiness trend
+- Usage event trend
+- Revenue metadata trend
+- Error trend
+- Deployment status trend
+
+Tables:
+- Recent SaaS products
+- Products not launch-ready
+- Tenant setup issues
+- Security warnings
+- Billing setup issues
+- Open feature requests
+- Recent releases
+- AI urgent alerts
+
+====================================================
+3. SaaS Command Center
+====================================================
+
+Build live SaaS operations command center.
+
+Show:
+- Products stuck in draft
+- Missing billing integration
+- Missing tenant isolation rules
+- Missing roles/permissions
+- Missing onboarding flow
+- Missing pricing plans
+- Missing security settings
+- Broken/misconfigured modules
+- Feedback needing review
+- Feature requests pending
+- Release checklist pending
+- Deployment checklist pending
+- AI urgent alerts
+
+AI SaaS Pulse examples:
+- “3 SaaS products have no pricing plans configured.”
+- “Product CRM-Lite has 8 modules but no role permissions assigned.”
+- “Tenant isolation audit is incomplete for 2 products.”
+- “Billing integration is not configured for 4 launch-ready products.”
+- “AI suggests adding onboarding checklist before launch.”
+- “12 feature requests are repeated by multiple customers.”
+- “Release v1.2 has 5 unresolved checklist items.”
+
+====================================================
+4. SaaS Products / Ideas / Blueprints
+
+SaaS products:
+- Create SaaS product
+- Product name
+- Product slug
+- Product category
+- Target industry
+- Target users
+- Description
+- Business model
+- Status: idea, blueprint, building, testing, launch_ready, launched, paused, archived
+- Owner
+- Launch date
+- Product detail page
+- Audit trail
+
+SaaS ideas:
+- Idea title
+- Problem statement
+- Target audience
+- Competitor notes
+- Monetization idea
+- Priority score
+- Convert to blueprint
+- Idea report
+
+Product blueprints:
+- Product overview
+- Core modules
+- User roles
+- Data entities
+- Pricing concept
+- Onboarding flow
+- Integrations needed
+- MVP scope
+- Future scope
+- Blueprint approval
+
+====================================================
+5. Modules / Module Builder
+
+Modules:
+- Module name
+- Product
+- Module type: dashboard, crm, billing, workflow, analytics, portal, forms, content, ecommerce, support, custom
+- Description
+- Status
+- Linked pages
+- Linked database entities
+- Linked permissions
+- Module report
+
+Module builder:
+- Create module
+- Add pages
+- Add forms
+- Add tables
+- Add dashboards
+- Add reports
+- Add workflows metadata
+- Add role permissions
+- Add settings
+- Module preview
+- Module audit trail
+
+====================================================
+6. Page Builder / Dashboard Builder
+
+Page builder:
+- Create app page
+- Page name
+- Route path
+- Page type: list, detail, form, dashboard, settings, report, portal, custom
+- Layout metadata
+- Components metadata
+- Linked entity
+- Permission required
+- Page report
+
+Dashboard builder:
+- Dashboard name
+- Metric cards
+- Charts metadata
+- Tables metadata
+- Filters
+- Date ranges
+- Role visibility
+- Dashboard preview
+- Dashboard report
+
+====================================================
+7. Form Builder / Table Builder
+
+Form builder:
+- Form name
+- Linked entity
+- Fields
+- Validation rules
+- Required fields
+- Conditional visibility
+- Submit action metadata
+- Approval workflow metadata
+- Form report
+
+Table builder:
+- Table/list view
+- Linked entity
+- Columns
+- Filters
+- Sort rules
+- Bulk actions metadata
+- Export permission
+- Table report
+
+====================================================
+8. Database Schema / Entities / Fields / Relationships
+
+Database schema:
+- Product schema view
+- Entity list
+- Field list
+- Relationship map
+- Migration draft metadata
+- Schema report
+
+Entities:
+- Entity name
+- Table name
+- Description
+- Module link
+- Status
+- Entity report
+
+Fields:
+- Field name
+- Field type
+- Required
+- Unique
+- Default value
+- Validation
+- Index metadata
+- Field report
+
+Relationships:
+- One-to-one
+- One-to-many
+- Many-to-many
+- Parent-child
+- Relationship validation
+- Relationship report
+
+Important:
+- Schema builder should create internal schema metadata first.
+- Do not directly run destructive DB changes without manager approval.
+- If real Drizzle migration generation is not implemented, store schema drafts and mark as “Needs Developer Review”, not Coming Soon.
+
+====================================================
+9. API Endpoints
+
+API endpoints:
+- Endpoint name
+- Method
+- Path
+- Linked entity
+- Auth required
+- Permission required
+- Request schema metadata
+- Response schema metadata
+- Rate limit metadata
+- API docs metadata
+- API endpoint report
+
+Features:
+- Create endpoint metadata
+- Edit endpoint metadata
+- Enable/disable endpoint
+- Generate API docs metadata
+- API usage logs provider-ready/internal
+
+====================================================
+10. Authentication / Tenants / Tenant Isolation
+
+Authentication:
+- Clerk provider-ready/internal link
+- Login methods metadata
+- Signup rules
+- Passwordless/social login metadata
+- MFA metadata
+- Auth settings report
+
+Tenants:
+- Tenant name
+- Product
+- Tenant slug
+- Domain metadata
+- Owner user
+- Plan
+- Status
+- Created date
+- Tenant report
+
+Tenant management:
+- Create tenant
+- Edit tenant
+- Suspend tenant
+- Archive tenant
+- Tenant users
+- Tenant settings
+- Tenant usage metadata
+- Tenant audit trail
+
+Tenant isolation:
+- company_id/tenant_id strategy
+- Data access rules
+- Cross-tenant access protection
+- Isolation audit
+- Tenant isolation report
+
+====================================================
+11. Users / Roles / Permissions
+
+Users:
+- Product users
+- Tenant users
+- User role mapping
+- Status
+- User report
+
+Roles:
+- Owner
+- Admin
+- Manager
+- Staff
+- Viewer
+- Customer
+- Member
+- Vendor
+- Custom role
+
+Permissions:
+- Module permissions
+- Page permissions
+- API permissions
+- Data permissions
+- Export permissions
+- Settings permissions
+- Billing permissions
+- Permission matrix
+- Permission report
+
+====================================================
+12. Feature Flags
+
+Feature flags:
+- Product-level flag
+- Tenant-level flag
+- User-level flag
+- Plan-level flag
+- Beta feature flag
+- Rollout percentage metadata
+- Status
+- Feature flag report
+
+Features:
+- Create flag
+- Enable/disable flag
+- Assign to tenants/plans/users
+- Audit changes
+- Feature rollout records
+
+====================================================
+13. Pricing Models / Plans / Billing Integration
+
+Pricing models:
+- Free
+- One-time
+- Monthly subscription
+- Yearly subscription
+- Usage-based
+- Seat-based
+- Tiered pricing
+- Enterprise custom
+- Hybrid pricing
+- Pricing model report
+
+Plans/packages:
+- Plan name
+- Product
+- Price
+- Billing interval
+- Included features
+- Limits
+- Trial days
+- Status
+- Plan report
+
+Billing integration:
+- Subscription/Membership Platform link provider-ready/internal
+- Payment gateway provider-ready
+- Plan sync
+- Subscription sync
+- Invoice sync
+- Billing logs
+- Billing integration report
+
+====================================================
+14. Trials / Onboarding / In-App Guides
+
+Trials/onboarding:
+- Trial length
+- Trial conversion goal
+- Trial checklist
+- Trial reminder metadata
+- Onboarding report
+
+Customer onboarding:
+- Onboarding checklist
+- Welcome flow
+- Setup tasks
+- Completion percentage
+- Onboarding status
+- Customer onboarding report
+
+In-app guides:
+- Guide name
+- Steps
+- Target page
+- Target role
+- Completion tracking
+- Guide report
+
+====================================================
+15. Settings Builder / Notification Builder
+
+Settings builder:
+- Product settings
+- Tenant settings
+- User settings
+- Module settings
+- Feature settings
+- Settings validation
+- Settings report
+
+Notification builder:
+- Notification event
+- Channel
+- Template
+- Variables
+- Recipient rules
+- Enabled/disabled
+- Notification report
+
+Email templates:
+- Welcome
+- Trial ending
+- Subscription active
+- Invite user
+- Password/security
+- Feature update
+- Custom template
+
+WhatsApp templates:
+- Welcome
+- Renewal
+- Alert
+- Trial ending
+- Onboarding reminder
+- Custom template
+
+====================================================
+16. Webhooks / Integration Builder / Plugin Connections
+
+Webhooks:
+- Webhook config
+- Event
+- Endpoint URL
+- Secret metadata
+- Retry rules
+- Logs
+- Webhook report
+
+Integration builder:
+- Integration name
+- Provider
+- Auth type
+- API base URL metadata
+- Events
+- Actions
+- Sync rules
+- Integration report
+
+Plugin connections:
+- Plugin/App Store provider-ready/internal link
+- Installed plugins metadata
+- Plugin permissions
+- Plugin status
+- Plugin connection report
+
+====================================================
+17. App Templates / Component Library
+
+App templates:
+- CRM SaaS template
+- HRMS SaaS template
+- Inventory SaaS template
+- Booking SaaS template
+- Membership SaaS template
+- Marketplace SaaS template
+- Support SaaS template
+- Custom template
+- Template report
+
+Component library:
+- Cards
+- Tables
+- Forms
+- Charts
+- Buttons
+- Navigation
+- Modals
+- Empty states
+- Settings blocks
+- Portal components
+- Component report
+
+====================================================
+18. Theme / Branding / White Label / Domains
+
+Theme/branding:
+- Product logo
+- Colors
+- Fonts
+- Sidebar style
+- Topbar style
+- Button style
+- Login page branding
+- Email branding
+- Branding report
+
+White-label settings:
+- Custom app name
+- Custom domain metadata
+- Client branding
+- Remove Waplia branding metadata
+- White-label report
+
+Domain settings:
+- Product domain
+- Tenant domain
+- DNS checklist
+- SSL metadata provider-ready
+- Domain report
+
+====================================================
+19. Deployment Checklist / Environment / Git / Deployment Provider
+
+Deployment checklist:
+- Product complete
+- Security checked
+- Tenant isolation checked
+- Billing checked
+- Domain checked
+- Email checked
+- Monitoring checked
+- Backup checked
+- Launch approval
+- Deployment checklist report
+
+Environment settings:
+- Development
+- Staging
+- Production
+- Environment variables metadata
+- Secrets reference metadata
+- Environment report
+
+Git repository:
+- Git provider-ready
+- Repository metadata
+- Branch metadata
+- Commit/deploy logs provider-ready
+- Git report
+
+Deployment provider:
+- Replit/Render/Vercel/AWS provider-ready metadata
+- Deployment status
+- Deploy logs provider-ready
+- Rollback metadata
+- Deployment report
+
+====================================================
+20. Monitoring / Logs / Error Tracking
+
+Monitoring/logs:
+- App logs metadata
+- API logs
+- Tenant logs
+- Usage logs
+- Monitoring provider-ready
+- Monitoring report
+
+Error tracking:
+- Error records
+- Severity
+- Affected tenant/product
+- Stack trace metadata
+- Resolution status
+- Error report
+
+====================================================
+21. API Keys / Secrets / Security Center
+
+API keys/secrets:
+- API key metadata
+- Secret reference
+- Scope
+- Rotation date
+- Status
+- Do not expose full secret after creation
+- API key report
+
+Security center:
+- Role audit
+- Permission audit
+- Tenant isolation audit
+- Exposed API warning
+- Missing MFA metadata
+- Secret rotation warning
+- Security report
+
+====================================================
+22. Compliance Center
+
+Compliance center:
+- Data retention metadata
+- Terms/privacy page metadata
+- Consent records
+- Data export request metadata
+- Delete request metadata
+- Audit log review
+- Compliance report
+
+====================================================
+23. Feedback / Feature Requests / Roadmap / Changelog / Releases
+
+Customer feedback:
+- Feedback title
+- Customer/tenant
+- Type
+- Priority
+- Status
+- Feedback report
+
+Feature requests:
+- Request title
+- Votes
+- Customer impact
+- Revenue impact metadata
+- Status
+- Feature request report
+
+Roadmap:
+- Roadmap item
+- Quarter/month
+- Priority
+- Status
+- Linked feature requests
+- Roadmap report
+
+Changelog:
+- Release note
+- Version
+- Published date
+- Audience
+- Changelog report
+
+Release management:
+- Release version
+- Features included
+- Bug fixes
+- Checklist
+- Approval
+- Release report
+
+====================================================
+24. Product / Usage / Revenue Analytics
+
+Product analytics:
+- Feature usage
+- Page views metadata
+- Activation events
+- Onboarding completion
+- Feature adoption
+- Product analytics report
+
+Usage analytics:
+- Tenant usage
+- User usage
+- API usage
+- Storage usage metadata
+- Message/credit usage metadata
+- Usage report
+
+Revenue analytics:
+- MRR metadata
+- ARR metadata
+- Plan revenue
+- Tenant revenue
+- Churn metadata
+- Revenue report
+
+====================================================
+25. AI SaaS Architect
+
+AI should create:
+- SaaS product blueprint
+- Module list
+- Database entity suggestions
+- Page structure
+- Role structure
+- Pricing structure
+- Integration plan
+- Launch checklist
+
+Features:
+- Product idea to SaaS blueprint
+- MVP scope generator
+- Module planning
+- Architecture notes
+- Saved AI recommendations
+- Human approval before applying blueprint
+
+If AI provider missing, show provider setup requirement.
+
+====================================================
+26. AI Product Manager
+
+Features:
+- Feature prioritization
+- Roadmap suggestions
+- Feedback clustering
+- Release notes draft
+- Product improvement suggestions
+- Customer segment insights
+- Churn/product risk notes
+- Human approval before roadmap/release changes
+
+====================================================
+27. AI Database Schema Builder
+
+Features:
+- Entity suggestion
+- Field suggestion
+- Relationship suggestion
+- Index suggestion metadata
+- Data validation suggestion
+- Migration draft metadata
+- Human approval before schema changes
+
+====================================================
+28. AI Role & Permission Designer
+
+Features:
+- Role matrix suggestion
+- Module permission suggestion
+- Tenant permission guard suggestion
+- Risky permission warning
+- Least-privilege recommendations
+- Human approval before permission changes
+
+====================================================
+29. AI Pricing Strategy Builder
+
+Features:
+- Plan packaging suggestion
+- Feature limit suggestion
+- Seat pricing suggestion
+- Usage pricing suggestion
+- Trial length suggestion
+- Enterprise pricing notes
+- Human approval before pricing/plan changes
+
+====================================================
+30. AI Launch Readiness Auditor
+
+Features:
+- Launch checklist review
+- Missing billing warning
+- Missing onboarding warning
+- Missing security warning
+- Missing tenant isolation warning
+- Missing support/contact warning
+- Deployment readiness score
+- Human approval before launch status change
+
+====================================================
+31. Reports
+
+Reports:
+- SaaS product report
+- SaaS idea report
+- Product blueprint report
+- Module report
+- Page builder report
+- Dashboard builder report
+- Form builder report
+- Table builder report
+- Database schema report
+- Entity report
+- Field report
+- Relationship report
+- API endpoint report
+- Authentication report
+- Tenant report
+- Tenant isolation report
+- User report
+- Role/permission report
+- Feature flag report
+- Pricing model report
+- Plan/package report
+- Billing integration report
+- Trial/onboarding report
+- In-app guide report
+- Settings builder report
+- Notification builder report
+- Webhook report
+- Integration builder report
+- Plugin connection report
+- App template report
+- Component library report
+- Theme/branding report
+- White-label report
+- Domain report
+- Deployment checklist report
+- Environment report
+- Git report
+- Deployment provider report
+- Monitoring/logs report
+- Error tracking report
+- API key/secret report
+- Security center report
+- Compliance center report
+- Feedback report
+- Feature request report
+- Roadmap report
+- Changelog report
+- Release management report
+- Product analytics report
+- Usage analytics report
+- Revenue analytics report
+- AI insights report
+
+Reports must support:
+- Date filters
+- Product filters
+- Tenant filters
+- Module filters
+- Status filters
+- Owner filters
+- Export CSV
+- Export PDF provider-ready
+- Save report view
+
+====================================================
+32. Analytics
+
+Analytics:
+- Products created
+- Products launched
+- Tenant count
+- Tenant growth
+- Module count
+- Feature flag count
+- Pricing plan count
+- Launch readiness score
+- Security issue count
+- Feedback volume
+- Feature request volume
+- Roadmap completion
+- Release frequency
+- Product usage metadata
+- API usage metadata
+- Revenue metadata
+- AI SaaS health score
+
+====================================================
+33. Automations
+
+Triggers:
+- New SaaS product created
+- Product status changed
+- Module created
+- Tenant created
+- Tenant suspended
+- Feature flag enabled
+- Trial nearing end metadata
+- Billing integration missing
+- Security issue detected
+- Feedback submitted
+- Feature request submitted
+- Release created
+- Deployment checklist incomplete
+- AI recommendation created
+
+Conditions:
+- Product equals
+- Tenant equals
+- Module equals
+- Status equals
+- Launch readiness below
+- Security score below
+- Feedback priority equals
+- Feature request votes greater than
+- AI risk score greater than
+
+Actions:
+- Send WhatsApp provider-ready
+- Send SMS provider-ready
+- Send email provider-ready
+- Create product task
+- Create security review task
+- Create launch checklist task
+- Create feedback review task
+- Create roadmap item draft
+- Create release checklist item
+- Trigger webhook placeholder
+
+Manual automation builder must work without AI.
+
+====================================================
+34. Integrations
+
+Build provider-ready integrations:
+- Subscription / Membership Platform
+- Accounting Platform
+- CRM Platform
+- Website Builder
+- App Builder
+- White-Label SaaS Platform
+- API Marketplace
+- Plugin/App Store
+- Payment gateway provider
+- Auth provider
+- File storage provider
+- Email provider
+- WhatsApp provider
+- SMS provider
+- Voice AI
+- Analytics provider
+- Git provider
+- Deployment provider
+- Monitoring provider
+- Error tracking provider
+- Domain/DNS provider
+- AI provider
+- Google Sheets import/export
+- Webhooks
+- API keys
+
+Do not wait for other modules. Use local link tables and provider-ready settings.
+
+====================================================
+35. Settings
+
+Settings sections:
+- General SaaS Builder settings
+- Product settings
+- Module settings
+- Page builder settings
+- Database schema settings
+- API settings
+- Tenant settings
+- Tenant isolation settings
+- Role/permission settings
+- Feature flag settings
+- Pricing settings
+- Billing integration settings
+- Onboarding settings
+- Notification settings
+- Webhook settings
+- Integration settings
+- Template settings
+- Theme/branding settings
+- White-label settings
+- Domain settings
+- Deployment settings
+- Environment settings
+- Git settings
+- Monitoring settings
+- Security settings
+- Compliance settings
+- Feedback/roadmap settings
+- Analytics settings
+- AI safety settings
+- AI provider
+- Roles and permissions
+- Audit settings
+
+All internal settings must work.
+
+====================================================
+36. Database Requirements
+
+Use Drizzle + PostgreSQL.
+
+Create/verify tables:
+- saas_builder_products
+- saas_builder_ideas
+- saas_builder_blueprints
+- saas_builder_modules
+- saas_builder_module_pages
+- saas_builder_pages
+- saas_builder_dashboards
+- saas_builder_dashboard_widgets
+- saas_builder_forms
+- saas_builder_form_fields
+- saas_builder_tables
+- saas_builder_table_columns
+- saas_builder_database_schemas
+- saas_builder_entities
+- saas_builder_fields
+- saas_builder_relationships
+- saas_builder_api_endpoints
+- saas_builder_auth_settings
+- saas_builder_tenants
+- saas_builder_tenant_users
+- saas_builder_tenant_isolation_rules
+- saas_builder_users
+- saas_builder_roles
+- saas_builder_permissions
+- saas_builder_role_permissions
+- saas_builder_feature_flags
+- saas_builder_feature_flag_assignments
+- saas_builder_pricing_models
+- saas_builder_plans
+- saas_builder_plan_features
+- saas_builder_billing_integrations
+- saas_builder_trials_onboarding
+- saas_builder_customer_onboarding
+- saas_builder_in_app_guides
+- saas_builder_settings_definitions
+- saas_builder_notification_templates
+- saas_builder_email_templates
+- saas_builder_whatsapp_templates
+- saas_builder_webhook_configs
+- saas_builder_webhook_logs
+- saas_builder_integration_builders
+- saas_builder_plugin_connections
+- saas_builder_app_templates
+- saas_builder_components
+- saas_builder_theme_branding
+- saas_builder_white_label_settings
+- saas_builder_domain_settings
+- saas_builder_deployment_checklists
+- saas_builder_environment_settings
+- saas_builder_git_repositories
+- saas_builder_deployment_providers
+- saas_builder_deployment_logs
+- saas_builder_monitoring_logs
+- saas_builder_error_tracking
+- saas_builder_api_keys
+- saas_builder_api_logs
+- saas_builder_security_records
+- saas_builder_compliance_records
+- saas_builder_customer_feedback
+- saas_builder_feature_requests
+- saas_builder_roadmap_items
+- saas_builder_changelog_entries
+- saas_builder_releases
+- saas_builder_product_analytics
+- saas_builder_usage_analytics
+- saas_builder_revenue_analytics
+- saas_builder_ai_requests
+- saas_builder_ai_architect_outputs
+- saas_builder_ai_product_manager_outputs
+- saas_builder_ai_schema_outputs
+- saas_builder_ai_role_permission_outputs
+- saas_builder_ai_pricing_outputs
+- saas_builder_ai_launch_audit_outputs
+- saas_builder_reports
+- saas_builder_analytics_events
+- saas_builder_automations
+- saas_builder_automation_runs
+- saas_builder_integration_links
+- saas_builder_integrations
+- saas_builder_settings
+- saas_builder_audit_results
+
+Every table must include company_id where relevant.
+Product/tenant/module/page/entity/role-level tables must include product_id/tenant_id/module_id/page_id/entity_id/role_id where relevant.
+Every important record must include created_by and audit metadata where relevant.
+
+====================================================
+37. Security
+
+All SaaS Builder API routes must:
+- Verify Clerk authentication
+- Verify company membership
+- Scope by company_id
+- Enforce SaaS Builder role permissions
+- Validate inputs server-side
+- Sanitize product names, module names, page content, schema names, notification templates, API metadata, and URLs
+- Protect delete operations with confirmation
+- Prevent cross-company access
+- Never expose provider credentials, API keys, or full secrets after creation
+- Enforce product/tenant/module/schema/permission access
+- Protect tenant data, schema drafts, API keys, deployment settings, billing integration settings, and security records
+- Prevent unauthorized schema changes
+- Prevent unauthorized tenant isolation changes
+- Prevent unauthorized role/permission changes
+- Prevent unauthorized pricing/billing changes
+- Prevent unauthorized deployment actions
+- Prevent unauthorized API exposure
+- Prevent AI-only technical, billing, security, permission, deployment, or schema actions
+- Require authorized human approval for AI-generated schema, pricing, permission, tenant, deployment, security, and API recommendations
+- Log important actions
+
+Permissions:
+- View SaaS Builder dashboard
+- Manage SaaS products
+- Manage blueprints
+- Manage modules
+- Manage pages
+- Manage database schema
+- Manage API endpoints
+- Manage tenants
+- Manage tenant isolation
+- Manage users
+- Manage roles/permissions
+- Manage feature flags
+- Manage pricing/plans
+- Manage billing integration
+- Manage onboarding
+- Manage notifications
+- Manage webhooks
+- Manage integrations
+- Manage templates/components
+- Manage branding/white-label
+- Manage domains
+- Manage deployment
+- Manage monitoring/logs
+- Manage security/compliance
+- Manage feedback/roadmap/releases
+- Manage analytics
+- Manage reports
+- Manage automations
+- Manage settings
+- Export data
+- Run AI tools
+
+====================================================
+38. Activity / Audit Logging
+
+Log:
+- SaaS product created/updated/archived/status changed
+- SaaS idea created/converted
+- blueprint created/approved
+- module created/updated/archived
+- page/dashboard/form/table created/updated
+- schema/entity/field/relationship created/updated
+- API endpoint created/updated/enabled/disabled
+- auth settings updated
+- tenant created/updated/suspended/archived
+- tenant isolation rule created/updated
+- user/role/permission created/updated
+- feature flag created/enabled/disabled/assigned
+- pricing model/plan created/updated
+- billing integration setting updated
+- onboarding/guide created/updated
+- notification template created/updated
+- webhook created/updated/delivered/failed
+- integration/plugin created/updated
+- app template/component created/updated
+- branding/white-label/domain updated
+- deployment checklist item updated
+- environment/Git/deployment setting updated
+- monitoring/error record created
+- API key created/rotated/disabled
+- security/compliance record created
+- feedback/feature request/roadmap item created
+- changelog/release created
+- analytics event created
+- AI suggestion generated
+- automation created/executed
+- provider setting updated
+- report exported
+- audit completed
+
+====================================================
+39. UI/UX Requirements
+
+Make it premium, product-builder-friendly, SaaS-founder-friendly, and clean:
+- Modern SaaS Builder dashboard
+- SaaS command center
+- SaaS product 360 profile
+- SaaS idea board
+- Product blueprint workspace
+- Module builder
+- Page builder
+- Dashboard builder
+- Form builder
+- Table builder
+- Database schema visual manager
+- Entity/field/relationship manager
+- API endpoint builder
+- Authentication settings screen
+- Tenant management dashboard
+- Tenant isolation audit screen
+- User/role/permission matrix
+- Feature flag manager
+- Pricing model builder
+- Plans/packages screen
+- Billing integration provider-ready screen
+- Trial/onboarding setup
+- In-app guide builder
+- Settings builder
+- Notification builder
+- Email/WhatsApp template screens
+- Webhook/API config screens
+- Integration builder
+- Plugin connection manager
+- App template gallery
+- Component library
+- Theme/branding editor
+- White-label settings
+- Domain settings checklist
+- Deployment checklist
+- Environment settings
+- Git repository provider-ready screen
+- Deployment provider-ready screen
+- Monitoring/logs screen
+- Error tracking screen
+- API keys/secrets protected screen
+- Security center
+- Compliance center
+- Customer feedback board
+- Feature request board
+- Roadmap board
+- Changelog manager
+- Release management board
+- Product/usage/revenue analytics dashboards
+- AI SaaS Architect panel
+- AI Product Manager panel
+- AI Database Schema Builder panel
+- AI Role & Permission Designer panel
+- AI Pricing Strategy Builder panel
+- AI Launch Readiness Auditor panel
+- Reports dashboards
+- Loading skeletons
+- Empty states
+- Error states
+- Toast notifications
+- Confirmation modals
+- Responsive mobile layout
+- No broken routes
+- No dead buttons
+- No mock data
+- No demo data
+- No Coming Soon for internal features
+
+====================================================
+40. Mandatory Feature Audit
+
+After implementation, create and run a feature audit page:
+
+Route:
+- /apps/saas-builder/settings/audit
+
+Audit status values:
+- Working
+- Partially Working
+- Broken
+- Needs Provider
+- Not Implemented
+
+Audit these areas:
+- Independent SaaSBuilderLayout
+- Dashboard metrics
+- Dashboard charts
+- Command Center
+- Products CRUD
+- Product detail page
+- SaaS Ideas
+- Product Blueprints
+- Modules
+- Module Builder
+- Page Builder
+- Dashboard Builder
+- Form Builder
+- Table Builder
+- Database Schema
+- Entities
+- Fields
+- Relationships
+- API Endpoints
+- Authentication provider handling
+- Tenants CRUD
+- Tenant Management
+- Tenant Isolation
+- Users
+- Roles/Permissions
+- Feature Flags
+- Pricing Models
+- Plans/Packages
+- Billing Integration provider handling
+- Trials/Onboarding
+- Customer Onboarding
+- In-App Guides
+- Settings Builder
+- Notification Builder
+- Email Templates provider handling
+- WhatsApp Templates provider handling
+- Webhooks
+- Integration Builder
+- Plugin Connections
+- App Templates
+- Component Library
+- Theme/Branding
+- White-Label Settings
+- Domain Settings
+- Deployment Checklist
+- Environment Settings
+- Git Repository provider handling
+- Deployment Provider handling
+- Monitoring/Logs provider handling
+- Error Tracking provider handling
+- API Keys/Secrets protection
+- Security Center
+- Compliance Center
+- Customer Feedback
+- Feature Requests
+- Roadmap
+- Changelog
+- Release Management
+- Product Analytics
+- Usage Analytics
+- Revenue Analytics
+- AI SaaS Architect provider handling
+- AI Product Manager provider handling
+- AI Database Schema Builder provider handling
+- AI Role/Permission Designer provider handling
+- AI Pricing Strategy Builder provider handling
+- AI Launch Readiness Auditor provider handling
+- Reports
+- Analytics
+- Automations
+- Automation execution
+- Integrations
+- Settings
+- Company data isolation
+- Clerk user sync
+- Role permissions
+- Tenant data protection
+- Schema change protection
+- Tenant isolation protection
+- Role/permission edit protection
+- Pricing/billing edit protection
+- Deployment action protection
+- API key/secret protection
+- AI-only technical/billing/security action prevention
+- Audit/activity logs
+- Mobile responsiveness
+- Empty states
+- Loading states
+- Error states
+- Dead buttons
+- Broken routes
+
+Audit page must show:
+- Total features checked
+- Working count
+- Partially Working count
+- Broken count
+- Needs Provider count
+- Not Implemented count
+- Last audit time
+- Feature-by-feature audit table
+- Notes for each failed feature
+
+Strict audit rule:
+Do not mark any feature as Working unless it has real UI, real database/API behavior, company_id isolation, validation, permission checks, SaaS Builder record persistence, tenant/security protections, and basic error handling.
+
+====================================================
+41. No Mock Data Rule
+
+Do not insert mock/demo/fake seed data.
+
+Instead:
+- Use real database tables.
+- Show empty states when no data exists.
+- Provide clear create buttons like “Create first SaaS product”, “Create first module”, “Create first tenant”, “Create first pricing plan”.
+- All create flows must save to database.
+- All list pages must load from database.
+- All SaaS product/blueprint/module records must persist.
+- All page/schema/API records must persist.
+- All tenant/user/role/permission records must persist.
+- All pricing/billing/onboarding records must persist.
+- All feedback/roadmap/release records must persist.
+- All reports must show real data or zero/empty states.
+
+====================================================
+42. Final Expected Result
+
+Waplia AI SaaS Builder Platform must be a complete, serious, production-ready SaaS product builder and SaaS operations app inside Waplia.ai.
+
+It must include:
+- independent SaaS Builder workspace
+- SaaS command center
+- SaaS products
+- SaaS ideas
+- product blueprints
+- modules
+- module builder
+- page builder
+- dashboard builder
+- form builder
+- table builder
+- database schema builder
+- entities/fields/relationships
+- API endpoint metadata builder
+- authentication provider-ready
+- tenants
+- tenant management
+- tenant isolation
+- users
+- roles/permissions
+- feature flags
+- pricing models
+- plans/packages
+- billing integration provider-ready
+- trials/onboarding
+- customer onboarding
+- in-app guides
+- settings builder
+- notification builder
+- email/WhatsApp templates provider-ready
+- webhooks
+- integration builder
+- plugin connections
+- app templates
+- component library
+- theme/branding
+- white-label settings
+- domain settings
+- deployment checklist
+- environment settings
+- Git provider-ready
+- deployment provider-ready
+- monitoring/logs provider-ready
+- error tracking provider-ready
+- API keys/secrets protected
+- security center
+- compliance center
+- customer feedback
+- feature requests
+- roadmap
+- changelog
+- release management
+- product analytics
+- usage analytics
+- revenue analytics
+- AI SaaS Architect
+- AI Product Manager
+- AI Database Schema Builder
+- AI Role & Permission Designer
+- AI Pricing Strategy Builder
+- AI Launch Readiness Auditor
+- reports
+- analytics
+- automations
+- integrations
+- settings
+- complete audit page
+- no mock data
+- no internal feature left as Coming Soon
+- no dead buttons
+- no broken SaaS Builder routes
+- AI-only technical/billing/security action prevention
+- human approval for schema/pricing/permission/deployment actions
+- not blocked by other app modules
+- ready for future Waplia apps integration
+```
+
+Next is **56th: Waplia No-Code Automation Platform**.

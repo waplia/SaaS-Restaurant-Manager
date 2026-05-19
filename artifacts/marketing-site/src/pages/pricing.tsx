@@ -47,21 +47,17 @@ const FAQ_ITEMS = [
 ];
 
 function planFeatureRows(plan: PublicPlan): PlanFeatureRow[] {
+  // Cards only highlight the main headline items — quantity limits, the
+  // free trial, and any free-form marketing bullets configured on the plan.
+  // The full boolean-flag matrix lives in the comparison table below, so we
+  // intentionally don't repeat every feature flag inside each card.
   const rows: PlanFeatureRow[] = [];
-  // 1. Quantity limits (always shown when > 0).
   for (const q of PLAN_QUANTITY_FEATURES) {
     const v = plan[q.key] ?? 0;
     const label = formatQuantity(q, v);
     if (label) rows.push({ label, enabled: true });
   }
   if (plan.trialDays > 0) rows.push({ label: `${plan.trialDays}-day free trial`, enabled: true });
-  // 2. Boolean flags — show every catalogue entry. Disabled flags render
-  // muted so customers can compare across plans at a glance.
-  for (const f of PLAN_BOOLEAN_FEATURES) {
-    const on = isFeatureEnabled(plan.featureFlags, f.key);
-    rows.push({ label: f.label, enabled: on, muted: !on });
-  }
-  // 3. Free-form marketing bullets last.
   for (const extra of plan.features ?? []) {
     rows.push({ label: extra, enabled: true });
   }
@@ -164,7 +160,7 @@ export default function Pricing() {
           ) : (
             <>
             {/* Mobile horizontal snap carousel */}
-            <div className="md:hidden -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-snap-x pb-2 pt-8" data-testid="pricing-grid-anchor">
+            <div className="md:hidden -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-snap-x pb-2 pt-6 items-stretch" data-testid="pricing-grid-anchor">
               {displayPlans.map((dp, i) => {
                 const plan = dp.plan;
                 const isFree = Number(plan.price) === 0;
@@ -185,7 +181,7 @@ export default function Pricing() {
               })}
             </div>
             {/* Desktop grid */}
-            <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto pt-6 items-stretch">
               {displayPlans.map((dp, i) => {
                 const plan = dp.plan;
                 const isFree = Number(plan.price) === 0;
@@ -303,7 +299,7 @@ function PricingCard({
   variant?: "default" | "outline";
 }) {
   return (
-    <div className={`relative h-full bg-card rounded-2xl border ${isPopular ? "border-primary shadow-xl md:scale-105 z-10" : "border-border shadow-md"} p-6 md:p-8 flex flex-col`} data-testid={`card-plan-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+    <div className={`relative h-full bg-card rounded-2xl border ${isPopular ? "border-primary border-2 shadow-xl" : "border-border shadow-md"} p-6 md:p-8 flex flex-col`} data-testid={`card-plan-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       {isPopular && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
           Most Popular
