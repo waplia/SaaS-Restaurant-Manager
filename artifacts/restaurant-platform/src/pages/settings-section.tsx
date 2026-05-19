@@ -1788,7 +1788,8 @@ function DirectOrderingSection() {
     holidayClosures: [],
   };
   const slug = restaurant?.slug ?? "";
-  const orderingUrl = slug ? `${window.location.origin}/menu/${slug}` : "";
+  const base = import.meta.env.BASE_URL || "/";
+  const orderingUrl = slug ? `${window.location.origin}${base}menu/${slug}` : "";
   const sitemapUrl = `${window.location.origin}/api/public/sitemap.xml`;
   return (
     <SettingForm section="direct-ordering" defaults={defaults}
