@@ -1,0 +1,829 @@
+Redesign the KhanaLagao Restaurant Mobile App into a modern, easy-to-use, fully functional restaurant operations app.
+
+Important correction:
+The center highlighted button in the bottom navigation should NOT be Scan. It should be “New Order”.
+
+The app should feel simple and modern like PhonePe/Paytm style home screen: big rounded action cards, easy access, clean icons, highlighted main action, and fast daily-use experience. But this app is for restaurant owners/staff, not customers.
+
+Current issues:
+- App UI is too basic.
+- Features feel like a simple list.
+- It is not easy to use.
+- New Order should be the main center action.
+- Items should be searchable while creating order.
+- Menu/category/item flow should be fast like a restaurant POS/mobile ordering app.
+- All screens should work with real data.
+- No mock data.
+- No blank screens.
+- No infinite loading.
+
+Brand:
+KhanaLagao
+
+Theme:
+Modern restaurant operations app
+Orange + warm white + dark premium UI
+Rounded cards
+Large touch buttons
+Simple navigation
+Fast workflows
+Real-time order and kitchen status
+
+====================================================
+1. APP MAIN NAVIGATION
+====================================================
+
+Use bottom navigation:
+
+1. Home
+2. Orders
+3. New Order
+4. Alerts
+5. More
+
+Important:
+- “New Order” should be the center highlighted button.
+- It should be a large round/orange gradient button slightly raised above bottom nav.
+- Icon: plus/order/bill icon.
+- Label: New Order
+- This should be the most important action in the app.
+
+Bottom nav behavior:
+- Home = restaurant overview
+- Orders = live orders
+- New Order = create new order quickly
+- Alerts = urgent notifications/approvals
+- More = all modules/settings
+
+Do not make Scan the center button.
+Scan should be available inside New Order or More as a secondary tool.
+
+====================================================
+2. CENTER NEW ORDER BUTTON FLOW
+====================================================
+
+When user taps center “New Order” button, open a fast order creation screen/action sheet.
+
+First show order type selection:
+
+- Dine-in
+- Takeaway
+- Delivery
+- QR Order assist
+- Curbside Pickup if enabled
+- Pre-order if enabled
+
+For Dine-in:
+- Select outlet
+- Select floor/table
+- Add customer optional
+- Search item
+- Add items
+- Add modifiers/add-ons
+- Send to kitchen
+- Save order
+
+For Takeaway:
+- Customer name/phone optional/required based on settings
+- Search item
+- Add items
+- Payment or pay later
+
+For Delivery:
+- Customer + address
+- Delivery charge
+- Search item
+- Add items
+- Delivery status
+
+The New Order screen must be fast, mobile-first, and not overloaded.
+
+====================================================
+3. ITEM SEARCH IN NEW ORDER
+====================================================
+
+Item search is mandatory.
+
+In New Order screen, add:
+- Search bar at top: “Search items, categories, add-ons…”
+- Category chips
+- Veg/non-veg filter
+- Bestseller filter
+- Recent items
+- Popular items
+- Frequently ordered items
+- Out-of-stock hidden/disabled
+- Item image thumbnails
+- Add button
+- Customize button if add-ons/modifiers exist
+
+Search should work by:
+- Item name
+- Category
+- SKU/code if available
+- Tags
+- Add-on name optionally
+
+Search UX:
+- Results should appear instantly.
+- Highlight matching item.
+- Show item image, name, price, availability.
+- If no item found, show helpful empty state.
+- Add “Create new item” shortcut only for owner/admin if permission allows.
+
+====================================================
+4. NEW ORDER ITEM CARD DESIGN
+====================================================
+
+Item cards in order creation should show:
+
+- Food image thumbnail
+- Item name
+- Price
+- Veg/non-veg icon
+- Category
+- Bestseller/recommended badge
+- Stock/availability status
+- Add button
+- Customize button if add-ons exist
+
+If item has no add-ons:
+- Tap Add adds item quickly.
+
+If item has add-ons/modifiers:
+- Tap Customize opens bottom sheet.
+
+If item already in cart:
+- Show quantity stepper.
+
+====================================================
+5. ADD-ONS / MODIFIERS IN MOBILE ORDER
+====================================================
+
+New Order must support full add-ons/modifiers.
+
+Examples:
+- Extra cheese
+- Extra sauce
+- No onion
+- No garlic
+- Less spicy
+- Medium spicy
+- Extra spicy
+- Add fries
+- Add cold drink
+- Extra paneer
+
+Bottom sheet should show:
+- Item image
+- Item name
+- Base price
+- Required groups
+- Optional groups
+- Single/multi-select
+- Price change
+- Quantity
+- Note
+- Final price
+- Add to cart
+
+Required add-ons must be validated before adding.
+
+====================================================
+6. CART IN NEW ORDER
+====================================================
+
+Mobile cart should be clear and sticky.
+
+Sticky bottom cart:
+“3 items • ₹420 • View Cart”
+
+Cart should show:
+- Item name
+- Item image
+- Add-ons/modifiers
+- Notes
+- Quantity stepper
+- Price
+- Edit customization
+- Remove item
+- Subtotal
+- Tax/service charge
+- Discount if allowed
+- Grand total
+
+Actions:
+- Send to Kitchen
+- Save Order
+- Mark Paid
+- Print/Share Bill if supported
+
+If dine-in:
+- Send to kitchen and keep table active.
+
+If takeaway/delivery:
+- Create order with correct status.
+
+====================================================
+7. HOME SCREEN REDESIGN
+====================================================
+
+Home should be the daily restaurant command screen.
+
+Top header:
+- Good Morning, {{user_name}}
+- Restaurant/outlet switcher
+- Role badge
+- Notification bell
+- Profile avatar
+
+Hero card:
+Show:
+- Today Sales
+- Live Orders
+- Payments
+- Profit estimate
+
+Example:
+Today Sales
+₹42,850
+37 orders today
+Profit estimate ₹12,400
+
+Main highlighted card:
+“New Orders”
+- Show count
+- Rounded large card
+- Pulse if new order pending
+- Tap opens Orders filtered by New
+
+Example:
+3 New Orders
+Tap to accept
+
+Quick action tiles:
+- New Order
+- Live Orders
+- Kitchen
+- Tables
+- QR Orders
+- Add Stock
+- Staff
+- Reports
+
+Critical alert strip:
+- Low Stock: 5
+- Kitchen Delay: 2
+- Pending Payments: ₹4,200
+- Staff Late: 1
+
+Khana AI card:
+“Khana AI Insight”
+“Paneer Tikka is trending tonight. Create offer?”
+Buttons:
+- Create Campaign
+- Ask AI
+
+Home should be compact, not too long.
+
+====================================================
+8. ORDERS SCREEN
+====================================================
+
+Orders screen should be clean and fast.
+
+Top:
+- Search order/customer/table
+- Filter chips:
+  All
+  New
+  QR
+  Dine-in
+  Takeaway
+  Delivery
+  Preparing
+  Ready
+  Payment Pending
+
+Order cards:
+- Order number
+- Type badge
+- Table/customer
+- Amount
+- Time
+- Status
+- Payment status
+- Items count
+- Quick action
+
+New order cards:
+- Orange highlight
+- Accept / Reject buttons
+
+Order detail:
+- Items
+- Add-ons/modifiers
+- Notes
+- Timeline
+- Customer/table
+- Payment summary
+- Actions:
+  Accept
+  Send to Kitchen
+  Mark Preparing
+  Mark Ready
+  Mark Served
+  Mark Delivered
+  Cancel
+  Share Invoice
+  Call/WhatsApp Customer
+
+====================================================
+9. TABLE-BASED ORDERING
+====================================================
+
+For dine-in order flow:
+
+- Show floor-wise table grid
+- Table status:
+  Available
+  Occupied
+  Reserved
+  Cleaning
+  Billed
+- Select table
+- View active order
+- Add more items
+- Transfer table
+- Merge table if allowed
+- Request bill
+- Close table
+
+Table screen should be visual, not a boring list.
+
+====================================================
+10. KITCHEN / KDS SCREEN
+====================================================
+
+Kitchen should be optimized for chef/manager.
+
+Tabs:
+- New
+- Preparing
+- Ready
+- Delayed
+
+KOT card:
+- Order number
+- Table/order type
+- Items
+- Add-ons/modifiers
+- Notes
+- Timer
+- Priority/status badge
+
+Actions:
+- Start Preparing
+- Item Ready
+- Full Order Ready
+- Delay Reason
+- Complete
+
+Chef role should open to Kitchen by default.
+
+====================================================
+11. ALERTS SCREEN
+====================================================
+
+Alerts should show important actions.
+
+Tabs:
+- All
+- Critical
+- Orders
+- Stock
+- Staff
+- Finance
+- Customers
+- AI
+- Approvals
+
+Alert card:
+- Title
+- Message
+- Priority
+- Time
+- Module
+- Action button
+
+Include Approval Inbox:
+- Refund approval
+- Discount approval
+- Expense approval
+- Leave approval
+- Purchase order approval
+- Campaign approval
+
+Actions:
+- View
+- Resolve
+- Snooze
+- Assign
+- Approve/Reject
+
+====================================================
+12. MORE SCREEN
+====================================================
+
+More should be grouped, not a long ugly list.
+
+Groups:
+
+Sell
+- POS Summary
+- Tables
+- Reservations
+- Waiter Requests
+- Delivery
+- Curbside Pickup
+
+Menu
+- Menu Items
+- Availability
+- QR Menu
+- Add-ons
+
+Inventory
+- Stock
+- Low Stock
+- Purchases
+- Vendors
+- Waste
+
+Customers
+- CRM
+- Feedback
+- Reviews
+- Loyalty
+- Push Subscribers
+
+Growth
+- Campaigns
+- Coupons
+- Email
+- WhatsApp
+- Web Push
+
+Khana AI
+- AI Dashboard
+- Ask AI
+- AI Campaigns
+- AI Insights
+- AI Credits
+
+Staff
+- Staff
+- Attendance
+- Payroll
+- Tasks
+- Shifts
+
+Finance
+- Payments
+- Expenses
+- Wallet
+- P&L
+- Invoices
+
+Reports
+- Sales
+- Orders
+- Inventory
+- Staff
+- Finance
+- Campaigns
+
+Tools
+- Scan QR
+- Generate QR
+- Import Menu
+- Export Reports
+
+Support
+- Tickets
+- Help Center
+- Emergency Support
+
+Settings
+- Profile
+- Outlet
+- Notifications
+- Security
+- Logout
+
+Show/hide based on role, plan, and module access.
+
+====================================================
+13. SCAN FEATURE PLACEMENT
+====================================================
+
+Scan is not the center nav button.
+
+Move Scan into:
+- New Order screen as small icon/action
+- More → Tools → Scan QR
+- Quick action tile on Home if needed
+
+Scan functions:
+- Scan table QR
+- Scan order QR
+- Scan customer QR
+- Scan loyalty QR
+- Scan inventory barcode
+- Scan staff attendance QR
+
+====================================================
+14. ROLE-BASED APP EXPERIENCE
+====================================================
+
+Owner/Admin:
+- Full dashboard
+- New order
+- Orders
+- Sales
+- Alerts
+- AI
+- Reports
+
+Manager:
+- Orders
+- Kitchen
+- Tables
+- Staff
+- Inventory
+- Alerts
+
+Cashier:
+- New Order
+- Orders
+- Payments
+- Tables
+- Invoices
+
+Waiter:
+- New Order
+- Tables
+- Orders
+- Waiter requests
+- Scan tools
+
+Chef:
+- Kitchen/KDS
+- Order notes
+- Modifiers
+- Status updates
+
+Inventory Manager:
+- Stock
+- Low stock
+- Purchases
+- Vendors
+- Waste
+
+Marketing:
+- Customers
+- Campaigns
+- Reviews
+- Web Push/Email/WhatsApp
+
+Accountant:
+- Finance
+- Payments
+- Expenses
+- Reports
+
+Delivery Staff:
+- Assigned deliveries
+- Pickup
+- Delivered
+- Cash collected
+
+Do not show irrelevant modules to each role.
+
+====================================================
+15. APP UI COMPONENTS
+====================================================
+
+Create/upgrade reusable components:
+
+- AppHeader
+- OutletSwitcher
+- MetricCard
+- GradientHeroCard
+- NewOrderCenterButton
+- NewOrderPulseCard
+- QuickActionTile
+- OrderTypeSelector
+- ItemSearchBar
+- CategoryChips
+- ItemCard
+- ModifierBottomSheet
+- MobileCartBar
+- CartSummarySheet
+- OrderCard
+- KOTCard
+- AlertCard
+- StatusBadge
+- BottomTabBar
+- ModuleGrid
+- EmptyState
+- ErrorState
+- LoadingSkeleton
+- OfflineBanner
+
+Design:
+- Rounded 20px+ cards
+- Soft shadows
+- Premium orange gradient
+- Warm background
+- Clear icons
+- Large touch targets
+- Smooth bottom sheets
+- Compact layout
+
+====================================================
+16. REAL DATA AND API REQUIREMENTS
+====================================================
+
+Every screen must use real backend data.
+
+Fix:
+- API base URL
+- Auth token
+- Restaurant ID
+- Outlet ID
+- Role permissions
+- Loading states
+- Error states
+- Pull to refresh
+- Empty states
+- Retry
+
+Needed mobile APIs or connect existing:
+
+Home:
+GET /mobile/dashboard
+
+Orders:
+GET /mobile/orders
+GET /mobile/orders/:id
+PATCH /mobile/orders/:id/status
+POST /mobile/orders
+
+New Order:
+GET /mobile/menu/items
+GET /mobile/menu/categories
+GET /mobile/menu/items/search
+GET /mobile/menu/items/:id/modifiers
+POST /mobile/orders
+
+Tables:
+GET /mobile/tables
+PATCH /mobile/tables/:id/status
+
+Kitchen:
+GET /mobile/kitchen
+PATCH /mobile/kitchen/orders/:id/status
+PATCH /mobile/kitchen/items/:id/status
+
+Alerts:
+GET /mobile/alerts
+PATCH /mobile/alerts/:id/read
+PATCH /mobile/alerts/:id/resolve
+
+Inventory:
+GET /mobile/inventory
+GET /mobile/inventory/low-stock
+POST /mobile/inventory/adjustment
+
+Finance:
+GET /mobile/finance/summary
+GET /mobile/payments
+GET /mobile/expenses
+POST /mobile/expenses
+
+Khana AI:
+GET /mobile/ai/dashboard
+POST /mobile/ai/chat
+GET /mobile/ai/credits
+
+Use existing API naming if different.
+
+====================================================
+17. ITEM SEARCH PERFORMANCE
+====================================================
+
+Item search must be fast.
+
+Requirements:
+- Debounced search
+- Search by item/category/tag
+- Show recent/popular items before search
+- Server-side search if menu is large
+- Local search cache if safe
+- Category chips
+- Out-of-stock status
+- Item image optimized
+- No lag while typing
+
+====================================================
+18. NOTIFICATIONS
+====================================================
+
+App should support push/in-app notifications.
+
+Notifications:
+- New QR order
+- New POS order
+- Kitchen delay
+- Order ready
+- Waiter request
+- Request bill
+- Low stock
+- Staff late
+- Payment failed
+- Negative feedback
+- Approval needed
+- AI insight
+- Campaign update
+- Support reply
+
+Notification click should open correct screen.
+
+====================================================
+19. NO BLANK / BROKEN STATES
+====================================================
+
+Every screen must handle:
+- Loading
+- Empty
+- Error
+- Offline
+- Unauthorized
+- Permission denied
+- Feature locked
+- Provider not configured
+
+No infinite loading.
+No blank screen.
+No dead buttons.
+
+====================================================
+20. TESTING FLOWS
+====================================================
+
+Test these live:
+
+1. Owner opens app → sees dashboard data.
+2. Tap center New Order → select Dine-in → select table.
+3. Search item → add item.
+4. Customize add-ons → add to cart.
+5. Send to kitchen → KOT appears.
+6. Kitchen marks preparing/ready.
+7. Order status updates.
+8. Payment/invoice works.
+9. Alerts show.
+10. Role-based menus work.
+11. Waiter creates table order.
+12. Chef sees only Kitchen.
+13. Cashier sees New Order and payments.
+14. Inventory manager sees stock.
+15. Marketing user sees campaigns.
+16. No screen has mock data or endless loading.
+
+====================================================
+21. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Bottom nav has Home, Orders, New Order, Alerts, More.
+- New Order is the center highlighted button.
+- Scan is moved into Tools/secondary actions.
+- New Order flow is fast and functional.
+- Item search works.
+- Items show images.
+- Add-ons/modifiers work.
+- Cart works.
+- Dine-in/takeaway/delivery order creation works.
+- KOT/KDS receives orders.
+- Home dashboard is modern and real-time.
+- Orders screen is usable.
+- Alerts screen is useful.
+- More screen is grouped and role-based.
+- App uses real APIs and database.
+- No mock data.
+- No blank screens.
+- No endless loading.
+- Build passes.
+- All key flows are tested live.
