@@ -1129,7 +1129,7 @@ router.get("/insurance/offers", async (_req, res) => {
 // ─── Super admin: cross-tenant fintech ──────────────────────────────────────
 
 const adminRouter = Router();
-adminRouter.use(requireSuperAdmin);
+adminRouter.use("/admin", requireSuperAdmin);
 
 adminRouter.get("/admin/fintech/overview", async (_req, res) => {
   const [walletAgg] = await db.select({

@@ -25,8 +25,9 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-// All endpoints require super-admin.
-router.use(requireSuperAdmin);
+// All endpoints require super-admin. Scope to the admin path so this router
+// doesn't 403 unrelated routes that get mounted after it.
+router.use("/admin/web-push", requireSuperAdmin);
 
 const SECRET_KEYS = ["apiKey", "serverKey", "privateKey", "secret", "token", "authToken", "password"];
 const isSecretKey = (k: string) => /token|secret|password|apikey|api_key|private|signing|authorization/i.test(k);
@@ -83,7 +84,7 @@ function mergeAndEncryptConfig(existing: Record<string, unknown>, incoming: Reco
 // GET /api/admin/web-push/provider
 // Returns the current platform-wide provider config with secrets masked.
 // ────────────────────────────────────────────────────────────
-router.get("/api/admin/web-push/provider", async (_req, res) => {
+router.get("/admin/web-push/provider", async (_req, res) => {
   const [row] = await db.select().from(appSettingsTable).where(eq(appSettingsTable.id, 1));
   // Ensure VAPID keys are generated so the public key surfaces immediately.
   const vapidPublicKey = await getVapidPublicKey().catch(() => null);
@@ -117,7 +118,7 @@ router.get("/api/admin/web-push/provider", async (_req, res) => {
 // Updates provider selection, secrets, defaults. Secret fields are encrypted
 // at rest. Mask placeholders are preserved (no clobber).
 // ────────────────────────────────────────────────────────────
-router.put("/api/admin/web-push/provider", async (req, res) => {
+router.put("/admin/web-push/provider", async (req, res) => {
   const body = req.body as {
     provider?: "vapid" | "fcm" | "onesignal" | "custom";
     fallbackProvider?: "vapid" | "fcm" | "onesignal" | "custom" | null;
@@ -165,7 +166,7 @@ router.put("/api/admin/web-push/provider", async (req, res) => {
 // ────────────────────────────────────────────────────────────
 // PUT /api/admin/web-push/plan-limits  { planLimits: Record<planId, limits> }
 // ────────────────────────────────────────────────────────────
-router.put("/api/admin/web-push/plan-limits", async (req, res) => {
+router.put("/admin/web-push/plan-limits", async (req, res) => {
   const { planLimits } = req.body as { planLimits?: Record<string, Record<string, unknown>> };
   if (!planLimits || typeof planLimits !== "object") return void res.status(400).json({ error: "planLimits required" });
   await db.update(appSettingsTable).set({ webPushPlanLimits: planLimits, updatedAt: new Date() }).where(eq(appSettingsTable.id, 1));
@@ -177,7 +178,7 @@ router.put("/api/admin/web-push/plan-limits", async (req, res) => {
 // PUT /api/admin/web-push/tenant-override/:tenantId
 // Set or clear (DELETE) per-tenant overrides.
 // ────────────────────────────────────────────────────────────
-router.put("/api/admin/web-push/tenant-override/:tenantId", async (req, res) => {
+router.put("/admin/web-push/tenant-override/:tenantId", async (req, res) => {
   const tenantId = Number(req.params.tenantId);
   if (!tenantId) return void res.status(400).json({ error: "Invalid tenantId" });
   const [row] = await db.select().from(appSettingsTable).where(eq(appSettingsTable.id, 1));
@@ -188,7 +189,7 @@ router.put("/api/admin/web-push/tenant-override/:tenantId", async (req, res) => 
   res.json({ success: true });
 });
 
-router.delete("/api/admin/web-push/tenant-override/:tenantId", async (req, res) => {
+router.delete("/admin/web-push/tenant-override/:tenantId", async (req, res) => {
   const tenantId = Number(req.params.tenantId);
   const [row] = await db.select().from(appSettingsTable).where(eq(appSettingsTable.id, 1));
   const overrides = { ...(row?.webPushTenantOverrides ?? {}) } as Record<string, Record<string, unknown>>;
@@ -201,7 +202,7 @@ router.delete("/api/admin/web-push/tenant-override/:tenantId", async (req, res) 
 // ────────────────────────────────────────────────────────────
 // GET /api/admin/web-push/plans  — list of plans for the limits matrix UI.
 // ────────────────────────────────────────────────────────────
-router.get("/api/admin/web-push/plans", async (_req, res) => {
+router.get("/admin/web-push/plans", async (_req, res) => {
   const plans = await db.select({ id: subscriptionPlansTable.id, name: subscriptionPlansTable.name }).from(subscriptionPlansTable);
   res.json(plans);
 });
@@ -209,7 +210,7 @@ router.get("/api/admin/web-push/plans", async (_req, res) => {
 // ────────────────────────────────────────────────────────────
 // POST /api/admin/web-push/test  — provider smoke test.
 // ────────────────────────────────────────────────────────────
-router.post("/api/admin/web-push/test", async (req, res) => {
+router.post("/admin/web-push/test", async (req, res) => {
   const { endpoint, title, body } = req.body as { endpoint?: string; title?: string; body?: string };
   if (endpoint) {
     const r = await sendTestWebPush(endpoint, { title: title ?? "Test push", body: body ?? "If you can read this, push delivery is working." });
@@ -222,7 +223,7 @@ router.post("/api/admin/web-push/test", async (req, res) => {
 // ────────────────────────────────────────────────────────────
 // GET /api/admin/web-push/stats  — platform reports.
 // ────────────────────────────────────────────────────────────
-router.get("/api/admin/web-push/stats", async (req, res) => {
+router.get("/admin/web-push/stats", async (req, res) => {
   const days = Math.max(1, Math.min(90, Number(req.query.days ?? 30)));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   try {
@@ -248,12 +249,12 @@ router.get("/api/admin/web-push/stats", async (req, res) => {
 // ────────────────────────────────────────────────────────────
 // Platform-level (NULL restaurantId) default templates
 // ────────────────────────────────────────────────────────────
-router.get("/api/admin/web-push/templates", async (_req, res) => {
+router.get("/admin/web-push/templates", async (_req, res) => {
   const rows = await db.select().from(webPushTemplatesTable).where(sql`${webPushTemplatesTable.restaurantId} IS NULL`);
   res.json(rows);
 });
 
-router.post("/api/admin/web-push/templates", async (req, res) => {
+router.post("/admin/web-push/templates", async (req, res) => {
   const { eventKey, name, title, body, iconUrl, imageUrl, clickUrl, variables } = req.body ?? {};
   if (!eventKey || !name || !title || !body) return void res.status(400).json({ error: "eventKey, name, title, body required" });
   const [row] = await db.insert(webPushTemplatesTable).values({
@@ -266,7 +267,7 @@ router.post("/api/admin/web-push/templates", async (req, res) => {
   res.json(row);
 });
 
-router.delete("/api/admin/web-push/templates/:id", async (req, res) => {
+router.delete("/admin/web-push/templates/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(webPushTemplatesTable).where(and(eq(webPushTemplatesTable.id, id), sql`${webPushTemplatesTable.restaurantId} IS NULL`));
   await recordAuditLog({ req, module: "web_push", action: "delete_template", entity: "web_push_template", entityId: id });
