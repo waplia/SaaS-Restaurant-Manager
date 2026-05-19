@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
 import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock, RotateCcw } from "lucide-react";
@@ -399,6 +399,19 @@ export default function CustomerMenuPage() {
     if (typeof window === "undefined" || typeof Notification === "undefined") return "unsupported";
     return Notification.permission;
   });
+  // iOS Safari (non-PWA) cannot receive Web Push at all — the browser permission
+  // dialog will not appear from a normal tab. The diner must install the menu
+  // to their Home Screen first. Detect this so we can show install instructions
+  // instead of a button that silently does nothing.
+  const iosPwaState = useMemo<"not-ios" | "ios-pwa" | "ios-needs-install">(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") return "not-ios";
+    const ua = navigator.userAgent || "";
+    const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && "ontouchend" in document);
+    if (!isIos) return "not-ios";
+    const standalone = window.matchMedia?.("(display-mode: standalone)").matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    return standalone ? "ios-pwa" : "ios-needs-install";
+  }, []);
 
   const cooldownKey = `tt_waiter_cooldown_${menu?.restaurantId ?? 0}_${tableId}`;
 
@@ -985,9 +998,10 @@ export default function CustomerMenuPage() {
       if (result === "granted") {
         setNotifPromptState("enabled");
         try { localStorage.setItem(notifPromptKey, "enabled"); } catch { /* ignore */ }
-        if (!import.meta.env.DEV) {
-          void registerWebPushSubscription();
-        }
+        // Register the push subscription on the server in all environments.
+        // (Was previously gated on production only, which meant diners on the
+        // dev/preview URL granted permission but never received push.)
+        void registerWebPushSubscription();
       } else {
         setNotifPromptState("dismissed");
         try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
@@ -1623,21 +1637,40 @@ export default function CustomerMenuPage() {
           <Bell className="w-5 h-5 mt-0.5 flex-shrink-0 text-orange-500" />
           <div className="flex-1 min-w-0">
             <p className="font-semibold leading-tight">Get notified when your order is ready</p>
-            <p className="text-xs text-orange-800/80 mt-0.5">Allow notifications and we'll ping you for status updates and waiter responses — even when this tab isn't in focus.</p>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={enableNotifications}
-                className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg px-3 py-1.5"
-              >
-                Allow notifications
-              </button>
-              <button
-                onClick={dismissNotificationPrompt}
-                className="bg-white border border-orange-200 text-orange-700 text-xs font-semibold rounded-lg px-3 py-1.5"
-              >
-                Not now
-              </button>
-            </div>
+            {iosPwaState === "ios-needs-install" ? (
+              <>
+                <p className="text-xs text-orange-800/80 mt-0.5">
+                  On iPhone, tap the <span className="font-semibold">Share</span> icon below and choose
+                  <span className="font-semibold"> "Add to Home Screen"</span>. Open the menu from your Home Screen, then tap "Allow notifications".
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={dismissNotificationPrompt}
+                    className="bg-white border border-orange-200 text-orange-700 text-xs font-semibold rounded-lg px-3 py-1.5"
+                  >
+                    Got it
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-orange-800/80 mt-0.5">Allow notifications and we'll ping you for status updates and waiter responses — even when this tab isn't in focus.</p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={enableNotifications}
+                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg px-3 py-1.5"
+                  >
+                    Allow notifications
+                  </button>
+                  <button
+                    onClick={dismissNotificationPrompt}
+                    className="bg-white border border-orange-200 text-orange-700 text-xs font-semibold rounded-lg px-3 py-1.5"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           <button onClick={dismissNotificationPrompt} className="text-orange-400 hover:text-orange-600 p-1 -mr-1 -mt-1" aria-label="Dismiss">
             <X className="w-4 h-4" />
