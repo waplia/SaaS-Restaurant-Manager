@@ -91,6 +91,13 @@ export async function generateFoodImage(opts: {
    * internal `reserveCredits` path.
    */
   existingReservation?: AiCreditReservation | null;
+  /**
+   * Set to true when the HTTP route already ran `requireAiCredits`
+   * middleware. In that case, do NOT auto-reserve here: the middleware
+   * may have intentionally returned a null reservation (super-admin
+   * bypass, free-quota path, etc.) and we must respect that decision.
+   */
+  creditsAlreadyHandled?: boolean;
   source?: string;
 }): Promise<FoodImageResult> {
   if (!isObjectStorageConfigured()) {
@@ -98,9 +105,10 @@ export async function generateFoodImage(opts: {
   }
 
   // Reserve 1 credit (matches the per-image rate for ai_food_image) unless
-  // the caller already reserved via requireAiCredits middleware.
+  // the caller already reserved (or explicitly bypassed) via the
+  // requireAiCredits middleware.
   let reservation: AiCreditReservation | null = opts.existingReservation ?? null;
-  if (!reservation && opts.tenantId != null) {
+  if (!reservation && !opts.creditsAlreadyHandled && opts.tenantId != null) {
     reservation = await reserveCredits({
       tenantId: opts.tenantId,
       featureSlug: "ai_food_image",

@@ -223,6 +223,7 @@ router.post(
         restaurantId,
         userId: req.user?.sub ?? null,
         existingReservation: reservation,
+        creditsAlreadyHandled: true,
         source: "ai_photo_button",
         inputs: {
           name: item.name,
