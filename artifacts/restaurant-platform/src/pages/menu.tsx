@@ -1047,7 +1047,7 @@ export default function MenuPage() {
               {menus.map((m: Menu) => (
                 <div key={m.id} className={cn("flex items-center rounded-md px-2 py-1.5 cursor-pointer group transition-colors", activeMenuId === m.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground")} onClick={() => { setSelectedMenuId(m.id); setSelectedCatId(undefined); }}>
                   {m.imageUrl ? (
-                    <img src={resolveImageUrl(m.imageUrl)} alt="" className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    <img src={resolveImageUrl(m.imageUrl)} alt={m.name} className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   ) : (
                     <UtensilsCrossed className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
                   )}
@@ -1080,7 +1080,7 @@ export default function MenuPage() {
             {categories.map((cat: MenuCategory) => (
               <div key={cat.id} className={cn("group flex items-center px-2 py-1.5 rounded-md cursor-pointer text-xs transition-colors mb-0.5", selectedCatId === cat.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground")} onClick={() => setSelectedCatId(cat.id)}>
                 {cat.imageUrl && (
-                  <img src={resolveImageUrl(cat.imageUrl)} alt="" className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <img src={resolveImageUrl(cat.imageUrl)} alt={cat.name} className="w-5 h-5 rounded object-cover mr-2 flex-shrink-0 bg-muted" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 )}
                 <span className="flex-1 truncate">{cat.name}</span>
                 <div className="hidden group-hover:flex items-center gap-0.5">

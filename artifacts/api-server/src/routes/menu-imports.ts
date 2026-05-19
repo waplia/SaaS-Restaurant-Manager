@@ -887,14 +887,25 @@ async function backfillPhotos(
 
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, () => worker()));
 
-  // Persist a compact summary so the import-history page can show
-  // "Generated photos for X of Y items."
+  // Persist a CUMULATIVE summary so the import-history page can show
+  // "Generated photos for X of Y items." For imports saved in multiple
+  // passes (partially_saved flow), we add this batch's counts to whatever
+  // earlier passes already contributed instead of overwriting.
   const [row] = await db.select({ summary: aiMenuImportsTable.summary })
     .from(aiMenuImportsTable).where(eq(aiMenuImportsTable.id, importId));
+  const prevSummary = (row?.summary ?? {}) as Record<string, unknown>;
+  const prevPhotos = (prevSummary.photos ?? {}) as {
+    total?: number; done?: number; failed?: number; skippedCredits?: number;
+  };
   await db.update(aiMenuImportsTable).set({
     summary: {
-      ...(row?.summary ?? {}),
-      photos: { total: queue.length, done, failed, skippedCredits },
+      ...prevSummary,
+      photos: {
+        total: (prevPhotos.total ?? 0) + queue.length,
+        done: (prevPhotos.done ?? 0) + done,
+        failed: (prevPhotos.failed ?? 0) + failed,
+        skippedCredits: (prevPhotos.skippedCredits ?? 0) + skippedCredits,
+      },
     },
     updatedAt: new Date(),
   }).where(eq(aiMenuImportsTable.id, importId));
