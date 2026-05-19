@@ -235,6 +235,17 @@ export async function startSession(restaurantId: number, actorUserId: number | n
         const errInfo = u.lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
         const errMsg = errInfo?.message ?? "closed";
         const statusCode = errInfo?.output?.statusCode;
+        // 515 = restartRequired — Baileys/WhatsApp always closes the socket
+        // immediately after a fresh QR pairing completes, expecting the
+        // client to reconnect with the saved creds. This is a SUCCESS path,
+        // not a failure — auto-restart without clearing auth.
+        if (statusCode === 515 || /stream errored|restart required/i.test(errMsg)) {
+          await logEvent(restaurantId, (await loadRow(restaurantId))?.id ?? 0, "restart_required", errMsg);
+          emit(restaurantId, "whatsapp:status", { status: "connecting" });
+          setLive(restaurantId, { status: "connecting", lastError: undefined });
+          setTimeout(() => { void startSession(restaurantId, null); }, 250);
+          return;
+        }
         // 401 = loggedOut, 403 = forbidden, 405 = unauthorized device — all
         // permanent: the cached creds are dead and any reconnect attempt
         // will repeat "Connection Failure". Clear the auth dir so the next
