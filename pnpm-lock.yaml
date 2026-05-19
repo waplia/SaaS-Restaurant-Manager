@@ -188,6 +188,9 @@ importers:
       electron-updater:
         specifier: ^6.3.9
         version: 6.8.3
+      node-thermal-printer:
+        specifier: ^4.4.5
+        version: 4.6.0
     devDependencies:
       electron:
         specifier: ^33.0.0
@@ -4953,6 +4956,9 @@ packages:
     resolution: {integrity: sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==}
     engines: {node: '>=12'}
 
+  dank-do-while@0.1.2:
+    resolution: {integrity: sha512-pyMrgXfugjvdernLCcXNixYqGijUZzYxrb+hAeED2EBpNbctCCxdA/O6NIQXn6vIjwzY1IMmV29d2Y6vaayrwQ==}
+
   dargs@7.0.0:
     resolution: {integrity: sha512-2iy1EkLdlBzQGvbweYRFxmFath8+K7+AKB0TlhHWkNuH+TmovaMH/Wp7V7R4u7f4SnX3OgLsU9t1NI9ioDnUpg==}
     engines: {node: '>=8'}
@@ -7342,6 +7348,9 @@ packages:
   node-releases@2.0.36:
     resolution: {integrity: sha512-TdC8FSgHz8Mwtw9g5L4gR/Sh9XhSP/0DEkQxfEFXOpiul5IiHgHan2VhYYb6agDSfp4KuvltmGApc8HMgUrIkA==}
 
+  node-thermal-printer@4.6.0:
+    resolution: {integrity: sha512-nl/beSbygyBf4qv6zDZimiD78S2VrMrpffULZWUgKxNjMUfzV2S0MO4/Qposrn2QZosVrQSGYq49VN1HIecw+A==}
+
   nodemailer@8.0.7:
     resolution: {integrity: sha512-pkjE4mkBzQjdJT4/UmlKl3pX0rC9fZmjh7c6C9o7lv66Ac6w9WCnzPzhbPNxwZAzlF4mdq4CSWB5+FbK6FWCow==}
     engines: {node: '>=6.0.0'}
@@ -7710,6 +7719,10 @@ packages:
   pngjs@5.0.0:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -9101,6 +9114,10 @@ packages:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
 
+  unorm@1.6.0:
+    resolution: {integrity: sha512-b2/KCUlYZUeA7JFUuRJZPUtr4gZvBh7tavtv4fvk4+KV9pfGiR6CQAQAWl49ZpR3ts2dk4FYkP7EIgDJoiOLDA==}
+    engines: {node: '>= 0.4.0'}
+
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
     engines: {node: '>= 0.8'}
@@ -9342,6 +9359,9 @@ packages:
   write-file-atomic@4.0.2:
     resolution: {integrity: sha512-7KxauUdBmSdWnmpaGFg+ppNjKF8uNLry8LyzjauQDOVONfFLNKrKvQOxZ/VuTIcS/gge/YNahf5RIIQWTSarlg==}
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
+
+  write-file-queue@0.0.1:
+    resolution: {integrity: sha512-uUInKYzJjhvZ5UJA27tsqbw6s9EEpwe6r4mdpN95t2E4aKzJEJbZg2EvIleTGaja+xtZYx376Jd2WWu5LEQP0w==}
 
   ws@6.2.3:
     resolution: {integrity: sha512-jmTjYU0j60B+vHey6TfR3Z7RD61z/hmxBS3VMSGIrroOWXQEneK1zNuotOUrGyBHQj0yrpsLHPWtigEFd13ndA==}
@@ -14454,6 +14474,8 @@ snapshots:
 
   d3-timer@3.0.1: {}
 
+  dank-do-while@0.1.2: {}
+
   dargs@7.0.0: {}
 
   data-uri-to-buffer@4.0.1: {}
@@ -17382,6 +17404,13 @@ snapshots:
 
   node-releases@2.0.36: {}
 
+  node-thermal-printer@4.6.0:
+    dependencies:
+      iconv-lite: 0.6.3
+      pngjs: 7.0.0
+      unorm: 1.6.0
+      write-file-queue: 0.0.1
+
   nodemailer@8.0.7: {}
 
   nopt@6.0.0:
@@ -17799,6 +17828,8 @@ snapshots:
   pngjs@3.4.0: {}
 
   pngjs@5.0.0: {}
+
+  pngjs@7.0.0: {}
 
   possible-typed-array-names@1.1.0: {}
 
@@ -19421,6 +19452,8 @@ snapshots:
 
   universalify@2.0.1: {}
 
+  unorm@1.6.0: {}
+
   unpipe@1.0.0: {}
 
   untildify@4.0.0: {}
@@ -19670,6 +19703,10 @@ snapshots:
     dependencies:
       imurmurhash: 0.1.4
       signal-exit: 3.0.7
+
+  write-file-queue@0.0.1:
+    dependencies:
+      dank-do-while: 0.1.2
 
   ws@6.2.3:
     dependencies:
