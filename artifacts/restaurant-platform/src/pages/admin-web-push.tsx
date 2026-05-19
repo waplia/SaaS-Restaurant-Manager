@@ -109,7 +109,7 @@ function ProviderTab() {
       try { body.fcm = JSON.parse(fcmJson || "{}"); } catch { throw new Error("FCM config is not valid JSON"); }
       try { body.onesignal = JSON.parse(oneJson || "{}"); } catch { throw new Error("OneSignal config is not valid JSON"); }
       try { body.custom = JSON.parse(customJson || "{}"); } catch { throw new Error("Custom config is not valid JSON"); }
-      return apiAction("/admin/web-push/provider", { method: "PUT", body });
+      return apiAction("/admin/web-push/provider", "PUT", body);
     },
     onSuccess: () => {
       toast.success("Provider configuration saved");
@@ -121,7 +121,7 @@ function ProviderTab() {
   });
 
   const test = useMutation({
-    mutationFn: () => apiAction("/admin/web-push/test", { method: "POST", body: { endpoint: testEndpoint } }),
+    mutationFn: () => apiAction("/admin/web-push/test", "POST", { endpoint: testEndpoint }),
     onSuccess: () => toast.success("Test push sent"),
     onError: (e: Error) => toast.error(e.message ?? "Failed"),
   });
@@ -242,9 +242,8 @@ function DefaultsTab() {
   }
 
   const save = useMutation({
-    mutationFn: () => apiAction("/admin/web-push/provider", {
-      method: "PUT",
-      body: { defaults: { iconUrl: icon || null, badgeUrl: badge || null, fallbackImage: fallbackImg || null, clickUrl: click || null } },
+    mutationFn: () => apiAction("/admin/web-push/provider", "PUT", {
+      defaults: { iconUrl: icon || null, badgeUrl: badge || null, fallbackImage: fallbackImg || null, clickUrl: click || null },
     }),
     onSuccess: () => {
       toast.success("Defaults saved");
@@ -292,7 +291,7 @@ function LimitsTab() {
       let planLimits, tenantOverrides;
       try { planLimits = JSON.parse(planJson || "{}"); } catch { throw new Error("Plan limits is not valid JSON"); }
       try { tenantOverrides = JSON.parse(overridesJson || "{}"); } catch { throw new Error("Tenant overrides is not valid JSON"); }
-      return apiAction("/admin/web-push/provider", { method: "PUT", body: { planLimits, tenantOverrides } });
+      return apiAction("/admin/web-push/provider", "PUT", { planLimits, tenantOverrides });
     },
     onSuccess: () => {
       toast.success("Limits saved");
