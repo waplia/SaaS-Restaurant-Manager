@@ -15,12 +15,23 @@ export function AdminLayout({ children, title, subtitle, actions }: Props) {
   const { user } = useAuth();
 
   if (!user?.isSuperAdmin) {
+    // Friendly empty state for non-super-admins who land on a platform-only
+    // page (typically via a bookmark or stale link). Pairs with the
+    // `SuperAdminRoute` wrapper in App.tsx, which already redirects most
+    // users away — this is the fallback for the rare case the page renders
+    // before the redirect, so they see a clear "Not available" state
+    // instead of submitting a form and getting a 403 "Super admin access
+    // required" toast.
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-3 max-w-sm px-6">
           <ShieldCheck className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h2 className="text-xl font-semibold">Super Admin Access Only</h2>
-          <p className="text-muted-foreground text-sm">You do not have permission to view this page.</p>
+          <h2 className="text-xl font-semibold">Not available on your account</h2>
+          <p className="text-muted-foreground text-sm">
+            This screen is part of platform-wide administration and isn't
+            available to restaurant accounts. If you think you should have
+            access, please contact your platform administrator.
+          </p>
           <Button variant="outline" onClick={() => window.history.back()}>Go back</Button>
         </div>
       </div>

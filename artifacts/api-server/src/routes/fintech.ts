@@ -8,8 +8,8 @@
  *   GET    /restaurants/:rid/wallets/:walletId/transactions
  *   POST   /restaurants/:rid/wallets/:walletId/topup
  *   POST   /restaurants/:rid/wallets/:walletId/transfer
- *   POST   /restaurants/:rid/wallets/:walletId/adjust   (super_admin)
- *   POST   /restaurants/:rid/wallets/:walletId/freeze   (super_admin)
+ *   POST   /restaurants/:rid/wallets/:walletId/adjust   (owner|manager|super_admin, wallet scoped to caller)
+ *   POST   /restaurants/:rid/wallets/:walletId/freeze   (owner|manager|super_admin, wallet scoped to caller)
  *
  *   GET    /restaurants/:rid/fintech/gateway-payments
  *   POST   /restaurants/:rid/fintech/gateway-payments
@@ -202,12 +202,22 @@ router.post("/restaurants/:restaurantId/wallets/:walletId/transfer", requireRole
   }
 });
 
-router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireSuperAdmin, async (req, res) => {
+// Owner/manager (or super-admin) can adjust the wallet. The router-level
+// requireRole + validateRestaurantAccess above enforces tenant membership
+// for the :restaurantId in the URL, but we also have to verify that the
+// :walletId path param actually belongs to that restaurant/tenant —
+// otherwise an owner could mutate another tenant's wallet by pairing
+// their own restaurantId with a foreign walletId (IDOR).
+router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const schema = z.object({ deltaPaise: z.number().int(), reason: z.string().min(3), idempotencyKey: z.string().min(8) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
   const w = await wallet.getWalletById(Number(req.params.walletId));
   if (!w) { res.status(404).json({ error: "Wallet not found" }); return; }
+  if (!req.user?.isSuperAdmin) {
+    if (w.tenantId !== tid(req)) { res.status(403).json({ error: "forbidden", message: "Wallet does not belong to your tenant" }); return; }
+    if (w.restaurantId !== rid(req)) { res.status(403).json({ error: "forbidden", message: "Wallet does not belong to this restaurant" }); return; }
+  }
   try {
     const r = await wallet.adjust(
       { tenantId: w.tenantId, kind: w.kind as any, restaurantId: w.restaurantId, customerId: w.customerId, giftCardId: w.giftCardId },
@@ -220,12 +230,16 @@ router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireSuperA
   }
 });
 
-router.post("/restaurants/:restaurantId/wallets/:walletId/freeze", requireSuperAdmin, async (req, res) => {
+router.post("/restaurants/:restaurantId/wallets/:walletId/freeze", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const schema = z.object({ frozen: z.boolean(), reason: z.string().min(3) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed" }); return; }
   const w = await wallet.getWalletById(Number(req.params.walletId));
   if (!w) { res.status(404).json({ error: "Wallet not found" }); return; }
+  if (!req.user?.isSuperAdmin) {
+    if (w.tenantId !== tid(req)) { res.status(403).json({ error: "forbidden", message: "Wallet does not belong to your tenant" }); return; }
+    if (w.restaurantId !== rid(req)) { res.status(403).json({ error: "forbidden", message: "Wallet does not belong to this restaurant" }); return; }
+  }
   const updated = await wallet.setFrozen(w.id, parsed.data.frozen, parsed.data.reason, uid(req));
   await recordAuditLog({ req, module: "fintech", action: "wallet_freeze", entity: "wallet", entityId: w.id, restaurantId: w.restaurantId, newValue: { frozen: parsed.data.frozen, reason: parsed.data.reason } });
   res.json(updated);
