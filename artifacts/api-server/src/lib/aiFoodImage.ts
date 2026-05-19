@@ -123,9 +123,9 @@ export async function generateFoodImage(opts: {
       body: buffer,
       headers: {
         "Content-Type": contentType,
-        // Browsers honour this when the object is served directly; restaurant
-        // owners downloading the image see a readable filename instead of a UUID.
-        "Content-Disposition": `inline; filename="${filename}"`,
+        // Restaurant owners downloading the asset get a readable filename
+        // (e.g. "paneer-tikka-7gk2qa.png") instead of the UUID object key.
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
     if (!put.ok) {
@@ -141,7 +141,7 @@ export async function generateFoodImage(opts: {
     // Persist the human-readable filename on the object metadata so any
     // subsequent download surfaces the correct name.
     try {
-      await objectFile.setMetadata({ contentDisposition: `inline; filename="${filename}"` });
+      await objectFile.setMetadata({ contentDisposition: `attachment; filename="${filename}"` });
     } catch {
       /* non-fatal — filename also baked into upload PUT above */
     }

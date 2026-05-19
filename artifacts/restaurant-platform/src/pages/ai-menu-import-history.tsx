@@ -24,6 +24,32 @@ interface ImportRow {
   rolledBackAt: string | null;
   createdByName: string | null;
   createdByEmail: string | null;
+  summary?: {
+    photos?: { total: number; done: number; failed: number; skippedCredits: number };
+  } | null;
+}
+
+function PhotosCell({ row }: { row: ImportRow }) {
+  const p = row.summary?.photos;
+  if (!p || p.total === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const allDone = p.done === p.total;
+  const inFlight = p.done + p.failed + p.skippedCredits < p.total;
+  let tone = "text-emerald-600";
+  if (inFlight) tone = "text-amber-600";
+  else if (!allDone) tone = "text-rose-600";
+  const detailBits: string[] = [];
+  if (p.failed > 0) detailBits.push(`${p.failed} failed`);
+  if (p.skippedCredits > 0) detailBits.push(`${p.skippedCredits} no credits`);
+  return (
+    <div className="text-xs">
+      <div className={`font-medium ${tone}`}>{p.done}/{p.total}</div>
+      {detailBits.length > 0 && (
+        <div className="text-muted-foreground">{detailBits.join(", ")}</div>
+      )}
+    </div>
+  );
 }
 
 export default function AiMenuImportHistoryPage() {
@@ -68,6 +94,7 @@ export default function AiMenuImportHistoryPage() {
                     <th className="px-3 py-2 text-right">Saved</th>
                     <th className="px-3 py-2 text-right">Review</th>
                     <th className="px-3 py-2 text-right">Credits</th>
+                    <th className="px-3 py-2 text-right">Photos</th>
                     <th className="px-3 py-2 text-left">Status</th>
                     <th className="px-3 py-2 text-right"></th>
                   </tr>
@@ -86,6 +113,7 @@ export default function AiMenuImportHistoryPage() {
                       <td className="px-3 py-2 text-right">{row.savedItemCount}</td>
                       <td className="px-3 py-2 text-right">{row.needsReviewCount}</td>
                       <td className="px-3 py-2 text-right">{row.actualCredits || row.estimatedCredits}</td>
+                      <td className="px-3 py-2 text-right"><PhotosCell row={row} /></td>
                       <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[10px] capitalize">{row.status.replace(/_/g, " ")}</Badge>
                       </td>

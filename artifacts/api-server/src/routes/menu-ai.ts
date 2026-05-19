@@ -18,9 +18,8 @@ import { requirePlanFeature } from "../middleware/planFeature";
 import { AIProviderService } from "../lib/aiProviderService";
 import { requireAiCredits, reserveCredits, commitReservation, refundReservation, type AiCreditReservation } from "../lib/aiCredits";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { setObjectAclPolicy } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
-import { buildImageFilename } from "../lib/aiFoodImage";
+import { generateFoodImage } from "../lib/aiFoodImage";
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -199,64 +198,36 @@ Rules: respond with JSON only, no prose, no markdown fence. Keep allergens and t
 
 router.post(
   "/restaurants/:restaurantId/items/:itemId/ai-photo",
-  requireAiCredits("ai_food_image", () => ({ units: 1 })),
   async (req: Request, res: Response) => {
+    // NOTE: credit reservation is handled inside `generateFoodImage` so this
+    // route uses the exact same provider/upload/ACL/credit code path as the
+    // menu-import auto-backfill. Don't add requireAiCredits here or credits
+    // get reserved twice.
     const restaurantId = Number(req.params.restaurantId);
     const itemId = Number(req.params.itemId);
-    const reservation = res.locals.aiCreditReservation as AiCreditReservation | null;
     const item = await loadItemWithCategory(restaurantId, itemId);
     if (!item) {
-      if (reservation) await refundReservation(reservation, "item not found");
       return void res.status(404).json({ error: "Item not found" });
     }
 
-    const styleHint = item.isVeg ? "vegetarian" : "";
     const extraStyle = String((req.body as { style?: string })?.style ?? "").trim();
     const ingredients = String((req.body as { ingredients?: string })?.ingredients ?? "").trim();
     const cuisine = String((req.body as { cuisine?: string })?.cuisine ?? "").trim();
-    const prompt = `Professional overhead food photograph of ${item.name}${item.categoryName ? `, a ${item.categoryName.toLowerCase()} dish` : ""}${cuisine ? `, ${cuisine} cuisine` : ""}${styleHint ? `, ${styleHint}` : ""}${ingredients ? `, with ${ingredients}` : ""}. ${extraStyle || "Restaurant menu style, square crop, natural daylight, shallow depth of field, plated on a neutral ceramic dish on a wooden table, garnished tastefully, vibrant colours, photorealistic"}, no text, no logo, no watermark.`;
 
     try {
-      const result = await AIProviderService.generateImage({
-        featureSlug: "ai_food_image",
+      const { objectPath } = await generateFoodImage({
         tenantId: req.user?.tenantId ?? null,
         restaurantId,
         userId: req.user?.sub ?? null,
-        metadata: { itemId, cuisine, ingredients, style: extraStyle },
-      }, { prompt });
-
-      const buffer = Buffer.from(result.b64_json, "base64");
-      const contentType = result.mimeType || "image/png";
-
-      const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg"
-        : contentType.includes("webp") ? "webp" : "png";
-      const filename = buildImageFilename(item.name, ext);
-      const uploadURL = await objectStorage.getObjectEntityUploadURL();
-      const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
-      const put = await fetch(uploadURL, {
-        method: "PUT",
-        body: buffer,
-        headers: {
-          "Content-Type": contentType,
-          "Content-Disposition": `inline; filename="${filename}"`,
+        inputs: {
+          name: item.name,
+          categoryName: item.categoryName,
+          isVeg: item.isVeg,
+          cuisine: cuisine || null,
+          ingredients: ingredients || null,
+          style: extraStyle || null,
         },
       });
-      if (!put.ok) {
-        if (reservation) await refundReservation(reservation, "object storage put failed");
-        req.log.error({ status: put.status }, "Upload to object storage failed");
-        return void res.status(502).json({ error: "Failed to store generated image" });
-      }
-      const objectFile = await objectStorage.getObjectEntityFile(objectPath);
-      await setObjectAclPolicy(objectFile, {
-        restaurantId: String(restaurantId),
-        uploaderId: req.user?.sub ? String(req.user.sub) : undefined,
-        visibility: "public",
-      });
-      try {
-        await objectFile.setMetadata({ contentDisposition: `inline; filename="${filename}"` });
-      } catch {
-        /* non-fatal */
-      }
 
       const payload: PhotoDraftPayload = { imageUrl: objectPath };
       const [draft] = await db
@@ -264,23 +235,17 @@ router.post(
         .values({ menuItemId: itemId, restaurantId, kind: "photo", payload })
         .returning();
       await trimDrafts(itemId, "photo");
-      if (reservation) await commitReservation({
-        reservation,
-        userId: req.user?.sub ?? null,
-        requestLogId: result.requestLogId,
-      });
       await recordAuditLog({
         req,
         module: "khana_ai",
         action: "ai_food_image.generate",
         entity: "menu_item",
         entityId: itemId,
-        newValue: { source: "ai_generated", cuisine, ingredients, draftId: draft?.id, objectPath, requestLogId: result.requestLogId },
+        newValue: { source: "ai_generated", cuisine, ingredients, draftId: draft?.id, objectPath },
       });
 
       res.json({ draft, payload });
     } catch (error) {
-      if (reservation) await refundReservation(reservation, (error as Error).message ?? "provider error");
       req.log.error({ err: error }, "AI photo generation failed");
       await recordAuditLog({
         req,
