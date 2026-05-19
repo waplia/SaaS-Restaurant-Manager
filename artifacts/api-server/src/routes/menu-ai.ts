@@ -198,15 +198,18 @@ Rules: respond with JSON only, no prose, no markdown fence. Keep allergens and t
 
 router.post(
   "/restaurants/:restaurantId/items/:itemId/ai-photo",
+  // Keep requireAiCredits in front of the HTTP route so plan toggles,
+  // daily/monthly caps, free-quota handling, and super-admin bypass are
+  // preserved — generateFoodImage will reuse the reservation it places on
+  // res.locals instead of creating a second one.
+  requireAiCredits("ai_food_image", () => ({ units: 1 })),
   async (req: Request, res: Response) => {
-    // NOTE: credit reservation is handled inside `generateFoodImage` so this
-    // route uses the exact same provider/upload/ACL/credit code path as the
-    // menu-import auto-backfill. Don't add requireAiCredits here or credits
-    // get reserved twice.
     const restaurantId = Number(req.params.restaurantId);
     const itemId = Number(req.params.itemId);
+    const reservation = res.locals.aiCreditReservation as AiCreditReservation | null;
     const item = await loadItemWithCategory(restaurantId, itemId);
     if (!item) {
+      if (reservation) await refundReservation(reservation, "item not found");
       return void res.status(404).json({ error: "Item not found" });
     }
 
@@ -219,6 +222,8 @@ router.post(
         tenantId: req.user?.tenantId ?? null,
         restaurantId,
         userId: req.user?.sub ?? null,
+        existingReservation: reservation,
+        source: "ai_photo_button",
         inputs: {
           name: item.name,
           categoryName: item.categoryName,
@@ -246,7 +251,14 @@ router.post(
 
       res.json({ draft, payload });
     } catch (error) {
-      req.log.error({ err: error }, "AI photo generation failed");
+      const err = error as Error & { code?: string };
+      req.log.error({ err }, "AI photo generation failed");
+      // Preserve the structured INSUFFICIENT_CREDITS response previously
+      // produced by requireAiCredits's commit path — UI shows the
+      // top-up-credits CTA on a 402.
+      if (err.code === "INSUFFICIENT_CREDITS") {
+        return void res.status(402).json({ error: err.message, code: "INSUFFICIENT_CREDITS" });
+      }
       await recordAuditLog({
         req,
         module: "khana_ai",

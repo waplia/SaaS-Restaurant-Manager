@@ -81,19 +81,31 @@ export async function generateFoodImage(opts: {
   restaurantId: number;
   userId: number | null;
   inputs: FoodImageInputs;
+  /**
+   * Optional pre-existing reservation from `requireAiCredits` middleware.
+   * When provided, the helper will NOT reserve credits again — it just
+   * commits/refunds the passed-in reservation. This lets HTTP routes keep
+   * the full plan/feature/cap/quota/super-admin checks that
+   * `requireAiCredits` performs, while the menu-import background backfill
+   * (which has no middleware in front of it) can fall back to the simpler
+   * internal `reserveCredits` path.
+   */
+  existingReservation?: AiCreditReservation | null;
+  source?: string;
 }): Promise<FoodImageResult> {
   if (!isObjectStorageConfigured()) {
     throw new Error("Object storage is not configured");
   }
 
-  // Reserve 1 credit (matches the per-image rate for ai_food_image).
-  let reservation: AiCreditReservation | null = null;
-  if (opts.tenantId != null) {
+  // Reserve 1 credit (matches the per-image rate for ai_food_image) unless
+  // the caller already reserved via requireAiCredits middleware.
+  let reservation: AiCreditReservation | null = opts.existingReservation ?? null;
+  if (!reservation && opts.tenantId != null) {
     reservation = await reserveCredits({
       tenantId: opts.tenantId,
       featureSlug: "ai_food_image",
       credits: 1,
-      meta: { source: "menu_import_auto", restaurantId: opts.restaurantId, itemName: opts.inputs.name },
+      meta: { source: opts.source ?? "menu_import_auto", restaurantId: opts.restaurantId, itemName: opts.inputs.name },
     });
   }
 
