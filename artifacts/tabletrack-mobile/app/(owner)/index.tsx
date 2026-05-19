@@ -21,6 +21,8 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { MetricCard, PlaceholderCard } from "@/components/MetricCard";
 import { MiniBarChart } from "@/components/MiniBarChart";
+import { GradientHeroCard } from "@/components/GradientHeroCard";
+import { QuickActionTile } from "@/components/QuickActionTile";
 
 type CashSession = {
   session: { id: number; status: string; openingFloat?: string; openedByName?: string | null } | null;
@@ -373,14 +375,36 @@ export default function OwnerDashboard() {
         </ScrollView>
       ) : null}
 
-      {/* Quick actions */}
-      <View style={styles.quickGrid}>
-        <QuickAction icon="add-circle" label="New Order" onPress={openNewOrder} />
-        <QuickAction icon="cash" label={cashOpen ? "Close Cash" : "Open Cash"} onPress={openCashRegister} />
-        <QuickAction icon="time" label="Attendance" onPress={openAttendance} />
-        <QuickAction icon="cube" label="Low Stock" onPress={openLowStock} />
-        <QuickAction icon="checkmark-done" label="Approvals" onPress={openApprovals} />
-        <QuickAction icon="shield" label="Fraud" onPress={openFraud} />
+      {/* Hero gradient card — today's headline numbers at a glance */}
+      <GradientHeroCard
+        title="TODAY'S PERFORMANCE"
+        onPress={openOrders}
+        metrics={[
+          { label: "Sales", value: todayRevenue ?? "—", sub: revGrowthLabel ?? undefined },
+          { label: "Orders", value: ds ? String(ds.todayOrders ?? 0) : "—", sub: liveOrders.total > 0 ? `${liveOrders.total} live` : "All clear" },
+          { label: "Avg Bill", value: ds ? `₹${Number((ds as unknown as { avgOrderValue?: string }).avgOrderValue ?? 0).toLocaleString("en-IN")}` : "—" },
+        ]}
+      />
+
+      {/* Pulsing new orders banner — only when there are unaccepted orders */}
+      {liveOrders.open > 0 ? (
+        <Pressable onPress={openOrders} style={[styles.pulseBanner, { borderColor: colors.primary, backgroundColor: colors.accent }]}>
+          <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+          <Text style={[styles.pulseText, { color: colors.foreground }]}>
+            {liveOrders.open} new order{liveOrders.open === 1 ? "" : "s"} waiting · tap to accept
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </Pressable>
+      ) : null}
+
+      {/* Quick actions — tile grid */}
+      <View style={styles.tileGrid}>
+        <QuickActionTile icon="cash-outline" label={cashOpen ? "Close Cash" : "Open Cash"} onPress={openCashRegister} />
+        <QuickActionTile icon="time-outline" label="Attendance" onPress={openAttendance} badge={attendance.absent || null} />
+        <QuickActionTile icon="cube-outline" label="Low Stock" onPress={openLowStock} badge={stockItems.low.length || null} tint="#ea580c" />
+        <QuickActionTile icon="checkmark-done-outline" label="Approvals" onPress={openApprovals} badge={(approvalsQ.data ?? []).length || null} />
+        <QuickActionTile icon="shield-outline" label="Fraud" onPress={openFraud} badge={fraudAlerts.total || null} tint="#dc2626" />
+        <QuickActionTile icon="restaurant-outline" label="Kitchen" onPress={openKitchen} badge={liveOrders.inKitchen || null} />
       </View>
 
       {/* Today's sales + Live orders */}
@@ -715,6 +739,10 @@ const styles = StyleSheet.create({
   outletSortLabel: { fontSize: 12, fontWeight: "500" },
   outletSortPills: { flexDirection: "row", gap: 6, flex: 1, flexWrap: "wrap" },
   quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between" },
+  pulseBanner: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
+  pulseDot: { width: 10, height: 10, borderRadius: 5 },
+  pulseText: { flex: 1, fontSize: 13, fontFamily: "Inter_700Bold" },
   quickAction: {
     flexBasis: "23%", flexGrow: 1, minWidth: 76, minHeight: 76,
     alignItems: "center", justifyContent: "center", gap: 6,
