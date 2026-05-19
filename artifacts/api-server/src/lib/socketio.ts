@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import type { Server as HTTPServer } from "http";
 import { verifyToken } from "./auth";
 import { validateGuestToken } from "./guestToken";
+import { sendWebPushToOrder } from "./webPush";
 
 interface SocketUser {
   restaurantId?: number;
@@ -109,6 +110,26 @@ export function broadcastEvent(restaurantId: number, event: string, data: unknow
 }
 
 export function broadcastOrderUpdate(orderId: number, data: unknown): void {
-  if (!io) return;
-  io.to(`order:${orderId}`).emit("order:update", data);
+  if (io) io.to(`order:${orderId}`).emit("order:update", data);
+
+  // Best-effort browser Web Push for diners whose tab is closed or backgrounded.
+  // Only fires for guest-facing status transitions; silent for everything else.
+  if (typeof data === "object" && data !== null) {
+    const d = data as { status?: unknown; orderNumber?: unknown };
+    const status = typeof d.status === "string" ? d.status : null;
+    const orderNumber = typeof d.orderNumber === "string" ? d.orderNumber : null;
+    const titleByStatus: Record<string, string> = {
+      confirmed: "Order confirmed",
+      preparing: "Your order is being prepared",
+      ready: "Your order is ready!",
+      served: "Your order has been served",
+      completed: "Order completed",
+      cancelled: "Order cancelled",
+    };
+    if (status && titleByStatus[status]) {
+      const title = titleByStatus[status];
+      const body = orderNumber ? `Order ${orderNumber}: ${status}` : `Status: ${status}`;
+      void sendWebPushToOrder(orderId, { title, body, data: { orderId, status } });
+    }
+  }
 }

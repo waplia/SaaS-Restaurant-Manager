@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { eq, and, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { db, waiterRequestsTable, floorTablesTable, notificationsTable, usersTable } from "../lib/db";
+import { db, waiterRequestsTable, floorTablesTable, notificationsTable, usersTable, ordersTable } from "../lib/db";
+import { getIO } from "../lib/socketio";
+import { sendWebPushToOrder } from "../lib/webPush";
 
 // Separate alias so the resolver name doesn't collide with the acknowledger
 // join in the request list query.
@@ -9,6 +11,50 @@ const resolverUsers = alias(usersTable, "resolver_users");
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { broadcastEvent } from "../lib/socketio";
+
+// Notify the diner whose table the waiter request was created on. We find the
+// most recent active order for that table, broadcast `waiter:acknowledged`
+// into its socket room, and fan out a Web Push so the diner is told even if
+// the QR menu tab is closed.
+async function notifyDinerOfWaiterUpdate(args: {
+  restaurantId: number;
+  tableId: number | null;
+  type: string | null;
+  status: "acknowledged" | "resolved";
+}): Promise<void> {
+  if (!args.tableId) return;
+  const [activeOrder] = await db
+    .select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.tableId, args.tableId),
+      eq(ordersTable.restaurantId, args.restaurantId),
+    ))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(1);
+  if (!activeOrder) return;
+  const io = getIO();
+  if (io) {
+    io.to(`order:${activeOrder.id}`).emit("waiter:acknowledged", {
+      tableId: args.tableId,
+      type: args.type,
+      status: args.status,
+    });
+  }
+  const isBill = args.type === "request_bill";
+  const verb = args.status === "resolved" ? "is on the way" : "has been notified";
+  const title = isBill
+    ? (args.status === "resolved" ? "Your bill is on the way" : "Bill request received")
+    : (args.status === "resolved" ? "Your waiter is on the way" : "Your waiter has been notified");
+  const body = isBill
+    ? `A staff member ${verb}.`
+    : `A staff member ${verb} for table ${args.tableId}.`;
+  void sendWebPushToOrder(activeOrder.id, {
+    title,
+    body,
+    data: { orderId: activeOrder.id, kind: "waiter", type: args.type, status: args.status },
+  });
+}
 import { broadcastEvent as sseBroadcast } from "./realtime";
 import { pushToStaff } from "../lib/pushNotify";
 
@@ -70,6 +116,7 @@ router.post("/restaurants/:restaurantId/waiter-requests/:id/acknowledge",
     if (!updated) return void res.status(409).json({ error: "Request not found or already acknowledged" });
     broadcastEvent(restaurantId, "waiter_request:update", { id: updated.id, status: updated.status });
     sseBroadcast(restaurantId, "waiter_request:update", { id: updated.id, status: updated.status });
+    void notifyDinerOfWaiterUpdate({ restaurantId, tableId: updated.tableId, type: updated.type, status: "acknowledged" });
     res.json(updated);
   },
 );
@@ -91,6 +138,7 @@ router.post("/restaurants/:restaurantId/waiter-requests/:id/resolve",
     if (!updated) return void res.status(409).json({ error: "Request not found or already resolved" });
     broadcastEvent(restaurantId, "waiter_request:update", { id: updated.id, status: updated.status });
     sseBroadcast(restaurantId, "waiter_request:update", { id: updated.id, status: updated.status });
+    void notifyDinerOfWaiterUpdate({ restaurantId, tableId: updated.tableId, type: updated.type, status: "resolved" });
     res.json(updated);
   },
 );

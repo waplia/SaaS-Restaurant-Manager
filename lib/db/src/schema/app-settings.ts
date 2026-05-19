@@ -29,6 +29,11 @@ export const appSettingsTable = pgTable("app_settings", {
   signupEnabled: boolean("signup_enabled").notNull().default(true),
   demoModeEnabled: boolean("demo_mode_enabled").notNull().default(false),
   landingPageEnabled: boolean("landing_page_enabled").notNull().default(true),
+  // Web Push (VAPID) — auto-generated on first use, persisted so existing
+  // subscriptions remain valid across api-server restarts.
+  webPushPublicKey: text("web_push_public_key"),
+  webPushPrivateKey: text("web_push_private_key"),
+  webPushSubject: text("web_push_subject"),
   // Footer & Social
   footerText: text("footer_text"),
   socialLinks: jsonb("social_links").$type<Record<string, string>>().notNull().default({}),

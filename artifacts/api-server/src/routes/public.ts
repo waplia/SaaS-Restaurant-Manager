@@ -45,6 +45,7 @@ import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { issueTokenForOrder } from "../lib/tokens";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
+import { getVapidPublicKey, upsertWebPushSubscription, deleteWebPushSubscription } from "../lib/webPush";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
 
 const router = Router();
@@ -999,6 +1000,64 @@ router.post("/public/call-waiter", async (req, res) => {
     note: trimmedNote || null,
   });
   return void res.json({ success: true, requestId: row.id, message: "Waiter has been notified" });
+});
+
+router.get("/public/push/vapid-public-key", async (_req, res) => {
+  try {
+    const key = await getVapidPublicKey();
+    res.json({ publicKey: key });
+  } catch (err) {
+    logger.error({ err }, "Failed to load VAPID public key");
+    res.status(500).json({ error: "Web push not available" });
+  }
+});
+
+router.post("/public/push/subscribe", async (req, res) => {
+  const { subscription, orderId, token, restaurantSlug, tableId } = req.body as {
+    subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+    orderId?: number;
+    token?: string;
+    restaurantSlug?: string;
+    tableId?: number;
+  };
+  if (!subscription || typeof subscription.endpoint !== "string" || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+    return void res.status(400).json({ error: "Invalid subscription payload" });
+  }
+  let resolvedOrderId: number | null = null;
+  if (orderId && token) {
+    if (!validateGuestToken(orderId, token)) {
+      return void res.status(403).json({ error: "Invalid order token" });
+    }
+    resolvedOrderId = orderId;
+  }
+  let resolvedRestaurantId: number | null = null;
+  if (restaurantSlug && typeof restaurantSlug === "string") {
+    const [r] = await db.select({ id: restaurantsTable.id }).from(restaurantsTable).where(eq(restaurantsTable.slug, restaurantSlug));
+    if (r) resolvedRestaurantId = r.id;
+  }
+  try {
+    await upsertWebPushSubscription({
+      endpoint: subscription.endpoint,
+      keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
+      orderId: resolvedOrderId,
+      restaurantId: resolvedRestaurantId,
+      tableId: typeof tableId === "number" ? tableId : null,
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"].slice(0, 500) : null,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "Failed to persist web push subscription");
+    res.status(500).json({ error: "Failed to subscribe" });
+  }
+});
+
+router.post("/public/push/unsubscribe", async (req, res) => {
+  const { endpoint } = req.body as { endpoint?: string };
+  if (!endpoint || typeof endpoint !== "string") {
+    return void res.status(400).json({ error: "endpoint required" });
+  }
+  await deleteWebPushSubscription(endpoint);
+  res.json({ success: true });
 });
 
 router.get("/public/site/:slug", async (req, res) => {

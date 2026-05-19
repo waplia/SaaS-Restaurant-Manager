@@ -19,6 +19,7 @@ export * from "./cash-register";
 export * from "./waiter-requests";
 export * from "./settings";
 export * from "./user-devices";
+export * from "./web-push";
 export * from "./marketing";
 export * from "./billing";
 export * from "./notifications";

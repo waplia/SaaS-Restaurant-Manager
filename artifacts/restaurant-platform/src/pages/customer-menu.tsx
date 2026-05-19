@@ -6,10 +6,37 @@ import { cn } from "@/lib/utils";
 
 const API_BASE = "/api";
 
+class ApiError extends Error {
+  status: number;
+  payload: Record<string, unknown> | null;
+  constructor(message: string, status: number, payload: Record<string, unknown> | null) {
+    super(message);
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+async function parseApiError(r: Response): Promise<ApiError> {
+  const text = await r.text().catch(() => "");
+  let payload: Record<string, unknown> | null = null;
+  let message = text || `Request failed (${r.status})`;
+  if (text) {
+    try {
+      const json = JSON.parse(text) as Record<string, unknown>;
+      payload = json;
+      const err = json.error ?? json.message;
+      if (typeof err === "string" && err.trim()) message = err;
+    } catch {
+      // not JSON, keep raw text
+    }
+  }
+  return new ApiError(message, r.status, payload);
+}
+
 function apiPublicGet<T>(path: string, token?: string): Promise<T> {
   const url = token ? `${API_BASE}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : `${API_BASE}${path}`;
   return fetch(url).then(async r => {
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw await parseApiError(r);
     return r.json();
   });
 }
@@ -21,7 +48,7 @@ function apiPublicPost<T>(path: string, body: unknown, token?: string): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).then(async r => {
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw await parseApiError(r);
     return r.json();
   });
 }
@@ -229,19 +256,28 @@ function itemHasTag(item: PublicMenuItem, tag: string): boolean {
   return !!item.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
 }
 
-function VegIcon({ isVeg, size = 14 }: { isVeg?: boolean; size?: number }) {
+function VegIcon({ isVeg, size = 14, showLabel = false }: { isVeg?: boolean; size?: number; showLabel?: boolean }) {
   const color = isVeg === false ? "#EF4444" : isVeg === true ? "#16A34A" : "#9CA3AF";
-  return (
+  const label = isVeg === false ? "Non-veg" : isVeg === true ? "Veg" : "";
+  const square = (
     <span
       className="inline-flex items-center justify-center border-2 flex-shrink-0 rounded-[3px]"
       style={{ width: size, height: size, borderColor: color }}
-      aria-label={isVeg === false ? "Non-veg" : "Veg"}
+      aria-hidden={showLabel ? true : undefined}
+      aria-label={showLabel ? undefined : label || "Veg"}
     >
       {isVeg === false ? (
-        <span className="rounded-full" style={{ width: size * 0.45, height: size * 0.45, background: color, clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)" }} />
+        <span style={{ width: size * 0.5, height: size * 0.5, background: color, clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)" }} />
       ) : (
         <span className="rounded-full" style={{ width: size * 0.45, height: size * 0.45, backgroundColor: color }} />
       )}
+    </span>
+  );
+  if (!showLabel) return square;
+  return (
+    <span className="inline-flex items-center gap-1" aria-label={label || "Veg"}>
+      {square}
+      <span className="text-[10px] font-semibold uppercase tracking-wide leading-none" style={{ color }}>{label}</span>
     </span>
   );
 }
@@ -340,7 +376,22 @@ export default function CustomerMenuPage() {
   const [waiterSending, setWaiterSending] = useState(false);
   const [waiterCooldownUntil, setWaiterCooldownUntil] = useState<number>(0);
   const [waiterStatus, setWaiterStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [waiterErrorMsg, setWaiterErrorMsg] = useState<string | null>(null);
   const [now, setNow] = useState<number>(Date.now());
+
+  // Browser-push opt-in for QR diners. Tri-state: null = undecided, "enabled" = granted, "dismissed" = user said not now.
+  const notifPromptKey = `tt_notif_prompt_${slug}`;
+  const [notifPromptState, setNotifPromptState] = useState<"undecided" | "enabled" | "dismissed">(() => {
+    try {
+      const v = localStorage.getItem(notifPromptKey);
+      if (v === "enabled" || v === "dismissed") return v;
+    } catch { /* ignore */ }
+    return "undecided";
+  });
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") return "unsupported";
+    return Notification.permission;
+  });
 
   const cooldownKey = `tt_waiter_cooldown_${menu?.restaurantId ?? 0}_${tableId}`;
 
@@ -542,12 +593,32 @@ export default function CustomerMenuPage() {
       socket.emit("join:order", { orderId, token });
     });
     socket.on("order:update", (data: { id: number; status: string; paymentStatus?: string }) => {
-      if (data.id === orderId) {
-        setOrderStatus(prev => prev ? { ...prev, status: data.status, paymentStatus: data.paymentStatus ?? prev.paymentStatus } : prev);
-      }
+      if (data.id !== orderId) return;
+      setOrderStatus(prev => {
+        if (!prev) return prev;
+        const prevStatus = prev.status;
+        const next = { ...prev, status: data.status, paymentStatus: data.paymentStatus ?? prev.paymentStatus };
+        if (prevStatus !== data.status) {
+          const map: Record<string, { title: string; body: string }> = {
+            confirmed: { title: "Order confirmed", body: "The restaurant has accepted your order." },
+            preparing: { title: "Cooking now", body: "The kitchen has started preparing your order." },
+            ready: { title: "Your order is ready!", body: "Please collect it / it's on its way to your table." },
+            served: { title: "Enjoy your meal!", body: "Your order has been served." },
+            completed: { title: "Order complete", body: "Thanks for dining with us." },
+            cancelled: { title: "Order cancelled", body: "Please speak with staff if you have questions." },
+          };
+          const m = map[data.status];
+          if (m) void showOrderNotification(m.title, m.body, { orderId, status: data.status });
+        }
+        return next;
+      });
+    });
+    socket.on("waiter:acknowledged", (payload: { tableId?: number; type?: string }) => {
+      if (payload?.tableId && payload.tableId !== tableId) return;
+      void showOrderNotification("Waiter on the way", "A staff member has acknowledged your request.", payload);
     });
     return () => { socket.disconnect(); socketRef.current = null; };
-  }, []);
+  }, [tableId]);
 
   useEffect(() => {
     if (!stripeReturnOrderId || !stripeReturnToken) return;
@@ -561,6 +632,7 @@ export default function CustomerMenuPage() {
     apiPublicGet<{ verified: boolean; paymentStatus: string; orderId: number; orderNumber: string; totalAmount: string }>(`/public/orders/verify-session?${qs}`)
       .then(result => {
         setOrderResult({ orderId: result.orderId, orderNumber: result.orderNumber, guestToken: token, totalAmount: result.totalAmount, status: result.paymentStatus === "paid" ? "preparing" : "pending" });
+        bindPushSubscriptionToOrder(result.orderId, token);
         return apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`, token);
       })
       .then(status => {
@@ -752,6 +824,7 @@ export default function CustomerMenuPage() {
         })),
       });
       setOrderResult(result);
+      bindPushSubscriptionToOrder(result.orderId, result.guestToken);
       const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`, result.guestToken);
       setOrderStatus(status);
       setCart([]);
@@ -767,8 +840,9 @@ export default function CustomerMenuPage() {
       } else {
         setView("success");
       }
-    } catch {
-      alert("Failed to place order. Please try again.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      alert(msg && msg.length < 300 ? msg : "We couldn't place your order. Please try again or ask staff for help.");
     } finally {
       setPlacing(false);
     }
@@ -807,7 +881,114 @@ export default function CustomerMenuPage() {
     setWaiterReason(reason ?? "call_waiter");
     setWaiterNote("");
     setWaiterStatus("idle");
+    setWaiterErrorMsg(null);
     setWaiterModalOpen(true);
+  }
+
+  // Show an order-status notification via the service worker (preferred on mobile)
+  // or fall back to the foreground Notification API. Silently no-ops when
+  // permission isn't granted.
+  async function showOrderNotification(title: string, body: string, data?: Record<string, unknown>) {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready.catch(() => null);
+        if (reg) {
+          await reg.showNotification(title, {
+            body,
+            icon: "/app/logo.png",
+            badge: "/app/favicon.png",
+            tag: "tt-order-update",
+            renotify: true,
+            data: data ?? {},
+          } as NotificationOptions);
+          return;
+        }
+      }
+      new Notification(title, { body, icon: "/app/logo.png", tag: "tt-order-update" });
+    } catch {
+      // Notifications can fail on some browsers (e.g. iOS Safari without PWA install) — silently ignore.
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    const output = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+    return output;
+  }
+
+  async function registerWebPushSubscription(opts?: { orderId?: number | null; guestToken?: string | null }): Promise<void> {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" });
+      await navigator.serviceWorker.ready;
+      const { publicKey } = await apiPublicGet<{ publicKey: string }>("/public/push/vapid-public-key");
+      if (!publicKey) return;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const keyBytes = urlBase64ToUint8Array(publicKey);
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: keyBytes.buffer.slice(keyBytes.byteOffset, keyBytes.byteOffset + keyBytes.byteLength) as ArrayBuffer,
+        });
+      }
+      const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+      await apiPublicPost("/public/push/subscribe", {
+        subscription: { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } },
+        orderId: opts?.orderId ?? orderResult?.orderId ?? null,
+        token: opts?.guestToken ?? orderResult?.guestToken ?? null,
+        restaurantSlug: slug,
+        tableId: tableId ?? null,
+      });
+    } catch (err) {
+      // Push subscription is best-effort — the in-page Notification fallback
+      // still works for foregrounded/backgrounded tabs.
+      console.warn("Web push subscribe failed", err);
+    }
+  }
+
+  // Re-upserts the existing browser push subscription with the freshly-issued
+  // order id + guest token so the server can fan-out push for THIS order. We
+  // call this every time an order is created — first-visit opt-in subscribes
+  // without an order, so this is what binds the subscription to a real order.
+  function bindPushSubscriptionToOrder(orderId: number, guestToken: string): void {
+    if (notifPermission !== "granted") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    void registerWebPushSubscription({ orderId, guestToken });
+  }
+
+  async function enableNotifications() {
+    if (notifPermission === "unsupported") {
+      setNotifPromptState("dismissed");
+      try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setNotifPermission(result);
+      if (result === "granted") {
+        setNotifPromptState("enabled");
+        try { localStorage.setItem(notifPromptKey, "enabled"); } catch { /* ignore */ }
+        if (!import.meta.env.DEV) {
+          void registerWebPushSubscription();
+        }
+      } else {
+        setNotifPromptState("dismissed");
+        try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
+      }
+    } catch {
+      setNotifPromptState("dismissed");
+      try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
+    }
+  }
+
+  function dismissNotificationPrompt() {
+    setNotifPromptState("dismissed");
+    try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
   }
 
   function openRewards() {
@@ -850,8 +1031,19 @@ export default function CustomerMenuPage() {
 
   async function sendWaiterRequest() {
     if (!menu) return;
-    if (waiterCooldownUntil > Date.now()) return;
+    if (!tableId) {
+      setWaiterErrorMsg("Call Waiter is only available when scanning a table QR. Please ask a staff member in person.");
+      setWaiterStatus("error");
+      return;
+    }
+    if (waiterCooldownUntil > Date.now()) {
+      const s = Math.ceil((waiterCooldownUntil - Date.now()) / 1000);
+      setWaiterErrorMsg(`Please wait ${s}s before sending another request.`);
+      setWaiterStatus("error");
+      return;
+    }
     setWaiterSending(true);
+    setWaiterErrorMsg(null);
     try {
       const body: { restaurantId: number; tableId: number; type: string; note?: string; token?: string } = {
         restaurantId: menu.restaurantId,
@@ -866,7 +1058,9 @@ export default function CustomerMenuPage() {
       try { localStorage.setItem(cooldownKey, String(until)); } catch { /* ignore */ }
       setWaiterStatus("sent");
       setTimeout(() => setWaiterModalOpen(false), 1200);
-    } catch {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      setWaiterErrorMsg(msg && msg.length < 200 ? msg : "Couldn't reach the kitchen. Please try again.");
       setWaiterStatus("error");
     } finally {
       setWaiterSending(false);
@@ -1397,8 +1591,49 @@ export default function CustomerMenuPage() {
     );
   }
 
+  const showNotifPrompt = !!tableId && notifPromptState === "undecided" && notifPermission === "default";
+  // Persistent re-enable affordance: shown after the user dismissed the banner
+  // but the browser permission is still 'default' (i.e. revocable). Keeps the
+  // door open without nagging the diner with the full banner.
+  const showNotifReenable = !!tableId && notifPromptState === "dismissed" && notifPermission === "default";
+
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
+      {showNotifPrompt && (
+        <div className="bg-orange-50 border-b border-orange-200 text-orange-900 px-4 py-3 text-sm flex items-start gap-3">
+          <Bell className="w-5 h-5 mt-0.5 flex-shrink-0 text-orange-500" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold leading-tight">Get notified when your order is ready</p>
+            <p className="text-xs text-orange-800/80 mt-0.5">Allow notifications and we'll ping you for status updates and waiter responses — even when this tab isn't in focus.</p>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={enableNotifications}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg px-3 py-1.5"
+              >
+                Allow notifications
+              </button>
+              <button
+                onClick={dismissNotificationPrompt}
+                className="bg-white border border-orange-200 text-orange-700 text-xs font-semibold rounded-lg px-3 py-1.5"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+          <button onClick={dismissNotificationPrompt} className="text-orange-400 hover:text-orange-600 p-1 -mr-1 -mt-1" aria-label="Dismiss">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {showNotifReenable && (
+        <button
+          onClick={enableNotifications}
+          className="w-full bg-white border-b border-gray-100 px-4 py-2 text-xs text-orange-600 hover:bg-orange-50 flex items-center justify-center gap-1.5"
+        >
+          <Bell className="w-3.5 h-3.5" />
+          <span>Enable order notifications</span>
+        </button>
+      )}
       {availability && !availability.accepting && (
         <div className="bg-red-50 border-b border-red-200 text-red-800 px-4 py-3 text-sm">
           <p className="font-semibold">Not accepting orders right now</p>
@@ -1604,8 +1839,8 @@ export default function CustomerMenuPage() {
                   >
                     <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
                       <div>
-                        <div className="flex items-start gap-1.5">
-                          <span className="mt-1"><VegIcon isVeg={item.isVeg} /></span>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <VegIcon isVeg={item.isVeg} showLabel />
                           <p className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</p>
                         </div>
                         <div className="flex gap-1 mt-1 flex-wrap items-center">
@@ -1770,9 +2005,12 @@ export default function CustomerMenuPage() {
               <X className="w-4 h-4" />
             </button>
             <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
-              <div className="flex items-start justify-between mb-1">
-                <h3 className="text-lg font-bold text-gray-900 leading-tight flex-1">{selectedItem.name}</h3>
-                <span className="text-lg font-bold text-orange-500 ml-3">{currSymbol}{Number(selectedItem.price).toFixed(2)}</span>
+              <div className="flex items-baseline justify-between gap-3 mb-1">
+                <div className="flex items-baseline gap-2 flex-1 min-w-0">
+                  <VegIcon isVeg={selectedItem.isVeg} showLabel />
+                  <h3 className="text-lg font-bold text-gray-900 leading-tight">{selectedItem.name}</h3>
+                </div>
+                <span className="text-lg font-bold text-orange-500 flex-shrink-0">{currSymbol}{Number(selectedItem.price).toFixed(2)}</span>
               </div>
               {selectedItem.description && <p className="text-sm text-gray-500 mb-3">{selectedItem.description}</p>}
               {selectedItem.calories && <p className="text-xs text-gray-400 mb-2">{selectedItem.calories} cal{selectedItem.prepTime ? ` · ${selectedItem.prepTime} min` : ""}</p>}
@@ -1940,17 +2178,25 @@ export default function CustomerMenuPage() {
               )}
               {waiterStatus === "error" && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-3 py-2">
-                  Could not send the request. Please try again.
+                  {waiterErrorMsg ?? "Could not send the request. Please try again."}
+                </div>
+              )}
+
+              {!tableId && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl px-3 py-2">
+                  Call Waiter only works when you've scanned a table QR code. For online/pickup orders, please contact the restaurant directly.
                 </div>
               )}
 
               <button
-                disabled={waiterSending || waiterCooldownUntil > now || (waiterReason === "custom" && !waiterNote.trim())}
+                disabled={waiterSending || !tableId || waiterCooldownUntil > now || (waiterReason === "custom" && !waiterNote.trim())}
                 onClick={sendWaiterRequest}
                 className="w-full bg-orange-500 text-white font-bold rounded-xl py-3.5 disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
               >
                 {waiterSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-                {waiterCooldownUntil > now
+                {!tableId
+                  ? "Not available online"
+                  : waiterCooldownUntil > now
                   ? `Wait ${Math.ceil((waiterCooldownUntil - now) / 1000)}s before next request`
                   : waiterSending ? "Sending…" : "Send request"}
               </button>
