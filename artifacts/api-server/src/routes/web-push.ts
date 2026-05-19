@@ -26,7 +26,7 @@ const router = Router();
 // ────────────────────────────────────────────────────────────
 // GET / PUT  restaurant-scoped settings (transactional toggles, caps, quiet hours)
 // ────────────────────────────────────────────────────────────
-router.get("/api/restaurants/:restaurantId/web-push/settings", validateRestaurantAccess, async (req, res) => {
+router.get("/restaurants/:restaurantId/web-push/settings", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const settings = await getOrCreateRestaurantSettings(restaurantId);
   const tenantId = (req as unknown as { restaurant?: { tenantId: number } }).restaurant?.tenantId
@@ -36,7 +36,7 @@ router.get("/api/restaurants/:restaurantId/web-push/settings", validateRestauran
   res.json({ settings, limits, knownFeatures: WEB_PUSH_FEATURE_KEYS, knownEvents: WEB_PUSH_EVENT_KEYS });
 });
 
-router.put("/api/restaurants/:restaurantId/web-push/settings", validateRestaurantAccess, async (req, res) => {
+router.put("/restaurants/:restaurantId/web-push/settings", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   await getOrCreateRestaurantSettings(restaurantId);
   const body = req.body as {
@@ -65,7 +65,7 @@ router.put("/api/restaurants/:restaurantId/web-push/settings", validateRestauran
 // ────────────────────────────────────────────────────────────
 // POST  test send to the most-recent active staff subscription
 // ────────────────────────────────────────────────────────────
-router.post("/api/restaurants/:restaurantId/web-push/test", validateRestaurantAccess, async (req, res) => {
+router.post("/restaurants/:restaurantId/web-push/test", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { endpoint, title, body } = req.body as { endpoint?: string; title?: string; body?: string };
   const payload = { title: title ?? "TableTrack test push", body: body ?? "This is a test from your restaurant's Web Push settings." };
@@ -89,13 +89,13 @@ router.post("/api/restaurants/:restaurantId/web-push/test", validateRestaurantAc
 // ────────────────────────────────────────────────────────────
 // Templates CRUD
 // ────────────────────────────────────────────────────────────
-router.get("/api/restaurants/:restaurantId/web-push/templates", validateRestaurantAccess, async (req, res) => {
+router.get("/restaurants/:restaurantId/web-push/templates", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db.select().from(webPushTemplatesTable).where(eq(webPushTemplatesTable.restaurantId, restaurantId));
   res.json(rows);
 });
 
-router.post("/api/restaurants/:restaurantId/web-push/templates", validateRestaurantAccess, async (req, res) => {
+router.post("/restaurants/:restaurantId/web-push/templates", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { eventKey, name, title, body, iconUrl, imageUrl, clickUrl, variables, isActive } = req.body ?? {};
   if (!eventKey || !name || !title || !body) return void res.status(400).json({ error: "eventKey, name, title, body required" });
@@ -110,7 +110,7 @@ router.post("/api/restaurants/:restaurantId/web-push/templates", validateRestaur
   res.json(row);
 });
 
-router.put("/api/restaurants/:restaurantId/web-push/templates/:id", validateRestaurantAccess, async (req, res) => {
+router.put("/restaurants/:restaurantId/web-push/templates/:id", validateRestaurantAccess, async (req, res) => {
   const id = Number(req.params.id);
   const restaurantId = Number(req.params.restaurantId);
   const patch: Record<string, unknown> = { updatedAt: new Date() };
@@ -122,7 +122,7 @@ router.put("/api/restaurants/:restaurantId/web-push/templates/:id", validateRest
   res.json({ success: true });
 });
 
-router.delete("/api/restaurants/:restaurantId/web-push/templates/:id", validateRestaurantAccess, async (req, res) => {
+router.delete("/restaurants/:restaurantId/web-push/templates/:id", validateRestaurantAccess, async (req, res) => {
   const id = Number(req.params.id);
   const restaurantId = Number(req.params.restaurantId);
   await db.delete(webPushTemplatesTable).where(and(eq(webPushTemplatesTable.id, id), eq(webPushTemplatesTable.restaurantId, restaurantId)));
@@ -133,7 +133,7 @@ router.delete("/api/restaurants/:restaurantId/web-push/templates/:id", validateR
 // ────────────────────────────────────────────────────────────
 // Subscribers list / cleanup
 // ────────────────────────────────────────────────────────────
-router.get("/api/restaurants/:restaurantId/web-push/subscribers", validateRestaurantAccess, async (req, res) => {
+router.get("/restaurants/:restaurantId/web-push/subscribers", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const status = (req.query.status as string | undefined) ?? null;
   const conds = [eq(webPushSubscriptionsTable.restaurantId, restaurantId)] as ReturnType<typeof eq>[];
@@ -154,7 +154,7 @@ router.get("/api/restaurants/:restaurantId/web-push/subscribers", validateRestau
   res.json(rows);
 });
 
-router.delete("/api/restaurants/:restaurantId/web-push/subscribers/:id", validateRestaurantAccess, async (req, res) => {
+router.delete("/restaurants/:restaurantId/web-push/subscribers/:id", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   await db.update(webPushSubscriptionsTable).set({ status: "unsubscribed", unsubscribedAt: new Date() })
@@ -163,7 +163,7 @@ router.delete("/api/restaurants/:restaurantId/web-push/subscribers/:id", validat
   res.json({ success: true });
 });
 
-router.post("/api/restaurants/:restaurantId/web-push/subscribers/cleanup", validateRestaurantAccess, async (req, res) => {
+router.post("/restaurants/:restaurantId/web-push/subscribers/cleanup", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const r = await db.update(webPushSubscriptionsTable)
     .set({ status: "expired", unsubscribedAt: new Date() })
@@ -176,13 +176,13 @@ router.post("/api/restaurants/:restaurantId/web-push/subscribers/cleanup", valid
 // ────────────────────────────────────────────────────────────
 // Campaigns CRUD + send
 // ────────────────────────────────────────────────────────────
-router.get("/api/restaurants/:restaurantId/web-push/campaigns", validateRestaurantAccess, async (req, res) => {
+router.get("/restaurants/:restaurantId/web-push/campaigns", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db.select().from(webPushCampaignsTable).where(eq(webPushCampaignsTable.restaurantId, restaurantId)).orderBy(desc(webPushCampaignsTable.createdAt));
   res.json(rows);
 });
 
-router.post("/api/restaurants/:restaurantId/web-push/campaigns", validateRestaurantAccess, async (req, res) => {
+router.post("/restaurants/:restaurantId/web-push/campaigns", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { name, title, body, iconUrl, imageUrl, clickUrl, segment, scheduledAt, templateId } = req.body ?? {};
   if (!name || !title || !body) return void res.status(400).json({ error: "name, title, body required" });
@@ -199,7 +199,7 @@ router.post("/api/restaurants/:restaurantId/web-push/campaigns", validateRestaur
   res.json(row);
 });
 
-router.post("/api/restaurants/:restaurantId/web-push/campaigns/:id/send", validateRestaurantAccess, async (req, res) => {
+router.post("/restaurants/:restaurantId/web-push/campaigns/:id/send", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const [c] = await db.select().from(webPushCampaignsTable).where(and(eq(webPushCampaignsTable.id, id), eq(webPushCampaignsTable.restaurantId, restaurantId)));
@@ -256,7 +256,7 @@ router.post("/api/restaurants/:restaurantId/web-push/campaigns/:id/send", valida
   }
 });
 
-router.delete("/api/restaurants/:restaurantId/web-push/campaigns/:id", validateRestaurantAccess, async (req, res) => {
+router.delete("/restaurants/:restaurantId/web-push/campaigns/:id", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   await db.delete(webPushCampaignsTable).where(and(eq(webPushCampaignsTable.id, id), eq(webPushCampaignsTable.restaurantId, restaurantId)));
@@ -267,7 +267,7 @@ router.delete("/api/restaurants/:restaurantId/web-push/campaigns/:id", validateR
 // ────────────────────────────────────────────────────────────
 // Usage report (this restaurant)
 // ────────────────────────────────────────────────────────────
-router.get("/api/restaurants/:restaurantId/web-push/usage", validateRestaurantAccess, async (req, res) => {
+router.get("/restaurants/:restaurantId/web-push/usage", validateRestaurantAccess, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const days = Math.max(1, Math.min(365, Number(req.query.days ?? 30)));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

@@ -1610,11 +1610,11 @@ export default function CustomerMenuPage() {
     );
   }
 
-  const showNotifPrompt = !!tableId && notifPromptState === "undecided" && notifPermission === "default";
+  const showNotifPrompt = notifPromptState === "undecided" && notifPermission === "default";
   // Persistent re-enable affordance: shown after the user dismissed the banner
   // but the browser permission is still 'default' (i.e. revocable). Keeps the
   // door open without nagging the diner with the full banner.
-  const showNotifReenable = !!tableId && notifPromptState === "dismissed" && notifPermission === "default";
+  const showNotifReenable = notifPromptState === "dismissed" && notifPermission === "default";
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
