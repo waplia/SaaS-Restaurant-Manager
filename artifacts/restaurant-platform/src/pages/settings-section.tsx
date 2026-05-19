@@ -28,7 +28,7 @@ const SECTION_PLAN_FEATURE: Partial<Record<SectionKey, string>> = {
 
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
-  "currencies", "taxes", "loyalty", "discounts", "whatsapp",
+  "currencies", "taxes", "loyalty", "discounts", "whatsapp", "web-push",
 ]);
 
 const ALLOWED_KEYS = new Set<SectionKey>([
@@ -37,7 +37,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "reservation", "about-us", "customer-site", "receipt", "printer",
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
-  "ai", "kiosk", "loyalty", "discounts", "whatsapp",
+  "ai", "kiosk", "loyalty", "discounts", "whatsapp", "web-push",
   "direct-ordering",
 ]);
 
