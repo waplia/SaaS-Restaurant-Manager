@@ -58,7 +58,6 @@ async function loadBaileys(): Promise<Record<string, unknown> | null> {
   try {
     // The dependency is intentionally optional; the await import is wrapped
     // so a missing package only degrades the Web QR provider, not the whole API.
-    // @ts-expect-error -- optional peer dep; missing module simply degrades the Web QR provider.
     const mod = await import("@whiskeysockets/baileys").catch(() => null);
     baileysModule = (mod as Record<string, unknown> | null) ?? null;
     return baileysModule;

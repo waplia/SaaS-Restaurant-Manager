@@ -2400,14 +2400,14 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
         restaurantId,
         eventKey: "order.ready",
         category: "transactional",
-        customerId: order.customerId,
+        targetCustomerIds: order.customerId ? [order.customerId] : undefined,
+        targetOrderId: updated.orderId,
         payload: {
           title: "Your order is ready!",
           body: `Order #${order.orderNumber ?? updated.orderId} is ready for pickup.`,
           url: `/orders/${updated.orderId}`,
-          data: { orderId: updated.orderId, type: "order_ready" },
+          data: { orderId: updated.orderId, type: "order_ready", orderNumber: String(order.orderNumber ?? updated.orderId), customerName: customer?.name ?? "" },
         },
-        vars: { orderNumber: String(order.orderNumber ?? updated.orderId), customerName: customer?.name ?? "" },
       }).catch((err) => console.warn("web-push order.ready failed", err));
     }
   }

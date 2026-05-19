@@ -82,7 +82,7 @@ router.post("/api/restaurants/:restaurantId/web-push/test", validateRestaurantAc
     lastTestStatus: result.ok ? "ok" : "failed",
     lastTestError: result.error ?? null,
   }).where(eq(webPushSettingsTable.restaurantId, restaurantId));
-  await recordAuditLog({ req, module: "web_push", action: "test_send", entity: "web_push_settings", entityId: restaurantId, details: result });
+  await recordAuditLog({ req, module: "web_push", action: "test_send", entity: "web_push_settings", entityId: restaurantId, details: JSON.stringify(result) });
   res.json(result);
 });
 
@@ -169,7 +169,7 @@ router.post("/api/restaurants/:restaurantId/web-push/subscribers/cleanup", valid
     .set({ status: "expired", unsubscribedAt: new Date() })
     .where(and(eq(webPushSubscriptionsTable.restaurantId, restaurantId), eq(webPushSubscriptionsTable.status, "failed")))
     .returning({ id: webPushSubscriptionsTable.id });
-  await recordAuditLog({ req, module: "web_push", action: "subscriber_cleanup", entity: "restaurant", entityId: restaurantId, details: { count: r.length } });
+  await recordAuditLog({ req, module: "web_push", action: "subscriber_cleanup", entity: "restaurant", entityId: restaurantId, details: JSON.stringify({ count: r.length }) });
   res.json({ cleaned: r.length });
 });
 
@@ -247,7 +247,7 @@ router.post("/api/restaurants/:restaurantId/web-push/campaigns/:id/send", valida
       }))).onConflictDoNothing?.();
     }
 
-    await recordAuditLog({ req, module: "web_push", action: "send_campaign", entity: "web_push_campaign", entityId: id, details: out });
+    await recordAuditLog({ req, module: "web_push", action: "send_campaign", entity: "web_push_campaign", entityId: id, details: JSON.stringify(out) });
     res.json(out);
   } catch (err) {
     logger.error({ err, campaignId: id }, "campaign send failed");

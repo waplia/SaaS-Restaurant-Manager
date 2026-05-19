@@ -158,7 +158,7 @@ router.put("/admin/web-push/provider", async (req, res) => {
   await db.update(appSettingsTable).set(patch).where(eq(appSettingsTable.id, 1));
   await recordAuditLog({
     req, module: "web_push", action: "update_provider", entity: "app_settings", entityId: 1,
-    details: { provider: body.provider, fallback: body.fallbackProvider, globalEnabled: body.globalEnabled },
+    details: JSON.stringify({ provider: body.provider, fallback: body.fallbackProvider, globalEnabled: body.globalEnabled }),
   });
   res.json({ success: true });
 });

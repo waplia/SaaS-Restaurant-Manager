@@ -467,6 +467,7 @@ export function getChannelCapabilities(): Record<BroadcastChannel, { available: 
     sms: hasSmsFrom ? { available: true } : { available: false, reason: "SMS provider not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_SMS_FROM missing)" },
     whatsapp: hasWhatsapp ? { available: true } : { available: false, reason: "WhatsApp provider not configured (Twilio credentials / TWILIO_WHATSAPP_FROM missing)" },
     push: hasPush ? { available: true } : { available: false, reason: "Push provider not configured (FCM_SERVER_KEY / FIREBASE_SERVICE_ACCOUNT / EXPO_ACCESS_TOKEN missing)" },
+    web_push: { available: !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY } as { available: true } | { available: false; reason: string },
   };
 }
 
