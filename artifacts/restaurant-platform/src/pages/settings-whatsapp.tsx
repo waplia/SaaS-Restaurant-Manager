@@ -97,6 +97,11 @@ function SettingsTab() {
     queryKey: ["whatsapp", "settings", rid],
     queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/settings`),
   });
+  const { data: provider } = useQuery<{ providerType: ProviderType }>({
+    queryKey: ["whatsapp", "provider-settings", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/provider-settings`),
+  });
+  const isWebQrProvider = provider?.providerType === "web_qr";
   const [form, setForm] = useState<Partial<WaSettings>>({});
   const [test, setTest] = useState({ to: "", body: "Hello from our restaurant!" });
 
@@ -128,6 +133,7 @@ function SettingsTab() {
       <WebQrConnectionCard />
       <SafeSendingCard />
 
+      {!isWebQrProvider && (
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -180,6 +186,7 @@ function SettingsTab() {
           </Button>
         </div>
       </div>
+      )}
 
       <div className="bg-card border border-border rounded-xl p-5 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-2"><Send className="w-4 h-4" /> Send test message</h3>
