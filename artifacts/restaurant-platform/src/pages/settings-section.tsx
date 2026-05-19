@@ -1,5 +1,6 @@
 import { useParams, Redirect } from "wouter";
 import WhatsAppSection from "./settings-whatsapp";
+import WebPushSection from "./settings-web-push";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,7 @@ function renderSection(key: SectionKey) {
     case "loyalty": return <LoyaltySection />;
     case "discounts": return <DiscountsSection />;
     case "whatsapp": return <WhatsAppSection />;
+    case "web-push": return <WebPushSection />;
     default: return null;
   }
 }

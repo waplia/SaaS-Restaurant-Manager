@@ -306,6 +306,7 @@ function Router() {
       <Route path="/admin/email" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/maintenance" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/whatsapp" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/web-push" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/ai" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/health" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/metrics" component={() => <SuperAdminRoute component={AdminPage} />} />

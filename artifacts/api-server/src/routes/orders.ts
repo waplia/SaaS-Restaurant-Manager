@@ -55,6 +55,7 @@ import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/k
 import { recordVariantPour } from "./bar";
 import { issueTokenForOrder, syncTokenWithTickets } from "../lib/tokens";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
+import { sendWebPush } from "../lib/webPush";
 import { requireOpenCashRegister, recordCashSaleMovement, lockOpenCashRegister } from "./cash-register";
 import { loadLoyaltyConfig, pickTier, computeEarnedPoints, computeRedemptionDiscount, computeExpiryDate, getLifetimeEarned } from "../lib/loyalty";
 import { loadDiscountsConfig, exceedsThreshold, exceedsRoleCap, verifyManagerPin, sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
@@ -2392,6 +2393,22 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
       if (customer?.phone) {
         sendWhatsApp({ to: customer.phone, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
       }
+      // Browser/web-push notification — runs in parallel with WhatsApp and is
+      // best-effort: opt-in, quiet hours, and caps are enforced inside
+      // sendWebPush, so we just hand off the event.
+      sendWebPush({
+        restaurantId,
+        eventKey: "order.ready",
+        category: "transactional",
+        customerId: order.customerId,
+        payload: {
+          title: "Your order is ready!",
+          body: `Order #${order.orderNumber ?? updated.orderId} is ready for pickup.`,
+          url: `/orders/${updated.orderId}`,
+          data: { orderId: updated.orderId, type: "order_ready" },
+        },
+        vars: { orderNumber: String(order.orderNumber ?? updated.orderId), customerName: customer?.name ?? "" },
+      }).catch((err) => console.warn("web-push order.ready failed", err));
     }
   }
 

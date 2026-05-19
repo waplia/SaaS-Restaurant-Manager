@@ -117,6 +117,8 @@ import vendorInvoicesRouter from "./vendor-invoices";
 import customerAppRouter, { customerAppPublicRouter } from "./customer-app";
 import walletRouter from "./wallet";
 import loyaltyNetworkRouter from "./loyalty-network";
+import webPushRouter from "./web-push";
+import adminWebPushRouter from "./admin-web-push";
 
 const router: IRouter = Router();
 
@@ -203,6 +205,8 @@ router.use(billingRouter);
 router.use(couponsRouter);
 router.use(loyaltyRouter);
 router.use(loyaltyNetworkRouter);
+router.use(webPushRouter);
+router.use(adminWebPushRouter);
 router.use(settingsRouter);
 router.use(onboardingRouter);
 router.use(implementationsRouter);

@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
-export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push";
+export type BroadcastChannel = "in_app" | "email" | "sms" | "whatsapp" | "push" | "web_push";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
 export type BroadcastPriority = "low" | "medium" | "high" | "urgent";
 export type DeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "skipped" | "pending";

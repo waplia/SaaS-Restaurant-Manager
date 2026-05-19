@@ -45,7 +45,9 @@ import { createKitchenTicketsForOrder } from "../lib/kitchenRouting";
 import { issueTokenForOrder } from "../lib/tokens";
 import { generateGuestToken, validateGuestToken } from "../lib/guestToken";
 import { createWaiterRequestPublic } from "./waiter-requests";
-import { getVapidPublicKey, upsertWebPushSubscription, deleteWebPushSubscription } from "../lib/webPush";
+import { getVapidPublicKey, upsertWebPushSubscription, deleteWebPushSubscription, updateSubscriptionPrefs, getSubscriptionStatus } from "../lib/webPush";
+import { webPushLogsTable } from "../lib/db";
+import { markLogClicked } from "../lib/webPush";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
 
 const router = Router();
@@ -1013,12 +1015,18 @@ router.get("/public/push/vapid-public-key", async (_req, res) => {
 });
 
 router.post("/public/push/subscribe", async (req, res) => {
-  const { subscription, orderId, token, restaurantSlug, tableId } = req.body as {
+  const { subscription, orderId, token, restaurantSlug, restaurantId: explicitRestaurantId, tableId, customerId, orderUpdatesOptIn, marketingOptIn, audience, locale } = req.body as {
     subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
     orderId?: number;
     token?: string;
     restaurantSlug?: string;
+    restaurantId?: number;
     tableId?: number;
+    customerId?: number;
+    orderUpdatesOptIn?: boolean;
+    marketingOptIn?: boolean;
+    audience?: "customers" | "staff";
+    locale?: string;
   };
   if (!subscription || typeof subscription.endpoint !== "string" || !subscription.keys?.p256dh || !subscription.keys?.auth) {
     return void res.status(400).json({ error: "Invalid subscription payload" });
@@ -1030,25 +1038,54 @@ router.post("/public/push/subscribe", async (req, res) => {
     }
     resolvedOrderId = orderId;
   }
-  let resolvedRestaurantId: number | null = null;
-  if (restaurantSlug && typeof restaurantSlug === "string") {
+  let resolvedRestaurantId: number | null = typeof explicitRestaurantId === "number" ? explicitRestaurantId : null;
+  if (!resolvedRestaurantId && restaurantSlug && typeof restaurantSlug === "string") {
     const [r] = await db.select({ id: restaurantsTable.id }).from(restaurantsTable).where(eq(restaurantsTable.slug, restaurantSlug));
     if (r) resolvedRestaurantId = r.id;
   }
   try {
-    await upsertWebPushSubscription({
+    const row = await upsertWebPushSubscription({
       endpoint: subscription.endpoint,
       keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
       orderId: resolvedOrderId,
       restaurantId: resolvedRestaurantId,
       tableId: typeof tableId === "number" ? tableId : null,
+      customerId: typeof customerId === "number" ? customerId : null,
+      audience: audience ?? "customers",
+      orderUpdatesOptIn: orderUpdatesOptIn !== false,
+      marketingOptIn: marketingOptIn === true,
       userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"].slice(0, 500) : null,
+      locale: typeof locale === "string" ? locale.slice(0, 16) : null,
     });
-    res.json({ success: true });
+    res.json({ success: true, subscriptionId: row.id, status: row.status, orderUpdatesOptIn: row.orderUpdatesOptIn, marketingOptIn: row.marketingOptIn });
   } catch (err) {
     logger.error({ err }, "Failed to persist web push subscription");
     res.status(500).json({ error: "Failed to subscribe" });
   }
+});
+
+router.get("/public/push/status", async (req, res) => {
+  const endpoint = String(req.query.endpoint ?? "");
+  if (!endpoint) return void res.status(400).json({ error: "endpoint required" });
+  const row = await getSubscriptionStatus(endpoint);
+  if (!row) return void res.json({ subscribed: false });
+  res.json({ subscribed: row.status === "active", status: row.status, orderUpdatesOptIn: row.orderUpdatesOptIn, marketingOptIn: row.marketingOptIn });
+});
+
+router.patch("/public/push/subscription", async (req, res) => {
+  const { endpoint, orderUpdatesOptIn, marketingOptIn } = req.body as { endpoint?: string; orderUpdatesOptIn?: boolean; marketingOptIn?: boolean };
+  if (!endpoint) return void res.status(400).json({ error: "endpoint required" });
+  const row = await updateSubscriptionPrefs(endpoint, { orderUpdatesOptIn, marketingOptIn });
+  if (!row) return void res.status(404).json({ error: "subscription not found" });
+  res.json({ success: true, orderUpdatesOptIn: row.orderUpdatesOptIn, marketingOptIn: row.marketingOptIn });
+});
+
+// Click-tracking redirect used by the service worker's notificationclick handler.
+router.get("/public/push/click/:logId", async (req, res) => {
+  const logId = Number(req.params.logId);
+  const fallback = typeof req.query.u === "string" ? req.query.u : "/";
+  if (logId) { try { await markLogClicked(logId); } catch { /* ignore */ } }
+  res.redirect(fallback);
 });
 
 router.post("/public/push/unsubscribe", async (req, res) => {

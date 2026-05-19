@@ -16,6 +16,7 @@ import {
 } from "./db";
 import { sendEmail, sendSms, sendPush } from "./notifications";
 import { sendBroadcastWhatsApp } from "./whatsapp";
+import { sendWebPush } from "./webPush";
 import { logger } from "./logger";
 
 export type ResolvedRecipient = {
@@ -297,6 +298,22 @@ async function sendOnChannel(
       if (r.pushTokens.length === 0) return { status: "skipped", recipient: null, error: "No push tokens" };
       await sendPush({ to: r.pushTokens, title: subject, body: message, data: { broadcastId: bc.id, priority: bc.priority } });
       return { status: "sent", recipient: `${r.pushTokens.length} device(s)`, providerMessageId: null };
+    }
+    if (channel === "web_push") {
+      // Fan out to all active web-push subscribers across the recipient's
+      // restaurants (transactional category respects order_updates opt-in,
+      // which staff defaults to true).
+      const restaurantId = r.restaurantIds[0] ?? null;
+      const out = await sendWebPush({
+        restaurantId,
+        tenantId: r.tenantId,
+        eventKey: bc.priority === "urgent" ? "staff.alert" : "system.announcement",
+        category: bc.priority === "urgent" ? "transactional" : "marketing",
+        payload: { title: subject, body: message, data: { broadcastId: bc.id, priority: bc.priority } },
+      });
+      if (out.sent > 0) return { status: "sent", recipient: `${out.sent} browser(s)`, providerMessageId: null };
+      if (out.total === 0) return { status: "skipped", recipient: null, error: out.reason ?? "No web-push subscribers" };
+      return { status: "failed", recipient: null, error: out.reason ?? `0/${out.total} delivered` };
     }
     return { status: "skipped", recipient: null, error: `Unknown channel ${channel}` };
   } catch (err) {

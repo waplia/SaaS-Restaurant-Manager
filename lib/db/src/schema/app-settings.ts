@@ -40,6 +40,27 @@ export const appSettingsTable = pgTable("app_settings", {
   whatsappWebQrGlobalEnabled: boolean("whatsapp_web_qr_global_enabled").notNull().default(false),
   /** Optional set of plan slugs that may use Web QR. Empty array = plan flag is the only gate. */
   whatsappWebQrAllowedPlans: text("whatsapp_web_qr_allowed_plans").array().notNull().default(sql`ARRAY[]::text[]`),
+  // Web Push provider center (super-admin owned). All secret-bearing fields
+  // are stored as encrypted JSON envelopes ({cipher,iv,tag}) and masked in
+  // the API. Restaurant admins never see or write any of these.
+  webPushProvider: text("web_push_provider").notNull().default("vapid"),
+  webPushFallbackProvider: text("web_push_fallback_provider"),
+  webPushFcmConfig: jsonb("web_push_fcm_config").$type<Record<string, unknown>>().notNull().default({}),
+  webPushOnesignalConfig: jsonb("web_push_onesignal_config").$type<Record<string, unknown>>().notNull().default({}),
+  webPushCustomConfig: jsonb("web_push_custom_config").$type<Record<string, unknown>>().notNull().default({}),
+  webPushDefaultIcon: text("web_push_default_icon"),
+  webPushDefaultBadge: text("web_push_default_badge"),
+  webPushFallbackImage: text("web_push_fallback_image"),
+  webPushDefaultClickUrl: text("web_push_default_click_url"),
+  // Global feature flag (master kill-switch). Per-plan + per-tenant overrides
+  // live in webPushPlanLimits / webPushTenantOverrides.
+  webPushGlobalEnabled: boolean("web_push_global_enabled").notNull().default(true),
+  // Per-plan limits matrix, keyed by plan id (string). Each value carries:
+  //   { enabled, monthlyCap, dailyCap, maxSubscribers, scheduling, richImages, segmentation, analytics }
+  webPushPlanLimits: jsonb("web_push_plan_limits").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+  // Per-tenant overrides keyed by tenantId (string). Each value carries:
+  //   { forceDisable: bool, monthlyCap: number, reason: string, setAt: ISOString }
+  webPushTenantOverrides: jsonb("web_push_tenant_overrides").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
   // Footer & Social
   footerText: text("footer_text"),
   socialLinks: jsonb("social_links").$type<Record<string, string>>().notNull().default({}),

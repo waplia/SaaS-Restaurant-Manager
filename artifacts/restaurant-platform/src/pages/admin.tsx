@@ -17,6 +17,7 @@ import AdminSmsTab from "./admin-sms";
 import AdminEmail from "./admin-email";
 import AdminMaintenance from "./admin-maintenance";
 import AdminWhatsAppTab from "./admin-whatsapp";
+import AdminWebPushTab from "./admin-web-push";
 import AdminAiTab from "./admin-ai";
 import AdminMetricsTab from "./admin-metrics";
 import { Button } from "@/components/ui/button";
@@ -1311,7 +1312,7 @@ export function TenantsTab() {
 
 type AdminSection =
   | "tenants" | "plans" | "payment-methods" | "approvals" | "coupons"
-  | "notifications" | "sms" | "email" | "maintenance" | "whatsapp"
+  | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "web-push"
   | "ai" | "health" | "metrics" | "implementations";
 
 const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> = {
@@ -1325,6 +1326,7 @@ const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> 
   "email": { title: "Email", subtitle: "Email provider, templates, and delivery logs" },
   "maintenance": { title: "System Maintenance", subtitle: "Maintenance windows and platform-wide notices" },
   "whatsapp": { title: "WhatsApp", subtitle: "WhatsApp Business config and templates" },
+  "web-push": { title: "Web Push", subtitle: "VAPID/FCM/OneSignal provider, defaults, limits, and platform stats" },
   "ai": { title: "AI Control Center", subtitle: "AI providers, prompts, and feature configuration" },
   "health": { title: "Restaurant Health", subtitle: "Operational health scores per tenant" },
   "metrics": { title: "Investor Metrics", subtitle: "MRR, ARR, retention, and growth KPIs" },
@@ -1396,6 +1398,7 @@ export default function AdminPage() {
         {section === "email" && <AdminEmail />}
         {section === "maintenance" && <AdminMaintenance />}
         {section === "whatsapp" && <AdminWhatsAppTab />}
+        {section === "web-push" && <AdminWebPushTab />}
         {section === "ai" && <AdminAiTab />}
         {section === "health" && <AdminHealthScoreTab />}
         {section === "metrics" && <AdminMetricsTab />}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ShieldCheck, LayoutDashboard, TrendingUp, Activity, History, Building2, Package, Tag, FileCheck2,
-  CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Inbox, FileText, LifeBuoy,
+  CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Bell, Inbox, FileText, LifeBuoy,
   Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,7 @@ const NAV: NavEntry[] = [
       { kind: "link", href: "/admin/notifications", label: "Notifications", icon: Megaphone },
       { kind: "link", href: "/admin/email", label: "Email", icon: Mail },
       { kind: "link", href: "/admin/sms", label: "SMS", icon: MessageSquare },
+      { kind: "link", href: "/admin/web-push", label: "Web Push", icon: Bell },
       { kind: "link", href: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
     ],
   },

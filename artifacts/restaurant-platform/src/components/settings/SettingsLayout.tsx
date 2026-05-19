@@ -10,7 +10,7 @@ import {
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
   Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash, Calculator, MonitorSmartphone,
-  Lock, ShoppingBag,
+  Lock, ShoppingBag, Bell,
 } from "lucide-react";
 
 export type SectionKey =
@@ -19,7 +19,7 @@ export type SectionKey =
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "order-capacity" | "refund-reasons" | "direct-ordering"
-  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "token-display"
+  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "web-push" | "token-display"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
   | "accounting" | "account" | "sessions" | "customer-app";
 
@@ -84,6 +84,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     items: [
       { key: "email", label: "Email", icon: Mail, ownerOnly: true },
       { key: "whatsapp", label: "WhatsApp", icon: MessageCircle, ownerOnly: true },
+      { key: "web-push", label: "Web Push Notifications", icon: Bell, ownerOnly: true },
     ],
   },
   {

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { Header } from "@/components/Layout";
 import { useAuth, type CustomerUser } from "@/lib/auth";
 import { LogOut, ShieldCheck } from "lucide-react";
+import PushOptIn from "@/components/PushOptIn";
 
 export default function Profile() {
   const { user, signOut, setUser } = useAuth();
@@ -59,6 +60,8 @@ export default function Profile() {
             {mut.isPending ? "Saving…" : "Save changes"}
           </button>
         </form>
+
+        <PushOptIn customerId={(user as unknown as { id?: number })?.id ?? null} />
 
         <button
           onClick={signOut}
