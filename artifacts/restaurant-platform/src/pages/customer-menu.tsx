@@ -377,7 +377,14 @@ export default function CustomerMenuPage() {
   const [waiterCooldownUntil, setWaiterCooldownUntil] = useState<number>(0);
   const [waiterStatus, setWaiterStatus] = useState<"idle" | "sent" | "error">("idle");
   const [waiterErrorMsg, setWaiterErrorMsg] = useState<string | null>(null);
+  const [waiterToast, setWaiterToast] = useState<{ tone: "success" | "info"; title: string; body?: string } | null>(null);
   const [now, setNow] = useState<number>(Date.now());
+
+  useEffect(() => {
+    if (!waiterToast) return;
+    const t = setTimeout(() => setWaiterToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [waiterToast]);
 
   // Browser-push opt-in for QR diners. Tri-state: null = undecided, "enabled" = granted, "dismissed" = user said not now.
   const notifPromptKey = `tt_notif_prompt_${slug}`;
@@ -615,7 +622,12 @@ export default function CustomerMenuPage() {
     });
     socket.on("waiter:acknowledged", (payload: { tableId?: number; type?: string }) => {
       if (payload?.tableId && payload.tableId !== tableId) return;
-      void showOrderNotification("Waiter on the way", "A staff member has acknowledged your request.", payload);
+      const title = payload?.type === "request_bill" ? "Bill on the way" : "Waiter on the way";
+      const body = payload?.type === "request_bill"
+        ? "A server is bringing your bill."
+        : "A staff member has acknowledged your request.";
+      setWaiterToast({ tone: "info", title, body });
+      void showOrderNotification(title, body, payload);
     });
     return () => { socket.disconnect(); socketRef.current = null; };
   }, [tableId]);
@@ -1057,7 +1069,14 @@ export default function CustomerMenuPage() {
       setWaiterCooldownUntil(until);
       try { localStorage.setItem(cooldownKey, String(until)); } catch { /* ignore */ }
       setWaiterStatus("sent");
-      setTimeout(() => setWaiterModalOpen(false), 1200);
+      const toastByReason: Record<typeof waiterReason, { title: string; body: string }> = {
+        call_waiter: { title: "Waiter notified", body: "A staff member is on the way to your table." },
+        request_bill: { title: "Bill requested", body: "A server will bring your bill shortly." },
+        water: { title: "Water requested", body: "We'll bring water to your table soon." },
+        custom: { title: "Request sent", body: "Staff have been notified." },
+      };
+      setWaiterToast({ tone: "success", ...toastByReason[waiterReason] });
+      setTimeout(() => setWaiterModalOpen(false), 900);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
       setWaiterErrorMsg(msg && msg.length < 200 ? msg : "Couldn't reach the kitchen. Please try again.");
@@ -2122,6 +2141,31 @@ export default function CustomerMenuPage() {
                 );
               })()}
             </div>
+          </div>
+        </div>
+      )}
+
+      {waiterToast && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[min(92vw,420px)] pointer-events-auto">
+          <div className={cn(
+            "rounded-2xl shadow-lg border px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2",
+            waiterToast.tone === "success"
+              ? "bg-green-50 border-green-200 text-green-900"
+              : "bg-orange-50 border-orange-200 text-orange-900"
+          )}>
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+              waiterToast.tone === "success" ? "bg-green-500 text-white" : "bg-orange-500 text-white"
+            )}>
+              {waiterToast.tone === "success" ? <CheckCircle className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm leading-tight">{waiterToast.title}</p>
+              {waiterToast.body && <p className="text-xs opacity-80 mt-0.5">{waiterToast.body}</p>}
+            </div>
+            <button onClick={() => setWaiterToast(null)} className="p-1 rounded-full hover:bg-black/5 flex-shrink-0">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
