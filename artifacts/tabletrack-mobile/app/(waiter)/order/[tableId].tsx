@@ -415,8 +415,21 @@ export default function WaiterOrderScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCart([]);
       Alert.alert("Sent!", "Items sent to kitchen.");
-    } catch {
-      Alert.alert("Error", "Failed to send order to kitchen.");
+    } catch (err) {
+      // Surface the server's actual error (e.g. "Spice Level is required")
+      // instead of a generic toast. customFetch throws ApiError where the
+      // parsed JSON body is on `.data` and `.message` is already formatted
+      // as "HTTP 400 Bad Request: <error>".
+      const e = err as { data?: { error?: string } | null; message?: string; status?: number };
+      const serverMsg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
+        ? e.data.error
+        : null;
+      Alert.alert(
+        "Couldn't send order",
+        serverMsg
+          ? `${serverMsg}\n\nTip: tap the item again to customize it (e.g. pick a spice level) before sending.`
+          : "Something went wrong sending to the kitchen. Please try again.",
+      );
     } finally {
       setSendingToKitchen(false);
     }
