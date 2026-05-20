@@ -187,6 +187,18 @@ export const PLAN_BOOLEAN_FEATURES: PlanBooleanFeature[] = [
   { key: "email_follow_up_automation", label: "Follow-up email sequences",   description: "Multi-step automated email sequences and trigger-based automations.",                category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
   { key: "ai_email_generation",        label: "AI email writing assistant",  description: "AI-assisted authoring of subjects, bodies and variants for marketing emails.",        category: "growth",                  defaultValue: false, defaultPlans: ["pro","enterprise"] },
   { key: "email_advanced_analytics",   label: "Email advanced analytics",    description: "Per-template, per-tenant open/click/unsub reports and click-map.",                    category: "growth",                  defaultValue: false, defaultPlans: ["pro","enterprise"] },
+
+  // ──────────────────────────────────────────────────────────────────
+  // Growth Engine — marketing platform (Task #516)
+  // ──────────────────────────────────────────────────────────────────
+  { key: "campaigns_sms",              label: "SMS marketing campaigns",     description: "Send targeted marketing SMS campaigns from the Growth Engine wizard.",               category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "campaigns_whatsapp",         label: "WhatsApp marketing campaigns", description: "Send WhatsApp broadcast campaigns to opted-in customers.",                           category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "campaigns_email",            label: "Email marketing campaigns",   description: "Send marketing emails from the Growth Engine wizard.",                                category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "campaigns_web_push",         label: "Web Push marketing",          description: "Send Web Push marketing notifications to subscribed customers.",                      category: "marketing",               defaultValue: false, defaultPlans: ["growth","pro","enterprise"] },
+  { key: "campaigns_omnichannel",      label: "Omnichannel campaigns",       description: "Run multi-step campaigns that escalate across WhatsApp, SMS, email and push.",        category: "marketing",               defaultValue: false, defaultPlans: ["pro","enterprise"] },
+  { key: "campaigns_ai_generation",    label: "AI campaign copy",            description: "AI-assisted authoring of subject lines, message bodies and variants.",                category: "marketing",               defaultValue: false, defaultPlans: ["pro","enterprise"] },
+  { key: "campaigns_advanced_segments", label: "Advanced segment builder",   description: "Build customer segments from RFM, tags, visit count, lifetime value and channel consent.", category: "marketing",         defaultValue: false, defaultPlans: ["pro","enterprise"] },
+  { key: "campaigns_recurring",        label: "Recurring campaigns",         description: "Schedule campaigns to repeat daily, weekly or monthly.",                              category: "marketing",               defaultValue: false, defaultPlans: ["pro","enterprise"] },
 ];
 
 export const PLAN_QUANTITY_FEATURES: PlanQuantityFeature[] = [

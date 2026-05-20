@@ -38,6 +38,10 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   emailMarketingMonthlyLimit: integer("email_marketing_monthly_limit").notNull().default(0),
   emailActiveSequencesLimit: integer("email_active_sequences_limit").notNull().default(0),
   emailCustomTemplatesLimit: integer("email_custom_templates_limit").notNull().default(0),
+  // Task #516 — Growth Engine marketing-platform plan limits.
+  campaignsMonthlyLimit: integer("campaigns_monthly_limit").notNull().default(0),
+  campaignsAudienceSizeLimit: integer("campaigns_audience_size_limit").notNull().default(0),
+  campaignsActiveRecurringLimit: integer("campaigns_active_recurring_limit").notNull().default(0),
   currency: text("currency").notNull().default("INR"),
   features: text("features").array().default([]),
   featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),

@@ -136,6 +136,24 @@ export function startScheduler(): void {
   registerCron("ops-morning-briefings", "0 8 * * *", "Generates and sends per-restaurant owner morning briefings (Operations Intelligence) at 08:00 IST");
   registerCron("ops-end-of-day", "30 23 * * *", "Computes and persists per-restaurant end-of-day summary into timeline_events (Operations Intelligence) at 23:30 IST");
   registerCron("web-push-scheduled-campaigns", "* * * * *", "Every minute: dispatches Web Push marketing campaigns whose scheduledAt has elapsed");
+  registerCron("growth-campaign-dispatch", "* * * * *", "Every minute: launches due Growth Engine campaigns across all channels and advances omnichannel enrollments");
+
+  // Task #516 — Growth Engine campaign dispatcher. Picks up scheduled and
+  // recurring campaigns whose run-time has elapsed and launches them on
+  // all configured channels, then advances any in-flight omnichannel
+  // enrollments through their step plan.
+  trackCron("growth_campaign_dispatch", "* * * * *", async () => {
+    try {
+      const { runDueCampaignsTick, advanceOmnichannelEnrollments } = await import("./campaigns");
+      const due = await runDueCampaignsTick();
+      const adv = await advanceOmnichannelEnrollments();
+      if (due.launched > 0 || adv.sent > 0) {
+        logger.info({ launched: due.launched, omnichannelSent: adv.sent }, "[growth] campaign dispatch tick");
+      }
+    } catch (err) {
+      logger.error({ err }, "[growth] campaign dispatch tick failed");
+    }
+  });
 
   // Web Push scheduled campaign dispatcher. Runs every minute and sends any
   // campaign whose status is "scheduled" and whose scheduledAt is in the past.
