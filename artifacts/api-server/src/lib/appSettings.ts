@@ -71,5 +71,7 @@ export function toPublicAppSettings(s: AppSettings): PublicAppSettings {
     authSelfRegistrationRequireMobileOtp: s.authSelfRegistrationRequireMobileOtp,
     authOtpDefaultChannel: s.authOtpDefaultChannel,
     googleSignInEnabled: s.googleSignInEnabled,
+    googleIosClientId: s.googleIosClientId ?? null,
+    googleAndroidClientId: s.googleAndroidClientId ?? null,
   };
 }

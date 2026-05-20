@@ -78,6 +78,8 @@ export const appSettingsTable = pgTable("app_settings", {
   // instead of the ciphertext. Restaurant admins never see any of these.
   googleSignInEnabled: boolean("google_signin_enabled").notNull().default(false),
   googleClientId: text("google_client_id"),
+  googleIosClientId: text("google_ios_client_id"),
+  googleAndroidClientId: text("google_android_client_id"),
   googleClientSecretEnc: jsonb("google_client_secret_enc").$type<{ cipher: string; iv: string; tag: string } | null>(),
   googleRequirePhoneAfterSignup: boolean("google_require_phone_after_signup").notNull().default(true),
   // Footer & Social
@@ -107,7 +109,7 @@ export type PublicAppSettings = Pick<
   | "signupEnabled" | "landingPageEnabled"
   | "authPasswordLoginEnabled" | "authMobileOtpLoginEnabled" | "authEmailOtpLoginEnabled"
   | "authTwoFactorEnabled" | "authSelfRegistrationRequireMobileOtp" | "authOtpDefaultChannel"
-  | "googleSignInEnabled"
+  | "googleSignInEnabled" | "googleIosClientId" | "googleAndroidClientId"
 >;
 
 export const SOCIAL_KEYS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;

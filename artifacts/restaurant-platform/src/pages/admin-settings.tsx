@@ -38,6 +38,8 @@ type Settings = {
   authOtpDefaultChannel: "sms" | "whatsapp";
   googleSignInEnabled: boolean;
   googleClientId: string | null;
+  googleIosClientId: string | null;
+  googleAndroidClientId: string | null;
   googleRequirePhoneAfterSignup: boolean;
   hasGoogleClientSecret?: boolean;
   googleClientSecret?: string;
@@ -332,6 +334,32 @@ export default function AdminSettingsPage() {
               />
               <p className="text-xs text-muted-foreground mt-1">
                 {form.hasGoogleClientSecret ? "A secret is already saved. Type a new value to replace it, or leave blank to keep the existing one." : "Stored encrypted at rest. Restaurant admins can never read it."}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>iOS OAuth Client ID (optional)</Label>
+              <Input
+                value={form.googleIosClientId ?? ""}
+                onChange={(e) => set("googleIosClientId", e.target.value || null)}
+                placeholder="123456789-ios.apps.googleusercontent.com"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Required for native iOS sign-in (standalone Expo / TestFlight / App Store builds). Create an "iOS" OAuth client in Google Cloud Console using your iOS bundle identifier.
+              </p>
+            </div>
+            <div>
+              <Label>Android OAuth Client ID (optional)</Label>
+              <Input
+                value={form.googleAndroidClientId ?? ""}
+                onChange={(e) => set("googleAndroidClientId", e.target.value || null)}
+                placeholder="123456789-android.apps.googleusercontent.com"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Required for native Android sign-in. Create an "Android" OAuth client in Google Cloud Console using your Android package name + SHA-1 fingerprint.
               </p>
             </div>
           </div>

@@ -570,6 +570,8 @@ router.get("/auth/settings/public", async (_req, res) => {
     otpDefaultChannel: s.authOtpDefaultChannel,
     googleSignInEnabled: !!(s.googleSignInEnabled && s.googleClientId),
     googleClientId: s.googleSignInEnabled ? s.googleClientId : null,
+    googleIosClientId: s.googleSignInEnabled ? (s.googleIosClientId ?? null) : null,
+    googleAndroidClientId: s.googleSignInEnabled ? (s.googleAndroidClientId ?? null) : null,
   });
 });
 

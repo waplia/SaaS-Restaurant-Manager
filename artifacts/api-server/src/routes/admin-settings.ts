@@ -78,6 +78,8 @@ const updateSchema = z.object({
   // Task #538 — Google sign-in
   googleSignInEnabled: z.boolean().optional(),
   googleClientId: z.string().trim().max(200).or(z.literal("")).nullish(),
+  googleIosClientId: z.string().trim().max(200).or(z.literal("")).nullish(),
+  googleAndroidClientId: z.string().trim().max(200).or(z.literal("")).nullish(),
   googleClientSecret: z.string().trim().max(400).or(z.literal("")).nullish(),
   // Explicit opt-in to wipe the stored secret. A blank `googleClientSecret`
   // alone is a no-op so that unrelated settings saves (which round-trip the
@@ -150,7 +152,7 @@ router.put("/admin/app-settings", requireSuperAdmin, async (req, res) => {
       (patch as Record<string, unknown>)["googleClientSecretEnc"] = encryptSecret(v.trim());
       continue;
     }
-    if (typeof v === "string" && v === "" && k !== "footerText" && k !== "maintenanceMessage" && k !== "supportPhone" && k !== "supportWhatsapp" && k !== "companyAddress" && k !== "logoUrl" && k !== "faviconUrl" && k !== "googleClientId") continue;
+    if (typeof v === "string" && v === "" && k !== "footerText" && k !== "maintenanceMessage" && k !== "supportPhone" && k !== "supportWhatsapp" && k !== "companyAddress" && k !== "logoUrl" && k !== "faviconUrl" && k !== "googleClientId" && k !== "googleIosClientId" && k !== "googleAndroidClientId") continue;
     (patch as Record<string, unknown>)[k] = v === "" ? null : v;
   }
   // Clean socialLinks: drop empty strings
