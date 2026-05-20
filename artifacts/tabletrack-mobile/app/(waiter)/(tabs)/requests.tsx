@@ -46,15 +46,15 @@ export default function WaiterRequestsTab() {
   const qc = useQueryClient();
 
   // Poll every 10s so newly-raised guest requests appear without manual
-  // refresh — matches the owner-side waiter-requests screen cadence.
+  // refresh — matches the owner-side waiter-requests screen exactly
+  // (same query key, same server-side status filter so both tabs share
+  // the react-query cache and stay in sync when one acks/resolves).
   const q = useQuery({
     queryKey: ["waiter-requests", restaurantId],
-    queryFn: () => customFetch<Request[]>(`/api/restaurants/${restaurantId}/waiter-requests`).catch(() => []),
+    queryFn: () => customFetch<Request[]>(`/api/restaurants/${restaurantId}/waiter-requests?status=pending,acknowledged`).catch(() => []),
     refetchInterval: 10_000,
   });
-  const all = Array.isArray(q.data) ? q.data : [];
-  // Show only active (pending/acknowledged) — resolved drop off automatically.
-  const list = all.filter((r) => r.status === "pending" || r.status === "acknowledged");
+  const list = Array.isArray(q.data) ? q.data : [];
 
   const ack = useMutation({
     mutationFn: (id: number) => customFetch(`/api/restaurants/${restaurantId}/waiter-requests/${id}/acknowledge`, { method: "POST" }),
