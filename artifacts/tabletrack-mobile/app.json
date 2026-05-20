@@ -27,7 +27,9 @@
         "INTERNET",
         "CAMERA",
         "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -60,6 +62,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "59b572a3-78e4-4910-a082-850ac1e42657"
+      }
+    },
+    "owner": "waplias-organization"
   }
 }
