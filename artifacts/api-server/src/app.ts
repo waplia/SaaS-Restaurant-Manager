@@ -87,7 +87,7 @@ app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 app.use("/api/cashfree/webhook", express.raw({ type: "application/json" }));
 app.use("/api/razorpay/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
