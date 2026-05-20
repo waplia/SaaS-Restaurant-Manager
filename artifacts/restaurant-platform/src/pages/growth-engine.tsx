@@ -211,22 +211,22 @@ export default function GrowthEnginePage() {
 
   const campaignsQ = useQuery<Campaign[]>({
     queryKey: ["growth-campaigns", restaurantId, qs],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/campaigns${qs}`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/campaigns${qs}`),
     enabled: !!restaurantId,
   });
   const analyticsQ = useQuery<AnalyticsOverview>({
     queryKey: ["growth-analytics", restaurantId],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/analytics`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/analytics`),
     enabled: !!restaurantId,
   });
   const logsQ = useQuery<Array<{ id: number; event: string; payload: Record<string, unknown> | null; createdAt: string; campaignId: number }>>({
     queryKey: ["growth-logs", restaurantId],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/logs?limit=100`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/logs?limit=100`),
     enabled: !!restaurantId && tab === "logs",
   });
   const planQ = useQuery<PlanInfo>({
     queryKey: ["growth-plan", restaurantId],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/plan-info`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/plan-info`),
     enabled: !!restaurantId,
   });
 
@@ -234,7 +234,7 @@ export default function GrowthEnginePage() {
 
   const startNew = async () => {
     try {
-      const c = await apiPost<Campaign>(`/api/restaurants/${restaurantId}/growth/campaigns/draft`, {});
+      const c = await apiPost<Campaign>(`/restaurants/${restaurantId}/growth/campaigns/draft`, {});
       openWizard(c);
       qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] });
     } catch (e) {
@@ -243,19 +243,19 @@ export default function GrowthEnginePage() {
   };
 
   const deleteC = useMutation({
-    mutationFn: (id: number) => apiDelete(`/api/restaurants/${restaurantId}/growth/campaigns/${id}`),
+    mutationFn: (id: number) => apiDelete(`/restaurants/${restaurantId}/growth/campaigns/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] }),
   });
   const pauseC = useMutation({
-    mutationFn: (id: number) => apiPost(`/api/restaurants/${restaurantId}/growth/campaigns/${id}/pause`, {}),
+    mutationFn: (id: number) => apiPost(`/restaurants/${restaurantId}/growth/campaigns/${id}/pause`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] }),
   });
   const resumeC = useMutation({
-    mutationFn: (id: number) => apiPost(`/api/restaurants/${restaurantId}/growth/campaigns/${id}/resume`, {}),
+    mutationFn: (id: number) => apiPost(`/restaurants/${restaurantId}/growth/campaigns/${id}/resume`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] }),
   });
   const cloneC = useMutation({
-    mutationFn: (id: number) => apiPost<Campaign>(`/api/restaurants/${restaurantId}/growth/campaigns/${id}/clone`, {}),
+    mutationFn: (id: number) => apiPost<Campaign>(`/restaurants/${restaurantId}/growth/campaigns/${id}/clone`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] }),
   });
 
@@ -493,7 +493,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
 
   // Autosave on field change (debounced via mutation).
   const saveM = useMutation({
-    mutationFn: (patch: Partial<Campaign>) => apiPatch<Campaign>(`/api/restaurants/${restaurantId}/growth/campaigns/${draft.id}`, patch),
+    mutationFn: (patch: Partial<Campaign>) => apiPatch<Campaign>(`/restaurants/${restaurantId}/growth/campaigns/${draft.id}`, patch),
     onSuccess: (data) => setDraft(prev => ({ ...prev, ...data })),
   });
   useEffect(() => {
@@ -516,7 +516,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
   })]);
 
   const launchM = useMutation({
-    mutationFn: () => apiPost(`/api/restaurants/${restaurantId}/growth/campaigns/${draft.id}/launch`, {}),
+    mutationFn: () => apiPost(`/restaurants/${restaurantId}/growth/campaigns/${draft.id}/launch`, {}),
     onSuccess: () => {
       toast({ title: draft.scheduleKind === "now" ? "Campaign launched" : "Campaign scheduled" });
       qc.invalidateQueries({ queryKey: ["growth-campaigns", restaurantId] });
@@ -525,7 +525,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
     onError: (e: ApiError) => toast({ title: "Couldn't launch", description: e.message, variant: "destructive" }),
   });
   const testM = useMutation({
-    mutationFn: () => apiPost(`/api/restaurants/${restaurantId}/growth/campaigns/${draft.id}/test-send`, { to: testTo, channel: draft.channel }),
+    mutationFn: () => apiPost(`/restaurants/${restaurantId}/growth/campaigns/${draft.id}/test-send`, { to: testTo, channel: draft.channel }),
     onSuccess: (r: { status: string; reason?: string }) => toast({ title: r.status === "sent" ? "Test sent" : "Test " + r.status, description: r.reason }),
     onError: (e: ApiError) => toast({ title: "Test failed", description: e.message, variant: "destructive" }),
   });
@@ -533,7 +533,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
   // When user lands on "preview" step, fetch preview audience.
   useEffect(() => {
     if (WIZARD_STEPS[stepIdx].key === "preview" || WIZARD_STEPS[stepIdx].key === "audience") {
-      apiPost<Preview>(`/api/restaurants/${restaurantId}/growth/segments/preview`, { audience: draft.audience })
+      apiPost<Preview>(`/restaurants/${restaurantId}/growth/segments/preview`, { audience: draft.audience })
         .then(setPreview).catch(() => setPreview(null));
     }
   }, [stepIdx, restaurantId, draft.audience]);
@@ -1092,12 +1092,12 @@ function CampaignDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const restaurantId = useRestaurantId();
   const analyticsQ = useQuery<CampaignAnalytics>({
     queryKey: ["growth-campaign-analytics", id],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/campaigns/${id}/analytics`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/campaigns/${id}/analytics`),
     enabled: !!restaurantId,
   });
   const campaignQ = useQuery<{ campaign: Campaign; steps: Step[]; logs: Array<{ id: number; event: string; createdAt: string }> }>({
     queryKey: ["growth-campaign-detail", id],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/campaigns/${id}`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/campaigns/${id}`),
     enabled: !!restaurantId,
   });
 
@@ -1254,15 +1254,15 @@ function TemplatesPanel({ restaurantId }: { restaurantId: number }) {
   const qc = useQueryClient();
   const tmplQ = useQuery<Array<{ id: number; key: string; name: string; category: string; body: string; title?: string }>>({
     queryKey: ["growth-tmpl", restaurantId, channel],
-    queryFn: () => apiGet(`/api/restaurants/${restaurantId}/growth/templates/${channel}`),
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/growth/templates/${channel}`),
     enabled: !!restaurantId,
   });
   const createM = useMutation({
-    mutationFn: (body: { name: string; body: string; title?: string }) => apiPost(`/api/restaurants/${restaurantId}/growth/templates/${channel}`, body),
+    mutationFn: (body: { name: string; body: string; title?: string }) => apiPost(`/restaurants/${restaurantId}/growth/templates/${channel}`, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["growth-tmpl", restaurantId, channel] }); toast({ title: "Template saved" }); },
   });
   const deleteM = useMutation({
-    mutationFn: (id: number) => apiDelete(`/api/restaurants/${restaurantId}/growth/templates/${channel}/${id}`),
+    mutationFn: (id: number) => apiDelete(`/restaurants/${restaurantId}/growth/templates/${channel}/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["growth-tmpl", restaurantId, channel] }),
   });
   const [draft, setDraft] = useState({ name: "", body: "", title: "" });
