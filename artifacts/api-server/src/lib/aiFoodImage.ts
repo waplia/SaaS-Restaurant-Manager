@@ -14,9 +14,9 @@ import { eq } from "drizzle-orm";
 import { db, menuItemsTable } from "./db";
 import { AIProviderService } from "./aiProviderService";
 import {
-  reserveCredits,
   commitReservation,
   refundReservation,
+  gatePublicAiCall,
   type AiCreditReservation,
 } from "./aiCredits";
 import { ObjectStorageService, isObjectStorageConfigured } from "./objectStorage";
@@ -104,17 +104,41 @@ export async function generateFoodImage(opts: {
     throw new Error("Object storage is not configured");
   }
 
-  // Reserve 1 credit (matches the per-image rate for ai_food_image) unless
-  // the caller already reserved (or explicitly bypassed) via the
-  // requireAiCredits middleware.
+  // When called outside the requireAiCredits middleware (e.g. menu-import
+  // background backfill) we run the same plan / feature-toggle / daily +
+  // monthly cap / credit-rule resolution that the HTTP path enforces, via
+  // `gatePublicAiCall`. This ensures identical accounting semantics — not a
+  // hardcoded 1-credit reservation that would bypass policy.
   let reservation: AiCreditReservation | null = opts.existingReservation ?? null;
   if (!reservation && !opts.creditsAlreadyHandled && opts.tenantId != null) {
-    reservation = await reserveCredits({
+    const gate = await gatePublicAiCall({
       tenantId: opts.tenantId,
       featureSlug: "ai_food_image",
-      credits: 1,
+      units: 1,
       meta: { source: opts.source ?? "menu_import_auto", restaurantId: opts.restaurantId, itemName: opts.inputs.name },
     });
+    if (!gate.ok) {
+      // Map gate reasons onto the error.code shape that callers
+      // (generateAndAttachItemPhoto / menu-imports) already branch on so
+      // "insufficient_credits" continues to surface as INSUFFICIENT_CREDITS
+      // (=> imageStatus: skipped_credits) and other policy denials surface
+      // distinctly without being miscategorised as a generation failure.
+      const codeMap: Record<string, string> = {
+        insufficient_credits: "INSUFFICIENT_CREDITS",
+        ai_not_in_plan: "AI_NOT_IN_PLAN",
+        ai_feature_disabled: "AI_FEATURE_DISABLED",
+        daily_cap_reached: "DAILY_CAP_REACHED",
+        feature_cap_reached: "FEATURE_CAP_REACHED",
+        no_credit_rule: "NO_CREDIT_RULE",
+        tenant_suspended: "TENANT_SUSPENDED",
+        wallet_blocked: "WALLET_BLOCKED",
+        wallet_error: "WALLET_ERROR",
+      };
+      throw Object.assign(new Error(`ai_food_image gate denied: ${gate.reason}`), {
+        code: codeMap[gate.reason] ?? "AI_GATE_DENIED",
+      });
+    }
+    reservation = gate.reservation;
   }
 
   try {
