@@ -14,6 +14,67 @@ import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Resolve the OAuth client ID for the current platform. Falls back to the
+// web client ID so a single configured ID keeps working in Expo Go via the
+// proxy; standalone iOS/Android builds need their own per-platform IDs.
+function resolveGoogleClientId(s: PublicAuthSettings | null | undefined): string | undefined {
+  if (!s?.googleSignInEnabled) return undefined;
+  const web = s.googleClientId ?? undefined;
+  if (Platform.OS === "ios") return s.googleIosClientId ?? web;
+  if (Platform.OS === "android") return s.googleAndroidClientId ?? web;
+  return web;
+}
+
+// Isolated child so Google.useIdTokenAuthRequest is only called when we
+// actually have a client ID for this platform — passing undefined throws
+// "Client Id property `iosClientId` must be defined" at hook-call time.
+function GoogleSignInButton({
+  webClientId, iosClientId, androidClientId,
+  label, disabled, onIdToken, onError, colors, styles, testID,
+}: {
+  webClientId?: string; iosClientId?: string; androidClientId?: string;
+  label: string; disabled?: boolean;
+  onIdToken: (idToken: string) => void;
+  onError: (msg: string) => void;
+  colors: ReturnType<typeof useColors>;
+  styles: { secondaryBtn: object; secondaryBtnText: object };
+  testID?: string;
+}) {
+  const [, , promptGoogle] = Google.useIdTokenAuthRequest({
+    clientId: webClientId,
+    iosClientId,
+    androidClientId,
+    webClientId,
+  });
+  async function press() {
+    try {
+      const res = await promptGoogle();
+      if (res?.type === "success" && res.params.id_token) {
+        onIdToken(res.params.id_token);
+      } else if (res?.type === "error") {
+        onError(res.error?.message ?? "Cancelled");
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Try again");
+    }
+  }
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.secondaryBtn, {
+        borderColor: colors.border,
+        flexDirection: "row", gap: 8,
+        opacity: pressed || disabled ? 0.7 : 1,
+      }]}
+      onPress={press}
+      disabled={disabled}
+      testID={testID}
+    >
+      <Ionicons name="logo-google" size={18} color={colors.foreground} />
+      <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 type Tab = "password" | "mobile" | "email";
 type Channel = "sms" | "whatsapp" | "email";
 
@@ -25,6 +86,8 @@ interface PublicAuthSettings {
   otpDefaultChannel: "sms" | "whatsapp";
   googleSignInEnabled?: boolean;
   googleClientId?: string | null;
+  googleIosClientId?: string | null;
+  googleAndroidClientId?: string | null;
 }
 
 interface LoginResp {
@@ -130,26 +193,22 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // Google sign-in via Expo AuthSession. The clientId comes from Super Admin
-  // settings (so restaurants never see it). On success we exchange the Google
-  // id_token with our backend, which mints our own JWTs.
-  const [, , promptGoogle] = Google.useIdTokenAuthRequest({
-    clientId: authSettings?.googleClientId ?? undefined,
-  });
-  async function handleGoogleLogin() {
-    if (!authSettings?.googleClientId) return;
+  // Google sign-in is implemented in a child component (GoogleSignInButton)
+  // because expo-auth-session's Google.useIdTokenAuthRequest validates
+  // `iosClientId` / `androidClientId` at hook-call time on native — passing
+  // `undefined` throws "Client Id property `iosClientId` must be defined".
+  // Mounting the child only when a client ID is configured guarantees the
+  // hook is never called with missing values, while still respecting the
+  // Rules of Hooks (the child's hook is unconditional within its own render).
+  const googleConfigured = !!resolveGoogleClientId(authSettings);
+  async function handleGoogleIdToken(idToken: string) {
     setLoading(true);
     try {
-      const res = await promptGoogle();
-      if (res?.type !== "success" || !res.params.id_token) {
-        if (res?.type === "error") Alert.alert("Google sign-in failed", res.error?.message ?? "Cancelled");
-        return;
-      }
       const r = await postJSON<LoginResp & {
         pending?: boolean; pendingToken?: string;
         needsProfileCompletion?: boolean;
         missing?: { phone: boolean; restaurantName: boolean };
-      }>("/auth/google/verify", { idToken: res.params.id_token });
+      }>("/auth/google/verify", { idToken });
       if (r.pending && r.pendingToken) {
         router.replace({
           pathname: "/complete-profile",
@@ -335,25 +394,24 @@ export default function LoginScreen() {
                   >
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Sign in</Text>}
                   </Pressable>
-                  {authSettings?.googleSignInEnabled && authSettings?.googleClientId ? (
+                  {authSettings?.googleSignInEnabled && googleConfigured ? (
                     <>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
                         <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
                         <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>or</Text>
                         <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
                       </View>
-                      <Pressable
-                        style={({ pressed }) => [styles.secondaryBtn, {
-                          borderColor: colors.border,
-                          flexDirection: "row", gap: 8,
-                          opacity: pressed || loading ? 0.7 : 1,
-                        }]}
-                        onPress={handleGoogleLogin}
+                      <GoogleSignInButton
+                        webClientId={authSettings?.googleClientId ?? undefined}
+                        iosClientId={authSettings?.googleIosClientId ?? authSettings?.googleClientId ?? undefined}
+                        androidClientId={authSettings?.googleAndroidClientId ?? authSettings?.googleClientId ?? undefined}
+                        label="Continue with Google"
                         disabled={loading}
-                      >
-                        <Ionicons name="logo-google" size={18} color={colors.foreground} />
-                        <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Continue with Google</Text>
-                      </Pressable>
+                        onIdToken={(t) => { void handleGoogleIdToken(t); }}
+                        onError={(m) => Alert.alert("Google sign-in failed", m)}
+                        colors={colors}
+                        styles={styles}
+                      />
                     </>
                   ) : null}
                 </>
@@ -442,24 +500,23 @@ export default function LoginScreen() {
               login: the backend's /auth/google/verify creates the account on
               first sign-in. Restaurant-name / phone collection happens on the
               /complete-profile screen if Super Admin requires it. */}
-          {!twoFa && authSettings?.googleSignInEnabled && authSettings?.googleClientId ? (
+          {!twoFa && authSettings?.googleSignInEnabled && googleConfigured ? (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 }}>
               <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: "center" }}>
                 New to {"KhanaLagao"}?
               </Text>
-              <Pressable
-                style={({ pressed }) => [styles.secondaryBtn, {
-                  borderColor: colors.border,
-                  flexDirection: "row", gap: 8,
-                  opacity: pressed || loading ? 0.7 : 1,
-                }]}
-                onPress={handleGoogleLogin}
+              <GoogleSignInButton
+                webClientId={authSettings?.googleClientId ?? undefined}
+                iosClientId={authSettings?.googleIosClientId ?? authSettings?.googleClientId ?? undefined}
+                androidClientId={authSettings?.googleAndroidClientId ?? authSettings?.googleClientId ?? undefined}
+                label="Sign up with Google"
                 disabled={loading}
+                onIdToken={(t) => { void handleGoogleIdToken(t); }}
+                onError={(m) => Alert.alert("Google sign-in failed", m)}
+                colors={colors}
+                styles={styles}
                 testID="signup-google-button"
-              >
-                <Ionicons name="logo-google" size={18} color={colors.foreground} />
-                <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Sign up with Google</Text>
-              </Pressable>
+              />
             </View>
           ) : null}
         </View>
