@@ -1,0 +1,87 @@
+Set up Android APK/AAB build support for the existing KhanaLagao Restaurant Mobile App using Expo EAS.
+
+Do not break iOS setup, web app, backend, admin, POS, QR menu, or existing mobile app.
+
+Check current mobile stack first. If it is Expo/React Native, configure Android properly. If mobile app structure is missing or incomplete, create/fix the Expo configuration around the existing app.
+
+Add/fix:
+- app.json or app.config.js
+- eas.json
+- Android package name: com.khanalagao.restaurant
+- App display name: KhanaLagao Restaurant
+- App version: 1.0.0
+- Android versionCode: 1
+- App icon
+- Adaptive icon
+- Splash screen
+- Android permissions:
+  INTERNET
+  CAMERA
+  POST_NOTIFICATIONS
+  VIBRATE if needed
+- Production API URL config using EXPO_PUBLIC_API_BASE_URL
+- Development/staging/production environment handling
+- Push notification permission handling if app uses notifications
+- Camera permission handling if app uses QR/barcode scanning
+- Build scripts in package.json
+- Documentation file: docs/android-build.md
+
+Add eas.json profiles:
+development = APK development client
+preview = APK for testing/direct install
+production = AAB for Google Play Store
+
+Use this eas.json:
+
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+
+Add package scripts:
+"android:dev": "expo start --android"
+"android:preview": "eas build -p android --profile preview"
+"android:production": "eas build -p android --profile production"
+"android:submit": "eas submit -p android --profile production"
+
+Create docs/android-build.md with exact commands:
+npm install
+npm install -g eas-cli
+eas login
+eas build:configure
+eas build -p android --profile preview
+eas build -p android --profile production
+eas submit -p android --profile production
+
+Final result:
+I should be able to run one command for APK testing:
+npm run android:preview
+
+And one command for Play Store AAB:
+npm run android:production
+
+After build, EAS should provide a downloadable APK/AAB link.

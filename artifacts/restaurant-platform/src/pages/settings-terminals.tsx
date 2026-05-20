@@ -31,6 +31,10 @@ const PROVIDER_DESCRIPTION: Record<TerminalProviderId, { tagline: string; help: 
     tagline: "Clover devices — stub. Charges return 'Configuration required'.",
     help: "Clover integration ships as a stub. Set CLOVER_API_TOKEN and implement the provider to enable.",
   },
+  phonepe: {
+    tagline: "PhonePe Business — EDC, Dynamic QR, Collect, Paylink and Static QR settlements.",
+    help: "Configure your Merchant ID, Salt Key and environment under Super Admin → PhonePe before pairing a terminal.",
+  },
   custom: {
     tagline: "Custom / webhook-based terminal — stub.",
     help: "Use this for any other provider; charges currently return 'Configuration required'.",
