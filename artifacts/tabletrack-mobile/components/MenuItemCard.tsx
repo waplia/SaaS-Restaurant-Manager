@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
+import { resolveImageUrl } from "@/lib/resolveImageUrl";
 
 interface MenuItemCardProps {
   name: string;
@@ -17,6 +18,7 @@ interface MenuItemCardProps {
 
 export function MenuItemCard({ name, description, price, imageUrl, quantity, isAvailable, onAdd, onRemove }: MenuItemCardProps) {
   const colors = useColors();
+  const resolvedImageUrl = resolveImageUrl(imageUrl);
 
   const handleAdd = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -30,8 +32,8 @@ export function MenuItemCard({ name, description, price, imageUrl, quantity, isA
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: isAvailable ? 1 : 0.5 }]}>
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+      {resolvedImageUrl ? (
+        <Image source={{ uri: resolvedImageUrl }} style={styles.image} resizeMode="cover" />
       ) : (
         <View style={[styles.imagePlaceholder, { backgroundColor: colors.accent }]}>
           <Ionicons name="fast-food-outline" size={28} color={colors.primary} />

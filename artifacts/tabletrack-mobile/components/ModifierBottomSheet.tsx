@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { resolveImageUrl } from "@/lib/resolveImageUrl";
 import type { CartModifier } from "@/context/CartContext";
 
 interface ModifierOption { id: number; name: string; priceDelta?: string | number | null; isAvailable?: boolean }
@@ -30,6 +31,7 @@ interface Props {
 
 export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePrice, imageUrl, onConfirm }: Props) {
   const colors = useColors();
+  const resolvedImageUrl = resolveImageUrl(imageUrl);
   const [selected, setSelected] = useState<Record<number, Set<number>>>({});
   const [note, setNote] = useState("");
   const [qty, setQty] = useState(1);
@@ -105,8 +107,8 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 14 }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.img} />
+            {resolvedImageUrl ? (
+              <Image source={{ uri: resolvedImageUrl }} style={styles.img} />
             ) : (
               <View style={[styles.img, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
                 <Ionicons name="fast-food-outline" size={24} color={colors.primary} />

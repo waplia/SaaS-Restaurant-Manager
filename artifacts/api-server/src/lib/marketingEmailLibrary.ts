@@ -70,6 +70,7 @@ function wrap(t: PremiumTpl): string {
       <tr><td style="background:#f9fafb;padding:20px 28px;font-size:12px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;">
         {{restaurant_name}} · {{restaurant_address}}<br/>
         You're receiving this because you opted in to updates from us.
+        <a href="{{unsubscribe_url}}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>.
       </td></tr>
     </table>
   </td></tr>
