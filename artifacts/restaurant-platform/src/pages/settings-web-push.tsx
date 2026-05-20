@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Save, Send, Trash2, Plus, RefreshCw, Megaphone, FileText, Users, BarChart3 } from "lucide-react";
+import { Bell, Save, Send, Trash2, Plus, RefreshCw, Megaphone, FileText, Users, BarChart3, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -254,16 +254,49 @@ function TemplatesTab() {
   );
 }
 
+type Audience = "marketing" | "order_updates" | "all";
+interface Draft {
+  name?: string; title?: string; body?: string;
+  iconUrl?: string; imageUrl?: string; clickUrl?: string;
+  audience?: Audience; scheduledAt?: string;
+}
+
 function CampaignsTab() {
   const rid = useRestaurantId();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data = [] } = useQuery<Campaign[]>({ queryKey: ["web-push", "campaigns", rid], queryFn: () => apiFetch(`/restaurants/${rid}/web-push/campaigns`) });
-  const [draft, setDraft] = useState<Partial<Campaign> & { iconUrl?: string; imageUrl?: string; clickUrl?: string }>({ name: "", title: "", body: "" });
-  const create = useMutation({
-    mutationFn: () => apiAction(`/restaurants/${rid}/web-push/campaigns`, "POST", draft),
-    onSuccess: () => { toast({ title: "Campaign saved" }); setDraft({ name: "", title: "", body: "" }); qc.invalidateQueries({ queryKey: ["web-push", "campaigns", rid] }); },
+  const [draft, setDraft] = useState<Draft>({ name: "", title: "", body: "", audience: "marketing" });
+  const reset = () => setDraft({ name: "", title: "", body: "", audience: "marketing" });
+  const buildBody = (mode: "draft" | "schedule" | "send_now") => {
+    const body: Record<string, unknown> = {
+      name: draft.name, title: draft.title, body: draft.body,
+      iconUrl: draft.iconUrl || undefined,
+      imageUrl: draft.imageUrl || undefined,
+      clickUrl: draft.clickUrl || undefined,
+      segment: { audience: draft.audience ?? "marketing" },
+    };
+    if (mode === "schedule" && draft.scheduledAt) body.scheduledAt = new Date(draft.scheduledAt).toISOString();
+    return body;
+  };
+
+  const saveDraft = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/web-push/campaigns`, "POST", buildBody("draft")),
+    onSuccess: () => { toast({ title: "Campaign saved as draft" }); reset(); qc.invalidateQueries({ queryKey: ["web-push", "campaigns", rid] }); },
     onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const schedule = useMutation({
+    mutationFn: () => apiAction(`/restaurants/${rid}/web-push/campaigns`, "POST", buildBody("schedule")),
+    onSuccess: () => { toast({ title: "Campaign scheduled", description: draft.scheduledAt ? `Will send at ${new Date(draft.scheduledAt).toLocaleString()}` : undefined }); reset(); qc.invalidateQueries({ queryKey: ["web-push", "campaigns", rid] }); },
+    onError: e => toast({ title: "Failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  const sendNow = useMutation({
+    mutationFn: async () => {
+      const created = await apiAction<{ id: number }>(`/restaurants/${rid}/web-push/campaigns`, "POST", buildBody("send_now"));
+      return apiAction<{ sent: number; failed: number; total: number; reason?: string }>(`/restaurants/${rid}/web-push/campaigns/${created.id}/send`, "POST");
+    },
+    onSuccess: r => { toast({ title: `${r.sent}/${r.total} delivered`, description: r.reason }); reset(); qc.invalidateQueries({ queryKey: ["web-push", "campaigns", rid] }); },
+    onError: e => toast({ title: "Send failed", description: (e as Error).message, variant: "destructive" }),
   });
   const send = useMutation({
     mutationFn: (id: number) => apiAction<{ sent: number; failed: number; total: number; reason?: string }>(`/restaurants/${rid}/web-push/campaigns/${id}/send`, "POST"),
@@ -274,17 +307,52 @@ function CampaignsTab() {
     mutationFn: (id: number) => apiDelete(`/restaurants/${rid}/web-push/campaigns/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["web-push", "campaigns", rid] }),
   });
+
+  const valid = !!draft.name && !!draft.title && !!draft.body;
+  const canSchedule = valid && !!draft.scheduledAt && new Date(draft.scheduledAt).getTime() > Date.now();
+  const busy = saveDraft.isPending || schedule.isPending || sendNow.isPending;
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="md:col-span-2"><Label>Name</Label><Input value={draft.name ?? ""} onChange={e => setDraft({ ...draft, name: e.target.value })} /></div>
-        <div className="md:col-span-2"><Label>Title</Label><Input value={draft.title ?? ""} onChange={e => setDraft({ ...draft, title: e.target.value })} /></div>
-        <div className="md:col-span-2"><Label>Body</Label><Textarea rows={3} value={draft.body ?? ""} onChange={e => setDraft({ ...draft, body: e.target.value })} /></div>
-        <div><Label>Icon URL</Label><Input value={draft.iconUrl ?? ""} onChange={e => setDraft({ ...draft, iconUrl: e.target.value })} /></div>
-        <div><Label>Image URL</Label><Input value={draft.imageUrl ?? ""} onChange={e => setDraft({ ...draft, imageUrl: e.target.value })} /></div>
-        <div className="md:col-span-2"><Label>Click URL</Label><Input value={draft.clickUrl ?? ""} onChange={e => setDraft({ ...draft, clickUrl: e.target.value })} /></div>
-        <div className="md:col-span-2">
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !draft.name || !draft.title || !draft.body}><Plus className="w-4 h-4 mr-1.5" />Save draft</Button>
+        <div className="md:col-span-2"><Label>Name <span className="text-muted-foreground">(internal)</span></Label><Input value={draft.name ?? ""} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Diwali special — 20% off" /></div>
+        <div className="md:col-span-2"><Label>Title <span className="text-muted-foreground">(shown in notification)</span></Label><Input value={draft.title ?? ""} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="🎉 Diwali Special at Spice Garden" /></div>
+        <div className="md:col-span-2"><Label>Body</Label><Textarea rows={3} value={draft.body ?? ""} onChange={e => setDraft({ ...draft, body: e.target.value })} placeholder="Get 20% off all biryanis this weekend. Tap to order." /></div>
+        <div><Label>Icon URL</Label><Input value={draft.iconUrl ?? ""} onChange={e => setDraft({ ...draft, iconUrl: e.target.value })} placeholder="https://…/icon.png" /></div>
+        <div><Label>Image URL <span className="text-muted-foreground">(rich card)</span></Label><Input value={draft.imageUrl ?? ""} onChange={e => setDraft({ ...draft, imageUrl: e.target.value })} placeholder="https://…/hero.jpg" /></div>
+        <div className="md:col-span-2"><Label>Click URL</Label><Input value={draft.clickUrl ?? ""} onChange={e => setDraft({ ...draft, clickUrl: e.target.value })} placeholder="https://yourrestaurant.com/menu" /></div>
+
+        <div>
+          <Label>Audience</Label>
+          <select
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+            value={draft.audience ?? "marketing"}
+            onChange={e => setDraft({ ...draft, audience: e.target.value as Audience })}
+          >
+            <option value="marketing">Marketing opt-in only (recommended for promos)</option>
+            <option value="order_updates">Anyone opted in to order updates</option>
+            <option value="all">All active subscribers</option>
+          </select>
+        </div>
+        <div>
+          <Label>Schedule for (optional)</Label>
+          <Input
+            type="datetime-local"
+            value={draft.scheduledAt ?? ""}
+            onChange={e => setDraft({ ...draft, scheduledAt: e.target.value })}
+          />
+        </div>
+
+        <div className="md:col-span-2 flex flex-wrap gap-2 pt-1">
+          <Button variant="outline" onClick={() => saveDraft.mutate()} disabled={busy || !valid}>
+            <Plus className="w-4 h-4 mr-1.5" />Save draft
+          </Button>
+          <Button variant="outline" onClick={() => schedule.mutate()} disabled={busy || !canSchedule} title={!canSchedule ? "Pick a future date/time first" : ""}>
+            <Clock className="w-4 h-4 mr-1.5" />Schedule
+          </Button>
+          <Button onClick={() => sendNow.mutate()} disabled={busy || !valid}>
+            <Send className="w-4 h-4 mr-1.5" />Send now
+          </Button>
         </div>
       </div>
       <div className="border border-border rounded-lg divide-y divide-border">
@@ -295,11 +363,14 @@ function CampaignsTab() {
               <div className="text-sm font-medium truncate">{c.name} <Badge variant="outline" className="ml-2 text-[10px] uppercase">{c.status}</Badge></div>
               <div className="text-sm">{c.title}</div>
               <div className="text-xs text-muted-foreground truncate">{c.body}</div>
+              {c.scheduledAt && c.status === "scheduled" && (
+                <div className="text-xs text-muted-foreground mt-0.5">Scheduled for {new Date(c.scheduledAt).toLocaleString()}</div>
+              )}
               {c.sentAt && <div className="text-xs text-muted-foreground mt-0.5">Sent {new Date(c.sentAt).toLocaleString()} · {c.sentCount}/{c.targetedCount} delivered · {c.failedCount} failed · {c.clickedCount} clicks</div>}
             </div>
             <div className="flex gap-1">
               {(c.status === "draft" || c.status === "scheduled" || c.status === "failed") && (
-                <Button size="sm" onClick={() => send.mutate(c.id)} disabled={send.isPending}><Send className="w-3.5 h-3.5 mr-1" />Send</Button>
+                <Button size="sm" onClick={() => send.mutate(c.id)} disabled={send.isPending}><Send className="w-3.5 h-3.5 mr-1" />Send now</Button>
               )}
               <Button variant="ghost" size="icon" onClick={() => del.mutate(c.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
             </div>

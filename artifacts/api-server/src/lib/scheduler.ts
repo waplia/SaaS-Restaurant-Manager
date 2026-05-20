@@ -135,6 +135,64 @@ export function startScheduler(): void {
   registerCron("abandoned-cart-detect", "*/10 * * * *", "Customer-Quality: detect & flag abandoned carts (every 10 min)");
   registerCron("ops-morning-briefings", "0 8 * * *", "Generates and sends per-restaurant owner morning briefings (Operations Intelligence) at 08:00 IST");
   registerCron("ops-end-of-day", "30 23 * * *", "Computes and persists per-restaurant end-of-day summary into timeline_events (Operations Intelligence) at 23:30 IST");
+  registerCron("web-push-scheduled-campaigns", "* * * * *", "Every minute: dispatches Web Push marketing campaigns whose scheduledAt has elapsed");
+
+  // Web Push scheduled campaign dispatcher. Runs every minute and sends any
+  // campaign whose status is "scheduled" and whose scheduledAt is in the past.
+  trackCron("web_push_scheduled_campaigns", "* * * * *", async () => {
+    try {
+      const { webPushCampaignsTable, webPushSubscriptionsTable, webPushCampaignRecipientsTable } = await import("./db");
+      const { sendWebPush } = await import("./webPush");
+      const now = new Date();
+      const due = await db.select().from(webPushCampaignsTable).where(and(
+        eq(webPushCampaignsTable.status, "scheduled"),
+        lte(webPushCampaignsTable.scheduledAt, now),
+      ));
+      for (const c of due) {
+        try {
+          await db.update(webPushCampaignsTable).set({ status: "sending", updatedAt: new Date() }).where(eq(webPushCampaignsTable.id, c.id));
+          const segment = (c.segment ?? {}) as { audience?: "marketing" | "order_updates" | "all" };
+          const audience = segment.audience ?? "marketing";
+          const conds = [
+            eq(webPushSubscriptionsTable.restaurantId, c.restaurantId),
+            eq(webPushSubscriptionsTable.status, "active"),
+          ];
+          if (audience === "marketing") conds.push(eq(webPushSubscriptionsTable.marketingOptIn, true));
+          else if (audience === "order_updates") conds.push(eq(webPushSubscriptionsTable.orderUpdatesOptIn, true));
+          const subs = await db.select({
+            id: webPushSubscriptionsTable.id,
+            endpoint: webPushSubscriptionsTable.endpoint,
+            p256dh: webPushSubscriptionsTable.p256dh,
+            auth: webPushSubscriptionsTable.auth,
+            customerId: webPushSubscriptionsTable.customerId,
+            marketingOptIn: webPushSubscriptionsTable.marketingOptIn,
+            orderUpdatesOptIn: webPushSubscriptionsTable.orderUpdatesOptIn,
+            restaurantId: webPushSubscriptionsTable.restaurantId,
+            tenantId: webPushSubscriptionsTable.tenantId,
+          }).from(webPushSubscriptionsTable).where(and(...conds));
+          const out = await sendWebPush({
+            restaurantId: c.restaurantId, eventKey: "system.announcement", category: "marketing", campaignId: c.id,
+            payload: { title: c.title, body: c.body, url: c.clickUrl ?? undefined, icon: c.iconUrl ?? undefined, image: c.imageUrl ?? undefined },
+            subscriptions: subs,
+          });
+          await db.update(webPushCampaignsTable).set({
+            status: out.sent > 0 ? "sent" : "failed",
+            sentAt: new Date(), targetedCount: out.total, sentCount: out.sent, failedCount: out.failed, updatedAt: new Date(),
+          }).where(eq(webPushCampaignsTable.id, c.id));
+          if (subs.length > 0) {
+            await db.insert(webPushCampaignRecipientsTable).values(subs.map(s => ({
+              campaignId: c.id, subscriptionId: s.id, status: "sent" as const,
+            }))).onConflictDoNothing?.();
+          }
+        } catch (err) {
+          logger.error({ err, campaignId: c.id }, "scheduled campaign send failed");
+          await db.update(webPushCampaignsTable).set({ status: "failed", updatedAt: new Date() }).where(eq(webPushCampaignsTable.id, c.id));
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "web-push-scheduled-campaigns tick failed");
+    }
+  });
 
   // Persisted nightly EOD artifact: at 23:30 IST we compute the day's
   // orders/incidents/panic alerts/closing-checklist summary for every

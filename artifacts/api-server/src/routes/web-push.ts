@@ -208,7 +208,18 @@ router.post("/restaurants/:restaurantId/web-push/campaigns/:id/send", validateRe
 
   await db.update(webPushCampaignsTable).set({ status: "sending", updatedAt: new Date() }).where(eq(webPushCampaignsTable.id, id));
   try {
-    // Resolve subscribers by segment (current support: all marketing-opted-in for the restaurant).
+    // Resolve subscribers from the campaign's segment definition.
+    //   segment.audience: "marketing" (default, marketing opt-in only)
+    //                   | "order_updates" (anyone opted-in to order updates)
+    //                   | "all" (every active subscriber for this restaurant)
+    const segment = (c.segment ?? {}) as { audience?: "marketing" | "order_updates" | "all" };
+    const audience = segment.audience ?? "marketing";
+    const conditions = [
+      eq(webPushSubscriptionsTable.restaurantId, restaurantId),
+      eq(webPushSubscriptionsTable.status, "active"),
+    ];
+    if (audience === "marketing") conditions.push(eq(webPushSubscriptionsTable.marketingOptIn, true));
+    else if (audience === "order_updates") conditions.push(eq(webPushSubscriptionsTable.orderUpdatesOptIn, true));
     const subs = await db.select({
       id: webPushSubscriptionsTable.id,
       endpoint: webPushSubscriptionsTable.endpoint,
@@ -219,11 +230,7 @@ router.post("/restaurants/:restaurantId/web-push/campaigns/:id/send", validateRe
       orderUpdatesOptIn: webPushSubscriptionsTable.orderUpdatesOptIn,
       restaurantId: webPushSubscriptionsTable.restaurantId,
       tenantId: webPushSubscriptionsTable.tenantId,
-    }).from(webPushSubscriptionsTable).where(and(
-      eq(webPushSubscriptionsTable.restaurantId, restaurantId),
-      eq(webPushSubscriptionsTable.status, "active"),
-      eq(webPushSubscriptionsTable.marketingOptIn, true),
-    ));
+    }).from(webPushSubscriptionsTable).where(and(...conditions));
 
     const out = await sendWebPush({
       restaurantId, eventKey: "system.announcement", category: "marketing", campaignId: id,
