@@ -45,10 +45,13 @@ function ensureGsiScript(): Promise<void> {
 
 interface Props {
   label?: string;
+  /** "login" (default) → server will refuse to create a new account for an
+   * unknown Google identity. "register" → the explicit signup path. */
+  mode?: "login" | "register";
   onCompleteProfileNeeded?: (info: { missing: { phone: boolean; restaurantName: boolean } }) => void;
 }
 
-export function GoogleSignInButton({ label = "Continue with Google", onCompleteProfileNeeded }: Props) {
+export function GoogleSignInButton({ label = "Continue with Google", mode = "login", onCompleteProfileNeeded }: Props) {
   const settings = useAppSettings();
   const { acceptAuthPayload } = useAuth();
   const [, navigate] = useLocation();
@@ -92,7 +95,7 @@ export function GoogleSignInButton({ label = "Continue with Google", onCompleteP
               const r = await fetch("/api/auth/google/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken: resp.credential }),
+                body: JSON.stringify({ idToken: resp.credential, mode }),
               });
               const data = await r.json().catch(() => ({}));
               if (!r.ok) {

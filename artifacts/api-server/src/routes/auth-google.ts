@@ -97,7 +97,13 @@ router.get("/auth/google/config", async (_req, res) => {
 // access/refresh tokens. The account cannot be used until the client
 // completes /auth/google/pending/verify with a valid phone OTP.
 // ────────────────────────────────────────────────────────────────────────────
-const VerifyBody = z.object({ idToken: z.string().min(10) });
+const VerifyBody = z.object({
+  idToken: z.string().min(10),
+  // "login" (default) → reject if no account exists for this Google identity.
+  // "register" → allowed to create a new tenant+user (still gated on
+  // signupEnabled). The caller is the explicit "Sign up with Google" button.
+  mode: z.enum(["login", "register"]).optional(),
+});
 
 router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), async (req, res) => {
   const client = await getGoogleClient();
@@ -106,7 +112,7 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
     return;
   }
   const settings = await getAppSettings();
-  const { idToken } = req.body as z.infer<typeof VerifyBody>;
+  const { idToken, mode = "login" } = req.body as z.infer<typeof VerifyBody>;
 
   let payload: import("google-auth-library").TokenPayload | undefined;
   try {
@@ -179,7 +185,17 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
     return;
   }
 
-  // No account — signup path.
+  // No account — gated signup path.
+  // Login attempts (mode !== "register") must NEVER create a new account.
+  // Surface a clear "not registered" message so the UI can prompt the user
+  // to register first.
+  if (mode !== "register") {
+    res.status(404).json({
+      error: "Account not registered. Please register first to continue.",
+      code: "account_not_registered",
+    });
+    return;
+  }
   if (!settings.signupEnabled) {
     res.status(404).json({ error: "Account not found. Self-signup is currently disabled." });
     return;

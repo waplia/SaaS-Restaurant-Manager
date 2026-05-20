@@ -92,9 +92,24 @@ export interface VerifyOtpResult {
   token?: string;
   customerUser?: { id: number; phone: string; name: string | null; email: string | null };
   error?: string;
+  /** Set when login was attempted but no account exists for the phone. */
+  code?: "account_not_registered";
 }
 
-export async function verifyCustomerOtp(rawPhone: string, code: string): Promise<VerifyOtpResult> {
+export interface VerifyOtpOptions {
+  /** When true, the caller is the explicit "register" flow and a new
+   * customer_users row may be created if none exists. When false (default),
+   * unknown phones are rejected so login does not silently create accounts. */
+  allowCreate?: boolean;
+  /** Display name to set on a newly-created account (register flow only). */
+  name?: string | null;
+}
+
+export async function verifyCustomerOtp(
+  rawPhone: string,
+  code: string,
+  opts: VerifyOtpOptions = {},
+): Promise<VerifyOtpResult> {
   const phone = normalizePhone(rawPhone);
   if (!phone || !code) return { ok: false, error: "Phone and code are required." };
 
@@ -118,15 +133,34 @@ export async function verifyCustomerOtp(rawPhone: string, code: string): Promise
     return { ok: false, error: "Incorrect code. Please try again." };
   }
 
+  // Find or (only when explicitly allowed) create the customer_users row.
+  // Login flow must NOT silently create accounts — surface a clear error
+  // so the UI can route the user to the register screen instead.
+  //
+  // IMPORTANT: do NOT consume the OTP here. If we mark it consumed before
+  // confirming the account exists / will be created, the wallet UI's
+  // "no account → register with the code you already entered" flow would
+  // fail because the same code can't be re-verified by /wallet/auth/register.
+  // The OTP is consumed below, once we know this call is about to succeed.
+  let [user] = await db.select().from(customerUsersTable).where(eq(customerUsersTable.phone, phone));
+  if (!user) {
+    if (!opts.allowCreate) {
+      return {
+        ok: false,
+        error: "Account not registered. Please register first to continue.",
+        code: "account_not_registered",
+      };
+    }
+    [user] = await db.insert(customerUsersTable).values({
+      phone,
+      name: opts.name?.trim() || null,
+    }).returning();
+  }
+
+  // Account confirmed — burn the OTP so it can't be replayed.
   await db.update(customerOtpsTable)
     .set({ consumedAt: new Date() })
     .where(eq(customerOtpsTable.id, otp.id));
-
-  // Find or create the customer_users row.
-  let [user] = await db.select().from(customerUsersTable).where(eq(customerUsersTable.phone, phone));
-  if (!user) {
-    [user] = await db.insert(customerUsersTable).values({ phone }).returning();
-  }
   await db.update(customerUsersTable)
     .set({ lastLoginAt: new Date(), updatedAt: new Date() })
     .where(eq(customerUsersTable.id, user.id));

@@ -199,6 +199,7 @@ export default function RegisterPage() {
                   <OrDivider />
                   <GoogleSignInButton
                     label="Continue with Google"
+                    mode="register"
                     onCompleteProfileNeeded={() => navigate("/complete-profile")}
                   />
                 </>

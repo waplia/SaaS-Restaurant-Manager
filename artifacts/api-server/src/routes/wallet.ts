@@ -55,12 +55,33 @@ router.post("/wallet/auth/request-otp", async (req, res) => {
   res.json({ ok: true, devCode: result.devCode ?? undefined });
 });
 
+// Login: verify OTP for an existing customer wallet account. Will NOT create
+// a new account — returns 404 with code "account_not_registered" so the UI
+// can route the user to the register screen.
 router.post("/wallet/auth/verify-otp", async (req, res) => {
   const { phone, code } = req.body as { phone?: string; code?: string };
   if (!phone || !code) return void res.status(400).json({ error: "Phone and code are required" });
-  const result = await verifyCustomerOtp(phone, code);
-  if (!result.ok) return void res.status(400).json({ error: result.error });
+  const result = await verifyCustomerOtp(phone, code, { allowCreate: false });
+  if (!result.ok) {
+    if (result.code === "account_not_registered") {
+      return void res.status(404).json({ error: result.error, code: result.code });
+    }
+    return void res.status(400).json({ error: result.error });
+  }
   res.json({ ok: true, token: result.token, customerUser: result.customerUser });
+});
+
+// Register: explicit signup endpoint for the customer wallet. Caller must
+// have already requested an OTP via /wallet/auth/request-otp and present the
+// code along with the new account's display name.
+router.post("/wallet/auth/register", async (req, res) => {
+  const { phone, code, name } = req.body as { phone?: string; code?: string; name?: string };
+  if (!phone || !code) return void res.status(400).json({ error: "Phone and code are required" });
+  const trimmedName = name?.trim() ?? "";
+  if (!trimmedName) return void res.status(400).json({ error: "Name is required to register." });
+  const result = await verifyCustomerOtp(phone, code, { allowCreate: true, name: trimmedName });
+  if (!result.ok) return void res.status(400).json({ error: result.error });
+  res.status(201).json({ ok: true, token: result.token, customerUser: result.customerUser });
 });
 
 // Public: list participating restaurants for the marketing page / discovery.

@@ -93,6 +93,7 @@ export default function LoginPage() {
                       <OrDivider />
                       <GoogleSignInButton
                         label="Sign in with Google"
+                        mode="login"
                         onCompleteProfileNeeded={() => navigate("/complete-profile")}
                       />
                     </div>
