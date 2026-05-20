@@ -51,6 +51,7 @@ type Step = {
 type Audience = {
   customerIds?: number[];
   segment?: "all" | "new" | "repeat" | "vip" | "inactive" | "birthday" | "anniversary" | "high_value" | "custom";
+  pushAudience?: "all" | "marketing" | "order_updates";
   rules?: {
     minTotalOrders?: number; maxTotalOrders?: number; minTotalSpent?: number;
     inactiveDays?: number; activeWithinDays?: number; birthdayThisMonth?: boolean;
@@ -110,7 +111,12 @@ type CampaignAnalytics = {
   recipients: Array<{ customerId: number | null; channel: string | null; status: string; sentAt: string; reason: string | null }>;
 };
 
-type Preview = { total: number; reachable: { email: number; sms: number; whatsapp: number }; sample: Array<{ id: number; name: string; email: string | null; phone: string | null }> };
+type Preview = {
+  total: number;
+  reachable: { email: number; sms: number; whatsapp: number; push?: number };
+  audienceKind?: "customers" | "subscribers";
+  sample: Array<{ id: number; name: string; email: string | null; phone: string | null; subtitle?: string | null }>;
+};
 
 // ─────────── Catalog ───────────
 const GOALS: Array<{ key: Goal; label: string; blurb: string; icon: typeof Target; defaults: { type: string; channels: Channel[] } }> = [
@@ -533,10 +539,10 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
   // When user lands on "preview" step, fetch preview audience.
   useEffect(() => {
     if (WIZARD_STEPS[stepIdx].key === "preview" || WIZARD_STEPS[stepIdx].key === "audience") {
-      apiPost<Preview>(`/restaurants/${restaurantId}/growth/segments/preview`, { audience: draft.audience })
+      apiPost<Preview>(`/restaurants/${restaurantId}/growth/segments/preview`, { audience: draft.audience, channel: draft.channel })
         .then(setPreview).catch(() => setPreview(null));
     }
-  }, [stepIdx, restaurantId, draft.audience]);
+  }, [stepIdx, restaurantId, draft.audience, draft.channel]);
 
   const updateDraft = (patch: Partial<Campaign>) => setDraft(prev => ({ ...prev, ...patch }));
   const updateContent = (patch: StepContent) => setDraft(prev => ({ ...prev, content: { ...prev.content, ...patch } }));
@@ -547,7 +553,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
     if (k === "goal") return Boolean(draft.goal && draft.name?.trim());
     if (k === "channel") return draft.isOmnichannel ? (draft.channels || []).length >= 1 : Boolean(draft.channel);
     if (k === "template") return Boolean(draft.content?.body?.trim() || draft.content?.subject?.trim());
-    if (k === "audience") return Boolean(draft.audience?.segment || draft.audience?.customerIds?.length);
+    if (k === "audience") return Boolean(draft.audience?.segment || draft.audience?.customerIds?.length || draft.audience?.pushAudience);
     return true;
   })();
 
@@ -820,6 +826,54 @@ function StepTemplate({ draft, updateContent }: { draft: Campaign; updateContent
 function StepAudience({ draft, updateAudience, preview, planInfo }: { draft: Campaign; updateAudience: (p: Audience) => void; preview: Preview | null; planInfo: PlanInfo | undefined }) {
   const seg = draft.audience?.segment ?? "all";
   const rules = draft.audience?.rules ?? {};
+  const isPush = draft.channel === "push" && !draft.isOmnichannel;
+
+  if (isPush) {
+    const pa = draft.audience?.pushAudience ?? "marketing";
+    const PUSH_OPTIONS: Array<{ key: NonNullable<Audience["pushAudience"]>; label: string; blurb: string }> = [
+      { key: "marketing",     label: "Marketing opt-in",       blurb: "Subscribers who agreed to marketing pushes (recommended)" },
+      { key: "order_updates", label: "Order update opt-in",    blurb: "Subscribers who accept order / transactional pushes" },
+      { key: "all",           label: "All active subscribers", blurb: "Every active Web Push subscription for this restaurant" },
+    ];
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-semibold">Choose Web Push subscribers</h3>
+          <p className="text-sm text-muted-foreground">Web Push campaigns send to browser subscribers, not the customer list. Manage them in Settings → Web Push → Subscribers.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {PUSH_OPTIONS.map(o => (
+            <button
+              key={o.key}
+              onClick={() => updateAudience({ pushAudience: o.key })}
+              className={cn(
+                "text-left p-3 border rounded transition",
+                pa === o.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/50",
+              )}
+            >
+              <div className="text-sm font-medium">{o.label}</div>
+              <div className="text-xs text-muted-foreground">{o.blurb}</div>
+            </button>
+          ))}
+        </div>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-2 text-sm mb-2"><Bell className="h-4 w-4" />Estimated reach</div>
+          {preview ? (
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <Stat label="Subscribers" value={preview.total} />
+              <Stat label="Reachable now" value={preview.reachable.push ?? preview.total} />
+            </div>
+          ) : <div className="text-sm text-muted-foreground">Calculating…</div>}
+          {preview && preview.total === 0 && (
+            <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded mt-3">
+              No active subscribers match this selector yet. Ask customers to enable browser notifications from your menu or order pages.
+            </div>
+          )}
+        </CardContent></Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -925,7 +979,11 @@ function StepPreview({ draft, preview }: { draft: Campaign; preview: Preview | n
               {(preview?.sample ?? []).map(s => (
                 <div key={s.id} className="text-sm flex items-center justify-between border-b pb-1">
                   <span className="truncate">{s.name}</span>
-                  <span className="text-xs text-muted-foreground">{channel === "email" ? s.email : s.phone}</span>
+                  <span className="text-xs text-muted-foreground truncate ml-2">{
+                    preview?.audienceKind === "subscribers"
+                      ? (s.subtitle || "Subscriber")
+                      : (channel === "email" ? s.email : s.phone)
+                  }</span>
                 </div>
               ))}
               {(preview?.sample ?? []).length === 0 && <div className="text-sm text-muted-foreground p-3">No recipients yet — refine your audience.</div>}
@@ -1060,7 +1118,7 @@ function SummaryRail({ draft, preview }: { draft: Campaign; preview: Preview | n
       <div className="space-y-2">
         <SummaryRow label="Goal" value={goal?.label ?? draft.goal} />
         <SummaryRow label="Channel" value={draft.isOmnichannel ? `Omnichannel (${(draft.channels ?? []).length})` : (channelMeta?.label ?? "—")} />
-        <SummaryRow label="Audience" value={preview?.total ? `${preview.total.toLocaleString()} customers` : (draft.audience?.segment ?? "—")} />
+        <SummaryRow label="Audience" value={preview?.total ? `${preview.total.toLocaleString()} ${preview.audienceKind === "subscribers" ? "subscribers" : "customers"}` : (preview?.audienceKind === "subscribers" ? (draft.audience?.pushAudience ?? "—") : (draft.audience?.segment ?? "—"))} />
         <SummaryRow label="Schedule" value={draft.scheduleKind === "now" ? "Send now" : (draft.scheduleKind === "recurring" ? `${draft.recurrence?.frequency ?? "?"} recurring` : (draft.scheduledAt ? fmtDate(draft.scheduledAt) : "Not set"))} />
       </div>
       {(draft.content?.body || draft.content?.subject) && (

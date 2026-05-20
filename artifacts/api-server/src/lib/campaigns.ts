@@ -24,6 +24,7 @@ import {
   smsSuppressionListTable,
   whatsappSuppressionListTable,
   webPushSuppressionListTable,
+  webPushSubscriptionsTable,
   subscriptionPlansTable,
   tenantsTable,
   restaurantsTable,
@@ -92,6 +93,9 @@ export type AudienceFilter = {
     | "anniversary"
     | "high_value"
     | "custom";
+  /** For Web Push campaigns the audience is selected from web_push_subscriptions,
+   * not customers. Values mirror the Web Push settings page. */
+  pushAudience?: "all" | "marketing" | "order_updates";
   rules?: {
     minTotalOrders?: number;
     maxTotalOrders?: number;
@@ -227,18 +231,99 @@ export async function resolveSegment(
   return rows;
 }
 
+export type SubscriberRow = {
+  id: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  customerId: number | null;
+  marketingOptIn: boolean;
+  orderUpdatesOptIn: boolean;
+  restaurantId: number | null;
+  tenantId: number | null;
+  browser: string | null;
+  device: string | null;
+  customerName: string | null;
+  createdAt: Date | null;
+};
+
+export async function resolvePushSubscribers(
+  restaurantId: number,
+  audience: AudienceFilter,
+): Promise<SubscriberRow[]> {
+  const pa = audience.pushAudience ?? "marketing";
+  const conds = [
+    eq(webPushSubscriptionsTable.restaurantId, restaurantId),
+    eq(webPushSubscriptionsTable.status, "active"),
+  ] as ReturnType<typeof eq>[];
+  if (pa === "marketing") conds.push(eq(webPushSubscriptionsTable.marketingOptIn, true));
+  else if (pa === "order_updates") conds.push(eq(webPushSubscriptionsTable.orderUpdatesOptIn, true));
+  const rows = await db
+    .select({
+      id: webPushSubscriptionsTable.id,
+      endpoint: webPushSubscriptionsTable.endpoint,
+      p256dh: webPushSubscriptionsTable.p256dh,
+      auth: webPushSubscriptionsTable.auth,
+      customerId: webPushSubscriptionsTable.customerId,
+      marketingOptIn: webPushSubscriptionsTable.marketingOptIn,
+      orderUpdatesOptIn: webPushSubscriptionsTable.orderUpdatesOptIn,
+      restaurantId: webPushSubscriptionsTable.restaurantId,
+      tenantId: webPushSubscriptionsTable.tenantId,
+      browser: webPushSubscriptionsTable.browser,
+      device: webPushSubscriptionsTable.device,
+      createdAt: webPushSubscriptionsTable.createdAt,
+      customerName: customersTable.name,
+    })
+    .from(webPushSubscriptionsTable)
+    .leftJoin(customersTable, eq(customersTable.id, webPushSubscriptionsTable.customerId))
+    .where(and(...conds))
+    .orderBy(desc(webPushSubscriptionsTable.createdAt))
+    .limit(50_000);
+  return rows as SubscriberRow[];
+}
+
+export type PreviewResult = {
+  total: number;
+  reachable: { email: number; sms: number; whatsapp: number; push: number };
+  sample: Array<{ id: number; name: string; email: string | null; phone: string | null; subtitle?: string | null }>;
+  /** When the channel is "push", "audienceKind" is "subscribers" so the UI
+   * can render subscriber-style stats instead of customer reach. */
+  audienceKind: "customers" | "subscribers";
+};
+
 export async function previewSegment(
   restaurantId: number,
   audience: AudienceFilter,
-): Promise<{ total: number; reachable: { email: number; sms: number; whatsapp: number }; sample: CustomerRow[] }> {
+  channel: ChannelName | null = null,
+): Promise<PreviewResult> {
+  if (channel === "push") {
+    const subs = await resolvePushSubscribers(restaurantId, audience);
+    return {
+      total: subs.length,
+      reachable: { email: 0, sms: 0, whatsapp: 0, push: subs.length },
+      audienceKind: "subscribers",
+      sample: subs.slice(0, 25).map(s => ({
+        id: s.id,
+        name: s.customerName || `Anonymous subscriber #${s.id}`,
+        email: null,
+        phone: null,
+        subtitle: [s.browser, s.device].filter(Boolean).join(" · ") || null,
+      })),
+    };
+  }
   const rows = await resolveSegment(restaurantId, audience, { hardLimit: 5_000 });
-  const reachable = { email: 0, sms: 0, whatsapp: 0 };
+  const reachable = { email: 0, sms: 0, whatsapp: 0, push: 0 };
   for (const r of rows) {
     if (r.email && r.emailMarketingOptIn && !r.emailUnsubscribed) reachable.email++;
     if (r.phone) reachable.sms++;
     if (r.phone && r.whatsappOptIn) reachable.whatsapp++;
   }
-  return { total: rows.length, reachable, sample: rows.slice(0, 25) };
+  return {
+    total: rows.length,
+    reachable,
+    audienceKind: "customers",
+    sample: rows.slice(0, 25).map(r => ({ id: r.id, name: r.name, email: r.email, phone: r.phone, subtitle: null })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -403,12 +488,49 @@ export async function dispatchOne(opts: {
 export async function launchSingleShot(campaign: Campaign): Promise<{ sent: number; failed: number; skipped: number; total: number }> {
   const audience = (campaign.audience ?? {}) as AudienceFilter;
   const content = (campaign.content ?? {}) as StepContent;
+  const channel = campaign.channel as ChannelName;
+
+  // Web Push: dispatch to subscriptions in a single batched call so we hit
+  // anonymous subscribers too (they have no customerId) and reuse the same
+  // pipeline as the Web Push settings page.
+  if (channel === "push") {
+    const subs = await resolvePushSubscribers(campaign.restaurantId, audience);
+    if (subs.length === 0) return { sent: 0, failed: 0, skipped: 0, total: 0 };
+    const out = await sendWebPush({
+      restaurantId: campaign.restaurantId,
+      eventKey: "system.announcement",
+      category: "marketing",
+      campaignId: campaign.id,
+      payload: {
+        title: content.title || content.subject || campaign.name,
+        body: content.body ?? "",
+        url: content.ctaUrl ?? undefined,
+        image: content.imageUrl ?? undefined,
+      },
+      subscriptions: subs,
+    });
+    // Mirror per-recipient logs into campaign_logs for the analytics view.
+    if (subs.length > 0) {
+      await db.insert(campaignLogsTable).values(subs.map((s, i) => ({
+        campaignId: campaign.id,
+        restaurantId: campaign.restaurantId,
+        event: i < out.sent ? "sent" : (i < out.sent + out.skipped ? "skipped" : "failed"),
+        channel: "push",
+        customerId: s.customerId,
+        errorReason: out.reason ?? null,
+        contentSnapshot: { title: content.title ?? null, body: (content.body ?? "").slice(0, 500) },
+        payload: { subscriptionId: s.id },
+      }))).catch(err => logger.warn({ err }, "push campaign log insert failed"));
+    }
+    return { sent: out.sent, failed: out.failed, skipped: out.skipped, total: out.total };
+  }
+
   const restaurantName = await getRestaurantName(campaign.restaurantId);
   const recipients = await resolveSegment(campaign.restaurantId, audience);
   const totals = { sent: 0, failed: 0, skipped: 0, total: recipients.length };
   for (const c of recipients) {
     const r = await dispatchOne({
-      campaign, channel: campaign.channel as ChannelName, customer: c,
+      campaign, channel, customer: c,
       content, restaurantName,
     });
     if (r.status === "sent") totals.sent++;

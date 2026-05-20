@@ -303,14 +303,15 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/preview", async (re
     .where(and(eq(campaignsTable.id, id), eq(campaignsTable.restaurantId, restaurantId)));
   if (!c) return void res.status(404).json({ error: "Not found" });
   const aud = (c.audience ?? {}) as AudienceFilter;
-  const out = await previewSegment(restaurantId, aud);
+  const out = await previewSegment(restaurantId, aud, (c.channel as ChannelName) ?? null);
   res.json(out);
 });
 
 router.post("/restaurants/:restaurantId/growth/segments/preview", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const audience = (req.body?.audience ?? {}) as AudienceFilter;
-  const out = await previewSegment(restaurantId, audience);
+  const channel = (req.body?.channel ?? null) as ChannelName | null;
+  const out = await previewSegment(restaurantId, audience, channel && CHANNELS.has(channel) ? channel : null);
   res.json(out);
 });
 
