@@ -975,6 +975,24 @@ export function startScheduler(): void {
     } catch (err) { logger.error({ err }, "[pnl] nightly warm-up failed"); }
   });
 
+  // Task #533 — periodic WhatsApp template Meta sync. Every 30 minutes
+  // we pull the latest status of all platform-scope templates from Meta
+  // (pending → approved/rejected transitions, rate limiting changes,
+  // etc). Errors are swallowed and logged; we don't want a Meta outage
+  // to take the scheduler down.
+  registerCron("whatsapp-template-meta-sync", "*/30 * * * *", "Pulls latest Meta status for all platform WhatsApp templates every 30 min (Task #533).");
+  trackCron("whatsapp_template_meta_sync", "*/30 * * * *", async () => {
+    try {
+      const { syncTemplates } = await import("./whatsapp");
+      const out = await syncTemplates("platform", null);
+      if (out.synced > 0) {
+        logger.info({ synced: out.synced }, "[whatsapp-template-center] periodic meta sync");
+      }
+    } catch (err) {
+      logger.warn({ err }, "[whatsapp-template-center] periodic meta sync failed");
+    }
+  });
+
   logger.info("Scheduler started — daily summary at 23:00 IST, trial-expiry at 00:00 IST, loyalty-expiry at 00:30 IST, auto-reorder evaluated every minute (per-restaurant cron, IST), webhook retries every minute, scheduled backups every minute, event payment reminders at 09:00 IST");
 }
 

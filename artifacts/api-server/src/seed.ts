@@ -1,5 +1,7 @@
 import { db } from "./lib/db";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
+import { seedDefaultWhatsAppTemplates } from "./lib/whatsappTemplateSeeder";
+import { seedRestaurantEmailLibrary } from "./lib/restaurantEmailSeeder";
 import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
 import { defaultFeatureFlagsForPlan } from "@workspace/db";
 import {
@@ -478,6 +480,12 @@ export async function seed(): Promise<void> {
 
   await seedDefaultEmailTemplates();
   console.log("✅ Default email templates ensured");
+
+  const restEmail = await seedRestaurantEmailLibrary();
+  console.log(`✅ Restaurant email library seeded (inserted ${restEmail.inserted}, skipped ${restEmail.skipped})`);
+
+  const waSeed = await seedDefaultWhatsAppTemplates();
+  console.log(`✅ Default WhatsApp templates seeded (inserted ${waSeed.inserted}, skipped ${waSeed.skipped})`);
 
   // ── AI feature → provider/model assignment defaults ──────────
   // Ensure the Dashboard Assistant chat is wired to a text-capable

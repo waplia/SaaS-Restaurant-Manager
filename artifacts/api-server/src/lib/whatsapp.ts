@@ -251,26 +251,37 @@ export async function syncTemplates(scope: WhatsAppScope, restaurantId: number |
     for (const t of res.data ?? []) {
       if (!t.name) continue;
       const body = (t.components ?? []).find(c => c.type === "BODY")?.text ?? "";
-      await db.insert(whatsappTemplatesTable).values({
-        scope,
-        restaurantId: scope === "restaurant" ? restaurantId : null,
-        name: t.name,
-        language: t.language ?? "en",
+      // Uniqueness on whatsapp_templates is enforced by two partial unique
+      // indexes (one per scope), because Postgres treats NULL restaurant_id
+      // as distinct under a single composite unique. We therefore branch the
+      // ON CONFLICT target per scope so Postgres can match the right index.
+      const updateSet = {
         category: t.category ?? null,
         status: (t.status ?? "pending").toLowerCase(),
         bodyPreview: body.slice(0, 500),
         raw: t as unknown as Record<string, unknown>,
         syncedAt: new Date(),
-      }).onConflictDoUpdate({
-        target: [whatsappTemplatesTable.scope, whatsappTemplatesTable.restaurantId, whatsappTemplatesTable.name, whatsappTemplatesTable.language],
-        set: {
-          category: t.category ?? null,
-          status: (t.status ?? "pending").toLowerCase(),
-          bodyPreview: body.slice(0, 500),
-          raw: t as unknown as Record<string, unknown>,
-          syncedAt: new Date(),
-        },
-      });
+      };
+      const insertValues = {
+        scope,
+        restaurantId: scope === "restaurant" ? restaurantId : null,
+        name: t.name,
+        language: t.language ?? "en",
+        ...updateSet,
+      };
+      if (scope === "platform") {
+        await db.insert(whatsappTemplatesTable).values(insertValues).onConflictDoUpdate({
+          target: [whatsappTemplatesTable.name, whatsappTemplatesTable.language],
+          targetWhere: sql`${whatsappTemplatesTable.scope} = 'platform' AND ${whatsappTemplatesTable.restaurantId} IS NULL`,
+          set: updateSet,
+        });
+      } else {
+        await db.insert(whatsappTemplatesTable).values(insertValues).onConflictDoUpdate({
+          target: [whatsappTemplatesTable.restaurantId, whatsappTemplatesTable.name, whatsappTemplatesTable.language],
+          targetWhere: sql`${whatsappTemplatesTable.scope} = 'restaurant' AND ${whatsappTemplatesTable.restaurantId} IS NOT NULL`,
+          set: updateSet,
+        });
+      }
       synced++;
     }
     next = res.paging?.next ? new URL(res.paging.next).pathname + new URL(res.paging.next).search : null;
@@ -375,6 +386,13 @@ export interface SendOptions {
   category?: SafeSendCategory;
   /** Override the provider pipeline (used by campaign retries and tests). Falls back to the restaurant's whatsapp_settings.providerType. */
   providerOverride?: WhatsAppProviderType;
+  /**
+   * Purpose tag enforcing Meta's category contract:
+   *  - 'otp'         : caller is sending a one-time code; template MUST be AUTHENTICATION.
+   *  - 'transactional' / 'marketing' : caller is NOT an OTP flow; template MUST NOT be AUTHENTICATION.
+   * When omitted, no category check runs (legacy callers).
+   */
+  purpose?: "otp" | "transactional" | "marketing";
 }
 
 export interface SendResult {
@@ -443,6 +461,37 @@ async function insertLog(opts: SendOptions, provider: WhatsAppProviderType, stat
 export async function sendWhatsAppMessage(opts: SendOptions): Promise<SendResult> {
   const restaurantId = opts.restaurantId;
   const category = opts.category ?? "transactional";
+
+  // ─── AUTH-category enforcement (Task #533) ────────────────────────
+  // Meta strictly partitions templates into AUTHENTICATION / UTILITY /
+  // MARKETING. Sending OTPs through a non-AUTH template (or worse,
+  // sending a campaign through an AUTH template) gets the WABA flagged.
+  // We block both directions when callers tag their purpose.
+  if (opts.purpose && opts.templateName) {
+    try {
+      const [tpl] = await db.select({
+        category: whatsappTemplatesTable.category,
+        scope: whatsappTemplatesTable.scope,
+      }).from(whatsappTemplatesTable)
+        .where(eq(whatsappTemplatesTable.name, opts.templateName))
+        .limit(1);
+      if (tpl?.category) {
+        const tplCat = String(tpl.category).toUpperCase();
+        if (opts.purpose === "otp" && tplCat !== "AUTHENTICATION") {
+          const logId = await insertLog(opts, "cloud_api", "blocked", { reason: "auth_category_required_for_otp" });
+          if (restaurantId) await bumpUsage(restaurantId, "blocked");
+          return { status: "blocked", logId, providerMessageId: null, error: "OTP sends require an AUTHENTICATION-category template." };
+        }
+        if (opts.purpose !== "otp" && tplCat === "AUTHENTICATION") {
+          const logId = await insertLog(opts, "cloud_api", "blocked", { reason: "auth_template_misuse" });
+          if (restaurantId) await bumpUsage(restaurantId, "blocked");
+          return { status: "blocked", logId, providerMessageId: null, error: "AUTHENTICATION-category templates can only be used for OTP flows." };
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, templateName: opts.templateName }, "[whatsapp] category guard lookup failed (continuing)");
+    }
+  }
 
   // Resolve provider pipeline. Restaurant-less platform sends (super-admin
   // tests, owner-tenant announcements) always use Cloud API.

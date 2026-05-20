@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, text, serial, timestamp, integer, jsonb, boolean, uniqueIndex, index, date } from "drizzle-orm/pg-core";
 import { tenantsTable } from "./tenants";
 import { usersTable } from "./users";
@@ -45,13 +46,67 @@ export const emailTemplatesTable = pgTable("email_templates", {
   isDefault: boolean("is_default").notNull().default(false),
   isGlobal: boolean("is_global").notNull().default(true),
   isHidden: boolean("is_hidden").notNull().default(false),
+  // ─── Template Center extensions (Task #533) ───────────────────────
+  /** "platform" | "restaurant" — mirrors whatsapp_templates.scope */
+  scope: text("scope").notNull().default("platform"),
+  /** When scope='restaurant', the owning restaurant. NULL for platform. */
+  restaurantId: integer("restaurant_id").references(() => restaurantsTable.id, { onDelete: "cascade" }),
+  /** draft | pending_review | approved | rejected | disabled */
+  status: text("status").notNull().default("approved"),
+  /** Restaurant copies: link back to the platform template they cloned from. */
+  sourceTemplateId: integer("source_template_id"),
+  /** Plan slugs allowed to see/use this template. Empty = all plans. */
+  assignedPlansJson: jsonb("assigned_plans_json").$type<string[]>().notNull().default([]),
+  /** Restaurant ids explicitly assigned this template. Empty = all (subject to plan). */
+  assignedRestaurantsJson: jsonb("assigned_restaurants_json").$type<number[]>().notNull().default([]),
+  /** Whether restaurants are allowed to clone & customise their own copy. */
+  allowRestaurantEdit: boolean("allow_restaurant_edit").notNull().default(false),
+  /** True when row was authored by Super Admin. */
+  createdBySuperAdmin: boolean("created_by_super_admin").notNull().default(true),
+  /** Last rejection reason from Super Admin review. */
+  rejectionReason: text("rejection_reason"),
+  /** Audit field. */
+  updatedBy: integer("updated_by").references(() => usersTable.id),
   createdBy: integer("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
-  keyIdx: uniqueIndex("email_templates_key_idx").on(t.key),
+  // Platform templates are keyed by `key` alone (NULL restaurant_id is
+  // treated as distinct in Postgres so a plain unique on `key` no longer
+  // works once restaurants can hold copies). Two partial uniques cover
+  // both scopes correctly.
+  platformKeyIdx: uniqueIndex("email_templates_platform_key_idx")
+    .on(t.key)
+    .where(sql`${t.scope} = 'platform' AND ${t.restaurantId} IS NULL`),
+  restaurantKeyIdx: uniqueIndex("email_templates_restaurant_key_idx")
+    .on(t.restaurantId, t.key)
+    .where(sql`${t.scope} = 'restaurant' AND ${t.restaurantId} IS NOT NULL`),
   categoryIdx: index("email_templates_category_idx").on(t.category),
+  scopeStatusIdx: index("email_templates_scope_status_idx").on(t.scope, t.status),
 }));
+
+/**
+ * Append-only audit of internal review attempts for restaurant email templates.
+ * Mirrors whatsapp_template_submissions semantics but for the email pipeline.
+ */
+export const emailTemplateSubmissionsTable = pgTable("email_template_submissions", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => emailTemplatesTable.id, { onDelete: "cascade" }),
+  /** "submit" | "approve" | "reject" | "edit" */
+  attemptType: text("attempt_type").notNull(),
+  /** Resulting status after this attempt (draft|pending_review|approved|rejected). */
+  resultStatus: text("result_status").notNull(),
+  requestPayloadJson: jsonb("request_payload_json").$type<Record<string, unknown>>().notNull().default({}),
+  responseJson: jsonb("response_json").$type<Record<string, unknown>>().notNull().default({}),
+  errorMessage: text("error_message"),
+  triggeredBy: integer("triggered_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  byTemplate: index("email_template_submissions_template_idx").on(t.templateId, t.createdAt),
+}));
+
+export type EmailTemplateSubmission = typeof emailTemplateSubmissionsTable.$inferSelect;
+export type NewEmailTemplateSubmission = typeof emailTemplateSubmissionsTable.$inferInsert;
 
 export const emailTemplateVersionsTable = pgTable("email_template_versions", {
   id: serial("id").primaryKey(),

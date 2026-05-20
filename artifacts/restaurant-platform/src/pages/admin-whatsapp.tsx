@@ -39,11 +39,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminWhatsAppTab() {
-  const [tab, setTab] = useState<"settings" | "templates" | "logs" | "usage" | "providers">("settings");
+  const [tab, setTab] = useState<"settings" | "templates" | "template_center" | "logs" | "usage" | "providers">("template_center");
   const TABS = [
+    { k: "template_center", label: "Template Center" },
     { k: "settings", label: "Settings" },
     { k: "providers", label: "Communication providers" },
-    { k: "templates", label: "Templates" },
+    { k: "templates", label: "Templates (synced)" },
     { k: "logs", label: "Logs" },
     { k: "usage", label: "Usage" },
   ] as const;
@@ -60,8 +61,408 @@ export default function AdminWhatsAppTab() {
       {tab === "settings" && <SettingsTab />}
       {tab === "providers" && <ProvidersTab />}
       {tab === "templates" && <TemplatesTab />}
+      {tab === "template_center" && <TemplateCenterTab />}
       {tab === "logs" && <LogsTab />}
       {tab === "usage" && <UsageTab />}
+    </div>
+  );
+}
+
+// ───────────────────────────── Template Center (Task #533) ──────────────────────────────
+interface TplVar { index: number; key: string; label: string; example: string }
+interface TplButton { type: "quick_reply" | "url"; text: string; url?: string }
+interface TplRow {
+  id: number; name: string; language: string; category: string | null; status: string;
+  description: string | null; defaultForEvent: string | null;
+  headerType: string; headerText: string | null; headerMediaUrl: string | null;
+  bodyText: string | null; footerText: string | null;
+  buttonsJson: TplButton[]; variablesJson: TplVar[]; sampleValuesJson: { header?: string[]; body?: string[] };
+  allowRestaurantEdit: boolean; assignedPlansJson: string[]; assignedRestaurantsJson: number[];
+  metaTemplateId: string | null; rejectionReason: string | null; lastSyncedAt: string | null; updatedAt: string;
+}
+interface VarRegistry { key: string; label: string; category: string; example: string; description?: string }
+interface ComplianceIssue { code: string; severity: "error" | "warning" | "info"; message: string; field?: string }
+interface VersionRow { id: number; versionNumber: number; status: string; bodyText: string | null; createdAt: string; changeNote: string | null }
+interface DashStats { byStatus: Record<string, number>; recentLogs: Array<{ templateName: string | null; status: string; count: number }>; defaultCount: number }
+
+const TPL_STATUS_STYLES: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground",
+  pending: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  rejected: "bg-red-500/15 text-red-700 dark:text-red-300",
+  paused: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+};
+
+function TemplateCenterTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [view, setView] = useState<"dashboard" | "list" | "editor" | "variables" | "submissions">("dashboard");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<{ status: string; category: string; q: string }>({ status: "", category: "", q: "" });
+
+  const stats = useQuery<DashStats>({
+    queryKey: ["wa-tpl-center-dash"],
+    queryFn: () => apiFetch("/admin/whatsapp/template-center/dashboard"),
+  });
+  const variables = useQuery<{ data: VarRegistry[]; byCategory: Record<string, VarRegistry[]> }>({
+    queryKey: ["wa-tpl-center-vars"],
+    queryFn: () => apiFetch("/admin/whatsapp/template-center/variables"),
+  });
+  const list = useQuery<{ data: TplRow[]; total: number }>({
+    queryKey: ["wa-tpl-center-list", filter],
+    queryFn: () => apiFetch(`/admin/whatsapp/template-center/templates?${new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString()}`),
+  });
+  const submissions = useQuery<{ data: TplRow[]; byStatus: Record<string, number> }>({
+    queryKey: ["wa-tpl-center-subs"],
+    queryFn: () => apiFetch("/admin/whatsapp/template-center/submissions"),
+    enabled: view === "submissions",
+  });
+
+  const seedDefaults = useMutation({
+    mutationFn: () => apiAction("/admin/whatsapp/template-center/seed-defaults", "POST"),
+    onSuccess: (out: { inserted: number; skipped: number; total: number }) => {
+      toast({ title: "Seeded", description: `Inserted ${out.inserted}, skipped ${out.skipped}, total ${out.total}.` });
+      qc.invalidateQueries({ queryKey: ["wa-tpl-center-list"] });
+      qc.invalidateQueries({ queryKey: ["wa-tpl-center-dash"] });
+    },
+    onError: (e: Error) => toast({ title: "Seed failed", description: e.message, variant: "destructive" }),
+  });
+  const syncAll = useMutation({
+    mutationFn: () => apiAction("/admin/whatsapp/template-center/sync-all", "POST"),
+    onSuccess: () => { toast({ title: "Sync requested" }); qc.invalidateQueries({ queryKey: ["wa-tpl-center-list"] }); },
+    onError: (e: Error) => toast({ title: "Sync failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+        <div className="flex gap-1">
+          {(["dashboard", "list", "editor", "variables", "submissions"] as const).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 text-xs font-medium rounded ${view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              {v[0].toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => seedDefaults.mutate()} disabled={seedDefaults.isPending}>
+            <Download className="w-3.5 h-3.5 mr-1" /> Seed defaults
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => syncAll.mutate()} disabled={syncAll.isPending}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Sync with Meta
+          </Button>
+        </div>
+      </div>
+
+      {view === "dashboard" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {Object.entries(stats.data?.byStatus ?? {}).map(([k, v]) => (
+            <div key={k} className="rounded-lg border border-border p-4">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{k}</p>
+              <p className="text-2xl font-semibold tabular-nums">{v}</p>
+            </div>
+          ))}
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Default library</p>
+            <p className="text-2xl font-semibold tabular-nums">{stats.data?.defaultCount ?? 0}</p>
+            <p className="text-xs text-muted-foreground mt-1">Click Seed defaults to import.</p>
+          </div>
+          <div className="md:col-span-3 rounded-lg border border-border p-4">
+            <p className="text-sm font-semibold mb-2">Recent sends (30 days)</p>
+            <div className="space-y-1 text-xs">
+              {(stats.data?.recentLogs ?? []).slice(0, 15).map((r, i) => (
+                <div key={i} className="flex justify-between border-b border-border/50 py-1">
+                  <span>{r.templateName ?? "—"}</span>
+                  <span className="text-muted-foreground">{r.status}</span>
+                  <span className="tabular-nums">{r.count}</span>
+                </div>
+              ))}
+              {(stats.data?.recentLogs ?? []).length === 0 && <p className="text-muted-foreground">No sends yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === "list" && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Input placeholder="Search…" value={filter.q} onChange={e => setFilter(f => ({ ...f, q: e.target.value }))} className="max-w-xs" />
+            <select className="text-sm border border-border rounded px-2 py-1.5 bg-background" value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}>
+              <option value="">All statuses</option>
+              {["draft", "pending", "approved", "rejected", "paused"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="text-sm border border-border rounded px-2 py-1.5 bg-background" value={filter.category} onChange={e => setFilter(f => ({ ...f, category: e.target.value }))}>
+              <option value="">All categories</option>
+              {["UTILITY", "MARKETING", "AUTHENTICATION"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <Button size="sm" onClick={() => { setSelectedId(null); setView("editor"); }}>New template</Button>
+          </div>
+          <div className="overflow-x-auto border border-border rounded">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr className="text-left text-xs uppercase tracking-wider">
+                  <th className="px-3 py-2">Name</th><th className="px-3 py-2">Lang</th><th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">Status</th><th className="px-3 py-2">Event</th><th className="px-3 py-2">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(list.data?.data ?? []).map(t => (
+                  <tr key={t.id} className="border-t border-border hover:bg-muted/40 cursor-pointer"
+                    onClick={() => { setSelectedId(t.id); setView("editor"); }}>
+                    <td className="px-3 py-2 font-medium">{t.name}{t.allowRestaurantEdit && <Badge variant="outline" className="ml-2 text-[10px]">editable</Badge>}</td>
+                    <td className="px-3 py-2">{t.language}</td>
+                    <td className="px-3 py-2">{t.category}</td>
+                    <td className="px-3 py-2"><Badge className={TPL_STATUS_STYLES[t.status] ?? ""}>{t.status}</Badge></td>
+                    <td className="px-3 py-2 text-muted-foreground">{t.defaultForEvent ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground text-xs">{new Date(t.updatedAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+                {(list.data?.data ?? []).length === 0 && (
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No templates yet. Click "Seed defaults" to load the starter library.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {view === "editor" && (
+        <TemplateEditor templateId={selectedId} variables={variables.data?.data ?? []}
+          onSaved={(id) => { setSelectedId(id); qc.invalidateQueries({ queryKey: ["wa-tpl-center-list"] }); }}
+          onDeleted={() => { setSelectedId(null); setView("list"); qc.invalidateQueries({ queryKey: ["wa-tpl-center-list"] }); }} />
+      )}
+
+      {view === "variables" && (
+        <div className="space-y-3">
+          {Object.entries(variables.data?.byCategory ?? {}).map(([cat, vs]) => (
+            <div key={cat} className="border border-border rounded">
+              <div className="px-3 py-2 bg-muted text-xs uppercase tracking-wider">{cat}</div>
+              <table className="w-full text-xs">
+                <tbody>
+                  {vs.map(v => (
+                    <tr key={v.key} className="border-t border-border">
+                      <td className="px-3 py-1.5 font-mono">{`{{${v.key}}}`}</td>
+                      <td className="px-3 py-1.5">{v.label}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{v.example}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === "submissions" && (
+        <div className="space-y-3">
+          <div className="flex gap-4 text-xs">
+            {Object.entries(submissions.data?.byStatus ?? {}).map(([k, v]) => (
+              <div key={k}><span className="text-muted-foreground">{k}:</span> <strong className="tabular-nums">{v}</strong></div>
+            ))}
+          </div>
+          <div className="overflow-x-auto border border-border rounded">
+            <table className="w-full text-sm">
+              <thead className="bg-muted text-xs uppercase tracking-wider"><tr>
+                <th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-left">Reason</th><th className="px-3 py-2">Last sync</th>
+              </tr></thead>
+              <tbody>
+                {(submissions.data?.data ?? []).map(r => (
+                  <tr key={r.id} className="border-t border-border hover:bg-muted/40 cursor-pointer"
+                    onClick={() => { setSelectedId(r.id); setView("editor"); }}>
+                    <td className="px-3 py-2">{r.name}</td>
+                    <td className="px-3 py-2 text-center"><Badge className={TPL_STATUS_STYLES[r.status] ?? ""}>{r.status}</Badge></td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{r.rejectionReason ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-center text-muted-foreground">{r.lastSyncedAt ? new Date(r.lastSyncedAt).toLocaleString() : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TemplateEditor({ templateId, variables, onSaved, onDeleted }:
+  { templateId: number | null; variables: VarRegistry[]; onSaved: (id: number) => void; onDeleted: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const detail = useQuery<{ data: TplRow; compliance: { issues: ComplianceIssue[]; summary: { canSubmit: boolean; errors: number; warnings: number } } }>({
+    queryKey: ["wa-tpl-center-detail", templateId],
+    queryFn: () => apiFetch(`/admin/whatsapp/template-center/templates/${templateId}`),
+    enabled: !!templateId,
+  });
+  const versions = useQuery<{ data: VersionRow[] }>({
+    queryKey: ["wa-tpl-center-versions", templateId],
+    queryFn: () => apiFetch(`/admin/whatsapp/template-center/templates/${templateId}/versions`),
+    enabled: !!templateId,
+  });
+
+  const [form, setForm] = useState<Partial<TplRow>>({
+    name: "", language: "en", category: "UTILITY", description: "",
+    headerType: "none", headerText: "", headerMediaUrl: "",
+    bodyText: "", footerText: "", buttonsJson: [], variablesJson: [], sampleValuesJson: {},
+    allowRestaurantEdit: false, assignedPlansJson: [], assignedRestaurantsJson: [],
+    defaultForEvent: "",
+  });
+  const [testTo, setTestTo] = useState("");
+  const [hydratedFor, setHydratedFor] = useState<number | null>(null);
+
+  if (detail.data && templateId && hydratedFor !== templateId) {
+    setForm({ ...detail.data.data });
+    setHydratedFor(templateId);
+  }
+
+  const save = useMutation({
+    mutationFn: () => templateId
+      ? apiAction(`/admin/whatsapp/template-center/templates/${templateId}`, "PUT", form)
+      : apiAction(`/admin/whatsapp/template-center/templates`, "POST", form),
+    onSuccess: (res: { data: TplRow }) => {
+      toast({ title: "Saved" });
+      onSaved(res.data.id);
+      qc.invalidateQueries({ queryKey: ["wa-tpl-center-detail", res.data.id] });
+      qc.invalidateQueries({ queryKey: ["wa-tpl-center-versions", res.data.id] });
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+  const submit = useMutation({
+    mutationFn: () => apiAction(`/admin/whatsapp/template-center/templates/${templateId}/submit`, "POST"),
+    onSuccess: () => { toast({ title: "Submitted to Meta" }); qc.invalidateQueries({ queryKey: ["wa-tpl-center-detail", templateId] }); },
+    onError: (e: Error) => toast({ title: "Submit failed", description: e.message, variant: "destructive" }),
+  });
+  const sync = useMutation({
+    mutationFn: () => apiAction(`/admin/whatsapp/template-center/templates/${templateId}/sync-status`, "POST"),
+    onSuccess: () => { toast({ title: "Status synced" }); qc.invalidateQueries({ queryKey: ["wa-tpl-center-detail", templateId] }); },
+    onError: (e: Error) => toast({ title: "Sync failed", description: e.message, variant: "destructive" }),
+  });
+  const del = useMutation({
+    mutationFn: () => apiAction(`/admin/whatsapp/template-center/templates/${templateId}`, "DELETE"),
+    onSuccess: () => { toast({ title: "Deleted" }); onDeleted(); },
+  });
+  const testSend = useMutation({
+    mutationFn: () => apiAction(`/admin/whatsapp/template-center/templates/${templateId}/test-send`, "POST", { to: testTo, values: {} }),
+    onSuccess: () => toast({ title: "Test sent" }),
+    onError: (e: Error) => toast({ title: "Test failed", description: e.message, variant: "destructive" }),
+  });
+  const rollback = useMutation({
+    mutationFn: (vid: number) => apiAction(`/admin/whatsapp/template-center/templates/${templateId}/rollback/${vid}`, "POST"),
+    onSuccess: () => { toast({ title: "Rolled back" }); setHydratedFor(null); qc.invalidateQueries({ queryKey: ["wa-tpl-center-detail", templateId] }); },
+  });
+
+  const insertVar = (key: string) => {
+    setForm(f => ({ ...f, bodyText: (f.bodyText ?? "") + `{{${key}}}` }));
+  };
+  const checkLocal = useQuery<{ issues: ComplianceIssue[]; summary: { canSubmit: boolean; errors: number; warnings: number } }>({
+    queryKey: ["wa-tpl-center-check", form.bodyText, form.headerText, form.footerText, form.category],
+    queryFn: () => apiAction("/admin/whatsapp/template-center/check", "POST", form),
+    enabled: !!form.bodyText,
+  });
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Name"><Input value={form.name ?? ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. khana_order_ready" /></Field>
+          <Field label="Language"><Input value={form.language ?? "en"} onChange={e => setForm(f => ({ ...f, language: e.target.value }))} /></Field>
+          <Field label="Category">
+            <select className="text-sm border border-border rounded px-2 py-1.5 bg-background w-full" value={form.category ?? "UTILITY"} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+              {["UTILITY", "MARKETING", "AUTHENTICATION"].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Default for event"><Input value={form.defaultForEvent ?? ""} onChange={e => setForm(f => ({ ...f, defaultForEvent: e.target.value }))} placeholder="order.confirmed" /></Field>
+        </div>
+        <Field label="Description"><Input value={form.description ?? ""} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></Field>
+
+        <div className="grid grid-cols-3 gap-2 items-end">
+          <Field label="Header type">
+            <select className="text-sm border border-border rounded px-2 py-1.5 bg-background w-full" value={form.headerType ?? "none"} onChange={e => setForm(f => ({ ...f, headerType: e.target.value }))}>
+              {["none", "text", "image", "video", "document"].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          {form.headerType === "text" && <Field label="Header text"><Input value={form.headerText ?? ""} onChange={e => setForm(f => ({ ...f, headerText: e.target.value }))} /></Field>}
+          {form.headerType && form.headerType !== "none" && form.headerType !== "text" && <Field label="Header media URL"><Input value={form.headerMediaUrl ?? ""} onChange={e => setForm(f => ({ ...f, headerMediaUrl: e.target.value }))} /></Field>}
+        </div>
+
+        <Field label="Body">
+          <textarea className="w-full min-h-[180px] border border-border rounded p-2 text-sm font-mono bg-background"
+            value={form.bodyText ?? ""} onChange={e => setForm(f => ({ ...f, bodyText: e.target.value }))}
+            placeholder="Hi {{customer_first_name}}, your order #{{order_number}} is ready." />
+        </Field>
+        <Field label="Footer"><Input value={form.footerText ?? ""} onChange={e => setForm(f => ({ ...f, footerText: e.target.value }))} /></Field>
+
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Insert variable</p>
+          <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+            {variables.map(v => (
+              <button key={v.key} onClick={() => insertVar(v.key)}
+                className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/70 font-mono">{`{{${v.key}}}`}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}><Save className="w-3.5 h-3.5 mr-1" /> Save</Button>
+          {templateId && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => submit.mutate()} disabled={submit.isPending || !checkLocal.data?.summary.canSubmit}>
+                <Send className="w-3.5 h-3.5 mr-1" /> Submit to Meta
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Sync status
+              </Button>
+              <div className="flex gap-1 items-center">
+                <Input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="+91…" className="h-8 w-40" />
+                <Button size="sm" variant="outline" onClick={() => testSend.mutate()} disabled={!testTo || testSend.isPending}>
+                  Test send
+                </Button>
+              </div>
+              <Button size="sm" variant="ghost" className="ml-auto text-red-600" onClick={() => { if (confirm("Delete this template?")) del.mutate(); }}>Delete</Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="border border-border rounded p-3 bg-muted/30">
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2">Preview</p>
+          {form.headerType === "text" && form.headerText && <p className="text-sm font-semibold mb-1">{form.headerText}</p>}
+          <p className="text-sm whitespace-pre-wrap">{form.bodyText}</p>
+          {form.footerText && <p className="text-xs text-muted-foreground mt-2">{form.footerText}</p>}
+        </div>
+        <div className="border border-border rounded p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center justify-between">
+            Compliance
+            {checkLocal.data && (
+              <Badge className={checkLocal.data.summary.canSubmit ? "bg-emerald-500/15 text-emerald-700" : "bg-red-500/15 text-red-700"}>
+                {checkLocal.data.summary.canSubmit ? "Pass" : `${checkLocal.data.summary.errors} errors`}
+              </Badge>
+            )}
+          </p>
+          {(checkLocal.data?.issues ?? []).slice(0, 8).map((i, idx) => (
+            <div key={idx} className={`text-xs py-1 ${i.severity === "error" ? "text-red-600" : i.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>
+              <strong>{i.severity}</strong>: {i.message}
+            </div>
+          ))}
+          {detail.data?.data.rejectionReason && (
+            <p className="mt-2 text-xs text-red-600 border-t border-border pt-2"><strong>Meta:</strong> {detail.data.data.rejectionReason}</p>
+          )}
+        </div>
+        <div className="border border-border rounded p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2">Versions</p>
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {(versions.data?.data ?? []).map(v => (
+              <div key={v.id} className="flex items-center justify-between text-xs border-b border-border/50 py-1">
+                <span>v{v.versionNumber} · <span className="text-muted-foreground">{v.changeNote ?? ""}</span></span>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => rollback.mutate(v.id)}>
+                  <Repeat className="w-3 h-3 mr-1" /> Restore
+                </Button>
+              </div>
+            ))}
+            {(versions.data?.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">No versions yet.</p>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, text, serial, timestamp, integer, boolean, jsonb, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { restaurantsTable } from "./restaurants";
 import { usersTable } from "./users";
@@ -89,11 +90,90 @@ export const whatsappTemplatesTable = pgTable(
      */
     defaultForEvent: text("default_for_event"),
     syncedAt: timestamp("synced_at").notNull().defaultNow(),
+
+    // ─── Template Center extensions (Task #533) ───────────────────────
+    /** Friendly description shown in the admin UI. */
+    description: text("description"),
+    /** Meta template id once submitted/approved. */
+    metaTemplateId: text("meta_template_id"),
+    /** Header type: none | text | image | video | document. */
+    headerType: text("header_type").notNull().default("none"),
+    /** Header text (with {{1}} placeholders) when headerType=text. */
+    headerText: text("header_text"),
+    /** Header media URL (image/video/document) sample for Meta submission. */
+    headerMediaUrl: text("header_media_url"),
+    /** Canonical body text (with {{1}}, {{2}}, … placeholders). */
+    bodyText: text("body_text"),
+    /** Footer text (no variables). */
+    footerText: text("footer_text"),
+    /** Buttons spec: [{ type: "quick_reply"|"url"|"phone_number", text, url?, phone? }] */
+    buttonsJson: jsonb("buttons_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    /** Variable mapping: [{ index: 1, key: "customer_name", label: "Customer name", example: "Anita" }] */
+    variablesJson: jsonb("variables_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    /** Concrete example values sent to Meta on submission. */
+    sampleValuesJson: jsonb("sample_values_json").$type<{ header?: string[]; body?: string[]; buttons?: string[] }>().notNull().default({}),
+    /** Whether restaurants are allowed to clone & customise their own copy. */
+    allowRestaurantEdit: boolean("allow_restaurant_edit").notNull().default(false),
+    /** Plan slugs allowed to see/use this template. Empty = all plans. */
+    assignedPlansJson: jsonb("assigned_plans_json").$type<string[]>().notNull().default([]),
+    /** Restaurant ids explicitly assigned this template. Empty = all (subject to plan). */
+    assignedRestaurantsJson: jsonb("assigned_restaurants_json").$type<number[]>().notNull().default([]),
+    /** Full Meta response from create/edit/sync. */
+    metaResponseJson: jsonb("meta_response_json").$type<Record<string, unknown>>().notNull().default({}),
+    /** Last rejection reason from Meta when status=rejected. */
+    rejectionReason: text("rejection_reason"),
+    /** Source template id when this row is a restaurant clone of a platform template. */
+    sourceTemplateId: integer("source_template_id"),
+    /** True when row was authored by Super Admin (not synced). */
+    createdBySuperAdmin: boolean("created_by_super_admin").notNull().default(false),
+    /** Audit fields. */
+    createdBy: integer("created_by").references(() => usersTable.id),
+    updatedBy: integer("updated_by").references(() => usersTable.id),
+    lastSyncedAt: timestamp("last_synced_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   t => ({
-    scopeNameLangIdx: uniqueIndex("whatsapp_templates_scope_name_lang_idx").on(t.scope, t.restaurantId, t.name, t.language),
+    // Partial unique indexes — Postgres treats NULL as distinct, so a
+    // single composite unique on (scope, restaurant_id, name, language)
+    // does NOT enforce uniqueness for platform rows (restaurant_id NULL).
+    // Split into two partial uniques to cover both scopes correctly.
+    platformNameLangIdx: uniqueIndex("whatsapp_templates_platform_name_lang_idx")
+      .on(t.name, t.language)
+      .where(sql`${t.scope} = 'platform' AND ${t.restaurantId} IS NULL`),
+    restaurantNameLangIdx: uniqueIndex("whatsapp_templates_restaurant_name_lang_idx")
+      .on(t.restaurantId, t.name, t.language)
+      .where(sql`${t.scope} = 'restaurant' AND ${t.restaurantId} IS NOT NULL`),
   }),
 );
+
+/**
+ * Append-only version history for whatsapp_templates. Each save creates a
+ * snapshot row; rollback re-applies the snapshot fields onto the live row.
+ */
+export const whatsappTemplateVersionsTable = pgTable("whatsapp_template_versions", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => whatsappTemplatesTable.id, { onDelete: "cascade" }),
+  versionNumber: integer("version_number").notNull(),
+  name: text("name").notNull(),
+  language: text("language").notNull(),
+  category: text("category"),
+  status: text("status").notNull(),
+  headerType: text("header_type").notNull().default("none"),
+  headerText: text("header_text"),
+  headerMediaUrl: text("header_media_url"),
+  bodyText: text("body_text"),
+  footerText: text("footer_text"),
+  buttonsJson: jsonb("buttons_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  variablesJson: jsonb("variables_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  sampleValuesJson: jsonb("sample_values_json").$type<Record<string, unknown>>().notNull().default({}),
+  metaResponseJson: jsonb("meta_response_json").$type<Record<string, unknown>>().notNull().default({}),
+  changeNote: text("change_note"),
+  changedBy: integer("changed_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  byTemplate: index("whatsapp_template_versions_template_idx").on(t.templateId, t.versionNumber),
+}));
 
 /**
  * Outbound WhatsApp message log. One row per send attempt. Restaurant-scoped;
@@ -205,3 +285,34 @@ export type WhatsAppLog = typeof whatsappLogsTable.$inferSelect;
 export type WhatsAppUsage = typeof whatsappUsageTable.$inferSelect;
 export type WhatsAppSession = typeof whatsappSessionsTable.$inferSelect;
 export type WhatsAppSessionLog = typeof whatsappSessionLogsTable.$inferSelect;
+export type WhatsAppTemplateVersion = typeof whatsappTemplateVersionsTable.$inferSelect;
+export type NewWhatsAppTemplate = typeof whatsappTemplatesTable.$inferInsert;
+export type NewWhatsAppTemplateVersion = typeof whatsappTemplateVersionsTable.$inferInsert;
+
+/**
+ * Append-only audit of every Meta submission attempt for a WhatsApp template
+ * (initial submit, resubmit, edit, periodic sync). Distinct from
+ * whatsapp_template_versions (which captures the *content* snapshot) — this
+ * captures the *Meta call* — request payload, response, status transition.
+ */
+export const whatsappTemplateSubmissionsTable = pgTable("whatsapp_template_submissions", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => whatsappTemplatesTable.id, { onDelete: "cascade" }),
+  /** "submit" | "edit" | "approve" | "sync" | "reject" */
+  attemptType: text("attempt_type").notNull(),
+  /** Status returned by Meta after this attempt (or "error"). */
+  resultStatus: text("result_status").notNull(),
+  metaTemplateId: text("meta_template_id"),
+  /** What we sent to Meta (or rendered template snapshot). */
+  requestPayloadJson: jsonb("request_payload_json").$type<Record<string, unknown>>().notNull().default({}),
+  /** Raw Meta response (or error body). */
+  responseJson: jsonb("response_json").$type<Record<string, unknown>>().notNull().default({}),
+  errorMessage: text("error_message"),
+  triggeredBy: integer("triggered_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  byTemplate: index("whatsapp_template_submissions_template_idx").on(t.templateId, t.createdAt),
+}));
+
+export type WhatsAppTemplateSubmission = typeof whatsappTemplateSubmissionsTable.$inferSelect;
+export type NewWhatsAppTemplateSubmission = typeof whatsappTemplateSubmissionsTable.$inferInsert;
