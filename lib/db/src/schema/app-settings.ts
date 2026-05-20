@@ -61,6 +61,17 @@ export const appSettingsTable = pgTable("app_settings", {
   // Per-tenant overrides keyed by tenantId (string). Each value carries:
   //   { forceDisable: bool, monthlyCap: number, reason: string, setAt: ISOString }
   webPushTenantOverrides: jsonb("web_push_tenant_overrides").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+  // Auth (Task #531) — platform-wide controls for OTP login, 2FA, and
+  // self-serve registration. Each *Enabled flag is a global kill switch;
+  // restaurants and individual users can still opt themselves out below
+  // (e.g. via per-user twoFactorEnabled), but not in.
+  authMobileOtpLoginEnabled: boolean("auth_mobile_otp_login_enabled").notNull().default(true),
+  authEmailOtpLoginEnabled: boolean("auth_email_otp_login_enabled").notNull().default(true),
+  authPasswordLoginEnabled: boolean("auth_password_login_enabled").notNull().default(true),
+  authTwoFactorEnabled: boolean("auth_two_factor_enabled").notNull().default(true),
+  authSelfRegistrationRequireMobileOtp: boolean("auth_self_reg_require_mobile_otp").notNull().default(true),
+  authOtpDefaultChannel: text("auth_otp_default_channel").notNull().default("sms"),
+  authOtpFallbackChannel: text("auth_otp_fallback_channel"),
   // Footer & Social
   footerText: text("footer_text"),
   socialLinks: jsonb("social_links").$type<Record<string, string>>().notNull().default({}),
@@ -86,6 +97,8 @@ export type PublicAppSettings = Pick<
   | "footerText" | "socialLinks"
   | "maintenanceMode" | "maintenanceMessage"
   | "signupEnabled" | "landingPageEnabled"
+  | "authPasswordLoginEnabled" | "authMobileOtpLoginEnabled" | "authEmailOtpLoginEnabled"
+  | "authTwoFactorEnabled" | "authSelfRegistrationRequireMobileOtp" | "authOtpDefaultChannel"
 >;
 
 export const SOCIAL_KEYS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;

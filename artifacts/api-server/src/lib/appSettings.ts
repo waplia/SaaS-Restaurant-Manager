@@ -64,5 +64,11 @@ export function toPublicAppSettings(s: AppSettings): PublicAppSettings {
     maintenanceMessage: s.maintenanceMessage,
     signupEnabled: s.signupEnabled,
     landingPageEnabled: s.landingPageEnabled,
+    authPasswordLoginEnabled: s.authPasswordLoginEnabled,
+    authMobileOtpLoginEnabled: s.authMobileOtpLoginEnabled,
+    authEmailOtpLoginEnabled: s.authEmailOtpLoginEnabled,
+    authTwoFactorEnabled: s.authTwoFactorEnabled,
+    authSelfRegistrationRequireMobileOtp: s.authSelfRegistrationRequireMobileOtp,
+    authOtpDefaultChannel: s.authOtpDefaultChannel,
   };
 }

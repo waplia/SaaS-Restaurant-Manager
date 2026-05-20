@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type AuthUser } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
 
 const FEATURES = [
@@ -15,12 +15,37 @@ const FEATURES = [
   "Inventory and customer loyalty built-in",
 ];
 
+type Step = "phone" | "otp" | "details";
+
+async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error((err as { error?: string }).error ?? "Request failed");
+  }
+  return res.json() as Promise<T>;
+}
+
 export default function RegisterPage() {
-  const { register } = useAuth();
   const settings = useAppSettings();
+  const { acceptAuthPayload } = useAuth();
   const [, navigate] = useLocation();
-  const [form, setForm] = useState({ restaurantName: "", ownerName: "", email: "", password: "", phone: "" });
-  const [error, setError] = useState("");
+
+  const needsOtp = settings.authSelfRegistrationRequireMobileOtp !== false;
+  const [step, setStep] = useState<Step>(needsOtp ? "phone" : "details");
+  const [phone, setPhone] = useState("");
+  const [channel, setChannel] = useState<"sms" | "whatsapp">(settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
+  const [code, setCode] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
+
+  const [details, setDetails] = useState({ restaurantName: "", ownerName: "", email: "", password: "" });
+
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!settings.signupEnabled) {
@@ -38,32 +63,50 @@ export default function RegisterPage() {
     );
   }
 
-  function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm(prev => ({ ...prev, [field]: e.target.value }));
+  async function startOtp(e: FormEvent) {
+    e.preventDefault();
+    setErr(""); setLoading(true);
+    try {
+      const trimmed = phone.trim();
+      if (!trimmed.startsWith("+")) throw new Error("Phone must include country code, e.g. +91 9876543210");
+      const m = trimmed.match(/^(\+\d{1,4})(.*)$/);
+      const countryCode = m?.[1] ?? "+91";
+      const local = (m?.[2] ?? "").replace(/[^\d]/g, "");
+      const r = await postJSON<{ registrationToken: string; devCode?: string }>("/auth/register/start", { countryCode, phone: local, channel });
+      setToken(r.registrationToken);
+      setDevCode(r.devCode ?? null);
+      setStep("otp");
+    } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Could not send code"); }
+    finally { setLoading(false); }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  async function verifyOtp(e: FormEvent) {
     e.preventDefault();
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-    const trimmedPhone = form.phone.trim();
-    if (trimmedPhone && !trimmedPhone.startsWith("+")) {
-      setError("Phone must include a country code, e.g. +91 9876543210");
-      return;
-    }
-    setError("");
-    setLoading(true);
+    if (!token) return;
+    setErr(""); setLoading(true);
     try {
-      await register(form);
+      await postJSON("/auth/register/verify-otp", { registrationToken: token, code, channel });
+      setStep("details");
+    } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Invalid code"); }
+    finally { setLoading(false); }
+  }
+
+  async function complete(e: FormEvent) {
+    e.preventDefault();
+    if (details.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
+    setErr(""); setLoading(true);
+    try {
+      const r = await postJSON<{ accessToken: string; refreshToken: string; user: AuthUser }>("/auth/register/complete", {
+        registrationToken: token,
+        restaurantName: details.restaurantName,
+        ownerName: details.ownerName,
+        email: details.email,
+        password: details.password,
+      });
+      acceptAuthPayload(r);
       navigate("/setup-wizard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Registration failed"); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -71,16 +114,12 @@ export default function RegisterPage() {
       <div className="w-full max-w-4xl grid md:grid-cols-2 gap-10 items-center">
         <div className="space-y-6 hidden md:block">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="KhanaLagao" className="h-10 w-10 object-contain" />
-            <span className="text-xl font-bold text-foreground">KhanaLagao</span>
+            <img src={settings.logoUrl || "/logo.png"} alt={settings.appName ?? "KhanaLagao"} className="h-10 w-10 object-contain" />
+            <span className="text-xl font-bold text-foreground">{settings.appName ?? "KhanaLagao"}</span>
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground leading-tight">
-              The all-in-one platform for modern restaurants
-            </h1>
-            <p className="text-muted-foreground">
-              Everything you need to run your restaurant — from table management to kitchen display to customer loyalty.
-            </p>
+            <h1 className="text-3xl font-bold text-foreground leading-tight">The all-in-one platform for modern restaurants</h1>
+            <p className="text-muted-foreground">Everything you need to run your restaurant — from table management to kitchen display to customer loyalty.</p>
           </div>
           <ul className="space-y-3">
             {FEATURES.map(f => (
@@ -96,90 +135,89 @@ export default function RegisterPage() {
 
         <div className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-5">
           <div className="flex items-center gap-3 md:hidden">
-            <img src="/logo.png" alt="KhanaLagao" className="h-9 w-9 object-contain" />
-            <span className="font-bold text-lg">KhanaLagao</span>
+            <img src={settings.logoUrl || "/logo.png"} alt={settings.appName ?? "KhanaLagao"} className="h-9 w-9 object-contain" />
+            <span className="font-bold text-lg">{settings.appName ?? "KhanaLagao"}</span>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Create your account</h2>
-            <p className="text-sm text-muted-foreground mt-1">Start your 14-day free trial</p>
+            <h2 className="text-xl font-semibold text-foreground">
+              {step === "phone" ? "Let's start with your phone" : step === "otp" ? "Verify your phone" : "Almost there"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {step === "phone" && "We'll send a one-time code to confirm your number."}
+              {step === "otp" && `Enter the 6-digit code sent via ${channel === "whatsapp" ? "WhatsApp" : "SMS"}.`}
+              {step === "details" && "Tell us about your restaurant to finish setting up your free trial."}
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="restaurantName">Restaurant name</Label>
-              <Input
-                id="restaurantName"
-                placeholder="Spice Garden"
-                value={form.restaurantName}
-                onChange={set("restaurantName")}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ownerName">Your name</Label>
-              <Input
-                id="ownerName"
-                placeholder="Priya Sharma"
-                value={form.ownerName}
-                onChange={set("ownerName")}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone (optional)</Label>
-              <PhoneInput
-                id="phone"
-                value={form.phone}
-                onChange={(v) => setForm(prev => ({ ...prev, phone: v }))}
-                placeholder="9876543210"
-                defaultCountry="IN"
-              />
-              <p className="text-xs text-muted-foreground">We'll only use this for account recovery and important notices.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Work email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="priya@spicegarden.com"
-                value={form.email}
-                onChange={set("email")}
-                required
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="At least 8 characters"
-                value={form.password}
-                onChange={set("password")}
-                required
-                autoComplete="new-password"
-              />
-            </div>
-
-            {error && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                {error}
+          {step === "phone" && (
+            <form onSubmit={startOtp} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Mobile number</Label>
+                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
               </div>
-            )}
+              <div className="space-y-1.5">
+                <Label>Send code via</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["sms", "whatsapp"] as const).map(c => (
+                    <button type="button" key={c} onClick={() => setChannel(c)}
+                      className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
+                      {c === "sms" ? "SMS" : "WhatsApp"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {err && <ErrorBox msg={err} />}
+              <Button type="submit" className="w-full" disabled={loading || !phone}>{loading ? "Sending…" : "Send code"}</Button>
+            </form>
+          )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account…" : "Start free trial"}
-            </Button>
-          </form>
+          {step === "otp" && (
+            <form onSubmit={verifyOtp} className="space-y-4">
+              {devCode && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded px-2 py-1">Dev code: <b>{devCode}</b></div>}
+              <div className="space-y-1.5">
+                <Label>Verification code</Label>
+                <Input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />
+              </div>
+              {err && <ErrorBox msg={err} />}
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => { setStep("phone"); setCode(""); }}>Back</Button>
+                <Button type="submit" className="flex-1" disabled={loading || code.length !== 6}>{loading ? "Verifying…" : "Verify"}</Button>
+              </div>
+            </form>
+          )}
+
+          {step === "details" && (
+            <form onSubmit={complete} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Restaurant name</Label>
+                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Spice Garden" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Your name</Label>
+                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Priya Sharma" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Work email</Label>
+                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="priya@spicegarden.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="At least 8 characters" />
+              </div>
+              {err && <ErrorBox msg={err} />}
+              <Button type="submit" className="w-full" disabled={loading}>{loading ? "Creating account…" : "Start free trial"}</Button>
+            </form>
+          )}
 
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <a href="/app/login" className="text-primary font-medium hover:underline">
-              Sign in
-            </a>
+            Already have an account? <a href="/app/login" className="text-primary font-medium hover:underline">Sign in</a>
           </p>
         </div>
       </div>
     </div>
   );
+}
+
+function ErrorBox({ msg }: { msg: string }) {
+  return <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">{msg}</div>;
 }

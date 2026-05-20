@@ -30,6 +30,12 @@ type Settings = {
   maintenanceMessage: string | null;
   signupEnabled: boolean;
   landingPageEnabled: boolean;
+  authPasswordLoginEnabled: boolean;
+  authMobileOtpLoginEnabled: boolean;
+  authEmailOtpLoginEnabled: boolean;
+  authTwoFactorEnabled: boolean;
+  authSelfRegistrationRequireMobileOtp: boolean;
+  authOtpDefaultChannel: "sms" | "whatsapp";
   footerText: string | null;
   socialLinks: Record<string, string>;
 };
@@ -264,6 +270,24 @@ export default function AdminSettingsPage() {
           <div>
             <Label>Maintenance message</Label>
             <Textarea value={form.maintenanceMessage ?? ""} onChange={(e) => set("maintenanceMessage", e.target.value || null)} rows={2} />
+          </div>
+        </Section>
+
+        <Section title="Login & registration" description="Choose which login methods are available and how new restaurants sign up.">
+          <div className="space-y-3">
+            <ToggleRow label="Password login" description="Allow staff to sign in with email + password." checked={form.authPasswordLoginEnabled} onChange={(v) => set("authPasswordLoginEnabled", v)} />
+            <ToggleRow label="Mobile OTP login" description="Allow staff to sign in with a one-time code sent to their phone (SMS or WhatsApp)." checked={form.authMobileOtpLoginEnabled} onChange={(v) => set("authMobileOtpLoginEnabled", v)} />
+            <ToggleRow label="Email OTP login" description="Allow staff to sign in with a one-time code sent to their email." checked={form.authEmailOtpLoginEnabled} onChange={(v) => set("authEmailOtpLoginEnabled", v)} />
+            <ToggleRow label="Two-factor authentication" description="Allow staff to enable 2FA on their account. When off, individual 2FA settings are ignored." checked={form.authTwoFactorEnabled} onChange={(v) => set("authTwoFactorEnabled", v)} />
+            <ToggleRow label="Require mobile OTP on self-serve signup" description="When on, new restaurants must verify their phone before completing signup." checked={form.authSelfRegistrationRequireMobileOtp} onChange={(v) => set("authSelfRegistrationRequireMobileOtp", v)} />
+          </div>
+          <div>
+            <Label>Default OTP channel for mobile</Label>
+            <select className="w-full h-9 px-3 rounded border border-input bg-background text-sm" value={form.authOtpDefaultChannel} onChange={(e) => set("authOtpDefaultChannel", e.target.value as "sms" | "whatsapp")}>
+              <option value="sms">SMS</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Used as the pre-selected channel in the login & signup screens.</p>
           </div>
         </Section>
 

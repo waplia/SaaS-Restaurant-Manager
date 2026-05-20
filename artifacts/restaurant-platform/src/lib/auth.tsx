@@ -17,11 +17,25 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+export interface LoginResponse {
+  accessToken?: string;
+  refreshToken?: string;
+  user?: AuthUser;
+  requires2fa?: boolean;
+  twoFactorChannel?: "sms" | "email" | "whatsapp";
+  userId?: number;
+  identifierHint?: string;
+}
+
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (data: RegisterInput) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Accepts a successful auth payload (from OTP / 2FA / self-serve register) and signs the user in. */
+  acceptAuthPayload: (data: { accessToken: string; refreshToken: string; user: AuthUser }) => void;
+  /** Password login that returns 2FA challenge when required. */
+  loginWith2faCheck: (email: string, password: string) => Promise<LoginResponse>;
 }
 
 export interface RegisterInput {
@@ -155,6 +169,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(s => ({ ...s, accessToken: data.accessToken }));
   }, []);
 
+  const acceptAuthPayload = useCallback((data: { accessToken: string; refreshToken: string; user: AuthUser }) => {
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setState({ user: data.user, accessToken: data.accessToken, isLoading: false, isAuthenticated: true });
+  }, []);
+
+  const loginWith2faCheck = useCallback(async (email: string, password: string): Promise<LoginResponse> => {
+    const res = await fetch(`${API_BASE}/auth/login-2fa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Login failed" }));
+      throw new Error(err.error ?? "Login failed");
+    }
+    const data: LoginResponse = await res.json();
+    if (!data.requires2fa && data.accessToken && data.user && data.refreshToken) {
+      acceptAuthPayload({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user });
+    }
+    return data;
+  }, [acceptAuthPayload]);
+
   const logout = useCallback(() => {
     // Fire-and-forget: ask the server to bump our tokenVersion so every
     // other session for this user (other tabs, phone, stolen laptop) is
@@ -178,7 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, register, changePassword }}>
+    <AuthContext.Provider value={{ ...state, login, logout, register, changePassword, acceptAuthPayload, loginWith2faCheck }}>
       {children}
     </AuthContext.Provider>
   );

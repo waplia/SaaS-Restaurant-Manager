@@ -17,6 +17,13 @@ export const usersTable = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
+  // Mobile OTP / 2FA fields (Task #531). passwordHash is still notNull for
+  // legacy seeded users; new OTP-registered owners get a random hash.
+  mobileVerifiedAt: timestamp("mobile_verified_at"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  twoFactorChannel: text("two_factor_channel").$type<"sms" | "email" | "whatsapp">(),
+  preferredLoginMethod: text("preferred_login_method").$type<"password" | "mobile_otp" | "email_otp">().notNull().default("password"),
   // Bumped whenever the user logs out everywhere, changes/reset their
   // password, or the platform force-revokes sessions. The current value is
   // embedded in every issued JWT and re-checked in the auth middleware so

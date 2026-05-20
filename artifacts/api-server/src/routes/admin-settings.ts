@@ -66,6 +66,13 @@ const updateSchema = z.object({
   signupEnabled: z.boolean().optional(),
   landingPageEnabled: z.boolean().optional(),
 
+  authPasswordLoginEnabled: z.boolean().optional(),
+  authMobileOtpLoginEnabled: z.boolean().optional(),
+  authEmailOtpLoginEnabled: z.boolean().optional(),
+  authTwoFactorEnabled: z.boolean().optional(),
+  authSelfRegistrationRequireMobileOtp: z.boolean().optional(),
+  authOtpDefaultChannel: z.enum(["sms", "whatsapp"]).optional(),
+
   footerText: z.string().trim().max(400).nullish(),
   socialLinks: z
     .record(z.enum(SOCIAL_KEYS), z.string().trim().url().or(z.literal("")))
