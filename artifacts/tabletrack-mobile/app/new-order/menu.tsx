@@ -23,6 +23,7 @@ import { ModifierBottomSheet } from "@/components/ModifierBottomSheet";
 import { MobileCartBar } from "@/components/MobileCartBar";
 import { CartSummarySheet } from "@/components/CartSummarySheet";
 import { EmptyState } from "@/components/EmptyState";
+import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
 
 type Filter = "all" | "veg" | "nonveg" | "bestseller";
 
@@ -51,6 +52,7 @@ export default function NewOrderMenuScreen() {
   const [cartOpen, setCartOpen] = useState(false);
   const [modifierItem, setModifierItem] = useState<ExtendedMenuItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -79,6 +81,7 @@ export default function NewOrderMenuScreen() {
     staleTime: 5 * 60 * 1000,
   });
   const settings = (settingsQ.data ?? {}) as Record<string, unknown>;
+  const voiceOrderingEnabled = !!(settings as { enableVoiceOrdering?: boolean }).enableVoiceOrdering;
   const taxRate = Number(settings.taxRate ?? 0) / (Number(settings.taxRate ?? 0) > 1 ? 100 : 1);
   const serviceCharge = Number(settings.serviceCharge ?? 0) / (Number(settings.serviceCharge ?? 0) > 1 ? 100 : 1);
 
@@ -180,19 +183,37 @@ export default function NewOrderMenuScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Sticky search bar */}
       <View style={[styles.searchWrap, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="search" size={18} color={colors.mutedForeground} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search items, categories, add-ons…"
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.searchInput, { color: colors.foreground }]}
-            returnKeyType="search"
-          />
-          {search ? (
-            <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+        <View style={styles.searchRow}>
+          <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border, flex: 1 }]}>
+            <Ionicons name="search" size={18} color={colors.mutedForeground} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search items, categories, add-ons…"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.searchInput, { color: colors.foreground }]}
+              returnKeyType="search"
+            />
+            {search ? (
+              <Pressable onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </View>
+          {voiceOrderingEnabled ? (
+            <Pressable
+              onPress={() => setVoiceOpen(true)}
+              accessibilityLabel="Voice order (AI)"
+              style={({ pressed }) => [
+                styles.voiceBtn,
+                {
+                  backgroundColor: colors.primary + "15",
+                  borderColor: colors.primary + "40",
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="mic" size={18} color={colors.primary} />
             </Pressable>
           ) : null}
         </View>
@@ -272,6 +293,34 @@ export default function NewOrderMenuScreen() {
 
       <MobileCartBar itemCount={itemCount} total={total} onPress={() => setCartOpen(true)} />
 
+      {voiceOrderingEnabled ? (
+        <VoiceOrderModal
+          visible={voiceOpen}
+          restaurantId={restaurantId}
+          tableId={cart.tableId ?? 0}
+          menuItems={allItems
+            .filter((m) => m.isAvailable !== false && !(m.stockQty != null && Number(m.stockQty) <= 0))
+            .map((m) => ({ id: m.id, name: m.name, price: m.price }))}
+          onClose={() => setVoiceOpen(false)}
+          onConfirm={async (result: VoiceOrderResult) => {
+            for (const it of result.items) {
+              const mi = allItems.find((m) => m.id === it.menuItemId);
+              addLine({
+                menuItemId: it.menuItemId,
+                name: mi?.name ?? `Item #${it.menuItemId}`,
+                price: mi ? Number(mi.price) : 0,
+                imageUrl: mi?.imageUrl ?? null,
+                modifiers: [],
+                note: it.notes ?? null,
+                quantity: it.quantity,
+              });
+            }
+            setVoiceOpen(false);
+            setCartOpen(true);
+          }}
+        />
+      ) : null}
+
       {modifierItem ? (
         <ModifierBottomSheet
           visible={!!modifierItem}
@@ -324,7 +373,9 @@ function Chip({ active, onPress, label, colors, dotColor, icon }: {
 
 const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, gap: 8, borderBottomWidth: 1 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  voiceBtn: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
   chipsRow: { gap: 8, paddingVertical: 2, paddingRight: 4 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
