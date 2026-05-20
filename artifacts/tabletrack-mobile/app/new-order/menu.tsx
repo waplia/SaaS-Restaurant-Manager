@@ -127,7 +127,10 @@ export default function NewOrderMenuScreen() {
   // Send order to kitchen using existing endpoints.
   const createOrder = useCreateOrder();
   const addItemMutation = useMutation({
-    mutationFn: ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number; modifierIds?: number[]; notes?: string } }) =>
+    // Server expects `modifiers: [{ modifierId, quantity }]` — sending
+    // `modifierIds: number[]` was silently dropped, leading to 400s when an
+    // item had a required modifier group (e.g. spice_level).
+    mutationFn: ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number; modifiers?: Array<{ modifierId: number; quantity: number }>; notes?: string } }) =>
       customFetch(`/api/restaurants/${rid}/orders/${id}/items`, { method: "POST", body: JSON.stringify(data) }),
   });
 
@@ -157,13 +160,13 @@ export default function NewOrderMenuScreen() {
       const created = await createOrder.mutateAsync({ restaurantId, data: body as never });
       const orderId = created.id;
       for (const line of cart.items) {
-        const modIds = (line.modifiers ?? []).map((m) => m.modifierId);
+        const mods = (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
         await addItemMutation.mutateAsync({
           rid: restaurantId, id: orderId,
           data: {
             menuItemId: line.menuItemId,
             quantity: line.quantity,
-            modifierIds: modIds.length ? modIds : undefined,
+            modifiers: mods.length ? mods : undefined,
             notes: line.note ?? undefined,
           },
         });

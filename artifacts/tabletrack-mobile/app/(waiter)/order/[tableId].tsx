@@ -25,12 +25,24 @@ import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNetworkStatus, useOfflineCache } from "@/hooks/useOfflineCache";
 import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
+import { ModifierBottomSheet } from "@/components/ModifierBottomSheet";
+import type { CartModifier } from "@/context/CartContext";
+
+interface CartLineModifier {
+  modifierId: number;
+  name: string;
+  priceDelta: number;
+}
 
 interface CartItem {
+  /** Stable per-line id so a single menu item with different mods is two lines. */
+  lineId?: string;
   menuItemId: number;
   name: string;
   price: number;
   quantity: number;
+  modifiers?: CartLineModifier[];
+  note?: string | null;
 }
 
 interface QueuedOrder {
@@ -69,6 +81,8 @@ export default function WaiterOrderScreen() {
   const [offlineCategories, setOfflineCategories] = useState<MenuCategory[]>([]);
   const [offlineItems, setOfflineItems] = useState<MenuItem[]>([]);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
+  const [checkingMods, setCheckingMods] = useState(false);
 
   const catCacheKey = `menu_cats_${restaurantId}`;
   const itemsCacheKey = (catId: number) => `menu_items_${restaurantId}_${catId}`;
@@ -167,7 +181,20 @@ export default function WaiterOrderScreen() {
     // the rest of the app and avoiding silent stale-token failures.
     // Accepts an optional idempotency key so queued retries can dedupe
     // safely on the server when a previous attempt succeeded mid-flight.
-    mutationFn: ({ rid, id, data, idempotencyKey }: { rid: number; id: number; data: { menuItemId: number; quantity: number }; idempotencyKey?: string }) =>
+    // Server expects `modifiers: [{ modifierId, quantity }]` (see
+    // /restaurants/:rid/orders/:id/items in api-server) — `modifierIds` is
+    // silently ignored, which is what was causing required-modifier validation
+    // to fail with HTTP 400 on Send to Kitchen.
+    mutationFn: ({ rid, id, data, idempotencyKey }: {
+      rid: number; id: number;
+      data: {
+        menuItemId: number;
+        quantity: number;
+        modifiers?: Array<{ modifierId: number; quantity: number }>;
+        notes?: string;
+      };
+      idempotencyKey?: string;
+    }) =>
       customFetch(`/api/restaurants/${rid}/orders/${id}/items`, {
         method: "POST",
         body: JSON.stringify(data),
@@ -201,19 +228,93 @@ export default function WaiterOrderScreen() {
     navigation.setOptions({ title: `Table ${tableId}` });
   }, [tableId]);
 
-  const getQty = (menuItemId: number) => cart.find((i) => i.menuItemId === menuItemId)?.quantity ?? 0;
+  const getQty = (menuItemId: number) =>
+    cart.filter((i) => i.menuItemId === menuItemId).reduce((s, i) => s + i.quantity, 0);
 
-  const updateCart = (item: MenuItem, delta: number) => {
+  const addPlainLine = (item: MenuItem) => {
+    setCart((prev) => {
+      // Coalesce only into an existing line WITHOUT modifiers for the same item
+      // — modifier-distinct lines must remain separate so kitchen sees the
+      // correct customizations.
+      const idx = prev.findIndex((i) => i.menuItemId === item.id && (i.modifiers?.length ?? 0) === 0);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
+        return copy;
+      }
+      return [...prev, { lineId: mobileUid(), menuItemId: item.id, name: item.name, price: Number(item.price), quantity: 1 }];
+    });
+  };
+
+  const addCustomizedLine = (item: MenuItem, mods: CartModifier[], note: string, qty: number) => {
+    const lineMods: CartLineModifier[] = mods.map((m) => ({
+      modifierId: m.modifierId,
+      name: m.name,
+      priceDelta: Number(m.priceDelta) || 0,
+    }));
+    const modsTotal = lineMods.reduce((s, m) => s + m.priceDelta, 0);
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId: mobileUid(),
+        menuItemId: item.id,
+        name: item.name,
+        price: Number(item.price) + modsTotal,
+        quantity: Math.max(1, qty),
+        modifiers: lineMods,
+        note: note || undefined,
+      },
+    ]);
+  };
+
+  /**
+   * On tap we don't know whether the item requires modifiers (the menu item
+   * list response doesn't include that flag). Fetch the item's modifier groups
+   * just-in-time — react-query caches the result so subsequent taps on the
+   * same item are instant. If any group exists we open the picker; the server
+   * enforces `is_required` minimums, which is what was causing Send to
+   * Kitchen to fail with HTTP 400 when waiters bypassed customization.
+   */
+  const handleAdd = async (item: MenuItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!isOnline) {
+      addPlainLine(item);
+      return;
+    }
+    setCheckingMods(true);
+    try {
+      const groups = await qc.fetchQuery({
+        queryKey: ["item-modifier-groups", item.id],
+        queryFn: () => customFetch<Array<{ id: number; modifiers?: unknown[] }>>(`/api/items/${item.id}/modifier-groups`).catch(() => []),
+        staleTime: 5 * 60 * 1000,
+      });
+      if (Array.isArray(groups) && groups.length > 0) {
+        setModifierItem(item);
+        return;
+      }
+      addPlainLine(item);
+    } catch {
+      // If the lookup fails for any reason, still let the waiter add the item;
+      // server will return a clear error on send if a required modifier is
+      // missing.
+      addPlainLine(item);
+    } finally {
+      setCheckingMods(false);
+    }
+  };
+
+  const handleRemove = (item: MenuItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCart((prev) => {
-      const existing = prev.find((i) => i.menuItemId === item.id);
-      if (existing) {
-        const newQty = existing.quantity + delta;
-        if (newQty <= 0) return prev.filter((i) => i.menuItemId !== item.id);
-        return prev.map((i) => (i.menuItemId === item.id ? { ...i, quantity: newQty } : i));
+      // Decrement the most-recently-added line for this item.
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].menuItemId === item.id) {
+          const newQty = prev[i].quantity - 1;
+          if (newQty <= 0) return prev.filter((_, idx) => idx !== i);
+          return prev.map((l, idx) => (idx === i ? { ...l, quantity: newQty } : l));
+        }
       }
-      if (delta <= 0) return prev;
-      return [...prev, { menuItemId: item.id, name: item.name, price: Number(item.price), quantity: 1 }];
+      return prev;
     });
   };
 
@@ -248,10 +349,16 @@ export default function WaiterOrderScreen() {
     }
     for (let i = 0; i < cartItems.length; i++) {
       const item = cartItems[i];
+      const mods = (item.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
       await addItemMutation.mutateAsync({
         rid: restaurantId,
         id: orderId!,
-        data: { menuItemId: item.menuItemId, quantity: item.quantity },
+        data: {
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          modifiers: mods.length ? mods : undefined,
+          notes: item.note ?? undefined,
+        },
         idempotencyKey: itemKeys?.[i],
       });
     }
@@ -437,12 +544,33 @@ export default function WaiterOrderScreen() {
               imageUrl={item.imageUrl}
               quantity={getQty(item.id)}
               isAvailable={item.isAvailable !== false}
-              onAdd={() => updateCart(item, 1)}
-              onRemove={() => updateCart(item, -1)}
+              onAdd={() => { void handleAdd(item); }}
+              onRemove={() => handleRemove(item)}
             />
           )}
         />
       )}
+
+      {modifierItem ? (
+        <ModifierBottomSheet
+          visible={!!modifierItem}
+          onClose={() => setModifierItem(null)}
+          itemId={modifierItem.id}
+          itemName={modifierItem.name}
+          basePrice={Number(modifierItem.price)}
+          imageUrl={modifierItem.imageUrl ?? null}
+          onConfirm={({ modifiers, note, quantity }) => {
+            addCustomizedLine(modifierItem, modifiers, note, quantity);
+            setModifierItem(null);
+          }}
+        />
+      ) : null}
+
+      {checkingMods ? (
+        <View style={styles.checkingOverlay} pointerEvents="none">
+          <ActivityIndicator color="#fff" />
+        </View>
+      ) : null}
 
       {totalItems > 0 ? (
         <View style={[styles.orderFooter, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: isWeb ? 34 : insets.bottom }]}>
@@ -489,4 +617,5 @@ const styles = StyleSheet.create({
   billChip: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" as const },
   billChipText: { fontSize: 11, fontFamily: "Inter_500Medium" },
   sendBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  checkingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.15)" },
 });

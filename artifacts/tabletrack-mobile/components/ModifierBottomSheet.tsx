@@ -9,14 +9,42 @@ import { useColors } from "@/hooks/useColors";
 import { resolveImageUrl } from "@/lib/resolveImageUrl";
 import type { CartModifier } from "@/context/CartContext";
 
-interface ModifierOption { id: number; name: string; priceDelta?: string | number | null; isAvailable?: boolean }
+interface ModifierOption {
+  id: number;
+  name: string;
+  // API returns `price` (Modifier.price string). Keep legacy `priceDelta` as a
+  // fallback so older callers that already shape the data still work.
+  price?: string | number | null;
+  priceDelta?: string | number | null;
+  isAvailable?: boolean;
+}
 interface ModifierGroup {
   id: number;
   name: string;
+  displayName?: string | null;
   isRequired?: boolean;
+  // API returns `minSelections` / `maxSelections` (Drizzle camelCase). Keep
+  // legacy `minSelect` / `maxSelect` aliases for any older shapes.
+  minSelections?: number | null;
+  maxSelections?: number | null;
   minSelect?: number | null;
   maxSelect?: number | null;
   modifiers?: ModifierOption[];
+}
+
+function groupMin(g: ModifierGroup): number {
+  const v = g.minSelections ?? g.minSelect;
+  if (v != null) return Number(v);
+  return g.isRequired ? 1 : 0;
+}
+function groupMax(g: ModifierGroup): number {
+  const v = g.maxSelections ?? g.maxSelect;
+  if (v != null) return Number(v);
+  return g.isRequired ? 1 : 0;
+}
+function optionDelta(o: ModifierOption): number {
+  const v = o.price ?? o.priceDelta ?? 0;
+  return Number(v) || 0;
 }
 
 interface Props {
@@ -55,7 +83,7 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
   const toggle = (g: ModifierGroup, optId: number) => {
     setSelected((prev) => {
       const cur = new Set(prev[g.id] ?? []);
-      const max = Number(g.maxSelect ?? (g.isRequired ? 1 : 0));
+      const max = groupMax(g);
       const isSingle = max === 1;
       if (cur.has(optId)) {
         cur.delete(optId);
@@ -75,8 +103,7 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
   const valid = useMemo(() => {
     return groups.every((g) => {
       const cur = selected[g.id] ?? new Set();
-      const min = Number(g.minSelect ?? (g.isRequired ? 1 : 0));
-      return cur.size >= min;
+      return cur.size >= groupMin(g);
     });
   }, [groups, selected]);
 
@@ -84,7 +111,7 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
     let extras = 0;
     for (const g of groups) {
       const cur = selected[g.id] ?? new Set();
-      for (const opt of g.modifiers ?? []) if (cur.has(opt.id)) extras += Number(opt.priceDelta ?? 0);
+      for (const opt of g.modifiers ?? []) if (cur.has(opt.id)) extras += optionDelta(opt);
     }
     return (basePrice + extras) * qty;
   }, [groups, selected, basePrice, qty]);
@@ -94,7 +121,7 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
     for (const g of groups) {
       const cur = selected[g.id] ?? new Set();
       for (const opt of g.modifiers ?? []) if (cur.has(opt.id)) {
-        out.push({ modifierId: opt.id, groupId: g.id, name: opt.name, priceDelta: Number(opt.priceDelta ?? 0) });
+        out.push({ modifierId: opt.id, groupId: g.id, name: opt.name, priceDelta: optionDelta(opt) });
       }
     }
     onConfirm({ modifiers: out, note: note.trim(), quantity: qty });
@@ -126,20 +153,21 @@ export function ModifierBottomSheet({ visible, onClose, itemId, itemName, basePr
             <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>No customizations available — add to cart.</Text>
           ) : groups.map((g) => {
             const cur = selected[g.id] ?? new Set();
-            const max = Number(g.maxSelect ?? (g.isRequired ? 1 : 0));
-            const min = Number(g.minSelect ?? (g.isRequired ? 1 : 0));
+            const max = groupMax(g);
+            const min = groupMin(g);
             const rule = max === 1 ? "Choose 1" : max > 0 ? `Choose up to ${max}` : "Optional";
+            const label = g.displayName ?? g.name;
             return (
               <View key={g.id} style={{ gap: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                  <Text style={[styles.groupName, { color: colors.foreground }]}>{g.name}</Text>
+                  <Text style={[styles.groupName, { color: colors.foreground }]}>{label}</Text>
                   {g.isRequired ? <Text style={[styles.req, { color: colors.destructive }]}>Required · min {min}</Text> : null}
                   <Text style={[styles.rule, { color: colors.mutedForeground }]}>{rule}</Text>
                 </View>
                 <View style={[styles.optBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   {(g.modifiers ?? []).map((opt, i) => {
                     const sel = cur.has(opt.id);
-                    const delta = Number(opt.priceDelta ?? 0);
+                    const delta = optionDelta(opt);
                     return (
                       <Pressable
                         key={opt.id}

@@ -644,7 +644,26 @@ router.get("/items/:itemId/modifier-groups", requireRole("owner", "manager", "wa
   const rows = await db.select().from(modifierGroupsTable)
     .where(and(...conds))
     .orderBy(modifierGroupsTable.sortOrder, modifierGroupsTable.id);
-  res.json(rows);
+  // Embed each group's modifier options so POS clients (mobile, web) can
+  // render a complete picker in one request. Filter out unavailable options
+  // for non-admin roles to match the operator's POS view.
+  const groupIds = rows.map(r => r.id);
+  const allMods = groupIds.length > 0
+    ? await db.select().from(modifiersTable).where(inArray(modifiersTable.groupId, groupIds))
+    : [];
+  const byGroup = new Map<number, typeof allMods>();
+  for (const m of allMods) {
+    const arr = byGroup.get(m.groupId) ?? [];
+    arr.push(m);
+    byGroup.set(m.groupId, arr);
+  }
+  const enriched = rows.map(r => ({
+    ...r,
+    modifiers: (byGroup.get(r.id) ?? [])
+      .filter(m => role === "waiter" || role === "kitchen" ? m.isAvailable : true)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id),
+  }));
+  res.json(enriched);
 });
 
 router.post("/items/:itemId/modifier-groups", requireRole("owner", "manager", "super_admin"), async (req, res) => {
