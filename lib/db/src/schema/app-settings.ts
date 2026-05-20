@@ -72,6 +72,14 @@ export const appSettingsTable = pgTable("app_settings", {
   authSelfRegistrationRequireMobileOtp: boolean("auth_self_reg_require_mobile_otp").notNull().default(true),
   authOtpDefaultChannel: text("auth_otp_default_channel").notNull().default("sms"),
   authOtpFallbackChannel: text("auth_otp_fallback_channel"),
+  // Task #538 — Google sign-in (super-admin configured). The client secret
+  // is stored as an encrypted JSON envelope ({cipher,iv,tag}) and never
+  // returned to any client; admin reads see a boolean `hasGoogleClientSecret`
+  // instead of the ciphertext. Restaurant admins never see any of these.
+  googleSignInEnabled: boolean("google_signin_enabled").notNull().default(false),
+  googleClientId: text("google_client_id"),
+  googleClientSecretEnc: jsonb("google_client_secret_enc").$type<{ cipher: string; iv: string; tag: string } | null>(),
+  googleRequirePhoneAfterSignup: boolean("google_require_phone_after_signup").notNull().default(true),
   // Footer & Social
   footerText: text("footer_text"),
   socialLinks: jsonb("social_links").$type<Record<string, string>>().notNull().default({}),
@@ -99,6 +107,7 @@ export type PublicAppSettings = Pick<
   | "signupEnabled" | "landingPageEnabled"
   | "authPasswordLoginEnabled" | "authMobileOtpLoginEnabled" | "authEmailOtpLoginEnabled"
   | "authTwoFactorEnabled" | "authSelfRegistrationRequireMobileOtp" | "authOtpDefaultChannel"
+  | "googleSignInEnabled"
 >;
 
 export const SOCIAL_KEYS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;

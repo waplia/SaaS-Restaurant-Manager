@@ -23,6 +23,13 @@ export interface PublicAppSettings {
   maintenanceMessage: string | null;
   signupEnabled: boolean;
   landingPageEnabled: boolean;
+  authPasswordLoginEnabled?: boolean;
+  authMobileOtpLoginEnabled?: boolean;
+  authEmailOtpLoginEnabled?: boolean;
+  authTwoFactorEnabled?: boolean;
+  authSelfRegistrationRequireMobileOtp?: boolean;
+  authOtpDefaultChannel?: "sms" | "whatsapp";
+  googleSignInEnabled?: boolean;
 }
 
 const DEFAULTS: PublicAppSettings = {

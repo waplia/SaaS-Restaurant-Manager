@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db, auditLogsTable, type AppSettings } from "../lib/db";
 import { requireSuperAdmin } from "../middleware/authorize";
 import { getAppSettings, updateAppSettings, toPublicAppSettings } from "../lib/appSettings";
+import { encryptSecret, decryptSecret } from "../lib/aiEncryption";
+import { googleAdminRouter } from "./auth-google";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -73,6 +75,17 @@ const updateSchema = z.object({
   authSelfRegistrationRequireMobileOtp: z.boolean().optional(),
   authOtpDefaultChannel: z.enum(["sms", "whatsapp"]).optional(),
 
+  // Task #538 — Google sign-in
+  googleSignInEnabled: z.boolean().optional(),
+  googleClientId: z.string().trim().max(200).or(z.literal("")).nullish(),
+  googleClientSecret: z.string().trim().max(400).or(z.literal("")).nullish(),
+  // Explicit opt-in to wipe the stored secret. A blank `googleClientSecret`
+  // alone is a no-op so that unrelated settings saves (which round-trip the
+  // whole form with the secret field masked to "") don't accidentally
+  // clear a configured secret.
+  clearGoogleClientSecret: z.boolean().optional(),
+  googleRequirePhoneAfterSignup: z.boolean().optional(),
+
   footerText: z.string().trim().max(400).nullish(),
   socialLinks: z
     .record(z.enum(SOCIAL_KEYS), z.string().trim().url().or(z.literal("")))
@@ -95,6 +108,12 @@ function maskSettings<T extends Partial<AppSettings>>(s: T): T {
       out[k as string] = typeof v === "string" && v.length > 4 ? `••••${v.slice(-4)}` : "••••";
     }
   }
+  // Task #538 — never return the encrypted Google client secret envelope.
+  // Replace it with a boolean so the UI can render "Secret saved ✓" without
+  // ever seeing the ciphertext.
+  const enc = out["googleClientSecretEnc"] as { cipher?: string } | null | undefined;
+  out["hasGoogleClientSecret"] = !!(enc && enc.cipher);
+  delete out["googleClientSecretEnc"];
   return out as T;
 }
 
@@ -112,9 +131,26 @@ router.put("/admin/app-settings", requireSuperAdmin, async (req, res) => {
     return;
   }
   const patch: Partial<AppSettings> = {};
+  // Honor explicit wipe first so a save that both sets `clearGoogleClientSecret:true`
+  // and includes a non-empty `googleClientSecret` still results in the new secret
+  // being stored (the new value below overrides the null we set here).
+  if (parsed.data.clearGoogleClientSecret) {
+    (patch as Record<string, unknown>)["googleClientSecretEnc"] = null;
+  }
   for (const [k, v] of Object.entries(parsed.data)) {
     if (v === undefined) continue;
-    if (typeof v === "string" && v === "" && k !== "footerText" && k !== "maintenanceMessage" && k !== "supportPhone" && k !== "supportWhatsapp" && k !== "companyAddress" && k !== "logoUrl" && k !== "faviconUrl") continue;
+    if (k === "clearGoogleClientSecret") continue;
+    // Task #538 — handle googleClientSecret separately (encrypt into
+    // googleClientSecretEnc). A blank/null value is a NO-OP — clearing
+    // requires `clearGoogleClientSecret: true`. This protects against
+    // accidental wipes when the UI round-trips the masked field on every
+    // save of unrelated fields.
+    if (k === "googleClientSecret") {
+      if (typeof v !== "string" || v.trim() === "") continue;
+      (patch as Record<string, unknown>)["googleClientSecretEnc"] = encryptSecret(v.trim());
+      continue;
+    }
+    if (typeof v === "string" && v === "" && k !== "footerText" && k !== "maintenanceMessage" && k !== "supportPhone" && k !== "supportWhatsapp" && k !== "companyAddress" && k !== "logoUrl" && k !== "faviconUrl" && k !== "googleClientId") continue;
     (patch as Record<string, unknown>)[k] = v === "" ? null : v;
   }
   // Clean socialLinks: drop empty strings
@@ -263,6 +299,9 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
     res.status(500).json({ error: `Couldn't finalize the upload: ${(err as Error).message}` });
   }
 });
+
+// ─── Super-admin: Google sign-in "Test connection" ────────────
+router.use(requireSuperAdmin, googleAdminRouter);
 
 // ─── PUBLIC: read non-sensitive settings (no auth) ─────────────
 export const publicAppSettingsRouter = Router();

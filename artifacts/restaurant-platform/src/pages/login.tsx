@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth, type LoginResponse } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { GoogleSignInButton, OrDivider } from "@/components/GoogleSignInButton";
 
 type Tab = "password" | "mobile" | "email";
 type Channel = "sms" | "whatsapp" | "email";
@@ -81,11 +82,22 @@ export default function LoginPage() {
               )}
 
               {tab === "password" && (
-                <PasswordTab
-                  on2fa={(c) => setTwoFa(c)}
-                  onSuccess={() => navigate("/dashboard")}
-                  loginWith2faCheck={loginWith2faCheck}
-                />
+                <>
+                  <PasswordTab
+                    on2fa={(c) => setTwoFa(c)}
+                    onSuccess={() => navigate("/dashboard")}
+                    loginWith2faCheck={loginWith2faCheck}
+                  />
+                  {settings.googleSignInEnabled && (
+                    <div className="space-y-3 pt-2">
+                      <OrDivider />
+                      <GoogleSignInButton
+                        label="Sign in with Google"
+                        onCompleteProfileNeeded={() => navigate("/complete-profile")}
+                      />
+                    </div>
+                  )}
+                </>
               )}
               {tab === "mobile" && (
                 <OtpTab
@@ -128,9 +140,9 @@ function PasswordTab({
 }: {
   on2fa: (c: { userId: number; channel: Channel; hint?: string }) => void;
   onSuccess: () => void;
-  loginWith2faCheck: (email: string, password: string) => Promise<LoginResponse>;
+  loginWith2faCheck: (identifier: string, password: string) => Promise<LoginResponse>;
 }) {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
@@ -140,22 +152,31 @@ function PasswordTab({
     e.preventDefault();
     setErr(""); setLoading(true);
     try {
-      const r = await loginWith2faCheck(email.trim(), password);
+      const r = await loginWith2faCheck(identifier.trim(), password);
       if (r.requires2fa && r.userId && r.twoFactorChannel) {
         on2fa({ userId: r.userId, channel: r.twoFactorChannel, hint: r.identifierHint });
       } else {
         onSuccess();
       }
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : "Login failed");
+      setErr(e2 instanceof Error ? e2.message : "Invalid login details");
     } finally { setLoading(false); }
   }
 
   return (
     <form onSubmit={handle} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" placeholder="you@restaurant.com" />
+        <Label htmlFor="identifier">Email or mobile number</Label>
+        <Input
+          id="identifier"
+          type="text"
+          inputMode="email"
+          value={identifier}
+          onChange={e => setIdentifier(e.target.value)}
+          required
+          autoComplete="username"
+          placeholder="you@restaurant.com or +91 98765 43210"
+        />
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">

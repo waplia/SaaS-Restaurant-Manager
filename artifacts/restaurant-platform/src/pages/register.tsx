@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth, type AuthUser } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { GoogleSignInButton, OrDivider } from "@/components/GoogleSignInButton";
 
 const FEATURES = [
   "14-day free trial — no credit card required",
@@ -15,7 +16,7 @@ const FEATURES = [
   "Inventory and customer loyalty built-in",
 ];
 
-type Step = "phone" | "otp" | "details";
+type Step = "choose" | "phone" | "otp" | "details" | "email";
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -36,7 +37,7 @@ export default function RegisterPage() {
   const [, navigate] = useLocation();
 
   const needsOtp = settings.authSelfRegistrationRequireMobileOtp !== false;
-  const [step, setStep] = useState<Step>(needsOtp ? "phone" : "details");
+  const [step, setStep] = useState<Step>("choose");
   const [phone, setPhone] = useState("");
   const [channel, setChannel] = useState<"sms" | "whatsapp">(settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
   const [code, setCode] = useState("");
@@ -109,6 +110,27 @@ export default function RegisterPage() {
     finally { setLoading(false); }
   }
 
+  // Email-first signup path — collects everything in one form and calls
+  // the existing /auth/register endpoint (which already supports email-only
+  // signup). Phone is optional here; users who pick this path are saying
+  // "I'd rather use email", so we don't force them through phone OTP.
+  async function completeEmail(e: FormEvent) {
+    e.preventDefault();
+    if (details.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
+    setErr(""); setLoading(true);
+    try {
+      const r = await postJSON<{ accessToken: string; refreshToken: string; user: AuthUser }>("/auth/register", {
+        restaurantName: details.restaurantName,
+        ownerName: details.ownerName,
+        email: details.email,
+        password: details.password,
+      });
+      acceptAuthPayload(r);
+      navigate("/setup-wizard");
+    } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Registration failed"); }
+    finally { setLoading(false); }
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-4xl grid md:grid-cols-2 gap-10 items-center">
@@ -140,14 +162,49 @@ export default function RegisterPage() {
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">
-              {step === "phone" ? "Let's start with your phone" : step === "otp" ? "Verify your phone" : "Almost there"}
+              {step === "choose" && "How would you like to sign up?"}
+              {step === "phone" && "Let's start with your phone"}
+              {step === "otp" && "Verify your phone"}
+              {step === "details" && "Almost there"}
+              {step === "email" && "Create your account"}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
+              {step === "choose" && "Pick the option that's easiest for you. You can change it later."}
               {step === "phone" && "We'll send a one-time code to confirm your number."}
               {step === "otp" && `Enter the 6-digit code sent via ${channel === "whatsapp" ? "WhatsApp" : "SMS"}.`}
               {step === "details" && "Tell us about your restaurant to finish setting up your free trial."}
+              {step === "email" && "Sign up with your work email — you can add your phone number later."}
             </p>
           </div>
+
+          {step === "choose" && (
+            <div className="space-y-3">
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => setStep("phone")}
+              >
+                Sign up with phone
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setStep("email")}
+              >
+                Sign up with email
+              </Button>
+              {settings.googleSignInEnabled && (
+                <>
+                  <OrDivider />
+                  <GoogleSignInButton
+                    label="Continue with Google"
+                    onCompleteProfileNeeded={() => navigate("/complete-profile")}
+                  />
+                </>
+              )}
+            </div>
+          )}
 
           {step === "phone" && (
             <form onSubmit={startOtp} className="space-y-4">
@@ -182,6 +239,32 @@ export default function RegisterPage() {
               <div className="flex gap-2">
                 <Button type="button" variant="ghost" onClick={() => { setStep("phone"); setCode(""); }}>Back</Button>
                 <Button type="submit" className="flex-1" disabled={loading || code.length !== 6}>{loading ? "Verifying…" : "Verify"}</Button>
+              </div>
+            </form>
+          )}
+
+          {step === "email" && (
+            <form onSubmit={completeEmail} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Restaurant name</Label>
+                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Spice Garden" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Your name</Label>
+                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Priya Sharma" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Work email</Label>
+                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="priya@spicegarden.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="At least 8 characters" />
+              </div>
+              {err && <ErrorBox msg={err} />}
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => setStep("choose")}>Back</Button>
+                <Button type="submit" className="flex-1" disabled={loading}>{loading ? "Creating account…" : "Start free trial"}</Button>
               </div>
             </form>
           )}

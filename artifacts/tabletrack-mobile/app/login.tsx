@@ -6,9 +6,13 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 import { useColors } from "@/hooks/useColors";
 import { useAuth, type AuthUser } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type Tab = "password" | "mobile" | "email";
 type Channel = "sms" | "whatsapp" | "email";
@@ -19,6 +23,8 @@ interface PublicAuthSettings {
   emailOtpLoginEnabled: boolean;
   twoFactorEnabled: boolean;
   otpDefaultChannel: "sms" | "whatsapp";
+  googleSignInEnabled?: boolean;
+  googleClientId?: string | null;
 }
 
 interface LoginResp {
@@ -64,7 +70,7 @@ export default function LoginScreen() {
   const [tab, setTab] = useState<Tab>("password");
 
   // password
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -105,22 +111,62 @@ export default function LoginScreen() {
   }
 
   async function handlePasswordLogin() {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Required", "Please enter your email and password.");
+    if (!identifier.trim() || !password.trim()) {
+      Alert.alert("Required", "Please enter your email or mobile number and password.");
       return;
     }
     setLoading(true);
     try {
-      const r = await postJSON<LoginResp>("/auth/login-2fa", { email: email.trim(), password });
+      const r = await postJSON<LoginResp>("/auth/login-2fa", { identifier: identifier.trim(), password });
       if (r.requires2fa && r.userId && r.twoFactorChannel) {
         setTwoFa({ userId: r.userId, channel: r.twoFactorChannel, hint: r.identifierHint });
       } else if (r.accessToken && r.refreshToken && r.user) {
         await finishLogin({ accessToken: r.accessToken, refreshToken: r.refreshToken, user: r.user });
       } else {
-        Alert.alert("Login failed", "Unexpected response from server.");
+        Alert.alert("Login failed", "Invalid login details.");
       }
     } catch (err) {
-      Alert.alert("Login Failed", err instanceof Error ? err.message : "Login failed");
+      Alert.alert("Login failed", err instanceof Error ? err.message : "Invalid login details");
+    } finally { setLoading(false); }
+  }
+
+  // Google sign-in via Expo AuthSession. The clientId comes from Super Admin
+  // settings (so restaurants never see it). On success we exchange the Google
+  // id_token with our backend, which mints our own JWTs.
+  const [, , promptGoogle] = Google.useIdTokenAuthRequest({
+    clientId: authSettings?.googleClientId ?? undefined,
+  });
+  async function handleGoogleLogin() {
+    if (!authSettings?.googleClientId) return;
+    setLoading(true);
+    try {
+      const res = await promptGoogle();
+      if (res?.type !== "success" || !res.params.id_token) {
+        if (res?.type === "error") Alert.alert("Google sign-in failed", res.error?.message ?? "Cancelled");
+        return;
+      }
+      const r = await postJSON<LoginResp & {
+        pending?: boolean; pendingToken?: string;
+        needsProfileCompletion?: boolean;
+        missing?: { phone: boolean; restaurantName: boolean };
+      }>("/auth/google/verify", { idToken: res.params.id_token });
+      if (r.pending && r.pendingToken) {
+        router.replace({
+          pathname: "/complete-profile",
+          params: {
+            pendingToken: r.pendingToken,
+            missingRestaurant: r.missing?.restaurantName ? "1" : "0",
+          },
+        } as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      if (r.accessToken && r.refreshToken && r.user) {
+        await finishLogin({ accessToken: r.accessToken, refreshToken: r.refreshToken, user: r.user });
+      } else {
+        Alert.alert("Google sign-in failed", "Server did not return a session.");
+      }
+    } catch (err) {
+      Alert.alert("Google sign-in failed", err instanceof Error ? err.message : "Try again");
     } finally { setLoading(false); }
   }
 
@@ -255,13 +301,13 @@ export default function LoginScreen() {
               {tab === "password" && (
                 <>
                   <View style={styles.field}>
-                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Email</Text>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Email or mobile number</Text>
                     <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
-                      <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                      <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}
-                        value={email} onChangeText={setEmail}
-                        placeholder="you@example.com"
+                        value={identifier} onChangeText={setIdentifier}
+                        placeholder="you@example.com or +91 98765 43210"
                         placeholderTextColor={colors.mutedForeground}
                         keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
                         testID="email-input"
@@ -289,6 +335,27 @@ export default function LoginScreen() {
                   >
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Sign in</Text>}
                   </Pressable>
+                  {authSettings?.googleSignInEnabled && authSettings?.googleClientId ? (
+                    <>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+                        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>or</Text>
+                        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                      </View>
+                      <Pressable
+                        style={({ pressed }) => [styles.secondaryBtn, {
+                          borderColor: colors.border,
+                          flexDirection: "row", gap: 8,
+                          opacity: pressed || loading ? 0.7 : 1,
+                        }]}
+                        onPress={handleGoogleLogin}
+                        disabled={loading}
+                      >
+                        <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                        <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Continue with Google</Text>
+                      </Pressable>
+                    </>
+                  ) : null}
                 </>
               )}
 
@@ -369,6 +436,32 @@ export default function LoginScreen() {
               )}
             </>
           )}
+
+          {/* Signup entry point — mobile doesn't have a dedicated signup screen,
+              so we offer Google as the in-app signup path here. Same handler as
+              login: the backend's /auth/google/verify creates the account on
+              first sign-in. Restaurant-name / phone collection happens on the
+              /complete-profile screen if Super Admin requires it. */}
+          {!twoFa && authSettings?.googleSignInEnabled && authSettings?.googleClientId ? (
+            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 }}>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: "center" }}>
+                New to {"KhanaLagao"}?
+              </Text>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, {
+                  borderColor: colors.border,
+                  flexDirection: "row", gap: 8,
+                  opacity: pressed || loading ? 0.7 : 1,
+                }]}
+                onPress={handleGoogleLogin}
+                disabled={loading}
+                testID="signup-google-button"
+              >
+                <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Sign up with Google</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

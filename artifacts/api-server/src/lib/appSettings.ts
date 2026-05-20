@@ -70,5 +70,6 @@ export function toPublicAppSettings(s: AppSettings): PublicAppSettings {
     authTwoFactorEnabled: s.authTwoFactorEnabled,
     authSelfRegistrationRequireMobileOtp: s.authSelfRegistrationRequireMobileOtp,
     authOtpDefaultChannel: s.authOtpDefaultChannel,
+    googleSignInEnabled: s.googleSignInEnabled,
   };
 }

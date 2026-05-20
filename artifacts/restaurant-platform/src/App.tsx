@@ -59,6 +59,7 @@ import OnboardingPage from "@/pages/onboarding";
 import SetupWizardPage from "@/pages/setup-wizard";
 import SetupOnboardingPage from "@/pages/setup-onboarding";
 import ForgotPasswordPage from "@/pages/forgot-password";
+import CompleteProfilePage from "@/pages/complete-profile";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminPage from "@/pages/admin";
 import AdminLeadsPage from "@/pages/admin-leads";
@@ -295,6 +296,7 @@ function Router() {
       <Route path="/login" component={() => <PublicOnlyRoute component={LoginPage} />} />
       <Route path="/register" component={() => <PublicOnlyRoute component={RegisterPage} />} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/complete-profile" component={CompleteProfilePage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/tenants" component={() => <SuperAdminRoute component={AdminPage} />} />

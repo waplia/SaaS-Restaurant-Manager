@@ -150,20 +150,25 @@ router.post("/auth/verify-otp", otpVerifyLimit, validate({ body: VerifyOtpBody }
 // backwards compatibility; this one is used by the new login UI when 2FA is
 // enabled for the user.)
 // ────────────────────────────────────────────────────────────────────────────
+// Task #538 — identifier accepts either email or phone. `email` retained for
+// backwards compatibility with any clients still posting the old shape.
 const PasswordLoginBody = z.object({
-  email: z.string().trim().email().max(200),
+  identifier: z.string().trim().min(1).max(200).optional(),
+  email: z.string().trim().min(1).max(200).optional(),
   password: z.string().min(1).max(200),
-});
+}).refine((b) => !!(b.identifier || b.email), { message: "identifier or email is required" });
 
 router.post(
   "/auth/login-2fa",
   rateLimit({ name: "auth.login2fa.ip", windowMs: 15 * 60 * 1000, max: 20 }),
   validate({ body: PasswordLoginBody }),
   async (req, res) => {
-    const { email, password } = req.body as z.infer<typeof PasswordLoginBody>;
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(email)));
-    if (!user || !user.isActive) {
-      res.status(401).json({ error: "Invalid credentials" });
+    const { identifier, email, password } = req.body as z.infer<typeof PasswordLoginBody>;
+    const raw = (identifier ?? email ?? "").trim();
+    const { findUserByIdentifier } = await import("./auth");
+    const user = await findUserByIdentifier(raw);
+    if (!user) {
+      res.status(401).json({ error: "Invalid login details" });
       return;
     }
     const ok = await comparePassword(password, user.passwordHash);
@@ -173,7 +178,18 @@ router.post(
         userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
         newValue: { reason: "bad_password" },
       });
-      res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid login details" });
+      return;
+    }
+    // Password correct — surface specific status for disabled accounts only
+    // after the password check passes, per task spec.
+    if (!user.isActive) {
+      await recordAuditLog({
+        req, module: "auth", action: "login.failed", entity: "auth",
+        userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
+        newValue: { reason: "user_inactive" },
+      });
+      res.status(403).json({ error: "Your account has been disabled. Please contact support." });
       return;
     }
 
@@ -552,6 +568,8 @@ router.get("/auth/settings/public", async (_req, res) => {
     selfRegistrationRequireMobileOtp: s.authSelfRegistrationRequireMobileOtp,
     signupEnabled: s.signupEnabled,
     otpDefaultChannel: s.authOtpDefaultChannel,
+    googleSignInEnabled: !!(s.googleSignInEnabled && s.googleClientId),
+    googleClientId: s.googleSignInEnabled ? s.googleClientId : null,
   });
 });
 

@@ -33,8 +33,45 @@ import { getAppSettings } from "../lib/appSettings";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { recordAuditLog } from "../lib/audit";
 import bcrypt from "bcryptjs";
+import { normalizePhone, normalizeEmail } from "../lib/staffOtp";
 
 const router = Router();
+
+// Identifier helpers (Task #538). Login accepts either an email or a phone
+// number in the same "identifier" field; we sniff which it is here so the
+// UI never has to ask the user "is this an email or a phone?".
+function isEmailLike(s: string): boolean {
+  return s.includes("@");
+}
+async function findUserByIdentifier(raw: string): Promise<typeof usersTable.$inferSelect | undefined> {
+  const v = raw.trim();
+  if (!v) return undefined;
+  if (isEmailLike(v)) {
+    const [u] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(v)));
+    return u;
+  }
+  const normalized = normalizePhone(v);
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length < 7) return undefined;
+  // Step 1: exact match against the user's stored phone after stripping
+  // formatting characters from both sides.
+  const [exact] = await db.select().from(usersTable)
+    .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
+  if (exact) return exact;
+  // Step 2: if the user typed a national number without country code (e.g.
+  // "9876543210"), fall back to matching the *last N significant digits* of
+  // stored phones. This lets "9876543210" find a user stored as
+  // "+91 98765 43210". We require at least 10 trailing digits for the match
+  // to avoid false positives on very short inputs.
+  if (digits.length >= 10) {
+    const tail = digits.slice(-10);
+    const [bySuffix] = await db.select().from(usersTable)
+      .where(sql`right(regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9]', '', 'g'), 10) = ${tail}`);
+    if (bySuffix) return bySuffix;
+  }
+  return undefined;
+}
+export { findUserByIdentifier };
 
 // Pre-computed bcrypt hash of a random string. Compared against when an email
 // is unknown so login response time does not leak whether an account exists.
@@ -43,9 +80,15 @@ const DUMMY_BCRYPT_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8.4OZN8ZjBkA8e2H9YQ2A6E
 // Two independent buckets — varying one dimension cannot bypass the other:
 //  • per-IP: stops a single host (or a single proxy IP) from spraying.
 //  • per-email: stops a botnet from grinding any *one* account from many IPs.
-const emailKey = (req: { body?: { email?: string } }) => {
-  const email = req.body?.email?.toLowerCase().trim();
-  return email ? email.slice(0, 200) : null;
+const emailKey = (req: { body?: { email?: string; identifier?: string } }) => {
+  // Task #538 — login now accepts either `email` (legacy) or `identifier`
+  // (email or phone). The per-account bucket must key on whichever the
+  // client sent, otherwise phone-based logins skip per-identifier throttling
+  // entirely and rely only on the IP bucket.
+  const raw = (req.body?.identifier ?? req.body?.email ?? "").toLowerCase().trim();
+  if (!raw) return null;
+  const normalised = raw.includes("@") ? raw : raw.replace(/[^\d+]/g, "");
+  return normalised.slice(0, 200) || null;
 };
 
 const loginLimitByIp = rateLimit({ name: "auth.login.ip", windowMs: 15 * 60 * 1000, max: 20 });
@@ -229,23 +272,28 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
   });
 });
 
-router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: LoginBody }), async (req, res) => {
-  const { email, password } = req.body as { email: string; password: string };
+// Task #538 — accept either `identifier` (email-or-phone, new) or legacy `email`.
+const LoginBodyFlexible = z.object({
+  identifier: z.string().trim().min(1).max(200).optional(),
+  email: z.string().trim().min(1).max(200).optional(),
+  password: z.string().min(1).max(200),
+}).refine((b) => !!(b.identifier || b.email), { message: "identifier or email is required" });
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()));
-  if (!user || !user.isActive) {
+router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: LoginBodyFlexible }), async (req, res) => {
+  const { identifier, email, password } = req.body as z.infer<typeof LoginBodyFlexible>;
+  const rawIdent = (identifier ?? email ?? "").trim();
+
+  const user = await findUserByIdentifier(rawIdent);
+  if (!user) {
     // Equalize timing so an attacker cannot tell from the response time
-    // whether the email exists or the account is disabled.
+    // whether the identifier exists.
     await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
     await recordAuditLog({
       req, module: "auth", action: "login.failed", entity: "auth",
-      userId: null, userDisplay: email, role: null,
-      newValue: { email, reason: !user ? "user_not_found" : "user_inactive" },
+      userId: null, userDisplay: rawIdent, role: null,
+      newValue: { identifier: rawIdent, reason: "user_not_found" },
     });
-    res.status(401).json({ error: "Invalid credentials" });
+    res.status(401).json({ error: "Invalid login details" });
     return;
   }
 
@@ -255,9 +303,23 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: L
       req, module: "auth", action: "login.failed", entity: "auth",
       userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
       restaurantId: user.restaurantId ?? null,
-      newValue: { email, reason: "bad_password" },
+      newValue: { identifier: rawIdent, reason: "bad_password" },
     });
-    res.status(401).json({ error: "Invalid credentials" });
+    res.status(401).json({ error: "Invalid login details" });
+    return;
+  }
+
+  // Credentials are correct — only NOW reveal account status. Disabled /
+  // locked accounts get a specific message so the legitimate owner knows to
+  // contact support (per task spec).
+  if (!user.isActive) {
+    await recordAuditLog({
+      req, module: "auth", action: "login.failed", entity: "auth",
+      userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
+      restaurantId: user.restaurantId ?? null,
+      newValue: { identifier: rawIdent, reason: "user_inactive" },
+    });
+    res.status(403).json({ error: "Your account has been disabled. Please contact support." });
     return;
   }
 

@@ -24,6 +24,11 @@ export const usersTable = pgTable("users", {
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   twoFactorChannel: text("two_factor_channel").$type<"sms" | "email" | "whatsapp">(),
   preferredLoginMethod: text("preferred_login_method").$type<"password" | "mobile_otp" | "email_otp">().notNull().default("password"),
+  // Task #538 — Google sign-in. `googleId` is the Google "sub" claim
+  // (account-level stable id). `authProvider` records how the account was
+  // originally created so the UI can show "Continue with Google" hints.
+  googleId: text("google_id").unique(),
+  authProvider: text("auth_provider").$type<"password" | "google" | "mobile_otp">().notNull().default("password"),
   // Bumped whenever the user logs out everywhere, changes/reset their
   // password, or the platform force-revokes sessions. The current value is
   // embedded in every issued JWT and re-checked in the auth middleware so

@@ -35,7 +35,7 @@ interface AuthContextValue extends AuthState {
   /** Accepts a successful auth payload (from OTP / 2FA / self-serve register) and signs the user in. */
   acceptAuthPayload: (data: { accessToken: string; refreshToken: string; user: AuthUser }) => void;
   /** Password login that returns 2FA challenge when required. */
-  loginWith2faCheck: (email: string, password: string) => Promise<LoginResponse>;
+  loginWith2faCheck: (identifier: string, password: string) => Promise<LoginResponse>;
 }
 
 export interface RegisterInput {
@@ -176,11 +176,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: data.user, accessToken: data.accessToken, isLoading: false, isAuthenticated: true });
   }, []);
 
-  const loginWith2faCheck = useCallback(async (email: string, password: string): Promise<LoginResponse> => {
+  const loginWith2faCheck = useCallback(async (identifier: string, password: string): Promise<LoginResponse> => {
     const res = await fetch(`${API_BASE}/auth/login-2fa`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Login failed" }));

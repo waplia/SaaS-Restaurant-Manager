@@ -36,6 +36,11 @@ type Settings = {
   authTwoFactorEnabled: boolean;
   authSelfRegistrationRequireMobileOtp: boolean;
   authOtpDefaultChannel: "sms" | "whatsapp";
+  googleSignInEnabled: boolean;
+  googleClientId: string | null;
+  googleRequirePhoneAfterSignup: boolean;
+  hasGoogleClientSecret?: boolean;
+  googleClientSecret?: string;
   footerText: string | null;
   socialLinks: Record<string, string>;
 };
@@ -288,6 +293,70 @@ export default function AdminSettingsPage() {
               <option value="whatsapp">WhatsApp</option>
             </select>
             <p className="text-xs text-muted-foreground mt-1">Used as the pre-selected channel in the login & signup screens.</p>
+          </div>
+        </Section>
+
+        <Section title="Google Sign-In" description="Let restaurants sign in with Google. Credentials are stored encrypted and are never returned to the browser. Whitelist the redirect URI in Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client.">
+          <div className="space-y-3">
+            <ToggleRow
+              label="Enable Google sign-in"
+              description="When off, the Google button is hidden on web & mobile and all Google auth requests are rejected."
+              checked={form.googleSignInEnabled}
+              onChange={(v) => set("googleSignInEnabled", v)}
+            />
+            <ToggleRow
+              label="Require phone verification after Google signup"
+              description="New accounts created via Google must add and verify a phone number before they can finish signing in."
+              checked={form.googleRequirePhoneAfterSignup}
+              onChange={(v) => set("googleRequirePhoneAfterSignup", v)}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Google Client ID</Label>
+              <Input
+                value={form.googleClientId ?? ""}
+                onChange={(e) => set("googleClientId", e.target.value || null)}
+                placeholder="123456789-abc.apps.googleusercontent.com"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <Label>Google Client Secret</Label>
+              <Input
+                type="password"
+                value={form.googleClientSecret ?? ""}
+                onChange={(e) => set("googleClientSecret", e.target.value)}
+                placeholder={form.hasGoogleClientSecret ? "•••••••••• (saved — leave blank to keep)" : "Paste the OAuth client secret"}
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.hasGoogleClientSecret ? "A secret is already saved. Type a new value to replace it, or leave blank to keep the existing one." : "Stored encrypted at rest. Restaurant admins can never read it."}
+              </p>
+            </div>
+          </div>
+          <div>
+            <Label>Redirect URI (whitelist this in Google Cloud)</Label>
+            <Input value={typeof window !== "undefined" ? `${window.location.origin}/app/auth/google/callback` : ""} readOnly />
+          </div>
+          <div className="flex justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const res = await apiPost<{ ok: boolean; error?: string; redirectUri?: string }>(
+                    "/admin/app-settings/google/test", {},
+                  );
+                  if (res.ok) toast({ title: "Google credentials look valid", description: `Redirect URI: ${res.redirectUri ?? "(set PUBLIC_APP_URL)"}` });
+                  else toast({ title: "Test failed", description: res.error ?? "Unknown error", variant: "destructive" });
+                } catch (e) {
+                  toast({ title: "Test failed", description: (e as Error).message, variant: "destructive" });
+                }
+              }}
+            >
+              Test connection
+            </Button>
           </div>
         </Section>
 
