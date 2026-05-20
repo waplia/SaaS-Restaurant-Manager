@@ -2,6 +2,7 @@ import { db } from "./lib/db";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
 import { seedDefaultWhatsAppTemplates } from "./lib/whatsappTemplateSeeder";
 import { seedRestaurantEmailLibrary } from "./lib/restaurantEmailSeeder";
+import { seedPremiumMarketingLibrary } from "./lib/marketingEmailLibrary";
 import { seedDefaultSupportCategories } from "./lib/supportCategoriesSeeder";
 import { defaultFeatureFlagsForPlan } from "@workspace/db";
 import {
@@ -483,6 +484,9 @@ export async function seed(): Promise<void> {
 
   const restEmail = await seedRestaurantEmailLibrary();
   console.log(`✅ Restaurant email library seeded (inserted ${restEmail.inserted}, skipped ${restEmail.skipped})`);
+
+  const premiumEmail = await seedPremiumMarketingLibrary();
+  console.log(`✅ Premium marketing email library seeded (inserted ${premiumEmail.inserted}, skipped ${premiumEmail.skipped})`);
 
   const waSeed = await seedDefaultWhatsAppTemplates();
   console.log(`✅ Default WhatsApp templates seeded (inserted ${waSeed.inserted}, skipped ${waSeed.skipped})`);
