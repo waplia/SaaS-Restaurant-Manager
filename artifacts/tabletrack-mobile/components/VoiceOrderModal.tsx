@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Modal, View, Text, TextInput, Pressable, ScrollView,
   ActivityIndicator, StyleSheet, Alert, Platform,
@@ -7,6 +7,23 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "@/lib/secureStorage";
 import { useColors } from "@/hooks/useColors";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+
+// Web Speech API typings (only used on web).
+type SRConstructor = new () => {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onerror: (e: { error: string }) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+};
+function getSpeechRecognition(): SRConstructor | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: SRConstructor; webkitSpeechRecognition?: SRConstructor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 interface ParsedItem {
   menuItemId: number | null;
@@ -54,6 +71,68 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [pickerForIdx, setPickerForIdx] = useState<number | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [listening, setListening] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const recognitionRef = useRef<InstanceType<SRConstructor> | null>(null);
+  const SR = getSpeechRecognition();
+  const micSupported = !!SR;
+
+  useEffect(() => {
+    return () => {
+      try { recognitionRef.current?.stop(); } catch {}
+    };
+  }, []);
+
+  const toggleListening = () => {
+    if (!SR) {
+      setMicError(
+        Platform.OS === "web"
+          ? "Your browser does not support voice input. Try Chrome on Android or desktop."
+          : "Use your keyboard's mic button to dictate (in-app recording coming soon)."
+      );
+      return;
+    }
+    if (listening) {
+      try { recognitionRef.current?.stop(); } catch {}
+      setListening(false);
+      return;
+    }
+    setMicError(null);
+    try {
+      const rec = new SR();
+      rec.lang = "en-IN";
+      rec.interimResults = true;
+      rec.continuous = true;
+      let finalText = transcript ? transcript + " " : "";
+      rec.onresult = (e) => {
+        let interim = "";
+        for (let i = 0; i < e.results.length; i++) {
+          const res = e.results[i] as ArrayLike<{ transcript: string }> & { isFinal?: boolean; 0: { transcript: string } };
+          const chunk = res[0]?.transcript ?? "";
+          if ((res as { isFinal?: boolean }).isFinal) finalText += chunk + " ";
+          else interim = chunk;
+        }
+        setTranscript((finalText + interim).trim());
+      };
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          setMicError("Microphone permission was denied. Enable it in your browser settings and try again.");
+        } else if (e.error === "no-speech") {
+          setMicError("Didn't catch anything — try again.");
+        } else {
+          setMicError(`Voice error: ${e.error}`);
+        }
+        setListening(false);
+      };
+      rec.onend = () => setListening(false);
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+    } catch (err) {
+      setMicError((err as Error).message);
+      setListening(false);
+    }
+  };
 
   const reset = () => {
     setTranscript("");
@@ -61,6 +140,9 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
     setItems([]);
     setParsing(false);
     setSubmitting(false);
+    setMicError(null);
+    try { recognitionRef.current?.stop(); } catch {}
+    setListening(false);
   };
   const handleClose = () => { reset(); onClose(); };
 
@@ -150,18 +232,42 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body}>
-          <Text style={[styles.label, { color: colors.muted }]}>
-            Tap the input, then press the mic on your keyboard to dictate. Hindi/English/Hinglish supported.
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            {micSupported
+              ? "Tap the mic and speak your order. Hindi/English/Hinglish supported."
+              : Platform.OS === "web"
+                ? "Your browser does not support in-page voice — type the order instead."
+                : "Type the order, or tap the input and use your keyboard's mic to dictate."}
           </Text>
+
+          <Pressable
+            onPress={toggleListening}
+            style={[
+              styles.micBtn,
+              {
+                backgroundColor: listening ? "#ef4444" : colors.primary,
+                opacity: micSupported ? 1 : 0.5,
+              },
+            ]}
+          >
+            <Ionicons name={listening ? "stop" : "mic"} size={22} color="#fff" />
+            <Text style={styles.micBtnText}>
+              {listening ? "Listening… tap to stop" : micSupported ? "Tap to speak" : "Voice input unavailable"}
+            </Text>
+          </Pressable>
+          {micError ? (
+            <Text style={{ color: colors.destructive, fontSize: 12 }}>{micError}</Text>
+          ) : null}
+
           <TextInput
             value={transcript}
             onChangeText={setTranscript}
             multiline
             numberOfLines={4}
             placeholder='e.g. "do butter naan, ek paneer tikka, teen lassi"'
-            placeholderTextColor={colors.muted}
-            style={[styles.textArea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.textArea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
           />
           <Pressable
             onPress={handleParse}
@@ -176,7 +282,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
           {parsed && (
             <View style={{ marginTop: 16, gap: 10 }}>
               {items.length === 0 && (
-                <Text style={[styles.label, { color: colors.muted, fontStyle: "italic" }]}>
+                <Text style={[styles.label, { color: colors.mutedForeground, fontStyle: "italic" }]}>
                   No items extracted. Edit the transcript and try again.
                 </Text>
               )}
@@ -229,7 +335,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
                       value={it.notes ?? ""}
                       onChangeText={(t) => setItemNotes(idx, t)}
                       placeholder="Add note (optional)"
-                      placeholderTextColor={colors.muted}
+                      placeholderTextColor={colors.mutedForeground}
                       style={{
                         borderWidth: 1, borderColor: colors.border, borderRadius: 8,
                         paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: colors.text,
@@ -301,7 +407,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
                 value={pickerSearch}
                 onChangeText={setPickerSearch}
                 placeholder="Search…"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.mutedForeground}
                 style={{
                   borderWidth: 1, borderColor: colors.border, borderRadius: 8,
                   paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.text,
@@ -327,7 +433,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
                     <Text style={{ color: colors.text, fontSize: 14, flex: 1 }} numberOfLines={1}>
                       {m.name}
                     </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12 }}>₹{Number(m.price).toFixed(0)}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>₹{Number(m.price).toFixed(0)}</Text>
                   </Pressable>
                 ))}
             </ScrollView>
@@ -355,6 +461,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center",
   },
   parseBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  micBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 14, borderRadius: 12,
+  },
+  micBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   itemRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
     borderWidth: 1, borderRadius: 10, padding: 10,
