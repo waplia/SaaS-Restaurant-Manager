@@ -512,9 +512,14 @@ export async function sendWebPush(input: SendWebPushInput): Promise<SendWebPushR
     }
   }
 
-  // Resolve subscriptions if not given.
+  // Resolve subscriptions if not given. When the caller pre-resolves them
+  // (e.g. Growth Engine, which lets the user explicitly pick an audience like
+  // "all subscribers" or "order updates"), trust that selection — don't apply
+  // the marketing opt-in filter again, otherwise picking "all" would silently
+  // drop everyone who only opted in to order updates.
+  const preResolved = !!(input.subscriptions && input.subscriptions.length > 0);
   let subs = input.subscriptions ?? [];
-  if (subs.length === 0) {
+  if (!preResolved) {
     const conditions = [eq(webPushSubscriptionsTable.status, "active")] as ReturnType<typeof eq>[];
     if (input.targetOrderId) conditions.push(eq(webPushSubscriptionsTable.orderId, input.targetOrderId));
     else if (input.targetCustomerIds && input.targetCustomerIds.length > 0) conditions.push(inArray(webPushSubscriptionsTable.customerId, input.targetCustomerIds));
@@ -534,9 +539,11 @@ export async function sendWebPush(input: SendWebPushInput): Promise<SendWebPushR
 
   const category: "transactional" | "marketing" = input.category ?? (TRANSACTIONAL_EVENTS.has(input.eventKey) ? "transactional" : "marketing");
 
-  // Opt-in gating
-  subs = subs.filter(s => category === "transactional" ? s.orderUpdatesOptIn !== false : s.marketingOptIn === true);
-  if (subs.length === 0) return result;
+  // Opt-in gating — only applied when we resolved the audience ourselves.
+  if (!preResolved) {
+    subs = subs.filter(s => category === "transactional" ? s.orderUpdatesOptIn !== false : s.marketingOptIn === true);
+  }
+  if (subs.length === 0) { result.reason = preResolved ? "Pre-resolved audience was empty" : "No subscribers matched opt-in filter"; return result; }
 
   // Caps (per restaurant: daily/monthly via logs, per customer: daily).
   if (input.restaurantId && settings) {
