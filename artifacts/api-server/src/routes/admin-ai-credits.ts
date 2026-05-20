@@ -19,6 +19,8 @@ import {
 } from "../lib/db";
 import { requireSuperAdmin } from "../middleware/authorize";
 import { recordAuditLog } from "../lib/audit";
+import { sendByTemplateKey } from "../lib/emailSender";
+import { logger } from "../lib/logger";
 import {
   getOrCreateWallet,
   summarizeWallet,
@@ -348,6 +350,42 @@ router.post("/admin/ai/wallets/:tenantId/adjust", async (req: Request, res: Resp
     req, module: MODULE, action: "wallet.adjust", entity: "ai_credit_wallet", entityId: updated.id,
     newValue: { tenantId, bucket, delta, reason, expiresAt },
   });
+  // Notify the tenant owner that their AI credit balance was adjusted by a
+  // super-admin. Positive deltas use `ai_credits_added`; negatives use
+  // `ai_credits_exhausted` only when the bucket is now zero, otherwise we
+  // skip (a quiet reduction shouldn't ping the owner unless it bottoms out).
+  try {
+    const [owner] = await db.select({ email: usersTable.email, name: usersTable.name })
+      .from(usersTable)
+      .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner")))
+      .limit(1);
+    const [tenantRow] = await db.select({ name: tenantsTable.name }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    const restaurantName = tenantRow?.name ?? "your restaurant";
+    const rechargeUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/ai-credits`;
+    if (owner?.email) {
+      const balance = summarizeWallet(updated);
+      if (delta > 0) {
+        void sendByTemplateKey("ai_credits_added", owner.email, {
+          name: owner.name ?? owner.email,
+          credits: String(delta),
+          bucket,
+          reason,
+          balance: String(balance.totalAvailable ?? balance.bonus ?? 0),
+          restaurant: restaurantName,
+          appName: "Khana Lagao",
+        }, { tenantId, recipientType: "user" });
+      } else if (delta < 0 && Number(balance.totalAvailable ?? 0) <= 0) {
+        void sendByTemplateKey("ai_credits_exhausted", owner.email, {
+          name: owner.name ?? owner.email,
+          restaurant: restaurantName,
+          rechargeUrl,
+          appName: "Khana Lagao",
+        }, { tenantId, recipientType: "user" });
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, tenantId }, "ai_credits_added/exhausted email skipped");
+  }
   res.json({ wallet: updated, balance: summarizeWallet(updated) });
 });
 
@@ -386,6 +424,31 @@ router.post("/admin/ai/wallets/:tenantId/recharge", async (req: Request, res: Re
     req, module: MODULE, action: "wallet.manual_recharge", entity: "ai_credit_wallet", entityId: result.wallet.id,
     newValue: { tenantId, packageId, creditsAdded: result.creditsAdded, bonusAdded: result.bonusAdded },
   });
+  // Notify the tenant owner of the recharge so they see the new balance
+  // reflected in their inbox via the Super-Admin-editable
+  // `ai_credits_recharged` template.
+  try {
+    const [owner] = await db.select({ email: usersTable.email, name: usersTable.name })
+      .from(usersTable)
+      .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner")))
+      .limit(1);
+    const [tenantRow] = await db.select({ name: tenantsTable.name }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    const [pkgRow] = await db.select({ name: aiRechargePackagesTable.name })
+      .from(aiRechargePackagesTable).where(eq(aiRechargePackagesTable.id, packageId));
+    if (owner?.email) {
+      void sendByTemplateKey("ai_credits_recharged", owner.email, {
+        name: owner.name ?? owner.email,
+        credits: String(result.creditsAdded ?? 0),
+        bonus: String(result.bonusAdded ?? 0),
+        balance: String(summarizeWallet(result.wallet).totalAvailable ?? 0),
+        packageName: pkgRow?.name ?? "Recharge",
+        restaurant: tenantRow?.name ?? "your restaurant",
+        appName: "Khana Lagao",
+      }, { tenantId, recipientType: "user" });
+    }
+  } catch (err) {
+    logger.warn({ err, tenantId }, "ai_credits_recharged email skipped");
+  }
   res.json({ wallet: result.wallet, balance: summarizeWallet(result.wallet) });
 });
 

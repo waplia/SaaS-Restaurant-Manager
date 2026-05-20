@@ -17,6 +17,8 @@ import {
 } from "../lib/addons";
 import { recordAuditLog } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { sendByTemplateKey } from "../lib/emailSender";
+import { usersTable, tenantsTable } from "../lib/db";
 import { validate } from "../middleware/validate";
 import { z } from "zod";
 
@@ -175,6 +177,29 @@ router.post("/addons/:key/confirm-payment", validate({ body: AddonConfirmPayment
       paymentRef, source: "self", actorUserId: req.user?.sub ?? null,
     });
     await recordAuditLog({ req, module: "addons", action: "payment", entity: "addon", details: `${key} ${cycle} ${price}` });
+    // Fire the Super Admin-editable `addon_purchased` template so the tenant
+    // gets a branded receipt and the send shows up in `email_logs`.
+    try {
+      const [owner] = await db.select({ email: usersTable.email, name: usersTable.name, tenantName: tenantsTable.name })
+        .from(usersTable)
+        .leftJoin(tenantsTable, eq(tenantsTable.id, usersTable.tenantId))
+        .where(and(eq(usersTable.tenantId, tid), eq(usersTable.role, "owner")))
+        .limit(1);
+      if (owner?.email) {
+        const addonName = state.addon.name ?? key;
+        void sendByTemplateKey("addon_purchased", owner.email, {
+          name: owner.name ?? owner.email,
+          addonName,
+          addon: addonName,
+          restaurant: owner.tenantName ?? "your restaurant",
+          cycle,
+          currency: state.addon.pricing.currency ?? "INR",
+          amount: String(price),
+          paymentRef,
+          appName: "Khana Lagao",
+        }, { tenantId: tid, recipientType: "user" });
+      }
+    } catch (err) { logger.warn({ err }, "addon_purchased email skipped"); }
     res.json({ install: row });
   } catch (err) {
     if (handleAddonError(res, err)) return;

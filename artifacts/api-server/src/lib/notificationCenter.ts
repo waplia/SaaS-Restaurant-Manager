@@ -15,6 +15,7 @@ import {
   type NotificationDelivery,
 } from "./db";
 import { sendEmail, sendSms, sendPush } from "./notifications";
+import { sendByTemplateKey } from "./emailSender";
 import { sendBroadcastWhatsApp } from "./whatsapp";
 import { sendWebPush } from "./webPush";
 import { logger } from "./logger";
@@ -266,8 +267,20 @@ async function sendOnChannel(
     }
     if (channel === "email") {
       if (!r.email) return { status: "skipped", recipient: null, error: "No email" };
-      const result = await sendEmail({ to: r.email, subject, html: `<div style="font-family:sans-serif">${message.replace(/\n/g, "<br/>")}</div>`, text: message });
-      return { status: "sent", recipient: r.email, providerMessageId: result?.messageId ?? null };
+      // All super-admin broadcasts go through the editable
+      // `super_admin_announcement` template so they pick up the premium card
+      // layout and are reflected in `email_logs` with a real template_key.
+      const result = await sendByTemplateKey("super_admin_announcement", r.email, {
+        name: "there",
+        title: subject,
+        message: message.replace(/\n/g, "<br/>"),
+      }, {
+        tenantId: r.tenantId ?? null,
+        restaurantId: r.restaurantIds[0] ?? null,
+        kind: bc.priority === "urgent" ? "transactional" : "lifecycle",
+        recipientType: "user",
+      });
+      return { status: result?.ok ? "sent" : "failed", recipient: r.email, providerMessageId: result?.messageId ?? null, error: result?.ok ? undefined : (result?.error ?? "send failed") };
     }
     if (channel === "sms") {
       if (!r.phone) return { status: "skipped", recipient: null, error: "No phone" };

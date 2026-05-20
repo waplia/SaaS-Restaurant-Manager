@@ -68,6 +68,70 @@ export function renderTemplate(text: string, vars: Record<string, unknown>): str
   });
 }
 
+// ─── Premium email layout ─────────────────────────────────────────
+// Single, shared 600px branded card used by every default platform email so
+// that triggers go out with a consistent KhanaLagao look: warm-white card on a
+// soft cream background, navy heading, orange CTA, footer with brand line.
+// Any rendered body that contains the data-tt-premium marker is considered
+// already wrapped so the seed/upgrade routine will not double-wrap it.
+export type PremiumLayoutInput = {
+  preheader?: string;
+  heading: string;
+  intro?: string;
+  bodyHtml: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footerNote?: string;
+  appName?: string;
+};
+
+export function premiumLayout(opts: PremiumLayoutInput): string {
+  const appName = opts.appName ?? "{{appName}}";
+  const preheader = opts.preheader ?? "";
+  const cta = opts.ctaLabel && opts.ctaUrl
+    ? `<tr><td align="center" style="padding:8px 0 4px 0">
+        <a href="${opts.ctaUrl}" style="display:inline-block;background:#F97316;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;line-height:1;padding:14px 28px;border-radius:8px;font-family:Inter,Segoe UI,Arial,sans-serif">${opts.ctaLabel}</a>
+       </td></tr>`
+    : "";
+  const intro = opts.intro
+    ? `<tr><td style="padding:0 0 16px 0;color:#1F2937;font-size:15px;line-height:1.55;font-family:Inter,Segoe UI,Arial,sans-serif">${opts.intro}</td></tr>`
+    : "";
+  const footerNote = opts.footerNote
+    ? `<p style="margin:8px 0 0 0;color:#6B7280;font-size:12px;line-height:1.5">${opts.footerNote}</p>`
+    : "";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.heading}</title></head>
+<body data-tt-premium="1" style="margin:0;padding:0;background:#FFF7ED;font-family:Inter,Segoe UI,Arial,sans-serif">
+<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${preheader}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7ED">
+  <tr><td align="center" style="padding:24px 12px">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#FFFBF5;border:1px solid #FDE6CC;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04)">
+      <tr><td style="background:#0F2C4A;padding:18px 28px;color:#FFFBF5;font-size:16px;font-weight:700;letter-spacing:.2px">${appName}</td></tr>
+      <tr><td style="padding:28px 28px 8px 28px">
+        <h1 style="margin:0 0 12px 0;color:#0F2C4A;font-size:22px;line-height:1.25;font-weight:700">${opts.heading}</h1>
+      </td></tr>
+      <tr><td style="padding:0 28px 24px 28px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${intro}
+          <tr><td style="color:#1F2937;font-size:15px;line-height:1.6">${opts.bodyHtml}</td></tr>
+          ${cta}
+        </table>
+      </td></tr>
+      <tr><td style="padding:18px 28px;border-top:1px solid #FDE6CC;background:#FFF7ED;color:#6B7280;font-size:12px;line-height:1.5">
+        <p style="margin:0">— The ${appName} team</p>
+        ${footerNote}
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
+/** True if the supplied HTML is already wrapped with the premium layout. */
+export function hasPremiumLayout(html: string): boolean {
+  return typeof html === "string" && html.includes("data-tt-premium");
+}
+
 export function htmlToText(html: string): string {
   return html.replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -591,7 +655,25 @@ export async function sendByTemplateKey(
   try {
     const [tpl] = await db.select().from(emailTemplatesTable).where(eq(emailTemplatesTable.key, key));
     if (!tpl || !tpl.isEnabled) {
-      logger.info({ key }, "Email template missing or disabled — skipping send");
+      // Loud failure: write a `failed` row to email_logs so Super Admin sees
+      // the trigger *attempted* and the operator can re-enable / seed the
+      // template. Previously this silently returned null which made the
+      // Email Center dashboard counters under-report broken triggers.
+      logger.warn({ key, to }, "Email template missing or disabled — logging failed send");
+      try {
+        await db.insert(emailLogsTable).values({
+          tenantId: opts.tenantId ?? null, restaurantId: opts.restaurantId ?? null,
+          recipient: to, recipientType: opts.recipientType ?? "user",
+          templateKey: key, templateId: tpl?.id ?? null,
+          providerId: null, providerDriver: null,
+          subject: opts.subjectOverride ?? `[${key}] (template missing)`,
+          status: "failed",
+          error: tpl ? "Template is disabled" : "Template not found",
+          campaignId: opts.campaignId ?? null, automationId: opts.automationId ?? null,
+        });
+      } catch (logErr) {
+        logger.error({ err: logErr, key }, "Failed to record missing-template email_logs row");
+      }
       return null;
     }
     const subject = renderTemplate(opts.subjectOverride ?? tpl.subject, vars);
@@ -797,20 +879,279 @@ export const DEFAULT_TEMPLATES: Array<{
     subject: "{{points}} loyalty points expiring soon",
     body: `<p>Hi {{name}},</p><p><strong>{{points}}</strong> of your loyalty points expire on <strong>{{expiresAt}}</strong>. Visit {{restaurant}} to use them before they're gone.</p>`,
     variables: ["name", "points", "expiresAt", "restaurant"], category: "marketing" },
+  // ─── Task #542: Missing premium templates wired into platform triggers ───
+  { key: "restaurant_registered", name: "Restaurant registered (pending review)", event: "tenant.registered",
+    subject: "We received your application for {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Thanks for registering <strong>{{restaurant}}</strong> on {{appName}}. Our team will review your details and get back to you within {{reviewHours}} hours.</p>`,
+    variables: ["name", "restaurant", "reviewHours", "appName"], category: "lifecycle" },
+  { key: "restaurant_approved", name: "Restaurant approved", event: "tenant.approved",
+    subject: "{{restaurant}} is approved on {{appName}} 🎉",
+    body: `<p>Hi {{name}},</p><p>Great news — <strong>{{restaurant}}</strong> has been approved. You can sign in now and finish your setup.</p>`,
+    variables: ["name", "restaurant", "appUrl", "appName"], category: "lifecycle" },
+  { key: "restaurant_rejected", name: "Restaurant rejected", event: "tenant.rejected",
+    subject: "Update on your {{appName}} application",
+    body: `<p>Hi {{name}},</p><p>Thanks for applying. We're unable to approve <strong>{{restaurant}}</strong> at this time. Reason: {{reason}}</p><p>Reply to this email if you'd like us to take another look.</p>`,
+    variables: ["name", "restaurant", "reason", "appName"], category: "lifecycle" },
+  { key: "wallet_recharge", name: "Wallet recharged", event: "billing.wallet_recharged",
+    subject: "Wallet recharged — {{currency}} {{amount}}",
+    body: `<p>Hi {{name}},</p><p>Your {{appName}} wallet was recharged by <strong>{{currency}} {{amount}}</strong>. New balance: <strong>{{currency}} {{balance}}</strong>.</p>`,
+    variables: ["name", "currency", "amount", "balance", "appName"], category: "transactional" },
+  { key: "addon_purchased", name: "Add-on purchased", event: "billing.addon_purchased",
+    subject: "{{addonName}} add-on is active",
+    body: `<p>Hi {{name}},</p><p>Your purchase of the <strong>{{addonName}}</strong> add-on for {{currency}} {{amount}} is confirmed and active on <strong>{{restaurant}}</strong>.</p>`,
+    variables: ["name", "addonName", "currency", "amount", "restaurant"], category: "transactional" },
+  { key: "payment_link_sent", name: "Payment link sent", event: "billing.payment_link_sent",
+    subject: "Action needed: complete your {{currency}} {{amount}} payment",
+    body: `<p>Hi {{name}},</p><p>Please use the link below to complete your payment of <strong>{{currency}} {{amount}}</strong> for {{purpose}}. The link expires on <strong>{{expiresAt}}</strong>.</p>`,
+    variables: ["name", "currency", "amount", "purpose", "expiresAt", "payUrl"], category: "transactional" },
+  { key: "payment_reminder", name: "Payment reminder", event: "billing.payment_reminder",
+    subject: "Reminder: {{currency}} {{amount}} due on {{dueDate}}",
+    body: `<p>Hi {{name}},</p><p>This is a friendly reminder that <strong>{{currency}} {{amount}}</strong> for the <strong>{{plan}}</strong> plan is due on <strong>{{dueDate}}</strong>.</p>`,
+    variables: ["name", "currency", "amount", "plan", "dueDate", "payUrl"], category: "transactional" },
+  { key: "invoice_paid", name: "Invoice paid", event: "billing.invoice_paid",
+    subject: "Invoice {{invoiceNumber}} paid",
+    body: `<p>Hi {{name}},</p><p>Invoice <strong>{{invoiceNumber}}</strong> for {{currency}} {{amount}} has been marked as paid. Thanks!</p>`,
+    variables: ["name", "invoiceNumber", "currency", "amount", "invoiceUrl"], category: "transactional" },
+  { key: "ai_credits_added", name: "AI credits added", event: "ai.credits_added",
+    subject: "{{credits}} AI credits added to {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p><strong>{{credits}}</strong> AI credits were added to your wallet. New balance: <strong>{{balance}}</strong>.</p>`,
+    variables: ["name", "credits", "balance", "restaurant"], category: "transactional" },
+  { key: "ai_credits_low", name: "AI credits low", event: "ai.credits_low",
+    subject: "AI credits running low at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your AI credit balance for <strong>{{restaurant}}</strong> is down to <strong>{{balance}}</strong>. Recharge to keep AI features running.</p>`,
+    variables: ["name", "balance", "restaurant", "rechargeUrl"], category: "lifecycle" },
+  { key: "ai_credits_exhausted", name: "AI credits exhausted", event: "ai.credits_exhausted",
+    subject: "AI credits exhausted at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your AI credits have run out. Some AI features are paused until you recharge.</p>`,
+    variables: ["name", "restaurant", "rechargeUrl"], category: "lifecycle" },
+  { key: "ai_credits_recharged", name: "AI credits recharged", event: "ai.credits_recharged",
+    subject: "AI wallet recharged — {{credits}} credits",
+    body: `<p>Hi {{name}},</p><p>Your AI wallet was recharged with <strong>{{credits}}</strong> credits via the <strong>{{packageName}}</strong> package. New balance: <strong>{{balance}}</strong>.</p>`,
+    variables: ["name", "credits", "packageName", "balance", "restaurant"], category: "transactional" },
+  { key: "ai_usage_summary", name: "AI usage summary", event: "ai.usage_summary",
+    subject: "Your AI usage summary — {{periodLabel}}",
+    body: `<p>Hi {{name}},</p><p>In <strong>{{periodLabel}}</strong> you used <strong>{{creditsUsed}}</strong> credits across <strong>{{requestCount}}</strong> requests on <strong>{{restaurant}}</strong>.</p>`,
+    variables: ["name", "periodLabel", "creditsUsed", "requestCount", "restaurant"], category: "lifecycle" },
+  { key: "ai_feature_enabled", name: "AI feature enabled", event: "ai.feature_enabled",
+    subject: "AI feature \"{{featureName}}\" is now active",
+    body: `<p>Hi {{name}},</p><p>The AI feature <strong>{{featureName}}</strong> is now enabled for <strong>{{restaurant}}</strong>.</p>`,
+    variables: ["name", "featureName", "restaurant"], category: "lifecycle" },
+  { key: "ai_menu_import_done", name: "AI menu import complete", event: "ai.menu_import_done",
+    subject: "Menu import finished for {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>We finished importing your menu. <strong>{{importedCount}}</strong> items were created and <strong>{{skippedCount}}</strong> were skipped.</p>`,
+    variables: ["name", "importedCount", "skippedCount", "restaurant", "menuUrl"], category: "transactional" },
+  { key: "ai_campaign_generated", name: "AI campaign generated", event: "ai.campaign_generated",
+    subject: "Your AI-generated campaign is ready to review",
+    body: `<p>Hi {{name}},</p><p>The AI just drafted a new campaign — <strong>{{campaignName}}</strong>. Review and send when you're ready.</p>`,
+    variables: ["name", "campaignName", "restaurant", "campaignUrl"], category: "lifecycle" },
+  { key: "order_ready", name: "Order ready", event: "order.ready",
+    subject: "Your order #{{orderNumber}} is ready",
+    body: `<p>Hi {{name}},</p><p>Your order <strong>#{{orderNumber}}</strong> at <strong>{{restaurant}}</strong> is ready{{pickupNote}}.</p>`,
+    variables: ["name", "orderNumber", "restaurant", "pickupNote"], category: "transactional" },
+  { key: "customer_order_confirmation", name: "Customer order confirmation", event: "order.placed",
+    subject: "Order confirmed — #{{orderNumber}} at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your order <strong>#{{orderNumber}}</strong> at <strong>{{restaurant}}</strong> is confirmed. Total: <strong>{{currency}} {{amount}}</strong>.</p><p>{{itemList}}</p>`,
+    variables: ["name", "orderNumber", "restaurant", "currency", "amount", "itemList", "orderUrl"], category: "transactional" },
+  { key: "security_suspicious_login", name: "Suspicious login", event: "auth.suspicious_login",
+    subject: "Suspicious sign-in to your {{appName}} account",
+    body: `<p>Hi {{name}},</p><p>We blocked a suspicious sign-in attempt from <strong>{{location}}</strong> at {{signinAt}}. If this was you, you can ignore this email. Otherwise, change your password immediately.</p>`,
+    variables: ["name", "location", "signinAt", "appName", "appUrl"], category: "transactional" },
+  { key: "security_account_locked", name: "Account locked", event: "auth.account_locked",
+    subject: "Your {{appName}} account is locked",
+    body: `<p>Hi {{name}},</p><p>Your account was locked after too many failed sign-in attempts. Reset your password to regain access.</p>`,
+    variables: ["name", "appName", "resetLink"], category: "transactional" },
+  { key: "staff_role_changed", name: "Staff role changed", event: "staff.role_changed",
+    subject: "Your role at {{restaurant}} was updated",
+    body: `<p>Hi {{name}},</p><p>Your role at <strong>{{restaurant}}</strong> was changed from <strong>{{oldRole}}</strong> to <strong>{{newRole}}</strong>.</p>`,
+    variables: ["name", "restaurant", "oldRole", "newRole"], category: "transactional" },
+  { key: "staff_access_disabled", name: "Staff access disabled", event: "staff.access_disabled",
+    subject: "Your access to {{restaurant}} was disabled",
+    body: `<p>Hi {{name}},</p><p>Your access to <strong>{{restaurant}}</strong> on {{appName}} has been disabled by an administrator. Contact your manager if you believe this is a mistake.</p>`,
+    variables: ["name", "restaurant", "appName"], category: "transactional" },
+  { key: "staff_payroll_generated", name: "Payslip generated", event: "staff.payroll_generated",
+    subject: "Your payslip for {{periodLabel}} is ready",
+    body: `<p>Hi {{name}},</p><p>Your payslip for <strong>{{periodLabel}}</strong> is ready. Net pay: <strong>{{currency}} {{netPay}}</strong>.</p>`,
+    variables: ["name", "periodLabel", "currency", "netPay", "payslipUrl", "restaurant"], category: "transactional" },
+  { key: "staff_shift_reminder", name: "Shift reminder", event: "staff.shift_reminder",
+    subject: "Shift reminder — {{shiftStart}}",
+    body: `<p>Hi {{name}},</p><p>Reminder: your shift at <strong>{{restaurant}}</strong> starts at <strong>{{shiftStart}}</strong>.</p>`,
+    variables: ["name", "restaurant", "shiftStart"], category: "transactional" },
+  { key: "staff_leave_approved", name: "Leave approved", event: "staff.leave_approved",
+    subject: "Your leave request was approved",
+    body: `<p>Hi {{name}},</p><p>Your leave from <strong>{{fromDate}}</strong> to <strong>{{toDate}}</strong> at <strong>{{restaurant}}</strong> has been approved.</p>`,
+    variables: ["name", "fromDate", "toDate", "restaurant"], category: "transactional" },
+  { key: "staff_leave_rejected", name: "Leave rejected", event: "staff.leave_rejected",
+    subject: "Your leave request was declined",
+    body: `<p>Hi {{name}},</p><p>Your leave request from <strong>{{fromDate}}</strong> to <strong>{{toDate}}</strong> at <strong>{{restaurant}}</strong> was not approved. Reason: {{reason}}</p>`,
+    variables: ["name", "fromDate", "toDate", "restaurant", "reason"], category: "transactional" },
+  { key: "staff_shift_handover", name: "Shift handover submitted", event: "staff.shift_handover",
+    subject: "Shift handover submitted — {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>A shift handover was submitted at <strong>{{restaurant}}</strong>.</p><p>{{summaryHtml}}</p>`,
+    variables: ["name", "restaurant", "summaryHtml"], category: "transactional" },
+  { key: "onboarding_workspace_created", name: "Workspace created", event: "onboarding.workspace_created",
+    subject: "Your {{appName}} workspace is ready",
+    body: `<p>Hi {{name}},</p><p>Your workspace for <strong>{{restaurant}}</strong> is set up. Let's get your first menu, QR code, and order in.</p>`,
+    variables: ["name", "restaurant", "appName", "appUrl"], category: "lifecycle" },
+  { key: "onboarding_first_menu", name: "First menu added", event: "onboarding.first_menu",
+    subject: "First menu added — great start!",
+    body: `<p>Hi {{name}},</p><p>You just added your first menu items. Next up: generate a QR code for table ordering.</p>`,
+    variables: ["name", "restaurant"], category: "lifecycle" },
+  { key: "onboarding_first_qr", name: "First QR generated", event: "onboarding.first_qr",
+    subject: "Your first QR code is ready",
+    body: `<p>Hi {{name}},</p><p>Your first QR code is generated for <strong>{{restaurant}}</strong>. Print it and put it on a table to take your first order.</p>`,
+    variables: ["name", "restaurant", "qrUrl"], category: "lifecycle" },
+  { key: "onboarding_first_order", name: "First order placed", event: "onboarding.first_order",
+    subject: "🎉 You received your first order!",
+    body: `<p>Hi {{name}},</p><p>Congrats — <strong>{{restaurant}}</strong> just received its first order. Welcome to the family!</p>`,
+    variables: ["name", "restaurant"], category: "lifecycle" },
+  { key: "onboarding_first_payment", name: "First payment received", event: "onboarding.first_payment",
+    subject: "Your first payment has landed",
+    body: `<p>Hi {{name}},</p><p>You received your first payment on {{appName}}. Online payments are now active for <strong>{{restaurant}}</strong>.</p>`,
+    variables: ["name", "restaurant", "appName"], category: "lifecycle" },
+  { key: "onboarding_incomplete_reminder", name: "Finish your setup", event: "onboarding.incomplete",
+    subject: "Finish setting up {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>You're almost done — just <strong>{{remainingSteps}}</strong> step(s) left to start taking orders on <strong>{{restaurant}}</strong>.</p>`,
+    variables: ["name", "restaurant", "remainingSteps", "setupUrl"], category: "lifecycle" },
+  { key: "maintenance_window", name: "Maintenance window", event: "platform.maintenance",
+    subject: "Scheduled maintenance on {{appName}} — {{windowLabel}}",
+    body: `<p>Hi {{name}},</p><p>{{appName}} will be undergoing scheduled maintenance during <strong>{{windowLabel}}</strong>. Some features may be temporarily unavailable.</p>`,
+    variables: ["name", "appName", "windowLabel"], category: "lifecycle" },
+  { key: "super_admin_announcement", name: "Platform announcement", event: "platform.announcement",
+    subject: "{{title}}",
+    body: `<p>Hi {{name}},</p><p>{{message}}</p>`,
+    variables: ["name", "title", "message", "appName"], category: "lifecycle" },
+  { key: "sla_breach", name: "SLA breach alert", event: "support.sla_breach",
+    subject: "SLA breached on ticket #{{ticketId}}",
+    body: `<p>Hi {{name}},</p><p>Ticket <strong>#{{ticketId}}</strong> ({{subjectLine}}) has breached its <strong>{{slaName}}</strong> SLA by <strong>{{overdueLabel}}</strong>.</p>`,
+    variables: ["name", "ticketId", "subjectLine", "slaName", "overdueLabel", "ticketUrl"], category: "transactional" },
+  { key: "provider_error_alert", name: "Provider error alert", event: "platform.provider_error",
+    subject: "{{providerName}} provider error on {{appName}}",
+    body: `<p>Hi {{name}},</p><p>The provider <strong>{{providerName}}</strong> ({{providerKind}}) failed: {{errorMessage}}. Please review the configuration in Super Admin.</p>`,
+    variables: ["name", "providerName", "providerKind", "errorMessage", "appName"], category: "transactional" },
+  { key: "support_ticket_resolved", name: "Support ticket resolved", event: "support.ticket_resolved",
+    subject: "Ticket #{{ticketId}} resolved",
+    body: `<p>Hi {{name}},</p><p>Ticket <strong>#{{ticketId}}</strong> has been marked as resolved. If anything still isn't right, just reply to this email to reopen.</p>`,
+    variables: ["name", "ticketId", "subjectLine", "ticketUrl"], category: "transactional" },
+  { key: "reservation_confirmed", name: "Reservation confirmed", event: "reservation.confirmed",
+    subject: "Reservation confirmed at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your reservation for <strong>{{guests}}</strong> guests on <strong>{{date}}</strong> at <strong>{{time}}</strong> is confirmed.</p>`,
+    variables: ["name", "restaurant", "date", "time", "guests"], category: "transactional" },
+  { key: "reservation_reminder", name: "Reservation reminder", event: "reservation.reminder",
+    subject: "Reminder: reservation at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>A friendly reminder of your reservation for <strong>{{guests}}</strong> guests at <strong>{{restaurant}}</strong> on <strong>{{date}}</strong> at <strong>{{time}}</strong>.</p>`,
+    variables: ["name", "restaurant", "date", "time", "guests"], category: "transactional" },
+  { key: "customer_feedback_request", name: "Customer feedback request", event: "customer.feedback_request",
+    subject: "How was your visit to {{restaurant}}?",
+    body: `<p>Hi {{name}},</p><p>Thanks for stopping by! We'd love a quick line about your experience.</p>`,
+    variables: ["name", "restaurant", "feedbackUrl"], category: "lifecycle" },
+  { key: "customer_festival_offer", name: "Festival offer", event: "customer.festival_offer",
+    subject: "🎉 {{festivalName}} offer from {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>To celebrate <strong>{{festivalName}}</strong>, we're offering <strong>{{offer}}</strong> at {{restaurant}}. See you soon!</p>`,
+    variables: ["name", "festivalName", "offer", "restaurant"], category: "marketing" },
+  { key: "customer_coupon_issued", name: "Coupon issued", event: "customer.coupon_issued",
+    subject: "Here's a coupon from {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Use code <strong>{{couponCode}}</strong> to get <strong>{{offer}}</strong> at {{restaurant}}. Valid until <strong>{{expiresAt}}</strong>.</p>`,
+    variables: ["name", "couponCode", "offer", "restaurant", "expiresAt"], category: "marketing" },
+  { key: "customer_membership_activated", name: "Membership activated", event: "customer.membership_activated",
+    subject: "Welcome to {{membershipName}} at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your <strong>{{membershipName}}</strong> membership at <strong>{{restaurant}}</strong> is now active. Enjoy your perks!</p>`,
+    variables: ["name", "membershipName", "restaurant"], category: "marketing" },
+  { key: "tiffin_subscription_confirmed", name: "Tiffin subscription confirmed", event: "tiffin.subscribed",
+    subject: "Tiffin plan confirmed at {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Your <strong>{{planName}}</strong> tiffin plan is confirmed. Deliveries start on <strong>{{startsOn}}</strong>.</p>`,
+    variables: ["name", "planName", "startsOn", "restaurant"], category: "transactional" },
+  { key: "catering_quote_sent", name: "Catering quote sent", event: "catering.quote_sent",
+    subject: "Catering quote from {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Here's your catering quote for <strong>{{eventName}}</strong> on <strong>{{eventDate}}</strong>: <strong>{{currency}} {{amount}}</strong>.</p>`,
+    variables: ["name", "eventName", "eventDate", "currency", "amount", "restaurant", "quoteUrl"], category: "transactional" },
+  { key: "event_booking_confirmed", name: "Event booking confirmed", event: "event.booking_confirmed",
+    subject: "Your event booking is confirmed",
+    body: `<p>Hi {{name}},</p><p>Your booking for <strong>{{eventName}}</strong> on <strong>{{eventDate}}</strong> at <strong>{{restaurant}}</strong> is confirmed.</p>`,
+    variables: ["name", "eventName", "eventDate", "restaurant"], category: "transactional" },
+  { key: "refund_confirmation", name: "Refund confirmation (customer)", event: "customer.refund",
+    subject: "Refund processed — {{currency}} {{amount}}",
+    body: `<p>Hi {{name}},</p><p>A refund of <strong>{{currency}} {{amount}}</strong> for order #{{orderNumber}} has been processed. It may take 5–10 business days to reflect.</p>`,
+    variables: ["name", "currency", "amount", "orderNumber"], category: "transactional" },
+  { key: "service_apology", name: "Service apology", event: "customer.apology",
+    subject: "We're sorry — let's make it right",
+    body: `<p>Hi {{name}},</p><p>We're really sorry about your recent experience at <strong>{{restaurant}}</strong>. {{message}}</p>`,
+    variables: ["name", "restaurant", "message"], category: "lifecycle" },
+  { key: "customer_review_invitation", name: "Customer review invitation", event: "customer.review_invitation",
+    subject: "Leave a quick review for {{restaurant}}",
+    body: `<p>Hi {{name}},</p><p>Hope you enjoyed your visit. A quick review really helps small kitchens like ours.</p>`,
+    variables: ["name", "restaurant", "reviewUrl"], category: "lifecycle" },
+  { key: "mobile_verification", name: "Mobile verification", event: "auth.mobile_verification",
+    subject: "Your verification code: {{otp}}",
+    body: `<p>Hi {{name}},</p><p>Your verification code is <strong>{{otp}}</strong>. It expires in <strong>{{ttlMinutes}}</strong> minutes.</p>`,
+    variables: ["name", "otp", "ttlMinutes"], category: "transactional" },
+  { key: "po_auto_draft", name: "PO auto-drafted", event: "inventory.po_auto_draft",
+    subject: "{{poCount}} draft purchase order(s) created",
+    body: `<p>Hi {{name}},</p><p><strong>{{poCount}}</strong> draft purchase order(s) were created from low-stock items at <strong>{{restaurant}}</strong>. {{summaryHtml}}</p>`,
+    variables: ["name", "poCount", "restaurant", "summaryHtml", "posUrl"], category: "transactional" },
+  { key: "daily_summary_owner", name: "Owner morning briefing", event: "ops.morning_briefing",
+    subject: "Morning briefing — {{restaurant}} ({{forDate}})",
+    body: `<p>Hi {{name}},</p><p>Here's your briefing for <strong>{{restaurant}}</strong> on <strong>{{forDate}}</strong>.</p><p>{{summaryHtml}}</p>`,
+    variables: ["name", "restaurant", "forDate", "summaryHtml"], category: "lifecycle" },
+  { key: "platform_internal_notification", name: "Internal notification", event: "platform.internal_notification",
+    subject: "{{title}}",
+    body: `<p>{{message}}</p>`,
+    variables: ["title", "message"], category: "transactional" },
 ];
 
+// Apply the shared premium layout to every default template body so that even
+// older keys (whose body is a plain <p>) render with the KhanaLagao card.
+// We only re-wrap bodies that don't already carry the premium marker — custom
+// HTML created by Super Admin is left untouched at render time.
+for (const t of DEFAULT_TEMPLATES) {
+  if (hasPremiumLayout(t.body)) continue;
+  const cta = t.body.match(/<a\s+href="(\{\{\s*[\w.]+\s*\}\})"[^>]*>([^<]+)<\/a>/);
+  t.body = premiumLayout({
+    preheader: t.subject,
+    heading: t.subject,
+    bodyHtml: t.body,
+    ctaLabel: cta?.[2],
+    ctaUrl: cta?.[1],
+  });
+}
+
 export async function seedDefaultEmailTemplates(): Promise<void> {
-  const existing = await db.select({ key: emailTemplatesTable.key }).from(emailTemplatesTable);
-  const have = new Set(existing.map(r => r.key));
-  const missing = DEFAULT_TEMPLATES.filter(t => !have.has(t.key));
-  if (missing.length === 0) return;
-  await db.insert(emailTemplatesTable).values(missing.map(t => ({
-    key: t.key, name: t.name, event: t.event,
-    subject: t.subject, body: t.body, variables: t.variables,
-    category: t.category ?? "transactional",
-    isEnabled: true, isDefault: true,
-  })));
-  logger.info({ count: missing.length }, "Seeded default email templates");
+  // Insert any new default keys.
+  const existing = await db.select({
+    id: emailTemplatesTable.id,
+    key: emailTemplatesTable.key,
+    body: emailTemplatesTable.body,
+    isDefault: emailTemplatesTable.isDefault,
+    updatedBy: emailTemplatesTable.updatedBy,
+  }).from(emailTemplatesTable);
+  const byKey = new Map(existing.map(r => [r.key, r]));
+  const missing = DEFAULT_TEMPLATES.filter(t => !byKey.has(t.key));
+  if (missing.length > 0) {
+    await db.insert(emailTemplatesTable).values(missing.map(t => ({
+      key: t.key, name: t.name, event: t.event,
+      subject: t.subject, body: t.body, variables: t.variables,
+      category: t.category ?? "transactional",
+      isEnabled: true, isDefault: true,
+    })));
+    logger.info({ count: missing.length }, "Seeded default email templates");
+  }
+  // Upgrade default-managed templates whose body is still the plain pre-premium
+  // markup so existing installs gain the KhanaLagao card. We *only* touch rows
+  // that have never been edited by a Super Admin (updatedBy IS NULL) so any
+  // customised content the operator typed in the Email Center is preserved on
+  // every server restart — `isDefault=true` alone isn't enough to prove the
+  // body is still the seeded default. isDefault=false rows are also left alone.
+  const toUpgrade = DEFAULT_TEMPLATES
+    .map(t => ({ t, row: byKey.get(t.key) }))
+    .filter(({ row }) => row && row.isDefault && row.updatedBy == null && !hasPremiumLayout(row.body ?? ""));
+  for (const { t, row } of toUpgrade) {
+    if (!row) continue;
+    await db.update(emailTemplatesTable)
+      .set({ body: t.body, subject: t.subject, variables: t.variables, updatedAt: new Date() })
+      .where(eq(emailTemplatesTable.id, row.id));
+  }
+  if (toUpgrade.length > 0) {
+    logger.info({ count: toUpgrade.length }, "Upgraded default email templates to premium layout");
+  }
 }
 
 export function maskProviderConfig(driver: EmailDriver, cfg: Record<string, unknown>): Record<string, unknown> {

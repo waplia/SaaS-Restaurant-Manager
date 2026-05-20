@@ -366,12 +366,10 @@ export function startScheduler(): void {
           // Dispatch to owners via email + WhatsApp + SMS (each best-effort).
           const owners = await db.select({ email: usersTable.email, phone: usersTable.phone })
             .from(usersTable).where(and(eq(usersTable.restaurantId, r.id), eq(usersTable.isActive, true), inArray(usersTable.role, ["owner"])));
-          const subject = `Morning briefing — ${r.name} (${today})`;
           const lowStockList = summary.lowStock.length > 0
             ? `<ul>${summary.lowStock.map(l => `<li>${l.name} — ${l.qty ?? "0"} / ${l.threshold ?? "?"}</li>`).join("")}</ul>`
             : "<i>none</i>";
-          const html = `<h3>${subject}</h3>
-<ul>
+          const summaryHtml = `<ul>
   <li><b>Yesterday orders:</b> ${summary.yesterdayOrders}</li>
   <li><b>Yesterday revenue:</b> ₹${summary.yesterdayRevenue.toFixed(2)}</li>
   <li><b>Cash closed yesterday:</b> ₹${summary.cashClosed.toFixed(2)}</li>
@@ -386,8 +384,12 @@ export function startScheduler(): void {
           const text = `Morning briefing ${today}: ${summary.yesterdayOrders} orders, ₹${summary.yesterdayRevenue.toFixed(2)} rev, cash ₹${summary.cashClosed.toFixed(2)}, ${summary.attendancePresent} present, ${summary.complaints} complaints, ${summary.pendingApprovals} approvals pending, ${summary.openIncidents} incidents, ${summary.panicAlerts24h} panic, forecast ₹${summary.forecastRevenueToday.toFixed(2)}, low-stock ${summary.lowStock.length}.`;
           const emails = [...new Set([r.email, ...owners.map(o => o.email)].filter((e): e is string => !!e))];
           for (const to of emails) {
-            sendEmail({ to, subject, html, text }).catch(err => logger.warn({ err, to }, "[ops] briefing email failed"));
+            sendByTemplateKey("daily_summary_owner", to, {
+              name: "team", restaurant: r.name, forDate: today, summaryHtml,
+            }, { restaurantId: r.id, recipientType: "user" })
+              .catch(err => logger.warn({ err, to }, "[ops] briefing email failed"));
           }
+          void text;
           const phones = [...new Set(owners.map(o => o.phone).filter((p): p is string => !!p))];
           for (const to of phones) {
             sendWhatsAppMessage({ restaurantId: r.id, to, body: text }).catch(err => logger.warn({ err, to }, "[ops] briefing whatsapp failed"));
@@ -559,18 +561,23 @@ export function startScheduler(): void {
         ));
 
         const dateStr = today.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-        const emailData = dailySummaryEmail({
-          restaurantName: restaurant.name,
-          date: dateStr,
-          totalOrders: Number(orderSummary?.cnt ?? 0),
-          totalRevenue: Number(orderSummary?.total ?? 0).toFixed(2),
-          topItems: topItemRows.map(r => r.name ?? "Unknown"),
-        });
-
+        // Route the morning briefing through the Super Admin–editable
+        // `daily_summary_owner` template so it renders in the premium layout,
+        // honours the configured provider, and shows up in email_logs.
+        const topItemsStr = topItemRows.map(r => r.name ?? "Unknown").join(", ") || "—";
+        const summaryHtml =
+          `<strong>${Number(orderSummary?.cnt ?? 0)}</strong> orders · ` +
+          `revenue <strong>₹${Number(orderSummary?.total ?? 0).toFixed(2)}</strong><br/>` +
+          `Top items: ${topItemsStr}`;
         for (const owner of owners) {
-          if (owner.email) {
-            await sendEmail({ to: owner.email, subject: emailData.subject, html: emailData.html, text: emailData.text });
-          }
+          if (!owner.email) continue;
+          await sendByTemplateKey("daily_summary_owner", owner.email, {
+            name: owner.name ?? "there",
+            restaurant: restaurant.name,
+            forDate: dateStr,
+            summaryHtml,
+            appName: "Khana Lagao",
+          }, { tenantId: restaurant.tenantId ?? null, restaurantId: restaurant.id });
         }
       }
     }).catch(err => logger.error({ err }, "Daily summary job failed"));
@@ -1036,13 +1043,18 @@ async function runEventPaymentReminders(): Promise<{ overdueMarked: number; remi
     if (!booking || booking.status === "cancelled") continue;
 
     const dueLabel = isOverdue ? "is overdue" : isDueToday ? "is due today" : "is due tomorrow";
-    const subject = `Payment ${dueLabel}: ${booking.title}`;
     const body = `Hi ${booking.customerName}, the ${m.label} payment of ₹${Number(m.amount).toFixed(2)} for "${booking.title}" on ${new Date(booking.eventDate).toLocaleDateString("en-IN")} ${dueLabel}. Please reach out if you have any questions.`;
-    const html = `<div style="font-family:sans-serif;max-width:480px"><h2 style="color:#f97316">Payment Reminder</h2><p>Hi <strong>${booking.customerName}</strong>,</p><p>This is a reminder that your <strong>${m.label}</strong> payment of <strong>₹${Number(m.amount).toFixed(2)}</strong> for <em>${booking.title}</em> on <strong>${new Date(booking.eventDate).toLocaleDateString("en-IN")}</strong> ${dueLabel}.</p><p>Booking #: ${booking.bookingNumber}</p><p style="color:#888;font-size:0.85em">Thank you!</p></div>`;
 
     try {
       if (booking.customerEmail) {
-        await sendEmail({ to: booking.customerEmail, subject, html, text: body });
+        await sendByTemplateKey("payment_reminder", booking.customerEmail, {
+          name: booking.customerName,
+          currency: "INR",
+          amount: Number(m.amount).toFixed(2),
+          plan: `${booking.title} — ${m.label}`,
+          dueDate: new Date(m.dueDate).toLocaleDateString("en-IN"),
+          payUrl: `${process.env.APP_URL ?? ""}/wallet/events/${booking.bookingNumber}`,
+        }, { restaurantId: booking.restaurantId, recipientType: "customer" });
       }
       if (booking.customerPhone) {
         await sendWhatsApp({ to: booking.customerPhone, body });
@@ -1068,10 +1080,16 @@ async function runEventPaymentReminders(): Promise<{ overdueMarked: number; remi
 
   let eventReminders = 0;
   for (const b of upcoming) {
-    const subject = `Reminder: ${b.title} is tomorrow`;
     const body = `Hi ${b.customerName}, this is a friendly reminder that your ${b.type} "${b.title}" is scheduled for ${new Date(b.eventDate).toLocaleString("en-IN")} at ${b.venue ?? "our venue"}. We look forward to hosting you!`;
     try {
-      if (b.customerEmail) await sendEmail({ to: b.customerEmail, subject, html: `<p>${body}</p>`, text: body });
+      if (b.customerEmail) {
+        await sendByTemplateKey("event_booking_confirmed", b.customerEmail, {
+          name: b.customerName,
+          eventName: b.title,
+          eventDate: new Date(b.eventDate).toLocaleString("en-IN"),
+          restaurant: b.venue ?? "our venue",
+        }, { restaurantId: b.restaurantId, recipientType: "customer" });
+      }
       if (b.customerPhone) await sendWhatsApp({ to: b.customerPhone, body });
       eventReminders++;
     } catch (err) {
@@ -1200,16 +1218,15 @@ async function runReservationSweep(now: Date): Promise<void> {
     if (Math.abs(targetMs - now.getTime()) > 5 * 60_000) continue;
     try {
       const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, r.restaurantId));
-      const tpl = reservationEmail({
-        customerName: r.guestName,
-        restaurantName: restaurant?.name ?? "Restaurant",
-        date: r.scheduledAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-        time: r.scheduledAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-        guests: r.partySize,
-      });
-      const reminderText = `Hi ${r.guestName}, this is a friendly reminder of your reservation at ${restaurant?.name ?? "our restaurant"} for ${r.partySize} on ${tpl.text.split("on ")[1] ?? ""}. See you soon!`;
+      const date = r.scheduledAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      const time = r.scheduledAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const reminderText = `Hi ${r.guestName}, this is a friendly reminder of your reservation at ${restaurant?.name ?? "our restaurant"} for ${r.partySize} on ${date} at ${time}. See you soon!`;
       if (r.guestEmail) {
-        await sendEmail({ to: r.guestEmail, subject: `Reminder: ${tpl.subject}`, html: tpl.html.replace("Reservation Confirmed", "Reservation Reminder"), text: reminderText }).catch(() => {});
+        await sendByTemplateKey("reservation_reminder", r.guestEmail, {
+          name: r.guestName,
+          restaurant: restaurant?.name ?? "our restaurant",
+          date, time, guests: r.partySize,
+        }, { restaurantId: r.restaurantId, recipientType: "customer" }).catch(() => {});
       }
       if (r.guestPhone) {
         await sendWhatsApp({ to: r.guestPhone, body: reminderText }).catch(() => {});

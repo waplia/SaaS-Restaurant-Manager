@@ -344,12 +344,23 @@ router.post("/tenants", requireSuperAdmin, async (req, res) => {
         logger.warn({ tenantId: tenant.id }, "APP_URL not configured — invite email will contain a path-only reset link");
       }
       const resetLink = `${appUrl}/app/reset-password?token=${encodeURIComponent(resetToken)}`;
-      await sendEmail({
-        to: ownerEmail,
-        subject: `You've been invited to ${name} on Khana Lagao`,
-        html: `<p>Hi ${ownerName ?? "there"},</p><p>You've been invited to manage <strong>${name}</strong> on Khana Lagao.</p><p><a href="${resetLink}">Set your password and sign in</a> (link expires in 1 hour).</p>`,
-        text: `You've been invited to ${name} on Khana Lagao. Set your password: ${resetLink}`,
-      }).catch(() => {});
+      await sendByTemplateKey("team_member_invited", ownerEmail, {
+        name: ownerName ?? "there",
+        inviterName: "the Khana Lagao team",
+        role: "owner",
+        restaurant: name,
+        appName: "Khana Lagao",
+        acceptUrl: resetLink,
+        inviteUrl: resetLink,
+      }, { tenantId: tenant.id, recipientType: "user" }).catch(() => {});
+      // Also fire the lifecycle "restaurant_registered" hook so the tenant
+      // sees the formal welcome / under-review message.
+      await sendByTemplateKey("restaurant_registered", ownerEmail, {
+        name: ownerName ?? "there",
+        restaurant: name,
+        reviewHours: 24,
+        appName: "Khana Lagao",
+      }, { tenantId: tenant.id, recipientType: "user" }).catch(() => {});
       ownerInviteStatus = "sent";
     }
   }
@@ -514,14 +525,65 @@ router.post("/tenants/:id/suspend", requireSuperAdmin, async (req, res) => {
 
 router.post("/tenants/:id/activate", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
+  const [before] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, id));
   const [updated] = await db.update(tenantsTable)
     .set({ isSuspended: false, isActive: true, updatedAt: new Date() })
     .where(eq(tenantsTable.id, id))
     .returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  // Fire the Super Admin–editable `restaurant_approved` template — covers both
+  // "newly approved after pending registration" and "reactivated after suspension".
+  try {
+    const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+      .from(usersTable).where(and(eq(usersTable.tenantId, id), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
+    const loginUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/login`;
+    for (const o of owners) {
+      if (!o.email) continue;
+      await sendByTemplateKey("restaurant_approved", o.email, {
+        name: o.name ?? "there",
+        tenantName: updated.name,
+        restaurant: updated.name,
+        loginUrl,
+        appName: "Khana Lagao",
+      }, { tenantId: id });
+    }
+  } catch (err) { logger.error({ err, tenantId: id }, "restaurant_approved email failed"); }
   await recordAuditLog({
     req, module: "tenants", action: "tenant.activate", entity: "tenant", entityId: id,
+    oldValue: { isSuspended: before?.isSuspended, isActive: before?.isActive },
     newValue: { isSuspended: false, isActive: true },
+  });
+  res.json(updated);
+});
+
+// Super-admin "reject" — soft-deactivate a registration that shouldn't proceed.
+// Fires the Super Admin–editable `restaurant_rejected` template.
+router.post("/tenants/:id/reject", requireSuperAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const reason = typeof req.body?.reason === "string" ? req.body.reason : "Application could not be approved.";
+  const [updated] = await db.update(tenantsTable)
+    .set({ isActive: false, isSuspended: true, updatedAt: new Date() })
+    .where(eq(tenantsTable.id, id))
+    .returning();
+  if (!updated) return void res.status(404).json({ error: "Not found" });
+  try {
+    const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+      .from(usersTable).where(and(eq(usersTable.tenantId, id), eq(usersTable.role, "owner")));
+    for (const o of owners) {
+      if (!o.email) continue;
+      await sendByTemplateKey("restaurant_rejected", o.email, {
+        name: o.name ?? "there",
+        tenantName: updated.name,
+        restaurant: updated.name,
+        reason,
+        supportEmail: process.env.SUPPORT_EMAIL ?? "support@khanalagao.app",
+        appName: "Khana Lagao",
+      }, { tenantId: id });
+    }
+  } catch (err) { logger.error({ err, tenantId: id }, "restaurant_rejected email failed"); }
+  await recordAuditLog({
+    req, module: "tenants", action: "tenant.reject", entity: "tenant", entityId: id,
+    newValue: { isActive: false, reason },
   });
   res.json(updated);
 });

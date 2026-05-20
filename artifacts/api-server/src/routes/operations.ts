@@ -24,8 +24,10 @@ import {
   floorTablesTable,
   kitchensTable,
   usersTable,
+  restaurantsTable,
   type ClosingChecklistItem,
 } from "../lib/db";
+import { sendByTemplateKey } from "../lib/emailSender";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requirePlanFeature } from "../middleware/planFeature";
@@ -399,8 +401,7 @@ router.post("/restaurants/:restaurantId/ops/handovers",
           ...toUser.map(u => u.email),
         ].filter((e): e is string => !!e);
         const uniqueEmails = [...new Set(emails)];
-        const html = `<h3>Shift handover</h3>
-<ul>
+        const summaryHtml = `<ul>
   <li><b>Cash:</b> ${row.cashIssue ?? "—"}</li>
   <li><b>Stock:</b> ${row.stockIssue ?? "—"}</li>
   <li><b>Staff:</b> ${row.staffIssue ?? "—"}</li>
@@ -409,8 +410,13 @@ router.post("/restaurants/:restaurantId/ops/handovers",
   <li><b>Tomorrow:</b> ${row.tomorrowTasks ?? "—"}</li>
 </ul>
 <p>${row.notes ?? ""}</p>`;
+        const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
         for (const to of uniqueEmails) {
-          sendEmail({ to, subject: "Shift handover submitted", html })
+          sendByTemplateKey("staff_shift_handover", to, {
+            name: "team",
+            restaurant: restaurant?.name ?? "Restaurant",
+            summaryHtml,
+          }, { restaurantId, recipientType: "user" })
             .catch(err => logger.warn({ err, to }, "handover email failed"));
         }
       } catch (err) {

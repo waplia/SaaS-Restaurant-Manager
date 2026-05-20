@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db, staffOtpsTable, type StaffOtpChannel, type StaffOtpPurpose } from "./db";
 import { sendSmsMessage } from "./smsSender";
-import { sendEmail } from "./emailSender";
+import { sendByTemplateKey } from "./emailSender";
 import { sendWhatsAppMessage } from "./whatsapp";
 import { getAppSettings } from "./appSettings";
 import { logger } from "./logger";
@@ -107,23 +107,26 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
         return { ok: false, otpId: otp.id, error: r.error ?? "Could not send WhatsApp message.", channel };
       }
     } else if (channel === "email") {
-      const subject = `${code} is your ${appName} verification code`;
-      const html = `<p>Hi ${input.name ?? "there"},</p>
-        <p>Your ${appName} verification code is:</p>
-        <h2 style="letter-spacing:4px">${code}</h2>
-        <p>This code expires in 5 minutes. If you did not request this, ignore this message.</p>`;
-      const r = await sendEmail({
-        to: identifier,
-        subject,
-        html,
-        text: fallbackBody,
+      // Route every staff OTP through the Super Admin–editable templates so
+      // the email lands in `email_logs` with a `template_key`, the premium
+      // layout, and the right kind. Login OTPs use `otp_login`; everything
+      // else (verify / 2FA / register) uses `otp_verification`.
+      const templateKey = input.purpose === "login" ? "otp_login" : "otp_verification";
+      const r = await sendByTemplateKey(templateKey, identifier, {
+        name: input.name ?? "there",
+        otp: code,
+        ttlMinutes: 5,
+        appName,
+      }, {
         tenantId: input.tenantId ?? null,
         restaurantId: input.restaurantId ?? null,
         kind: "transactional",
         recipientType: "user",
-        skipConsentCheck: true,
-        noTracking: true,
       });
+      // No hard-coded HTML fallback: if the template is missing/disabled or
+      // the provider isn't configured, `sendByTemplateKey` already wrote a
+      // failed `email_logs` row, so we just surface a loud error to the
+      // caller. This keeps every OTP send centrally managed by Super Admin.
       if ((!r || !r.ok) && !isDev) {
         return { ok: false, otpId: otp.id, error: "Could not send email. Please try again.", channel };
       }

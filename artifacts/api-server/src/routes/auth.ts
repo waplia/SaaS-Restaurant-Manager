@@ -323,6 +323,34 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: L
     return;
   }
 
+  // Detect new device/IP by comparing against this user's prior session
+  // fingerprints. Cheap query, runs before we mint the new session so the
+  // current login isn't counted as the "previous" device.
+  const ipNow = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const uaNow = String(req.headers["user-agent"] ?? "unknown");
+  const priorSessions = await db.select({ ip: userSessionsTable.ip, userAgent: userSessionsTable.userAgent })
+    .from(userSessionsTable)
+    .where(eq(userSessionsTable.userId, user.id))
+    .orderBy(desc(userSessionsTable.createdAt))
+    .limit(20);
+  const seenBefore = priorSessions.some(s => s.ip === ipNow && s.userAgent === uaNow);
+  if (!seenBefore && priorSessions.length > 0) {
+    // Only alert on truly new devices (skip the very first login to avoid
+    // a noisy welcome+new-device pair).
+    const signinAt = new Date().toUTCString();
+    void sendByTemplateKey("security_login_new_device", user.email, {
+      name: user.name ?? user.email,
+      device: uaNow,
+      location: ipNow,
+      signinAt,
+      // Back-compat aliases — older edited templates may still reference these.
+      ip: ipNow,
+      userAgent: uaNow,
+      when: signinAt,
+      appName: "Khana Lagao",
+    }, { tenantId: user.tenantId, restaurantId: user.restaurantId ?? null, recipientType: "user" });
+  }
+
   await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
   await recordAuditLog({
     req, module: "auth", action: "login.success", entity: "auth",
@@ -534,6 +562,21 @@ router.post("/auth/change-password", authenticate, changePasswordLimitByIp, vali
     userId: user.id, userDisplay: user.name ?? user.email, role: user.role,
     restaurantId: user.restaurantId ?? null,
   });
+  // Notify the account holder that their password was changed so they can act
+  // immediately if it wasn't them. Best-effort — never blocks the response,
+  // and `sendByTemplateKey` writes its own `email_logs` row.
+  const changedAt = new Date().toUTCString();
+  const changeIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const changeUa = String(req.headers["user-agent"] ?? "unknown");
+  void sendByTemplateKey("security_password_changed", user.email, {
+    name: user.name ?? user.email,
+    changedAt,
+    // Back-compat aliases — kept in case admin-edited templates reference them.
+    ip: changeIp,
+    userAgent: changeUa,
+    when: changedAt,
+    appName: "Khana Lagao",
+  }, { tenantId: user.tenantId, restaurantId: user.restaurantId ?? null, recipientType: "user" });
   // Issue fresh tokens bound to the new tokenVersion so the caller stays
   // signed in on this device while every other session is killed.
   const tokenPayload = {

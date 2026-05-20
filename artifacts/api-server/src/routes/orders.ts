@@ -203,14 +203,17 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
   const orderItems = await db.select({ name: orderItemsTable.menuItemName, qty: orderItemsTable.quantity }).from(orderItemsTable).where(eq(orderItemsTable.orderId, paidOrder.id));
   const itemStrings = orderItems.map(i => `${i.name} x${i.qty}`);
   if (customer.email) {
-    const tpl = orderConfirmationEmail({
-      customerName: customer.name,
+    const { sendByTemplateKey } = await import("../lib/emailSender");
+    const itemList = `<ul>${itemStrings.map(i => `<li>${i}</li>`).join("")}</ul>`;
+    sendByTemplateKey("customer_order_confirmation", customer.email, {
+      name: customer.name,
       orderNumber: paidOrder.orderNumber,
-      restaurantName: restaurant?.name ?? "Restaurant",
-      items: itemStrings,
-      total: Number(paidOrder.totalAmount).toFixed(2),
-    });
-    sendEmail({ to: customer.email, subject: tpl.subject, html: tpl.html, text: tpl.text }).catch(console.error);
+      restaurant: restaurant?.name ?? "Restaurant",
+      currency: "INR",
+      amount: Number(paidOrder.totalAmount).toFixed(2),
+      itemList,
+      orderUrl: `${process.env.APP_URL ?? ""}/orders/${paidOrder.id}`,
+    }, { restaurantId, recipientType: "customer" }).catch(console.error);
   }
   if (customer.phone) {
     const msg = `Hi ${customer.name}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
@@ -2388,10 +2391,23 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
     }).catch(() => {});
     broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
     if (order?.customerId) {
-      const [customer] = await db.select({ phone: customersTable.phone, name: customersTable.name })
+      const [customer] = await db.select({ phone: customersTable.phone, email: customersTable.email, name: customersTable.name })
         .from(customersTable).where(eq(customersTable.id, order.customerId));
       if (customer?.phone) {
         sendWhatsApp({ to: customer.phone, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
+      }
+      if (customer?.email) {
+        // Email the customer through the Super Admin–editable
+        // `order_ready` template so the send lands in `email_logs`
+        // and respects the restaurant's premium layout / branding.
+        const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+        const { sendByTemplateKey } = await import("../lib/emailSender");
+        sendByTemplateKey("order_ready", customer.email, {
+          name: customer.name,
+          orderNumber: order.orderNumber,
+          restaurant: restaurant?.name ?? "Restaurant",
+          pickupNote: " for pickup",
+        }, { restaurantId, recipientType: "customer" }).catch(console.error);
       }
       // Browser/web-push notification — runs in parallel with WhatsApp and is
       // best-effort: opt-in, quiet hours, and caps are enforced inside

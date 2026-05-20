@@ -928,9 +928,11 @@ router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner"
   broadcastEvent(restaurantId, "notification:new", { type, id: notification.id });
 
   if (emailRecipients?.length) {
-    const { sendEmail } = await import("../lib/notifications");
+    const { sendByTemplateKey } = await import("../lib/emailSender");
     for (const to of emailRecipients) {
-      sendEmail({ to, subject: title, html: `<p>${message}</p>`, text: message }).catch(console.error);
+      sendByTemplateKey("platform_internal_notification", to, {
+        title, message,
+      }, { restaurantId, recipientType: "user" }).catch(console.error);
     }
   }
 

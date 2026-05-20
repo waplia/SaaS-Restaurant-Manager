@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
+import { premiumLayout } from "./emailSender";
 
 const SMTP_HOST = process.env.SMTP_HOST ?? "";
 const SMTP_PORT = Number(process.env.SMTP_PORT ?? 587);
@@ -158,6 +159,12 @@ export async function sendPush(opts: {
   }
 }
 
+// ─── Builder helpers ──────────────────────────────────────────────
+// These wrap their body content in the shared `premiumLayout()` so even the
+// legacy call sites that still hand-build emails inherit the KhanaLagao card
+// look. Newer call sites should prefer `sendByTemplateKey(...)` directly,
+// which renders the Super-Admin-editable template instead of these builders.
+
 export function orderConfirmationEmail(opts: {
   customerName: string;
   orderNumber: string;
@@ -165,19 +172,18 @@ export function orderConfirmationEmail(opts: {
   items: string[];
   total: string;
 }): { subject: string; html: string; text: string } {
+  const subject = `Order Confirmed — ${opts.orderNumber} at ${opts.restaurantName}`;
   const itemList = opts.items.map(i => `<li>${i}</li>`).join("");
   return {
-    subject: `Order Confirmed — ${opts.orderNumber} at ${opts.restaurantName}`,
+    subject,
     text: `Hi ${opts.customerName}, your order ${opts.orderNumber} has been confirmed. Total: ₹${opts.total}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#f97316">Order Confirmed!</h2>
-        <p>Hi <strong>${opts.customerName}</strong>,</p>
-        <p>Your order <strong>#${opts.orderNumber}</strong> at <strong>${opts.restaurantName}</strong> has been confirmed.</p>
-        <ul>${itemList}</ul>
-        <p style="font-size:1.1em"><strong>Total: ₹${opts.total}</strong></p>
-        <p style="color:#888;font-size:0.85em">Thank you for dining with us!</p>
-      </div>`,
+    html: premiumLayout({
+      preheader: `Order #${opts.orderNumber} at ${opts.restaurantName}`,
+      heading: "Order confirmed",
+      intro: `Hi <strong>${opts.customerName}</strong>, your order at <strong>${opts.restaurantName}</strong> is confirmed.`,
+      bodyHtml: `<p style="margin:0 0 8px 0"><strong>Order #${opts.orderNumber}</strong></p><ul>${itemList}</ul><p style="margin:8px 0 0 0;font-size:16px"><strong>Total: ₹${opts.total}</strong></p>`,
+      appName: "Khana Lagao",
+    }),
   };
 }
 
@@ -187,27 +193,29 @@ export function lowStockEmail(opts: {
 }): { subject: string; html: string; text: string } {
   const rows = opts.items.map(i => `
     <tr>
-      <td style="padding:6px 12px;border-bottom:1px solid #eee">${i.name}</td>
-      <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#dc2626">${i.quantity} ${i.unit}</td>
-      <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#888">${i.threshold} ${i.unit}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #FDE6CC">${i.name}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #FDE6CC;color:#dc2626">${i.quantity} ${i.unit}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #FDE6CC;color:#6B7280">${i.threshold} ${i.unit}</td>
     </tr>`).join("");
+  const subject = `⚠️ Low Stock Alert — ${opts.restaurantName}`;
   return {
-    subject: `⚠️ Low Stock Alert — ${opts.restaurantName}`,
+    subject,
     text: `Low stock alert at ${opts.restaurantName}: ${opts.items.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(", ")}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#dc2626">⚠️ Low Stock Alert</h2>
-        <p>The following items at <strong>${opts.restaurantName}</strong> are running low:</p>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#fef2f2">
-            <th style="padding:8px 12px;text-align:left">Item</th>
-            <th style="padding:8px 12px;text-align:left">Current Stock</th>
-            <th style="padding:8px 12px;text-align:left">Threshold</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <p style="color:#888;font-size:0.85em;margin-top:16px">Please reorder soon to avoid running out.</p>
-      </div>`,
+    html: premiumLayout({
+      preheader: subject,
+      heading: "Low stock alert",
+      intro: `The following items at <strong>${opts.restaurantName}</strong> are running low.`,
+      bodyHtml: `<table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#FFF7ED">
+          <th style="padding:8px 12px;text-align:left">Item</th>
+          <th style="padding:8px 12px;text-align:left">Current Stock</th>
+          <th style="padding:8px 12px;text-align:left">Threshold</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`,
+      footerNote: "Please reorder soon to avoid running out.",
+      appName: "Khana Lagao",
+    }),
   };
 }
 
@@ -217,20 +225,22 @@ export function autoDraftPOEmail(opts: {
 }): { subject: string; html: string; text: string } {
   const totalDrafts = opts.suppliers.length;
   const blocks = opts.suppliers.map(s => `
-    <div style="margin:12px 0;padding:12px;border:1px solid #eee;border-radius:8px">
+    <div style="margin:12px 0;padding:12px;border:1px solid #FDE6CC;border-radius:8px;background:#FFFBF5">
       <strong>${s.supplierName}</strong> — ${s.itemCount} item${s.itemCount === 1 ? "" : "s"}
-      <ul style="margin:6px 0 0 18px;color:#555">${s.items.map(n => `<li>${n}</li>`).join("")}</ul>
+      <ul style="margin:6px 0 0 18px;color:#1F2937">${s.items.map(n => `<li>${n}</li>`).join("")}</ul>
     </div>`).join("");
+  const subject = `📝 ${totalDrafts} auto-drafted purchase order${totalDrafts === 1 ? "" : "s"} — ${opts.restaurantName}`;
   return {
-    subject: `📝 ${totalDrafts} auto-drafted purchase order${totalDrafts === 1 ? "" : "s"} — ${opts.restaurantName}`,
+    subject,
     text: `${totalDrafts} draft purchase order${totalDrafts === 1 ? "" : "s"} were created from low-stock items at ${opts.restaurantName}. Review and send.`,
-    html: `
-      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#f97316">📝 Auto-drafted Purchase Orders</h2>
-        <p>${totalDrafts} draft purchase order${totalDrafts === 1 ? "" : "s"} ${totalDrafts === 1 ? "was" : "were"} created from low-stock items at <strong>${opts.restaurantName}</strong>. Review and click send when ready.</p>
-        ${blocks}
-        <p style="color:#888;font-size:0.85em">Manage them in Inventory → Purchase Orders.</p>
-      </div>`,
+    html: premiumLayout({
+      preheader: subject,
+      heading: "Auto-drafted purchase orders",
+      intro: `${totalDrafts} draft purchase order${totalDrafts === 1 ? "" : "s"} ${totalDrafts === 1 ? "was" : "were"} created from low-stock items at <strong>${opts.restaurantName}</strong>. Review and click send when ready.`,
+      bodyHtml: blocks,
+      footerNote: "Manage them in Inventory → Purchase Orders.",
+      appName: "Khana Lagao",
+    }),
   };
 }
 
@@ -242,20 +252,21 @@ export function dailySummaryEmail(opts: {
   topItems: string[];
 }): { subject: string; html: string; text: string } {
   const items = opts.topItems.map(i => `<li>${i}</li>`).join("");
+  const subject = `📊 Daily Sales Summary — ${opts.restaurantName} — ${opts.date}`;
   return {
-    subject: `📊 Daily Sales Summary — ${opts.restaurantName} — ${opts.date}`,
+    subject,
     text: `Daily summary for ${opts.restaurantName} on ${opts.date}: ${opts.totalOrders} orders, ₹${opts.totalRevenue} revenue.`,
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#f97316">📊 Daily Sales Summary</h2>
-        <p><strong>${opts.restaurantName}</strong> — ${opts.date}</p>
-        <table style="width:100%">
+    html: premiumLayout({
+      preheader: subject,
+      heading: "Daily sales summary",
+      intro: `<strong>${opts.restaurantName}</strong> — ${opts.date}`,
+      bodyHtml: `<table style="width:100%">
           <tr><td>Total Orders</td><td><strong>${opts.totalOrders}</strong></td></tr>
           <tr><td>Total Revenue</td><td><strong>₹${opts.totalRevenue}</strong></td></tr>
-        </table>
-        ${opts.topItems.length ? `<p><strong>Top Items:</strong></p><ul>${items}</ul>` : ""}
-        <p style="color:#888;font-size:0.85em">Generated automatically by Khana Lagao.</p>
-      </div>`,
+        </table>${opts.topItems.length ? `<p style="margin-top:12px"><strong>Top Items:</strong></p><ul>${items}</ul>` : ""}`,
+      footerNote: "Generated automatically by Khana Lagao.",
+      appName: "Khana Lagao",
+    }),
   };
 }
 
@@ -266,20 +277,21 @@ export function reservationEmail(opts: {
   time: string;
   guests: number;
 }): { subject: string; html: string; text: string } {
+  const subject = `Reservation Confirmed — ${opts.restaurantName}`;
   return {
-    subject: `Reservation Confirmed — ${opts.restaurantName}`,
+    subject,
     text: `Hi ${opts.customerName}, your reservation at ${opts.restaurantName} for ${opts.guests} guests on ${opts.date} at ${opts.time} is confirmed.`,
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#f97316">Reservation Confirmed</h2>
-        <p>Hi <strong>${opts.customerName}</strong>,</p>
-        <p>Your reservation at <strong>${opts.restaurantName}</strong> is confirmed:</p>
-        <ul>
-          <li>Date: <strong>${opts.date}</strong></li>
-          <li>Time: <strong>${opts.time}</strong></li>
-          <li>Guests: <strong>${opts.guests}</strong></li>
-        </ul>
-        <p style="color:#888;font-size:0.85em">We look forward to seeing you!</p>
-      </div>`,
+    html: premiumLayout({
+      preheader: subject,
+      heading: "Reservation confirmed",
+      intro: `Hi <strong>${opts.customerName}</strong>, your reservation at <strong>${opts.restaurantName}</strong> is confirmed.`,
+      bodyHtml: `<ul>
+        <li>Date: <strong>${opts.date}</strong></li>
+        <li>Time: <strong>${opts.time}</strong></li>
+        <li>Guests: <strong>${opts.guests}</strong></li>
+      </ul>`,
+      footerNote: "We look forward to seeing you!",
+      appName: "Khana Lagao",
+    }),
   };
 }

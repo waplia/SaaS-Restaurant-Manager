@@ -822,6 +822,30 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
     `Your ${reqRow.method.toUpperCase()} payment of ${reqRow.currency} ${reqRow.amount} was rejected. Reason: ${reason}. You can resubmit with corrected details from the Subscription page.`,
     id,
   );
+  // Fire the Super Admin–editable `payment_failed` template so the owner has
+  // a branded record of the rejection in their inbox (in addition to the
+  // in-app notification above).
+  try {
+    const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(and(eq(usersTable.tenantId, reqRow.tenantId), eq(usersTable.role, "owner")))
+      .limit(1);
+    if (owner?.email) {
+      const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
+      const [planRow] = reqRow.planId
+        ? await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, reqRow.planId))
+        : [undefined];
+      void sendByTemplateKey("payment_failed", owner.email, {
+        name: owner.name ?? "there",
+        amount: String(reqRow.amount),
+        currency: reqRow.currency,
+        plan: planRow?.name ?? "your plan",
+        reason,
+        retryUrl,
+        appName: "Khana Lagao",
+      }, { tenantId: reqRow.tenantId });
+    }
+  } catch { /* non-fatal */ }
   res.json({ ok: true });
 });
 

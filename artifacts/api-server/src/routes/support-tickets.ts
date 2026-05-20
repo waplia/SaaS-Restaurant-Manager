@@ -39,6 +39,7 @@ import {
 } from "../lib/supportSla";
 import { recordAuditLog } from "../lib/audit";
 import { sendEmail } from "../lib/notifications";
+import { sendByTemplateKey } from "../lib/emailSender";
 import { logger } from "../lib/logger";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { setObjectAclPolicy, getObjectAclPolicy } from "../lib/objectAcl";
@@ -136,7 +137,7 @@ async function logAudit(input: { userId: number | null; action: string; ticketId
   });
 }
 
-async function notifyAdmins(title: string, message: string, ticketId: number) {
+async function notifyAdmins(title: string, message: string, ticketId: number, templateKey: string = "support_ticket_created") {
   // In-app notifications are scoped to a restaurantId — for admin alerts we
   // have no restaurant context, so we email super-admins instead and rely on
   // their visiting the ticket queue. (Restaurant-side notifications still go
@@ -145,13 +146,19 @@ async function notifyAdmins(title: string, message: string, ticketId: number) {
     .from(usersTable)
     .where(and(eq(usersTable.isSuperAdmin, true), eq(usersTable.isActive, true)));
   for (const a of admins) {
-    sendEmail({ to: a.email, subject: title, html: `<p>${message}</p><p>Ticket #${ticketId}</p>`, text: `${message}\nTicket #${ticketId}` })
+    sendByTemplateKey(templateKey, a.email, {
+      name: a.name ?? "there",
+      ticketId,
+      subjectLine: title,
+      reply: message,
+      ticketUrl: `${process.env.APP_URL ?? ""}/app/admin/support/${ticketId}`,
+    }, { recipientType: "support" })
       .catch(err => logger.warn({ err }, "support: admin email notify failed"));
   }
 }
 
-async function notifyTenant(tenantId: number, type: string, title: string, message: string, ticketId: number) {
-  const users = await db.select({ id: usersTable.id, email: usersTable.email, restaurantId: usersTable.restaurantId })
+async function notifyTenant(tenantId: number, type: string, title: string, message: string, ticketId: number, templateKey: string = "support_ticket_replied") {
+  const users = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, restaurantId: usersTable.restaurantId })
     .from(usersTable)
     .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.isActive, true), inArray(usersTable.role, ["owner", "manager"])));
   // Use the first restaurant we can find as a "home" for in-app delivery.
@@ -166,7 +173,13 @@ async function notifyTenant(tenantId: number, type: string, title: string, messa
         entityType: "support_ticket",
       }).catch(err => logger.warn({ err }, "support: in-app notify failed"));
     }
-    sendEmail({ to: u.email, subject: title, html: `<p>${message}</p><p>Ticket #${ticketId}</p>`, text: `${message}\nTicket #${ticketId}` })
+    sendByTemplateKey(templateKey, u.email, {
+      name: u.name ?? "there",
+      ticketId,
+      subjectLine: title,
+      reply: message,
+      ticketUrl: `${process.env.APP_URL ?? ""}/app/support/${ticketId}`,
+    }, { tenantId, recipientType: "user" })
       .catch(() => {});
   }
 }
@@ -1018,14 +1031,21 @@ export async function runSupportSlaBreachSweep(now: Date = new Date()): Promise<
         const step = steps[i];
         if (overdueMin >= step.afterMinutes) {
           for (const email of step.notifyEmails) {
-            sendEmail({
-              to: email,
-              subject: `SLA escalation L${i + 1}: ${t.ticketNumber} — ${t.subject}`,
-              html: `<p>Ticket <strong>${t.ticketNumber}</strong> is <strong>${overdueMin} min</strong> past its SLA window.</p>` +
-                    `<p>Priority: ${t.priority}${t.isEmergency ? " (POS emergency)" : ""}.</p>` +
-                    `<p>Step label: ${step.label ?? "(unlabelled)"}</p>` +
-                    `<p>Please review the ticket at once.</p>`,
-              text: `Ticket ${t.ticketNumber} is ${overdueMin} min past SLA (priority ${t.priority}). Step ${i + 1} (${step.label ?? "unlabelled"}).`,
+            // Route via the editable `sla_breach` template so escalations
+            // share the premium layout, honour the Super Admin–configured
+            // provider, and land in email_logs.
+            const overdueLabel = overdueMin >= 60
+              ? `${Math.floor(overdueMin / 60)}h ${overdueMin % 60}m`
+              : `${overdueMin}m`;
+            const ticketUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/admin/support/${t.id}`;
+            sendByTemplateKey("sla_breach", email, {
+              name: "Team",
+              ticketId: t.ticketNumber,
+              subjectLine: t.subject,
+              slaName: `${step.label ?? `Step ${i + 1}`} (priority ${t.priority}${t.isEmergency ? ", POS emergency" : ""})`,
+              overdueLabel,
+              ticketUrl,
+              appName: "Khana Lagao",
             }).catch(err => logger.warn({ err, ticketId: t.id, email }, "[support] escalation email failed"));
           }
           await logEvent({ ticketId: t.id, type: "sla_breached", actor: { id: null, isAdmin: true, name: "SLA monitor" }, toValue: `escalation_l${i + 1}` });
