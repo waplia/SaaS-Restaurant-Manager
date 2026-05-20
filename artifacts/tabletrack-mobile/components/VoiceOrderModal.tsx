@@ -81,11 +81,20 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const [transcribing, setTranscribing] = useState(false);
+  const [language, setLanguage] = useState<"en" | "hi" | "mix">("en");
   const recognitionRef = useRef<InstanceType<SRConstructor> | null>(null);
   const SR = getSpeechRecognition();
   const isNative = Platform.OS !== "web";
   const nativeRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const micSupported = isNative || !!SR;
+
+  // Per-language config: BCP-47 tag for Web Speech, ISO-639-1 for OpenAI
+  // Whisper, and a free-form hint string for the parser LLM.
+  const langCfg = {
+    en: { web: "en-IN", whisper: "en", parserHint: "English" },
+    hi: { web: "hi-IN", whisper: "hi", parserHint: "Hindi (Devanagari or romanized)" },
+    mix: { web: "en-IN", whisper: "", parserHint: "Hinglish (mix of Hindi and English)" },
+  }[language];
 
   useEffect(() => {
     return () => {
@@ -97,7 +106,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
     if (!SR) return;
     try {
       const rec = new SR();
-      rec.lang = "en-IN";
+      rec.lang = langCfg.web;
       rec.interimResults = true;
       rec.continuous = true;
       let finalText = transcript ? transcript + " " : "";
@@ -162,7 +171,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
       const resp = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/voice-orders/transcribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
-        body: JSON.stringify({ audioBase64: base64, mimeType, language: "en" }),
+        body: JSON.stringify({ audioBase64: base64, mimeType, language: langCfg.whisper }),
       });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({} as { error?: string }));
@@ -221,7 +230,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
       const resp = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/voice-orders/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
-        body: JSON.stringify({ transcript: text, language: "en-IN", tableId }),
+        body: JSON.stringify({ transcript: text, language: langCfg.parserHint, tableId }),
       });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({} as { error?: string }));
@@ -297,9 +306,37 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             {micSupported
-              ? "Tap the mic and speak your order. English/Hindi/Hinglish supported."
+              ? "Pick a language, tap the mic, and speak your order."
               : "Your browser does not support in-page voice — type the order instead."}
           </Text>
+
+          <View style={[styles.langRow, { borderColor: colors.border }]}>
+            {([
+              { key: "en", label: "English" },
+              { key: "hi", label: "हिंदी" },
+              { key: "mix", label: "Hinglish" },
+            ] as const).map((opt) => {
+              const active = language === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => !listening && !transcribing && setLanguage(opt.key)}
+                  disabled={listening || transcribing}
+                  style={[
+                    styles.langBtn,
+                    {
+                      backgroundColor: active ? colors.primary : "transparent",
+                      opacity: listening || transcribing ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: active ? "#fff" : colors.text, fontWeight: active ? "700" : "500", fontSize: 13 }}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           <Pressable
             onPress={toggleListening}
@@ -536,6 +573,12 @@ const styles = StyleSheet.create({
   micBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 10, paddingVertical: 14, borderRadius: 12,
+  },
+  langRow: {
+    flexDirection: "row", borderWidth: 1, borderRadius: 10, padding: 3, gap: 3,
+  },
+  langBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center",
   },
   micBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   itemRow: {
