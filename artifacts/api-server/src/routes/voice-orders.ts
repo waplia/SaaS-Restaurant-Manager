@@ -73,6 +73,61 @@ interface ParsedVoiceResponse {
 }
 
 const MAX_TRANSCRIPT_CHARS = 1000;
+const MAX_AUDIO_BYTES = 6 * 1024 * 1024; // 6MB
+
+/**
+ * POST /restaurants/:restaurantId/voice-orders/transcribe
+ *
+ * Accepts a base64-encoded audio clip (m4a/webm/wav) recorded by the mobile app
+ * and returns its text transcript using OpenAI's gpt-4o-mini-transcribe via the
+ * Replit AI Integrations proxy. Used by the mobile VoiceOrderModal in-app mic.
+ */
+router.post(
+  "/restaurants/:restaurantId/voice-orders/transcribe",
+  async (req: Request, res: Response) => {
+    try {
+      const { audioBase64, mimeType, language } = (req.body ?? {}) as {
+        audioBase64?: string;
+        mimeType?: string;
+        language?: string;
+      };
+      if (!audioBase64 || typeof audioBase64 !== "string") {
+        return res.status(400).json({ error: "audioBase64 is required" });
+      }
+      const baseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+      if (!baseUrl || !apiKey) {
+        return res.status(503).json({ error: "Voice transcription is not configured on this server." });
+      }
+      const cleaned = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+      const buf = Buffer.from(cleaned, "base64");
+      if (buf.length === 0) return res.status(400).json({ error: "Empty audio" });
+      if (buf.length > MAX_AUDIO_BYTES) return res.status(413).json({ error: "Audio too large (max 6MB)" });
+
+      const safeMime = typeof mimeType === "string" && mimeType ? mimeType : "audio/m4a";
+      const ext = safeMime.includes("webm") ? "webm" : safeMime.includes("wav") ? "wav" : safeMime.includes("mp3") ? "mp3" : "m4a";
+      const blob = new Blob([buf], { type: safeMime });
+      const form = new FormData();
+      form.append("file", blob, `voice-order.${ext}`);
+      form.append("model", "gpt-4o-mini-transcribe");
+      if (typeof language === "string" && language) form.append("language", language.slice(0, 5));
+
+      const r = await fetch(`${baseUrl.replace(/\/$/, "")}/audio/transcriptions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      });
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        return res.status(502).json({ error: `Transcription failed: ${r.status} ${text.slice(0, 200)}` });
+      }
+      const data = (await r.json()) as { text?: string };
+      return res.json({ transcript: (data.text ?? "").trim() });
+    } catch (e) {
+      return res.status(500).json({ error: (e as Error).message });
+    }
+  },
+);
 
 router.post(
   "/restaurants/:restaurantId/voice-orders/parse",

@@ -14,7 +14,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow KhanaLagao to use the microphone so you can dictate orders with voice."
+      }
     },
     "android": {
       "package": "com.khanalagao.restaurant",
@@ -52,12 +55,19 @@
         }
       ],
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow KhanaLagao to use the microphone so you can dictate orders with voice."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/adaptive-icon.png",
           "color": "#f97316"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -7,6 +7,13 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "@/lib/secureStorage";
 import { useColors } from "@/hooks/useColors";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 
 // Web Speech API typings (only used on web).
 type SRConstructor = new () => {
@@ -73,9 +80,12 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
   const [pickerSearch, setPickerSearch] = useState("");
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const recognitionRef = useRef<InstanceType<SRConstructor> | null>(null);
   const SR = getSpeechRecognition();
-  const micSupported = !!SR;
+  const isNative = Platform.OS !== "web";
+  const nativeRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const micSupported = isNative || !!SR;
 
   useEffect(() => {
     return () => {
@@ -83,21 +93,8 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
     };
   }, []);
 
-  const toggleListening = () => {
-    if (!SR) {
-      setMicError(
-        Platform.OS === "web"
-          ? "Your browser does not support voice input. Try Chrome on Android or desktop."
-          : "Use your keyboard's mic button to dictate (in-app recording coming soon)."
-      );
-      return;
-    }
-    if (listening) {
-      try { recognitionRef.current?.stop(); } catch {}
-      setListening(false);
-      return;
-    }
-    setMicError(null);
+  const startWebRecognition = () => {
+    if (!SR) return;
     try {
       const rec = new SR();
       rec.lang = "en-IN";
@@ -132,6 +129,71 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
       setMicError((err as Error).message);
       setListening(false);
     }
+  };
+
+  const startNativeRecording = async () => {
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        setMicError("Microphone permission was denied. Enable it in your device settings and try again.");
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await nativeRecorder.prepareToRecordAsync();
+      nativeRecorder.record();
+      setListening(true);
+    } catch (e) {
+      setMicError(`Could not start recording: ${(e as Error).message}`);
+      setListening(false);
+    }
+  };
+
+  const stopNativeRecordingAndTranscribe = async () => {
+    setListening(false);
+    setTranscribing(true);
+    try {
+      await nativeRecorder.stop();
+      const uri = nativeRecorder.uri;
+      if (!uri) throw new Error("No recording captured");
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const mimeType = uri.endsWith(".wav") ? "audio/wav" : uri.endsWith(".webm") ? "audio/webm" : "audio/m4a";
+      const baseUrl = getApiBaseUrl();
+      const token = await SecureStore.getItem("accessToken");
+      const resp = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/voice-orders/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({ audioBase64: base64, mimeType, language: "en" }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({} as { error?: string }));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${resp.status}`);
+      }
+      const data = (await resp.json()) as { transcript: string };
+      setTranscript((prev) => (prev ? prev + " " : "") + (data.transcript ?? "").trim());
+    } catch (e) {
+      setMicError((e as Error).message);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const toggleListening = () => {
+    setMicError(null);
+    if (isNative) {
+      if (listening) { void stopNativeRecordingAndTranscribe(); }
+      else { void startNativeRecording(); }
+      return;
+    }
+    if (!SR) {
+      setMicError("Your browser does not support voice input. Try Chrome on Android or desktop.");
+      return;
+    }
+    if (listening) {
+      try { recognitionRef.current?.stop(); } catch {}
+      setListening(false);
+      return;
+    }
+    startWebRecognition();
   };
 
   const reset = () => {
@@ -235,26 +297,36 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             {micSupported
-              ? "Tap the mic and speak your order. Hindi/English/Hinglish supported."
-              : Platform.OS === "web"
-                ? "Your browser does not support in-page voice — type the order instead."
-                : "Type the order, or tap the input and use your keyboard's mic to dictate."}
+              ? "Tap the mic and speak your order. English/Hindi/Hinglish supported."
+              : "Your browser does not support in-page voice — type the order instead."}
           </Text>
 
           <Pressable
             onPress={toggleListening}
+            disabled={transcribing}
             style={[
               styles.micBtn,
               {
                 backgroundColor: listening ? "#ef4444" : colors.primary,
-                opacity: micSupported ? 1 : 0.5,
+                opacity: micSupported && !transcribing ? 1 : 0.5,
               },
             ]}
           >
-            <Ionicons name={listening ? "stop" : "mic"} size={22} color="#fff" />
-            <Text style={styles.micBtnText}>
-              {listening ? "Listening… tap to stop" : micSupported ? "Tap to speak" : "Voice input unavailable"}
-            </Text>
+            {transcribing ? (
+              <>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.micBtnText}>Transcribing…</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name={listening ? "stop" : "mic"} size={22} color="#fff" />
+                <Text style={styles.micBtnText}>
+                  {listening
+                    ? (isNative ? "Recording… tap to stop" : "Listening… tap to stop")
+                    : micSupported ? "Tap to speak" : "Voice input unavailable"}
+                </Text>
+              </>
+            )}
           </Pressable>
           {micError ? (
             <Text style={{ color: colors.destructive, fontSize: 12 }}>{micError}</Text>
