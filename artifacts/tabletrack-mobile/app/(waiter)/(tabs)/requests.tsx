@@ -38,6 +38,16 @@ const LABEL: Record<string, string> = {
   custom: "Custom request",
 };
 
+// Bulletproof against any weird field shapes the server might return —
+// avoids `.replace of undefined` crashes if `r.type` is ever missing,
+// null, a number, or any non-string value.
+function formatRequestLabel(type: unknown): string {
+  if (type == null) return "Request";
+  const key = String(type);
+  if (LABEL[key]) return LABEL[key];
+  return key.split("_").join(" ") || "Request";
+}
+
 export default function WaiterRequestsTab() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -88,7 +98,7 @@ export default function WaiterRequestsTab() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-                  {LABEL[r.type] ?? String(r.type ?? "Request").replace(/_/g, " ")}
+                  {formatRequestLabel(r.type)}
                   {r.tableNumber != null ? ` · Table ${r.tableNumber}` : ""}
                 </Text>
                 {r.note ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{r.note}</Text> : null}
