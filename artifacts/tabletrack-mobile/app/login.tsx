@@ -115,9 +115,19 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
 }
 
 function routeForRole(role: string) {
-  if (role === "owner" || role === "super_admin") return "/(owner)";
-  if (role === "waiter") return "/(waiter)/(tabs)";
-  if (role === "kitchen") return "/(waiter)/(tabs)/notifications";
+  if (role === "owner" || role === "manager" || role === "super_admin") return "/(owner)";
+  if (role === "waiter" || role === "captain") return "/(waiter)/(tabs)";
+  // Kitchen/chef live inside the (owner) stack on the dedicated kitchen screen.
+  // Sending them to (waiter)/notifications used to bounce them via AuthGate and
+  // index.tsx in a redirect loop ("Maximum update depth exceeded"). Keep this
+  // map aligned with `lib/roles.ts:roleHomePath` so a fresh login and a cached
+  // session land on the same screen.
+  if (role === "kitchen" || role === "chef") return "/(owner)/kitchen";
+  if (role === "cashier") return "/(owner)/orders";
+  if (role === "inventory_manager") return "/(owner)/inventory";
+  if (role === "accountant" || role === "payroll") return "/(owner)/finance";
+  if (role === "hr") return "/(owner)/staff";
+  if (role === "marketing") return "/(owner)/growth";
   if (role === "delivery_executive") return "/(delivery)/my-deliveries";
   if (role === "customer") return "/(customer)";
   return "/(owner)";
