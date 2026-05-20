@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -19,8 +19,21 @@ export default function IndexScreen() {
   }, [user, isLoading]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator color={colors.primary} size="large" />
+    <View style={[styles.root, { backgroundColor: "#ffffff" }]}>
+      <Image
+        source={require("../assets/images/brand-logo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+        accessibilityLabel="KhanaLagao logo"
+      />
+      <Text style={[styles.brand, { color: colors.foreground }]}>KhanaLagao</Text>
+      <ActivityIndicator color={colors.primary} size="small" style={{ marginTop: 24 }} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  logo: { width: 160, height: 160 },
+  brand: { fontSize: 24, fontFamily: "Inter_700Bold", marginTop: 12, letterSpacing: -0.5 },
+});
