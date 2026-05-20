@@ -19,9 +19,12 @@ import { setBaseUrl } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
-// Set base URL at module level so all API calls use the correct domain
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// Set base URL at module level so all API calls use the correct domain.
+// Resolved from EXPO_PUBLIC_API_BASE_URL (preferred) with fallback to the
+// Replit dev domain — see lib/apiBaseUrl.ts.
+setBaseUrl(getApiBaseUrl());
 
 SplashScreen.preventAutoHideAsync();
 

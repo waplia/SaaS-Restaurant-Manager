@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 export default function ChangePasswordScreen() {
   const colors = useColors();
@@ -20,7 +21,7 @@ export default function ChangePasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const baseUrl = `${getApiBaseUrl()}`;
 
   async function onSubmit() {
     setError(null);

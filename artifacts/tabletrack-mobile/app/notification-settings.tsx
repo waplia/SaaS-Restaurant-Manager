@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 type Prefs = {
   waiter_call: boolean;
@@ -26,7 +27,7 @@ export default function NotificationSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const baseUrl = `${getApiBaseUrl()}`;
 
   useEffect(() => {
     if (!user || !accessToken) return;

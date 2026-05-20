@@ -11,6 +11,7 @@ import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
 import { useNetworkStatus } from "@/hooks/useOfflineCache";
 import { EmptyState } from "@/components/EmptyState";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface PublicOrderFull {
   orderId: number;
@@ -80,7 +81,7 @@ export default function CartScreen() {
     if (!orderResult) return;
     setPayingStripe(true);
     try {
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const baseUrl = `${getApiBaseUrl()}`;
       const resp = await fetch(
         `${baseUrl}/api/public/orders/${orderResult.orderId}/payment-intent?token=${orderResult.guestToken}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }

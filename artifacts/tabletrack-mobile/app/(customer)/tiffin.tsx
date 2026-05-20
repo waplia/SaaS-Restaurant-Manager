@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface MySubscription {
   id: number;
@@ -23,7 +24,7 @@ export default function MyTiffinScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { restaurantId, accessToken } = useAuth();
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const baseUrl = `${getApiBaseUrl()}`;
 
   const apiFetch = useCallback(async (path: string) => {
     const res = await fetch(`${baseUrl}/api${path}`, {

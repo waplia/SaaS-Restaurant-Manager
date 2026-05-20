@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface RouteStop {
   id: number;
@@ -28,7 +29,7 @@ export default function TiffinRouteScreen() {
   const insets = useSafeAreaInsets();
   const { restaurantId, accessToken } = useAuth();
   const qc = useQueryClient();
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const baseUrl = `${getApiBaseUrl()}`;
 
   const apiFetch = useCallback(async (path: string, init?: RequestInit) => {
     const res = await fetch(`${baseUrl}/api${path}`, {

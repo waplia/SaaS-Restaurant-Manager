@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { router } from "expo-router";
 import { setAuthTokenGetter, setUnauthorizedHandler } from "@workspace/api-client-react";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -54,7 +55,7 @@ async function registerPushToken(userId: number, accessToken: string): Promise<s
     const tokenData = await Notifications.getExpoPushTokenAsync();
     const pushToken = tokenData.data;
 
-    const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+    const baseUrl = getApiBaseUrl();
     await fetch(`${baseUrl}/api/users/${userId}/push-token`, {
       method: "POST",
       headers: {
@@ -76,7 +77,7 @@ async function deregisterPushToken(userId: number, accessToken: string) {
   try {
     const token = await SecureStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
     if (!token) return;
-    const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+    const baseUrl = getApiBaseUrl();
     await fetch(`${baseUrl}/api/users/${userId}/push-token`, {
       method: "DELETE",
       headers: {

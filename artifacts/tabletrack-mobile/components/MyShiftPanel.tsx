@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 const ACTIVE_SESSION_STORAGE_KEY = "tabletrack.activeSession.v1";
 
@@ -23,7 +24,7 @@ type AttendanceRecord = {
 type MyActive = { open: AttendanceRecord | null; todayShift: Shift | null };
 
 function apiUrl(path: string) {
-  return `https://${process.env.EXPO_PUBLIC_DOMAIN}/api${path}`;
+  return `${getApiBaseUrl()}/api${path}`;
 }
 
 async function authFetch(token: string | null, path: string, init?: RequestInit): Promise<unknown> {

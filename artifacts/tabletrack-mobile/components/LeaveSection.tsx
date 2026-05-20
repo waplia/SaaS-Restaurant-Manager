@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 type LeavePolicy = {
   id: number; leaveType: string; label: string; isPaid: boolean;
@@ -21,7 +22,7 @@ type LeaveRequest = {
 };
 
 function apiUrl(path: string) {
-  return `https://${process.env.EXPO_PUBLIC_DOMAIN}/api${path}`;
+  return `${getApiBaseUrl()}/api${path}`;
 }
 async function authFetch(token: string | null, path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(apiUrl(path), {

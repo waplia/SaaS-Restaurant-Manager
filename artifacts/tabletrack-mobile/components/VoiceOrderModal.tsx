@@ -6,6 +6,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "@/lib/secureStorage";
 import { useColors } from "@/hooks/useColors";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface ParsedItem {
   menuItemId: number | null;
@@ -71,7 +72,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
     }
     setParsing(true);
     try {
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const baseUrl = `${getApiBaseUrl()}`;
       const token = await SecureStore.getItem("accessToken");
       const resp = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/voice-orders/parse`, {
         method: "POST",

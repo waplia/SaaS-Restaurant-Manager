@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useNetworkStatus } from "@/hooks/useOfflineCache";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface PublicOrderStatus {
   id: number;
@@ -46,7 +47,7 @@ export default function TrackOrderScreen() {
     queryKey: ["public-order", id, guestToken],
     queryFn: async () => {
       if (!guestToken) throw new Error("Missing guest token");
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const baseUrl = `${getApiBaseUrl()}`;
       const resp = await fetch(`${baseUrl}/api/public/orders/${id}?token=${encodeURIComponent(guestToken)}`);
       if (!resp.ok) throw new Error(`Order not found (${resp.status})`);
       return resp.json() as Promise<PublicOrderStatus>;
@@ -62,7 +63,7 @@ export default function TrackOrderScreen() {
 
   const handleCallWaiter = async () => {
     try {
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const baseUrl = `${getApiBaseUrl()}`;
       await fetch(`${baseUrl}/api/public/call-waiter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

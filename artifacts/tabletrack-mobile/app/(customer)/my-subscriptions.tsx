@@ -4,6 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 type Subscription = {
   id: number; templateId: number; status: string;
@@ -13,7 +14,7 @@ type Subscription = {
   template: { id: number; name: string; type: string; billingCycle: string; price: string } | null;
 };
 
-function apiUrl(p: string) { return `https://${process.env.EXPO_PUBLIC_DOMAIN}/api${p}`; }
+function apiUrl(p: string) { return `${getApiBaseUrl()}/api${p}`; }
 async function fetchJson<T>(url: string, init?: RequestInit, token?: string | null): Promise<T> {
   const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) } });
   if (!res.ok) throw new Error(await res.text());

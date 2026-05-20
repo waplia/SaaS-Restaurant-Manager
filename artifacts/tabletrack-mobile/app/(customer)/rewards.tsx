@@ -2,8 +2,9 @@ import { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { PhoneInput } from "@/components/PhoneInput";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
-const apiBase = `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
+const apiBase = () => `${getApiBaseUrl()}/api`;
 
 interface Summary {
   config: { enabled: boolean; cashback: { enabled: boolean }; family: { enabled: boolean }; tiers: any[] };
@@ -30,11 +31,11 @@ export default function RewardsScreen() {
   async function lookup() {
     setLoading(true); setErr(null); setData(null);
     try {
-      const search = await fetch(`${apiBase}/restaurants/${restaurantId}/customers?search=${encodeURIComponent(phone)}`);
+      const search = await fetch(`${apiBase()}/restaurants/${restaurantId}/customers?search=${encodeURIComponent(phone)}`);
       const customers = (await search.json())?.data ?? [];
       const match = customers.find((c: any) => (c.phone || "").replace(/\D/g, "").endsWith(phone.replace(/\D/g, "")));
       if (!match) { setErr("No customer found with that phone."); return; }
-      const sumRes = await fetch(`${apiBase}/restaurants/${restaurantId}/loyalty/summary/${match.id}`);
+      const sumRes = await fetch(`${apiBase()}/restaurants/${restaurantId}/loyalty/summary/${match.id}`);
       if (!sumRes.ok) { setErr("Loyalty unavailable for this restaurant."); return; }
       setData(await sumRes.json());
     } catch (e: any) { setErr(e?.message || "Lookup failed"); }

@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { PhoneInput } from "@/components/PhoneInput";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 type Cake = { id: number; name: string; description: string | null; price: string; imageUrl: string | null };
 
@@ -16,7 +17,7 @@ export default function CakeBookingScreen() {
   const restaurantId = Number(rIdParam) || 1;
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const baseUrl = `${getApiBaseUrl()}`;
 
   const cakesQ = useQuery<{ enabled: boolean; items: Cake[] }>({
     queryKey: ["public-cakes", restaurantId],
