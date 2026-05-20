@@ -17,6 +17,7 @@ const PROVIDER_TYPES = [
   { value: "textlocal", label: "Textlocal" },
   { value: "fast2sms", label: "Fast2SMS" },
   { value: "gupshup", label: "Gupshup Enterprise" },
+  { value: "2factor", label: "2Factor.in (India / DLT)" },
   { value: "custom", label: "Custom HTTP" },
 ] as const;
 
@@ -174,6 +175,7 @@ function ProviderDialog({ provider, onClose }: { provider: SmsProvider | null; o
     textlocal: '{ "apiKey": "...", "senderId": "TXTLCL" }',
     fast2sms: '{ "apiKey": "...", "route": "q", "senderId": "TXTLCL" }',
     gupshup: '{ "apiKey": "...", "senderId": "...", "userId": "..." }',
+    "2factor": '{\n  "apiKey": "...",\n  "senderId": "TFCTR",\n  "otpTemplateName": "OTP1",\n  "transactionalTemplateId": "",\n  "promotionalTemplateId": "",\n  "defaultCountryCode": "+91",\n  "otpLength": 6,\n  "otpExpiryMinutes": 5,\n  "resendCooldownSeconds": 30,\n  "maxAttempts": 5,\n  "maxResends": 3,\n  "dailyLimit": 0,\n  "monthlyLimit": 0,\n  "smsOtpEnabled": true,\n  "voiceOtpEnabled": false,\n  "transactionalEnabled": true,\n  "promotionalEnabled": true,\n  "mode": "live"\n}',
     custom: '{ "baseUrl": "https://gateway.example.com/send", "method": "POST", "headers": { "Authorization": "Bearer …" }, "bodyTemplate": "{\\"to\\":\\"{{to}}\\",\\"message\\":\\"{{message}}\\"}" }',
   };
 

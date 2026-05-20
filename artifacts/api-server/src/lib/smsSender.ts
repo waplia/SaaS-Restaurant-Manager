@@ -12,6 +12,15 @@ import {
   type SmsLogStatus,
 } from "./db";
 import { logger } from "./logger";
+import * as twoFactor from "./twoFactorAdapter";
+import type { TwoFactorConfig } from "./twoFactorAdapter";
+
+export type SmsPurpose =
+  | "login" | "register" | "two_factor" | "password_reset"
+  | "staff_invite" | "new_device" | "verify_mobile" | "verify_email"
+  | "marketing" | "lifecycle" | "custom";
+
+export type SmsMessageType = "otp" | "transactional" | "promotional" | "voice_otp" | "test";
 
 export type SendInput = {
   to: string;
@@ -24,6 +33,9 @@ export type SendInput = {
   retryOf?: number | null;
   // When true, bypass quota checks (used for super-admin tests).
   bypassQuota?: boolean;
+  // Optional context written to the log row + used by 2Factor routing.
+  purpose?: SmsPurpose;
+  messageType?: SmsMessageType;
 };
 
 export type SendResult = {
@@ -31,7 +43,12 @@ export type SendResult = {
   logId: number;
   status: SmsLogStatus;
   providerMessageId?: string | null;
+  providerSessionId?: string | null;
   error?: string;
+  /** Normalized error code from the underlying provider — used by the
+   * unified OtpProvider (Task #531) to decide on falling back to email /
+   * WhatsApp exactly once. */
+  errorCode?: string | null;
 };
 
 export function renderTemplate(text: string, vars: Record<string, string | number | undefined | null> = {}): string {
@@ -91,12 +108,62 @@ export async function getTenantMonthlyLimit(tenantId: number): Promise<number> {
   return Number(t.planLimit ?? 0);
 }
 
-async function callProvider(provider: SmsProvider, to: string, body: string, template: SmsTemplate | null): Promise<{
+type ProviderCallResult = {
   providerMessageId: string | null;
+  providerSessionId?: string | null;
   cost?: string | null;
   costCurrency?: string | null;
-}> {
+  costEstimate?: string | null;
+  providerResponse?: Record<string, unknown> | null;
+};
+
+/** Raised by adapters that return a normalized error code (used by the
+ * unified OtpProvider to decide whether to fall back to email / WhatsApp). */
+export class ProviderSendError extends Error {
+  constructor(message: string, public readonly errorCode: string, public readonly providerResponse?: Record<string, unknown>) {
+    super(message);
+    this.name = "ProviderSendError";
+  }
+}
+
+async function callProvider(provider: SmsProvider, to: string, body: string, template: SmsTemplate | null, opts: { messageType?: SmsMessageType } = {}): Promise<ProviderCallResult> {
   const cfg = provider.config as Record<string, string | undefined>;
+
+  if (provider.type === "2factor") {
+    const tfCfg = provider.config as unknown as TwoFactorConfig;
+    const messageType = opts.messageType
+      ?? (template?.eventKey === "otp" ? "otp" : (template?.category === "promotional" ? "promotional" : "transactional"));
+    const mobile = to;
+    if (messageType === "otp") {
+      // Caller (staffOtp) already generated a code; use 2Factor custom-OTP
+      // mode so the same code in the message body is the one provider
+      // tracks. Falls back gracefully when the body doesn't contain a 6-digit code.
+      const codeMatch = body.match(/\b(\d{4,8})\b/);
+      const code = codeMatch?.[1];
+      if (code) {
+        const r = await twoFactor.sendCustomOtp(tfCfg, { mobile, otp: code });
+        if (!r.ok) throw new ProviderSendError(r.error, r.errorCode, r.raw);
+        return { providerMessageId: r.data.sessionId, providerSessionId: r.data.sessionId, providerResponse: r.raw };
+      }
+      // No embedded code — use transactional send for the message.
+      const r = await twoFactor.sendTransactionalSms(tfCfg, { mobile, body, templateId: template?.dltTemplateId ?? undefined });
+      if (!r.ok) throw new ProviderSendError(r.error, r.errorCode, r.raw);
+      return { providerMessageId: r.data.providerMessageId, providerResponse: r.raw };
+    }
+    if (messageType === "voice_otp") {
+      const r = await twoFactor.sendVoiceOtp(tfCfg, { mobile });
+      if (!r.ok) throw new ProviderSendError(r.error, r.errorCode, r.raw);
+      return { providerMessageId: r.data.sessionId, providerSessionId: r.data.sessionId, providerResponse: r.raw };
+    }
+    if (messageType === "promotional") {
+      const r = await twoFactor.sendPromotionalSms(tfCfg, { mobile, body, templateId: template?.dltTemplateId ?? undefined });
+      if (!r.ok) throw new ProviderSendError(r.error, r.errorCode, r.raw);
+      return { providerMessageId: r.data.providerMessageId, providerResponse: r.raw };
+    }
+    const r = await twoFactor.sendTransactionalSms(tfCfg, { mobile, body, templateId: template?.dltTemplateId ?? undefined });
+    if (!r.ok) throw new ProviderSendError(r.error, r.errorCode, r.raw);
+    return { providerMessageId: r.data.providerMessageId, providerResponse: r.raw };
+  }
 
   if (provider.type === "twilio") {
     const sid = cfg.accountSid ?? "";
@@ -299,7 +366,7 @@ export async function sendSmsMessage(input: SendInput): Promise<SendResult> {
   }
 
   try {
-    const result = await callProvider(provider, input.to, body, template);
+    const result = await callProvider(provider, input.to, body, template, { messageType: input.messageType });
     const [log] = await db.insert(smsLogsTable).values({
       tenantId: input.tenantId ?? null,
       restaurantId: input.restaurantId ?? null,
@@ -311,18 +378,31 @@ export async function sendSmsMessage(input: SendInput): Promise<SendResult> {
       body,
       status: "sent",
       providerMessageId: result.providerMessageId,
+      providerSessionId: result.providerSessionId ?? null,
+      purpose: input.purpose ?? null,
+      messageType: input.messageType ?? null,
       cost: result.cost ?? null,
       costCurrency: result.costCurrency ?? null,
+      costEstimate: result.costEstimate ?? null,
+      providerResponse: result.providerResponse ?? null,
       retryOf: input.retryOf ?? null,
     }).returning();
     // Best-effort low-balance check after every send.
     if (input.tenantId) {
       checkTenantQuotaAlert(input.tenantId).catch(err => logger.warn({ err }, "low-quota check failed"));
     }
-    return { ok: true, logId: log.id, status: "sent", providerMessageId: result.providerMessageId };
+    return {
+      ok: true,
+      logId: log.id,
+      status: "sent",
+      providerMessageId: result.providerMessageId,
+      providerSessionId: result.providerSessionId ?? null,
+    };
   } catch (err) {
     const message = (err as Error).message ?? String(err);
-    logger.warn({ err, providerId: provider.id, providerType: provider.type }, "SMS send failed");
+    const errorCode = err instanceof ProviderSendError ? err.errorCode : null;
+    const providerResponse = err instanceof ProviderSendError ? (err.providerResponse ?? null) : null;
+    logger.warn({ err, errorCode, providerId: provider.id, providerType: provider.type }, "SMS send failed");
     const [log] = await db.insert(smsLogsTable).values({
       tenantId: input.tenantId ?? null,
       restaurantId: input.restaurantId ?? null,
@@ -333,10 +413,14 @@ export async function sendSmsMessage(input: SendInput): Promise<SendResult> {
       providerType: provider.type,
       body,
       status: "failed",
+      purpose: input.purpose ?? null,
+      messageType: input.messageType ?? null,
+      errorCode,
+      providerResponse,
       error: message.slice(0, 1000),
       retryOf: input.retryOf ?? null,
     }).returning();
-    return { ok: false, logId: log.id, status: "failed", error: message };
+    return { ok: false, logId: log.id, status: "failed", error: message, errorCode };
   }
 }
 

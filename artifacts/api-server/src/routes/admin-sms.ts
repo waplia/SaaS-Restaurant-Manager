@@ -23,7 +23,7 @@ import {
 
 const router = Router();
 
-const VALID_PROVIDERS: SmsProviderType[] = ["twilio", "msg91", "textlocal", "fast2sms", "gupshup", "custom"];
+const VALID_PROVIDERS: SmsProviderType[] = ["twilio", "msg91", "textlocal", "fast2sms", "gupshup", "2factor", "custom"];
 
 // Keys that must never leak in GET responses (mask everything that looks like
 // a credential, token, secret, key, password, signing key, etc).
@@ -217,6 +217,9 @@ router.get("/admin/sms/logs", requireSuperAdmin, async (req, res) => {
   const tenantId = Number(req.query.tenantId);
   const restaurantId = Number(req.query.restaurantId);
   const eventKey = typeof req.query.eventKey === "string" ? req.query.eventKey : undefined;
+  const provider = typeof req.query.provider === "string" ? req.query.provider : undefined;
+  const purpose = typeof req.query.purpose === "string" ? req.query.purpose : undefined;
+  const messageType = typeof req.query.messageType === "string" ? req.query.messageType : undefined;
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const offset = Math.max(0, Number(req.query.offset) || 0);
 
@@ -225,6 +228,9 @@ router.get("/admin/sms/logs", requireSuperAdmin, async (req, res) => {
   if (Number.isFinite(tenantId)) conds.push(eq(smsLogsTable.tenantId, tenantId));
   if (Number.isFinite(restaurantId)) conds.push(eq(smsLogsTable.restaurantId, restaurantId));
   if (eventKey) conds.push(eq(smsLogsTable.eventKey, eventKey as never));
+  if (provider) conds.push(eq(smsLogsTable.providerType, provider));
+  if (purpose) conds.push(eq(smsLogsTable.purpose, purpose as never));
+  if (messageType) conds.push(eq(smsLogsTable.messageType, messageType as never));
 
   const where = conds.length > 0 ? and(...conds) : undefined;
   const [rows, totalRow] = await Promise.all([
@@ -328,7 +334,28 @@ router.get("/admin/sms/usage", requireSuperAdmin, async (req, res) => {
     : [];
   const byTenant = new Map(usageRows.map(r => [r.tenantId, r]));
 
+  // Provider-level breakdown for the current month, used by the Reports
+  // panel to surface 2Factor / Twilio / etc. traffic, failure rate, and
+  // cost estimate at a glance.
+  const providerRows = await db.select({
+    providerType: smsLogsTable.providerType,
+    sent: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} IN ('sent','delivered'))::int`,
+    failed: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'failed')::int`,
+    blocked: sql<number>`count(*) FILTER (WHERE ${smsLogsTable.status} = 'blocked')::int`,
+    costEstimate: sql<string>`COALESCE(SUM(${smsLogsTable.costEstimate})::text, '0')`,
+  })
+    .from(smsLogsTable)
+    .where(gte(smsLogsTable.createdAt, start))
+    .groupBy(smsLogsTable.providerType);
+
   res.json({
+    byProvider: providerRows.map(r => ({
+      provider: r.providerType ?? "unknown",
+      sent: r.sent ?? 0,
+      failed: r.failed ?? 0,
+      blocked: r.blocked ?? 0,
+      costEstimate: r.costEstimate ?? "0",
+    })),
     rows: tenants.map(t => {
       const u = byTenant.get(t.id) ?? { sent: 0, failed: 0, blocked: 0 };
       const lim = (t.override ?? t.planLimit ?? 0) || 0;

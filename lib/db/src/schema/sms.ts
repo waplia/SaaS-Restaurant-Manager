@@ -3,8 +3,13 @@ import { tenantsTable } from "./tenants";
 import { restaurantsTable } from "./restaurants";
 import { usersTable } from "./users";
 
-export type SmsProviderType = "twilio" | "msg91" | "textlocal" | "fast2sms" | "gupshup" | "custom";
+export type SmsProviderType = "twilio" | "msg91" | "textlocal" | "fast2sms" | "gupshup" | "2factor" | "custom";
 export type SmsLogStatus = "queued" | "sent" | "delivered" | "failed" | "blocked";
+export type SmsMessageType = "otp" | "transactional" | "promotional" | "voice_otp" | "test";
+export type SmsPurpose =
+  | "login" | "register" | "two_factor" | "password_reset"
+  | "staff_invite" | "new_device" | "verify_mobile" | "verify_email"
+  | "marketing" | "lifecycle" | "custom";
 
 export const SMS_TEMPLATE_EVENT_KEYS = [
   "welcome",
@@ -68,8 +73,25 @@ export const smsLogsTable = pgTable("sms_logs", {
   body: text("body").notNull(),
   status: text("status").$type<SmsLogStatus>().notNull().default("queued"),
   providerMessageId: text("provider_message_id"),
+  // Provider-issued session id for verify-by-session OTP flows (e.g. 2Factor).
+  providerSessionId: text("provider_session_id"),
+  // Why the message was sent: login, register, marketing, lifecycle, etc.
+  // Used by Reports breakdown alongside `provider`.
+  purpose: text("purpose").$type<SmsPurpose>(),
+  // High-level category routed at the provider (otp / transactional /
+  // promotional / voice_otp / test).
+  messageType: text("message_type").$type<SmsMessageType>(),
+  // Provider-reported cost estimate (separate from the legacy `cost` field
+  // so existing code paths are untouched).
+  costEstimate: decimal("cost_estimate", { precision: 10, scale: 4 }),
   cost: decimal("cost", { precision: 10, scale: 4 }),
   costCurrency: text("cost_currency"),
+  // Normalized provider error code (e.g. "INVALID_API_KEY", "LOW_BALANCE")
+  // so the UI can render friendly messages without parsing free text.
+  errorCode: text("error_code"),
+  // Raw provider response JSON for debugging / audit. Kept separate from
+  // `metadata` so app-level metadata isn't polluted by provider payloads.
+  providerResponse: jsonb("provider_response").$type<Record<string, unknown>>(),
   error: text("error"),
   retryOf: integer("retry_of"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
