@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,9 +65,12 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brand}>
-          <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
-            <Ionicons name="restaurant" size={32} color="#fff" />
-          </View>
+          <Image
+            source={require("../assets/images/brand-logo.png")}
+            style={styles.logoImg}
+            resizeMode="contain"
+            accessibilityLabel="KhanaLagao logo"
+          />
           <Text style={[styles.brandName, { color: colors.foreground }]}>KhanaLagao</Text>
           <Text style={[styles.brandSub, { color: colors.mutedForeground }]}>Restaurant Management</Text>
         </View>
@@ -135,6 +138,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 20, justifyContent: "center", gap: 32 },
   brand: { alignItems: "center", gap: 8 },
   logoBox: { width: 64, height: 64, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  logoImg: { width: 96, height: 96 },
   brandName: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   brandSub: { fontSize: 14, fontFamily: "Inter_400Regular" },
   card: { borderRadius: 16, borderWidth: 1, padding: 20, gap: 16 },

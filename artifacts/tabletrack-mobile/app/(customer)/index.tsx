@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, Pressable, Platform, Alert, TextInput,
+  View, Text, StyleSheet, Pressable, Platform, Alert, TextInput, Image,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,9 +56,12 @@ export default function QRScanScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: isWeb ? 67 : insets.top }]}>
         <View style={styles.manualContent}>
-          <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
-            <Ionicons name="restaurant" size={36} color="#fff" />
-          </View>
+          <Image
+            source={require("../../assets/images/brand-logo.png")}
+            style={styles.logoImg}
+            resizeMode="contain"
+            accessibilityLabel="KhanaLagao logo"
+          />
           <Text style={[styles.title, { color: colors.foreground }]}>KhanaLagao</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             {isWeb ? "Enter a table number to browse the menu" : "Enter a table number manually"}
@@ -161,6 +164,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   manualContent: { flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center", gap: 16 },
   logoBox: { width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  logoImg: { width: 112, height: 112 },
   title: { fontSize: 26, fontFamily: "Inter_700Bold" },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
   inputWrap: {
