@@ -1,0 +1,1046 @@
+Implement complete PhonePe Offline / In-Store integration in KhanaLagao using PhonePe official Offline Integration documentation.
+
+Official documentation:
+Main Offline Integration:
+https://developer.phonepe.com/offline-integration
+
+Integrated EDC Solution:
+https://developer.phonepe.com/offline-integration/integrated-edc-solution/edc-sale-request-api
+https://developer.phonepe.com/offline-integration/integrated-edc-solution/edc-status-check-api
+https://developer.phonepe.com/offline-integration/integrated-edc-solution/edc-s2s-callback-api
+https://developer.phonepe.com/offline-integration/integrated-edc-solution/edc-txn-search-api
+https://developer.phonepe.com/offline-integration/integrated-edc-solution/edc-uat-testing
+
+Dynamic QR:
+https://developer.phonepe.com/offline-integration/dynamic-qr-solution/dqr-init-api
+
+Collect Call:
+https://developer.phonepe.com/offline-integration/collect-call-solution/request-payment-api
+
+Paylink:
+https://developer.phonepe.com/offline-integration/paylink-solution/paymentlink-api
+
+Response Capturing:
+https://developer.phonepe.com/offline-integration/response-capturing-api/check-payment-status-api
+https://developer.phonepe.com/offline-integration/response-capturing-api/server-to-server-callback
+https://developer.phonepe.com/offline-integration/response-capturing-api/comprehensive-transaction-recon-api
+
+Refund:
+https://developer.phonepe.com/offline-integration/refund-flow/refund-api
+https://developer.phonepe.com/offline-integration/refund-flow/check-payment-status-api
+https://developer.phonepe.com/offline-integration/refund-flow/cancel-payment-request-api
+
+Important:
+- Do not rebuild existing POS or payment system.
+- KhanaLagao already has payment terminal/provider structure. Extend it.
+- Do not break existing Stripe terminal or other payment providers.
+- Add PhonePe as a real payment provider adapter.
+- No mock payment success.
+- All PhonePe credentials must be configured only in Super Admin Provider Center.
+- Restaurant admin must not see PhonePe secrets.
+- Restaurant admin should only enable allowed PhonePe modes, assign terminals, and view transactions/logs.
+- All status verification must happen on backend.
+- Never mark invoice/order paid only from frontend.
+- Existing POS → invoice → payment → cashier closing → reports flow must continue working.
+
+Feature name:
+PhonePe Offline Payments
+PhonePe EDC Terminal
+PhonePe Dynamic QR
+PhonePe Collect Call
+PhonePe Paylink
+PhonePe Static QR
+PhonePe Refund
+PhonePe Reconciliation
+
+====================================================
+1. PHONEPE OFFLINE SOLUTIONS TO SUPPORT
+====================================================
+
+PhonePe documentation lists these in-store/offline solutions:
+- Integrated EDC Solution
+- Dynamic QR Solution
+- Collect Call Solution
+- Paylink Solution
+- Integrated Static QR
+- Refund Flow
+- Response Capturing API
+- Comprehensive Transaction Recon API
+
+Implement support in phases but build architecture for all.
+
+Priority 1:
+- Integrated EDC Sale Request
+- EDC Status Check
+- EDC S2S Callback
+- POS payment UI
+- Transaction logs
+- Cashier closing/report updates
+
+Priority 2:
+- Dynamic QR
+- Paylink
+- Collect Call
+- Refund
+- Reconciliation
+
+Priority 3:
+- Integrated Static QR
+- Transaction search
+- Advanced settlement matching
+
+====================================================
+2. SUPER ADMIN PROVIDER CENTER
+====================================================
+
+Add:
+
+Super Admin → Provider Center → Payments → PhonePe Offline
+
+Fields:
+- Provider enabled: yes/no
+- Mode: UAT / Production
+- Merchant ID
+- Salt Key
+- Salt Index
+- Provider ID optional
+- Default Callback URL
+- EDC Callback URL
+- Dynamic QR Callback URL
+- Paylink Callback URL
+- Collect Callback URL
+- Refund Callback URL
+- Supported modes:
+  - EDC Terminal
+  - Dynamic QR
+  - Collect Call
+  - Paylink
+  - Static QR
+  - Refund
+  - Reconciliation
+- Default terminal timeout seconds: 60
+- Test connection button
+- Test X-VERIFY button
+- View provider logs
+
+Security:
+- Encrypt Salt Key and all secrets.
+- Mask all secret values in UI.
+- Never expose secrets to restaurant admin/frontend.
+- Audit log every provider change.
+
+Mode base URLs:
+UAT EDC Sale:
+POST https://mercury-uat.phonepe.com/enterprise-sandbox/v1/edc/transaction/init
+
+Production EDC Sale:
+POST https://mercury-t2.phonepe.com/v1/edc/transaction/init
+
+UAT EDC Status:
+POST https://mercury-uat.phonepe.com/enterprise-sandbox/v1/edc/transaction/{merchantId}/{transactionId}/status
+
+Production EDC Status:
+POST https://mercury-t2.phonepe.com/v1/edc/transaction/{merchantId}/{transactionId}/status
+
+Use exact endpoint paths from docs for signature generation.
+
+====================================================
+3. PHONEPE X-VERIFY / CHECKSUM IMPLEMENTATION
+====================================================
+
+Create backend utility:
+
+phonepeOfflineSigner.ts or phonepeOfflineSigner.js
+
+Functions:
+- base64EncodePayload(payload)
+- generateEdcSaleXVerify(base64Payload, saltKey, saltIndex)
+- generateEdcStatusXVerify(merchantId, transactionId, saltKey, saltIndex)
+- verifyCallbackSignature if docs/header available
+- buildHeaders(providerConfig, callbackUrl)
+
+EDC Sale X-VERIFY:
+SHA256(base64 encoded payload + "/v1/edc/transaction/init" + saltKey) + "###" + saltIndex
+
+EDC Status X-VERIFY:
+SHA256("/v1/edc/transaction/{merchantId}/{transactionId}/status" + saltKey) + "###" + saltIndex
+
+Headers for EDC Sale:
+Content-Type: application/json
+X-VERIFY: generated checksum
+X-PROVIDER-ID: optional, only if configured
+X-CALLBACK-URL: EDC callback URL
+
+Headers for EDC Status:
+Content-Type: application/json
+X-VERIFY: generated checksum
+X-PROVIDER-ID: optional, only if configured
+
+Important:
+- Generate X-VERIFY only on backend.
+- Never calculate checksum on frontend.
+- Add unit tests for X-VERIFY generation.
+- Log only safe metadata, not salt key.
+
+====================================================
+4. PHONEPE TERMINAL / STORE MAPPING
+====================================================
+
+Add PhonePe terminal mapping.
+
+Restaurant Admin:
+Settings → Payments → PhonePe Terminals
+
+Super Admin can also manage/view terminals.
+
+Fields:
+- Outlet
+- Counter name
+- PhonePe Store ID
+- PhonePe Terminal ID
+- Terminal name
+- Integration Mapping Type:
+  - ONE_TO_ONE
+  - OPEN
+- Short Order ID enabled yes/no
+- Supported payment modes:
+  - CARD
+  - DQR
+  - CARD + DQR
+- Active/inactive
+- Default terminal for outlet/counter
+- Test terminal button
+
+Rules from docs:
+- storeId is PhonePe generated and mandatory.
+- terminalId is PhonePe generated.
+- terminalId is mandatory for ONE_TO_ONE.
+- For OPEN mode, terminalId is optional and shortOrderId is mandatory.
+- shortOrderId must be 4 to 8 digits.
+- paymentModes must include CARD and/or DQR, not empty.
+- amount is in paise.
+- transactionId must be unique and under 40 characters.
+
+Database:
+phonepe_terminals
+- id
+- restaurant_id
+- outlet_id
+- store_id
+- terminal_id nullable
+- terminal_name
+- counter_name
+- integration_mapping_type enum: ONE_TO_ONE, OPEN
+- short_order_enabled boolean
+- supported_modes_json
+- is_default boolean
+- status enum: active, inactive
+- last_transaction_at
+- created_at
+- updated_at
+
+====================================================
+5. DATABASE TABLES
+====================================================
+
+Create or extend tables.
+
+phonepe_provider_configs:
+- id
+- mode enum: UAT, PRODUCTION
+- merchant_id
+- salt_key_encrypted
+- salt_index
+- provider_id nullable
+- edc_callback_url
+- dqr_callback_url nullable
+- paylink_callback_url nullable
+- collect_callback_url nullable
+- enabled_modes_json
+- default_timeout_seconds
+- status
+- created_by
+- updated_by
+- created_at
+- updated_at
+
+phonepe_terminals:
+- id
+- restaurant_id
+- outlet_id
+- store_id
+- terminal_id nullable
+- terminal_name
+- counter_name
+- integration_mapping_type
+- supported_modes_json
+- is_default
+- status
+- last_transaction_at
+- created_at
+- updated_at
+
+payment_transactions:
+- id
+- restaurant_id
+- outlet_id
+- order_id
+- invoice_id
+- provider enum/string: phonepe
+- solution_type enum: EDC, DYNAMIC_QR, COLLECT, PAYLINK, STATIC_QR, MANUAL
+- merchant_id
+- store_id
+- terminal_id nullable
+- phonepe_order_id
+- phonepe_transaction_id
+- short_order_id nullable
+- amount_paise
+- amount_rupees
+- currency default INR
+- requested_payment_modes_json
+- final_payment_mode nullable: CARD, DQR, UPI, WALLET, UNKNOWN
+- reference_number nullable
+- response_code nullable
+- status enum: initiated, pending, success, failed, expired, cancelled, refunded, partially_refunded
+- raw_request_json
+- raw_response_json
+- callback_payload_json
+- error_code nullable
+- error_message nullable
+- verified_at nullable
+- webhook_received_at nullable
+- created_by
+- created_at
+- updated_at
+
+phonepe_callbacks:
+- id
+- payment_transaction_id nullable
+- merchant_id
+- transaction_id
+- order_id nullable
+- raw_payload_json
+- headers_json
+- verified boolean
+- processed boolean
+- error_message nullable
+- created_at
+
+phonepe_reconciliation_records:
+- id
+- restaurant_id
+- outlet_id nullable
+- transaction_id
+- reference_number nullable
+- amount_paise
+- payment_mode
+- phonepe_status
+- settlement_amount_paise nullable
+- settlement_date nullable
+- matched_payment_transaction_id nullable
+- match_status enum: matched, missing_in_khanalagao, missing_in_phonepe, amount_mismatch, pending, failed
+- raw_data_json
+- created_at
+- updated_at
+
+phonepe_refunds:
+- id
+- restaurant_id
+- payment_transaction_id
+- refund_transaction_id
+- amount_paise
+- reason
+- status
+- raw_request_json
+- raw_response_json
+- created_by
+- created_at
+- updated_at
+
+====================================================
+6. PAYMENT PROVIDER ADAPTER
+====================================================
+
+Add PhonePe provider adapter without breaking other providers.
+
+Create:
+PhonePeOfflineProviderAdapter
+
+Methods:
+- createEdcSaleRequest(input)
+- checkEdcStatus(transactionId)
+- handleEdcCallback(payload, headers)
+- createDynamicQr(input)
+- createCollectRequest(input)
+- createPaylink(input)
+- cancelPayment(transactionId)
+- refundPayment(input)
+- checkRefundStatus(refundTransactionId)
+- reconcileTransactions(input)
+- testConnection()
+- normalizePhonePeStatus(response)
+- mapPhonePeError(code)
+
+Do not put PhonePe logic directly in POS components.
+POS should call internal backend APIs only.
+
+====================================================
+7. EDC SALE REQUEST API IMPLEMENTATION
+====================================================
+
+Create backend API:
+POST /api/payments/phonepe/edc/sale
+
+Request from POS:
+{
+  invoiceId,
+  orderId,
+  terminalId,
+  paymentModes: ["CARD", "DQR"],
+  integrationMappingType,
+  timeoutSeconds
+}
+
+Backend should:
+1. Authenticate user.
+2. Check restaurant/outlet.
+3. Check permissions.
+4. Check provider configured by Super Admin.
+5. Check restaurant plan/payment mode enabled.
+6. Load invoice/order.
+7. Validate amount > 0.
+8. Load PhonePe terminal mapping.
+9. Generate unique phonepe_order_id.
+10. Generate unique phonepe_transaction_id under 40 chars.
+11. For OPEN mode generate 4-8 digit shortOrderId.
+12. Build PhonePe payload.
+13. Base64 encode payload.
+14. Generate X-VERIFY.
+15. POST to PhonePe EDC Sale endpoint.
+16. Store payment transaction with raw request/response.
+17. Return safe result to frontend.
+
+PhonePe EDC Sale payload:
+{
+  "merchantId": "<merchantId>",
+  "storeId": "<storeId>",
+  "orderId": "<billing/order id>",
+  "terminalId": "<terminalId for ONE_TO_ONE>",
+  "shortOrderId": "<4-8 digit code for OPEN only>",
+  "transactionId": "<unique transaction id>",
+  "amount": <amount in paise>,
+  "paymentModes": ["CARD", "DQR"],
+  "timeAllowedForHandoverToTerminalSeconds": 60,
+  "integrationMappingType": "ONE_TO_ONE"
+}
+
+Payload wrapper:
+{
+  "request": "<base64 encoded payload>"
+}
+
+Use endpoint:
+UAT:
+https://mercury-uat.phonepe.com/enterprise-sandbox/v1/edc/transaction/init
+
+Prod:
+https://mercury-t2.phonepe.com/v1/edc/transaction/init
+
+Success response from PhonePe includes:
+success
+code
+message
+data.merchantId
+data.transactionId
+data.amount
+
+Handle response codes:
+SUCCESS
+SOLUTION_NOT_ENABLED
+UNAUTHORIZED
+INVALID_MERCHANT_ID
+INVALID_STORE_ID
+INVALID_TERMINAL_ID
+DUPLICATE_TRANSACTION_ID
+INVALID_TRANSACTION_ID
+INVALID_INTEGRATION_MAPPING_TYPE
+INVALID_SHORTCODE_LENGTH
+INTEGRATEDMODE_NOT_ENABLED_ON_TERMINAL
+SHORT_CODE_IS_REQUIRED
+SHORT_CODE_NOT_REQUIRED
+INVALID_TERMINAL_HANDOVER_TIME
+INVALID_AMOUNT
+INVALID_PAYMENT_MODES
+
+Frontend should show clear messages for each.
+
+====================================================
+8. EDC STATUS CHECK API IMPLEMENTATION
+====================================================
+
+Create backend API:
+GET /api/payments/phonepe/edc/status/:transactionId
+
+Backend should:
+1. Authenticate user.
+2. Find payment transaction by transactionId and restaurant scope.
+3. Load provider config.
+4. Generate X-VERIFY:
+SHA256("/v1/edc/transaction/{merchantId}/{transactionId}/status" + saltKey) + "###" + saltIndex
+5. POST to PhonePe Status endpoint.
+6. Save raw response.
+7. If status SUCCESS and amount matches:
+   - Mark payment transaction success
+   - Mark invoice paid
+   - Mark order paid if needed
+   - Save referenceNumber
+   - Save paymentMode
+   - Save paymentInstruments
+   - Create payment ledger entry
+   - Update cashier closing/report data
+   - Trigger payment success notification
+8. If PENDING:
+   - Keep pending
+9. If FAILED or EXPIRED:
+   - Update status
+   - Do not mark paid
+10. Return current status to POS.
+
+Status response fields to handle:
+- merchantId
+- storeId
+- terminalId
+- orderId
+- transactionId
+- referenceNumber
+- paymentMode: CARD or DQR
+- amount in paise
+- status: PENDING, SUCCESS, FAILED, EXPIRED
+- responseCode
+- paymentInstruments
+- timestamp
+
+====================================================
+9. EDC S2S CALLBACK IMPLEMENTATION
+====================================================
+
+Create callback endpoint:
+POST /api/payments/phonepe/edc/callback
+
+This endpoint must be public but secure.
+
+Callback handling:
+1. Store raw callback in phonepe_callbacks.
+2. Verify callback authenticity according to PhonePe docs/header if available.
+3. Extract merchantId, orderId, transactionId, amount, status, referenceNumber, paymentMode.
+4. Find payment transaction.
+5. If transaction not found, store callback as unmatched.
+6. For safety, call EDC Status Check API to verify final status.
+7. If verified SUCCESS and amount matches:
+   - Mark payment transaction success
+   - Mark invoice paid
+   - Mark order paid
+   - Save referenceNumber
+   - Save paymentMode
+   - Save paymentInstruments
+   - Create ledger/payment record
+   - Update reports
+8. If failed/expired:
+   - Update status
+9. Make callback idempotent:
+   - Same callback should not duplicate payment.
+   - If already success, ignore duplicate safely.
+10. Return HTTP 200 after processing.
+
+Never mark paid without backend verification.
+
+====================================================
+10. POS PAYMENT UI
+====================================================
+
+Update POS payment modal.
+
+Payment methods:
+- Cash
+- Manual UPI
+- Manual Card
+- PhonePe EDC
+- PhonePe Dynamic QR
+- PhonePe Collect
+- PhonePe Paylink
+- PhonePe Static QR
+- Split Payment
+
+PhonePe EDC screen:
+- Select terminal/counter
+- Select payment modes:
+  - CARD
+  - DQR
+  - CARD + DQR
+- Show amount
+- Timeout seconds default 60
+- Button: Send to PhonePe Machine
+- Waiting screen:
+  “Payment request sent to PhonePe machine”
+  “Ask customer to pay by Card or UPI QR”
+- Show:
+  - transactionId
+  - terminal name
+  - timer
+  - Check Status button
+  - Cancel button
+  - Retry button if failed/expired
+- On success:
+  - Show success
+  - Mark invoice paid
+  - Close modal
+  - Print/share invoice if enabled
+
+OPEN mode:
+- Show shortOrderId clearly.
+- Instruction:
+  “Enter/fetch this code on PhonePe machine.”
+
+ONE_TO_ONE mode:
+- Show:
+  “Payment pushed to assigned terminal.”
+
+====================================================
+11. DYNAMIC QR IMPLEMENTATION
+====================================================
+
+Create backend API:
+POST /api/payments/phonepe/dqr/init
+
+Flow:
+1. POS/customer checkout requests Dynamic QR for invoice/order.
+2. Backend creates PhonePe Dynamic QR request using official DQR Init API.
+3. Store transaction.
+4. Return QR/payment data to frontend.
+5. Frontend displays QR and timer.
+6. Backend receives callback or checks status.
+7. On success, mark invoice/order paid.
+
+UI:
+- Show QR
+- Countdown
+- Refresh status
+- Retry/cancel
+- Clear failed/expired state
+
+Use PhonePe official Dynamic QR docs.
+
+====================================================
+12. COLLECT CALL IMPLEMENTATION
+====================================================
+
+Create backend API:
+POST /api/payments/phonepe/collect/request
+
+Flow:
+1. Select Collect Call payment.
+2. Customer phone/VPA required.
+3. Backend calls PhonePe Request Payment API.
+4. Store transaction.
+5. Wait for callback/status.
+6. On success, mark paid.
+
+Use for:
+- Delivery order payment
+- Remote payment
+- Pending invoice collection
+
+====================================================
+13. PAYLINK IMPLEMENTATION
+====================================================
+
+Create backend API:
+POST /api/payments/phonepe/paylink/create
+
+Flow:
+1. Generate paylink for invoice/order.
+2. Copy link or send via WhatsApp/SMS/email if configured.
+3. Track payment through callback/status.
+4. Mark invoice paid on verified success.
+
+Use for:
+- Pending invoices
+- Catering advance
+- Tiffin monthly plan
+- Remote payment
+
+====================================================
+14. STATIC QR SUPPORT
+====================================================
+
+Add optional Integrated Static QR support.
+
+Features:
+- Map static QR to outlet/counter/table.
+- Receive static QR S2S callback.
+- Try to match transaction to order/invoice if metadata available.
+- If unmatched, show in “Unmatched PhonePe Payments”.
+- Allow manager to map payment manually to invoice/order.
+
+====================================================
+15. CANCEL PAYMENT REQUEST
+====================================================
+
+Create API:
+POST /api/payments/phonepe/cancel
+
+Use official PhonePe Cancel Payment Request API where applicable.
+
+Use cases:
+- Customer changes payment mode.
+- EDC request is stuck.
+- Cashier cancels waiting request.
+- Order cancelled.
+
+Update transaction status:
+cancelled
+
+Do not mark paid.
+
+====================================================
+16. REFUND IMPLEMENTATION
+====================================================
+
+Create APIs:
+POST /api/payments/phonepe/refund
+GET /api/payments/phonepe/refund/status/:refundTransactionId
+
+Refund flow:
+1. User selects paid invoice.
+2. Click refund.
+3. Choose full/partial refund.
+4. Add reason.
+5. Check permission/approval rules.
+6. Backend calls PhonePe Refund API.
+7. Store refund transaction.
+8. Check refund status.
+9. Update payment/refund reports.
+
+If PhonePe refund API is not enabled:
+Show:
+“PhonePe refund API not enabled. Process refund manually and mark refund.”
+
+====================================================
+17. RECONCILIATION IMPLEMENTATION
+====================================================
+
+Add:
+Finance → Payments → PhonePe Reconciliation
+
+Support:
+- Comprehensive Transaction Recon API
+- Settlement CSV upload fallback
+
+Features:
+- Fetch/import PhonePe transaction data.
+- Match by transactionId, referenceNumber, orderId, amount, date.
+- Show matched/missing/mismatch records.
+- Mark settled.
+- Export report.
+
+Statuses:
+- Matched
+- Missing in KhanaLagao
+- Missing in PhonePe
+- Amount mismatch
+- Pending
+- Failed
+- Refund mismatch
+- Settled
+
+====================================================
+18. REPORTS AND CASHIER CLOSING
+====================================================
+
+PhonePe payments must appear in:
+- POS payment summary
+- Cashier closing
+- Daily sales
+- Payment report
+- Finance/P&L
+- Settlement report
+- Refund report
+- Terminal-wise report
+- Store-wise report
+- Outlet report
+- Tax report if applicable
+
+Cashier closing split:
+- Cash
+- Manual UPI
+- Manual Card
+- PhonePe EDC CARD
+- PhonePe EDC DQR
+- PhonePe Dynamic QR
+- PhonePe Collect
+- PhonePe Paylink
+- Other gateways
+
+====================================================
+19. PERMISSIONS
+====================================================
+
+Add permissions:
+- View PhonePe settings
+- Manage PhonePe terminals
+- Take PhonePe EDC payment
+- Take PhonePe Dynamic QR payment
+- Generate PhonePe Paylink
+- Send PhonePe Collect request
+- Cancel PhonePe request
+- Refund PhonePe payment
+- View PhonePe transactions
+- Reconcile PhonePe settlements
+- Configure PhonePe provider in Super Admin
+
+Cashier:
+- Take payment
+- Check status
+
+Manager/Owner:
+- Refund/cancel/reconcile based on permission
+
+Super Admin:
+- Provider configuration
+
+====================================================
+20. ERROR HANDLING
+====================================================
+
+Show user-friendly errors.
+
+Map PhonePe response codes:
+SOLUTION_NOT_ENABLED:
+“PhonePe EDC Sale API is not enabled for this merchant.”
+
+UNAUTHORIZED:
+“PhonePe checksum verification failed. Please check Salt Key/Salt Index.”
+
+INVALID_MERCHANT_ID:
+“Invalid PhonePe Merchant ID.”
+
+INVALID_STORE_ID:
+“Invalid PhonePe Store ID.”
+
+INVALID_TERMINAL_ID:
+“Invalid PhonePe Terminal ID.”
+
+DUPLICATE_TRANSACTION_ID:
+“Duplicate PhonePe transaction ID. Please retry.”
+
+INVALID_TRANSACTION_ID:
+“Invalid transaction ID format.”
+
+INVALID_INTEGRATION_MAPPING_TYPE:
+“Invalid integration mapping type.”
+
+INVALID_SHORTCODE_LENGTH:
+“Short Order ID must be 4 to 8 digits.”
+
+INTEGRATEDMODE_NOT_ENABLED_ON_TERMINAL:
+“Integrated mode is not enabled on this PhonePe terminal.”
+
+SHORT_CODE_IS_REQUIRED:
+“Short Order ID is required for OPEN mode.”
+
+SHORT_CODE_NOT_REQUIRED:
+“Short Order ID is not allowed for ONE_TO_ONE mode.”
+
+INVALID_TERMINAL_HANDOVER_TIME:
+“Invalid or expired terminal handover time.”
+
+INVALID_AMOUNT:
+“Invalid payment amount.”
+
+INVALID_PAYMENT_MODES:
+“Invalid PhonePe payment mode.”
+
+Also handle:
+- Network failure
+- Timeout
+- Webhook delayed
+- Pending too long
+- Amount mismatch
+- Terminal inactive
+- Provider not configured
+- Plan locked
+- Permission denied
+
+Never keep spinner forever.
+
+====================================================
+21. SECURITY RULES
+====================================================
+
+- No card data storage.
+- No PhonePe secrets in frontend.
+- All PhonePe requests are backend-only.
+- Verify checksum/signature.
+- Verify status before marking paid.
+- Use unique transaction IDs.
+- Use idempotency for callbacks.
+- Tenant isolation by restaurant_id/store_id.
+- Validate amount server-side.
+- Restrict refunds by role.
+- Audit log all payments/refunds/settings changes.
+- Store raw request/response safely.
+
+====================================================
+22. ENVIRONMENT / CONFIG
+====================================================
+
+Add .env.example placeholders only:
+
+PHONEPE_OFFLINE_MODE=UAT
+PHONEPE_MERCHANT_ID=
+PHONEPE_SALT_KEY=
+PHONEPE_SALT_INDEX=
+PHONEPE_PROVIDER_ID=
+PHONEPE_EDC_CALLBACK_URL=
+PHONEPE_DQR_CALLBACK_URL=
+PHONEPE_COLLECT_CALLBACK_URL=
+PHONEPE_PAYLINK_CALLBACK_URL=
+
+But actual credentials should be saved in Super Admin Provider Center, not hardcoded.
+
+====================================================
+23. DOCUMENTATION FILE FOR PROJECT
+====================================================
+
+Create documentation file:
+
+docs/phonepe-offline-integration.md
+
+Include:
+- Overview
+- Supported PhonePe modes
+- Super Admin setup
+- Restaurant terminal setup
+- POS EDC payment flow
+- ONE_TO_ONE vs OPEN mode
+- Dynamic QR flow
+- Collect Call flow
+- Paylink flow
+- Callback handling
+- Status check handling
+- Refund flow
+- Reconciliation flow
+- Error code mapping
+- UAT testing checklist
+- Production checklist
+
+Also include PhonePe doc links in this file.
+
+====================================================
+24. UAT TESTING CHECKLIST
+====================================================
+
+Test in PhonePe UAT first.
+
+A. Super Admin Setup
+- Add Merchant ID
+- Add Salt Key
+- Add Salt Index
+- Save config
+- Test X-VERIFY generation
+- Enable PhonePe for plan/restaurant
+
+B. Terminal Mapping
+- Add storeId
+- Add terminalId
+- Set ONE_TO_ONE
+- Supported modes CARD + DQR
+- Test terminal
+
+C. EDC CARD Payment
+- Create POS invoice ₹100
+- Select PhonePe EDC
+- Select CARD
+- Send to terminal
+- Pay on PhonePe machine
+- Status SUCCESS
+- Invoice marked paid
+- Reports update
+
+D. EDC DQR Payment
+- Create invoice ₹100
+- Select PhonePe EDC
+- Select DQR
+- Pay using QR/UPI on EDC
+- Status SUCCESS
+- Reports update
+
+E. OPEN Mode
+- Create invoice
+- Select OPEN mode terminal/store
+- Generate shortOrderId
+- Fetch on EDC using shortOrderId
+- Pay
+- Status success
+
+F. Status Check
+- Start payment
+- Click Check Status
+- Show PENDING/SUCCESS/FAILED/EXPIRED correctly
+
+G. Callback
+- Receive PhonePe S2S callback
+- Verify/process
+- No duplicate payment if callback repeats
+
+H. Cancel
+- Start EDC request
+- Cancel before payment
+- Status cancelled
+
+I. Refund
+- Full refund
+- Partial refund
+- Refund report updates
+
+J. Reconciliation
+- Fetch/import recon data
+- Match transactions
+- Show mismatch if amount differs
+
+K. Cashier Closing
+- PhonePe EDC CARD and DQR split visible
+- Totals correct
+
+L. Permissions
+- Cashier cannot configure provider
+- Owner/manager can view allowed reports
+- Super Admin controls credentials
+
+====================================================
+25. FINAL ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- PhonePe Offline provider exists in Super Admin.
+- EDC Sale Request API is implemented with exact parameters.
+- X-VERIFY checksum works.
+- EDC Status Check API is implemented.
+- EDC S2S Callback endpoint exists and is idempotent.
+- POS payment modal supports PhonePe EDC.
+- ONE_TO_ONE and OPEN mapping are supported.
+- CARD and DQR payment modes are supported.
+- Amount is sent in paise.
+- Invoice/order is marked paid only after verified SUCCESS.
+- Dynamic QR support is added.
+- Collect Call support is added or proper configuration message shown.
+- Paylink support is added or proper configuration message shown.
+- Refund support is added.
+- Reconciliation support is added.
+- Cashier closing and reports include PhonePe.
+- Restaurant cannot see PhonePe secrets.
+- Existing payment providers still work.
+- No mock success.
+- No infinite loading.
+- Build passes.
+- docs/phonepe-offline-integration.md is created.
