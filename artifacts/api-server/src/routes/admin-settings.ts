@@ -303,7 +303,15 @@ router.post("/admin/app-settings/uploads/finalize", requireSuperAdmin, async (re
 });
 
 // ─── Super-admin: Google sign-in "Test connection" ────────────
-router.use(requireSuperAdmin, googleAdminRouter);
+// IMPORTANT: mount the subrouter WITHOUT a path-less `router.use(middleware, ...)`.
+// `router.use(requireSuperAdmin, googleAdminRouter)` would attach
+// `requireSuperAdmin` at "/" of this parent router, causing it to run for
+// every request that flows through `adminSettingsRouter` (which is mounted
+// early in routes/index.ts and sees almost every authenticated request).
+// That broke ALL non-super-admin owners/managers with "Super admin access
+// required". The route-level guard inside `googleAdminRouter` is the right
+// place for the check.
+router.use(googleAdminRouter);
 
 // ─── PUBLIC: read non-sensitive settings (no auth) ─────────────
 export const publicAppSettingsRouter = Router();

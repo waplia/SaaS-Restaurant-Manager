@@ -16,6 +16,7 @@ import { decryptSecret } from "../lib/aiEncryption";
 import { signAccessToken, signRefreshToken } from "../lib/auth";
 import { createSession } from "../lib/sessions";
 import { rateLimit } from "../middleware/rateLimit";
+import { requireSuperAdmin } from "../middleware/authorize";
 import { validate } from "../middleware/validate";
 import { recordAuditLog } from "../lib/audit";
 import { sendStaffOtp, verifyStaffOtp } from "../lib/staffOtp";
@@ -355,7 +356,7 @@ router.post("/auth/google/pending/verify", googleLimit, validate({ body: Pending
 // Super-admin: "Test connection". Mounted via googleAdminRouter below.
 // ────────────────────────────────────────────────────────────────────────────
 export const googleAdminRouter = Router();
-googleAdminRouter.post("/admin/app-settings/google/test", async (_req, res) => {
+googleAdminRouter.post("/admin/app-settings/google/test", requireSuperAdmin, async (_req, res) => {
   const s = await getAppSettings();
   if (!s.googleClientId) {
     res.status(400).json({ ok: false, error: "Set the Client ID first." });
