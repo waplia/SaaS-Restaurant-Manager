@@ -1,0 +1,1257 @@
+Build complete Email Template Center and WhatsApp Cloud Template Library for KhanaLagao.
+
+Goal:
+KhanaLagao should have a complete template system for:
+1. Super Admin platform emails
+2. Restaurant customer emails
+3. WhatsApp Cloud API templates
+4. WhatsApp template sync/edit/submit flow
+5. Restaurant activity notifications on WhatsApp
+6. Marketing, utility, and authentication templates
+7. Variables, preview, testing, approval status, logs, and usage tracking
+
+Important:
+- Do not break existing email, WhatsApp, SMS, web push, campaign, provider, or notification systems.
+- Super Admin owns provider configuration and global templates.
+- Restaurant admin should not manage provider API keys or WhatsApp Cloud API tokens.
+- Restaurant admin can only use templates allowed by Super Admin and plan.
+- Restaurant can customize allowed templates if permitted.
+- WhatsApp templates must support Meta Cloud API format.
+- Support template categories:
+  - AUTHENTICATION
+  - UTILITY
+  - MARKETING
+- Use real database, real APIs, real provider status, real Meta sync.
+- No mock success.
+- No fake template approval.
+- No infinite loading.
+- Every template must support variables/placeholders.
+- Every message sent must be logged.
+
+====================================================
+1. SUPER ADMIN EMAIL CENTER
+====================================================
+
+Create/upgrade:
+
+Super Admin → Email Center
+
+Menus:
+- Dashboard
+- Platform Email Templates
+- Restaurant Email Templates
+- Lifecycle Automations
+- Follow-up Sequences
+- Marketing Email Templates
+- Email Campaign Templates
+- Email Logs
+- Provider Status
+- Variables
+- Template Versions
+
+Dashboard:
+- Total templates
+- Active templates
+- Emails sent today
+- Failed emails
+- Most used templates
+- Active automations
+- Provider status
+- Recent failures
+
+Template editor should support:
+- Template name
+- Template code/key
+- Template category
+- Subject
+- Preheader
+- HTML body
+- Plain text body
+- CTA text
+- CTA URL
+- Header logo
+- Footer
+- Variables
+- Preview
+- Send test email
+- Enable/disable
+- Duplicate
+- Version history
+- Reset default
+
+Design:
+- Premium KhanaLagao email design
+- Mobile responsive
+- Orange/white/dark theme
+- Clear CTA button
+- Clean footer
+- Legal/unsubscribe where marketing
+
+====================================================
+2. PLATFORM EMAIL TEMPLATES FOR SUPER ADMIN
+====================================================
+
+Create beautiful default templates for platform-level activity:
+
+A. Authentication / Security
+1. Signup Verification OTP
+2. Login OTP
+3. 2FA OTP
+4. Password Reset OTP
+5. New Device Login Alert
+6. Password Changed
+7. 2FA Enabled
+8. 2FA Disabled
+9. Account Locked
+10. Suspicious Login Alert
+
+B. Restaurant Lifecycle
+11. Restaurant Signup Welcome
+12. Restaurant Registration Pending Approval
+13. Restaurant Approved
+14. Trial Started
+15. Trial Ending in 7 Days
+16. Trial Ending in 3 Days
+17. Trial Ending Today
+18. Trial Expired
+19. Onboarding Incomplete Reminder
+20. Setup Completed
+
+C. Billing / Subscription
+21. Plan Activated
+22. Plan Upgraded
+23. Plan Downgraded
+24. Subscription Renewed
+25. Subscription Expiring Soon
+26. Subscription Cancelled
+27. Payment Successful
+28. Payment Failed
+29. Payment Reminder
+30. Invoice Generated
+31. Refund Processed
+
+D. AI / Credits
+32. AI Credits Added
+33. AI Credits Low
+34. AI Credits Exhausted
+35. AI Usage Summary
+36. AI Recharge Successful
+
+E. Support / System
+37. Support Ticket Created
+38. Support Ticket Replied
+39. Support Ticket Resolved
+40. SLA Breach Alert
+41. Scheduled Maintenance Notice
+42. Feature Announcement
+43. Super Admin Announcement
+44. Provider Error Alert
+45. Daily SaaS Summary
+
+====================================================
+3. RESTAURANT EMAIL TEMPLATES
+====================================================
+
+Create restaurant-side email templates that restaurants can use if Email provider is enabled by Super Admin.
+
+Restaurant Admin:
+Growth Engine → Email Templates
+
+Templates:
+1. Customer Welcome
+2. Order Confirmation
+3. Order Ready
+4. Reservation Confirmation
+5. Reservation Reminder
+6. Payment Reminder
+7. Invoice Sent
+8. Feedback Request
+9. Review Request
+10. Birthday Offer
+11. Anniversary Offer
+12. Weekend Offer
+13. Festival Offer
+14. New Item Launch
+15. Loyalty Points Update
+16. Coupon Issued
+17. Coupon Expiry Reminder
+18. Win-back Campaign
+19. Membership Renewal
+20. Tiffin Plan Renewal
+21. Catering Quote Follow-up
+22. Event Booking Confirmation
+23. Refund Confirmation
+24. Apology / Service Recovery
+25. Customer Reactivation
+
+Restaurant email rules:
+- Marketing emails require opt-in.
+- Every marketing email includes unsubscribe.
+- Utility emails only for genuine activity.
+- Logs must be saved.
+- Variables must be replaced before sending.
+
+====================================================
+4. EMAIL VARIABLES
+====================================================
+
+Support variables:
+
+Global:
+{{app_name}}
+{{app_url}}
+{{logo_url}}
+{{support_email}}
+{{support_phone}}
+{{current_year}}
+{{login_url}}
+{{dashboard_url}}
+
+User:
+{{user_name}}
+{{user_email}}
+{{user_mobile}}
+{{role_name}}
+
+Restaurant:
+{{restaurant_name}}
+{{owner_name}}
+{{owner_email}}
+{{owner_phone}}
+{{restaurant_city}}
+{{outlet_name}}
+{{restaurant_login_url}}
+
+Subscription:
+{{plan_name}}
+{{plan_price}}
+{{billing_cycle}}
+{{trial_end_date}}
+{{trial_days_left}}
+{{renewal_date}}
+{{invoice_number}}
+{{invoice_amount}}
+{{payment_due_date}}
+{{payment_link}}
+
+Customer:
+{{customer_name}}
+{{customer_phone}}
+{{customer_email}}
+{{last_order_date}}
+{{favorite_item}}
+{{loyalty_points}}
+{{wallet_balance}}
+
+Order:
+{{order_number}}
+{{order_status}}
+{{table_number}}
+{{order_total}}
+{{payment_status}}
+{{order_status_url}}
+{{invoice_url}}
+
+Campaign:
+{{coupon_code}}
+{{coupon_expiry}}
+{{offer_title}}
+{{offer_amount}}
+{{ordering_url}}
+{{review_link}}
+{{unsubscribe_url}}
+
+Support:
+{{ticket_id}}
+{{ticket_subject}}
+{{ticket_status}}
+{{ticket_url}}
+
+AI:
+{{ai_credits_balance}}
+{{ai_credits_used}}
+{{ai_recharge_url}}
+
+OTP:
+{{otp}}
+{{expiry_minutes}}
+
+====================================================
+5. WHATSAPP TEMPLATE CENTER
+====================================================
+
+Create:
+
+Super Admin → WhatsApp Template Center
+
+Menus:
+- Dashboard
+- Global Templates
+- Restaurant Templates
+- Meta Sync
+- Template Submissions
+- Template Status
+- Variables
+- Template Logs
+- Usage Analytics
+
+Restaurant Admin:
+Growth Engine → WhatsApp Templates
+Growth Engine → WhatsApp Campaigns
+
+Super Admin should manage:
+- Global WhatsApp templates
+- Template categories
+- Languages
+- Variables
+- Buttons
+- Header media
+- Footer
+- Meta submission
+- Approval status
+- Sync from Meta
+- Assign templates to plans
+- Assign templates to restaurants
+- Lock/unlock editing
+- Version history
+
+Restaurant admin can:
+- View allowed templates
+- Use templates in campaigns/automations
+- Edit restaurant copy if Super Admin allows
+- Preview with sample variables
+- Send test message if provider active
+- Submit edited template for internal approval if required
+
+====================================================
+6. WHATSAPP META CLOUD SYNC
+====================================================
+
+Add WhatsApp Cloud API template sync.
+
+Requirements:
+- Super Admin configures WhatsApp Cloud API provider.
+- Super Admin connects WABA/business account.
+- Fetch existing templates from Meta.
+- Show status:
+  - APPROVED
+  - PENDING
+  - REJECTED
+  - PAUSED
+  - DISABLED
+- Show category:
+  - AUTHENTICATION
+  - UTILITY
+  - MARKETING
+- Show language
+- Show components
+- Show rejection reason if available.
+- Allow submit new template to Meta.
+- Allow resubmit after editing.
+- Allow sync status manually.
+- Allow periodic sync via cron.
+
+Database:
+whatsapp_templates
+- id
+- restaurant_id nullable
+- created_by_super_admin boolean
+- template_name
+- meta_template_id nullable
+- category
+- language
+- status
+- header_type
+- header_text
+- header_media_url
+- body_text
+- footer_text
+- buttons_json
+- variables_json
+- sample_values_json
+- allow_restaurant_edit boolean
+- assigned_plans_json
+- assigned_restaurants_json
+- meta_response_json
+- rejection_reason
+- last_synced_at
+- created_at
+- updated_at
+
+whatsapp_template_versions
+- id
+- template_id
+- version_number
+- body_text
+- components_json
+- changed_by
+- created_at
+
+====================================================
+7. WHATSAPP TEMPLATE FORMAT
+====================================================
+
+Support Meta template components:
+
+Header:
+- None
+- Text
+- Image
+- Video
+- Document
+
+Body:
+- Text with variables like {{1}}, {{2}}, {{3}}
+
+Footer:
+- Short footer text
+
+Buttons:
+- Quick reply
+- URL button
+- Phone call button
+- Copy code button for authentication templates if supported/required
+
+Languages:
+- en
+- en_US
+- en_IN
+- hi
+- pt_BR
+- id
+- ar
+- es
+Add flexible language support.
+
+Variable mapping:
+Internal variables like {{customer_name}} should map to Meta variables {{1}}, {{2}}, etc.
+
+Example:
+Body:
+Hi {{1}}, your order {{2}} from {{3}} is confirmed.
+
+Variable map:
+{{1}} = customer_name
+{{2}} = order_number
+{{3}} = restaurant_name
+
+Require sample values for Meta submission:
+{{1}} sample: Rahul
+{{2}} sample: ORD1024
+{{3}} sample: Spice Cafe
+
+====================================================
+8. WHATSAPP TEMPLATE CATEGORIES
+====================================================
+
+Use correct category rules.
+
+AUTHENTICATION:
+Use only for OTP/security verification:
+- Login OTP
+- Signup OTP
+- 2FA OTP
+- Password reset OTP
+- New device verification
+
+UTILITY:
+Use for transactional/service activity:
+- Order confirmation
+- Order ready
+- Payment reminder
+- Reservation confirmation
+- Invoice sent
+- Refund confirmation
+- Tiffin renewal reminder
+- Event booking confirmation
+- Staff shift alert
+- Low stock internal alert
+
+MARKETING:
+Use for promotions, offers, reactivation, loyalty, campaigns:
+- Weekend offer
+- Birthday offer
+- Festival offer
+- Win-back
+- New item launch
+- Coupon
+- Membership promotion
+
+If a template has promotional content, classify it as MARKETING.
+
+====================================================
+9. WHATSAPP VARIABLES
+====================================================
+
+Support variables:
+
+{{customer_name}}
+{{restaurant_name}}
+{{order_number}}
+{{order_status}}
+{{table_number}}
+{{order_total}}
+{{estimated_time}}
+{{pickup_time}}
+{{delivery_eta}}
+{{reservation_date}}
+{{reservation_time}}
+{{guest_count}}
+{{payment_amount}}
+{{payment_link}}
+{{invoice_link}}
+{{review_link}}
+{{coupon_code}}
+{{coupon_expiry}}
+{{offer_title}}
+{{loyalty_points}}
+{{wallet_balance}}
+{{membership_name}}
+{{plan_name}}
+{{expiry_date}}
+{{tiffin_plan_name}}
+{{event_name}}
+{{event_date}}
+{{quote_amount}}
+{{staff_name}}
+{{shift_time}}
+{{otp}}
+{{expiry_minutes}}
+{{support_phone}}
+
+====================================================
+10. WHATSAPP TEMPLATES TO CREATE FOR META SUBMISSION
+====================================================
+
+Create these templates in WhatsApp Template Center with name, category, body, variables, footer, and suggested buttons.
+
+Important:
+For Meta submission, use numbered variables {{1}}, {{2}}, etc.
+Also store internal variable mapping.
+
+A. AUTHENTICATION TEMPLATES
+
+1. khanalagao_login_otp
+Category: AUTHENTICATION
+Body:
+{{1}} is your KhanaLagao login code. It expires in {{2}} minutes. Do not share this code.
+Variables:
+{{1}} otp
+{{2}} expiry_minutes
+Button:
+Copy Code
+
+2. khanalagao_signup_otp
+Category: AUTHENTICATION
+Body:
+{{1}} is your KhanaLagao signup verification code. It expires in {{2}} minutes. Do not share it.
+Variables:
+{{1}} otp
+{{2}} expiry_minutes
+Button:
+Copy Code
+
+3. khanalagao_2fa_otp
+Category: AUTHENTICATION
+Body:
+{{1}} is your KhanaLagao 2-step verification code. It expires in {{2}} minutes.
+Variables:
+{{1}} otp
+{{2}} expiry_minutes
+Button:
+Copy Code
+
+4. khanalagao_password_reset_otp
+Category: AUTHENTICATION
+Body:
+Use {{1}} to reset your KhanaLagao password. This code expires in {{2}} minutes.
+Variables:
+{{1}} otp
+{{2}} expiry_minutes
+Button:
+Copy Code
+
+5. khanalagao_new_device_otp
+Category: AUTHENTICATION
+Body:
+{{1}} is your KhanaLagao new device verification code. It expires in {{2}} minutes.
+Variables:
+{{1}} otp
+{{2}} expiry_minutes
+Button:
+Copy Code
+
+B. RESTAURANT UTILITY TEMPLATES
+
+6. restaurant_order_confirmed
+Category: UTILITY
+Body:
+Hi {{1}}, your order {{2}} at {{3}} is confirmed. Total: {{4}}. Track here: {{5}}
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+{{4}} order_total
+{{5}} order_status_url
+Footer:
+Thank you for ordering.
+Button:
+URL: Track Order
+
+7. restaurant_order_preparing
+Category: UTILITY
+Body:
+Hi {{1}}, your order {{2}} is now being prepared at {{3}}. Estimated time: {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+{{4}} estimated_time
+
+8. restaurant_order_ready
+Category: UTILITY
+Body:
+Hi {{1}}, your order {{2}} from {{3}} is ready. Please collect it or wait for service at your table.
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+
+9. restaurant_takeaway_ready
+Category: UTILITY
+Body:
+Hi {{1}}, your takeaway order {{2}} from {{3}} is ready for pickup.
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+
+10. restaurant_delivery_update
+Category: UTILITY
+Body:
+Hi {{1}}, your order {{2}} from {{3}} is {{4}}. ETA: {{5}}.
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+{{4}} order_status
+{{5}} delivery_eta
+
+11. restaurant_payment_link
+Category: UTILITY
+Body:
+Hi {{1}}, payment of {{2}} is pending for order {{3}} at {{4}}. Pay securely here: {{5}}
+Variables:
+{{1}} customer_name
+{{2}} payment_amount
+{{3}} order_number
+{{4}} restaurant_name
+{{5}} payment_link
+Button:
+URL: Pay Now
+
+12. restaurant_invoice_sent
+Category: UTILITY
+Body:
+Hi {{1}}, your invoice for order {{2}} at {{3}} is ready. View it here: {{4}}
+Variables:
+{{1}} customer_name
+{{2}} order_number
+{{3}} restaurant_name
+{{4}} invoice_link
+Button:
+URL: View Invoice
+
+13. restaurant_reservation_confirmed
+Category: UTILITY
+Body:
+Hi {{1}}, your reservation at {{2}} is confirmed for {{3}} at {{4}} for {{5}} guests.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} reservation_date
+{{4}} reservation_time
+{{5}} guest_count
+
+14. restaurant_reservation_reminder
+Category: UTILITY
+Body:
+Reminder: Your reservation at {{1}} is today at {{2}} for {{3}} guests. See you soon.
+Variables:
+{{1}} restaurant_name
+{{2}} reservation_time
+{{3}} guest_count
+
+15. restaurant_review_request
+Category: UTILITY
+Body:
+Hi {{1}}, thank you for visiting {{2}}. Please share your feedback here: {{3}}
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} review_link
+Button:
+URL: Give Feedback
+
+16. restaurant_refund_processed
+Category: UTILITY
+Body:
+Hi {{1}}, your refund of {{2}} for order {{3}} at {{4}} has been processed.
+Variables:
+{{1}} customer_name
+{{2}} payment_amount
+{{3}} order_number
+{{4}} restaurant_name
+
+17. restaurant_loyalty_points_update
+Category: UTILITY
+Body:
+Hi {{1}}, you now have {{2}} loyalty points at {{3}}. Use them on your next visit.
+Variables:
+{{1}} customer_name
+{{2}} loyalty_points
+{{3}} restaurant_name
+
+18. restaurant_tiffin_plan_reminder
+Category: UTILITY
+Body:
+Hi {{1}}, your {{2}} tiffin plan at {{3}} renews on {{4}}. Please complete payment if pending.
+Variables:
+{{1}} customer_name
+{{2}} tiffin_plan_name
+{{3}} restaurant_name
+{{4}} expiry_date
+
+19. restaurant_event_booking_confirmed
+Category: UTILITY
+Body:
+Hi {{1}}, your event booking {{2}} at {{3}} is confirmed for {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} event_name
+{{3}} restaurant_name
+{{4}} event_date
+
+20. restaurant_quote_followup
+Category: UTILITY
+Body:
+Hi {{1}}, your catering quote from {{2}} is {{3}}. View or confirm here: {{4}}
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} quote_amount
+{{4}} quote_link
+Button:
+URL: View Quote
+
+C. INTERNAL / STAFF UTILITY TEMPLATES
+
+21. staff_shift_reminder
+Category: UTILITY
+Body:
+Hi {{1}}, your shift at {{2}} starts at {{3}}. Please be on time.
+Variables:
+{{1}} staff_name
+{{2}} restaurant_name
+{{3}} shift_time
+
+22. staff_task_assigned
+Category: UTILITY
+Body:
+Hi {{1}}, a new task has been assigned to you at {{2}}: {{3}}.
+Variables:
+{{1}} staff_name
+{{2}} restaurant_name
+{{3}} task_title
+
+23. owner_low_stock_alert
+Category: UTILITY
+Body:
+Alert from {{1}}: {{2}} is low in stock. Current level: {{3}}.
+Variables:
+{{1}} restaurant_name
+{{2}} item_name
+{{3}} stock_level
+
+24. owner_daily_summary
+Category: UTILITY
+Body:
+Daily summary for {{1}}: Sales {{2}}, Orders {{3}}, Pending Alerts {{4}}. View dashboard: {{5}}
+Variables:
+{{1}} restaurant_name
+{{2}} today_sales
+{{3}} order_count
+{{4}} alert_count
+{{5}} dashboard_url
+Button:
+URL: Open Dashboard
+
+25. support_ticket_update
+Category: UTILITY
+Body:
+Ticket {{1}} has been updated. Status: {{2}}. View details: {{3}}
+Variables:
+{{1}} ticket_id
+{{2}} ticket_status
+{{3}} ticket_url
+Button:
+URL: View Ticket
+
+D. MARKETING TEMPLATES
+
+26. restaurant_weekend_offer
+Category: MARKETING
+Body:
+Hi {{1}}, enjoy {{2}} at {{3}} this weekend. Use code {{4}} before {{5}}.
+Variables:
+{{1}} customer_name
+{{2}} offer_title
+{{3}} restaurant_name
+{{4}} coupon_code
+{{5}} coupon_expiry
+Footer:
+Reply STOP to opt out.
+Button:
+URL: Order Now
+
+27. restaurant_birthday_offer
+Category: MARKETING
+Body:
+Happy Birthday {{1}}! {{2}} has a special birthday treat for you. Use code {{3}} before {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} coupon_code
+{{4}} coupon_expiry
+Footer:
+Reply STOP to opt out.
+
+28. restaurant_anniversary_offer
+Category: MARKETING
+Body:
+Happy Anniversary {{1}}! Celebrate with {{2}} and use code {{3}} before {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} coupon_code
+{{4}} coupon_expiry
+Footer:
+Reply STOP to opt out.
+
+29. restaurant_winback_offer
+Category: MARKETING
+Body:
+Hi {{1}}, we miss you at {{2}}. Come back and enjoy {{3}} with code {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} offer_title
+{{4}} coupon_code
+Footer:
+Reply STOP to opt out.
+
+30. restaurant_new_item_launch
+Category: MARKETING
+Body:
+Hi {{1}}, {{2}} has launched {{3}}. Try it today and enjoy {{4}}.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} item_name
+{{4}} offer_title
+Footer:
+Reply STOP to opt out.
+
+31. restaurant_festival_offer
+Category: MARKETING
+Body:
+Celebrate {{1}} with {{2}}. Get {{3}} using code {{4}} before {{5}}.
+Variables:
+{{1}} festival_name
+{{2}} restaurant_name
+{{3}} offer_title
+{{4}} coupon_code
+{{5}} coupon_expiry
+Footer:
+Reply STOP to opt out.
+
+32. restaurant_loyalty_reward
+Category: MARKETING
+Body:
+Hi {{1}}, you have {{2}} loyalty points at {{3}}. Redeem them on your next order.
+Variables:
+{{1}} customer_name
+{{2}} loyalty_points
+{{3}} restaurant_name
+Footer:
+Reply STOP to opt out.
+
+33. restaurant_membership_offer
+Category: MARKETING
+Body:
+Hi {{1}}, unlock exclusive benefits at {{2}} with our {{3}} membership plan.
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} membership_name
+Footer:
+Reply STOP to opt out.
+
+34. restaurant_abandoned_cart
+Category: MARKETING
+Body:
+Hi {{1}}, you left items in your cart at {{2}}. Complete your order here: {{3}}
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} order_link
+Footer:
+Reply STOP to opt out.
+Button:
+URL: Complete Order
+
+35. restaurant_flash_sale
+Category: MARKETING
+Body:
+Flash offer at {{1}}! Get {{2}} today only. Use code {{3}}.
+Variables:
+{{1}} restaurant_name
+{{2}} offer_title
+{{3}} coupon_code
+Footer:
+Reply STOP to opt out.
+
+36. restaurant_tiffin_promo
+Category: MARKETING
+Body:
+Hi {{1}}, start your {{2}} tiffin plan with {{3}}. Use code {{4}} to get {{5}}.
+Variables:
+{{1}} customer_name
+{{2}} tiffin_plan_name
+{{3}} restaurant_name
+{{4}} coupon_code
+{{5}} offer_title
+Footer:
+Reply STOP to opt out.
+
+37. restaurant_catering_promo
+Category: MARKETING
+Body:
+Planning an event? {{1}} offers catering packages for birthdays, offices, and parties. Enquire here: {{2}}
+Variables:
+{{1}} restaurant_name
+{{2}} enquiry_link
+Footer:
+Reply STOP to opt out.
+
+38. restaurant_review_boost_offer
+Category: MARKETING
+Body:
+Hi {{1}}, share your experience with {{2}} and unlock {{3}} on your next visit: {{4}}
+Variables:
+{{1}} customer_name
+{{2}} restaurant_name
+{{3}} offer_title
+{{4}} review_link
+Footer:
+Reply STOP to opt out.
+
+39. restaurant_happy_hour
+Category: MARKETING
+Body:
+Happy Hour at {{1}}! Enjoy {{2}} from {{3}} to {{4}} today.
+Variables:
+{{1}} restaurant_name
+{{2}} offer_title
+{{3}} start_time
+{{4}} end_time
+Footer:
+Reply STOP to opt out.
+
+40. restaurant_combo_offer
+Category: MARKETING
+Body:
+Hi {{1}}, try our {{2}} combo at {{3}} today. Use code {{4}} for extra savings.
+Variables:
+{{1}} customer_name
+{{2}} combo_name
+{{3}} restaurant_name
+{{4}} coupon_code
+Footer:
+Reply STOP to opt out.
+
+====================================================
+11. EMAIL TEMPLATE DEFAULT CONTENT
+====================================================
+
+Create these default email templates in beautiful responsive HTML.
+
+A. Signup Verification Email
+Subject:
+Your KhanaLagao Verification Code
+
+Body:
+Hi {{user_name}},
+
+Your verification code is:
+
+{{otp}}
+
+This code is valid for {{expiry_minutes}} minutes.
+
+If you did not request this code, you can safely ignore this email.
+
+Team KhanaLagao
+
+B. Restaurant Welcome Email
+Subject:
+Welcome to KhanaLagao — Your Restaurant OS is Ready
+
+Body:
+Hi {{owner_name}},
+
+Welcome to KhanaLagao.
+
+Your workspace for {{restaurant_name}} is ready. You can now manage POS billing, QR menu, kitchen, inventory, staff, finance, growth tools, and Khana AI from one connected platform.
+
+Next steps:
+1. Add your outlet details
+2. Create your menu
+3. Generate table QR codes
+4. Add staff members
+5. Try Khana AI
+
+CTA:
+Open Dashboard
+
+C. Trial Ending Email
+Subject:
+Your KhanaLagao trial ends in {{trial_days_left}} days
+
+Body:
+Hi {{owner_name}},
+
+Your trial for {{restaurant_name}} ends on {{trial_end_date}}.
+
+Choose a plan to keep using POS, QR menu, inventory, payroll, growth tools, and Khana AI without interruption.
+
+CTA:
+Choose Plan
+
+D. Payment Failed Email
+Subject:
+Payment failed for your KhanaLagao subscription
+
+Body:
+Hi {{owner_name}},
+
+We could not process your payment of {{invoice_amount}} for {{restaurant_name}}.
+
+Please complete payment to avoid service interruption.
+
+CTA:
+Pay Now
+
+E. AI Credits Low Email
+Subject:
+Your Khana AI credits are running low
+
+Body:
+Hi {{owner_name}},
+
+Your Khana AI credit balance is {{ai_credits_balance}}.
+
+Recharge now to continue using AI menu import, AI campaigns, AI insights, and AI chat.
+
+CTA:
+Recharge Credits
+
+F. Customer Order Confirmation Email
+Subject:
+Your order {{order_number}} is confirmed
+
+Body:
+Hi {{customer_name}},
+
+Your order at {{restaurant_name}} is confirmed.
+
+Order Number: {{order_number}}
+Total: {{order_total}}
+Status: {{order_status}}
+
+CTA:
+Track Order
+
+G. Customer Review Request Email
+Subject:
+How was your experience at {{restaurant_name}}?
+
+Body:
+Hi {{customer_name}},
+
+Thank you for visiting {{restaurant_name}}.
+
+Please share your feedback. It helps us serve you better.
+
+CTA:
+Give Feedback
+
+H. Customer Offer Email
+Subject:
+Special offer from {{restaurant_name}}
+
+Body:
+Hi {{customer_name}},
+
+Enjoy {{offer_title}} at {{restaurant_name}}.
+
+Use code {{coupon_code}} before {{coupon_expiry}}.
+
+CTA:
+Order Now
+
+Footer:
+You are receiving this because you opted in to updates from {{restaurant_name}}.
+Unsubscribe: {{unsubscribe_url}}
+
+====================================================
+12. TEMPLATE BUILDER FEATURES
+====================================================
+
+Email builder:
+- HTML editor
+- Rich text editor
+- Drag/drop blocks if available
+- Preview desktop/mobile
+- Send test email
+- Variables sidebar
+- Sample data preview
+- Version history
+
+WhatsApp builder:
+- Category selector
+- Language selector
+- Header builder
+- Body builder
+- Footer builder
+- Button builder
+- Variable mapping
+- Sample values
+- Meta compliance check
+- Submit to Meta
+- Sync status
+- Test send
+
+Compliance checker:
+- Authentication templates must only contain OTP/security content.
+- Utility templates must not include promotional offers.
+- Marketing templates must include opt-out suggestion where needed.
+- Variables must have sample values.
+- URL buttons must have valid URLs.
+- No empty body.
+- Template name lowercase snake_case.
+
+====================================================
+13. SYNC AND EDIT FLOW
+====================================================
+
+Super Admin workflow:
+1. Create global WhatsApp template.
+2. Add variables and sample values.
+3. Run compliance check.
+4. Submit to Meta.
+5. Status becomes Pending.
+6. Sync status from Meta.
+7. If approved, make template available to restaurants/plans.
+8. If rejected, show rejection reason and allow edit/resubmit.
+
+Restaurant workflow:
+1. Restaurant opens WhatsApp Templates.
+2. Sees approved templates allowed by plan.
+3. Can preview with own restaurant variables.
+4. Can use template in campaign/automation.
+5. If editing allowed, create restaurant copy.
+6. Edited copy can require Super Admin approval before Meta submission.
+7. After approved, restaurant can send.
+
+====================================================
+14. CAMPAIGN / AUTOMATION INTEGRATION
+====================================================
+
+WhatsApp templates should be usable in:
+- Order updates
+- Reservation reminders
+- Payment reminders
+- Review requests
+- Marketing campaigns
+- Birthday campaigns
+- Win-back campaigns
+- Tiffin renewal
+- Catering follow-up
+- Staff alerts
+- Owner daily summaries
+- OTP authentication
+- 2FA
+- Signup/login
+
+Email templates should be usable in:
+- Platform emails
+- Lifecycle emails
+- Restaurant marketing emails
+- Customer order emails
+- Billing emails
+- Support emails
+- Follow-up sequences
+
+====================================================
+15. TESTING
+====================================================
+
+Test:
+
+Email:
+- Create email template.
+- Preview with variables.
+- Send test.
+- Trigger signup email.
+- Trigger payment email.
+- Trigger restaurant customer email.
+- Logs saved.
+
+WhatsApp:
+- Create template.
+- Variable mapping works.
+- Sample values required.
+- Submit to Meta.
+- Sync status.
+- Approved template appears for restaurant.
+- Restaurant can use template.
+- Send test WhatsApp.
+- Campaign uses template.
+- Logs saved.
+
+Security:
+- Restaurant cannot see provider secrets.
+- Restaurant cannot submit unauthorized template if not allowed.
+- Plan locks work.
+- Permission checks work.
+
+====================================================
+16. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Email Center exists with platform and restaurant templates.
+- WhatsApp Template Center exists.
+- Meta template sync exists.
+- Templates support variables and sample values.
+- Super Admin can create/edit/submit/sync WhatsApp templates.
+- Restaurants can use allowed templates.
+- Email templates are responsive and editable.
+- WhatsApp templates cover authentication, utility, and marketing.
+- Campaigns and automations can use templates.
+- Logs are saved.
+- Approval/status states are real.
+- No mock Meta approval.
+- No provider secrets exposed.
+- Build passes.

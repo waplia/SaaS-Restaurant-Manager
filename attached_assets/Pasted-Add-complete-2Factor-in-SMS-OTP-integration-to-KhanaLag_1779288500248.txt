@@ -1,0 +1,673 @@
+Add complete 2Factor.in SMS/OTP integration to KhanaLagao for mobile OTP login, signup verification, 2FA, password reset, staff invite verification, and SMS campaigns.
+
+Official docs:
+2Factor API Postman docs:
+https://documenter.getpostman.com/view/301893/TWDamFGh
+
+2Factor website/pricing/API overview:
+https://2factor.in/v3/sms-api
+https://2factor.in/
+
+Important:
+- Do not break existing login/authentication.
+- Do not break existing SMS provider architecture.
+- Do not break existing email OTP, WhatsApp OTP, or password login.
+- Add 2Factor.in as one SMS/OTP provider inside Super Admin Provider Center.
+- All 2Factor API keys must be configured only in Super Admin.
+- Restaurant admin must not see or edit 2Factor API keys.
+- Restaurant admin can only enable/disable SMS OTP/SMS campaigns if Super Admin and plan allow it.
+- Use real 2Factor APIs, not mock success.
+- If 2Factor is not configured, show proper configuration error.
+- OTP must be secure, rate-limited, expiring, and logged.
+- Do not store OTP in plain text.
+- Build this for web and mobile app both.
+
+Feature name:
+2Factor.in SMS & OTP Provider
+
+====================================================
+1. SUPER ADMIN PROVIDER CENTER
+====================================================
+
+Add:
+
+Super Admin → Provider Center → SMS / OTP → 2Factor.in
+
+Fields:
+- Provider enabled: yes/no
+- Mode: live/sandbox if supported
+- API Key
+- Sender ID if required for SMS
+- OTP template name if using template-based OTP
+- Transactional SMS template ID/name
+- Promotional SMS template ID/name if used
+- Default country code: +91
+- OTP length: 4 / 6 digits
+- OTP expiry minutes
+- Resend cooldown seconds
+- Max OTP attempts
+- Max resend attempts
+- Daily OTP limit
+- Monthly OTP limit
+- Enable SMS OTP
+- Enable Voice OTP if available
+- Enable Transactional SMS
+- Enable Promotional SMS
+- Test OTP button
+- Test SMS button
+
+Security:
+- Encrypt API key.
+- Mask API key in UI.
+- Never expose API key to restaurant admin/frontend.
+- Audit log every provider setting change.
+
+====================================================
+2. RESTAURANT SMS/OTP SETTINGS
+====================================================
+
+Restaurant Admin → Settings → Communication → SMS / OTP
+
+Restaurant admin can only see:
+- 2Factor provider status: Active / Not configured / Locked by plan / Limit reached
+- SMS OTP enabled/disabled
+- SMS campaign enabled/disabled
+- OTP usage
+- SMS usage
+- Logs
+- Templates if allowed
+- Test SMS if permission allows
+
+Restaurant admin cannot see:
+- 2Factor API key
+- Super Admin provider secrets
+- Global provider configuration
+
+If provider not configured by Super Admin:
+Show:
+“2Factor.in SMS provider is not configured by platform admin.”
+
+If plan locked:
+Show upgrade screen.
+
+====================================================
+3. SUPPORTED 2FACTOR USE CASES
+====================================================
+
+Use 2Factor for these:
+
+Authentication:
+- Mobile number login OTP
+- Signup mobile verification OTP
+- Two-factor authentication OTP
+- Password reset OTP
+- Staff invite verification OTP
+- New device verification OTP
+
+Communication:
+- Transactional SMS
+- Payment reminder SMS
+- Reservation reminder SMS
+- Order update SMS if enabled
+- Marketing SMS campaigns if restaurant has consent and plan access
+
+Optional:
+- Voice OTP fallback if 2Factor account supports it.
+
+====================================================
+4. 2FACTOR OTP API ADAPTER
+====================================================
+
+Create provider adapter:
+
+TwoFactorSmsProviderAdapter
+
+Methods:
+- sendOtp({ mobile, countryCode, purpose, templateName })
+- verifyOtp({ sessionId, otp })
+- resendOtp({ sessionId })
+- sendTransactionalSms({ mobile, message, templateName })
+- sendPromotionalSms({ mobile, message, templateName })
+- sendVoiceOtp({ mobile }) if supported
+- testConnection()
+- normalizeError(error)
+- getBalance() if API supports
+
+Important:
+- Keep 2Factor logic only in provider adapter/service.
+- Do not write 2Factor code directly inside React components.
+- Frontend should only call internal KhanaLagao APIs.
+- Backend should call 2Factor APIs.
+
+====================================================
+5. 2FACTOR API ENDPOINT STRUCTURE
+====================================================
+
+Use 2Factor API documentation to implement exact endpoints.
+
+Common 2Factor OTP flow normally has:
+1. Send OTP to mobile number.
+2. Receive session/details ID from provider.
+3. Verify OTP using session/details ID + OTP.
+
+Implement endpoints using official docs:
+- Send OTP API
+- Verify OTP API
+- Transactional SMS API
+- Promotional SMS API if enabled
+- Voice OTP API if enabled
+- Delivery report/status API if available
+
+Important:
+- Follow exact endpoint format from 2Factor docs.
+- Support both auto-generated OTP by 2Factor and custom OTP mode if docs/provider support it.
+- Store provider session/details ID for verification.
+- Do not trust frontend verification.
+
+====================================================
+6. INTERNAL AUTH API FLOW
+====================================================
+
+Use existing auth APIs or create these:
+
+POST /api/auth/request-otp
+POST /api/auth/verify-otp
+POST /api/auth/resend-otp
+POST /api/auth/login-password
+POST /api/auth/verify-2fa
+POST /api/auth/register/start
+POST /api/auth/register/verify-mobile
+POST /api/auth/register/complete
+
+When channel = sms and provider = 2factor:
+- Use 2FactorSmsProviderAdapter.
+
+POST /api/auth/request-otp input:
+{
+  "identifier_type": "mobile",
+  "country_code": "+91",
+  "mobile_number": "9876543210",
+  "purpose": "login_mobile",
+  "channel": "sms"
+}
+
+Backend:
+1. Validate mobile number.
+2. Check Super Admin settings.
+3. Check rate limits.
+4. Check purpose allowed.
+5. Create otp_verification record.
+6. Call 2Factor Send OTP API.
+7. Store provider session/details ID.
+8. Return safe response.
+
+POST /api/auth/verify-otp input:
+{
+  "identifier_type": "mobile",
+  "country_code": "+91",
+  "mobile_number": "9876543210",
+  "purpose": "login_mobile",
+  "otp": "123456"
+}
+
+Backend:
+1. Find latest pending OTP record.
+2. Verify OTP with 2Factor if provider verification is used.
+3. Or verify locally if using custom OTP mode.
+4. Mark verified.
+5. Complete login / signup / 2FA / password reset based on purpose.
+6. Create session/JWT only after valid verification.
+
+====================================================
+7. OTP DATABASE STRUCTURE
+====================================================
+
+Create/update table:
+
+otp_verifications
+- id
+- identifier_type: mobile/email
+- identifier_value
+- country_code
+- purpose
+- channel: sms/whatsapp/email
+- provider: 2factor
+- provider_session_id nullable
+- provider_request_id nullable
+- otp_hash nullable
+- expires_at
+- attempts
+- max_attempts
+- resend_count
+- max_resends
+- status: pending/verified/expired/failed/locked
+- ip_address
+- user_agent
+- restaurant_id nullable
+- user_id nullable
+- provider_response_json
+- error_message nullable
+- created_at
+- verified_at nullable
+
+Rules:
+- If 2Factor generates/verifies OTP, store provider session ID.
+- If KhanaLagao generates OTP, store hashed OTP only.
+- Never store plain OTP.
+- Expire OTP after configured time.
+- Invalidate OTP after success.
+
+====================================================
+8. SMS LOGS DATABASE
+====================================================
+
+Create/update:
+
+sms_logs
+- id
+- restaurant_id nullable
+- user_id nullable
+- customer_id nullable
+- provider: 2factor
+- message_type: otp/transactional/promotional/marketing
+- purpose
+- recipient_mobile
+- country_code
+- message_snapshot
+- template_name nullable
+- provider_message_id nullable
+- provider_session_id nullable
+- status: queued/sent/delivered/failed/verified/expired
+- error_code nullable
+- error_message nullable
+- cost_estimate nullable
+- provider_response_json
+- sent_at nullable
+- delivered_at nullable
+- created_at
+
+Super Admin and restaurant logs should read from this.
+
+====================================================
+9. MOBILE LOGIN + SIGNUP FLOW WITH 2FACTOR
+====================================================
+
+Web and mobile app should support:
+
+A. Mobile OTP Login
+- User enters mobile number.
+- Send OTP using 2Factor.
+- User verifies OTP.
+- Login success.
+- Redirect role-wise.
+
+B. Restaurant Signup Mobile Verification
+- Owner enters mobile number.
+- OTP sent by 2Factor.
+- Verify OTP.
+- Continue registration.
+- Create restaurant workspace after completion.
+
+C. 2FA Login
+- User enters password.
+- If 2FA required, send OTP using 2Factor.
+- Verify OTP.
+- Complete login.
+
+D. Password Reset
+- User enters mobile.
+- Send OTP.
+- Verify OTP.
+- Allow password reset.
+
+E. Staff Invite
+- Staff enters mobile.
+- OTP verifies staff account activation.
+
+====================================================
+10. 2FACTOR SMS CAMPAIGN SUPPORT
+====================================================
+
+Add 2Factor as SMS channel provider in Growth Engine campaigns.
+
+Growth Engine → SMS Campaigns
+
+Flow:
+1. Select SMS campaign.
+2. Choose SMS template.
+3. Select audience/segment.
+4. Show reachable mobile numbers.
+5. Exclude SMS opt-out customers.
+6. Write message.
+7. Show character count.
+8. Show estimated SMS parts.
+9. Send test SMS via 2Factor.
+10. Schedule/send campaign.
+11. Queue sending.
+12. Save logs.
+13. Show delivery/failed status if available.
+
+Marketing rules:
+- Send only to customers with SMS marketing opt-in.
+- Do not send to opted-out customers.
+- Respect quiet hours.
+- Respect plan/monthly limits.
+- Respect provider limits.
+
+====================================================
+11. SMS TEMPLATE SYSTEM
+====================================================
+
+Add/edit templates.
+
+Super Admin global SMS templates:
+- OTP login
+- Signup verification
+- 2FA verification
+- Password reset
+- Staff invite
+- Order update
+- Payment reminder
+- Reservation reminder
+- Review request
+- Marketing offer
+
+Restaurant SMS templates:
+- Marketing offer
+- Birthday offer
+- Win-back
+- Festival offer
+- Coupon
+- Loyalty reward
+
+Variables:
+{{otp}}
+{{expiry_minutes}}
+{{app_name}}
+{{restaurant_name}}
+{{customer_name}}
+{{coupon_code}}
+{{coupon_expiry}}
+{{order_link}}
+{{review_link}}
+{{payment_link}}
+
+Default OTP SMS:
+{{otp}} is your KhanaLagao verification code. It is valid for {{expiry_minutes}} minutes. Do not share this code with anyone.
+
+====================================================
+12. OTP RATE LIMITING AND SECURITY
+====================================================
+
+Implement:
+- Rate limit by mobile number.
+- Rate limit by IP.
+- Rate limit by device/user-agent.
+- Resend cooldown.
+- Max resend attempts.
+- Max wrong OTP attempts.
+- Temporary lockout after failed attempts.
+- OTP expiry.
+- OTP replay prevention.
+- OTP purpose binding.
+- Audit logs.
+- No OTP in logs.
+- No API keys in frontend.
+- No fake success.
+
+Recommended defaults:
+- OTP length: 6 digits.
+- Expiry: 5 minutes.
+- Resend cooldown: 30 seconds.
+- Max attempts: 5.
+- Max resends: 3.
+- Lockout: 15 minutes.
+
+====================================================
+13. SUPER ADMIN SMS USAGE REPORTS
+====================================================
+
+Super Admin → Reports → SMS / OTP Usage
+
+Show:
+- OTP sent today
+- OTP verified
+- OTP failed
+- Delivery success/failure
+- SMS campaigns sent
+- SMS provider cost estimate
+- Usage by restaurant
+- Usage by purpose
+- Usage by channel
+- Failed provider calls
+- Rate limit blocks
+- Top sending restaurants
+
+Filters:
+- Date
+- Restaurant
+- Purpose
+- Status
+- Provider
+
+====================================================
+14. RESTAURANT SMS USAGE REPORTS
+====================================================
+
+Restaurant Admin → Settings → Communication → SMS Logs
+or
+Growth Engine → SMS Logs
+
+Show:
+- OTP sent for staff/customers if applicable
+- Campaign SMS sent
+- Failed SMS
+- Recipient
+- Message preview
+- Status
+- Date/time
+- Error reason
+- Retry if allowed
+
+====================================================
+15. PROVIDER FALLBACK
+====================================================
+
+Support fallback if configured.
+
+Example:
+Primary OTP channel: SMS via 2Factor
+Fallback: Email OTP or WhatsApp OTP
+
+If 2Factor API fails:
+- Log failure.
+- Try fallback provider if enabled.
+- Show clear error if all providers fail.
+
+Do not retry endlessly.
+
+====================================================
+16. UI REQUIREMENTS
+====================================================
+
+Super Admin Provider UI:
+- 2Factor config form
+- API key masked
+- OTP settings
+- Test OTP modal
+- Test SMS modal
+- Provider health/status
+- Logs
+
+Web login UI:
+- Mobile OTP tab
+- Country code
+- Send OTP
+- OTP input
+- Resend timer
+- Error states
+
+Mobile app UI:
+- Mobile OTP login
+- Signup OTP verification
+- 6-digit OTP boxes
+- Auto-focus
+- Resend timer
+- Clear success/error
+
+Campaign UI:
+- SMS campaign wizard
+- Template select
+- Audience select
+- Character count
+- Test SMS
+- Schedule/send
+- Logs/analytics
+
+====================================================
+17. ERROR HANDLING
+====================================================
+
+Handle:
+- 2Factor API key missing
+- Invalid API key
+- Insufficient balance
+- Invalid mobile number
+- Provider API error
+- OTP expired
+- Wrong OTP
+- Too many attempts
+- Resend limit reached
+- SMS delivery failed
+- Provider timeout
+- Rate limit exceeded
+- Feature locked by plan
+- SMS opt-out
+
+Show user-friendly messages:
+- “OTP provider is not configured.”
+- “Unable to send OTP right now. Please try again.”
+- “Invalid OTP.”
+- “OTP expired. Please request a new OTP.”
+- “Too many attempts. Try again later.”
+- “SMS limit reached.”
+
+No infinite loading.
+
+====================================================
+18. ENVIRONMENT / CONFIG
+====================================================
+
+Add .env.example placeholders only:
+
+TWOFACTOR_API_KEY=
+TWOFACTOR_DEFAULT_TEMPLATE=
+TWOFACTOR_DEFAULT_COUNTRY_CODE=+91
+
+But actual API key should be saved in Super Admin Provider Center, not hardcoded.
+
+====================================================
+19. DOCUMENTATION
+====================================================
+
+Create:
+
+docs/2factor-sms-otp-integration.md
+
+Include:
+- Overview
+- Official docs link
+- Super Admin setup
+- OTP login flow
+- Signup verification flow
+- 2FA flow
+- SMS campaign flow
+- Rate limiting rules
+- Database tables
+- API endpoints
+- Error handling
+- Testing checklist
+- Production checklist
+
+====================================================
+20. TESTING CHECKLIST
+====================================================
+
+Test:
+
+A. Super Admin setup
+- Add 2Factor API key.
+- Save.
+- Test SMS OTP.
+- Test SMS message.
+- API key masked.
+
+B. Mobile OTP Login Web
+- Enter mobile.
+- OTP sent.
+- Verify.
+- Login success.
+
+C. Mobile OTP Login App
+- Enter mobile.
+- OTP sent.
+- Verify.
+- Mobile app home opens.
+
+D. Restaurant Registration
+- Register owner.
+- Verify mobile OTP.
+- Create restaurant workspace.
+
+E. Password + 2FA
+- Login password.
+- 2FA OTP sent.
+- Verify.
+- Login success.
+
+F. Wrong OTP
+- Attempts increase.
+- Error shown.
+
+G. Expired OTP
+- Verification fails.
+- Resend works.
+
+H. Rate limits
+- Too many sends blocked.
+- Too many wrong attempts locks.
+
+I. SMS Campaign
+- Select SMS channel.
+- Select opted-in customers.
+- Send test.
+- Send/schedule campaign.
+- Logs saved.
+
+J. Security
+- No API key in frontend.
+- No plain OTP in database/logs.
+- Restaurant cannot see provider secrets.
+
+====================================================
+21. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- 2Factor.in provider is added in Super Admin.
+- 2Factor API key is encrypted/masked.
+- Mobile OTP login works on web.
+- Mobile OTP login works on mobile app.
+- Signup verification works.
+- 2FA OTP works.
+- Password reset OTP works if enabled.
+- Staff invite OTP works if enabled.
+- SMS campaign channel works through 2Factor.
+- Consent/opt-out rules work for marketing SMS.
+- OTP logs and SMS logs are saved.
+- Rate limits and resend cooldown work.
+- No mock OTP success.
+- No plain OTP stored.
+- No API keys exposed.
+- docs/2factor-sms-otp-integration.md is created.
+- Full live testing is completed.

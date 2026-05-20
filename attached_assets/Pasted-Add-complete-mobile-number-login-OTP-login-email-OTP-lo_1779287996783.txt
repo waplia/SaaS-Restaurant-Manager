@@ -1,0 +1,969 @@
+Add complete mobile number login, OTP login, email OTP login, restaurant registration, and two-factor authentication support across KhanaLagao web and mobile app.
+
+Current requirement:
+KhanaLagao should support login using mobile number on both web and mobile app. It should also support full restaurant registration from the restaurant mobile app. Two-factor authentication should work using OTP through mobile SMS/WhatsApp or email depending on Super Admin configuration.
+
+Important:
+- Do not break existing email/password login.
+- Do not break Super Admin login.
+- Do not break current restaurant admin, staff login, mobile app login, POS, QR menu, or backend.
+- Add mobile number login as an additional login method.
+- OTP provider configuration must be controlled only by Super Admin.
+- Restaurant admin should not manage OTP/SMS/email provider API keys.
+- OTP must be secure, expiring, rate-limited, and logged.
+- Mobile app and web should use the same backend auth system.
+- No mock OTP success.
+- No fake login.
+- All auth flows must use real database, real OTP generation, real provider if configured.
+- If provider is not configured, show proper configuration error.
+
+Feature name:
+Mobile Login + OTP Authentication + Restaurant Registration + 2FA
+
+====================================================
+1. SUPPORTED AUTH FLOWS
+====================================================
+
+Support these login methods:
+
+1. Email + Password
+Existing flow should continue working.
+
+2. Mobile Number + OTP
+User enters mobile number.
+System sends OTP by SMS or WhatsApp based on Super Admin setting.
+User verifies OTP.
+User logs in.
+
+3. Email + OTP
+User enters email.
+System sends OTP to email.
+User verifies OTP.
+User logs in.
+
+4. Password + 2FA OTP
+User enters email/mobile + password.
+If 2FA enabled, system sends OTP to configured channel.
+User verifies OTP.
+Then login completes.
+
+5. Mobile App Restaurant Registration
+New restaurant owner can register from mobile app.
+Registration uses mobile/email OTP verification.
+After verification, restaurant workspace is created.
+
+6. Staff Login
+Staff can login using:
+- Mobile + OTP
+- Email + OTP
+- Email/mobile + password + optional 2FA
+based on restaurant/Super Admin settings.
+
+7. Super Admin Login
+Keep Super Admin secure.
+Allow existing login.
+Optional 2FA for Super Admin using email/mobile OTP if enabled.
+
+====================================================
+2. SUPER ADMIN AUTH PROVIDER SETTINGS
+====================================================
+
+Add Super Admin settings:
+
+Super Admin → Provider Center → Authentication / OTP
+
+Provider settings should include:
+
+OTP Channels:
+- SMS OTP
+- WhatsApp OTP
+- Email OTP
+
+SMS Providers:
+- Twilio
+- MSG91
+- Textlocal
+- Gupshup
+- Kaleyra
+- Fast2SMS
+- Custom SMS API
+
+WhatsApp OTP Providers:
+- WhatsApp Cloud API
+- WhatsApp Web QR only if allowed
+- Custom WhatsApp Provider
+
+Email OTP Providers:
+- SMTP
+- SendGrid
+- Mailgun
+- Amazon SES
+- Resend
+- Postmark
+
+Super Admin controls:
+- Default OTP channel for login
+- Fallback OTP channel
+- OTP length: 4 / 6 digits
+- OTP expiry time, default 5 minutes
+- OTP resend cooldown, default 30 seconds
+- Max OTP attempts, default 5
+- Max resend attempts, default 3
+- Lockout duration after failed attempts
+- Enable mobile login globally
+- Enable email OTP login globally
+- Enable 2FA globally
+- Enable restaurant self-registration
+- Enable mobile app registration
+- Allowed countries
+- Default country code
+- OTP template content
+- Provider test button
+- OTP delivery logs
+
+Security:
+- Provider secrets encrypted.
+- Provider secrets masked.
+- Provider secrets never exposed to restaurant admin/frontend.
+- Audit log provider changes.
+
+====================================================
+3. RESTAURANT ADMIN AUTH SETTINGS
+====================================================
+
+Restaurant admin should not configure provider secrets.
+
+Restaurant Admin → Settings → Security → Login & 2FA
+
+Restaurant owner/admin can configure allowed login options if Super Admin allows:
+
+- Allow staff mobile OTP login
+- Allow staff email OTP login
+- Require 2FA for owner/admin
+- Require 2FA for finance/payroll roles
+- Require 2FA for all staff
+- Preferred OTP channel:
+  - SMS
+  - WhatsApp
+  - Email
+  - Super Admin default
+- Staff login policy
+- Session timeout
+- Device login alerts
+
+If feature is not allowed by plan:
+Show upgrade screen.
+
+If provider not configured by Super Admin:
+Show:
+“OTP provider is not configured by platform admin.”
+
+====================================================
+4. WEB LOGIN UI
+====================================================
+
+Update web login page.
+
+Login tabs:
+- Email / Mobile + Password
+- Mobile OTP
+- Email OTP
+
+Mobile OTP flow:
+1. User selects country code.
+2. Enters mobile number.
+3. Clicks Send OTP.
+4. OTP screen opens.
+5. User enters OTP.
+6. Verify OTP.
+7. Login success.
+8. Redirect based on role:
+   - Super Admin → Super Admin dashboard
+   - Restaurant owner/admin → Restaurant dashboard
+   - Staff → role-based dashboard
+
+Email OTP flow:
+1. User enters email.
+2. Send OTP.
+3. Verify OTP.
+4. Login success.
+
+Password + 2FA flow:
+1. User enters email/mobile and password.
+2. Password verified.
+3. If 2FA required, send OTP.
+4. Verify OTP.
+5. Login success.
+
+UI requirements:
+- Clean modern design
+- Mobile responsive
+- Country code dropdown
+- Resend OTP timer
+- Change number/email option
+- Clear error states
+- Loading states
+- Too many attempts state
+- Provider not configured state
+- Account not found state
+- Account disabled state
+
+====================================================
+5. MOBILE APP LOGIN UI
+====================================================
+
+Update restaurant mobile app login.
+
+Login options:
+- Continue with Mobile OTP
+- Continue with Email OTP
+- Login with Password
+- Register Restaurant
+
+Mobile app OTP flow:
+- Country code picker
+- Mobile number input
+- Send OTP
+- 6 digit OTP input
+- Auto-focus OTP boxes
+- Resend timer
+- Verify and login
+
+After login:
+- Store token securely.
+- Load user profile.
+- Load restaurant/outlet/role.
+- Redirect role-wise.
+
+For mobile app token storage:
+- Use secure storage if available.
+- Do not store sensitive data in plain local storage.
+- Handle token expiry.
+- Handle logout.
+
+====================================================
+6. RESTAURANT REGISTRATION FLOW ON MOBILE APP
+====================================================
+
+Add full registration flow inside mobile app.
+
+Entry:
+Mobile App Login → Register Restaurant
+
+Step 1: Owner Details
+- Owner name
+- Mobile number
+- Email
+- Password optional if password login enabled
+- Country code
+- City
+- Referral code optional
+
+Step 2: OTP Verification
+- Verify mobile OTP
+- Verify email OTP if required by Super Admin
+
+Step 3: Restaurant Details
+- Restaurant name
+- Business type:
+  - Restaurant
+  - Cafe
+  - Cloud Kitchen
+  - Hotel
+  - Food Court
+  - Tiffin
+  - Catering
+  - Bakery
+  - Bar
+  - Other
+- Number of outlets
+- City
+- Address optional
+- GST/FSSAI optional
+- Expected features interested:
+  - POS
+  - QR Menu
+  - Inventory
+  - Payroll
+  - Growth Engine
+  - Khana AI
+
+Step 4: Plan / Trial
+- Assign default trial plan from Super Admin settings.
+- Or show plan selection if enabled.
+- If approval required, show pending approval.
+
+Step 5: Workspace Creation
+After successful verification:
+- Create restaurant
+- Create owner user
+- Assign owner role
+- Assign default outlet
+- Assign trial plan
+- Create onboarding checklist
+- Send welcome email/SMS/WhatsApp if enabled
+- Redirect to mobile app home/onboarding
+
+Registration status:
+- Active immediately
+- Pending approval
+- Trial active
+based on Super Admin settings.
+
+====================================================
+7. WEB RESTAURANT REGISTRATION FLOW
+====================================================
+
+Also support registration from web.
+
+Routes:
+- /register
+- /signup
+- /restaurant-register
+
+Same flow as mobile:
+- Owner details
+- OTP verification
+- Restaurant details
+- Plan/trial
+- Workspace creation
+- Redirect to dashboard/onboarding
+
+Lead handling:
+- If user starts registration but does not complete, save as lead.
+- Capture UTM parameters.
+- Capture source page.
+- Super Admin can view incomplete registrations.
+
+====================================================
+8. OTP GENERATION AND STORAGE
+====================================================
+
+Create secure OTP system.
+
+OTP rules:
+- Random 4 or 6 digit numeric OTP based on Super Admin setting.
+- Store hashed OTP, not plain OTP.
+- Expiry default 5 minutes.
+- Max attempts default 5.
+- Resend cooldown default 30 seconds.
+- Max resends default 3.
+- Lock user/mobile/email after too many failed attempts.
+- One OTP should be valid for one purpose only.
+
+OTP purposes:
+- login_mobile
+- login_email
+- two_factor
+- register_mobile
+- register_email
+- password_reset
+- staff_invite
+- device_verification
+
+Database table:
+otp_verifications
+- id
+- identifier_type: mobile/email
+- identifier_value
+- country_code nullable
+- purpose
+- otp_hash
+- expires_at
+- attempts
+- max_attempts
+- resend_count
+- max_resends
+- status: pending/verified/expired/failed/locked
+- ip_address
+- user_agent
+- restaurant_id nullable
+- user_id nullable
+- provider_channel: sms/whatsapp/email
+- provider_message_id nullable
+- created_at
+- verified_at nullable
+
+Never store plain OTP after sending.
+
+====================================================
+9. USER DATABASE UPDATES
+====================================================
+
+Update users/staff models.
+
+Users table should support:
+- mobile_number
+- country_code
+- mobile_verified_at
+- email_verified_at
+- password_hash nullable if OTP-only account
+- two_factor_enabled
+- two_factor_channel: sms/whatsapp/email/default
+- last_login_at
+- login_method
+- status
+- failed_login_attempts
+- locked_until
+
+Staff table:
+- mobile number
+- email
+- user account relation
+- login allowed yes/no
+- role
+- outlet access
+- status
+
+Restaurant table:
+- registration_source
+- trial_started_at
+- trial_ends_at
+- onboarding_status
+- approval_status
+
+====================================================
+10. AUTH API REQUIREMENTS
+====================================================
+
+Create/fix APIs.
+
+Auth:
+POST /api/auth/request-otp
+POST /api/auth/verify-otp
+POST /api/auth/login
+POST /api/auth/login-password
+POST /api/auth/verify-2fa
+POST /api/auth/resend-otp
+POST /api/auth/logout
+GET /api/auth/me
+
+Registration:
+POST /api/auth/register/start
+POST /api/auth/register/verify-mobile
+POST /api/auth/register/verify-email
+POST /api/auth/register/complete
+GET /api/auth/register/status/:id
+
+2FA:
+POST /api/auth/2fa/enable
+POST /api/auth/2fa/disable
+POST /api/auth/2fa/send
+POST /api/auth/2fa/verify
+
+Admin:
+GET /api/super-admin/auth/settings
+PATCH /api/super-admin/auth/settings
+GET /api/super-admin/otp/logs
+GET /api/super-admin/registration-leads
+
+Use existing API naming style if different.
+
+====================================================
+11. OTP REQUEST API LOGIC
+====================================================
+
+POST /api/auth/request-otp
+
+Input:
+- identifier_type: mobile/email
+- mobile_number
+- country_code
+- email
+- purpose
+- channel optional: sms/whatsapp/email
+
+Backend logic:
+1. Validate identifier.
+2. Check global auth settings.
+3. Check purpose allowed.
+4. Check rate limits.
+5. Check existing account if login purpose.
+6. Generate OTP.
+7. Hash OTP.
+8. Save otp_verifications.
+9. Select provider:
+   - Super Admin default channel
+   - Restaurant preferred channel if allowed
+   - Fallback channel if primary fails
+10. Send OTP.
+11. Save provider message ID/log.
+12. Return safe response:
+   “OTP sent if account exists.”
+
+For security:
+- Do not reveal if account exists for login unless desired.
+- For registration, allow new mobile/email.
+
+====================================================
+12. VERIFY OTP API LOGIC
+====================================================
+
+POST /api/auth/verify-otp
+
+Input:
+- identifier
+- purpose
+- otp
+- registration_session_id optional
+
+Backend logic:
+1. Find latest pending OTP.
+2. Check expiry.
+3. Check attempts.
+4. Compare hashed OTP.
+5. If valid, mark verified.
+6. For login:
+   - Find user.
+   - Check status.
+   - Create session/JWT.
+   - Return role, restaurant, outlet access.
+7. For registration:
+   - Mark mobile/email verified in registration session.
+8. For 2FA:
+   - Complete login challenge.
+9. Log success/failure.
+
+====================================================
+13. TWO-FACTOR AUTHENTICATION
+====================================================
+
+Add 2FA support.
+
+2FA can be required by:
+- Super Admin globally
+- Restaurant admin setting
+- Role-based policy
+- User preference
+- Suspicious login
+- New device login
+
+2FA channels:
+- SMS OTP
+- WhatsApp OTP
+- Email OTP
+- Default channel from Super Admin
+
+2FA flow:
+1. User enters password or starts login.
+2. Backend checks if 2FA required.
+3. If required, return:
+   requires_2fa: true
+   challenge_id
+   available_channels
+4. User selects/uses default channel.
+5. OTP sent.
+6. User verifies OTP.
+7. Session created.
+
+2FA should be required for:
+- Owner/admin if enabled
+- Finance/accounting role if enabled
+- Payroll role if enabled
+- Super Admin if enabled
+- New device login if enabled
+
+====================================================
+14. OTP PROVIDER ROUTING
+====================================================
+
+Create provider abstraction:
+
+OtpProvider:
+- sendSmsOtp()
+- sendWhatsappOtp()
+- sendEmailOtp()
+- testConnection()
+- normalizeError()
+
+Adapters:
+- SmsProviderAdapter
+- WhatsAppOtpProviderAdapter
+- EmailOtpProviderAdapter
+
+Provider routing:
+- Primary channel from Super Admin
+- Fallback channel if primary fails
+- Purpose-based routing:
+  - Login OTP → SMS/WhatsApp
+  - Email OTP → Email
+  - 2FA → configured channel
+  - Registration → mobile + email if required
+
+If provider fails:
+- Log failure.
+- Try fallback if configured.
+- Show clear error if no provider works.
+
+====================================================
+15. OTP MESSAGE TEMPLATES
+====================================================
+
+Add editable templates in Super Admin.
+
+Super Admin → Provider Center → Authentication → OTP Templates
+
+Templates:
+- Mobile login OTP
+- Email login OTP
+- 2FA OTP
+- Registration mobile OTP
+- Registration email OTP
+- Password reset OTP
+- Staff invite OTP
+
+SMS/WhatsApp OTP text:
+“{{otp}} is your KhanaLagao login OTP. It is valid for {{expiry_minutes}} minutes. Do not share it with anyone.”
+
+Email OTP subject:
+“Your KhanaLagao OTP Code”
+
+Email OTP body:
+“Your OTP is {{otp}}. It is valid for {{expiry_minutes}} minutes.”
+
+Variables:
+{{otp}}
+{{app_name}}
+{{expiry_minutes}}
+{{restaurant_name}}
+{{owner_name}}
+{{support_email}}
+
+====================================================
+16. REGISTRATION LEADS AND INCOMPLETE SIGNUPS
+====================================================
+
+Track registration attempts.
+
+Table:
+registration_sessions
+- id
+- owner_name
+- mobile_number
+- country_code
+- email
+- mobile_verified
+- email_verified
+- restaurant_name
+- business_type
+- city
+- source
+- utm_source
+- utm_medium
+- utm_campaign
+- status: started/mobile_verified/email_verified/completed/abandoned/pending_approval
+- created_at
+- updated_at
+- completed_at
+
+Super Admin → Leads → Registration Leads:
+Show:
+- Owner name
+- Phone
+- Email
+- Restaurant name
+- Status
+- Source
+- UTM
+- Created time
+- Continue/contact action
+
+If incomplete for X hours:
+- Trigger follow-up email/SMS/WhatsApp if enabled.
+
+====================================================
+17. SECURITY REQUIREMENTS
+====================================================
+
+Must implement:
+
+- Hash OTP before storage.
+- OTP expiry.
+- Rate limiting by mobile/email/IP/device.
+- Resend cooldown.
+- Max attempts.
+- Lockout after failed attempts.
+- Audit logs for login/OTP/2FA.
+- Do not expose OTP in logs.
+- Do not expose provider secrets.
+- Use secure tokens.
+- Protect against brute force.
+- Protect against OTP replay.
+- Invalidate OTP after success.
+- Device/session tracking.
+- Logout clears session.
+- Direct API access protected.
+
+Security logs:
+- OTP requested
+- OTP verified
+- OTP failed
+- 2FA required
+- 2FA verified
+- Login success
+- Login failed
+- Registration completed
+- Account locked
+- Suspicious login
+
+====================================================
+18. SESSION / TOKEN HANDLING
+====================================================
+
+Use same auth tokens for web and mobile.
+
+Requirements:
+- JWT/session created after verified login.
+- Include user_id, restaurant_id, role, permissions.
+- Refresh token if existing system supports.
+- Secure storage on mobile.
+- HttpOnly cookie on web if existing setup uses cookies.
+- Token expiry.
+- Logout.
+- Revoke old sessions if needed.
+
+Device sessions:
+- Store device name
+- IP
+- User agent
+- Last login
+- Login method
+- Active/revoked
+
+User can view active sessions if feature exists.
+
+====================================================
+19. ROLE-BASED REDIRECTS
+====================================================
+
+After login:
+- Super Admin → /super-admin/dashboard
+- Restaurant Owner/Admin → /dashboard
+- Cashier → /pos or role dashboard
+- Waiter → /tables/orders
+- Chef → /kitchen
+- Inventory Manager → /inventory
+- HR/Payroll → /staff
+- Marketing → /growth
+- Accountant → /finance
+- Mobile app → role-based home screen
+
+Direct URL permissions must still work.
+
+====================================================
+20. PLAN / PRICING INTEGRATION
+====================================================
+
+Add auth features to plans if needed.
+
+Super Admin controls:
+- Mobile OTP login enabled by plan
+- Email OTP login enabled by plan
+- 2FA enabled by plan
+- Staff OTP login enabled by plan
+- Monthly OTP limit
+- SMS/WhatsApp OTP limit
+- Email OTP limit
+- Registration self-serve enabled
+
+Usage logs:
+- OTP sent count
+- OTP cost estimate
+- OTP failures
+- Channel-wise OTP usage
+
+If limit reached:
+Show clear message:
+“OTP limit reached. Please contact support or upgrade plan.”
+
+====================================================
+21. NOTIFICATIONS AND EMAILS
+====================================================
+
+Send notifications/emails for:
+- Registration completed
+- New restaurant signup to Super Admin
+- Login from new device
+- Password changed
+- 2FA enabled/disabled
+- Account locked
+- Staff invited
+
+These should use Super Admin configured providers.
+
+====================================================
+22. UI STATES
+====================================================
+
+Every auth screen must handle:
+- Loading
+- OTP sent
+- OTP verified
+- Invalid OTP
+- OTP expired
+- Too many attempts
+- Resend timer
+- Provider not configured
+- Account not found
+- Account disabled
+- Permission denied
+- Network error
+- Registration pending approval
+- Trial created
+
+No infinite loading.
+No blank page.
+No fake success.
+
+====================================================
+23. MOBILE APP REGISTRATION UX
+====================================================
+
+Mobile app should have clean screens:
+
+Screen 1:
+Welcome to KhanaLagao
+Buttons:
+- Login
+- Register Restaurant
+
+Screen 2:
+Enter mobile number
+
+Screen 3:
+Verify OTP
+
+Screen 4:
+Enter owner details
+
+Screen 5:
+Enter restaurant details
+
+Screen 6:
+Choose business type
+
+Screen 7:
+Trial/plan confirmation
+
+Screen 8:
+Workspace created
+Button:
+Open Dashboard
+
+Use progress indicator:
+Step 1 of 5
+
+====================================================
+24. WEB REGISTRATION UX
+====================================================
+
+Web should have:
+- Modern signup page
+- Left side benefits
+- Right side registration form
+- Mobile/email OTP verification
+- Restaurant details
+- Trial plan
+- Success page
+- Login redirect
+
+Capture:
+- UTM parameters
+- Source page
+- Referrer
+
+====================================================
+25. TESTING CHECKLIST
+====================================================
+
+Test web:
+
+A. Mobile OTP login
+- Enter mobile.
+- OTP sent.
+- Verify OTP.
+- Login success.
+- Redirect correct.
+
+B. Email OTP login
+- Enter email.
+- OTP sent.
+- Verify.
+- Login success.
+
+C. Password + 2FA
+- Login password.
+- 2FA required.
+- OTP sent.
+- Verify.
+- Login success.
+
+D. Restaurant registration web
+- Start registration.
+- Verify mobile/email.
+- Add restaurant details.
+- Workspace created.
+- Owner can login.
+
+Test mobile:
+
+E. Mobile app registration
+- Register restaurant.
+- Verify OTP.
+- Workspace created.
+- Mobile app home opens.
+
+F. Mobile app login
+- Mobile OTP login works.
+- Email OTP login works.
+- Role-based app home opens.
+
+Test security:
+
+G. Wrong OTP
+- Attempts increase.
+- Error shown.
+
+H. Expired OTP
+- Cannot verify.
+- Resend works.
+
+I. Too many attempts
+- Lockout works.
+
+J. Provider not configured
+- Clear message.
+
+K. Secrets
+- No provider secrets visible in frontend.
+
+L. Super Admin settings
+- Change OTP channel.
+- Login uses changed channel.
+
+M. Role login
+- Chef/waiter/cashier redirect correctly.
+
+====================================================
+26. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+
+- Mobile number login works on web.
+- Mobile number login works on mobile app.
+- Email OTP login works.
+- Existing password login still works.
+- 2FA works with OTP.
+- OTP channel is controlled by Super Admin.
+- OTP providers are configured only in Super Admin.
+- Restaurant app registration works completely.
+- Restaurant workspace is created after registration.
+- Registration leads are tracked.
+- OTPs are hashed and expire.
+- Rate limiting and resend cooldown work.
+- Role-based redirects work.
+- No provider secrets are exposed.
+- No mock OTP success.
+- No infinite loading.
+- Auth flows are tested on web and mobile.
