@@ -529,7 +529,7 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
     eventKey: "welcome",
     variables: { name: ownerName, restaurant: restaurantName, trialDays },
   });
-  void sendByTemplateKey("welcome", user.email, {
+  void sendByTemplateKey("restaurant_welcome", user.email, {
     name: user.name, restaurant: restaurant.name,
     appName: settings.appName, appUrl: process.env.PUBLIC_APP_URL ?? "",
   }, { tenantId: tenant.id });

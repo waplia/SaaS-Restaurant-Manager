@@ -277,6 +277,37 @@ export async function commitReservation(opts: CommitOptions): Promise<void> {
       }
     }
   });
+  // Best-effort low-credit notice: if this debit pulled the wallet below
+  // the configured low-balance threshold (default 100) and it wasn't
+  // already below it before, email the tenant owner via the canonical
+  // `ai_credits_low` template. Failures are silently logged.
+  try {
+    const [wallet] = await db.select().from(aiCreditWalletsTable)
+      .where(eq(aiCreditWalletsTable.id, reservation.walletId));
+    if (wallet) {
+      const after = wallet.monthlyIncludedCredits + wallet.bonusCredits + wallet.purchasedCredits;
+      const before = after + Math.min(charge, reservation.reservedCredits);
+      const threshold = 100;
+      if (after <= threshold && before > threshold) {
+        const { usersTable } = await import("./db");
+        const { sendByTemplateKey } = await import("./emailSender");
+        const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+          .from(usersTable)
+          .where(and(eq(usersTable.tenantId, reservation.tenantId), eq(usersTable.role, "owner")))
+          .limit(1);
+        if (owner?.email) {
+          void sendByTemplateKey("ai_credits_low", owner.email, {
+            name: owner.name ?? "there",
+            balance: String(after),
+            restaurant: "",
+            rechargeUrl: `${(process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "")}/settings/ai-credits`,
+          }, { tenantId: reservation.tenantId });
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, tenantId: reservation.tenantId }, "ai_credits_low notification failed");
+  }
 }
 
 /** Release a reservation without debiting (e.g. provider call failed). */

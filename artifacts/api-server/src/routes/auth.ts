@@ -225,7 +225,7 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       variables: { name: ownerName, restaurant: restaurantName, trialDays: 14 },
     });
   }
-  void sendByTemplateKey("welcome", user.email, {
+  void sendByTemplateKey("restaurant_welcome", user.email, {
     name: user.name,
     restaurant: restaurant.name,
     appName: "Khana Lagao",

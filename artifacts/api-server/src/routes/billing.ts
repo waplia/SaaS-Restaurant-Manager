@@ -777,6 +777,7 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     .from(subscriptionPlansTable)
     .where(eq(subscriptionPlansTable.id, reqRow.planId));
   if (owner?.email) {
+    const invoiceNumber = `MP-${reqRow.id}`;
     void sendByTemplateKey("payment_successful", owner.email, {
       name: owner.name,
       amount: String(reqRow.amount),
@@ -784,7 +785,14 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
       plan: plan?.name ?? "your plan",
       invoiceUrl: "",
     }, { tenantId: reqRow.tenantId });
-    void sendByTemplateKey("subscription_activated", owner.email, {
+    void sendByTemplateKey("invoice_generated", owner.email, {
+      name: owner.name,
+      invoiceNumber,
+      amount: String(reqRow.amount),
+      currency: reqRow.currency,
+      invoiceUrl: "",
+    }, { tenantId: reqRow.tenantId });
+    void sendByTemplateKey("plan_activated", owner.email, {
       name: owner.name,
       plan: plan?.name ?? "your plan",
       renewsAt: "",

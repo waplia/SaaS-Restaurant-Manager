@@ -111,7 +111,19 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
       // the email lands in `email_logs` with a `template_key`, the premium
       // layout, and the right kind. Login OTPs use `otp_login`; everything
       // else (verify / 2FA / register) uses `otp_verification`.
-      const templateKey = input.purpose === "login" ? "otp_login" : "otp_verification";
+      // Canonical template keys (Task #546): map each OTP purpose to its
+      // Super Admin–editable template. Falls back to legacy keys if the
+      // canonical row isn't present yet.
+      const templateKey = (() => {
+        switch (input.purpose) {
+          case "login": return "login_otp";
+          case "register": return "signup_verification_otp";
+          case "two_factor": return "two_factor_otp";
+          case "verify_email":
+          case "verify_mobile":
+          default: return "signup_verification_otp";
+        }
+      })();
       const r = await sendByTemplateKey(templateKey, identifier, {
         name: input.name ?? "there",
         otp: code,
