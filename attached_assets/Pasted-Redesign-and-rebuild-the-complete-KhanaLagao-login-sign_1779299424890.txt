@@ -1,0 +1,812 @@
+Redesign and rebuild the complete KhanaLagao login, signup, registration, OTP, password login, and Google Sign-in flow for web admin and restaurant mobile app.
+
+Current requirement:
+The current login/signup flow should look more modern, premium, and easy to use. Login should support both email and phone number with password. Signup should support both email and phone number. Google Sign-in should be added and integrated properly in web admin and mobile app. OTP/2FA should continue working with Super Admin configured providers.
+
+Important:
+- Do not break existing users, roles, sessions, OTP, restaurant admin, super admin, mobile app, or staff login.
+- Do not remove existing email/password login.
+- Add email OR phone login with password.
+- Add phone OTP login.
+- Add email OTP login.
+- Add Google Sign-in.
+- Add signup using email, phone, or Google.
+- Add full restaurant registration flow.
+- Add Google OAuth settings only in Super Admin.
+- Restaurant admin should not configure Google OAuth keys.
+- No mock login.
+- No fake Google login.
+- All auth must use real database and real sessions/JWT/cookies.
+- All screens should be mobile responsive.
+- No infinite loading.
+- No dead buttons.
+- No exposed provider secrets.
+
+Brand:
+KhanaLagao
+
+Product:
+Restaurant OS for Modern Food Businesses
+
+====================================================
+1. AUTH UI DESIGN DIRECTION
+====================================================
+
+Redesign login/signup pages with a premium SaaS look.
+
+Design style:
+- Modern restaurant-tech SaaS
+- Clean white/warm background
+- Orange gradient accents
+- Soft shadows
+- Rounded cards
+- Trust badges
+- Product mockup/illustration side panel
+- Mobile responsive
+- Fast and minimal
+- Clear steps
+- No clutter
+
+Colors:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Dark Navy: #0F172A
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+Success Green: #16A34A
+Danger Red: #EF4444
+AI Purple: #7C3AED
+
+Login/signup layout:
+Desktop:
+- Left side: beautiful product/restaurant OS visual
+- Right side: login/signup card
+
+Mobile:
+- Full screen card
+- Logo at top
+- Clean tabs/buttons
+
+Left side content examples:
+- “Run your restaurant smarter”
+- POS, QR Menu, Kitchen, Inventory, Staff, Finance and Khana AI in one platform
+- Small dashboard mockup
+- Trust chips:
+  POS
+  QR Menu
+  Kitchen
+  Inventory
+  Growth
+  AI
+
+====================================================
+2. LOGIN PAGE STRUCTURE
+====================================================
+
+Route:
+/login
+
+Login card should include:
+
+Header:
+- KhanaLagao logo
+- Title: Welcome back
+- Subtitle: Login to manage your restaurant
+
+Login methods:
+A. Email or Phone + Password
+B. Login with OTP
+C. Continue with Google
+
+Default tab:
+Email/Phone + Password
+
+Field:
+Email or mobile number
+Placeholder:
+Email or mobile number
+
+Password field:
+Password
+Show/hide password icon
+
+Button:
+Login
+
+Links:
+- Forgot password?
+- Don’t have an account? Create restaurant account
+
+Google button:
+Continue with Google
+
+OTP login switch:
+Login with OTP
+
+Important:
+Email/phone field should accept:
+- email@example.com
+- +919876543210
+- 9876543210 with default country code
+
+Backend should detect whether input is email or phone.
+
+====================================================
+3. LOGIN WITH OTP FLOW
+====================================================
+
+Login with OTP screen should support:
+
+Tabs:
+- Phone OTP
+- Email OTP
+
+Phone OTP:
+- Country code dropdown
+- Mobile number
+- Send OTP
+- OTP input
+- Resend timer
+- Verify and Login
+
+Email OTP:
+- Email input
+- Send OTP
+- OTP input
+- Resend timer
+- Verify and Login
+
+OTP UI:
+- 6 digit boxes
+- Auto-focus
+- Paste OTP support
+- Resend countdown
+- Change mobile/email
+- Clear error messages
+
+States:
+- OTP sent
+- Invalid OTP
+- OTP expired
+- Too many attempts
+- Provider not configured
+- Account not found
+- Account disabled
+
+====================================================
+4. PASSWORD LOGIN WITH EMAIL OR PHONE
+====================================================
+
+Update password login backend.
+
+User can login with:
+- Email + password
+- Phone + password
+
+Logic:
+1. User enters identifier.
+2. Detect email or phone.
+3. Normalize phone with country code.
+4. Find user by email or phone.
+5. Validate password.
+6. Check user status.
+7. Check restaurant status.
+8. Check role access.
+9. If 2FA required, trigger 2FA.
+10. If no 2FA, create session.
+11. Redirect role-wise.
+
+Do not reveal too much:
+Use generic message:
+“Invalid login details.”
+
+But for disabled/locked accounts show clear state.
+
+====================================================
+5. TWO-FACTOR AFTER PASSWORD LOGIN
+====================================================
+
+If 2FA is enabled:
+- Login password first.
+- Show 2FA verification screen.
+- Send OTP via Super Admin configured channel:
+  SMS / WhatsApp / Email
+- User verifies OTP.
+- Then complete login.
+
+2FA screen:
+Title:
+Verify your identity
+
+Subtitle:
+We sent a verification code to your configured contact method.
+
+Options:
+- Resend code
+- Use another allowed channel if available
+- Back to login
+
+2FA should work for:
+- Owner/admin
+- Finance roles
+- Payroll roles
+- Super Admin
+- Staff if required
+
+====================================================
+6. SIGNUP PAGE STRUCTURE
+====================================================
+
+Route:
+/signup
+/register
+/restaurant-register
+
+Signup page should include:
+
+Header:
+- KhanaLagao logo
+- Title: Create your restaurant account
+- Subtitle: Start managing POS, QR menu, kitchen, inventory and growth from one place.
+
+Signup options:
+A. Sign up with Email
+B. Sign up with Phone
+C. Continue with Google
+
+Fields depending on selected option:
+
+Email signup:
+- Owner name
+- Email
+- Password
+- Confirm password
+- Phone optional or required based on Super Admin setting
+- Continue
+
+Phone signup:
+- Owner name
+- Country code
+- Mobile number
+- Password optional if password signup enabled
+- Email optional or required based on Super Admin setting
+- Continue
+
+Google signup:
+- Continue with Google
+- After Google success, ask remaining required fields:
+  - Phone number if missing
+  - Restaurant name
+  - Business type
+  - City
+
+====================================================
+7. SIGNUP VERIFICATION FLOW
+====================================================
+
+After signup start:
+
+If email signup:
+- Send email OTP
+- Verify email
+- If phone is required, verify phone OTP too
+
+If phone signup:
+- Send phone OTP
+- Verify phone
+- If email is required, verify email OTP too
+
+If Google signup:
+- Google email is treated as verified if returned by Google as verified
+- Ask phone verification if Super Admin requires phone verification
+
+Verification screen:
+- Show progress
+- Show current verification method
+- OTP input boxes
+- Resend timer
+- Change email/phone option
+
+Example:
+Step 1 of 4: Verify your phone
+Step 2 of 4: Add restaurant details
+Step 3 of 4: Choose trial/plan
+Step 4 of 4: Start onboarding
+
+====================================================
+8. RESTAURANT REGISTRATION FLOW
+====================================================
+
+After owner verification, show restaurant setup.
+
+Step 1: Owner Details
+- Owner name
+- Email
+- Mobile number
+- Password if not set
+- Referral code optional
+
+Step 2: Restaurant Details
+- Restaurant name
+- Business type:
+  Restaurant
+  Cafe
+  Cloud Kitchen
+  Hotel
+  Food Court
+  Tiffin
+  Catering
+  Bakery
+  Bar
+  Franchise
+  Other
+- City
+- Address optional
+- Number of outlets
+- GST/FSSAI optional
+
+Step 3: Feature Interest
+Checkboxes:
+- POS Billing
+- QR Menu
+- Kitchen/KDS
+- Inventory
+- Staff/Payroll
+- Growth Engine
+- Khana AI
+- Online Ordering
+- Multi-outlet
+
+Step 4: Trial / Plan
+- Start free trial
+- Choose plan if enabled
+- Pending approval if Super Admin requires approval
+
+Step 5: Workspace Created
+- Create restaurant
+- Create owner user
+- Assign owner role
+- Create default outlet
+- Assign default trial plan
+- Create onboarding checklist
+- Send welcome email/WhatsApp/SMS if enabled
+- Redirect to dashboard/mobile home
+
+====================================================
+9. GOOGLE SIGN-IN INTEGRATION
+====================================================
+
+Add Google OAuth login/signup.
+
+Super Admin:
+Provider Center → Authentication → Google Sign-In
+
+Fields:
+- Enable Google Sign-In yes/no
+- Google Client ID
+- Google Client Secret
+- Authorized redirect URI
+- Allowed domains optional
+- Auto-create restaurant account yes/no
+- Allow staff Google login yes/no
+- Require phone verification after Google signup yes/no
+- Default role for new Google signup
+- Test Google OAuth button
+
+Security:
+- Client secret encrypted.
+- Secrets never shown to restaurant admin/frontend.
+- Audit log provider changes.
+
+Web Google login:
+- Use OAuth redirect or Google Identity Services based on current stack.
+- On success, backend verifies Google token.
+- Match user by Google account email.
+- If user exists, login.
+- If no user exists:
+  - Start signup flow
+  - Ask restaurant details
+  - Create account if self-registration enabled
+  - Or show “Account not found” if self-registration disabled
+
+Mobile Google login:
+- Add Google Sign-In support in restaurant mobile app.
+- Use Expo/AuthSession or existing mobile auth method.
+- Backend verifies Google token.
+- Same user matching rules as web.
+
+User table fields:
+- google_id
+- auth_provider
+- email_verified_at
+- last_login_method
+
+Account linking:
+If existing email user logs in with Google using same verified email:
+- Link Google account after confirmation
+- Do not create duplicate user
+
+====================================================
+10. SUPER ADMIN AUTH SETTINGS
+====================================================
+
+Add:
+
+Super Admin → Settings → Authentication
+
+Settings:
+- Enable email/password login
+- Enable phone/password login
+- Enable phone OTP login
+- Enable email OTP login
+- Enable Google Sign-In
+- Enable restaurant self-signup
+- Enable mobile app signup
+- Require email verification on signup
+- Require phone verification on signup
+- Require password on signup yes/no
+- Require 2FA for Super Admin
+- Require 2FA for restaurant owner/admin
+- Require 2FA for finance/payroll roles
+- Default OTP channel
+- OTP expiry
+- Resend cooldown
+- Max attempts
+- Signup approval required yes/no
+- Default trial plan
+- Registration lead capture enabled
+
+====================================================
+11. MOBILE APP AUTH REDESIGN
+====================================================
+
+Redesign mobile app auth screens.
+
+Screen 1:
+Welcome to KhanaLagao
+- Logo
+- Short tagline
+- Continue with Mobile
+- Continue with Email
+- Continue with Google
+- Login with Password
+- Register Restaurant
+
+Login with password:
+- Email or phone
+- Password
+- Login
+
+OTP login:
+- Phone or email
+- Send OTP
+- Verify OTP
+
+Signup:
+- Email signup
+- Phone signup
+- Google signup
+
+Mobile app must support:
+- Secure token storage
+- Role-based redirect
+- Logout
+- Token expiry handling
+- Retry
+- Error states
+
+====================================================
+12. DATABASE UPDATES
+====================================================
+
+Update users table:
+- email
+- mobile_number
+- country_code
+- password_hash nullable
+- google_id nullable
+- auth_provider: password/google/otp/mixed
+- email_verified_at
+- mobile_verified_at
+- two_factor_enabled
+- two_factor_channel
+- last_login_method
+- last_login_at
+- failed_login_attempts
+- locked_until
+- status
+
+Add:
+auth_provider_configs
+- id
+- provider_type: google/otp/sms/email/whatsapp
+- config_encrypted
+- public_config
+- enabled
+- status
+- created_at
+- updated_at
+
+registration_sessions
+- id
+- owner_name
+- email
+- mobile_number
+- country_code
+- google_id nullable
+- email_verified
+- mobile_verified
+- restaurant_name
+- business_type
+- city
+- source
+- utm_source
+- utm_medium
+- utm_campaign
+- status
+- created_at
+- updated_at
+- completed_at
+
+auth_login_attempts
+- id
+- identifier
+- identifier_type
+- user_id nullable
+- login_method
+- ip_address
+- user_agent
+- status
+- error_reason
+- created_at
+
+device_sessions
+- id
+- user_id
+- restaurant_id nullable
+- device_name
+- ip_address
+- user_agent
+- login_method
+- refresh_token_hash nullable
+- active
+- last_seen_at
+- created_at
+
+====================================================
+13. API REQUIREMENTS
+====================================================
+
+Auth APIs:
+
+POST /api/auth/login
+- email/phone + password
+
+POST /api/auth/request-otp
+- phone/email OTP
+
+POST /api/auth/verify-otp
+- verify login/signup OTP
+
+POST /api/auth/verify-2fa
+- verify 2FA challenge
+
+POST /api/auth/google/start
+- start Google OAuth if redirect flow
+
+POST /api/auth/google/callback
+- handle Google OAuth callback
+
+POST /api/auth/google/verify
+- verify Google token from web/mobile
+
+POST /api/auth/register/start
+- create registration session
+
+POST /api/auth/register/verify
+- verify email/phone
+
+POST /api/auth/register/complete
+- create restaurant workspace
+
+GET /api/auth/me
+- current user
+
+POST /api/auth/logout
+
+Super Admin:
+GET /api/super-admin/auth/settings
+PATCH /api/super-admin/auth/settings
+GET /api/super-admin/auth/provider/google
+PATCH /api/super-admin/auth/provider/google
+GET /api/super-admin/auth/registration-leads
+GET /api/super-admin/auth/login-logs
+
+Use existing API naming if different.
+
+====================================================
+14. AUTH REDIRECT RULES
+====================================================
+
+After successful login:
+
+Super Admin:
+→ /super-admin/dashboard
+
+Restaurant owner/admin:
+→ /dashboard
+
+Cashier:
+→ /pos or mobile order home
+
+Waiter:
+→ /tables or mobile waiter home
+
+Chef:
+→ /kitchen
+
+Inventory manager:
+→ /inventory
+
+HR/payroll:
+→ /staff
+
+Marketing:
+→ /growth
+
+Accountant:
+→ /finance
+
+Mobile app:
+→ role-based app home
+
+If user has multiple restaurants:
+Show restaurant switcher after login.
+
+If user has no restaurant and self-signup is enabled:
+Continue registration.
+
+If account pending approval:
+Show pending approval page.
+
+====================================================
+15. ERROR STATES
+====================================================
+
+Handle:
+- Invalid email/phone/password
+- Account not found
+- Account disabled
+- Restaurant suspended
+- OTP provider not configured
+- Google provider not configured
+- Google login failed
+- Google account not verified
+- Email already used
+- Phone already used
+- Duplicate account detected
+- 2FA required
+- 2FA failed
+- Too many login attempts
+- Registration pending approval
+- Plan/trial creation failed
+
+No infinite loading.
+Show clean messages.
+
+====================================================
+16. SECURITY REQUIREMENTS
+====================================================
+
+- Hash passwords.
+- Hash OTPs if locally generated.
+- Verify Google token server-side.
+- Never trust frontend provider data.
+- Rate limit login and OTP.
+- Prevent account enumeration where needed.
+- Secure session/JWT.
+- HttpOnly cookie for web if current system supports it.
+- Secure storage on mobile.
+- Audit log login/signup/Google/2FA events.
+- No provider secrets exposed.
+- Account linking must be safe.
+- Direct URL access still checks role permissions.
+
+====================================================
+17. UX COPY
+====================================================
+
+Login title:
+Welcome back
+
+Login subtitle:
+Manage your restaurant operations from one place.
+
+Signup title:
+Create your restaurant account
+
+Signup subtitle:
+Start with POS, QR menu, kitchen, inventory, growth tools and Khana AI.
+
+Google button:
+Continue with Google
+
+Phone OTP button:
+Continue with Mobile OTP
+
+Email OTP button:
+Continue with Email OTP
+
+Password login button:
+Login securely
+
+Signup CTA:
+Start Free Trial
+
+Success message:
+Your KhanaLagao workspace is ready.
+
+====================================================
+18. TESTING CHECKLIST
+====================================================
+
+Test web:
+1. Login with email + password.
+2. Login with phone + password.
+3. Login with phone OTP.
+4. Login with email OTP.
+5. Login with Google existing user.
+6. Signup with email.
+7. Signup with phone.
+8. Signup with Google.
+9. 2FA after password login.
+10. Forgot password still works.
+11. Role redirect works.
+12. Super Admin login still works.
+
+Test mobile:
+1. Mobile OTP login.
+2. Email OTP login.
+3. Phone/password login.
+4. Email/password login.
+5. Google login.
+6. Restaurant registration.
+7. Secure token storage.
+8. Role-based mobile home.
+
+Test security:
+1. Wrong password.
+2. Wrong OTP.
+3. Expired OTP.
+4. Too many attempts.
+5. Disabled account.
+6. Suspended restaurant.
+7. Duplicate Google/email account.
+8. Provider not configured.
+9. No secrets visible in frontend.
+
+====================================================
+19. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Login page is redesigned beautifully.
+- Signup page is redesigned beautifully.
+- Email or phone + password login works.
+- Phone OTP login works.
+- Email OTP login works.
+- 2FA works.
+- Google Sign-in works on web.
+- Google Sign-in works in mobile app.
+- Signup supports email, phone, and Google.
+- Restaurant registration creates workspace.
+- Super Admin can configure Google Sign-In.
+- Super Admin can configure auth settings.
+- Restaurant admin does not see provider secrets.
+- Existing users still login.
+- Super Admin login still works.
+- Role-based redirects work.
+- No mock login.
+- No infinite loading.
+- Build passes.

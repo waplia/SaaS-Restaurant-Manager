@@ -1,0 +1,817 @@
+Design and integrate a complete premium Email Template System in Super Admin for KhanaLagao.
+
+Current requirement:
+Super Admin should have attractive, modern, editable email templates for every important platform activity, and those templates should be integrated everywhere in the platform, like signup, OTP, login, plan upgrade, trial, payment, invoice, support, AI credits, restaurant onboarding, follow-ups, and customer activity emails.
+
+Important:
+- Do not create basic plain emails.
+- Design premium, modern, responsive HTML email templates.
+- All templates should be editable from Super Admin.
+- All templates should support variables/placeholders.
+- All email sending should use Super Admin configured email provider only.
+- Restaurant admin should not manage SMTP/API keys.
+- Do not break existing email provider/settings.
+- No mock success.
+- Every sent email must be logged.
+- Every template should have preview and test email option.
+- Every activity should use the matching template automatically.
+- If provider is not configured, show clear error and do not fail silently.
+
+Brand:
+KhanaLagao
+
+Theme:
+Modern restaurant-tech SaaS
+Orange, warm white, dark navy
+Premium cards
+Clear CTA button
+Mobile responsive
+Clean footer
+Professional layout
+
+====================================================
+1. SUPER ADMIN EMAIL CENTER
+====================================================
+
+Create/upgrade:
+
+Super Admin → Email Center
+
+Menus:
+- Dashboard
+- Email Templates
+- Platform Templates
+- Restaurant Templates
+- Lifecycle / Follow-up Emails
+- Template Categories
+- Variables
+- Email Logs
+- Provider Status
+- Test Email
+- Template Versions
+
+Dashboard should show:
+- Total templates
+- Active templates
+- Emails sent today
+- Emails failed today
+- Most used templates
+- Provider status
+- Recent failed emails
+- Active automations
+
+====================================================
+2. EMAIL TEMPLATE BUILDER
+====================================================
+
+Each email template should support:
+
+- Template name
+- Template key/code
+- Template category
+- Trigger/activity type
+- Subject
+- Preheader
+- HTML body
+- Plain text fallback
+- Header logo
+- Banner image optional
+- CTA button text
+- CTA button URL
+- Footer text
+- Variables
+- Sample variable values
+- Preview desktop
+- Preview mobile
+- Send test email
+- Enable/disable
+- Duplicate
+- Version history
+- Reset to default
+
+Template editor should support:
+- Rich text editor
+- HTML editor
+- Variables insert button
+- Sample data preview
+- Mobile responsive preview
+- Test email modal
+
+====================================================
+3. DEFAULT EMAIL DESIGN SYSTEM
+====================================================
+
+Create a reusable email layout.
+
+Layout:
+- Header with KhanaLagao logo
+- Soft orange gradient header or accent line
+- Main white rounded content card
+- Clear heading
+- Short helpful body text
+- CTA button
+- Secondary details card if needed
+- Support/help section
+- Footer with company/legal text
+
+Style:
+- Mobile responsive
+- Width around 600px
+- Clean typography
+- Orange CTA button
+- Warm background
+- Dark text
+- No broken images
+- Works in Gmail, Outlook, Apple Mail, mobile email apps
+
+Default colors:
+Primary Orange: #FF6B1A
+Deep Orange: #E85A0C
+Charcoal Black: #111827
+Dark Navy: #0F172A
+Warm White: #FFF8F1
+Light Background: #FFFDF9
+Success Green: #16A34A
+Danger Red: #EF4444
+AI Purple: #7C3AED
+
+====================================================
+4. PLATFORM EMAIL TEMPLATES TO CREATE
+====================================================
+
+Create attractive editable templates for all these platform activities.
+
+Authentication:
+1. Signup Verification OTP
+2. Login OTP
+3. Email Verification
+4. Mobile Verification
+5. Two-Factor Authentication OTP
+6. Password Reset OTP
+7. Password Changed
+8. New Device Login Alert
+9. Account Locked
+10. Suspicious Login Alert
+
+Restaurant Signup / Onboarding:
+11. Restaurant Signup Welcome
+12. Restaurant Registration Pending Approval
+13. Restaurant Account Approved
+14. Restaurant Account Rejected
+15. Workspace Created
+16. Onboarding Started
+17. Onboarding Incomplete Reminder
+18. Setup Completed
+19. First Menu Created
+20. First QR Code Generated
+21. First Order Received
+22. First Payment Received
+
+Trial / Subscription:
+23. Trial Started
+24. Trial Ending in 7 Days
+25. Trial Ending in 3 Days
+26. Trial Ending Today
+27. Trial Expired
+28. Plan Activated
+29. Plan Upgraded
+30. Plan Downgraded
+31. Subscription Renewed
+32. Subscription Expiring Soon
+33. Subscription Cancelled
+34. Account Suspended
+35. Account Reactivated
+
+Billing / Payment:
+36. Payment Successful
+37. Payment Failed
+38. Payment Reminder
+39. Invoice Generated
+40. Invoice Paid
+41. Refund Processed
+42. Wallet Recharge Successful
+43. Add-on Purchase Successful
+44. Payment Link Sent
+
+Khana AI / Credits:
+45. AI Credits Added
+46. AI Credits Low
+47. AI Credits Exhausted
+48. AI Recharge Successful
+49. AI Usage Summary
+50. AI Feature Enabled
+51. AI Menu Import Completed
+52. AI Campaign Generated
+
+Support / System:
+53. Support Ticket Created
+54. Support Ticket Replied
+55. Support Ticket Resolved
+56. SLA Breach Alert
+57. Emergency Support Ticket
+58. Maintenance Notice
+59. Feature Announcement
+60. Super Admin Announcement
+61. Provider Error Alert
+62. Daily SaaS Summary
+63. Weekly SaaS Summary
+
+Staff / Restaurant User:
+64. Staff Invite
+65. Staff Account Created
+66. Role Changed
+67. Login Access Disabled
+68. Payroll Generated
+69. Shift Reminder
+70. Leave Approved
+71. Leave Rejected
+
+Customer Restaurant Emails:
+72. Customer Order Confirmation
+73. Order Ready
+74. Reservation Confirmation
+75. Reservation Reminder
+76. Payment Reminder
+77. Invoice Sent
+78. Feedback Request
+79. Review Request
+80. Birthday Offer
+81. Anniversary Offer
+82. Weekend Offer
+83. Festival Offer
+84. Win-back Offer
+85. Coupon Issued
+86. Coupon Expiry Reminder
+87. Loyalty Points Update
+88. Membership Renewal
+89. Tiffin Plan Renewal
+90. Catering Quote Follow-up
+91. Event Booking Confirmation
+92. Refund Confirmation
+93. Apology / Service Recovery
+
+====================================================
+5. TEMPLATE VARIABLES
+====================================================
+
+Support these variables globally:
+
+Global:
+{{app_name}}
+{{app_url}}
+{{logo_url}}
+{{support_email}}
+{{support_phone}}
+{{current_year}}
+{{login_url}}
+{{dashboard_url}}
+{{pricing_url}}
+{{book_demo_url}}
+
+User:
+{{user_name}}
+{{user_email}}
+{{user_mobile}}
+{{role_name}}
+
+Restaurant:
+{{restaurant_name}}
+{{owner_name}}
+{{owner_email}}
+{{owner_phone}}
+{{restaurant_city}}
+{{outlet_name}}
+{{restaurant_login_url}}
+
+OTP:
+{{otp}}
+{{expiry_minutes}}
+
+Subscription:
+{{plan_name}}
+{{plan_price}}
+{{billing_cycle}}
+{{trial_end_date}}
+{{trial_days_left}}
+{{renewal_date}}
+{{subscription_status}}
+
+Invoice / Payment:
+{{invoice_number}}
+{{invoice_amount}}
+{{payment_due_date}}
+{{payment_link}}
+{{invoice_url}}
+{{payment_status}}
+
+Customer:
+{{customer_name}}
+{{customer_phone}}
+{{customer_email}}
+{{last_order_date}}
+{{favorite_item}}
+{{loyalty_points}}
+{{wallet_balance}}
+
+Order:
+{{order_number}}
+{{order_status}}
+{{table_number}}
+{{order_total}}
+{{payment_status}}
+{{order_status_url}}
+{{invoice_url}}
+
+Campaign:
+{{coupon_code}}
+{{coupon_expiry}}
+{{offer_title}}
+{{offer_amount}}
+{{ordering_url}}
+{{review_link}}
+{{unsubscribe_url}}
+
+Support:
+{{ticket_id}}
+{{ticket_subject}}
+{{ticket_status}}
+{{ticket_url}}
+
+AI:
+{{ai_credits_balance}}
+{{ai_credits_used}}
+{{ai_recharge_url}}
+
+Staff:
+{{staff_name}}
+{{shift_time}}
+{{payroll_month}}
+{{salary_amount}}
+
+====================================================
+6. SAMPLE DEFAULT TEMPLATE CONTENT
+====================================================
+
+Create these as beautiful responsive HTML templates.
+
+A. Signup Verification OTP
+Subject:
+Your KhanaLagao verification code
+
+Preheader:
+Use this code to verify your account.
+
+Body:
+Hi {{user_name}},
+
+Your KhanaLagao verification code is:
+
+{{otp}}
+
+This code is valid for {{expiry_minutes}} minutes. Please do not share this code with anyone.
+
+If you did not request this code, you can safely ignore this email.
+
+CTA:
+Open KhanaLagao
+
+B. Restaurant Welcome
+Subject:
+Welcome to KhanaLagao — Your Restaurant OS is Ready
+
+Preheader:
+Start managing POS, QR menu, kitchen, inventory, staff and growth tools.
+
+Body:
+Hi {{owner_name}},
+
+Welcome to KhanaLagao.
+
+Your workspace for {{restaurant_name}} is ready. You can now manage POS billing, QR menu, kitchen, inventory, staff, finance, growth tools and Khana AI from one connected platform.
+
+Recommended next steps:
+1. Add your outlet details
+2. Create your menu
+3. Generate table QR codes
+4. Add staff members
+5. Try Khana AI
+
+CTA:
+Open Dashboard
+
+C. Trial Ending
+Subject:
+Your KhanaLagao trial ends in {{trial_days_left}} days
+
+Preheader:
+Choose a plan to keep your restaurant running without interruption.
+
+Body:
+Hi {{owner_name}},
+
+Your KhanaLagao trial for {{restaurant_name}} ends on {{trial_end_date}}.
+
+Choose a plan to continue using POS, QR menu, inventory, payroll, growth tools and Khana AI without interruption.
+
+CTA:
+Choose Plan
+
+D. Plan Upgraded
+Subject:
+Your KhanaLagao plan has been upgraded to {{plan_name}}
+
+Body:
+Hi {{owner_name}},
+
+Your restaurant has been upgraded to the {{plan_name}} plan.
+
+You now have access to more KhanaLagao features based on your plan.
+
+CTA:
+Open Dashboard
+
+E. Payment Successful
+Subject:
+Payment received for invoice {{invoice_number}}
+
+Body:
+Hi {{owner_name}},
+
+We have received your payment of {{invoice_amount}} for invoice {{invoice_number}}.
+
+Thank you for using KhanaLagao.
+
+CTA:
+View Invoice
+
+F. Payment Failed
+Subject:
+Payment failed for your KhanaLagao subscription
+
+Body:
+Hi {{owner_name}},
+
+We could not process your payment of {{invoice_amount}} for {{restaurant_name}}.
+
+Please complete payment to avoid service interruption.
+
+CTA:
+Pay Now
+
+G. AI Credits Low
+Subject:
+Your Khana AI credits are running low
+
+Body:
+Hi {{owner_name}},
+
+Your Khana AI credit balance is now {{ai_credits_balance}}.
+
+Recharge now to continue using AI menu import, AI campaigns, AI insights and AI chat.
+
+CTA:
+Recharge Credits
+
+H. Support Ticket Created
+Subject:
+Support ticket {{ticket_id}} created
+
+Body:
+Hi {{user_name}},
+
+Your support ticket has been created successfully.
+
+Ticket: {{ticket_subject}}
+Status: {{ticket_status}}
+
+Our team will update you soon.
+
+CTA:
+View Ticket
+
+I. Customer Order Confirmation
+Subject:
+Your order {{order_number}} is confirmed
+
+Body:
+Hi {{customer_name}},
+
+Your order at {{restaurant_name}} is confirmed.
+
+Order Number: {{order_number}}
+Total: {{order_total}}
+Status: {{order_status}}
+
+CTA:
+Track Order
+
+J. Customer Review Request
+Subject:
+How was your experience at {{restaurant_name}}?
+
+Body:
+Hi {{customer_name}},
+
+Thank you for visiting {{restaurant_name}}.
+
+Please share your feedback. It helps us serve you better.
+
+CTA:
+Give Feedback
+
+K. Customer Offer
+Subject:
+Special offer from {{restaurant_name}}
+
+Body:
+Hi {{customer_name}},
+
+Enjoy {{offer_title}} at {{restaurant_name}}.
+
+Use code {{coupon_code}} before {{coupon_expiry}}.
+
+CTA:
+Order Now
+
+Footer:
+You are receiving this because you opted in to updates from {{restaurant_name}}.
+Unsubscribe: {{unsubscribe_url}}
+
+====================================================
+7. EMAIL TRIGGER INTEGRATION
+====================================================
+
+Integrate templates everywhere.
+
+Trigger correct email templates on:
+
+Auth:
+- Signup OTP
+- Login OTP
+- 2FA OTP
+- Password reset
+- New device login
+- Password changed
+
+Restaurant:
+- Signup complete
+- Workspace created
+- Approval status
+- Onboarding reminder
+- Setup completed
+
+Subscription:
+- Trial start
+- Trial ending
+- Trial expired
+- Plan activate/upgrade/downgrade
+- Subscription renewal/cancel
+
+Billing:
+- Payment success
+- Payment failed
+- Invoice generated
+- Refund processed
+- Add-on purchase
+
+AI:
+- Credits low/exhausted/added
+- AI usage summary
+- AI import completed
+
+Support:
+- Ticket created/replied/resolved
+- SLA breach
+
+Staff:
+- Staff invite
+- Role changed
+- Payroll generated
+- Shift reminder
+- Leave update
+
+Customer:
+- Order confirmation
+- Order ready
+- Reservation
+- Review request
+- Feedback
+- Loyalty
+- Coupons
+- Offers
+- Tiffin/catering/event updates
+
+====================================================
+8. EMAIL LOGS
+====================================================
+
+Every email sent must create a log.
+
+email_logs:
+- id
+- restaurant_id nullable
+- recipient_email
+- recipient_type
+- template_id
+- template_key
+- subject
+- body_snapshot
+- provider
+- status: queued/sent/delivered/failed/opened/clicked
+- error_message
+- sent_at
+- opened_at
+- clicked_at
+- created_at
+
+Email logs page:
+- Search by recipient
+- Filter by template
+- Filter by status
+- Filter by restaurant
+- Filter by date
+- View email snapshot
+- Retry failed email
+- Export logs
+
+====================================================
+9. EMAIL AUTOMATION / FOLLOW-UP
+====================================================
+
+Add lifecycle follow-up emails.
+
+Default sequences:
+
+New Restaurant Signup:
+- Day 0: Welcome
+- Day 1: Add your menu
+- Day 2: Generate table QR codes
+- Day 3: Add staff and payroll
+- Day 4: Connect inventory
+- Day 5: Try Khana AI
+- Day 7: Complete setup
+- Day 10: Start Growth Engine
+- Day 13: Trial ending soon
+
+Trial Ending:
+- 7 days before
+- 3 days before
+- 1 day before
+- Trial expired
+
+Payment Recovery:
+- Payment failed immediately
+- Reminder after 1 day
+- Reminder after 3 days
+- Final warning
+
+Inactive Restaurant:
+- No login for 7 days
+- No order for 7 days
+- Setup incomplete
+
+Stop rules:
+- Stop onboarding if setup completed.
+- Stop trial emails if plan purchased.
+- Stop payment recovery if payment completed.
+
+====================================================
+10. PROVIDER RULES
+====================================================
+
+All email providers are configured in Super Admin only.
+
+Super Admin → Provider Center → Email
+
+Providers:
+- SMTP
+- SendGrid
+- Mailgun
+- Amazon SES
+- Resend
+- Postmark
+- Custom SMTP
+
+Restaurant admin cannot see:
+- SMTP password
+- SendGrid key
+- Mailgun key
+- SES secret
+- Resend key
+- Postmark token
+
+Restaurant admin can:
+- Enable customer email marketing if allowed
+- Edit allowed restaurant email templates
+- Send test email
+- View logs
+- Manage unsubscribe/consent
+
+====================================================
+11. PLAN / PERMISSION RULES
+====================================================
+
+Super Admin controls:
+- Email templates enabled by plan
+- Marketing email enabled by plan
+- Lifecycle emails enabled by plan
+- Monthly email limit
+- Custom templates limit
+- AI email generation access
+- Advanced analytics access
+
+Permissions:
+- View templates
+- Create template
+- Edit template
+- Delete template
+- Send test email
+- Manage automation
+- View logs
+- Retry failed email
+
+====================================================
+12. RESTAURANT EMAIL MARKETING
+====================================================
+
+Restaurant Admin → Growth Engine → Email Templates
+
+Restaurant can use allowed templates for:
+- Birthday offers
+- Anniversary offers
+- Weekend offers
+- Festival campaigns
+- Win-back campaigns
+- Loyalty campaigns
+- Review requests
+- Customer reactivation
+
+Marketing rules:
+- Must require customer email opt-in.
+- Must include unsubscribe link.
+- Do not send to unsubscribed customers.
+- Show recipient count before sending.
+- Log all emails.
+
+====================================================
+13. DESIGN ACCEPTANCE
+====================================================
+
+Email templates should not look plain.
+
+Every template must have:
+- Logo
+- Header
+- Beautiful content card
+- CTA button
+- Helpful supporting text
+- Footer
+- Mobile responsive design
+- Brand colors
+- Plain text fallback
+- Variable preview
+
+====================================================
+14. TESTING CHECKLIST
+====================================================
+
+Test:
+- Create/edit email template
+- Preview with sample variables
+- Send test email
+- Trigger signup OTP email
+- Trigger restaurant welcome email
+- Trigger trial ending email
+- Trigger plan upgrade email
+- Trigger payment success email
+- Trigger payment failed email
+- Trigger AI credits low email
+- Trigger support ticket email
+- Trigger customer order email
+- Trigger review request email
+- Logs saved
+- Failed email shows reason
+- Retry failed email works
+- Variables replace correctly
+- Mobile email preview looks good
+- Restaurant cannot see provider secrets
+
+====================================================
+15. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Super Admin Email Center exists.
+- Attractive editable email templates exist for all major activities.
+- Templates support variables.
+- Templates have mobile responsive HTML.
+- Preview and test email work.
+- Email triggers are integrated across auth, signup, plans, billing, AI, support, staff, and restaurant customer activity.
+- Email logs are saved.
+- Failed emails can be retried.
+- Restaurant email marketing works with opt-in.
+- Provider secrets remain only in Super Admin.
+- No mock success.
+- No broken buttons.
+- No infinite loading.
+- Build passes.
