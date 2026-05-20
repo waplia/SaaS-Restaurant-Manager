@@ -78,3 +78,4 @@ export * from "./operations";
 export * from "./vendor-invoices";
 export * from "./idempotency";
 export * from "./implementations";
+export * from "./phonepe";

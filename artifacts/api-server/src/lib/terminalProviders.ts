@@ -9,9 +9,9 @@
  */
 import Stripe from "stripe";
 
-export type TerminalProviderId = "stripe" | "square" | "clover" | "custom";
+export type TerminalProviderId = "stripe" | "square" | "clover" | "phonepe" | "custom";
 
-export const TERMINAL_PROVIDERS: TerminalProviderId[] = ["stripe", "square", "clover", "custom"];
+export const TERMINAL_PROVIDERS: TerminalProviderId[] = ["stripe", "square", "clover", "phonepe", "custom"];
 
 export interface TerminalDeviceRef {
   deviceId: number;
@@ -190,10 +190,42 @@ const squareProvider = makeStub("square", "Square Terminal", "SQUARE_ACCESS_TOKE
 const cloverProvider = makeStub("clover", "Clover", "CLOVER_API_TOKEN");
 const customProvider = makeStub("custom", "Custom / Webhook", "CUSTOM_TERMINAL_WEBHOOK_URL");
 
+// PhonePe Offline — a real provider but configured via Super Admin → Provider
+// Center (db-backed config + per-restaurant store/terminal mapping rows),
+// not via env vars. The actual charge/refund flow runs through the dedicated
+// /api/payments/phonepe/* routes; this adapter entry exists so the terminal
+// registry is aware of PhonePe for listing + future polymorphic charging.
+const phonepeProvider: TerminalProvider = {
+  id: "phonepe",
+  label: "PhonePe Offline",
+  isConfigured() {
+    // Truthful runtime check would hit the DB; the registry call sites accept
+    // a synchronous answer, so we report `false` here and the dedicated
+    // /api/payments/phonepe/config endpoint exposes the real status.
+    return false;
+  },
+  async charge() {
+    return {
+      status: "not_configured",
+      providerRef: null,
+      receiptUrl: null,
+      message: "Use the PhonePe Offline endpoints under /api/payments/phonepe/*.",
+    };
+  },
+  async refund() {
+    return {
+      status: "not_configured",
+      providerRef: null,
+      message: "Refund PhonePe payments via /api/payments/phonepe/refund.",
+    };
+  },
+};
+
 const REGISTRY: Record<TerminalProviderId, TerminalProvider> = {
   stripe: stripeProvider,
   square: squareProvider,
   clover: cloverProvider,
+  phonepe: phonepeProvider,
   custom: customProvider,
 };
 

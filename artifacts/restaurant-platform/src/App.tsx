@@ -161,6 +161,7 @@ import SettlementReconPage from "@/pages/settlement-recon";
 import AggregatorReconPage from "@/pages/aggregator-recon";
 import CapitalInsurancePage from "@/pages/capital-insurance";
 import AdminFintechPage from "@/pages/admin-fintech";
+import AdminPhonePePage from "@/pages/admin-phonepe";
 import AdminFinancePartnersPage from "@/pages/admin-finance-partners";
 import HealthScorePage from "@/pages/health-score";
 import SustainabilityPage from "@/pages/sustainability";
@@ -426,6 +427,7 @@ function Router() {
       <Route path="/aggregator-payouts" component={() => <RoleProtectedRoute component={AggregatorReconPage} allow={["owner", "manager", "super_admin"]} />} />
       <Route path="/capital" component={() => <RoleProtectedRoute component={CapitalInsurancePage} allow={["owner", "manager"]} />} />
       <Route path="/admin/fintech" component={() => <SuperAdminRoute component={AdminFintechPage} />} />
+      <Route path="/admin/phonepe" component={() => <SuperAdminRoute component={AdminPhonePePage} />} />
       <Route path="/admin/finance-partners" component={() => <SuperAdminRoute component={AdminFinancePartnersPage} />} />
       <Route path="/reports" component={() => <Redirect to="/reports/sales" />} />
       <Route path="/reports/fraud-alerts" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={FraudAlertsPage} feature="advanced_reports" />} allow={["owner", "manager", "super_admin"]} />} />

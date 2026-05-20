@@ -119,6 +119,7 @@ import walletRouter from "./wallet";
 import loyaltyNetworkRouter from "./loyalty-network";
 import webPushRouter from "./web-push";
 import adminWebPushRouter from "./admin-web-push";
+import phonepeRouter, { phonepePublicRouter } from "./phonepe";
 
 const router: IRouter = Router();
 
@@ -144,6 +145,7 @@ router.use(canteenPublicRouter);
 router.use(tokensRouter);
 router.use(bakeryPublicRouter);
 router.use(customerAppPublicRouter);
+router.use(phonepePublicRouter);
 
 // Customer-facing wallet API (own JWT, mounted before the staff `authenticate` gate)
 router.use(walletRouter);
@@ -267,5 +269,6 @@ router.use(orderCapacityRouter);
 router.use(operationsRouter);
 router.use(vendorInvoicesRouter);
 router.use(customerAppRouter);
+router.use(phonepeRouter);
 
 export default router;
