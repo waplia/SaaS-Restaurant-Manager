@@ -13,7 +13,9 @@ import {
   smsSuppressionListTable,
   whatsappSuppressionListTable,
   webPushSuppressionListTable,
+  webPushSubscriptionsTable,
 } from "../lib/db";
+import { sendTestWebPush } from "../lib/webPush";
 import type { NewCampaign, NewCampaignStep } from "@workspace/db/schema";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -353,12 +355,45 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/dry-run", async (re
 router.post("/restaurants/:restaurantId/growth/campaigns/:id/test-send", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
-  const { to, channel } = req.body ?? {};
-  if (!to || typeof to !== "string") return void res.status(400).json({ error: "to is required" });
+  const { to, channel, subscriptionId } = req.body ?? {};
   const [c] = await db.select().from(campaignsTable)
     .where(and(eq(campaignsTable.id, id), eq(campaignsTable.restaurantId, restaurantId)));
   if (!c) return void res.status(404).json({ error: "Not found" });
   const ch = (channel && CHANNELS.has(channel)) ? (channel as ChannelName) : (c.channel as ChannelName);
+
+  // Web Push test: deliver to a real subscription (picked in the UI from the
+  // Subscribers list) via the same code path the Web Push settings page uses.
+  if (ch === "push") {
+    const content = (c.content ?? {}) as StepContent;
+    let endpoint: string | null = null;
+    if (typeof subscriptionId === "number" && subscriptionId > 0) {
+      const [sub] = await db.select({ endpoint: webPushSubscriptionsTable.endpoint, restaurantId: webPushSubscriptionsTable.restaurantId })
+        .from(webPushSubscriptionsTable).where(eq(webPushSubscriptionsTable.id, subscriptionId));
+      if (!sub || sub.restaurantId !== restaurantId) return void res.status(404).json({ error: "Subscription not found for this restaurant" });
+      endpoint = sub.endpoint;
+    } else if (typeof to === "string" && /^https?:\/\//i.test(to)) {
+      endpoint = to;
+    } else {
+      // Fall back to the most recent active subscription so the user can test
+      // without picking one explicitly.
+      const [sub] = await db.select({ endpoint: webPushSubscriptionsTable.endpoint })
+        .from(webPushSubscriptionsTable)
+        .where(and(eq(webPushSubscriptionsTable.restaurantId, restaurantId), eq(webPushSubscriptionsTable.status, "active")))
+        .orderBy(desc(webPushSubscriptionsTable.createdAt))
+        .limit(1);
+      if (!sub) return void res.status(400).json({ error: "No active Web Push subscribers to test against. Open the storefront, allow notifications, then retry." });
+      endpoint = sub.endpoint;
+    }
+    const r = await sendTestWebPush(endpoint, {
+      title: content.title || content.subject || c.name,
+      body: content.body ?? "",
+      url: content.ctaUrl ?? undefined,
+      image: content.imageUrl ?? undefined,
+    });
+    return void res.json({ ok: r.ok, status: r.ok ? "sent" : "failed", reason: r.error ?? null, endpoint });
+  }
+
+  if (!to || typeof to !== "string") return void res.status(400).json({ error: "to is required" });
   const fakeCustomer = {
     id: -1, name: "Test User",
     email: ch === "email" ? to : null,

@@ -496,6 +496,8 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
   const [stepIdx, setStepIdx] = useState(0);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [testTo, setTestTo] = useState("");
+  const [testSubId, setTestSubId] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; status?: string; reason?: string | null } | null>(null);
 
   // Autosave on field change (debounced via mutation).
   const saveM = useMutation({
@@ -531,9 +533,27 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
     onError: (e: ApiError) => toast({ title: "Couldn't launch", description: e.message, variant: "destructive" }),
   });
   const testM = useMutation({
-    mutationFn: () => apiPost(`/restaurants/${restaurantId}/growth/campaigns/${draft.id}/test-send`, { to: testTo, channel: draft.channel }),
-    onSuccess: (r: { status: string; reason?: string }) => toast({ title: r.status === "sent" ? "Test sent" : "Test " + r.status, description: r.reason }),
-    onError: (e: ApiError) => toast({ title: "Test failed", description: e.message, variant: "destructive" }),
+    mutationFn: () => {
+      const body: Record<string, unknown> = { channel: draft.channel };
+      if (draft.channel === "push") {
+        if (testSubId) body.subscriptionId = testSubId;
+      } else {
+        body.to = testTo;
+      }
+      return apiPost(`/restaurants/${restaurantId}/growth/campaigns/${draft.id}/test-send`, body);
+    },
+    onSuccess: (r: { ok?: boolean; status: string; reason?: string | null }) => {
+      setTestResult({ ok: r.ok ?? r.status === "sent", status: r.status, reason: r.reason ?? null });
+      toast({
+        title: r.status === "sent" ? "Test sent" : "Test " + r.status,
+        description: r.reason ?? undefined,
+        variant: r.status === "sent" ? "default" : "destructive",
+      });
+    },
+    onError: (e: ApiError) => {
+      setTestResult({ ok: false, status: "failed", reason: e.message });
+      toast({ title: "Test failed", description: e.message, variant: "destructive" });
+    },
   });
 
   // When user lands on "preview" step, fetch preview audience.
@@ -608,7 +628,7 @@ function CampaignWizard({ campaign, planInfo, onClose }: { campaign: Campaign; p
             {currentStep.key === "template" && <StepTemplate draft={draft} updateContent={updateContent} />}
             {currentStep.key === "audience" && <StepAudience draft={draft} updateAudience={updateAudience} preview={preview} planInfo={planInfo} />}
             {currentStep.key === "preview" && <StepPreview draft={draft} preview={preview} />}
-            {currentStep.key === "test" && <StepTest draft={draft} testTo={testTo} setTestTo={setTestTo} onSend={() => testM.mutate()} sending={testM.isPending} />}
+            {currentStep.key === "test" && <StepTest draft={draft} testTo={testTo} setTestTo={setTestTo} restaurantId={restaurantId} testSubId={testSubId} setTestSubId={setTestSubId} onSend={() => testM.mutate()} sending={testM.isPending} testResult={testResult} />}
             {currentStep.key === "schedule" && <StepSchedule draft={draft} updateDraft={updateDraft} planInfo={planInfo} />}
           </div>
 
@@ -996,8 +1016,66 @@ function StepPreview({ draft, preview }: { draft: Campaign; preview: Preview | n
 }
 
 // ─────────── Step 6: Test ───────────
-function StepTest({ draft, testTo, setTestTo, onSend, sending }: { draft: Campaign; testTo: string; setTestTo: (v: string) => void; onSend: () => void; sending: boolean }) {
+type PushSubscriberRow = { id: number; browser: string | null; device: string | null; status: string; customerId: number | null; marketingOptIn: boolean; orderUpdatesOptIn: boolean };
+
+function StepTest({ draft, testTo, setTestTo, restaurantId, testSubId, setTestSubId, onSend, sending, testResult }: { draft: Campaign; testTo: string; setTestTo: (v: string) => void; restaurantId: number; testSubId: number | null; setTestSubId: (v: number | null) => void; onSend: () => void; sending: boolean; testResult: { ok: boolean; status?: string; reason?: string | null } | null }) {
   const channel = draft.channel;
+  const subsQ = useQuery<PushSubscriberRow[]>({
+    queryKey: ["growth-test-subscribers", restaurantId],
+    queryFn: () => apiGet(`/restaurants/${restaurantId}/web-push/subscribers?status=active`),
+    enabled: channel === "push",
+  });
+  useEffect(() => {
+    if (channel === "push" && subsQ.data && subsQ.data.length > 0 && !testSubId) {
+      setTestSubId(subsQ.data[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel, subsQ.data]);
+
+  if (channel === "push") {
+    const subs = subsQ.data ?? [];
+    const canSend = !!testSubId && !sending;
+    return (
+      <div className="space-y-6 max-w-lg">
+        <div>
+          <h3 className="text-lg font-semibold">Send a test push</h3>
+          <p className="text-sm text-muted-foreground">Pick one of your active Web Push subscribers. We'll deliver this campaign to just that browser.</p>
+        </div>
+        <div>
+          <Label>Subscriber</Label>
+          {subsQ.isLoading ? (
+            <div className="mt-1.5 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading subscribers…</div>
+          ) : subs.length === 0 ? (
+            <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              No active Web Push subscribers yet. Open your storefront in a browser, allow notifications, then come back and retry.
+            </div>
+          ) : (
+            <Select value={testSubId ? String(testSubId) : ""} onValueChange={v => setTestSubId(Number(v))}>
+              <SelectTrigger className="mt-1.5"><SelectValue placeholder="Choose a subscriber" /></SelectTrigger>
+              <SelectContent>
+                {subs.map(s => {
+                  const label = `${s.customerId ? `Customer #${s.customerId}` : `Anonymous #${s.id}`} — ${s.browser ?? "Unknown"} · ${s.device ?? "unknown"}${s.marketingOptIn ? "" : " · no marketing opt-in"}`;
+                  return <SelectItem key={s.id} value={String(s.id)}>{label}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <Button onClick={onSend} disabled={!canSend}>
+          {sending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Sending…</> : <><FlaskConical className="h-4 w-4 mr-1" />Send test push</>}
+        </Button>
+        {testResult && (
+          <div className={`rounded-md border p-3 text-sm ${testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"}`}>
+            {testResult.ok
+              ? "Push delivered. Check the selected browser — if you don't see it, the OS / browser may have notifications muted."
+              : `Push failed: ${testResult.reason ?? "unknown error"}`}
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground">Test sends don't count towards your monthly quota or analytics.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-lg">
       <div>
@@ -1011,6 +1089,11 @@ function StepTest({ draft, testTo, setTestTo, onSend, sending }: { draft: Campai
       <Button onClick={onSend} disabled={!testTo || sending}>
         {sending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Sending…</> : <><FlaskConical className="h-4 w-4 mr-1" />Send test</>}
       </Button>
+      {testResult && (
+        <div className={`rounded-md border p-3 text-sm ${testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"}`}>
+          {testResult.ok ? "Test sent successfully." : `Test failed: ${testResult.reason ?? "unknown error"}`}
+        </div>
+      )}
       <div className="text-xs text-muted-foreground">Test sends don't count towards your monthly quota or analytics.</div>
     </div>
   );
