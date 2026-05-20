@@ -132,6 +132,7 @@ export default function RegisterPage() {
                 value={form.phone}
                 onChange={(v) => setForm(prev => ({ ...prev, phone: v }))}
                 placeholder="9876543210"
+                defaultCountry="IN"
               />
               <p className="text-xs text-muted-foreground">We'll only use this for account recovery and important notices.</p>
             </div>

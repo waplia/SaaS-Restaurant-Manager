@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Wallet } from "lucide-react";
 import { api, setToken } from "@/lib/api";
 import { useAuth, type CustomerUser } from "@/lib/auth";
+import { PhoneInput } from "@/components/PhoneInput";
 
 export default function Login() {
   const { refresh, setUser } = useAuth();
@@ -57,12 +58,16 @@ export default function Login() {
           <form onSubmit={requestOtp} className="card p-6 space-y-4" data-testid="form-phone">
             <label className="block">
               <span className="text-sm font-medium">Mobile number</span>
-              <input
-                className="input mt-2" type="tel" required minLength={7}
-                placeholder="+91 98765 43210"
-                value={phone} onChange={e => setPhone(e.target.value)}
-                data-testid="input-phone" autoFocus
-              />
+              <div className="mt-2">
+                <PhoneInput
+                  value={phone}
+                  onChange={setPhone}
+                  required
+                  placeholder="98765 43210"
+                  inputTestId="input-phone"
+                  autoFocus
+                />
+              </div>
             </label>
             {error && <p className="text-sm text-red-600" data-testid="text-error">{error}</p>}
             <button className="btn-primary w-full" disabled={loading} data-testid="button-send-otp">

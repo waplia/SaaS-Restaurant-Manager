@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { PhoneInput } from "@/components/PhoneInput";
 
 const apiBase = `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
 
@@ -64,7 +65,7 @@ export default function RewardsScreen() {
       <Text style={styles.sub}>Look up your loyalty balance, tier, and stamps using your registered phone number.</Text>
 
       <TextInput style={styles.input} placeholder="Restaurant ID" placeholderTextColor={colors.mutedForeground} keyboardType="number-pad" value={restaurantId} onChangeText={setRestaurantId} />
-      <TextInput style={styles.input} placeholder="Phone number" placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+      <PhoneInput value={phone} onChange={setPhone} placeholder="Phone number" />
       <TouchableOpacity style={styles.btn} onPress={lookup} disabled={!phone || loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Find my rewards</Text>}
       </TouchableOpacity>

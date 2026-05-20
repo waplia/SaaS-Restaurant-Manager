@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, Search, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   COUNTRY_CODES,
-  DEFAULT_CODE,
   DEFAULT_ISO,
   parsePhone,
   resolveCountry,
   formatPhone,
   type CountryCode,
 } from "@workspace/phone-utils";
-import { useRestaurantInfo } from "@/lib/hooks";
-
-export type { CountryCode };
-export { COUNTRY_CODES, DEFAULT_CODE, DEFAULT_ISO };
+import { cn } from "@/lib/utils";
 
 interface PhoneInputProps {
   value: string;
@@ -25,13 +18,21 @@ interface PhoneInputProps {
   id?: string;
   disabled?: boolean;
   className?: string;
-  autoComplete?: string;
-  /**
-   * Initial ISO-2 country used when {@link value} is empty / national-only.
-   * Defaults to the active restaurant's configured country, falling back
-   * to "IN" when nothing is available (e.g. on pre-auth screens).
-   */
   defaultCountry?: string;
+  onBlur?: () => void;
+  name?: string;
+}
+
+/**
+ * Browser-locale defaulted country for the public marketing site, since
+ * there is no signed-in restaurant context here. Falls back to "IN" when
+ * the locale can't be parsed.
+ */
+function defaultIsoFromBrowser(): string {
+  if (typeof navigator === "undefined") return DEFAULT_ISO;
+  const lang = navigator.language ?? "";
+  const region = lang.includes("-") ? lang.split("-")[1] : "";
+  return region ? region.toUpperCase() : DEFAULT_ISO;
 }
 
 export function PhoneInput({
@@ -42,16 +43,11 @@ export function PhoneInput({
   id,
   disabled,
   className,
-  autoComplete = "tel",
   defaultCountry,
+  onBlur,
+  name,
 }: PhoneInputProps) {
-  // Pick up the restaurant's configured country when no explicit override
-  // is given. The hook is always called (React rules of hooks) but its
-  // value is only used when defaultCountry is omitted.
-  const restaurant = useRestaurantInfo();
-  const effectiveDefault =
-    defaultCountry ?? restaurant.data?.country ?? DEFAULT_ISO;
-
+  const effectiveDefault = defaultCountry ?? defaultIsoFromBrowser();
   const parsed = useMemo(
     () => parsePhone(value, effectiveDefault),
     [value, effectiveDefault],
@@ -61,6 +57,9 @@ export function PhoneInput({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const displayCountry =
+    parsed.country.iso ? parsed.country : resolveCountry(effectiveDefault);
 
   function emit(country: CountryCode, national: string) {
     onChange(formatPhone(country, national));
@@ -101,37 +100,34 @@ export function PhoneInput({
     setSearch("");
   }
 
-  // Keep dropdown showing the resolved-default country even before the
-  // user types anything (so empty-state still shows the right flag).
-  const displayCountry = parsed.country.iso ? parsed.country : resolveCountry(effectiveDefault);
-
   return (
     <div className={cn("flex gap-2 relative", className)}>
-      <Button
+      <button
         ref={triggerRef}
         type="button"
-        variant="outline"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-10 min-w-[7rem] justify-between gap-1 px-2"
+        className="flex items-center gap-1 h-10 px-2 min-w-[6.5rem] justify-between rounded-md border border-input bg-background text-sm hover:bg-accent disabled:opacity-50"
       >
         <span className="text-base leading-none">{displayCountry.flag}</span>
-        <span className="text-sm font-medium">{displayCountry.code}</span>
+        <span className="font-medium">{displayCountry.code}</span>
         <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-      </Button>
-      <Input
+      </button>
+      <input
         id={id}
+        name={name}
         type="tel"
         inputMode="tel"
-        autoComplete={autoComplete}
+        autoComplete="tel"
         required={required}
         disabled={disabled}
         value={parsed.national}
         onChange={e => emit(displayCountry, e.target.value)}
+        onBlur={onBlur}
         placeholder={placeholder}
-        className="flex-1"
+        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />
 
       {open && (

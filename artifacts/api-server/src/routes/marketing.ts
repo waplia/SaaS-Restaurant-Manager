@@ -16,6 +16,7 @@ import { authenticate } from "../middleware/authenticate";
 import { sendSmsMessage } from "../lib/smsSender";
 import { hashPassword } from "../lib/auth";
 import { sendEmail, sendSms, sendWhatsApp } from "../lib/notifications";
+import { normalizePhone, toE164, DEFAULT_ISO } from "@workspace/phone-utils";
 import { logger } from "../lib/logger";
 import { recordAuditLog } from "../lib/audit";
 
@@ -104,7 +105,11 @@ router.post("/leads", async (req, res) => {
       name,
       email,
       restaurantName: body.restaurantName ? String(body.restaurantName).slice(0, 200) : null,
-      phone: body.phone ? String(body.phone).slice(0, 50) : null,
+      // Leads come from the public marketing site where we have no
+      // restaurant context yet — fall back to the global default ISO.
+      phone: body.phone
+        ? (normalizePhone(String(body.phone).slice(0, 50), DEFAULT_ISO) ?? String(body.phone).slice(0, 50))
+        : null,
       city: body.city ? String(body.city).slice(0, 120) : null,
       outletCount,
       businessType: body.businessType ? String(body.businessType).slice(0, 80) : null,
@@ -126,7 +131,7 @@ router.post("/leads", async (req, res) => {
   // Lifecycle SMS — confirm demo booked. Best-effort, never blocks the lead.
   if (lead.phone) {
     void sendSmsMessage({
-      to: lead.phone,
+      to: toE164(lead.phone, DEFAULT_ISO) ?? lead.phone,
       eventKey: "demo_booked",
       variables: {
         name: lead.name,
@@ -688,7 +693,8 @@ adminRouter.post("/admin/leads/:id/convert", async (req, res) => {
   const restaurantName = String(body.restaurantName ?? lead.restaurantName ?? lead.name ?? "").trim();
   const ownerName = String(body.ownerName ?? lead.name ?? "").trim();
   const email = String(body.email ?? lead.email ?? "").trim().toLowerCase();
-  const phone = body.phone ? String(body.phone).trim() : (lead.phone ?? null);
+  const phoneRaw = body.phone ? String(body.phone).trim() : (lead.phone ?? null);
+  const phone = phoneRaw ? (normalizePhone(phoneRaw, DEFAULT_ISO) ?? phoneRaw) : null;
   const city = body.city ? String(body.city).trim() : (lead.city ?? null);
   const password = String(body.password ?? "").trim();
   const planSlug = body.planSlug ? String(body.planSlug) : "free-trial";

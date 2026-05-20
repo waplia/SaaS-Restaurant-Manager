@@ -37,6 +37,7 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { recordAuditLog } from "../lib/audit";
 import { sendWhatsApp, sendSms } from "../lib/notifications";
+import { toE164, DEFAULT_ISO } from "@workspace/phone-utils";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -536,12 +537,21 @@ router.patch(`${BASE}/queue/:id`, requireRole(...SERVICE_ROLES), requirePlanFeat
   // Fire WhatsApp + SMS notification when ticket transitions to ready/notified
   if ((status === "notified" || status === "ready") && row.phone) {
     const body = `Hi ${row.customerName}, your takeaway order #${row.ticketNumber} is ready for pickup. Thank you!`;
-    Promise.allSettled([
-      sendWhatsApp({ to: row.phone, body }),
-      sendSms({ to: row.phone, body }),
-    ]).then(results => {
-      for (const r of results) if (r.status === "rejected") logger.warn({ err: r.reason }, "[queue] notification failed");
-    });
+    // Normalise the stored phone (which may be national-only) to E.164
+    // using the restaurant's configured country.
+    const [r] = await db.select({ country: restaurantsTable.country })
+      .from(restaurantsTable).where(eq(restaurantsTable.id, rid(req)));
+    const to = toE164(row.phone, r?.country ?? DEFAULT_ISO);
+    if (to) {
+      Promise.allSettled([
+        sendWhatsApp({ to, body }),
+        sendSms({ to, body }),
+      ]).then(results => {
+        for (const r of results) if (r.status === "rejected") logger.warn({ err: r.reason }, "[queue] notification failed");
+      });
+    } else {
+      logger.warn({ phone: row.phone, ticketId: id }, "[queue] could not normalise recipient phone — skipping notification");
+    }
   }
   await recordAuditLog({ req, module: "advanced_growth", action: "queue.ticket.update", entity: "takeaway_queue_ticket", entityId: id, restaurantId: rid(req), newValue: row });
   res.json(row);

@@ -25,8 +25,19 @@ export const IsoDateString = z.string().min(1).refine(
   { message: "Expected an ISO date string" },
 );
 
-/** E.164-ish phone — keep loose to tolerate the variety of formats we accept. */
-export const PhoneString = z.string().min(6).max(32);
+/**
+ * E.164-ish phone — kept loose to tolerate the variety of formats we
+ * accept on the wire. The server normalises everything to the canonical
+ * `"+<dial> <national>"` form before persisting (see @workspace/phone-utils).
+ *
+ * The regex permits digits, spaces, dashes and an optional leading `+`,
+ * which is everything the country-aware PhoneInput components emit.
+ */
+export const PhoneString = z
+  .string()
+  .min(6)
+  .max(32)
+  .regex(/^\+?[\d\s\-]+$/, "Phone must contain only digits, spaces, dashes, and an optional leading +");
 
 /** Email with case-insensitive normalisation. */
 export const EmailString = z.string().email().transform((v) => v.toLowerCase().trim());

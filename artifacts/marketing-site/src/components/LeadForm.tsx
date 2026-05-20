@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -177,7 +178,12 @@ export function LeadForm({ source, buttonText = "Submit", showMessage = false, s
                   <FormItem>
                     <FormLabel>Phone Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="+1 (555) 000-0000" type="tel" {...field} />
+                      <PhoneInput
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

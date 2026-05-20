@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TextInput, Pressable } from "react-
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
+import { PhoneInput } from "@/components/PhoneInput";
 
 export default function CustomerEntryScreen() {
   const colors = useColors();
@@ -25,7 +26,10 @@ export default function CustomerEntryScreen() {
         {isDelivery ? "Delivery details" : "Customer (optional)"}
       </Text>
       <Field colors={colors} label="Name" value={name} onChange={setName} placeholder="Customer name" />
-      <Field colors={colors} label="Phone" value={phone} onChange={setPhone} placeholder="10-digit phone" keyboardType="phone-pad" />
+      <View style={{ gap: 6 }}>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>Phone</Text>
+        <PhoneInput value={phone} onChange={setPhone} placeholder="98765 43210" />
+      </View>
       {isDelivery ? (
         <Field colors={colors} label="Delivery address" value={address} onChange={setAddress} placeholder="Door / street / area" multiline />
       ) : null}

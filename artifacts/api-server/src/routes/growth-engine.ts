@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, sql, inArray, isNotNull } from "drizzle-orm";
-import { db, campaignsTable, campaignLogsTable, customersTable } from "../lib/db";
+import { db, campaignsTable, campaignLogsTable, customersTable, restaurantsTable } from "../lib/db";
+import { toE164, DEFAULT_ISO } from "@workspace/phone-utils";
 import type { NewCampaign } from "@workspace/db/schema";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -329,36 +330,48 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/dispatch", async (r
         } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-email send failed"); }
       }
     } else if (c.channel === "whatsapp") {
+      // Look up the restaurant's country once so we can normalise each
+      // recipient's stored phone to E.164 before handing to the provider.
+      const [restaurant] = await db
+        .select({ country: restaurantsTable.country })
+        .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const iso = restaurant?.country ?? DEFAULT_ISO;
       const rows = await db.select({ id: customersTable.id, phone: customersTable.phone, name: customersTable.name })
         .from(customersTable)
         .where(and(...wheres, eq(customersTable.whatsappOptIn, true), isNotNull(customersTable.phone)));
       total = rows.length;
       const message = renderVars(body, { name: "" });
       for (const r of rows) {
-        if (!r.phone) { skipped++; continue; }
+        const to = toE164(r.phone, iso);
+        if (!to) { skipped++; continue; }
         try {
           const out = await sendBroadcastWhatsApp({
-            restaurantId, to: r.phone, subject, body: renderVars(body, { name: r.name ?? "" }),
+            restaurantId, to, subject, body: renderVars(body, { name: r.name ?? "" }),
             event: `growth.campaign.${c.type}`,
           });
           if (out.status === "sent" || out.status === "queued" || out.status === "delivered") sent++; else failed++;
-        } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-whatsapp send failed"); }
+        } catch (err) { failed++; logger.warn({ err, customerId: r.id, to }, "growth-whatsapp send failed"); }
       }
       void message;
     } else if (c.channel === "sms") {
+      const [restaurant] = await db
+        .select({ country: restaurantsTable.country })
+        .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const iso = restaurant?.country ?? DEFAULT_ISO;
       const rows = await db.select({ id: customersTable.id, phone: customersTable.phone, name: customersTable.name })
         .from(customersTable)
         .where(and(...wheres, isNotNull(customersTable.phone)));
       total = rows.length;
       for (const r of rows) {
-        if (!r.phone) { skipped++; continue; }
+        const to = toE164(r.phone, iso);
+        if (!to) { skipped++; continue; }
         try {
           const out = await sendSmsMessage({
-            to: r.phone, body: renderVars(body, { name: r.name ?? "" }),
+            to, body: renderVars(body, { name: r.name ?? "" }),
             restaurantId, eventKey: "custom" as never,
           });
           if (out.ok) sent++; else failed++;
-        } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-sms send failed"); }
+        } catch (err) { failed++; logger.warn({ err, customerId: r.id, to }, "growth-sms send failed"); }
       }
     } else {
       return void res.status(400).json({ error: `Unsupported channel: ${c.channel}` });

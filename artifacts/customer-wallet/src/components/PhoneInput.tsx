@@ -1,21 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, Search, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   COUNTRY_CODES,
-  DEFAULT_CODE,
   DEFAULT_ISO,
   parsePhone,
   resolveCountry,
   formatPhone,
   type CountryCode,
 } from "@workspace/phone-utils";
-import { useRestaurantInfo } from "@/lib/hooks";
-
-export type { CountryCode };
-export { COUNTRY_CODES, DEFAULT_CODE, DEFAULT_ISO };
 
 interface PhoneInputProps {
   value: string;
@@ -26,41 +18,46 @@ interface PhoneInputProps {
   disabled?: boolean;
   className?: string;
   autoComplete?: string;
-  /**
-   * Initial ISO-2 country used when {@link value} is empty / national-only.
-   * Defaults to the active restaurant's configured country, falling back
-   * to "IN" when nothing is available (e.g. on pre-auth screens).
-   */
+  /** Initial ISO-2 country (default: "IN"). */
   defaultCountry?: string;
+  /** Optional test-id (the trigger button reads this). */
+  "data-testid"?: string;
+  /** Optional test-id for the inner number input. */
+  inputTestId?: string;
+  autoFocus?: boolean;
 }
 
+/**
+ * Wallet-themed country-aware phone input. Uses the same shared lib as the
+ * back-office and mobile apps for country data + parsing — only the styling
+ * differs (wallet uses plain `.input` / Tailwind classes, no shadcn).
+ */
 export function PhoneInput({
   value,
   onChange,
-  placeholder = "9876543210",
+  placeholder = "98765 43210",
   required,
   id,
   disabled,
   className,
   autoComplete = "tel",
-  defaultCountry,
+  defaultCountry = DEFAULT_ISO,
+  inputTestId,
+  autoFocus,
+  ...rest
 }: PhoneInputProps) {
-  // Pick up the restaurant's configured country when no explicit override
-  // is given. The hook is always called (React rules of hooks) but its
-  // value is only used when defaultCountry is omitted.
-  const restaurant = useRestaurantInfo();
-  const effectiveDefault =
-    defaultCountry ?? restaurant.data?.country ?? DEFAULT_ISO;
-
   const parsed = useMemo(
-    () => parsePhone(value, effectiveDefault),
-    [value, effectiveDefault],
+    () => parsePhone(value, defaultCountry),
+    [value, defaultCountry],
   );
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const displayCountry =
+    parsed.country.iso ? parsed.country : resolveCountry(defaultCountry);
 
   function emit(country: CountryCode, national: string) {
     onChange(formatPhone(country, national));
@@ -101,63 +98,61 @@ export function PhoneInput({
     setSearch("");
   }
 
-  // Keep dropdown showing the resolved-default country even before the
-  // user types anything (so empty-state still shows the right flag).
-  const displayCountry = parsed.country.iso ? parsed.country : resolveCountry(effectiveDefault);
-
   return (
-    <div className={cn("flex gap-2 relative", className)}>
-      <Button
+    <div className={`flex gap-2 relative ${className ?? ""}`}>
+      <button
         ref={triggerRef}
         type="button"
-        variant="outline"
         disabled={disabled}
+        data-testid={rest["data-testid"] ?? "btn-country-select"}
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-10 min-w-[7rem] justify-between gap-1 px-2"
+        className="flex items-center gap-1 px-3 h-12 rounded-xl border border-zinc-200 bg-white text-sm font-medium min-w-[6.5rem] justify-between disabled:opacity-50"
       >
         <span className="text-base leading-none">{displayCountry.flag}</span>
-        <span className="text-sm font-medium">{displayCountry.code}</span>
+        <span>{displayCountry.code}</span>
         <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-      </Button>
-      <Input
+      </button>
+      <input
         id={id}
         type="tel"
         inputMode="tel"
         autoComplete={autoComplete}
         required={required}
         disabled={disabled}
+        autoFocus={autoFocus}
         value={parsed.national}
         onChange={e => emit(displayCountry, e.target.value)}
         placeholder={placeholder}
-        className="flex-1"
+        data-testid={inputTestId}
+        className="input flex-1"
       />
 
       {open && (
         <div
           ref={popoverRef}
           role="listbox"
-          className="absolute top-full left-0 mt-1 z-50 w-72 max-w-[90vw] bg-popover border border-border rounded-md shadow-lg overflow-hidden"
+          className="absolute top-full left-0 mt-1 z-50 w-72 max-w-[90vw] bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden"
         >
-          <div className="p-2 border-b border-border bg-card relative">
-            <Search className="w-3.5 h-3.5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <div className="p-2 border-b border-zinc-100 relative">
+            <Search className="w-3.5 h-3.5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
             <input
               ref={searchRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search country or code"
-              className="w-full h-8 pl-7 pr-7 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full h-9 pl-7 pr-7 rounded-lg border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" type="button" aria-label="Clear search">
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700" type="button" aria-label="Clear search">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">No matches</div>
+              <div className="px-3 py-6 text-center text-sm text-zinc-500">No matches</div>
             ) : (
               filtered.map(c => {
                 const selected = c.iso === displayCountry.iso;
@@ -168,14 +163,14 @@ export function PhoneInput({
                     role="option"
                     aria-selected={selected}
                     onClick={() => pick(c)}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-accent",
-                      selected && "bg-accent/60 font-medium",
-                    )}
+                    className={
+                      "w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-zinc-100 " +
+                      (selected ? "bg-zinc-50 font-medium" : "")
+                    }
                   >
                     <span className="text-base leading-none">{c.flag}</span>
                     <span className="flex-1 truncate">{c.name}</span>
-                    <span className="text-muted-foreground tabular-nums text-xs">{c.code}</span>
+                    <span className="text-zinc-500 tabular-nums text-xs">{c.code}</span>
                   </button>
                 );
               })

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
+import { PhoneInput } from "@/components/PhoneInput";
 
 type Cake = { id: number; name: string; description: string | null; price: string; imageUrl: string | null };
 
@@ -111,7 +112,7 @@ export default function CakeBookingScreen() {
         <TextInput style={inputStyle(colors)} value={form.customerName} onChangeText={t => setForm(s => ({ ...s, customerName: t }))} />
       </Field>
       <Field label="Phone *" colors={colors}>
-        <TextInput style={inputStyle(colors)} keyboardType="phone-pad" value={form.customerPhone} onChangeText={t => setForm(s => ({ ...s, customerPhone: t }))} />
+        <PhoneInput value={form.customerPhone} onChange={(v) => setForm(s => ({ ...s, customerPhone: v }))} />
       </Field>
       <Field label="Email" colors={colors}>
         <TextInput style={inputStyle(colors)} keyboardType="email-address" autoCapitalize="none" value={form.customerEmail} onChangeText={t => setForm(s => ({ ...s, customerEmail: t }))} />

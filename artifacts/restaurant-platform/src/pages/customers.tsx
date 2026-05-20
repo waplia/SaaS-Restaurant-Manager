@@ -14,6 +14,7 @@ import {
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -801,7 +802,7 @@ function CustomerDetailPanel({ customerId, onClose }: { customerId: number; onCl
         <div className="p-4 space-y-2 border-b border-border bg-muted/10">
           <div><Label className="text-xs">Name</Label><Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} className="h-8 text-sm" /></div>
           <div><Label className="text-xs">Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} className="h-8 text-sm" /></div>
-          <div><Label className="text-xs">Phone</Label><Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} className="h-8 text-sm" /></div>
+          <div><Label className="text-xs">Phone</Label><PhoneInput value={editForm.phone} onChange={(v) => setEditForm(p => ({ ...p, phone: v }))} /></div>
           <div><Label className="text-xs">Address</Label><Input value={editForm.address} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} className="h-8 text-sm" /></div>
           <div className="flex gap-2 pt-1">
             <Button variant="outline" size="sm" className="flex-1 h-7" onClick={() => setEditing(false)}>Cancel</Button>
@@ -1180,7 +1181,7 @@ function CustomersTab() {
             <div className="space-y-3">
               <div><Label>Name *</Label><Input placeholder="Full name" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
               <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-              <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={(v) => setForm(p => ({ ...p, phone: v }))} /></div>
               <div><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
               <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} /></div>
               <div className="flex gap-3 pt-1">

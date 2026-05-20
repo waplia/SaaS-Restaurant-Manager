@@ -2,6 +2,7 @@ import { useParams, Redirect } from "wouter";
 import WhatsAppSection from "./settings-whatsapp";
 import WebPushSection from "./settings-web-push";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -172,7 +173,7 @@ function GeneralSection() {
             <Field label="Contact email"><Input type="email" value={s.contactEmail} onChange={e => set(p => ({ ...p, contactEmail: e.target.value }))} /></Field>
           </Row>
           <Row>
-            <Field label="Contact phone"><Input value={s.contactPhone} onChange={e => set(p => ({ ...p, contactPhone: e.target.value }))} /></Field>
+            <Field label="Contact phone"><PhoneInput value={s.contactPhone} onChange={(v) => set(p => ({ ...p, contactPhone: v }))} /></Field>
             <Field label="Postal code"><Input value={s.postalCode} onChange={e => set(p => ({ ...p, postalCode: e.target.value }))} /></Field>
           </Row>
           <Field label="Address line 1"><Input value={s.addressLine1} onChange={e => set(p => ({ ...p, addressLine1: e.target.value }))} /></Field>
@@ -467,7 +468,7 @@ function BranchListInline() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-border">
         <Input placeholder="Branch name" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <Input placeholder="Address" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
-        <Input placeholder="Phone" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+        <PhoneInput value={form.phone} onChange={(v) => setForm(p => ({ ...p, phone: v }))} />
         <Button onClick={async () => {
           if (!form.name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
           await create.mutateAsync({ name: form.name.trim(), address: form.address || undefined, phone: form.phone || undefined, isMain: form.isMain });

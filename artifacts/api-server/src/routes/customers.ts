@@ -9,7 +9,9 @@ import {
   ordersTable, orderItemsTable,
   customerFeedbackTable, externalReviewsTable,
   usersTable,
+  restaurantsTable,
 } from "../lib/db";
+import { normalizePhone, DEFAULT_ISO } from "@workspace/phone-utils";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { recordAuditLog } from "../lib/audit";
@@ -20,6 +22,19 @@ const router = Router();
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Look up a restaurant's configured ISO-2 country, used as the fallback
+ * region when parsing inbound phone numbers that don't have a `+`-prefix.
+ * Falls back to {@link DEFAULT_ISO} when the restaurant or column is null.
+ */
+async function getRestaurantCountry(restaurantId: number): Promise<string> {
+  const [row] = await db
+    .select({ country: restaurantsTable.country })
+    .from(restaurantsTable)
+    .where(eq(restaurantsTable.id, restaurantId));
+  return row?.country ?? DEFAULT_ISO;
+}
 
 const PREFERRED_CHANNELS = ["whatsapp", "sms", "email", "call", "none"] as const;
 type PreferredChannel = (typeof PREFERRED_CHANNELS)[number];
@@ -195,8 +210,13 @@ router.post("/restaurants/:restaurantId/customers", requireRole("owner", "manage
   const restaurantId = Number(req.params.restaurantId);
   // Legacy `customers.notes` is no longer written — all freeform notes live
   // in the timestamped `customer_notes` log.
+  // Normalise to canonical "+<dial> <national>" using the restaurant's
+  // configured country as the fallback for national-only input.
+  const normalizedPhone = phone
+    ? normalizePhone(phone, await getRestaurantCountry(restaurantId))
+    : phone;
   const [customer] = await db.insert(customersTable)
-    .values({ restaurantId, name, email, phone, address })
+    .values({ restaurantId, name, email, phone: normalizedPhone, address })
     .returning();
 
   if (notes && typeof notes === "string" && notes.trim()) {
@@ -311,7 +331,11 @@ router.patch("/restaurants/:restaurantId/customers/:id", requireRole("owner", "m
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name;
   if (email !== undefined) updates.email = email;
-  if (phone !== undefined) updates.phone = phone;
+  if (phone !== undefined) {
+    updates.phone = phone
+      ? normalizePhone(String(phone), await getRestaurantCountry(restaurantId))
+      : phone;
+  }
   if (address !== undefined) updates.address = address;
   if (loyaltyPoints !== undefined) updates.loyaltyPoints = Number(loyaltyPoints);
   // Note: the legacy `notes` field is no longer writable through this route.
