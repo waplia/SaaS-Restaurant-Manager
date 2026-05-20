@@ -1,10 +1,15 @@
 import { Router } from "express";
-import { eq, and, desc, sql } from "drizzle-orm";
-import { db, campaignsTable, campaignLogsTable } from "../lib/db";
+import { eq, and, desc, sql, inArray, isNotNull } from "drizzle-orm";
+import { db, campaignsTable, campaignLogsTable, customersTable } from "../lib/db";
 import type { NewCampaign } from "@workspace/db/schema";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { detectOfferConflicts, persistConflictCheck } from "./advanced-growth";
+import { sendWebPush } from "../lib/webPush";
+import { sendBroadcastWhatsApp } from "../lib/whatsapp";
+import { sendEmail } from "../lib/emailSender";
+import { sendSmsMessage } from "../lib/smsSender";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -258,6 +263,134 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/status", async (req
   });
   res.json(updated);
 });
+
+// ───────── dispatch (actually send the campaign on its chosen channel) ─────────
+// POST /restaurants/:rid/growth/campaigns/:id/dispatch
+// Resolves recipients from the campaign's audience selectors and sends via
+// the appropriate channel. Per-channel rules:
+//   - push:      goes through sendWebPush (already enforces opt-in, quiet hours, caps)
+//   - email:     filtered to customers with emailMarketingOptIn && !emailUnsubscribed
+//   - whatsapp:  filtered to whatsappOptIn customers, sent via sendBroadcastWhatsApp
+//   - sms:       sent to every customer with a phone (provider/quota gates inside)
+//   - qr_banner: no per-customer send; just marks the campaign sent
+router.post("/restaurants/:restaurantId/growth/campaigns/:id/dispatch", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const [c] = await db.select().from(campaignsTable)
+    .where(and(eq(campaignsTable.id, id), eq(campaignsTable.restaurantId, restaurantId)));
+  if (!c) return void res.status(404).json({ error: "Not found" });
+  if (c.status === "sent" || c.status === "completed") {
+    return void res.status(409).json({ error: `Campaign is already ${c.status}` });
+  }
+
+  const content = (c.content ?? {}) as { subject?: string; body?: string; ctaText?: string; ctaUrl?: string };
+  const body = content.body ?? "";
+  const subject = content.subject ?? c.name;
+  if (!body.trim()) return void res.status(400).json({ error: "Campaign body is empty" });
+
+  // Audience selectors (best-effort — extends over time). Right now we
+  // support either {customerIds:[…]} or "all customers in restaurant".
+  const aud = (c.audience ?? {}) as { customerIds?: number[] };
+  const wheres = [eq(customersTable.restaurantId, restaurantId), eq(customersTable.isActive, true)];
+  if (Array.isArray(aud.customerIds) && aud.customerIds.length > 0) {
+    wheres.push(inArray(customersTable.id, aud.customerIds.map(Number).filter(Number.isFinite)));
+  }
+
+  let sent = 0, failed = 0, total = 0, skipped = 0, reason: string | undefined;
+
+  try {
+    if (c.channel === "push") {
+      const out = await sendWebPush({
+        restaurantId, eventKey: "system.announcement", category: "marketing", campaignId: c.id,
+        payload: { title: subject, body, url: content.ctaUrl ?? undefined },
+        targetCustomerIds: Array.isArray(aud.customerIds) && aud.customerIds.length > 0
+          ? aud.customerIds.map(Number).filter(Number.isFinite) : undefined,
+      });
+      sent = out.sent; failed = out.failed; total = out.total; skipped = out.skipped; reason = out.reason;
+    } else if (c.channel === "qr_banner") {
+      // QR banner is a display-only campaign — no per-customer send.
+      total = 1; sent = 1; reason = "QR banner activated (display-only channel)";
+    } else if (c.channel === "email") {
+      const rows = await db.select({ id: customersTable.id, email: customersTable.email, name: customersTable.name })
+        .from(customersTable)
+        .where(and(...wheres, eq(customersTable.emailMarketingOptIn, true), eq(customersTable.emailUnsubscribed, false), isNotNull(customersTable.email)));
+      total = rows.length;
+      for (const r of rows) {
+        if (!r.email) { skipped++; continue; }
+        try {
+          const html = `<p>Hi ${escapeHtml(r.name || "there")},</p><p>${escapeHtml(body).replace(/\n/g, "<br/>")}</p>${
+            content.ctaUrl ? `<p><a href="${content.ctaUrl}">${escapeHtml(content.ctaText || "Open")}</a></p>` : ""
+          }`;
+          const out = await sendEmail({
+            to: r.email, subject, html, restaurantId, kind: "marketing",
+            recipientType: "customer", campaignId: c.id,
+          });
+          if (out?.ok) sent++; else failed++;
+        } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-email send failed"); }
+      }
+    } else if (c.channel === "whatsapp") {
+      const rows = await db.select({ id: customersTable.id, phone: customersTable.phone, name: customersTable.name })
+        .from(customersTable)
+        .where(and(...wheres, eq(customersTable.whatsappOptIn, true), isNotNull(customersTable.phone)));
+      total = rows.length;
+      const message = renderVars(body, { name: "" });
+      for (const r of rows) {
+        if (!r.phone) { skipped++; continue; }
+        try {
+          const out = await sendBroadcastWhatsApp({
+            restaurantId, to: r.phone, subject, body: renderVars(body, { name: r.name ?? "" }),
+            event: `growth.campaign.${c.type}`,
+          });
+          if (out.status === "sent" || out.status === "queued" || out.status === "delivered") sent++; else failed++;
+        } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-whatsapp send failed"); }
+      }
+      void message;
+    } else if (c.channel === "sms") {
+      const rows = await db.select({ id: customersTable.id, phone: customersTable.phone, name: customersTable.name })
+        .from(customersTable)
+        .where(and(...wheres, isNotNull(customersTable.phone)));
+      total = rows.length;
+      for (const r of rows) {
+        if (!r.phone) { skipped++; continue; }
+        try {
+          const out = await sendSmsMessage({
+            to: r.phone, body: renderVars(body, { name: r.name ?? "" }),
+            restaurantId, eventKey: "custom" as never,
+          });
+          if (out.ok) sent++; else failed++;
+        } catch (err) { failed++; logger.warn({ err, customerId: r.id }, "growth-sms send failed"); }
+      }
+    } else {
+      return void res.status(400).json({ error: `Unsupported channel: ${c.channel}` });
+    }
+  } catch (err) {
+    logger.error({ err, campaignId: c.id }, "growth-engine dispatch failed");
+    return void res.status(500).json({ error: (err as Error).message ?? "Dispatch failed" });
+  }
+
+  const newStatus = sent > 0 ? "sent" : "draft";
+  const stats = { ...(c.stats ?? {}), sent, failed, total, skipped, lastDispatchedAt: new Date().toISOString() };
+  await db.update(campaignsTable).set({
+    status: newStatus, stats,
+    sentAt: sent > 0 ? new Date() : c.sentAt,
+    updatedAt: new Date(),
+  }).where(eq(campaignsTable.id, c.id));
+  await db.insert(campaignLogsTable).values({
+    campaignId: c.id, restaurantId,
+    event: sent > 0 ? "dispatched" : "dispatch_failed",
+    actorId: req.user?.sub ?? null,
+    payload: { sent, failed, total, skipped, reason, channel: c.channel },
+  });
+
+  res.json({ sent, failed, total, skipped, reason, status: newStatus });
+});
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] as string));
+}
+function renderVars(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");
+}
 
 // ───────── delete ─────────
 router.delete("/restaurants/:restaurantId/growth/campaigns/:id", async (req, res) => {

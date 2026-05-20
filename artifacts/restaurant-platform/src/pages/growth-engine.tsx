@@ -193,6 +193,21 @@ export default function GrowthEnginePage() {
     }),
   });
 
+  const dispatchMut = useMutation({
+    mutationFn: (id: number) =>
+      apiPost<{ sent: number; failed: number; total: number; skipped: number; reason?: string; status: string }>(
+        `/restaurants/${restaurantId}/growth/campaigns/${id}/dispatch`, {},
+      ),
+    onSuccess: r => {
+      toast({
+        title: r.sent > 0 ? `Campaign sent — ${r.sent}/${r.total} delivered` : "Campaign not sent",
+        description: r.reason || (r.failed > 0 ? `${r.failed} failed` : undefined),
+        variant: r.sent > 0 ? "default" : "destructive",
+      });
+      invalidate();
+    },
+    onError: e => toast({ title: "Send failed", description: (e as Error).message, variant: "destructive" }),
+  });
   const statusMut = useMutation({
     mutationFn: ({ id, status }: { id: number; status: Status }) =>
       apiPost<Campaign>(`/restaurants/${restaurantId}/growth/campaigns/${id}/status`, { status }),
@@ -409,12 +424,13 @@ export default function GrowthEnginePage() {
               data={detailQ.data}
               onEdit={() => { openEditExisting(detailQ.data!.campaign); setDetailId(null); }}
               onStatus={(s) => statusMut.mutate({ id: detailQ.data!.campaign.id, status: s })}
+              onSendNow={() => dispatchMut.mutate(detailQ.data!.campaign.id)}
               onDelete={() => {
                 if (confirm("Delete this campaign? This cannot be undone.")) {
                   deleteMut.mutate(detailQ.data!.campaign.id);
                 }
               }}
-              busy={statusMut.isPending || deleteMut.isPending}
+              busy={statusMut.isPending || deleteMut.isPending || dispatchMut.isPending}
             />
           ) : (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
@@ -582,10 +598,11 @@ function CampaignEditor({ campaign, onChange, onSave, saving }: {
   );
 }
 
-function CampaignDetail({ data, onEdit, onStatus, onDelete, busy }: {
+function CampaignDetail({ data, onEdit, onStatus, onSendNow, onDelete, busy }: {
   data: { campaign: Campaign; logs: LogRow[] };
   onEdit: () => void;
   onStatus: (s: Status) => void;
+  onSendNow: () => void;
   onDelete: () => void;
   busy: boolean;
 }) {
@@ -623,16 +640,18 @@ function CampaignDetail({ data, onEdit, onStatus, onDelete, busy }: {
 
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={onEdit}><Pencil className="w-4 h-4 mr-1" />Edit</Button>
+          {(c.status === "draft" || c.status === "scheduled" || c.status === "paused") && (
+            <Button size="sm" disabled={busy} onClick={onSendNow}>
+              <Send className="w-4 h-4 mr-1" />Send now
+            </Button>
+          )}
           {c.status === "draft" && (
-            <Button size="sm" disabled={busy} onClick={() => onStatus("scheduled")}>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("scheduled")}>
               <Clock className="w-4 h-4 mr-1" />Mark scheduled
             </Button>
           )}
           {c.status === "scheduled" && (
-            <>
-              <Button size="sm" disabled={busy} onClick={() => onStatus("sent")}><Send className="w-4 h-4 mr-1" />Mark sent</Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("paused")}><Pause className="w-4 h-4 mr-1" />Pause</Button>
-            </>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("paused")}><Pause className="w-4 h-4 mr-1" />Pause</Button>
           )}
           {c.status === "paused" && (
             <Button size="sm" disabled={busy} onClick={() => onStatus("scheduled")}><Play className="w-4 h-4 mr-1" />Resume</Button>
