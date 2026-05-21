@@ -362,6 +362,13 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  // Mark as a programmatic XHR request. Some hosting proxies (e.g. Replit
+  // deployments) reject cross-origin POSTs from native/mobile clients with
+  // HTTP 403 "expected X-Requested-With header" unless this is present.
+  if (!headers.has("x-requested-with")) {
+    headers.set("x-requested-with", "XMLHttpRequest");
+  }
+
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {
