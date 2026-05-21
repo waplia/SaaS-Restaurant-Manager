@@ -171,7 +171,7 @@ function PasswordTab({
         <div className="flex items-center justify-between">
           <Label htmlFor="identifier">{idMode === "email" ? "Email" : "Mobile number"}</Label>
           <div className="grid grid-cols-2 bg-muted rounded-md p-0.5 text-xs" role="tablist">
-            {(["email", "mobile"] as const).map(m => (
+            {(["mobile", "email"] as const).map(m => (
               <button
                 key={m}
                 type="button"

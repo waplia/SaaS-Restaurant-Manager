@@ -379,7 +379,7 @@ export default function LoginScreen() {
                         {idMode === "email" ? "Email" : "Mobile number"}
                       </Text>
                       <View style={[styles.idModeTabs, { backgroundColor: colors.muted }]}>
-                        {(["email", "mobile"] as const).map(m => (
+                        {(["mobile", "email"] as const).map(m => (
                           <Pressable
                             key={m}
                             onPress={() => { setIdMode(m); setIdentifier(""); }}
