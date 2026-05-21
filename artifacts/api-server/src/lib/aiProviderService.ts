@@ -734,7 +734,7 @@ export class AIProviderService {
     }
     const assignment = await loadAssignment(ctx.featureSlug);
     const primaryId = assignment?.primaryProviderId ?? null;
-    const primaryModel = assignment?.primaryModel ?? "gemini-3.1-flash-image-preview";
+    const primaryModel = assignment?.primaryModel ?? "gemini-2.5-flash-image";
     const fallbackId = assignment?.fallbackProviderId ?? null;
     const fallbackModel = assignment?.fallbackModel ?? primaryModel;
     const start = Date.now();
@@ -752,7 +752,7 @@ export class AIProviderService {
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey: provider.apiKey });
       const result = await ai.models.generateContent({
-        model: model || "gemini-3.1-flash-image-preview",
+        model: model || "gemini-2.5-flash-image",
         contents: [{ role: "user", parts: [{ text: req.prompt }] }],
       });
       const parts = result.candidates?.[0]?.content?.parts ?? [];
