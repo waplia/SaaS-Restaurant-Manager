@@ -1565,11 +1565,12 @@ export type ForgotPasswordBody = {
 export type ForgotPassword200 = {
   success: boolean;
   message: string;
-  resetToken?: string;
+  ttlMinutes?: number;
 };
 
 export type ResetPasswordBody = {
-  token: string;
+  email: string;
+  code: string;
   newPassword: string;
 };
 

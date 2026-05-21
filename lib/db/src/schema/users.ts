@@ -36,6 +36,15 @@ export const usersTable = pgTable("users", {
   tokenVersion: integer("token_version").notNull().default(0),
   pushToken: text("push_token"),
   kitchenId: integer("kitchen_id"),
+  // OTP-based password reset (Task #572). When the user requests a reset,
+  // we generate a 6-digit code, bcrypt-hash it into `passwordResetCodeHash`,
+  // set `passwordResetCodeExpiresAt` ~15 minutes ahead, and reset
+  // `passwordResetAttempts` to 0. The reset endpoint verifies the code,
+  // increments attempts on each bad try, and locks the code out after 5
+  // failures. All three fields are cleared on successful reset.
+  passwordResetCodeHash: text("password_reset_code_hash"),
+  passwordResetCodeExpiresAt: timestamp("password_reset_code_expires_at"),
+  passwordResetAttempts: integer("password_reset_attempts").notNull().default(0),
   notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

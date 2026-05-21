@@ -121,7 +121,7 @@ paths:
     post:
       operationId: forgotPassword
       tags: [auth]
-      summary: Request a password reset link
+      summary: Request a one-time password-reset code by email
       requestBody:
         required: true
         content:
@@ -133,7 +133,7 @@ paths:
                 email: { type: string }
       responses:
         "200":
-          description: Reset link sent (or silently ignored for unknown email)
+          description: OTP sent (or silently ignored for unknown email)
           content:
             application/json:
               schema:
@@ -142,22 +142,23 @@ paths:
                 properties:
                   success: { type: boolean }
                   message: { type: string }
-                  resetToken: { type: string }
+                  ttlMinutes: { type: integer }
 
   /auth/reset-password:
     post:
       operationId: resetPassword
       tags: [auth]
-      summary: Set a new password using a reset token
+      summary: Set a new password using an emailed OTP code
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [token, newPassword]
+              required: [email, code, newPassword]
               properties:
-                token: { type: string }
+                email: { type: string }
+                code: { type: string }
                 newPassword: { type: string }
       responses:
         "200":

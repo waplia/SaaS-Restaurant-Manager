@@ -520,7 +520,7 @@ export const useLogout = <
 };
 
 /**
- * @summary Request a password reset link
+ * @summary Request a one-time password-reset code by email
  */
 export const getForgotPasswordUrl = () => {
   return `/api/auth/forgot-password`;
@@ -583,7 +583,7 @@ export type ForgotPasswordMutationBody = BodyType<ForgotPasswordBody>;
 export type ForgotPasswordMutationError = ErrorType<unknown>;
 
 /**
- * @summary Request a password reset link
+ * @summary Request a one-time password-reset code by email
  */
 export const useForgotPassword = <
   TError = ErrorType<unknown>,
@@ -606,7 +606,7 @@ export const useForgotPassword = <
 };
 
 /**
- * @summary Set a new password using a reset token
+ * @summary Set a new password using an emailed OTP code
  */
 export const getResetPasswordUrl = () => {
   return `/api/auth/reset-password`;
@@ -669,7 +669,7 @@ export type ResetPasswordMutationBody = BodyType<ResetPasswordBody>;
 export type ResetPasswordMutationError = ErrorType<unknown>;
 
 /**
- * @summary Set a new password using a reset token
+ * @summary Set a new password using an emailed OTP code
  */
 export const useResetPassword = <
   TError = ErrorType<unknown>,

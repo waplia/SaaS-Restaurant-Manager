@@ -8,10 +8,9 @@ import {
   comparePassword,
   signAccessToken,
   signRefreshToken,
-  signResetToken,
   verifyToken,
-  verifyResetToken,
 } from "../lib/auth";
+import crypto from "node:crypto";
 import { authenticate, invalidateTokenVersionCache } from "../middleware/authenticate";
 import { rateLimit } from "../middleware/rateLimit";
 import { validate } from "../middleware/validate";
@@ -101,6 +100,10 @@ const forgotLimitByIp = rateLimit({ name: "auth.forgot.ip", windowMs: 60 * 60 * 
 const forgotLimitByEmail = rateLimit({ name: "auth.forgot.email", windowMs: 60 * 60 * 1000, max: 5, ignoreIp: true, keyExtra: emailKey });
 
 const resetLimitByIp = rateLimit({ name: "auth.reset.ip", windowMs: 60 * 60 * 1000, max: 10 });
+// Per-email limiter on reset so a distributed attacker can't burn through
+// an account's OTP attempts from many IPs. Tight window mirrors the
+// 5-attempt application-level cap.
+const resetLimitByEmail = rateLimit({ name: "auth.reset.email", windowMs: 15 * 60 * 1000, max: 10, ignoreIp: true, keyExtra: emailKey });
 
 const refreshLimitByIp = rateLimit({ name: "auth.refresh.ip", windowMs: 60 * 1000, max: 30 });
 
@@ -609,80 +612,178 @@ router.post("/auth/change-password", authenticate, changePasswordLimitByIp, vali
   });
 });
 
+// ─── Password reset (OTP flow) ────────────────────────────────────
+// Replaces the old emailed-link / JWT flow. Step 1: user submits email →
+// we mint a 6-digit code, bcrypt-hash it into the users row with a
+// 15-minute expiry, and email the code via the `password_reset_otp`
+// template. Step 2: user submits {email, code, newPassword} → we verify
+// the code (constant-time bcrypt compare, attempt-capped, expiry-checked)
+// and update the password. Same response shape ("If an account exists…")
+// is returned regardless of whether the email is known, to prevent
+// account enumeration.
+const RESET_OTP_TTL_MINUTES = 15;
+const RESET_OTP_MAX_ATTEMPTS = 5;
+
 router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, validate({ body: ForgotPasswordBody }), async (req, res) => {
   const { email } = req.body as { email: string };
   const [user] = await db
-    .select({ id: usersTable.id, email: usersTable.email })
+    .select({
+      id: usersTable.id, email: usersTable.email, name: usersTable.name,
+      tenantId: usersTable.tenantId, isActive: usersTable.isActive,
+    })
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
 
-  if (user) {
-    const resetToken = signResetToken({ sub: user.id, email: user.email });
-    if (process.env.NODE_ENV === "development") {
-      console.info(`[dev-only] password-reset token for user id=${user.id}`);
-    }
-    const base = (process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const resetLink = `${base}/app/reset-password?token=${encodeURIComponent(resetToken)}`;
-    const [u] = await db
-      .select({ name: usersTable.name, email: usersTable.email, tenantId: usersTable.tenantId })
-      .from(usersTable).where(eq(usersTable.id, user.id));
-    void sendByTemplateKey("password_reset", u.email, {
-      name: u.name,
-      resetLink,
-      appName: "Khana Lagao",
-    }, { tenantId: u.tenantId });
-  }
-  res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
-});
-
-const ResetPasswordBodyStrict = ResetPasswordBody.extend({
-  newPassword: z.string().min(8),
-});
-
-router.post("/auth/reset-password", resetLimitByIp, validate({ body: ResetPasswordBodyStrict }), async (req, res) => {
-  const { token, newPassword } = req.body as { token: string; newPassword: string };
-  try {
-    const payload = verifyResetToken(token);
-    if (payload.type !== "reset") {
-      res.status(400).json({ error: "Invalid reset token" });
-      return;
-    }
-    // Single-use reset: refuse the token if the account's passwordHash has
-    // already been changed after this token was issued (iat is in seconds).
-    const [existing] = await db
-      .select({ updatedAt: usersTable.updatedAt, isActive: usersTable.isActive })
-      .from(usersTable)
-      .where(eq(usersTable.id, payload.sub));
-    if (!existing || !existing.isActive) {
-      res.status(400).json({ error: "Invalid or expired reset token" });
-      return;
-    }
-    const iat = (payload as unknown as { iat?: number }).iat;
-    if (iat && existing.updatedAt && Math.floor(existing.updatedAt.getTime() / 1000) > iat) {
-      res.status(400).json({ error: "Invalid or expired reset token" });
-      return;
-    }
-    const passwordHash = await hashPassword(newPassword);
-    // Bump tokenVersion alongside the password change so any sessions
-    // active before the reset (including ones belonging to whoever
-    // compromised the account) are invalidated immediately.
+  if (user && user.isActive) {
+    // 6-digit numeric code, zero-padded. Generated from crypto-strong
+    // randomness rather than Math.random.
+    const code = String(Math.floor(crypto.randomInt(0, 1_000_000))).padStart(6, "0");
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60_000);
     await db
       .update(usersTable)
       .set({
+        passwordResetCodeHash: codeHash,
+        passwordResetCodeExpiresAt: expiresAt,
+        passwordResetAttempts: 0,
+      })
+      .where(eq(usersTable.id, user.id));
+    if (process.env.NODE_ENV === "development") {
+      // Helpful for local testing without checking a real inbox.
+      console.info(`[dev-only] password-reset OTP for user id=${user.id}: ${code}`);
+    }
+    void sendByTemplateKey("password_reset_otp", user.email, {
+      name: user.name ?? user.email,
+      otp: code,
+      ttlMinutes: String(RESET_OTP_TTL_MINUTES),
+      appName: "Khana Lagao",
+    }, { tenantId: user.tenantId });
+  }
+  res.json({
+    success: true,
+    message: "If an account with that email exists, a 6-digit reset code has been sent.",
+    ttlMinutes: RESET_OTP_TTL_MINUTES,
+  });
+});
+
+// Note: the request body schema changed from {token, newPassword} (link
+// flow) to {email, code, newPassword} (OTP flow). The generated zod schema
+// `ResetPasswordBody` already reflects the new shape; we extend it here
+// with the same min-length + numeric-code constraints the API enforces.
+const ResetPasswordBodyStrict = ResetPasswordBody.extend({
+  email: z.string().trim().toLowerCase().email(),
+  code: z.string().trim().regex(/^\d{6}$/, "Code must be 6 digits"),
+  newPassword: z.string().min(8),
+});
+
+// Dummy bcrypt hash used to equalize response time on "no such user / no
+// active code" paths so an attacker can't distinguish them from a real
+// "wrong code" attempt by timing the response. The hash is for a random
+// 6-digit number that the attacker will never guess; the compare always
+// returns false but takes the same wall time as a real check.
+const DUMMY_RESET_HASH = bcrypt.hashSync("000000", 10);
+
+router.post("/auth/reset-password", resetLimitByIp, resetLimitByEmail, validate({ body: ResetPasswordBodyStrict }), async (req, res) => {
+  const { email, code, newPassword } = req.body as { email: string; code: string; newPassword: string };
+
+  // Generic message used for every "couldn't verify" path so the caller
+  // can't tell whether the email is unknown, the code is wrong, or the
+  // code has expired — same anti-enumeration stance as forgot-password.
+  const genericError = "The code is invalid or has expired. Please request a new one.";
+
+  // ── Verify + consume atomically in a transaction ─────────────────────
+  // The previous implementation read the row, compared bcrypt, then
+  // wrote — leaving a window where two concurrent valid-code requests
+  // could both pass the compare. We now SELECT FOR UPDATE inside a
+  // transaction and immediately consume (clear or increment) before the
+  // commit, so the second concurrent request sees a NULL hash.
+  const verdict: "ok" | "fail" = await db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({
+        id: usersTable.id, email: usersTable.email, name: usersTable.name,
+        isActive: usersTable.isActive, tenantId: usersTable.tenantId,
+        restaurantId: usersTable.restaurantId,
+        codeHash: usersTable.passwordResetCodeHash,
+        codeExpiresAt: usersTable.passwordResetCodeExpiresAt,
+        attempts: usersTable.passwordResetAttempts,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .for("update");
+
+    // No usable account/code → run a dummy bcrypt to equalize timing,
+    // then bail.
+    if (!user || !user.isActive || !user.codeHash || !user.codeExpiresAt) {
+      await bcrypt.compare(code, DUMMY_RESET_HASH);
+      return "fail";
+    }
+    if (user.codeExpiresAt.getTime() < Date.now() || (user.attempts ?? 0) >= RESET_OTP_MAX_ATTEMPTS) {
+      // Expired or attempt-locked — burn the code so future guesses skip
+      // the bcrypt path entirely, but still equalize timing on this one.
+      await bcrypt.compare(code, DUMMY_RESET_HASH);
+      await tx.update(usersTable)
+        .set({ passwordResetCodeHash: null, passwordResetCodeExpiresAt: null, passwordResetAttempts: 0 })
+        .where(eq(usersTable.id, user.id));
+      return "fail";
+    }
+
+    const ok = await bcrypt.compare(code, user.codeHash);
+    if (!ok) {
+      await tx.update(usersTable)
+        .set({ passwordResetAttempts: sql`${usersTable.passwordResetAttempts} + 1` })
+        .where(eq(usersTable.id, user.id));
+      return "fail";
+    }
+
+    // Success — hash the new password, clear the OTP fields, and bump
+    // tokenVersion so every existing session (including a potential
+    // attacker's) is invalidated immediately. All in the same tx so a
+    // concurrent request with the same code sees the cleared hash.
+    const passwordHash = await hashPassword(newPassword);
+    await tx
+      .update(usersTable)
+      .set({
         passwordHash,
+        passwordResetCodeHash: null,
+        passwordResetCodeExpiresAt: null,
+        passwordResetAttempts: 0,
         tokenVersion: sql`${usersTable.tokenVersion} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.id, payload.sub));
-    invalidateTokenVersionCache(payload.sub);
-    await recordAuditLog({
-      req, module: "auth", action: "password.reset", entity: "auth",
-      userId: payload.sub, userDisplay: payload.email, role: null,
-    });
-    res.json({ success: true });
-  } catch {
-    res.status(400).json({ error: "Invalid or expired reset token" });
+      .where(eq(usersTable.id, user.id));
+    // Stash a few fields on the request for post-commit side effects.
+    (req as unknown as { _resetUser?: typeof user }) ._resetUser = user;
+    return "ok";
+  });
+
+  if (verdict === "fail") {
+    res.status(400).json({ error: genericError });
+    return;
   }
+
+  const user = (req as unknown as { _resetUser: {
+    id: number; email: string; name: string | null;
+    tenantId: number | null; restaurantId: number | null;
+  } })._resetUser;
+
+  invalidateTokenVersionCache(user.id);
+  await recordAuditLog({
+    req, module: "auth", action: "password.reset", entity: "auth",
+    userId: user.id, userDisplay: user.email, role: null,
+  });
+
+  // Fire the "your password was changed" security notification so the
+  // user can react immediately if it wasn't them. Best-effort.
+  const changedAt = new Date().toUTCString();
+  const changeIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const changeUa = String(req.headers["user-agent"] ?? "unknown");
+  void sendByTemplateKey("security_password_changed", user.email, {
+    name: user.name ?? user.email,
+    changedAt, ip: changeIp, userAgent: changeUa, when: changedAt,
+    appName: "Khana Lagao",
+  }, { tenantId: user.tenantId, restaurantId: user.restaurantId ?? null, recipientType: "user" });
+
+  res.json({ success: true });
 });
 
 router.get("/auth/me", authenticate, async (req, res) => {

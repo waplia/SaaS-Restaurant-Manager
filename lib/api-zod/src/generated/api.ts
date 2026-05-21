@@ -72,7 +72,7 @@ export const LogoutResponse = zod.object({
 });
 
 /**
- * @summary Request a password reset link
+ * @summary Request a one-time password-reset code by email
  */
 export const ForgotPasswordBody = zod.object({
   email: zod.string(),
@@ -81,14 +81,15 @@ export const ForgotPasswordBody = zod.object({
 export const ForgotPasswordResponse = zod.object({
   success: zod.boolean(),
   message: zod.string(),
-  resetToken: zod.string().optional(),
+  ttlMinutes: zod.number().optional(),
 });
 
 /**
- * @summary Set a new password using a reset token
+ * @summary Set a new password using an emailed OTP code
  */
 export const ResetPasswordBody = zod.object({
-  token: zod.string(),
+  email: zod.string(),
+  code: zod.string(),
   newPassword: zod.string(),
 });
 
