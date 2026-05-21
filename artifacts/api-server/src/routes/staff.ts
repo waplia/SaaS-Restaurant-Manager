@@ -219,14 +219,34 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
     try {
       const settings = await getAppSettings();
       const appName = settings.appName ?? "TableTrack";
-      const appUrl = (settings as { appUrl?: string }).appUrl
+      // Resolve an ABSOLUTE http(s) URL. The email-tracking redirect
+      // (/e/c/:token) rejects anything that isn't a parseable absolute URL
+      // (open-redirector protection), so a relative path like
+      // "/forgot-password?email=..." results in "Invalid link" when the
+      // recipient clicks the wrapped tracking URL.
+      const rawAppUrl = (settings as { appUrl?: string }).appUrl
         ?? process.env.PUBLIC_APP_URL
+        ?? process.env.APP_URL
+        ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "")
         ?? "";
+      // Belt-and-braces: ensure the value actually parses. If somehow we end
+      // up with a non-URL (e.g. a leftover relative path in app_settings),
+      // skip the email rather than ship a broken link.
+      let origin = "";
+      try {
+        const u = new URL(rawAppUrl);
+        if (u.protocol === "http:" || u.protocol === "https:") origin = u.origin;
+      } catch { /* origin stays empty */ }
+      if (!origin) {
+        logger.warn({ email }, "Skipping staff_invite email: no absolute app URL configured (set PUBLIC_APP_URL or app_settings.appUrl)");
+        return;
+      }
+      // Restaurant platform is mounted under /app by default. Allow override
+      // via env to match deployments that host it at a different prefix.
+      const webBase = (process.env.WEB_APP_BASE_PATH ?? "/app").replace(/\/$/, "");
       const [restaurant] = await db.select({ name: restaurantsTable.name })
         .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
-      const acceptUrl = appUrl
-        ? `${appUrl.replace(/\/$/, "")}/forgot-password?email=${encodeURIComponent(email)}`
-        : `/forgot-password?email=${encodeURIComponent(email)}`;
+      const acceptUrl = `${origin}${webBase}/forgot-password?email=${encodeURIComponent(email)}`;
       await sendByTemplateKey("staff_invite", email, {
         name,
         inviterName: inviter?.name ?? "Your manager",
