@@ -32,7 +32,7 @@ interface ExtendedMenuItem extends MenuItem {
   isBestseller?: boolean;
   hasModifiers?: boolean;
   modifierGroupCount?: number;
-  tags?: string[] | null;
+  tags?: string[];
   sku?: string | null;
   stockQty?: number | null;
 }

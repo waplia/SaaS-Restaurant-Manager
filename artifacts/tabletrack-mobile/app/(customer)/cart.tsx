@@ -213,7 +213,7 @@ export default function CartScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  updateQuantity(item.menuItemId, -1);
+                  updateQuantity(item.lineId, -1);
                 }}
                 style={[styles.qtyBtn, { backgroundColor: colors.muted }]}
               >
@@ -223,7 +223,7 @@ export default function CartScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  updateQuantity(item.menuItemId, 1);
+                  updateQuantity(item.lineId, 1);
                 }}
                 style={[styles.qtyBtn, { backgroundColor: colors.primary }]}
               >

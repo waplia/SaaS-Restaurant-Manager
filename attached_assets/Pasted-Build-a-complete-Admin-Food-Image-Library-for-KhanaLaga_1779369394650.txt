@@ -1,0 +1,492 @@
+Build a complete Admin Food Image Library for KhanaLagao.
+
+Goal:
+Super Admin should have a master image library of Indian food, drinks, desserts, snacks, breads, thali, sweets, fast food, beverages and restaurant items. Any restaurant can choose images from this library while creating menu items.
+
+Important:
+- Do not use copyrighted images directly from Google without license.
+- Use only AI-generated images, royalty-free stock sources, uploaded images, or licensed/public image APIs.
+- Do not add broken image URLs.
+- Every image must be stored properly in our storage/CDN.
+- Every image should be searchable and categorized.
+- Restaurants should be able to select images easily from the library.
+- Images should look realistic, clean, appetizing, and suitable for menu display.
+- No fake/broken buttons.
+- No raw image URL input only; allow upload, library select, and AI generate.
+
+====================================================
+1. SUPER ADMIN IMAGE LIBRARY
+====================================================
+
+Create:
+
+Super Admin → Media Library → Food Image Library
+
+Features:
+- Add image
+- Bulk upload images
+- AI-generate image
+- Import from royalty-free source if configured
+- Search images
+- Filter by cuisine/category/type
+- View image details
+- Edit image name/category/tags
+- Delete/archive image
+- Mark image as featured
+- Mark image as verified/approved
+- Download image
+- Copy image URL
+- Usage count
+- Which restaurants used this image
+
+Image fields:
+- Image title
+- Food item name
+- Category
+- Cuisine
+- Tags
+- Dietary type: Veg / Non-Veg / Egg / Vegan / Jain
+- Meal type: Breakfast / Lunch / Dinner / Snacks / Drinks / Dessert
+- Spice level optional
+- Image URL
+- Thumbnail URL
+- Source: AI Generated / Uploaded / Stock / Imported
+- License status
+- Approved status
+- Created at
+- Updated at
+
+====================================================
+2. RESTAURANT MENU IMAGE PICKER
+====================================================
+
+In Restaurant Admin:
+
+Menu → Menu Items → Add/Edit Item → Image
+
+Options:
+1. Upload Image
+2. Choose from KhanaLagao Library
+3. Generate with AI
+4. Use existing item image
+
+Library picker should show:
+- Search bar
+- Category filter
+- Cuisine filter
+- Veg/non-veg filter
+- Recently used
+- Popular images
+- Similar images based on item name
+
+Example:
+If item name is “Paneer Tikka”, automatically suggest:
+- Paneer Tikka
+- Tandoori Paneer
+- Paneer Starter
+- Indian Veg Starter
+
+====================================================
+3. SEARCHABLE INDIAN FOOD IMAGE CATEGORIES
+====================================================
+
+Create categories and seed image placeholders/generation tasks for these Indian food types:
+
+North Indian:
+- Butter Chicken
+- Paneer Butter Masala
+- Shahi Paneer
+- Kadhai Paneer
+- Dal Makhani
+- Dal Tadka
+- Chole
+- Rajma
+- Aloo Gobi
+- Malai Kofta
+- Mix Veg
+- Chicken Curry
+- Mutton Curry
+- Tandoori Chicken
+- Paneer Tikka
+- Chicken Tikka
+- Seekh Kebab
+- Tandoori Roti
+- Butter Naan
+- Garlic Naan
+- Laccha Paratha
+- Kulcha
+- Rice
+- Jeera Rice
+- Pulao
+
+South Indian:
+- Idli
+- Medu Vada
+- Masala Dosa
+- Plain Dosa
+- Mysore Dosa
+- Rava Dosa
+- Uttapam
+- Appam
+- Pongal
+- Upma
+- Sambar
+- Rasam
+- Curd Rice
+- Lemon Rice
+- Coconut Chutney
+
+Indian Snacks / Street Food:
+- Samosa
+- Kachori
+- Pakora
+- Bread Pakora
+- Pav Bhaji
+- Vada Pav
+- Pani Puri
+- Bhel Puri
+- Sev Puri
+- Dahi Puri
+- Dahi Bhalla
+- Aloo Tikki
+- Chaat
+- Chole Bhature
+- Momos
+- Spring Roll
+- Veg Roll
+- Paneer Roll
+- Chicken Roll
+
+Biryani / Rice:
+- Veg Biryani
+- Chicken Biryani
+- Mutton Biryani
+- Hyderabadi Biryani
+- Egg Biryani
+- Paneer Biryani
+- Fried Rice
+- Schezwan Rice
+- Veg Pulao
+
+Thali:
+- North Indian Thali
+- South Indian Thali
+- Rajasthani Thali
+- Gujarati Thali
+- Punjabi Thali
+- Mini Thali
+- Special Thali
+- Veg Thali
+- Non-Veg Thali
+
+Indian Sweets:
+- Gulab Jamun
+- Rasgulla
+- Rasmalai
+- Jalebi
+- Kheer
+- Gajar Halwa
+- Moong Dal Halwa
+- Rabri
+- Barfi
+- Kaju Katli
+- Ladoo
+- Soan Papdi
+- Malpua
+- Kulfi
+- Falooda
+
+Beverages:
+- Masala Chai
+- Coffee
+- Cold Coffee
+- Lassi
+- Mango Lassi
+- Buttermilk
+- Fresh Lime Soda
+- Jaljeera
+- Sugarcane Juice
+- Coconut Water
+- Milkshake
+- Oreo Shake
+- Chocolate Shake
+- Mango Shake
+- Mocktail
+- Mojito
+- Iced Tea
+
+Fast Food / Cafe:
+- Pizza
+- Burger
+- Sandwich
+- Club Sandwich
+- Pasta
+- White Sauce Pasta
+- Red Sauce Pasta
+- French Fries
+- Garlic Bread
+- Nachos
+- Wrap
+- Maggi
+- Cheese Toast
+- Salad
+- Soup
+
+Chinese / Indo-Chinese:
+- Hakka Noodles
+- Chowmein
+- Manchurian
+- Chilli Paneer
+- Chilli Chicken
+- Fried Rice
+- Schezwan Noodles
+- Spring Roll
+- Honey Chilli Potato
+- Momos
+- Soup
+
+Bakery / Desserts:
+- Cake
+- Pastry
+- Brownie
+- Donut
+- Muffin
+- Cookies
+- Waffle
+- Pancake
+- Ice Cream
+- Sundae
+
+Tiffin / Meal:
+- Tiffin Meal
+- Home Style Roti Sabzi
+- Dal Rice
+- Rice Bowl
+- Healthy Meal
+- Office Lunch Box
+- Monthly Tiffin Plate
+
+====================================================
+4. IMAGE GENERATION / IMPORT FLOW
+====================================================
+
+Super Admin should have bulk image creation tool:
+
+Super Admin → Media Library → Generate Food Images
+
+Flow:
+1. Select category/cuisine.
+2. Select food items.
+3. Select image style:
+   - Realistic menu photo
+   - Top view
+   - Plate close-up
+   - Restaurant table style
+   - White background
+   - Premium food photography
+4. Select provider/model:
+   - Gemini image model
+   - OpenAI image model
+   - Stable Diffusion/Cloudflare if configured
+5. Generate images.
+6. Review images.
+7. Approve selected images.
+8. Save to library with tags.
+
+Prompt style for AI image generation:
+“Create a realistic high-quality restaurant menu photo of {{food_item}}, Indian style, appetizing, clean plate presentation, natural lighting, no text, no watermark, suitable for digital menu image.”
+
+Important:
+- No text on food images.
+- No watermark.
+- No logos.
+- No hands/people unless required.
+- Food should look realistic and clean.
+- Use square 1:1 images for menu items.
+- Generate thumbnails.
+
+====================================================
+5. IMAGE SEARCH AND AUTO-SUGGEST
+====================================================
+
+When restaurant creates/edits menu item:
+
+If item name matches library:
+- Show suggested images automatically.
+
+Example:
+Item name: “Masala Dosa”
+Suggested:
+- Masala Dosa
+- South Indian Dosa
+- Dosa Plate
+- Dosa with Sambar
+
+If no exact match:
+- Show similar category images.
+- Offer “Generate AI image for this item”.
+
+Search should support:
+- item name
+- alias
+- cuisine
+- category
+- tags
+- veg/non-veg
+- meal type
+
+====================================================
+6. DATABASE TABLES
+====================================================
+
+Create/update tables:
+
+media_library_images
+- id
+- title
+- food_item_name
+- category
+- cuisine
+- tags_json
+- dietary_type
+- meal_type
+- image_url
+- thumbnail_url
+- source
+- provider
+- model
+- license_status
+- approved_status
+- is_featured
+- usage_count
+- created_by
+- created_at
+- updated_at
+
+restaurant_menu_item_images
+- id
+- restaurant_id
+- menu_item_id
+- media_library_image_id nullable
+- custom_image_url nullable
+- source
+- created_at
+
+image_generation_jobs
+- id
+- requested_by
+- category
+- items_json
+- provider
+- model
+- status
+- result_json
+- error_message
+- created_at
+- completed_at
+
+====================================================
+7. STORAGE REQUIREMENTS
+====================================================
+
+All images should be saved to platform storage:
+- S3 / Cloudflare R2 / DigitalOcean Spaces / configured storage
+- Generate optimized thumbnails
+- Compress images
+- Use WebP if possible
+- Store original and thumbnail
+- Do not hotlink random external images
+- Add fallback image if missing
+
+Recommended sizes:
+- Original: 1024x1024
+- Thumbnail: 300x300
+- Menu display: optimized WebP
+
+====================================================
+8. UI DESIGN
+====================================================
+
+Super Admin library UI:
+- Beautiful grid view
+- Food image cards
+- Search and filters
+- Category sidebar
+- Bulk selection
+- Approve/archive actions
+- Usage count
+- Source badge
+- AI Generated badge
+- Featured badge
+
+Restaurant image picker:
+- Modal/bottom sheet
+- Search
+- Suggested images first
+- Category filters
+- Preview image
+- Select button
+- Upload button
+- Generate AI button
+
+Mobile responsive:
+- Grid becomes 2 columns on mobile
+- Image picker easy to use on phone
+
+====================================================
+9. PERMISSIONS / PLAN
+====================================================
+
+Super Admin:
+- Full library control
+- Generate/import images
+- Approve images
+- Delete/archive images
+
+Restaurant:
+- View approved images
+- Select images
+- Upload own images
+- Generate AI image only if plan allows
+
+Plan limits:
+- Free/Starter: use library images only
+- Growth: limited AI image generation
+- Pro: more AI images
+- Enterprise: custom
+
+====================================================
+10. TESTING
+====================================================
+
+Test:
+- Super Admin can see Food Image Library.
+- Default categories appear.
+- Images can be added manually.
+- Bulk image generation job works.
+- Generated image saves to library.
+- Restaurant can open image picker.
+- Menu item name suggests relevant images.
+- Restaurant can select image from library.
+- Selected image appears on QR menu and POS.
+- Upload own image still works.
+- Broken image fallback works.
+- Plan lock for AI generation works.
+- No copyrighted hotlinked images are used.
+- Build passes.
+
+====================================================
+11. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Super Admin Food Image Library exists.
+- Indian food/drink categories are seeded.
+- Restaurants can choose images from library.
+- Image search and filters work.
+- Menu item auto-suggests images.
+- Images are stored in platform storage.
+- AI image generation/import flow exists.
+- QR menu and POS show selected item images.
+- No broken image URLs.
+- No copyright-risk hotlinked Google images.

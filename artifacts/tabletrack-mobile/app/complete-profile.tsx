@@ -65,7 +65,10 @@ export default function CompleteProfileScreen() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((data as { error?: string }).error ?? "Invalid code");
       const payload = data as { accessToken: string; refreshToken: string; user: AuthUser };
-      await login(payload.accessToken, payload.refreshToken, payload.user);
+      await login(payload.accessToken, payload.refreshToken, {
+        ...payload.user,
+        name: payload.user.name ?? payload.user.email ?? "",
+      });
       router.replace("/");
     } catch (e) {
       Alert.alert("Verification failed", e instanceof Error ? e.message : "Try again");

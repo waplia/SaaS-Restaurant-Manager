@@ -5,7 +5,7 @@
  *
  * Rendered as the `stock-food-images` section of /admin (see admin.tsx).
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Trash2, Loader2, ImageIcon, X, Upload, RefreshCw, FileUp } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
@@ -64,6 +64,14 @@ export default function AdminStockFoodImagesTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [q, setQ] = useState("");
+  // Debounced copy of `q` — keeps each keystroke from triggering an
+  // immediate refetch + re-render, which otherwise drops fast typing
+  // and makes the search box feel sluggish on large catalogs.
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [modalState, setModalState] = useState<{ mode: "create" } | { mode: "edit"; row: StockFoodImage } | null>(null);
   const [deleting, setDeleting] = useState<StockFoodImage | null>(null);
@@ -81,11 +89,11 @@ export default function AdminStockFoodImagesTab() {
 
   const params = useMemo(() => {
     const s = new URLSearchParams();
-    if (q.trim()) s.set("q", q.trim());
+    if (debouncedQ.trim()) s.set("q", debouncedQ.trim());
     if (includeInactive) s.set("includeInactive", "true");
     s.set("limit", "200");
     return s.toString();
-  }, [q, includeInactive]);
+  }, [debouncedQ, includeInactive]);
 
   const { data, isLoading } = useQuery<ListResponse>({
     queryKey: ["admin", "stock-food-images", params],

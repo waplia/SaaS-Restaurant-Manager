@@ -97,7 +97,10 @@ export default function CustomerMenuScreen() {
               quantity={getQty(item.id)}
               isAvailable={item.isAvailable !== false}
               onAdd={() => addItem({ menuItemId: item.id, name: item.name, price: Number(item.price), imageUrl: item.imageUrl })}
-              onRemove={() => updateQuantity(item.id, -1)}
+              onRemove={() => {
+                const line = cart.items.find((l) => l.menuItemId === item.id);
+                if (line) updateQuantity(line.lineId, -1);
+              }}
             />
           )}
         />
