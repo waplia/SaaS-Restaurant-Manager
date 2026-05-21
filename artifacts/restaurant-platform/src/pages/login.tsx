@@ -211,7 +211,7 @@ function PasswordTab({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label htmlFor="password">Password</Label>
-          <a href="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</a>
+          <a href="/app/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</a>
         </div>
         <div className="relative">
           <Input id="password" type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" className="pr-10" placeholder="••••••••" />
