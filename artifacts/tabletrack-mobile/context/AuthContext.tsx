@@ -24,6 +24,7 @@ export interface AuthUser {
   restaurantId: number | null;
   tenantId: number | null;
   isSuperAdmin: boolean;
+  kitchenId?: number | null;
 }
 
 interface AuthContextType {

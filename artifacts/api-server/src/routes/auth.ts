@@ -400,6 +400,7 @@ router.post("/auth/login", loginLimitByIp, loginLimitByEmail, validate({ body: L
       tenantId: user.tenantId,
       restaurantId: user.restaurantId,
       isSuperAdmin: user.isSuperAdmin,
+      kitchenId: user.kitchenId ?? null,
     },
   });
 });

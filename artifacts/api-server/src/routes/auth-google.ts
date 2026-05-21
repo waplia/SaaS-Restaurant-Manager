@@ -72,6 +72,7 @@ async function issueFullSession(user: typeof usersTable.$inferSelect, req: Param
       id: user.id, name: user.name, email: user.email,
       role: user.role, tenantId: user.tenantId, restaurantId: user.restaurantId,
       isSuperAdmin: user.isSuperAdmin, phone: user.phone,
+      kitchenId: user.kitchenId ?? null,
     },
   };
 }

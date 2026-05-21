@@ -12,6 +12,9 @@ interface Props {
   onPrimaryAction: (ticket: KdsTicket) => void;
   onCancel: (ticket: KdsTicket) => void;
   onPriority?: (ticket: KdsTicket) => void;
+  onBump?: (ticket: KdsTicket) => void;
+  onReprint?: (ticket: KdsTicket) => void;
+  isPending?: boolean;
 }
 
 const ORDER_TYPE_META: Record<string, { label: string; color: string }> = {
@@ -95,7 +98,7 @@ function usePulse(active: boolean) {
   return anim;
 }
 
-export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction, onCancel, onPriority }: Props) {
+export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction, onCancel, onPriority, onBump, onReprint, isPending }: Props) {
   const colors = useColors();
   const timer = useLiveTimer(ticket.createdAt);
   const pulse = usePulse(!!ticket.isDelayed);
@@ -186,7 +189,9 @@ export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction,
                   </Text>
                 ) : null}
                 {item.notes ? (
-                  <Text style={[styles.itemNote, { color: "#c2410c" }]}>📝 {item.notes}</Text>
+                  <Text style={[styles.itemNote, { color: "#9a3412" }]} numberOfLines={3}>
+                    📝 {item.notes}
+                  </Text>
                 ) : null}
               </View>
               <View style={[styles.itemStatusPill, { backgroundColor: meta.bg }]}>
@@ -201,11 +206,12 @@ export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction,
         <View style={styles.actions}>
           <Pressable
             onPress={() => onPrimaryAction(ticket)}
+            disabled={!!isPending}
             style={({ pressed }) => [
               styles.primaryBtn,
               {
                 backgroundColor: allLocalReady && primary.next === "ready" ? "#16a34a" : colors.primary,
-                opacity: pressed ? 0.85 : 1,
+                opacity: isPending ? 0.6 : pressed ? 0.85 : 1,
               },
             ]}
           >
@@ -218,6 +224,27 @@ export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction,
               {allLocalReady && primary.next === "ready" ? "All Ready · Mark Ready" : primary.label}
             </Text>
           </Pressable>
+          {onBump ? (
+            <Pressable
+              onPress={() => onBump(ticket)}
+              disabled={!!isPending}
+              style={({ pressed }) => [styles.iconBtn, { borderColor: colors.border, opacity: isPending ? 0.5 : pressed ? 0.7 : 1 }]}
+              hitSlop={6}
+              accessibilityLabel="Bump ticket forward"
+            >
+              <Ionicons name="play-skip-forward" size={18} color={colors.foreground} />
+            </Pressable>
+          ) : null}
+          {onReprint ? (
+            <Pressable
+              onPress={() => onReprint(ticket)}
+              style={({ pressed }) => [styles.iconBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+              hitSlop={6}
+              accessibilityLabel="Reprint KOT"
+            >
+              <Ionicons name="print-outline" size={18} color={colors.foreground} />
+            </Pressable>
+          ) : null}
           {onPriority ? (
             <Pressable
               onPress={() => onPriority(ticket)}
@@ -265,7 +292,7 @@ const styles = StyleSheet.create({
   qty: { fontSize: 16, fontFamily: "Inter_700Bold", minWidth: 28 },
   itemName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   itemMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  itemNote: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  itemNote: { fontSize: 12.5, fontFamily: "Inter_600SemiBold", marginTop: 3, lineHeight: 16 },
   itemStatusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: "flex-start" },
   itemStatusText: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.3 },
   actions: { flexDirection: "row", alignItems: "center", gap: 8 },

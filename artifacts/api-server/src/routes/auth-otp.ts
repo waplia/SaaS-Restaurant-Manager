@@ -581,6 +581,7 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
       id: user.id, name: user.name, email: user.email,
       role: user.role, tenantId: user.tenantId, restaurantId: user.restaurantId,
       isSuperAdmin: user.isSuperAdmin,
+      kitchenId: user.kitchenId ?? null,
     },
     tenant: {
       id: tenant.id, name: tenant.name, planStatus: tenant.planStatus, trialEndsAt,
@@ -640,6 +641,7 @@ async function issueLogin(req: import("express").Request, res: import("express")
       id: user.id, name: user.name, email: user.email,
       role: user.role, tenantId: user.tenantId, restaurantId: user.restaurantId,
       isSuperAdmin: user.isSuperAdmin,
+      kitchenId: user.kitchenId ?? null,
     },
   });
 }

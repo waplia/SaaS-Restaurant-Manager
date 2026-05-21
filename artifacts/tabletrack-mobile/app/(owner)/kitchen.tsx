@@ -86,6 +86,9 @@ function KdsView() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [historyTarget, setHistoryTarget] = useState<KdsTicket | null>(null);
   const [undoState, setUndoState] = useState<{ ticketId: number; itemId: number; prev: ItemStatus } | null>(null);
+  const [pendingTicketIds, setPendingTicketIds] = useState<Record<number, true>>({});
+  const [toast, setToast] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const stationDefaultedRef = useRef(false);
 
   const seenTicketIds = useRef<Set<number>>(new Set());
   const seenDelayedIds = useRef<Set<number>>(new Set());
@@ -93,9 +96,21 @@ function KdsView() {
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (settingsLoaded) setStationId(settings.defaultStationId);
+    if (!settingsLoaded || stationDefaultedRef.current) return;
+    // Kitchen-role cooks land on their assigned kitchen if their staff record
+    // has one — admins / cashiers fall back to the per-device default. This
+    // happens once on first load; manual station switches still persist via
+    // local setStationId state.
+    const role = user?.role ?? "";
+    const assignedKitchen = user?.kitchenId ?? null;
+    if ((role === "kitchen" || role === "chef") && assignedKitchen != null) {
+      setStationId(assignedKitchen);
+    } else {
+      setStationId(settings.defaultStationId);
+    }
+    stationDefaultedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsLoaded]);
+  }, [settingsLoaded, user?.role, user?.kitchenId]);
 
   const kitchensQ = useKitchensList(restaurantId);
   const ticketsQ = useKdsTickets(restaurantId, { pollMs: 15_000 });
@@ -226,6 +241,16 @@ function KdsView() {
     });
   }, [ticketsQ.isFetching, tickets]);
 
+  const showToast = useCallback((kind: "success" | "error", message: string) => {
+    setToast({ kind, message });
+    setTimeout(() => setToast((t) => (t && t.message === message ? null : t)), 2500);
+  }, []);
+
+  // Ticket-level transitions are optimistic so cooks see the card hop tabs
+  // instantly. We patch the React Query cache, fire the mutation, then either
+  // reconcile from the server response (which holds the canonical timestamps)
+  // or roll back the cache entry on failure. Polling at 15s and the socket
+  // `ticket:status` event silently re-converge after that.
   const advanceTicket = useCallback(async (ticket: KdsTicket) => {
     const nextStatus =
       ticket.status === "new" || ticket.status === "pending" ? "preparing"
@@ -233,14 +258,30 @@ function KdsView() {
       : ticket.status === "ready" ? "served"
       : null;
     if (!nextStatus) return;
+    if (pendingTicketIds[ticket.id]) return;
+
+    const queryKey = ticketsQ.queryKey;
+    const previous = qc.getQueryData<KdsTicket[]>(queryKey);
+    qc.setQueryData<KdsTicket[]>(queryKey, (old) =>
+      Array.isArray(old)
+        ? old.map((t) => (t.id === ticket.id ? { ...t, status: nextStatus } : t))
+        : old,
+    );
+    setPendingTicketIds((m) => ({ ...m, [ticket.id]: true }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await updateStatus.mutateAsync({ restaurantId, id: ticket.id, data: { status: nextStatus } });
-      qc.invalidateQueries({ queryKey: ticketsQ.queryKey });
+      qc.invalidateQueries({ queryKey });
     } catch (err) {
-      Alert.alert("Couldn't update", (err as Error).message || "Please try again.");
+      if (previous) qc.setQueryData(queryKey, previous);
+      showToast("error", (err as Error).message || "Couldn't update ticket. Please try again.");
+    } finally {
+      setPendingTicketIds((m) => {
+        const { [ticket.id]: _, ...rest } = m;
+        return rest;
+      });
     }
-  }, [restaurantId, updateStatus, qc, ticketsQ.queryKey]);
+  }, [restaurantId, updateStatus, qc, ticketsQ.queryKey, pendingTicketIds, showToast]);
 
   const requestCancel = useCallback((ticket: KdsTicket) => {
     const role = user?.role ?? "";
@@ -269,13 +310,48 @@ function KdsView() {
   }, [cancelTarget, restaurantId, qc, ticketsQ.queryKey]);
 
   const togglePriority = useCallback(async (ticket: KdsTicket) => {
+    const queryKey = ticketsQ.queryKey;
+    const previous = qc.getQueryData<KdsTicket[]>(queryKey);
+    qc.setQueryData<KdsTicket[]>(queryKey, (old) =>
+      Array.isArray(old)
+        ? old.map((t) => (t.id === ticket.id ? { ...t, isPriority: !t.isPriority } : t))
+        : old,
+    );
     try {
       await customFetch(`/api/restaurants/${restaurantId}/kitchen/tickets/${ticket.id}/priority`, { method: "PATCH" });
-      qc.invalidateQueries({ queryKey: ticketsQ.queryKey });
+      qc.invalidateQueries({ queryKey });
     } catch (err) {
-      Alert.alert("Couldn't update", (err as Error).message || "Please try again.");
+      if (previous) qc.setQueryData(queryKey, previous);
+      showToast("error", (err as Error).message || "Couldn't update priority.");
     }
-  }, [restaurantId, qc, ticketsQ.queryKey]);
+  }, [restaurantId, qc, ticketsQ.queryKey, showToast]);
+
+  // "Bump" is parity with the web KDS — a single tap that advances the
+  // ticket one step regardless of label, useful when the cook is clearing
+  // a busy board and doesn't want to read the primary-button text.
+  const bumpTicket = useCallback((ticket: KdsTicket) => {
+    void advanceTicket(ticket);
+  }, [advanceTicket]);
+
+  // Reprint mirrors the web KDS reprint button. The web KDS's reprint is also
+  // purely client-side (it opens the browser print dialog) — there is no
+  // server-side reprint endpoint today, and the task explicitly forbids
+  // adding one. On mobile there's no browser print dialog either, so the
+  // most useful thing we can do is show the cook which physical printer is
+  // configured for this station so they (or the host) can retrieve / re-run
+  // the paper ticket manually. We keep the wording honest so it doesn't
+  // imply the server queued a new job. A real reprint endpoint is tracked
+  // as a follow-up.
+  const reprintKot = useCallback((ticket: KdsTicket) => {
+    const printer = ticket.kitchen?.printerName;
+    const station = ticket.kitchen?.name ?? "this station";
+    if (printer && String(printer).trim()) {
+      showToast("success", `Reprint manually at ${printer} (${station})`);
+      Haptics.selectionAsync().catch(() => {});
+    } else {
+      showToast("error", `No printer configured for ${station}`);
+    }
+  }, [showToast]);
 
   const autoAcceptedIds = useRef<Set<number>>(new Set());
   useEffect(() => {
@@ -445,6 +521,9 @@ function KdsView() {
                 onPrimaryAction={advanceTicket}
                 onCancel={requestCancel}
                 onPriority={togglePriority}
+                onBump={bumpTicket}
+                onReprint={reprintKot}
+                isPending={!!pendingTicketIds[item.id]}
               />
             );
           }}
@@ -457,6 +536,25 @@ function KdsView() {
           <Text style={styles.undoText}>Item updated</Text>
           <Pressable onPress={undoLastItemChange} hitSlop={8}>
             <Text style={styles.undoLink}>UNDO</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {toast ? (
+        <View
+          style={[
+            styles.undoToast,
+            { bottom: insets.bottom + (undoState ? 140 : 80), backgroundColor: toast.kind === "error" ? "#7f1d1d" : "#065f46" },
+          ]}
+        >
+          <Ionicons
+            name={toast.kind === "error" ? "alert-circle" : "checkmark-circle"}
+            size={18}
+            color="#fff"
+          />
+          <Text style={styles.undoText}>{toast.message}</Text>
+          <Pressable onPress={() => setToast(null)} hitSlop={8}>
+            <Ionicons name="close" size={16} color="#fff" />
           </Pressable>
         </View>
       ) : null}
