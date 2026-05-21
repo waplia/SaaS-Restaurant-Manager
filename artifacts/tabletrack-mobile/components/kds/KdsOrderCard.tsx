@@ -29,8 +29,8 @@ const ORDER_TYPE_META: Record<string, { label: string; color: string }> = {
 export const STATUS_META: Record<string, { label: string; color: string }> = {
   new: { label: "New", color: "#3b82f6" },
   pending: { label: "New", color: "#3b82f6" },
-  preparing: { label: "Preparing", color: "#f59e0b" },
-  in_progress: { label: "Preparing", color: "#f59e0b" },
+  preparing: { label: "Preparing", color: "#f97316" },
+  in_progress: { label: "Preparing", color: "#f97316" },
   ready: { label: "Ready", color: "#22c55e" },
   served: { label: "Served", color: "#6b7280" },
   completed: { label: "Done", color: "#6b7280" },
@@ -38,8 +38,8 @@ export const STATUS_META: Record<string, { label: string; color: string }> = {
 };
 
 const PRIMARY_FOR_STATUS: Record<string, { label: string; next: string; color: string } | null> = {
-  new: { label: "Start Preparing", next: "preparing", color: "#f59e0b" },
-  pending: { label: "Start Preparing", next: "preparing", color: "#f59e0b" },
+  new: { label: "Start Preparing", next: "preparing", color: "#f97316" },
+  pending: { label: "Start Preparing", next: "preparing", color: "#f97316" },
   preparing: { label: "Mark Ready", next: "ready", color: "#16a34a" },
   in_progress: { label: "Mark Ready", next: "ready", color: "#16a34a" },
   ready: { label: "Mark Served", next: "served", color: "#6b7280" },

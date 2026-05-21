@@ -29,12 +29,12 @@ const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; b
   },
   preparing: {
     label: "Preparing",
-    col: "bg-amber-50/60 border-amber-200 text-amber-950",
-    dot: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-700",
+    col: "bg-orange-50/60 border-orange-200 text-orange-950",
+    dot: "bg-orange-500",
+    badge: "bg-orange-100 text-orange-700",
     next: "ready",
     nextLabel: "Mark Ready",
-    nextClass: "bg-amber-600 hover:bg-amber-700 text-white",
+    nextClass: "bg-orange-600 hover:bg-orange-700 text-white",
   },
   ready: {
     label: "Ready to Serve",
