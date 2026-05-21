@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, gte, lte, desc, count, sql, notInArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
 import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable, ticketDelayAlertsTable, devicesTable } from "../lib/db";
 import { AIProviderService } from "../lib/aiProviderService";
 import { loadKitchenDelayConfig } from "../lib/kitchenDelay";
@@ -32,6 +32,7 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   const orderCols = {
     id: ordersTable.id,
     status: ordersTable.status,
+    paymentStatus: ordersTable.paymentStatus,
     totalAmount: ordersTable.totalAmount,
     createdAt: ordersTable.createdAt,
   } as const;
@@ -53,12 +54,13 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(and(eq(expensesTable.restaurantId, restaurantId), gte(expensesTable.expenseDate, monthStartStr))),
   ]);
 
-  // Exclude cancelled / voided orders from revenue, order count and AOV so
-  // accounting figures aren't diluted by zero-value lines (cashier mistakes,
-  // table-side voids, etc).
-  const isBillable = (status: string | null) => status !== "cancelled" && status !== "voided";
-  const billableToday = todayOrdersRows.filter(o => isBillable(o.status));
-  const billableYesterday = yesterdayOrders.filter(o => isBillable(o.status));
+  // Only paid orders count as sales. Cancelled, voided, pending/in-progress
+  // and any unpaid order is excluded so the dashboard reflects real money
+  // taken, not orders still flowing through the kitchen.
+  const isBillable = (o: { paymentStatus?: string | null; status: string | null }) =>
+    o.paymentStatus === "paid" && o.status !== "cancelled" && o.status !== "voided";
+  const billableToday = todayOrdersRows.filter(isBillable);
+  const billableYesterday = yesterdayOrders.filter(isBillable);
   const todayRevenue = billableToday.reduce((s, o) => s + Number(o.totalAmount), 0);
   const yesterdayRevenue = billableYesterday.reduce((s, o) => s + Number(o.totalAmount), 0);
   // Growth = 0% when there's no activity at all; "+100%" only when today has
@@ -111,8 +113,9 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
     .where(and(
       eq(ordersTable.restaurantId, restaurantId),
       gte(ordersTable.createdAt, from),
-      // Cancelled / voided orders are not sales — exclude from the trend.
-      notInArray(ordersTable.status, ["cancelled", "voided"]),
+      // Only paid orders are real sales — exclude cancelled, voided and
+      // any in-progress / pending ticket that hasn't been billed yet.
+      eq(ordersTable.paymentStatus, "paid"),
     ));
 
   type Bucket = { revenue: number; orders: number };
@@ -178,6 +181,9 @@ router.get("/restaurants/:restaurantId/dashboard/popular-items", async (req, res
       eq(orderItemsTable.orderId, ordersTable.id),
       eq(ordersTable.restaurantId, restaurantId),
       gte(ordersTable.createdAt, from),
+      // Only paid orders are real sales — matches dashboard summary,
+      // revenue-trend, reports, and P&L semantics.
+      eq(ordersTable.paymentStatus, "paid"),
     ))
     .groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName)
     .orderBy(desc(sql`count(*)`))
@@ -243,12 +249,13 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
   }
   from.setHours(0, 0, 0, 0);
 
-  // Sales reports exclude cancelled / voided orders so revenue, AOV, top
-  // items, and staff perf reflect actual money taken.
-  const notCancelled = notInArray(ordersTable.status, ["cancelled", "voided"]);
+  // Sales reports only count paid orders so revenue, AOV, top items, and
+  // staff perf reflect real money taken — never cancelled, voided, or
+  // in-progress orders still moving through the kitchen.
+  const paidOnly = eq(ordersTable.paymentStatus, "paid");
   const dateCondition = fromStr && toStr
-    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to), notCancelled)
-    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), notCancelled);
+    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to), paidOnly)
+    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), paidOnly);
 
   const orders = await db.select().from(ordersTable).where(dateCondition);
   const totalRevenue = orders.reduce((s, o) => s + Number(o.totalAmount), 0);
@@ -286,7 +293,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
       FROM orders o
       WHERE o.restaurant_id = ${restaurantId}
         AND o.waiter_id IS NOT NULL
-        AND o.status NOT IN ('cancelled', 'voided')
+        AND o.payment_status = 'paid'
         AND o.created_at >= ${from}
         ${to ? sql`AND o.created_at <= ${to}` : sql``}
       GROUP BY o.waiter_id

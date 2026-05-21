@@ -113,8 +113,8 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
   const toEnd = new Date(range.to);
   toEnd.setHours(23, 59, 59, 999);
 
-  // Sales & discounts from completed/served/paid orders. Mirrors the
-  // dashboard / reports logic — cancelled and voided orders never count.
+  // Sales & discounts only count paid orders — mirrors the dashboard /
+  // reports logic. Cancelled, voided, and in-progress orders never count.
   const [salesRow] = await db
     .select({
       gross: sql<string>`coalesce(sum(${ordersTable.totalAmount}), 0)::text`,
@@ -127,7 +127,7 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
       eq(ordersTable.restaurantId, restaurantId),
       gte(ordersTable.createdAt, range.from),
       lte(ordersTable.createdAt, toEnd),
-      sql`${ordersTable.status} NOT IN ('cancelled', 'voided')`,
+      sql`${ordersTable.paymentStatus} = 'paid'`,
     ));
   const sales = num(salesRow?.gross);
   const discounts = num(salesRow?.discount);

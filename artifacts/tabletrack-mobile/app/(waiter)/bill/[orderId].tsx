@@ -149,6 +149,82 @@ export default function BillScreen() {
           { paddingTop: 16, paddingBottom: (isWeb ? 34 : insets.bottom) + 24 },
         ]}
       >
+        {!isPaid && (
+          <View style={[styles.paymentSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Method</Text>
+            <View style={styles.paymentMethods}>
+              {PAYMENT_METHODS.map((m) => (
+                <Pressable
+                  key={m.key}
+                  onPress={() => setSelectedPayment(m.key)}
+                  style={[
+                    styles.methodBtn,
+                    {
+                      borderColor: selectedPayment === m.key ? colors.primary : colors.border,
+                      backgroundColor: selectedPayment === m.key ? colors.primary + "15" : colors.muted,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={m.icon}
+                    size={20}
+                    color={selectedPayment === m.key ? colors.primary : colors.mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.methodLabel,
+                      { color: selectedPayment === m.key ? colors.primary : colors.mutedForeground },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.confirmBtn,
+                { backgroundColor: colors.primary, opacity: pressed || confirming ? 0.8 : 1, marginTop: 4 },
+              ]}
+              onPress={handleConfirmPayment}
+              disabled={confirming}
+            >
+              {confirming ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={styles.confirmBtnText}>Confirm Payment</Text>
+                </>
+              )}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.printBtn,
+                { borderColor: colors.border, opacity: pressed ? 0.7 : 1, justifyContent: "center" },
+              ]}
+              onPress={handlePrintBill}
+            >
+              <Ionicons name="print-outline" size={18} color={colors.foreground} />
+              <Text style={[styles.printBtnText, { color: colors.foreground }]}>Print Bill</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {isPaid && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.confirmBtn,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back-outline" size={18} color="#fff" />
+            <Text style={styles.confirmBtnText}>Back to Tables</Text>
+          </Pressable>
+        )}
+
         <View style={[styles.billCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.billHeader}>
             <Ionicons name="receipt-outline" size={20} color={colors.primary} />
@@ -213,85 +289,6 @@ export default function BillScreen() {
             </View>
           </View>
         </View>
-
-        {!isPaid && (
-          <View style={[styles.paymentSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Method</Text>
-            <View style={styles.paymentMethods}>
-              {PAYMENT_METHODS.map((m) => (
-                <Pressable
-                  key={m.key}
-                  onPress={() => setSelectedPayment(m.key)}
-                  style={[
-                    styles.methodBtn,
-                    {
-                      borderColor: selectedPayment === m.key ? colors.primary : colors.border,
-                      backgroundColor: selectedPayment === m.key ? colors.primary + "15" : colors.muted,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={m.icon}
-                    size={20}
-                    color={selectedPayment === m.key ? colors.primary : colors.mutedForeground}
-                  />
-                  <Text
-                    style={[
-                      styles.methodLabel,
-                      { color: selectedPayment === m.key ? colors.primary : colors.mutedForeground },
-                    ]}
-                  >
-                    {m.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Action buttons rendered inline directly under the payment
-                methods so they're never hidden behind the device tab bar. */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.confirmBtn,
-                { backgroundColor: colors.primary, opacity: pressed || confirming ? 0.8 : 1, marginTop: 4 },
-              ]}
-              onPress={handleConfirmPayment}
-              disabled={confirming}
-            >
-              {confirming ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                  <Text style={styles.confirmBtnText}>Confirm Payment</Text>
-                </>
-              )}
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.printBtn,
-                { borderColor: colors.border, opacity: pressed ? 0.7 : 1, justifyContent: "center" },
-              ]}
-              onPress={handlePrintBill}
-            >
-              <Ionicons name="print-outline" size={18} color={colors.foreground} />
-              <Text style={[styles.printBtnText, { color: colors.foreground }]}>Print Bill</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {isPaid && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.confirmBtn,
-              styles.actionStacked,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
-            ]}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back-outline" size={18} color="#fff" />
-            <Text style={styles.confirmBtnText}>Back to Tables</Text>
-          </Pressable>
-        )}
       </ScrollView>
     </View>
   );
