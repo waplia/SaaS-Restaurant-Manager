@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { eq, and, desc, sql, gte, lte, like } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, like, inArray } from "drizzle-orm";
 import {
   db,
   aiProvidersTable,
@@ -239,6 +239,131 @@ router.patch("/admin/ai/assignments/:id", async (req: Request, res: Response) =>
   const [row] = await db.update(aiFeatureModelAssignmentsTable).set(patch).where(eq(aiFeatureModelAssignmentsTable.id, id)).returning();
   await recordAuditLog({ req, module: MODULE, action: "assignment.update", entity: "ai_assignment", entityId: id, oldValue: existing, newValue: row });
   res.json(row);
+});
+
+/**
+ * Bulk-update feature → model assignments.
+ *
+ * Lets the super admin switch the provider/model for many features at once
+ * (e.g. "move everything from OpenAI to Anthropic"). The filter narrows the
+ * affected rows; the patch is applied to every match. Returns the number of
+ * rows updated and the new state so the client can refresh without an extra
+ * round-trip.
+ *
+ * Body shape:
+ *   {
+ *     filter?: {
+ *       ids?: number[];                   // explicit selection wins over others
+ *       category?: string;                // e.g. "marketing"
+ *       modality?: string;                // e.g. "text" | "image"
+ *       primaryProviderId?: number|null;  // useful for "rebind everything currently on provider X"
+ *     },
+ *     patch: {
+ *       primaryProviderId?: number|null;
+ *       primaryModel?: string|null;
+ *       fallbackProviderId?: number|null;
+ *       fallbackModel?: string|null;
+ *       isEnabled?: boolean;
+ *     }
+ *   }
+ */
+router.post("/admin/ai/assignments/bulk", async (req: Request, res: Response) => {
+  const { filter = {}, patch = {} } = (req.body ?? {}) as {
+    filter?: {
+      ids?: unknown;
+      category?: unknown;
+      modality?: unknown;
+      primaryProviderId?: unknown;
+    };
+    patch?: Record<string, unknown>;
+  };
+
+  // Helper: coerce to a positive integer or return undefined if invalid.
+  // We treat `null` as a legitimate "clear this FK" signal, distinct from
+  // garbage input which must be rejected loudly.
+  const toIntOrNull = (v: unknown): number | null | undefined => {
+    if (v === null) return null;
+    if (typeof v === "number" && Number.isInteger(v) && v > 0) return v;
+    if (typeof v === "string" && /^\d+$/.test(v)) return Number(v);
+    return undefined; // sentinel: invalid
+  };
+
+  // Build the update object. Only whitelisted keys flow through so the
+  // caller can't sneak in `featureSlug` or other identity columns.
+  const update: Partial<typeof aiFeatureModelAssignmentsTable.$inferInsert> = { updatedAt: new Date() };
+  for (const key of ["primaryProviderId", "fallbackProviderId"] as const) {
+    if (key in patch) {
+      const v = toIntOrNull(patch[key]);
+      if (v === undefined) return void res.status(400).json({ error: `Invalid ${key}` });
+      update[key] = v;
+    }
+  }
+  if ("primaryModel" in patch) update.primaryModel = patch.primaryModel == null ? null : String(patch.primaryModel);
+  if ("fallbackModel" in patch) update.fallbackModel = patch.fallbackModel == null ? null : String(patch.fallbackModel);
+  if ("isEnabled" in patch) update.isEnabled = !!patch.isEnabled;
+  if (Object.keys(update).length <= 1) {
+    return void res.status(400).json({ error: "Provide at least one field to update in 'patch'." });
+  }
+
+  // Validate referenced providers exist (otherwise drizzle will error on the
+  // FK constraint and we'd return a confusing 500).
+  for (const key of ["primaryProviderId", "fallbackProviderId"] as const) {
+    const v = update[key];
+    if (typeof v === "number") {
+      const [exists] = await db.select({ id: aiProvidersTable.id }).from(aiProvidersTable).where(eq(aiProvidersTable.id, v));
+      if (!exists) return void res.status(400).json({ error: `Unknown ${key}: ${v}` });
+    }
+  }
+
+  // Compose the WHERE clause from filter. Explicit `ids` always wins; the
+  // other facets are AND-ed together. An empty filter means "every row" —
+  // that's intentional, super admins may need it for a global switch.
+  const conditions = [] as Array<ReturnType<typeof eq>>;
+  if (filter.ids !== undefined) {
+    // If the caller sent `ids` at all, treat it as the authoritative scope.
+    // Falling back to "update everything" because some entries were invalid
+    // would be a catastrophic footgun, so we 400 instead.
+    if (!Array.isArray(filter.ids)) return void res.status(400).json({ error: "filter.ids must be an array" });
+    const ids = (filter.ids as unknown[]).map((n) => (typeof n === "number" || typeof n === "string") ? Number(n) : NaN);
+    if (ids.length === 0 || ids.some((n) => !Number.isInteger(n) || n <= 0)) {
+      return void res.status(400).json({ error: "filter.ids must contain only positive integers" });
+    }
+    conditions.push(inArray(aiFeatureModelAssignmentsTable.id, ids));
+  } else {
+    if (typeof filter.category === "string" && filter.category) {
+      conditions.push(eq(aiFeatureModelAssignmentsTable.category, filter.category));
+    }
+    if (typeof filter.modality === "string" && filter.modality) {
+      conditions.push(eq(aiFeatureModelAssignmentsTable.modality, filter.modality));
+    }
+    if (filter.primaryProviderId === null) {
+      conditions.push(sql`${aiFeatureModelAssignmentsTable.primaryProviderId} is null` as unknown as ReturnType<typeof eq>);
+    } else if (typeof filter.primaryProviderId === "number" || (typeof filter.primaryProviderId === "string" && filter.primaryProviderId)) {
+      conditions.push(eq(aiFeatureModelAssignmentsTable.primaryProviderId, Number(filter.primaryProviderId)));
+    }
+  }
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Capture old state for the audit log (size-bounded to avoid huge entries
+  // when admins update hundreds of rows).
+  const beforeRows = await (where
+    ? db.select().from(aiFeatureModelAssignmentsTable).where(where)
+    : db.select().from(aiFeatureModelAssignmentsTable));
+  if (beforeRows.length === 0) {
+    return void res.json({ updated: 0, rows: [] });
+  }
+
+  const updated = await (where
+    ? db.update(aiFeatureModelAssignmentsTable).set(update).where(where).returning()
+    : db.update(aiFeatureModelAssignmentsTable).set(update).returning());
+
+  await recordAuditLog({
+    req, module: MODULE, action: "assignment.bulk_update", entity: "ai_assignment", entityId: null,
+    details: `Bulk-updated ${updated.length} feature assignments`,
+    oldValue: { count: beforeRows.length, ids: beforeRows.map((r) => r.id), filter },
+    newValue: { patch: update },
+  });
+  res.json({ updated: updated.length, rows: updated });
 });
 
 router.delete("/admin/ai/assignments/:id", async (req: Request, res: Response) => {

@@ -442,6 +442,7 @@ function ModelSettingsSubTab() {
   const { data: providers = [] } = useQuery<AiProvider[]>({ queryKey: ["admin-ai", "providers"], queryFn: () => apiFetch("/admin/ai/providers") });
   const [editing, setEditing] = useState<AiAssignment | null>(null);
   const [creating, setCreating] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const providerName = useMemo(() => Object.fromEntries(providers.map(p => [p.id, p.name])), [providers]);
 
   const remove = async (a: AiAssignment) => {
@@ -453,9 +454,12 @@ function ModelSettingsSubTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center gap-2">
         <p className="text-sm text-muted-foreground">{assignments.length} feature assignments</p>
-        <Button onClick={() => setCreating(true)} className="gap-2"><Plus className="w-4 h-4" /> New assignment</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkOpen(true)} className="gap-2"><Zap className="w-4 h-4" /> Bulk update</Button>
+          <Button onClick={() => setCreating(true)} className="gap-2"><Plus className="w-4 h-4" /> New assignment</Button>
+        </div>
       </div>
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -495,7 +499,241 @@ function ModelSettingsSubTab() {
       </div>
       {creating && <AssignmentModal assignment={null} providers={providers} onClose={() => setCreating(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "assignments"] })} />}
       {editing && <AssignmentModal assignment={editing} providers={providers} onClose={() => setEditing(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "assignments"] })} />}
+      {bulkOpen && (
+        <BulkAssignmentModal
+          assignments={assignments}
+          providers={providers}
+          onClose={() => setBulkOpen(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["admin-ai", "assignments"] })}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Bulk update modal — lets the super admin re-bind many feature assignments
+ * to a new provider/model in one click. Two scopes are offered:
+ *   - "all"       : every assignment in the system
+ *   - "category"  : just rows in a selected category (e.g. "marketing")
+ *   - "modality"  : just rows of a given modality (e.g. text vs image)
+ *   - "provider"  : every row currently bound to a specific provider
+ *                   (use case: "move everything off OpenAI to Anthropic")
+ * The patch can change primary provider/model, fallback provider/model, or
+ * the enabled flag. A preview count is shown before applying so the admin
+ * sees exactly how many rows will be touched.
+ */
+function BulkAssignmentModal({
+  assignments, providers, onClose, onSaved,
+}: {
+  assignments: AiAssignment[];
+  providers: AiProvider[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [scope, setScope] = useState<"all" | "category" | "modality" | "provider">("all");
+  const [category, setCategory] = useState("");
+  const [modality, setModality] = useState("text");
+  const [filterProviderId, setFilterProviderId] = useState<number | "">("");
+
+  // Patch fields. Empty string = "leave unchanged"; null is allowed for
+  // fallback to explicitly clear it.
+  const [newPrimaryProviderId, setNewPrimaryProviderId] = useState<number | "">("");
+  const [newPrimaryModel, setNewPrimaryModel] = useState("");
+  const [touchFallback, setTouchFallback] = useState(false);
+  const [newFallbackProviderId, setNewFallbackProviderId] = useState<number | "" | "clear">("");
+  const [newFallbackModel, setNewFallbackModel] = useState("");
+
+  // Distinct categories/modalities present in the current assignments — much
+  // friendlier than free-text since the column is effectively an enum.
+  const categories = useMemo(
+    () => Array.from(new Set(assignments.map(a => a.category).filter(Boolean))).sort(),
+    [assignments],
+  );
+  const modalities = useMemo(
+    () => Array.from(new Set(assignments.map(a => a.modality).filter(Boolean))).sort(),
+    [assignments],
+  );
+
+  // Live preview of how many rows the current filter selects.
+  const matched = useMemo(() => {
+    if (scope === "all") return assignments;
+    if (scope === "category") return assignments.filter(a => a.category === category);
+    if (scope === "modality") return assignments.filter(a => a.modality === modality);
+    if (scope === "provider") return assignments.filter(a => a.primaryProviderId === filterProviderId);
+    return [];
+  }, [scope, assignments, category, modality, filterProviderId]);
+
+  // Suggest a default model from the chosen provider so the admin doesn't
+  // have to type one out every time. They can still override.
+  const pickedProvider = providers.find(p => p.id === newPrimaryProviderId);
+  useEffect(() => {
+    if (pickedProvider && !newPrimaryModel) {
+      setNewPrimaryModel(pickedProvider.defaultModel ?? "");
+    }
+  }, [pickedProvider, newPrimaryModel]);
+
+  const hasPatch =
+    newPrimaryProviderId !== "" ||
+    newPrimaryModel.trim() !== "" ||
+    touchFallback;
+
+  const apply = async () => {
+    if (matched.length === 0) {
+      toast({ title: "Nothing to update", description: "No assignments match the current filter.", variant: "destructive" });
+      return;
+    }
+    if (!hasPatch) {
+      toast({ title: "No changes", description: "Pick at least one field to update.", variant: "destructive" });
+      return;
+    }
+    if (!confirm(`Update ${matched.length} assignment${matched.length === 1 ? "" : "s"}? This cannot be undone in bulk.`)) return;
+
+    const filter: Record<string, unknown> = {};
+    if (scope === "category") filter.category = category;
+    else if (scope === "modality") filter.modality = modality;
+    else if (scope === "provider") filter.primaryProviderId = filterProviderId;
+    // scope === "all" → no filter keys, server treats as "every row"
+
+    const patch: Record<string, unknown> = {};
+    if (newPrimaryProviderId !== "") patch.primaryProviderId = newPrimaryProviderId;
+    if (newPrimaryModel.trim() !== "") patch.primaryModel = newPrimaryModel.trim();
+    if (touchFallback) {
+      // Empty select = leave unchanged (don't send the key). "clear" = send
+      // null to explicitly wipe the FK. A real provider id sends that id.
+      if (newFallbackProviderId === "clear") patch.fallbackProviderId = null;
+      else if (newFallbackProviderId !== "") patch.fallbackProviderId = newFallbackProviderId;
+      // Same idea for the model string: only include it when the admin
+      // actually typed something or explicitly cleared the provider.
+      if (newFallbackModel.trim() !== "") patch.fallbackModel = newFallbackModel.trim();
+      else if (newFallbackProviderId === "clear") patch.fallbackModel = null;
+    }
+
+    setBusy(true);
+    try {
+      const res = await apiAction<{ updated: number }>(`/admin/ai/assignments/bulk`, "POST", { filter, patch });
+      toast({ title: "Bulk update complete", description: `${res.updated} assignment${res.updated === 1 ? "" : "s"} updated.` });
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast({ title: "Bulk update failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Bulk update assignments" onClose={onClose} wide>
+      <div className="space-y-4">
+        <Field label="Apply to" hint="Pick which assignments this change should affect.">
+          <select className={inputCls} value={scope} onChange={e => setScope(e.target.value as typeof scope)}>
+            <option value="all">All assignments ({assignments.length})</option>
+            <option value="category">By category</option>
+            <option value="modality">By modality</option>
+            <option value="provider">By current primary provider</option>
+          </select>
+        </Field>
+
+        {scope === "category" && (
+          <Field label="Category">
+            <select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">Pick a category…</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+        )}
+        {scope === "modality" && (
+          <Field label="Modality">
+            <select className={inputCls} value={modality} onChange={e => setModality(e.target.value)}>
+              {modalities.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+        )}
+        {scope === "provider" && (
+          <Field label="Currently bound to">
+            <select className={inputCls} value={filterProviderId} onChange={e => setFilterProviderId(e.target.value ? Number(e.target.value) : "")}>
+              <option value="">Pick a provider…</option>
+              {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.kind})</option>)}
+            </select>
+          </Field>
+        )}
+
+        <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          {matched.length === 0
+            ? "No assignments match this filter yet."
+            : `${matched.length} assignment${matched.length === 1 ? "" : "s"} will be updated.`}
+        </div>
+
+        <div className="border-t border-border pt-4 space-y-3">
+          <h4 className="text-sm font-semibold text-foreground">New settings</h4>
+          <p className="text-xs text-muted-foreground">Leave a field blank to keep it as-is.</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="New primary provider">
+              <select
+                className={inputCls}
+                value={newPrimaryProviderId}
+                onChange={e => {
+                  const v = e.target.value ? Number(e.target.value) : "";
+                  setNewPrimaryProviderId(v);
+                  // Reset suggested model so the effect re-suggests for the new provider.
+                  setNewPrimaryModel("");
+                }}
+              >
+                <option value="">Don't change</option>
+                {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="New primary model" hint={pickedProvider?.defaultModel ? `Default: ${pickedProvider.defaultModel}` : undefined}>
+              <input
+                className={inputCls}
+                value={newPrimaryModel}
+                placeholder="e.g. gpt-4o-mini"
+                onChange={e => setNewPrimaryModel(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={touchFallback} onChange={e => setTouchFallback(e.target.checked)} />
+            <span>Also update fallback</span>
+          </label>
+          {touchFallback && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="New fallback provider">
+                <select
+                  className={inputCls}
+                  value={newFallbackProviderId}
+                  onChange={e => setNewFallbackProviderId(e.target.value === "clear" ? "clear" : e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="">Don't change</option>
+                  <option value="clear">— Clear fallback —</option>
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </Field>
+              <Field label="New fallback model">
+                <input
+                  className={inputCls}
+                  value={newFallbackModel}
+                  placeholder="e.g. claude-3-5-haiku"
+                  onChange={e => setNewFallbackModel(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={apply} disabled={busy || matched.length === 0 || !hasPatch} className="gap-2">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Apply to {matched.length}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
