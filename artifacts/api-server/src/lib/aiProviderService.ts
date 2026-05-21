@@ -164,20 +164,29 @@ async function checkRateLimit(
   return { ok: true };
 }
 
+// Per-kind default API host. Used whenever a provider row was saved without an
+// explicit base_url so we never accidentally route a non-OpenAI key to OpenAI.
+export function defaultBaseUrlForKind(kind: string): string | null {
+  switch (kind) {
+    case "openai":      return "https://api.openai.com/v1";
+    case "groq":        return "https://api.groq.com/openai/v1";
+    case "xai":         return "https://api.x.ai/v1";
+    case "mistral":     return "https://api.mistral.ai/v1";
+    case "openrouter":  return "https://openrouter.ai/api/v1";
+    case "perplexity":  return "https://api.perplexity.ai";
+    case "replicate":   return "https://api.replicate.com/v1";
+    case "stability":   return "https://api.stability.ai/v2beta";
+    default:            return null;
+  }
+}
+
 // ---------- Adapter: OpenAI-compatible (OpenAI, Groq, Mistral, OpenRouter, Perplexity, Custom) ----------
 async function callOpenAICompatible(
   provider: ProviderRow,
   model: string,
   req: TextRequest,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
-  const baseUrl = provider.baseUrl
-    ?? (provider.kind === "openai" ? "https://api.openai.com/v1"
-      : provider.kind === "groq" ? "https://api.groq.com/openai/v1"
-      : provider.kind === "xai" ? "https://api.x.ai/v1"
-      : provider.kind === "mistral" ? "https://api.mistral.ai/v1"
-      : provider.kind === "openrouter" ? "https://openrouter.ai/api/v1"
-      : provider.kind === "perplexity" ? "https://api.perplexity.ai"
-      : null);
+  const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind(provider.kind);
   if (!baseUrl) throw new Error(`No baseUrl configured for provider ${provider.slug}`);
   if (!provider.apiKey) throw new Error(`Provider ${provider.slug} has no API key`);
 
@@ -634,7 +643,8 @@ export class AIProviderService {
       // OpenAI-compatible vision (image_url with data URL)
       if (["openai", "openrouter", "groq", "xai", "mistral", "perplexity", "custom"].includes(provider.kind)) {
         if (!provider.apiKey) throw new Error(`${provider.kind} provider ${provider.slug} has no API key`);
-        const baseUrl = provider.baseUrl ?? "https://api.openai.com/v1";
+        const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind(provider.kind);
+        if (!baseUrl) throw new Error(`No baseUrl configured for vision provider ${provider.slug} (kind=${provider.kind})`);
         const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
           headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
