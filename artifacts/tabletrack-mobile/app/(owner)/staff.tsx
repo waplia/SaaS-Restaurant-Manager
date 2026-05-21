@@ -50,7 +50,14 @@ export default function StaffScreen() {
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
   const [editing, setEditing] = useState<Staff | null>(null);
-  const [creating, setCreating] = useState(false);
+  // `creating` carries the *flow* used to open the sheet so the success
+  // handler knows whether to reveal the temp password (Add) or just show
+  // a quiet "invitation sent" toast (Invite).
+  //   - "add"    → generate password and surface CredentialsModal so the
+  //                owner can hand it to the staff member directly.
+  //   - "invite" → same API call, but skip the modal. The staff member
+  //                receives the email invite and uses Forgot Password.
+  const [creating, setCreating] = useState<null | "add" | "invite">(null);
   // After a successful invite we surface the generated password to the
   // inviter once. It is NEVER fetched again from the server — if they
   // dismiss this without copying it the new staff member must use the
@@ -71,26 +78,33 @@ export default function StaffScreen() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["staff-list", restaurantId] });
 
   const createM = useMutation({
-    mutationFn: async (body: FormValues) => {
+    mutationFn: async ({ body, flow }: { body: FormValues; flow: "add" | "invite" }) => {
       // Generate the temp password on the client so we can show it to the
-      // inviter after success. The API hashes it server-side and returns
+      // owner after success. The API hashes it server-side and returns
       // the created user — it never echoes the password back.
       const password = generateTempPassword();
       await customFetch(`/api/restaurants/${restaurantId}/staff`, {
         method: "POST", body: JSON.stringify({ ...body, password }),
       });
-      return { ...body, password };
+      return { ...body, password, flow };
     },
     onSuccess: (created) => {
-      setCreating(false);
+      setCreating(null);
       invalidate();
-      setGeneratedCreds({
-        name: created.name,
-        email: created.email ?? "",
-        password: created.password!,
-      });
+      if (created.flow === "add") {
+        setGeneratedCreds({
+          name: created.name,
+          email: created.email ?? "",
+          password: created.password!,
+        });
+      } else {
+        Alert.alert(
+          "Invitation sent",
+          `${created.name} will receive an email at ${created.email ?? "their address"} to set their password.`,
+        );
+      }
     },
-    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not invite staff"),
+    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not add staff"),
   });
 
   const updateM = useMutation({
@@ -125,21 +139,36 @@ export default function StaffScreen() {
           : `${staff.length} members`}
         showBack
         right={
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable onPress={() => router.push("/(owner)/attendance" as never)} hitSlop={10}>
               <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Attendance</Text>
             </Pressable>
+            {/* Invite → emails the staff member; they set their own password.
+                Add    → generates a password and shows it to the owner so
+                         the staff member can sign in immediately. */}
             <Pressable
               onPress={() => staffLimit.reached
                 ? Alert.alert("Plan limit reached", staffLimit.reason ?? "Upgrade your plan to invite more staff.")
-                : setCreating(true)}
+                : setCreating("invite")}
+              hitSlop={10}
+              style={({ pressed }) => [styles.outlineBtn, {
+                borderColor: colors.primary,
+                opacity: staffLimit.reached ? 0.4 : (pressed ? 0.7 : 1),
+              }]}>
+              <Ionicons name="mail-outline" size={16} color={colors.primary} />
+              <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Invite</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => staffLimit.reached
+                ? Alert.alert("Plan limit reached", staffLimit.reason ?? "Upgrade your plan to add more staff.")
+                : setCreating("add")}
               hitSlop={10}
               style={({ pressed }) => [styles.addBtn, {
                 backgroundColor: colors.primary,
                 opacity: staffLimit.reached ? 0.4 : (pressed ? 0.85 : 1),
               }]}>
               <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.addBtnText}>Invite</Text>
+              <Text style={styles.addBtnText}>Add</Text>
             </Pressable>
           </View>
         }
@@ -148,7 +177,7 @@ export default function StaffScreen() {
         <EmptyState
           icon="people-outline"
           title="No staff yet"
-          message="Tap Invite to add your first team member."
+          message="Tap Add to create an account with a password, or Invite to email them a sign-up link."
         />
       ) : (
         <ScrollView
@@ -189,14 +218,14 @@ export default function StaffScreen() {
       )}
 
       <StaffForm
-        visible={creating}
-        title="Invite staff"
-        submitLabel="Send invite"
+        visible={creating !== null}
+        title={creating === "add" ? "Add staff member" : "Invite staff"}
+        submitLabel={creating === "add" ? "Add & generate password" : "Send invite"}
         mode="create"
         submitting={createM.isPending}
         member={null}
-        onClose={() => setCreating(false)}
-        onSubmit={(v) => createM.mutate(v)}
+        onClose={() => setCreating(null)}
+        onSubmit={(v) => createM.mutate({ body: v, flow: creating ?? "add" })}
       />
       <StaffForm
         visible={!!editing}
@@ -432,4 +461,6 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   addBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  outlineBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, backgroundColor: "transparent" },
+  outlineBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
