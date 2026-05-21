@@ -58,6 +58,13 @@ export type SendEmailResult = {
 
 export function renderTemplate(text: string, vars: Record<string, unknown>): string {
   return String(text ?? "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => {
+    // 1) Flat-key lookup: callers may pre-flatten brand vars like
+    //    "brand.logoImgHtml" → string. Use this when present.
+    if (Object.prototype.hasOwnProperty.call(vars, key)) {
+      const flat = (vars as Record<string, unknown>)[key];
+      if (flat !== undefined && flat !== null) return String(flat);
+    }
+    // 2) Nested traversal: vars.brand.logoImgHtml etc.
     const v = key.split(".").reduce<unknown>((acc, k) => {
       if (acc && typeof acc === "object" && k in (acc as Record<string, unknown>)) {
         return (acc as Record<string, unknown>)[k];
@@ -68,12 +75,42 @@ export function renderTemplate(text: string, vars: Record<string, unknown>): str
   });
 }
 
-// ─── Premium email layout ─────────────────────────────────────────
-// Single, shared 600px branded card used by every default platform email so
-// that triggers go out with a consistent KhanaLagao look: warm-white card on a
-// soft cream background, navy heading, orange CTA, footer with brand line.
-// Any rendered body that contains the data-tt-premium marker is considered
-// already wrapped so the seed/upgrade routine will not double-wrap it.
+// ─── Premium email layout (v2) ────────────────────────────────────
+// A single, shared, professionally designed 600px-max branded email used by
+// every default platform email so triggers go out with a consistent look:
+//
+//   ┌────────────────────────────────────────────────────────────┐
+//   │  [ logo or wordmark ]                       (header bar)   │
+//   ├────────────────────────────────────────────────────────────┤
+//   │  Big heading                                                │
+//   │  Lead/intro paragraph                                       │
+//   │                                                             │
+//   │  Body content (rendered as-is)                              │
+//   │                                                             │
+//   │            ┌──────────────────────────┐                     │
+//   │            │       Primary CTA        │                     │
+//   │            └──────────────────────────┘                     │
+//   │                                                             │
+//   │  Optional secondary link                                    │
+//   ├────────────────────────────────────────────────────────────┤
+//   │  Help row · "Questions? hello@... · +91 ..."                │
+//   │  Address line                                               │
+//   │  Social row (icons)                                         │
+//   │  Legal row · "© 2026 brand · Unsubscribe · Preferences"     │
+//   └────────────────────────────────────────────────────────────┘
+//
+// The layout is fully inlined (no external CSS), uses bullet-proof tables
+// for Outlook, and renders well on mobile via a small <style> block in
+// the head that only progressive clients pick up.
+//
+// All brand-specific bits (logo URL, support email/phone, company address,
+// social links, primary color) come from `{{brand.*}}` placeholders that
+// `sendByTemplateKey` injects from `getAppSettings()` before rendering. That
+// means a single edit in Super Admin → App Settings updates every email
+// without re-seeding.
+//
+// `data-tt-premium="2"` marks the layout version so the seed/upgrade routine
+// can re-wrap rows produced by older versions (v1 had data-tt-premium="1").
 export type PremiumLayoutInput = {
   preheader?: string;
   heading: string;
@@ -81,45 +118,145 @@ export type PremiumLayoutInput = {
   bodyHtml: string;
   ctaLabel?: string;
   ctaUrl?: string;
+  secondaryLabel?: string;
+  secondaryUrl?: string;
   footerNote?: string;
   appName?: string;
 };
 
+export const PREMIUM_LAYOUT_VERSION = 2;
+
 export function premiumLayout(opts: PremiumLayoutInput): string {
   const appName = opts.appName ?? "{{appName}}";
   const preheader = opts.preheader ?? "";
+  const heading = opts.heading;
+
+  // ─── Header (logo image with text fallback) ─────────────────────
+  // Email clients block remote images by default, so we render the brand
+  // name as a text wordmark *alongside* the logo. Clients that load the
+  // image will show it; clients that don't still see the brand name.
+  const header = `
+    <tr>
+      <td style="padding:0;background:#0F172A">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td align="left" style="padding:22px 32px">
+              <a href="{{brand.appUrl}}" style="text-decoration:none;color:#ffffff;display:inline-block">
+                {{brand.logoImgHtml}}<span style="vertical-align:middle;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;letter-spacing:-.2px;color:#ffffff">${appName}</span>
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr><td style="height:4px;background:{{brand.primaryColor}};line-height:4px;font-size:0">&nbsp;</td></tr>`;
+
+  // ─── CTA block ──────────────────────────────────────────────────
+  // Uses a VML rounded-rect for Outlook + a normal anchor everywhere else.
   const cta = opts.ctaLabel && opts.ctaUrl
     ? `<tr><td align="center" style="padding:8px 0 4px 0">
-        <a href="${opts.ctaUrl}" style="display:inline-block;background:#F97316;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;line-height:1;padding:14px 28px;border-radius:8px;font-family:Inter,Segoe UI,Arial,sans-serif">${opts.ctaLabel}</a>
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${opts.ctaUrl}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="14%" stroke="f" fillcolor="{{brand.primaryColor}}">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:Inter,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;">${opts.ctaLabel}</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <a href="${opts.ctaUrl}" style="display:inline-block;background:{{brand.primaryColor}};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;line-height:1;padding:15px 32px;border-radius:8px;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif;box-shadow:0 1px 2px rgba(15,23,42,.08)">${opts.ctaLabel}</a>
+        <!--<![endif]-->
        </td></tr>`
     : "";
+
+  const secondary = opts.secondaryLabel && opts.secondaryUrl
+    ? `<tr><td align="center" style="padding:14px 0 0 0">
+         <a href="${opts.secondaryUrl}" style="color:{{brand.primaryColor}};text-decoration:none;font-size:13px;font-weight:500;font-family:Inter,Helvetica,Arial,sans-serif">${opts.secondaryLabel} →</a>
+       </td></tr>`
+    : "";
+
   const intro = opts.intro
-    ? `<tr><td style="padding:0 0 16px 0;color:#1F2937;font-size:15px;line-height:1.55;font-family:Inter,Segoe UI,Arial,sans-serif">${opts.intro}</td></tr>`
+    ? `<tr><td style="padding:0 0 18px 0;color:#475569;font-size:16px;line-height:1.55;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif">${opts.intro}</td></tr>`
     : "";
+
+  // ─── Footer ─────────────────────────────────────────────────────
+  // Built from injected brand vars. Each row is conditionally rendered
+  // via tiny inline placeholders: when a value is empty the surrounding
+  // text falls away cleanly because the template is plain-string and
+  // {{var}} substitutes to "".
   const footerNote = opts.footerNote
-    ? `<p style="margin:8px 0 0 0;color:#6B7280;font-size:12px;line-height:1.5">${opts.footerNote}</p>`
+    ? `<p style="margin:14px 0 0 0;color:#94A3B8;font-size:12px;line-height:1.6">${opts.footerNote}</p>`
     : "";
+
+  const footer = `
+    <tr><td style="padding:0 32px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="border-top:1px solid #E2E8F0;padding:0;line-height:0;font-size:0">&nbsp;</td></tr>
+      </table>
+    </td></tr>
+    <tr>
+      <td style="padding:24px 32px 8px 32px;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <p style="margin:0 0 8px 0;color:#0F172A;font-size:14px;font-weight:600;line-height:1.5">Need a hand?</p>
+        <p style="margin:0;color:#64748B;font-size:13px;line-height:1.6">
+          Reply to this email or reach us at
+          <a href="mailto:{{brand.supportEmail}}" style="color:{{brand.primaryColor}};text-decoration:none">{{brand.supportEmail}}</a>{{brand.supportPhoneHtml}}.
+        </p>
+        ${footerNote}
+      </td>
+    </tr>
+    {{brand.socialRowHtml}}
+    <tr>
+      <td style="padding:8px 32px 24px 32px;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <p style="margin:14px 0 4px 0;color:#94A3B8;font-size:12px;line-height:1.6">{{brand.companyAddress}}</p>
+        <p style="margin:0;color:#94A3B8;font-size:12px;line-height:1.6">
+          © {{brand.year}} ${appName}. All rights reserved.
+          {{brand.unsubscribeFooterHtml}}
+        </p>
+        {{brand.footerTextHtml}}
+      </td>
+    </tr>`;
+
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.heading}</title></head>
-<body data-tt-premium="1" style="margin:0;padding:0;background:#FFF7ED;font-family:Inter,Segoe UI,Arial,sans-serif">
-<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${preheader}</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7ED">
-  <tr><td align="center" style="padding:24px 12px">
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#FFFBF5;border:1px solid #FDE6CC;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04)">
-      <tr><td style="background:#0F2C4A;padding:18px 28px;color:#FFFBF5;font-size:16px;font-weight:700;letter-spacing:.2px">${appName}</td></tr>
-      <tr><td style="padding:28px 28px 8px 28px">
-        <h1 style="margin:0 0 12px 0;color:#0F2C4A;font-size:22px;line-height:1.25;font-weight:700">${opts.heading}</h1>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>${heading}</title>
+  <!--[if mso]>
+    <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+  <style>
+    @media only screen and (max-width:620px) {
+      .tt-card { width:100% !important; border-radius:0 !important; border-left:0 !important; border-right:0 !important; }
+      .tt-pad  { padding-left:22px !important; padding-right:22px !important; }
+      .tt-h    { font-size:22px !important; line-height:1.25 !important; }
+    }
+    a { color:{{brand.primaryColor}}; }
+  </style>
+</head>
+<body data-tt-premium="${PREMIUM_LAYOUT_VERSION}" style="margin:0;padding:0;background:#F1F5F9;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all">${preheader}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F5F9">
+  <tr><td align="center" style="padding:32px 12px">
+    <table role="presentation" class="tt-card" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.06)">
+      ${header}
+      <tr><td class="tt-pad" style="padding:36px 36px 8px 36px">
+        <h1 class="tt-h" style="margin:0 0 14px 0;color:#0F172A;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-.3px">${heading}</h1>
       </td></tr>
-      <tr><td style="padding:0 28px 24px 28px">
+      <tr><td class="tt-pad" style="padding:0 36px 28px 36px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${intro}
-          <tr><td style="color:#1F2937;font-size:15px;line-height:1.6">${opts.bodyHtml}</td></tr>
+          <tr><td style="color:#1F2937;font-size:15px;line-height:1.65;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif">${opts.bodyHtml}</td></tr>
           ${cta}
+          ${secondary}
         </table>
       </td></tr>
-      <tr><td style="padding:18px 28px;border-top:1px solid #FDE6CC;background:#FFF7ED;color:#6B7280;font-size:12px;line-height:1.5">
-        <p style="margin:0">— The ${appName} team</p>
-        ${footerNote}
+      ${footer}
+    </table>
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%">
+      <tr><td align="center" style="padding:16px 12px 8px 12px;color:#94A3B8;font-family:Inter,'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.5">
+        This is an automated message from ${appName}. Please do not reply to system addresses; use the support contact above.
       </td></tr>
     </table>
   </td></tr>
@@ -127,9 +264,128 @@ export function premiumLayout(opts: PremiumLayoutInput): string {
 </body></html>`;
 }
 
-/** True if the supplied HTML is already wrapped with the premium layout. */
+/** True if the supplied HTML is already wrapped with the premium layout (any version). */
 export function hasPremiumLayout(html: string): boolean {
   return typeof html === "string" && html.includes("data-tt-premium");
+}
+
+/** True if the body is wrapped with the *current* premium layout version. */
+export function hasCurrentPremiumLayout(html: string): boolean {
+  return typeof html === "string" && html.includes(`data-tt-premium="${PREMIUM_LAYOUT_VERSION}"`);
+}
+
+// ─── Brand variable injection ─────────────────────────────────────
+// Pulls logo, colors, support contact, address, social links from
+// `app_settings` and turns them into the `{{brand.*}}` placeholders the
+// premium layout uses. Cached at the same TTL as `getAppSettings`.
+const DEFAULT_PRIMARY = "#F97316";
+
+/** Hex color guard — only #RGB / #RRGGBB allowed, otherwise return fallback. */
+function safeHexColor(raw: string | null | undefined, fallback: string): string {
+  return typeof raw === "string" && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(raw)
+    ? raw
+    : fallback;
+}
+
+/** Only http/https/mailto/tel URLs are emitted as-is; everything else → "#". */
+function safeUrl(raw: string | null | undefined): string {
+  if (typeof raw !== "string") return "#";
+  const s = raw.trim();
+  if (!s) return "#";
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^mailto:/i.test(s) || /^tel:/i.test(s)) return s;
+  return "#";
+}
+
+/** Strip control chars from a phone-like string before putting it in a tel: href. */
+function safePhone(raw: string | null | undefined): string {
+  return typeof raw === "string" ? raw.replace(/[^\d+\-() ]/g, "").trim() : "";
+}
+
+/** Light email validation — used only to avoid emitting mailto:"" anchors. */
+function safeEmail(raw: string | null | undefined, fallback: string): string {
+  return typeof raw === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : fallback;
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function socialRowHtml(links: Record<string, string | null | undefined> | null | undefined, accent: string): string {
+  if (!links) return "";
+  const order: Array<[string, string]> = [
+    ["website",   "Website"],
+    ["instagram", "Instagram"],
+    ["facebook",  "Facebook"],
+    ["twitter",   "Twitter"],
+    ["linkedin",  "LinkedIn"],
+    ["youtube",   "YouTube"],
+  ];
+  const cells = order
+    .filter(([k]) => typeof links[k] === "string" && links[k]!.trim().length > 0)
+    .map(([k, label]) =>
+      `<a href="${escapeHtml(links[k]!)}" style="color:${accent};text-decoration:none;font-size:12px;font-weight:500;margin:0 8px;font-family:Inter,Helvetica,Arial,sans-serif">${label}</a>`,
+    );
+  if (cells.length === 0) return "";
+  return `<tr><td align="center" style="padding:12px 32px 0 32px;border-top:1px solid #F1F5F9">${cells.join('<span style="color:#CBD5E1">·</span>')}</td></tr>`;
+}
+
+export async function getBrandTemplateVars(opts?: { appUrlFallback?: string }): Promise<Record<string, string>> {
+  const s = await getAppSettings().catch(() => null);
+  const appName  = s?.appName        || "TableTrack";
+  const primary  = safeHexColor(s?.primaryColor ?? null, DEFAULT_PRIMARY);
+  const logoUrl  = safeUrl(s?.logoUrl ?? null);
+  const support  = safeEmail(s?.supportEmail ?? null, "support@tabletrack.in");
+  const phone    = safePhone(s?.supportPhone ?? null);
+  const address  = s?.companyAddress || "";
+  const footer   = s?.footerText     || "";
+  const appUrl   = safeUrl(
+    (s as { appUrl?: string } | null)?.appUrl
+      ?? opts?.appUrlFallback
+      ?? process.env.PUBLIC_APP_URL
+      ?? null,
+  );
+  const social   = (s?.socialLinks ?? null) as Record<string, string> | null;
+
+  const unsubscribeFooterHtml = `<span style="color:#CBD5E1"> · </span><a href="{{unsubscribeUrl}}" style="color:#94A3B8;text-decoration:underline">Unsubscribe</a>`;
+  const footerTextHtml = footer
+    ? `<p style="margin:8px 0 0 0;color:#94A3B8;font-size:12px;line-height:1.6">${escapeHtml(footer)}</p>`
+    : "";
+
+  // When a logo URL is configured, render an <img> tag in the header next
+  // to the wordmark; otherwise emit empty markup so just the brand text
+  // shows (no broken-image icon in clients that block remote loads).
+  // logoUrl is already URL-sanitized by safeUrl(); we still escape for the
+  // attribute context as belt-and-braces.
+  const logoImgHtml = logoUrl && logoUrl !== "#"
+    ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(appName)}" height="32" style="display:inline-block;vertical-align:middle;height:32px;width:auto;border:0;outline:none;margin-right:10px" />`
+    : "";
+
+  // Phone fragment for the "Need a hand?" footer. Renders the " or call
+  // <a tel:...>+91 ...</a>" only when a usable phone number is configured,
+  // so empty phones don't produce dangling `tel:` anchors.
+  const supportPhoneHtml = phone
+    ? ` or call <a href="tel:${escapeHtml(phone)}" style="color:${primary};text-decoration:none">${escapeHtml(phone)}</a>`
+    : "";
+
+  return {
+    "appName": appName,
+    "appUrl": appUrl,
+    "brand.appUrl": appUrl,
+    "brand.logoUrl": logoUrl,
+    "brand.logoImgHtml": logoImgHtml,
+    "brand.primaryColor": primary,
+    "brand.supportEmail": support,
+    "brand.supportPhone": phone,
+    "brand.supportPhoneHtml": supportPhoneHtml,
+    "brand.companyAddress": address ? escapeHtml(address) : "",
+    "brand.socialRowHtml": socialRowHtml(social, primary),
+    "brand.year": String(new Date().getUTCFullYear()),
+    "brand.unsubscribeFooterHtml": unsubscribeFooterHtml,
+    "brand.footerTextHtml": footerTextHtml,
+  };
 }
 
 export function htmlToText(html: string): string {
@@ -676,8 +932,14 @@ export async function sendByTemplateKey(
       }
       return null;
     }
-    const subject = renderTemplate(opts.subjectOverride ?? tpl.subject, vars);
-    const html = renderTemplate(tpl.body, vars);
+    // Inject brand vars (logo, primary color, support contact, address,
+    // social links, year) before rendering so the premium layout's
+    // {{brand.*}} placeholders fill in. Per-template `vars` win over
+    // brand defaults so callers can still override e.g. appName.
+    const brandVars = await getBrandTemplateVars().catch(() => ({}));
+    const mergedVars: Record<string, unknown> = { ...brandVars, ...vars };
+    const subject = renderTemplate(opts.subjectOverride ?? tpl.subject, mergedVars);
+    const html = renderTemplate(tpl.body, mergedVars);
     const kind: EmailKind = opts.kind ?? (tpl.category === "marketing" ? "marketing" : "transactional");
     return await sendEmail({
       to, subject, html, text: htmlToText(html),
@@ -1212,15 +1474,19 @@ export async function seedDefaultEmailTemplates(): Promise<void> {
     })));
     logger.info({ count: missing.length }, "Seeded default email templates");
   }
-  // Upgrade default-managed templates whose body is still the plain pre-premium
-  // markup so existing installs gain the KhanaLagao card. We *only* touch rows
-  // that have never been edited by a Super Admin (updatedBy IS NULL) so any
-  // customised content the operator typed in the Email Center is preserved on
-  // every server restart — `isDefault=true` alone isn't enough to prove the
-  // body is still the seeded default. isDefault=false rows are also left alone.
+  // Upgrade default-managed templates whose body is either:
+  //   (a) plain pre-premium markup (no marker), or
+  //   (b) wrapped with a previous version of the premium layout
+  //       (data-tt-premium="1", etc.) — so existing installs pick up the
+  //       latest design (logo, footer, social, support row) automatically.
+  // We *only* touch rows that have never been edited by a Super Admin
+  // (updatedBy IS NULL) so customised content typed in the Email Center
+  // is preserved on every server restart — `isDefault=true` alone isn't
+  // enough to prove the body is still the seeded default. isDefault=false
+  // rows are also left alone.
   const toUpgrade = DEFAULT_TEMPLATES
     .map(t => ({ t, row: byKey.get(t.key) }))
-    .filter(({ row }) => row && row.isDefault && row.updatedBy == null && !hasPremiumLayout(row.body ?? ""));
+    .filter(({ row }) => row && row.isDefault && row.updatedBy == null && !hasCurrentPremiumLayout(row.body ?? ""));
   for (const { t, row } of toUpgrade) {
     if (!row) continue;
     await db.update(emailTemplatesTable)
