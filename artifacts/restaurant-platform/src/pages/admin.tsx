@@ -19,6 +19,7 @@ import AdminMaintenance from "./admin-maintenance";
 import AdminWhatsAppTab from "./admin-whatsapp";
 import AdminWebPushTab from "./admin-web-push";
 import AdminAiTab from "./admin-ai";
+import AdminStockFoodImagesTab from "./admin-stock-food-images";
 import AdminMetricsTab from "./admin-metrics";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1313,7 +1314,7 @@ export function TenantsTab() {
 type AdminSection =
   | "tenants" | "plans" | "payment-methods" | "approvals" | "coupons"
   | "notifications" | "sms" | "email" | "maintenance" | "whatsapp" | "web-push"
-  | "ai" | "health" | "metrics" | "implementations";
+  | "ai" | "health" | "metrics" | "implementations" | "stock-food-images";
 
 const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> = {
   "tenants": { title: "Tenants", subtitle: "Manage restaurant accounts, plans, and trial windows" },
@@ -1331,6 +1332,7 @@ const SECTION_TITLES: Record<AdminSection, { title: string; subtitle: string }> 
   "health": { title: "Restaurant Health", subtitle: "Operational health scores per tenant" },
   "metrics": { title: "Investor Metrics", subtitle: "MRR, ARR, retention, and growth KPIs" },
   "implementations": { title: "Implementation Board", subtitle: "In-flight go-live projects, assigned onboarding managers and SLA timers" },
+  "stock-food-images": { title: "Food Image Library", subtitle: "Curated stock photos tenants pick from when adding menu items" },
 };
 
 function parseSection(path: string): AdminSection {
@@ -1403,6 +1405,7 @@ export default function AdminPage() {
         {section === "health" && <AdminHealthScoreTab />}
         {section === "metrics" && <AdminMetricsTab />}
         {section === "implementations" && <AdminImplementationsTab />}
+        {section === "stock-food-images" && <AdminStockFoodImagesTab />}
       </div>
     </AdminLayout>
   );

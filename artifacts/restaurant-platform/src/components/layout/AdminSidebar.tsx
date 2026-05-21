@@ -4,6 +4,7 @@ import {
   ShieldCheck, LayoutDashboard, TrendingUp, Activity, History, Building2, Package, Tag, FileCheck2,
   CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Bell, Inbox, FileText, LifeBuoy,
   Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X, ListChecks,
+  Image as ImageIconLucide,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -53,6 +54,7 @@ const NAV: NavEntry[] = [
   },
   // 5. AI Control Center
   { kind: "link", href: "/admin/ai", label: "AI Control Center", icon: Brain },
+  { kind: "link", href: "/admin/stock-food-images", label: "Food Image Library", icon: ImageIconLucide },
   // 6. Website & Leads
   {
     kind: "group", key: "website_leads", label: "Website & Leads", icon: Inbox,

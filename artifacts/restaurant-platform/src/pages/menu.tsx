@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Menu, MenuCategory, MenuItem, ModifierGroup, Modifier } from "@/lib/types";
 import { ImageUploadField, resolveImageUrl } from "@/components/ImageUploadField";
+import { StockImagePicker } from "@/components/StockImagePicker";
+import { ImageIcon } from "lucide-react";
 import { apiPost, apiGet, apiPut } from "@/lib/api";
 
 
@@ -613,6 +615,7 @@ export default function MenuPage() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
+  const [showStockPicker, setShowStockPicker] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "modifiers" | "recipe">("details");
   const [aiBusy, setAiBusy] = useState<null | "description" | "photo" | "nutrition">(null);
   const [aiDrafts, setAiDrafts] = useState<AiDraftsResponse>({ description: [], photo: [], nutrition: [] });
@@ -1475,21 +1478,40 @@ export default function MenuPage() {
                     </div>
                     <div className="col-span-2">
                       <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url }))} />
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={handleGeneratePhoto}
-                          disabled={!editItem || aiBusy !== null}
-                          title={!editItem ? "Save the item first" : itemForm.imageUrl ? "Regenerate AI food photo" : "Generate an AI food photo"}
-                        >
-                          {aiBusy === "photo" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ImagePlus className="w-3 h-3 mr-1" />}
-                          {itemForm.imageUrl ? "Regenerate AI photo" : "Suggest AI photo"}
-                        </Button>
-                        <p className="text-[10px] text-muted-foreground">AI photos are suggestions — review before saving.</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setShowStockPicker(true)}
+                            title="Pick a real photo from the curated food image library — instant, no AI credits"
+                          >
+                            <ImageIcon className="w-3 h-3 mr-1" />
+                            Pick from library
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={handleGeneratePhoto}
+                            disabled={!editItem || aiBusy !== null}
+                            title={!editItem ? "Save the item first" : itemForm.imageUrl ? "Regenerate AI food photo" : "Generate an AI food photo"}
+                          >
+                            {aiBusy === "photo" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ImagePlus className="w-3 h-3 mr-1" />}
+                            {itemForm.imageUrl ? "Regenerate AI photo" : "Suggest AI photo"}
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Library is free; AI photos cost credits.</p>
                       </div>
+                      <StockImagePicker
+                        open={showStockPicker}
+                        onClose={() => setShowStockPicker(false)}
+                        initialQuery={itemForm.name}
+                        onPick={(url) => setItemForm(p => ({ ...p, imageUrl: url }))}
+                      />
                     </div>
                     <div>
                       <Label>Calories (kcal)</Label>

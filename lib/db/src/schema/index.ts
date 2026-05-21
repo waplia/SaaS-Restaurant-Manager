@@ -6,6 +6,7 @@ export * from "./kitchens";
 export * from "./menu";
 export * from "./menu-ai-drafts";
 export * from "./menu-imports";
+export * from "./stock-food-images";
 export * from "./orders";
 export * from "./inventory";
 export * from "./staff";

@@ -34,6 +34,7 @@ import { ObjectStorageService, isObjectStorageConfigured } from "../lib/objectSt
 import { getObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
 import { generateAndAttachItemPhoto } from "../lib/aiFoodImage";
+import { findBestStockImageMatch } from "../lib/stockFoodImages";
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -788,7 +789,39 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
     newValue: { phase: "save", source: importRow.source, savedCount: created.length, fileName: importRow.fileName },
   });
 
-  // Kick off AI image generation for every newly-saved item, in the
+  // ── Stock library auto-attach (cheap, fast, runs before AI fallback) ──
+  // For every newly-saved item, look up the curated stock food library.
+  // If we find a confident match (veg-safe), write that URL straight onto
+  // the menu_item and remove the entry from `photoQueue`. Items that don't
+  // match still flow to the AI generator below — but the typical Indian
+  // menu is dominated by well-known dishes, so this saves a *lot* of
+  // credits and produces a screenshot-ready menu in seconds.
+  let libraryMatched = 0;
+  if (photoQueue.length > 0) {
+    const remaining: typeof photoQueue = [];
+    for (const job of photoQueue) {
+      try {
+        const match = await findBestStockImageMatch({ name: job.name, isVeg: job.isVeg });
+        if (match) {
+          await db.update(menuItemsTable)
+            .set({ imageUrl: match.row.imageUrl, updatedAt: new Date() })
+            .where(eq(menuItemsTable.id, job.itemId));
+          await db.update(aiMenuImportItemsTable)
+            .set({ imageStatus: "matched_library", imageError: null })
+            .where(eq(aiMenuImportItemsTable.id, job.draftId));
+          libraryMatched++;
+          continue;
+        }
+      } catch (err) {
+        req.log.warn({ err, itemId: job.itemId }, "stock library match failed; falling back to AI");
+      }
+      remaining.push(job);
+    }
+    photoQueue.length = 0;
+    photoQueue.push(...remaining);
+  }
+
+  // Kick off AI image generation for every still-unmatched item, in the
   // background with a small concurrency cap so the HTTP response returns
   // immediately. Each image takes 5-15s; we don't want to block the user.
   if (photoQueue.length > 0) {
@@ -808,7 +841,13 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
     }
   }
 
-  res.json({ savedCount: created.length, savedItemIds: created, errors: [] });
+  res.json({
+    savedCount: created.length,
+    savedItemIds: created,
+    libraryMatched,
+    aiPhotoQueued: photoQueue.length,
+    errors: [],
+  });
 });
 
 /**
