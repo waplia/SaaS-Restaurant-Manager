@@ -2280,6 +2280,8 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
       orderNumber: order?.orderNumber ?? "",
       tableNumber,
       orderType: order?.orderType ?? "dine_in",
+      paymentStatus: order?.paymentStatus ?? null,
+      customerName: order?.customerName ?? null,
       items: enrichedItems,
       kitchen: kitchen ? { id: kitchen.id, name: kitchen.name, autoPrint: kitchen.autoPrint, printerName: kitchen.printerName, paperSize: kitchen.paperSize } : null,
       elapsedMinutes,
@@ -2435,6 +2437,46 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
 
   res.json(updated);
 });
+
+// Per-item kitchen status update — used by the mobile KDS to track each
+// line on a ticket (pending / preparing / ready / out_of_stock) without
+// changing the whole ticket. Mirrors timer fields onto the order item.
+router.patch(
+  "/restaurants/:restaurantId/orders/:orderId/items/:itemId/kitchen-status",
+  requireRole("owner", "manager", "kitchen", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const orderId = Number(req.params.orderId);
+    const itemId = Number(req.params.itemId);
+    const allowed = new Set(["pending", "preparing", "ready", "out_of_stock"]);
+    const status = String(req.body?.status ?? "");
+    if (!allowed.has(status)) {
+      return void res.status(400).json({ error: "Invalid status", code: "INVALID_STATUS" });
+    }
+    const [item] = await db.select().from(orderItemsTable)
+      .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
+    if (!item) return void res.status(404).json({ error: "Not found" });
+    // Confirm the order belongs to this restaurant.
+    const [order] = await db.select({ id: ordersTable.id }).from(ordersTable)
+      .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+    if (!order) return void res.status(404).json({ error: "Not found" });
+
+    const now = new Date();
+    const updates: Record<string, unknown> = { status };
+    if (status === "preparing" && !item.startedAt) updates.startedAt = now;
+    if (status === "ready" && !item.readyAt) updates.readyAt = now;
+    if (status === "pending") {
+      updates.startedAt = null;
+      updates.readyAt = null;
+    }
+    const [updated] = await db.update(orderItemsTable).set(updates)
+      .where(eq(orderItemsTable.id, itemId)).returning();
+    broadcastEvent(restaurantId, "order:item-status", {
+      orderId, itemId, status, startedAt: updated.startedAt, readyAt: updated.readyAt,
+    });
+    res.json(updated);
+  },
+);
 
 router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
