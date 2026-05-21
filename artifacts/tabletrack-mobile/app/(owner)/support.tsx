@@ -32,7 +32,7 @@ export default function SupportScreen() {
 
   const create = useMutation({
     mutationFn: () => customFetch(`/api/support/tickets`, {
-      method: "POST", body: JSON.stringify({ subject, body }),
+      method: "POST", body: JSON.stringify({ subject, description: body }),
     }),
     onSuccess: () => {
       setShowNew(false); setSubject(""); setBody("");
