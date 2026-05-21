@@ -197,9 +197,21 @@ async function updateCouponUsage(couponCode: string | null, restaurantId: number
 }
 
 async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect, restaurantId: number): Promise<void> {
-  if (!paidOrder.customerId) return;
-  const [customer] = await db.select({ name: customersTable.name, email: customersTable.email, phone: customersTable.phone }).from(customersTable).where(eq(customersTable.id, paidOrder.customerId));
-  if (!customer) return;
+  let customer: { name: string | null; email: string | null; phone: string | null } | undefined;
+  if (paidOrder.customerId) {
+    const [c] = await db.select({ name: customersTable.name, email: customersTable.email, phone: customersTable.phone }).from(customersTable).where(eq(customersTable.id, paidOrder.customerId));
+    if (c) customer = c;
+  }
+  // Fall back to the guest-order fields so QR / public orders without a
+  // linked customer record still get a final confirmation message.
+  if (!customer) {
+    customer = {
+      name: paidOrder.customerName ?? null,
+      email: null,
+      phone: paidOrder.customerPhone ?? null,
+    };
+  }
+  if (!customer.email && !customer.phone) return;
   const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
   const orderItems = await db.select({ name: orderItemsTable.menuItemName, qty: orderItemsTable.quantity }).from(orderItemsTable).where(eq(orderItemsTable.orderId, paidOrder.id));
   const itemStrings = orderItems.map(i => `${i.name} x${i.qty}`);
@@ -217,7 +229,8 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
     }, { restaurantId, recipientType: "customer" }).catch(console.error);
   }
   if (customer.phone) {
-    const msg = `Hi ${customer.name}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
+    const safeName = customer.name ?? paidOrder.customerName ?? "there";
+    const msg = `Hi ${safeName}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
     // Normalize to strict E.164 so WhatsApp / SMS providers accept the recipient.
     const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
@@ -2384,39 +2397,96 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
 
   await syncTokenWithTickets(updated.orderId, restaurantId).catch(() => {});
 
-  if (status === "ready") {
-    const [order] = await db.select({ customerId: ordersTable.customerId, orderNumber: ordersTable.orderNumber })
-      .from(ordersTable).where(eq(ordersTable.id, updated.orderId));
-    await db.insert(notificationsTable).values({
-      restaurantId,
-      type: "order_status",
-      title: "Order Ready",
-      message: `Order #${order?.orderNumber ?? updated.orderId} is ready for pickup`,
-      entityId: updated.orderId,
-      entityType: "order",
-    }).catch(() => {});
-    broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
+  // Notify the customer on the two transitions they care about: when the
+  // kitchen STARTS preparing their food, and when it's READY. Works for
+  // both registered customers (via customers.phone) AND walk-in / QR /
+  // public guest orders (via orders.customer_phone fallback).
+  if (status === "preparing" || status === "ready") {
+    const [order] = await db.select({
+      customerId: ordersTable.customerId,
+      customerName: ordersTable.customerName,
+      customerPhone: ordersTable.customerPhone,
+      orderNumber: ordersTable.orderNumber,
+    }).from(ordersTable).where(eq(ordersTable.id, updated.orderId));
+
+    if (status === "ready") {
+      await db.insert(notificationsTable).values({
+        restaurantId,
+        type: "order_status",
+        title: "Order Ready",
+        message: `Order #${order?.orderNumber ?? updated.orderId} is ready for pickup`,
+        entityId: updated.orderId,
+        entityType: "order",
+      }).catch(() => {});
+      broadcastEvent(restaurantId, "notification:new", { type: "order_status" });
+    }
+
+    // Resolve recipient: prefer linked customer record, fall back to the
+    // guest phone captured on the order itself so QR / public orders
+    // (which have customer_id = NULL) still get WhatsApp updates.
+    let custName: string | null = null;
+    let custPhone: string | null = null;
+    let custEmail: string | null = null;
     if (order?.customerId) {
-      const [customer] = await db.select({ phone: customersTable.phone, email: customersTable.email, name: customersTable.name })
+      const [c] = await db.select({ phone: customersTable.phone, email: customersTable.email, name: customersTable.name })
         .from(customersTable).where(eq(customersTable.id, order.customerId));
-      if (customer?.phone) {
-        const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
-        const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
-        sendWhatsApp({
-          to,
-          body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.`,
-          restaurantId,
-          meta: { event: "order.ready", orderId: updated.orderId },
-        }).catch(console.error);
-      }
-      if (customer?.email) {
+      custName = c?.name ?? null;
+      custPhone = c?.phone ?? null;
+      custEmail = c?.email ?? null;
+    }
+    if (!custPhone) custPhone = order?.customerPhone ?? null;
+    if (!custName) custName = order?.customerName ?? "there";
+
+    // For multi-kitchen orders, hold the "ready" WhatsApp until every
+    // kitchen ticket on the order is ready/served — otherwise the guest
+    // gets pinged before the rest of their food is actually done.
+    let aggregateReady = true;
+    if (status === "ready") {
+      const pending = await db.select({ id: kitchenTicketsTable.id })
+        .from(kitchenTicketsTable)
+        .where(and(
+          eq(kitchenTicketsTable.orderId, updated.orderId),
+          notInArray(kitchenTicketsTable.status, ["ready", "served", "cancelled"]),
+        ));
+      aggregateReady = pending.length === 0;
+    }
+
+    // Dedupe: avoid double-pinging the customer if the same event has
+    // already been sent for this order (e.g. multi-kitchen orders where
+    // each KOT independently moves through preparing).
+    const eventKey = status === "preparing" ? "order.preparing" : "order.ready";
+    const dupe = await db.execute(sql`
+      SELECT 1 FROM whatsapp_logs
+      WHERE status='sent'
+        AND meta->>'event'=${eventKey}
+        AND meta->>'orderId'=${String(updated.orderId)}
+      LIMIT 1
+    `);
+    const alreadySent = (dupe as any).rows?.length > 0 || (dupe as any).length > 0;
+
+    if (custPhone && aggregateReady && !alreadySent) {
+      const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const to = toE164(custPhone, rCountry?.country ?? null) ?? custPhone;
+      const body = status === "preparing"
+        ? `Hi ${custName}, the kitchen has started preparing your order #${order?.orderNumber ?? updated.orderId}. We'll let you know when it's ready.`
+        : `Hi ${custName}, your order #${order?.orderNumber ?? updated.orderId} is ready! Please collect it.`;
+      sendWhatsApp({
+        to,
+        body,
+        restaurantId,
+        meta: { event: eventKey, orderId: updated.orderId },
+      }).catch(console.error);
+    }
+
+    if (status === "ready" && order?.customerId) {
+      if (custEmail) {
         // Email the customer through the Super Admin–editable
         // `order_ready` template so the send lands in `email_logs`
         // and respects the restaurant's premium layout / branding.
         const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
         const { sendByTemplateKey } = await import("../lib/emailSender");
-        sendByTemplateKey("order_ready", customer.email, {
-          name: customer.name,
+        sendByTemplateKey("order_ready", custEmail, {
+          name: custName,
           orderNumber: order.orderNumber,
           restaurant: restaurant?.name ?? "Restaurant",
           pickupNote: " for pickup",
@@ -2435,7 +2505,7 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
           title: "Your order is ready!",
           body: `Order #${order.orderNumber ?? updated.orderId} is ready for pickup.`,
           url: `/orders/${updated.orderId}`,
-          data: { orderId: updated.orderId, type: "order_ready", orderNumber: String(order.orderNumber ?? updated.orderId), customerName: customer?.name ?? "" },
+          data: { orderId: updated.orderId, type: "order_ready", orderNumber: String(order.orderNumber ?? updated.orderId), customerName: custName ?? "" },
         },
       }).catch((err) => console.warn("web-push order.ready failed", err));
     }

@@ -1026,6 +1026,25 @@ router.post("/public/orders/:id/pay", async (req, res) => {
   broadcastEvent(order.restaurantId, "order:update", { id: order.id, status: order.status, paymentStatus: "paid" });
   broadcastOrderUpdate(orderId, { id: order.id, status: order.status, paymentStatus: "paid" });
 
+  // Send "order confirmed" WhatsApp to the guest now that payment is settled.
+  // Mirrors the staff payment path so QR / public self-pay customers get
+  // the same confirmation as orders paid at the counter.
+  try {
+    const phone = updated.customerPhone ?? order.customerPhone;
+    if (phone) {
+      const [restaurant] = await db.select({ name: restaurantsTable.name, country: restaurantsTable.country })
+        .from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+      const to = toE164(phone, restaurant?.country ?? null) ?? phone;
+      const name = updated.customerName ?? order.customerName ?? "there";
+      const total = Number(updated.totalAmount ?? order.totalAmount).toFixed(2);
+      const body = `Hi ${name}, your order #${updated.orderNumber ?? order.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${total}. Thank you!`;
+      const { sendWhatsApp } = await import("../lib/notifications");
+      sendWhatsApp({ to, body, restaurantId: order.restaurantId, meta: { event: "order.confirmed", orderId } }).catch(console.error);
+    }
+  } catch (err) {
+    console.error("[public/pay] order.confirmed dispatch failed", err);
+  }
+
   res.json({ success: true, totalAmount: updated.totalAmount });
 });
 
