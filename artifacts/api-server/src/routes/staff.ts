@@ -326,6 +326,25 @@ router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "m
     await db.update(usersTable).set({ ...userPatch, updatedAt: new Date() }).where(eq(usersTable.id, userId));
   }
 
+  // Optional password reset by owner/manager. Hashing happens server-side
+  // and the plaintext is NEVER logged or echoed back. Bumping tokenVersion
+  // invalidates any existing sessions so the staff member is forced to
+  // sign in again with the new credentials.
+  if (typeof body.password === "string" && body.password.length > 0) {
+    if (body.password.length < 8) {
+      return void res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const passwordHash = await bcrypt.hash(body.password, 10);
+    await db.update(usersTable)
+      .set({
+        passwordHash,
+        tokenVersion: sql`${usersTable.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, userId));
+    await audit(restaurantId, req.user?.sub ?? null, "password_reset", "staff", userId, { email: user.email }, req.ip);
+  }
+
   if (typeof body.salaryType === "string" && body.salaryType && !ALLOWED_SALARY_TYPES.includes(body.salaryType)) {
     return void res.status(400).json({ error: "Invalid salaryType" });
   }

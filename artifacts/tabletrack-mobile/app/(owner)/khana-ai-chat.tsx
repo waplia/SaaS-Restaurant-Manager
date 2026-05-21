@@ -7,11 +7,32 @@ import { useMutation } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "@/lib/secureStorage";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AICreditChip } from "@/components/AICreditChip";
 import { BRAND } from "@/constants/brand";
+
+// Web SpeechRecognition shim (Chrome/Edge/Safari).
+type SRConstructor = new () => {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onerror: (e: { error: string }) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+};
+function getSpeechRecognition(): SRConstructor | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: SRConstructor; webkitSpeechRecognition?: SRConstructor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -38,6 +59,21 @@ export default function KhanaAIChatScreen() {
   const [hydrated, setHydrated] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
+
+  // Voice input state. On native we record m4a via expo-audio and POST it
+  // to the existing /voice-orders/transcribe endpoint (gpt-4o-mini-transcribe).
+  // On web we use the browser's SpeechRecognition API (no server round-trip).
+  const isNative = Platform.OS !== "web";
+  const SR = getSpeechRecognition();
+  const nativeRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recognitionRef = useRef<InstanceType<SRConstructor> | null>(null);
+  const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const micSupported = isNative || !!SR;
+
+  // Stop any in-flight recording on unmount so we don't leak the mic.
+  useEffect(() => () => { try { recognitionRef.current?.stop(); } catch { /* ignore */ } }, []);
 
   // Restore the prior conversation on mount.
   useEffect(() => {
@@ -116,6 +152,125 @@ export default function KhanaAIChatScreen() {
     send.mutate(t);
   };
 
+  const appendToInput = (chunk: string) => {
+    const t = chunk.trim();
+    if (!t) return;
+    setInput(prev => (prev ? prev.trim() + " " : "") + t);
+  };
+
+  // ---- Web SpeechRecognition (free, in-browser) ----
+  const startWebRecognition = () => {
+    if (!SR) return;
+    try {
+      const rec = new SR();
+      rec.lang = "en-IN";
+      rec.interimResults = true;
+      rec.continuous = true;
+      let finalText = "";
+      rec.onresult = (e) => {
+        let interim = "";
+        finalText = "";
+        for (let i = 0; i < e.results.length; i++) {
+          const res = e.results[i] as ArrayLike<{ transcript: string }> & { isFinal?: boolean; 0: { transcript: string } };
+          const chunk = res[0]?.transcript ?? "";
+          if ((res as { isFinal?: boolean }).isFinal) finalText += chunk + " ";
+          else interim = chunk;
+        }
+        // Replace the trailing draft each tick so the input mirrors what the
+        // user is currently saying without piling duplicate words.
+        setInput((finalText + interim).trim());
+      };
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          setMicError("Microphone permission was denied. Enable it in your browser settings.");
+        } else if (e.error === "no-speech") {
+          setMicError("Didn't catch anything — try again.");
+        } else {
+          setMicError(`Voice error: ${e.error}`);
+        }
+        setListening(false);
+      };
+      rec.onend = () => setListening(false);
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+    } catch (err) {
+      setMicError((err as Error).message);
+      setListening(false);
+    }
+  };
+
+  // ---- Native recording (expo-audio) + server transcription ----
+  const startNativeRecording = async () => {
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        setMicError("Microphone permission was denied. Enable it in your device settings.");
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await nativeRecorder.prepareToRecordAsync();
+      nativeRecorder.record();
+      setListening(true);
+    } catch (e) {
+      setMicError(`Could not start recording: ${(e as Error).message}`);
+      setListening(false);
+    }
+  };
+
+  const stopNativeRecordingAndTranscribe = async () => {
+    setListening(false);
+    setTranscribing(true);
+    try {
+      await nativeRecorder.stop();
+      const uri = nativeRecorder.uri;
+      if (!uri) throw new Error("No recording captured");
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const mimeType = uri.endsWith(".wav") ? "audio/wav" : uri.endsWith(".webm") ? "audio/webm" : "audio/m4a";
+      const baseUrl = getApiBaseUrl();
+      const token = await SecureStore.getItem("accessToken");
+      // We reuse the existing /voice-orders/transcribe endpoint — it doesn't
+      // require an active table and the OpenAI Whisper call is identical for
+      // any utterance. No AI credit is charged for transcription (only for
+      // the parse step, which Khana AI does not use).
+      const resp = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/voice-orders/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({ audioBase64: base64, mimeType, language: "" }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({} as { error?: string }));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${resp.status}`);
+      }
+      const data = (await resp.json()) as { transcript: string };
+      appendToInput(data.transcript ?? "");
+    } catch (e) {
+      setMicError((e as Error).message);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const toggleMic = () => {
+    setMicError(null);
+    if (send.isPending || transcribing) return;
+    if (isNative) {
+      if (listening) void stopNativeRecordingAndTranscribe();
+      else void startNativeRecording();
+      return;
+    }
+    if (!SR) {
+      setMicError("This browser does not support voice input. Try Chrome on Android or desktop.");
+      return;
+    }
+    if (listening) {
+      try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+      setListening(false);
+      return;
+    }
+    startWebRecognition();
+  };
+
   const suggestions = [
     "What were today's sales?",
     "Which items sold best this week?",
@@ -184,32 +339,47 @@ export default function KhanaAIChatScreen() {
           </View>
         ) : null}
       </ScrollView>
+      {micError ? (
+        <View style={{ paddingHorizontal: 14, paddingTop: 4 }}>
+          <Text style={{ color: "#dc2626", fontSize: 11, fontFamily: "Inter_500Medium" }}>{micError}</Text>
+        </View>
+      ) : null}
       <View style={[styles.inputRow, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <TextInput
           ref={inputRef}
           value={input}
           onChangeText={setInput}
-          placeholder="Ask Khana AI… (tap mic on keyboard for voice)"
+          placeholder={listening ? "Listening…" : transcribing ? "Transcribing…" : "Ask Khana AI… or tap the mic"}
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted }]}
           onSubmitEditing={() => sendText(input)}
           editable={!send.isPending}
           multiline
         />
-        {/* Mic hint button — tapping focuses the input so the user can use
-            their keyboard's built-in voice-dictation mic. We intentionally
-            don't roll our own audio recorder: keyboard dictation already
-            handles permissions, language, and STT on both iOS & Android. */}
+        {/* Real mic button: native uses expo-audio + server Whisper; web uses
+            in-browser SpeechRecognition. Permissions are requested on first
+            tap and the button turns red while recording. */}
         <Pressable
-          onPress={() => inputRef.current?.focus()}
-          disabled={send.isPending}
+          onPress={toggleMic}
+          disabled={send.isPending || transcribing || !micSupported}
           style={({ pressed }) => [
             styles.micBtn,
-            { backgroundColor: colors.muted, opacity: send.isPending ? 0.4 : pressed ? 0.7 : 1 },
+            {
+              backgroundColor: listening ? "#dc2626" : colors.muted,
+              opacity: (!micSupported || send.isPending) ? 0.4 : transcribing ? 0.7 : pressed ? 0.7 : 1,
+            },
           ]}
-          accessibilityLabel="Voice input"
+          accessibilityLabel={listening ? "Stop recording" : "Start voice input"}
         >
-          <Ionicons name="mic-outline" size={18} color={colors.foreground} />
+          {transcribing ? (
+            <ActivityIndicator size="small" color={colors.foreground} />
+          ) : (
+            <Ionicons
+              name={listening ? "stop" : "mic-outline"}
+              size={18}
+              color={listening ? "#fff" : colors.foreground}
+            />
+          )}
         </Pressable>
         <Pressable
           onPress={() => sendText(input)}

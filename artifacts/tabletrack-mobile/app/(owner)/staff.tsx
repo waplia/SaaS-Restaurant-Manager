@@ -116,6 +116,37 @@ export default function StaffScreen() {
     onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not update staff"),
   });
 
+  // Owner-initiated password reset. We generate a fresh temp password on
+  // the client (same algorithm as Add) so we can immediately surface it
+  // in CredentialsModal — the server hashes and stores it, and bumps the
+  // staff member's tokenVersion so any active sessions are signed out.
+  const resetPasswordM = useMutation({
+    mutationFn: async (member: Staff) => {
+      const password = generateTempPassword();
+      await customFetch(`/api/restaurants/${restaurantId}/staff/${member.id}`, {
+        method: "PATCH", body: JSON.stringify({ password }),
+      });
+      return { name: member.name, email: member.email ?? "", password };
+    },
+    onSuccess: (creds) => {
+      setEditing(null);
+      invalidate();
+      setGeneratedCreds(creds);
+    },
+    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not reset password"),
+  });
+
+  const confirmResetPassword = (m: Staff) => {
+    Alert.alert(
+      "Reset password?",
+      `Generate a new temporary password for “${m.name}”? Their current password will stop working immediately.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Reset", style: "destructive", onPress: () => resetPasswordM.mutate(m) },
+      ],
+    );
+  };
+
   const deleteM = useMutation({
     mutationFn: (userId: number) =>
       customFetch(`/api/restaurants/${restaurantId}/staff/${userId}`, { method: "DELETE" }),
@@ -242,11 +273,12 @@ export default function StaffScreen() {
         title="Edit staff member"
         submitLabel="Save changes"
         mode="edit"
-        submitting={updateM.isPending || deleteM.isPending}
+        submitting={updateM.isPending || deleteM.isPending || resetPasswordM.isPending}
         member={editing}
         onClose={() => setEditing(null)}
         onSubmit={(v) => editing && updateM.mutate({ userId: editing.id, body: v })}
         onDelete={editing ? () => confirmDelete(editing) : undefined}
+        onResetPassword={editing ? () => confirmResetPassword(editing) : undefined}
       />
 
       {/* One-time credentials reveal after a successful invite.
@@ -372,7 +404,7 @@ const credStyles = StyleSheet.create({
 });
 
 function StaffForm({
-  visible, title, submitLabel, mode, member, submitting, onClose, onSubmit, onDelete,
+  visible, title, submitLabel, mode, member, submitting, onClose, onSubmit, onDelete, onResetPassword,
 }: {
   visible: boolean;
   title: string;
@@ -383,6 +415,7 @@ function StaffForm({
   onClose: () => void;
   onSubmit: (v: FormValues) => void;
   onDelete?: () => void;
+  onResetPassword?: () => void;
 }) {
   const colors = useColors();
   const [name, setName] = useState("");
@@ -457,6 +490,24 @@ function StaffForm({
           A temporary password is generated. Ask the new member to use “Forgot password” on the login screen to set their own.
         </Text>
       ) : null}
+      {mode === "edit" && onResetPassword ? (
+        <View style={{ marginTop: 16, gap: 6 }}>
+          <Pressable
+            onPress={onResetPassword}
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.resetPwdBtn,
+              { borderColor: colors.primary, opacity: submitting ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Ionicons name="key-outline" size={16} color={colors.primary} />
+            <Text style={[styles.resetPwdBtnText, { color: colors.primary }]}>Reset password</Text>
+          </Pressable>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>
+            Generates a new temporary password and signs the staff member out of all active sessions.
+          </Text>
+        </View>
+      ) : null}
     </EntityFormSheet>
   );
 }
@@ -474,4 +525,10 @@ const styles = StyleSheet.create({
   outlineBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, backgroundColor: "transparent" },
   outlineBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   iconBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  resetPwdBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  resetPwdBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
