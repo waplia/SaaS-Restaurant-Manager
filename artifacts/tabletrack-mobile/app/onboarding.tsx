@@ -7,6 +7,7 @@ import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -689,14 +690,16 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProp
 }
 
 // ───── AI Menu Import panel (used inside ItemsStep) ──────────────
-// Mirrors the web /ai/menu-import flow: pick a source (photo / URL / text),
-// kick off the AI extraction job, poll until ready, then auto-save every row
-// the AI didn't flag for review or duplicate. Photo uses expo-image-picker +
-// the same presigned-URL storage flow that expenses use for receipts. PDF
-// / CSV / Excel are intentionally not exposed on mobile yet (no document
-// picker installed); users can do those on the web dashboard.
+// Mirrors the web /ai/menu-import flow: pick a source (photo / PDF / URL /
+// text), kick off the AI extraction job, poll until ready, then auto-save
+// every row the AI didn't flag for review or duplicate. Photo + PDF both use
+// the presigned-URL storage flow (server caps uploads at 10 MB and allows
+// image/* + application/pdf only — see api-server/src/routes/storage.ts).
+// CSV / Excel are web-only because the storage backend rejects those
+// content types; users can run those on the web dashboard.
 
-type ImportSource = "image" | "url" | "text";
+type ImportSource = "image" | "pdf" | "url" | "text";
+const STORAGE_MAX_BYTES = 10 * 1024 * 1024; // matches assertAllowedContentType cap
 
 interface ImportItemRow {
   id: number;
@@ -775,6 +778,10 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
       if (result.canceled || !result.assets?.[0]) return;
       const a = result.assets[0];
       const blob = await (await fetch(a.uri)).blob();
+      if (blob.size > STORAGE_MAX_BYTES) {
+        Alert.alert("Photo too large", `Max 10 MB. Try a smaller or compressed photo.`);
+        return;
+      }
       setPicked({
         uri: a.uri,
         name: a.fileName ?? `menu-${Date.now()}.jpg`,
@@ -786,8 +793,33 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
     }
   }
 
-  async function uploadPickedPhoto(): Promise<string> {
-    if (!picked) throw new Error("No photo picked");
+  async function pickPdf() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const a = result.assets[0];
+      const size = a.size ?? (await (await fetch(a.uri)).blob()).size;
+      if (size > STORAGE_MAX_BYTES) {
+        Alert.alert("PDF too large", "Max 10 MB. Try splitting the file or exporting fewer pages.");
+        return;
+      }
+      setPicked({
+        uri: a.uri,
+        name: a.name || `menu-${Date.now()}.pdf`,
+        mime: a.mimeType || "application/pdf",
+        size,
+      });
+    } catch (e) {
+      Alert.alert("Could not pick PDF", e instanceof Error ? e.message : "Try again.");
+    }
+  }
+
+  async function uploadPickedFile(): Promise<string> {
+    if (!picked) throw new Error("No file picked");
     const presign = await api.post<{ uploadURL: string; objectPath: string }>(
       `/restaurants/${restaurantId}/storage/uploads/request-url`,
       { name: picked.name, size: picked.size, contentType: picked.mime },
@@ -873,11 +905,18 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
     setError(null);
     try {
       const body: Record<string, unknown> = { source };
-      if (source === "image") {
-        if (!picked) { Alert.alert("Pick a photo", "Choose a photo of your menu first."); return; }
+      if (source === "image" || source === "pdf") {
+        if (!picked) {
+          Alert.alert(source === "pdf" ? "Pick a PDF" : "Pick a photo",
+            source === "pdf" ? "Choose a PDF of your menu first." : "Choose a photo of your menu first.");
+          return;
+        }
         setStatus("uploading");
         body.fileName = picked.name;
-        body.objectPath = await uploadPickedPhoto();
+        body.objectPath = await uploadPickedFile();
+        if (source === "pdf") {
+          body.estimatedPages = Math.max(1, Math.ceil(picked.size / 100_000));
+        }
       } else if (source === "url") {
         if (!/^https?:\/\//i.test(url.trim())) { Alert.alert("Invalid URL", "Enter a full https:// URL."); return; }
         body.url = url.trim();
@@ -930,35 +969,42 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
 
       {!importId && (
         <>
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            {(["image", "url", "text"] as ImportSource[]).map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => setSource(s)}
-                style={[styles.importTab, {
-                  borderColor: source === s ? colors.primary : colors.border,
-                  backgroundColor: source === s ? colors.primary + "12" : "transparent",
-                }]}
-              >
-                <Ionicons
-                  name={s === "image" ? "image-outline" : s === "url" ? "link-outline" : "document-text-outline"}
-                  size={14}
-                  color={source === s ? colors.primary : colors.mutedForeground}
-                />
-                <Text style={{ color: source === s ? colors.primary : colors.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium" }}>
-                  {s === "image" ? "Photo" : s === "url" ? "URL" : "Text"}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {(["image", "pdf", "url", "text"] as ImportSource[]).map((s) => {
+              const icon =
+                s === "image" ? "image-outline" :
+                s === "pdf" ? "document-outline" :
+                s === "url" ? "link-outline" : "document-text-outline";
+              const label =
+                s === "image" ? "Photo" : s === "pdf" ? "PDF" : s === "url" ? "URL" : "Text";
+              const active = source === s;
+              return (
+                <Pressable
+                  key={s}
+                  onPress={() => { setSource(s); setPicked(null); }}
+                  style={[styles.importTab, {
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: active ? colors.primary + "12" : "transparent",
+                  }]}
+                >
+                  <Ionicons name={icon} size={14} color={active ? colors.primary : colors.mutedForeground} />
+                  <Text style={{ color: active ? colors.primary : colors.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium" }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          {source === "image" && (
+          {(source === "image" || source === "pdf") && (
             <View style={{ gap: 8 }}>
-              <Pressable onPress={pickPhoto} disabled={isBusy}
+              <Pressable onPress={source === "pdf" ? pickPdf : pickPhoto} disabled={isBusy}
                 style={({ pressed }) => [styles.uploadDrop, { borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}>
-                <Ionicons name="cloud-upload-outline" size={22} color={colors.mutedForeground} />
+                <Ionicons name={source === "pdf" ? "document-outline" : "cloud-upload-outline"} size={22} color={colors.mutedForeground} />
                 <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                  {picked ? "Change photo" : "Pick a photo of your menu"}
+                  {picked
+                    ? (source === "pdf" ? "Change PDF" : "Change photo")
+                    : (source === "pdf" ? "Pick a PDF of your menu" : "Pick a photo of your menu")}
                 </Text>
                 {picked && (
                   <Text style={{ color: colors.mutedForeground, fontSize: 11 }} numberOfLines={1}>
@@ -967,7 +1013,9 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
                 )}
               </Pressable>
               <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
-                Best results with a flat, well-lit photo. JPG / PNG up to 10 MB.
+                {source === "pdf"
+                  ? "PDF up to 10 MB. Charged per page."
+                  : "Best results with a flat, well-lit photo. JPG / PNG up to 10 MB."}
               </Text>
             </View>
           )}
