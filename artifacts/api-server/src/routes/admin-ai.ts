@@ -337,15 +337,20 @@ router.post("/admin/ai/assignments/bulk", async (req: Request, res: Response) =>
     if (typeof filter.modality === "string" && filter.modality) {
       conditions.push(eq(aiFeatureModelAssignmentsTable.modality, filter.modality));
     }
-    // Tier filter — "normal" means the feature is on a lightweight model
-    // (currently anything whose primaryModel contains "flash-lite"), and
-    // "advance" is the complement (everything else, including unset rows).
-    // We expose this as a filter so the admin can do things like
-    // "bulk-move all advance features to Anthropic Sonnet".
+    // Tier filter — three buckets derived from primary_model:
+    //   normal    : *-flash-lite                              (cheap & fast)
+    //   advance   : *-flash but NOT *-flash-lite              (mid reasoning,
+    //               e.g. ai_menu_import, fraud detection)
+    //   reasoning : everything else (sonnet/gpt-4/gemini-pro) (heavy reasoning)
+    // The UI mirrors this exact rule so the live "X rows affected" preview
+    // matches what the server will actually update.
+    const modelExpr = sql`lower(coalesce(${aiFeatureModelAssignmentsTable.primaryModel}, ''))`;
     if (filter.tier === "normal") {
-      conditions.push(sql`lower(coalesce(${aiFeatureModelAssignmentsTable.primaryModel}, '')) like '%flash-lite%'` as unknown as ReturnType<typeof eq>);
+      conditions.push(sql`${modelExpr} like '%flash-lite%'` as unknown as ReturnType<typeof eq>);
     } else if (filter.tier === "advance") {
-      conditions.push(sql`lower(coalesce(${aiFeatureModelAssignmentsTable.primaryModel}, '')) not like '%flash-lite%'` as unknown as ReturnType<typeof eq>);
+      conditions.push(sql`${modelExpr} like '%flash%' and ${modelExpr} not like '%flash-lite%'` as unknown as ReturnType<typeof eq>);
+    } else if (filter.tier === "reasoning") {
+      conditions.push(sql`${modelExpr} not like '%flash%'` as unknown as ReturnType<typeof eq>);
     }
     if (filter.primaryProviderId === null) {
       conditions.push(sql`${aiFeatureModelAssignmentsTable.primaryProviderId} is null` as unknown as ReturnType<typeof eq>);

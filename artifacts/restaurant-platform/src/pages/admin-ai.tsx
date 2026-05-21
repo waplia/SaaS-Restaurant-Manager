@@ -483,9 +483,9 @@ function ModelSettingsSubTab() {
               <tr key={a.id} className="border-t border-border">
                 <td className="px-3 py-2"><div className="font-medium">{a.featureLabel}</div><div className="text-xs text-muted-foreground">{a.featureSlug} · {a.category}</div></td>
                 <td className="px-3 py-2 text-xs">
-                  {t === "normal"
-                    ? <Badge variant="outline" className="text-[10px]">Normal</Badge>
-                    : <Badge variant="default" className="text-[10px]">Advance</Badge>}
+                  {t === "normal" && <Badge variant="outline" className="text-[10px]">Normal</Badge>}
+                  {t === "advance" && <Badge variant="secondary" className="text-[10px]">Advance</Badge>}
+                  {t === "reasoning" && <Badge variant="default" className="text-[10px]">Reasoning</Badge>}
                 </td>
                 <td className="px-3 py-2 text-xs">{a.modality}</td>
                 <td className="px-3 py-2 text-xs">{a.primaryProviderId ? `${providerName[a.primaryProviderId] ?? "?"} / ${a.primaryModel ?? "—"}` : "—"}</td>
@@ -521,13 +521,32 @@ function ModelSettingsSubTab() {
 }
 
 /**
- * Tier classification — "normal" features run on a lightweight model
- * (currently anything whose primary model name contains "flash-lite"),
- * everything else is "advance". Derived so we don't need a schema column.
+ * Tier classification — three buckets based on how much reasoning the
+ * feature really needs, derived from the primary model name so we don't
+ * need a schema column:
+ *   - "normal"    : lightweight tasks on a *-flash-lite model
+ *                   (e.g. short suggestions, simple summaries)
+ *   - "advance"   : mid-weight tasks on a *-flash model
+ *                   (e.g. menu import, fraud detection, recipe optimizer —
+ *                    things that need more than flash-lite but don't need
+ *                    a full reasoning model)
+ *   - "reasoning" : heavyweight tasks on a premium reasoning model
+ *                   (sonnet / gpt-4 / gemini pro / o-series / etc.)
  */
-function tierOf(a: AiAssignment): "normal" | "advance" {
-  return (a.primaryModel ?? "").toLowerCase().includes("flash-lite") ? "normal" : "advance";
+type Tier = "normal" | "advance" | "reasoning";
+
+function tierOf(a: AiAssignment): Tier {
+  const m = (a.primaryModel ?? "").toLowerCase();
+  if (m.includes("flash-lite")) return "normal";
+  if (m.includes("flash")) return "advance";
+  return "reasoning";
 }
+
+const TIER_LABELS: Record<Tier, string> = {
+  normal: "Normal",
+  advance: "Advance",
+  reasoning: "Reasoning",
+};
 
 /**
  * Bulk update modal — lets the super admin re-bind many feature assignments
@@ -554,7 +573,7 @@ function BulkAssignmentModal({
   const [scope, setScope] = useState<"all" | "category" | "modality" | "tier" | "provider">("all");
   const [category, setCategory] = useState("");
   const [modality, setModality] = useState("text");
-  const [tier, setTier] = useState<"normal" | "advance">("normal");
+  const [tier, setTier] = useState<Tier>("normal");
   const [filterProviderId, setFilterProviderId] = useState<number | "">("");
 
   // Patch fields. Empty string = "leave unchanged"; null is allowed for
@@ -659,10 +678,11 @@ function BulkAssignmentModal({
         </Field>
 
         {scope === "tier" && (
-          <Field label="Tier" hint="Normal = features on a flash-lite model. Advance = everything else.">
-            <select className={inputCls} value={tier} onChange={e => setTier(e.target.value as "normal" | "advance")}>
+          <Field label="Tier" hint="Normal = flash-lite. Advance = flash (mid-weight reasoning). Reasoning = premium models (pro/sonnet/gpt-4).">
+            <select className={inputCls} value={tier} onChange={e => setTier(e.target.value as Tier)}>
               <option value="normal">Normal (flash-lite)</option>
-              <option value="advance">Advance</option>
+              <option value="advance">Advance (flash)</option>
+              <option value="reasoning">Reasoning (premium)</option>
             </select>
           </Field>
         )}
