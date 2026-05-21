@@ -3,6 +3,17 @@ import { eq, and, ilike, gt, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, modifierInventoryMappingsTable, inventoryItemsTable, orderItemsTable, orderItemModifiersTable, ordersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { recordLibraryImageUsage } from "../lib/stockFoodImages";
+
+type ImageSource = "library" | "ai_generated" | "upload" | "reuse";
+const VALID_IMAGE_SOURCES = new Set<ImageSource>(["library", "ai_generated", "upload", "reuse"]);
+function parseImageMeta(body: Record<string, unknown>): { libraryImageId: number | null; source: ImageSource } {
+  const id = body.libraryImageId;
+  const libraryImageId = typeof id === "number" && Number.isFinite(id) ? id : null;
+  const raw = String(body.imageSource ?? "").trim() as ImageSource;
+  const source: ImageSource = VALID_IMAGE_SOURCES.has(raw) ? raw : (libraryImageId != null ? "library" : "upload");
+  return { libraryImageId, source };
+}
 
 const router = Router();
 
@@ -140,6 +151,14 @@ router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", 
 
   const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId } = req.body;
   const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId: kitchenId ?? null }).returning();
+  if (imageUrl) {
+    const meta = parseImageMeta(req.body as Record<string, unknown>);
+    await recordLibraryImageUsage({
+      restaurantId, menuItemId: item.id,
+      libraryImageId: meta.libraryImageId, imageUrl,
+      source: meta.source, attachedBy: req.user?.sub ?? null,
+    });
+  }
   res.status(201).json(item);
 });
 
@@ -175,6 +194,14 @@ router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manag
   if (nutritionAiMeta !== undefined) updates.nutritionAiMeta = nutritionAiMeta;
   const [updated] = await db.update(menuItemsTable).set(updates).where(and(eq(menuItemsTable.id, Number(req.params.id)), eq(menuItemsTable.restaurantId, Number(req.params.restaurantId)))).returning();
   if (!updated) return void res.status(404).json({ error: "Not found" });
+  if (imageUrl !== undefined && updates.imageUrl) {
+    const meta = parseImageMeta(req.body as Record<string, unknown>);
+    await recordLibraryImageUsage({
+      restaurantId: Number(req.params.restaurantId), menuItemId: updated.id,
+      libraryImageId: meta.libraryImageId, imageUrl: String(updates.imageUrl),
+      source: meta.source, attachedBy: req.user?.sub ?? null,
+    });
+  }
   res.json(updated);
 });
 

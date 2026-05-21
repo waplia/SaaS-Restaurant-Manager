@@ -234,6 +234,18 @@ export async function generateAndAttachItemPhoto(opts: {
     if (updated.length === 0) {
       return { ok: false, reason: "menu item no longer exists", code: "ITEM_GONE" };
     }
+    // Best-effort usage analytics — never throws.
+    try {
+      const { recordLibraryImageUsage } = await import("./stockFoodImages");
+      await recordLibraryImageUsage({
+        restaurantId: opts.restaurantId,
+        menuItemId: opts.itemId,
+        libraryImageId: null,
+        imageUrl: objectPath,
+        source: "menu_import_ai",
+        attachedBy: opts.userId,
+      });
+    } catch { /* swallow */ }
     return { ok: true, objectPath, filename };
   } catch (err) {
     const e = err as Error & { code?: string };

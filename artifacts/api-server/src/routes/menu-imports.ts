@@ -34,7 +34,7 @@ import { ObjectStorageService, isObjectStorageConfigured } from "../lib/objectSt
 import { getObjectAclPolicy, isAclOwnerOf, ObjectPermission } from "../lib/objectAcl";
 import { recordAuditLog } from "../lib/audit";
 import { generateAndAttachItemPhoto } from "../lib/aiFoodImage";
-import { findBestStockImageMatch } from "../lib/stockFoodImages";
+import { findBestStockImageMatch, recordLibraryImageUsage } from "../lib/stockFoodImages";
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -809,6 +809,11 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
           await db.update(aiMenuImportItemsTable)
             .set({ imageStatus: "matched_library", imageError: null })
             .where(eq(aiMenuImportItemsTable.id, job.draftId));
+          await recordLibraryImageUsage({
+            restaurantId, menuItemId: job.itemId,
+            libraryImageId: match.row.id, imageUrl: match.row.imageUrl,
+            source: "menu_import_library", attachedBy: req.user?.sub ?? null,
+          });
           libraryMatched++;
           continue;
         }

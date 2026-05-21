@@ -543,6 +543,8 @@ type ItemForm = {
   isVegan: TriBool;
   isJain: TriBool;
   spicyLevel: string;
+  libraryImageId: number | null;
+  imageSource: "library" | "upload" | "ai_generated" | "reuse" | "";
 };
 
 const EMPTY_ITEM_FORM: ItemForm = {
@@ -551,6 +553,7 @@ const EMPTY_ITEM_FORM: ItemForm = {
   proteinG: "", fatG: "", carbsG: "",
   containsDairy: "", containsNuts: "", containsGluten: "",
   isVegan: "", isJain: "", spicyLevel: "",
+  libraryImageId: null, imageSource: "",
 };
 
 const triFromBool = (v: boolean | null | undefined): TriBool => (v == null ? "" : v ? "yes" : "no");
@@ -679,6 +682,8 @@ export default function MenuPage() {
       isVegan: triFromBool(item.isVegan),
       isJain: triFromBool(item.isJain),
       spicyLevel: item.spicyLevel != null ? String(item.spicyLevel) : "",
+      libraryImageId: null,
+      imageSource: "",
     });
     setNutritionAiMeta(((item as unknown as { nutritionAiMeta?: Record<string, { source: "ai"; at: string }> }).nutritionAiMeta) ?? {});
     setActiveTab("details");
@@ -803,7 +808,7 @@ export default function MenuPage() {
         `/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-photo`,
         {},
       );
-      setItemForm(prev => ({ ...prev, imageUrl: res.payload.imageUrl }));
+      setItemForm(prev => ({ ...prev, imageUrl: res.payload.imageUrl, libraryImageId: null, imageSource: "ai_generated" }));
       const drafts = await apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-drafts`);
       setAiDrafts(drafts);
       toast({ title: "Photo suggested — accept or regenerate" });
@@ -831,6 +836,8 @@ export default function MenuPage() {
       tags: itemForm.tags.split(",").map(t => t.trim()).filter(Boolean),
       allergens: itemForm.allergens.split(",").map(t => t.trim()).filter(Boolean),
       kitchenId: itemForm.kitchenId ? Number(itemForm.kitchenId) : null,
+      libraryImageId: itemForm.libraryImageId ?? undefined,
+      imageSource: itemForm.imageSource || undefined,
       proteinG: itemForm.proteinG === "" ? null : Number(itemForm.proteinG),
       fatG: itemForm.fatG === "" ? null : Number(itemForm.fatG),
       carbsG: itemForm.carbsG === "" ? null : Number(itemForm.carbsG),
@@ -1477,7 +1484,7 @@ export default function MenuPage() {
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url }))} />
+                      <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url, libraryImageId: null, imageSource: url ? "upload" : "" }))} />
                       <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Button
@@ -1510,7 +1517,15 @@ export default function MenuPage() {
                         open={showStockPicker}
                         onClose={() => setShowStockPicker(false)}
                         initialQuery={itemForm.name}
-                        onPick={(url) => setItemForm(p => ({ ...p, imageUrl: url }))}
+                        itemName={itemForm.name}
+                        itemId={editItem?.id}
+                        itemIsVeg={itemForm.isVeg}
+                        onSelect={(sel) => setItemForm(p => ({
+                          ...p,
+                          imageUrl: sel.url,
+                          libraryImageId: sel.libraryImageId ?? null,
+                          imageSource: sel.source,
+                        }))}
                       />
                     </div>
                     <div>
