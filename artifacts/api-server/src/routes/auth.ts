@@ -622,7 +622,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
       console.info(`[dev-only] password-reset token for user id=${user.id}`);
     }
     const base = (process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const resetLink = `${base}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const resetLink = `${base}/app/reset-password?token=${encodeURIComponent(resetToken)}`;
     const [u] = await db
       .select({ name: usersTable.name, email: usersTable.email, tenantId: usersTable.tenantId })
       .from(usersTable).where(eq(usersTable.id, user.id));
