@@ -466,6 +466,7 @@ function ModelSettingsSubTab() {
           <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
             <tr>
               <th className="text-left px-3 py-2">Feature</th>
+              <th className="text-left px-3 py-2">Tier</th>
               <th className="text-left px-3 py-2">Modality</th>
               <th className="text-left px-3 py-2">Primary</th>
               <th className="text-left px-3 py-2">Fallback</th>
@@ -475,10 +476,17 @@ function ModelSettingsSubTab() {
             </tr>
           </thead>
           <tbody>
-            {assignments.length === 0 && <tr><td colSpan={7} className="text-center p-6 text-muted-foreground">No assignments yet.</td></tr>}
-            {assignments.map(a => (
+            {assignments.length === 0 && <tr><td colSpan={8} className="text-center p-6 text-muted-foreground">No assignments yet.</td></tr>}
+            {assignments.map(a => {
+              const t = tierOf(a);
+              return (
               <tr key={a.id} className="border-t border-border">
                 <td className="px-3 py-2"><div className="font-medium">{a.featureLabel}</div><div className="text-xs text-muted-foreground">{a.featureSlug} · {a.category}</div></td>
+                <td className="px-3 py-2 text-xs">
+                  {t === "normal"
+                    ? <Badge variant="outline" className="text-[10px]">Normal</Badge>
+                    : <Badge variant="default" className="text-[10px]">Advance</Badge>}
+                </td>
                 <td className="px-3 py-2 text-xs">{a.modality}</td>
                 <td className="px-3 py-2 text-xs">{a.primaryProviderId ? `${providerName[a.primaryProviderId] ?? "?"} / ${a.primaryModel ?? "—"}` : "—"}</td>
                 <td className="px-3 py-2 text-xs">{a.fallbackProviderId ? `${providerName[a.fallbackProviderId] ?? "?"} / ${a.fallbackModel ?? "—"}` : "—"}</td>
@@ -493,7 +501,8 @@ function ModelSettingsSubTab() {
                   <Button variant="ghost" size="sm" onClick={() => remove(a)} className="text-destructive"><Trash2 className="w-3 h-3" /></Button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -509,6 +518,15 @@ function ModelSettingsSubTab() {
       )}
     </div>
   );
+}
+
+/**
+ * Tier classification — "normal" features run on a lightweight model
+ * (currently anything whose primary model name contains "flash-lite"),
+ * everything else is "advance". Derived so we don't need a schema column.
+ */
+function tierOf(a: AiAssignment): "normal" | "advance" {
+  return (a.primaryModel ?? "").toLowerCase().includes("flash-lite") ? "normal" : "advance";
 }
 
 /**
@@ -533,9 +551,10 @@ function BulkAssignmentModal({
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [scope, setScope] = useState<"all" | "category" | "modality" | "provider">("all");
+  const [scope, setScope] = useState<"all" | "category" | "modality" | "tier" | "provider">("all");
   const [category, setCategory] = useState("");
   const [modality, setModality] = useState("text");
+  const [tier, setTier] = useState<"normal" | "advance">("normal");
   const [filterProviderId, setFilterProviderId] = useState<number | "">("");
 
   // Patch fields. Empty string = "leave unchanged"; null is allowed for
@@ -562,9 +581,10 @@ function BulkAssignmentModal({
     if (scope === "all") return assignments;
     if (scope === "category") return assignments.filter(a => a.category === category);
     if (scope === "modality") return assignments.filter(a => a.modality === modality);
+    if (scope === "tier") return assignments.filter(a => tierOf(a) === tier);
     if (scope === "provider") return assignments.filter(a => a.primaryProviderId === filterProviderId);
     return [];
-  }, [scope, assignments, category, modality, filterProviderId]);
+  }, [scope, assignments, category, modality, tier, filterProviderId]);
 
   // Suggest a default model from the chosen provider so the admin doesn't
   // have to type one out every time. They can still override.
@@ -594,6 +614,7 @@ function BulkAssignmentModal({
     const filter: Record<string, unknown> = {};
     if (scope === "category") filter.category = category;
     else if (scope === "modality") filter.modality = modality;
+    else if (scope === "tier") filter.tier = tier;
     else if (scope === "provider") filter.primaryProviderId = filterProviderId;
     // scope === "all" → no filter keys, server treats as "every row"
 
@@ -632,9 +653,19 @@ function BulkAssignmentModal({
             <option value="all">All assignments ({assignments.length})</option>
             <option value="category">By category</option>
             <option value="modality">By modality</option>
+            <option value="tier">By tier (Normal / Advance)</option>
             <option value="provider">By current primary provider</option>
           </select>
         </Field>
+
+        {scope === "tier" && (
+          <Field label="Tier" hint="Normal = features on a flash-lite model. Advance = everything else.">
+            <select className={inputCls} value={tier} onChange={e => setTier(e.target.value as "normal" | "advance")}>
+              <option value="normal">Normal (flash-lite)</option>
+              <option value="advance">Advance</option>
+            </select>
+          </Field>
+        )}
 
         {scope === "category" && (
           <Field label="Category">
