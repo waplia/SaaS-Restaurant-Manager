@@ -424,17 +424,23 @@ function KdsView() {
         </ScrollView>
 
         {tab !== "settings" && tab !== "history" ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-            {FILTERS.map((f) => (
-              <FilterChip
-                key={f.key}
-                label={f.label}
-                active={filter === f.key}
-                badge={f.key === "delayed" ? buckets.delayedCount : undefined}
-                onPress={() => setFilter(f.key)}
-              />
-            ))}
-          </ScrollView>
+          <View style={styles.filterRow}>
+            <View style={styles.filterLabelWrap}>
+              <Ionicons name="filter" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>Filter</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+              {FILTERS.map((f) => (
+                <FilterChip
+                  key={f.key}
+                  label={f.label}
+                  active={filter === f.key}
+                  badge={f.key === "delayed" ? buckets.delayedCount : undefined}
+                  onPress={() => setFilter(f.key)}
+                />
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
 
         {tab === "history" ? (
@@ -663,18 +669,19 @@ function StationChip({ label, active, onPress }: { label: string; active: boolea
 
 function FilterChip({ label, active, onPress, badge }: { label: string; active: boolean; onPress: () => void; badge?: number }) {
   const colors = useColors();
+  const activeBg = colors.primary;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
-        { backgroundColor: active ? colors.foreground : "transparent", borderColor: active ? colors.foreground : colors.border, opacity: pressed ? 0.8 : 1 },
+        { backgroundColor: active ? activeBg : "transparent", borderColor: active ? activeBg : colors.border, opacity: pressed ? 0.8 : 1 },
       ]}
     >
-      <Text style={[styles.chipText, { color: active ? colors.background : colors.foreground }]}>{label}</Text>
+      <Text style={[styles.chipText, { color: active ? "#fff" : colors.foreground }]}>{label}</Text>
       {badge && badge > 0 ? (
-        <View style={[styles.chipBadge, { backgroundColor: active ? colors.background : "#dc2626" }]}>
-          <Text style={[styles.chipBadgeText, { color: active ? colors.foreground : "#fff" }]}>{badge}</Text>
+        <View style={[styles.chipBadge, { backgroundColor: active ? "#fff" : "#dc2626" }]}>
+          <Text style={[styles.chipBadgeText, { color: active ? activeBg : "#fff" }]}>{badge}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -910,6 +917,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 4 },
   title: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   chipsRow: { gap: 6, paddingHorizontal: 4, paddingVertical: 4 },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  filterLabelWrap: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
+  filterLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.4, textTransform: "uppercase" },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   chipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   chipBadge: { minWidth: 18, paddingHorizontal: 5, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
