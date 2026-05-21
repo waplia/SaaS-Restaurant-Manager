@@ -23,6 +23,7 @@ import { MetricCard, PlaceholderCard } from "@/components/MetricCard";
 import { MiniBarChart } from "@/components/MiniBarChart";
 import { GradientHeroCard } from "@/components/GradientHeroCard";
 import { QuickActionTile } from "@/components/QuickActionTile";
+import { OnboardingChecklistCard } from "@/components/OnboardingChecklistCard";
 
 type CashSession = {
   session: { id: number; status: string; openingFloat?: string; openedByName?: string | null } | null;
@@ -388,6 +389,9 @@ export default function OwnerDashboard() {
           ))}
         </ScrollView>
       ) : null}
+
+      {/* Onboarding resume card — highlights skipped/pending setup steps */}
+      <OnboardingChecklistCard />
 
       {/* Hero gradient card — today's headline numbers at a glance */}
       <GradientHeroCard

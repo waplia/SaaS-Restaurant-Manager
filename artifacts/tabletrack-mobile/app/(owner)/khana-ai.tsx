@@ -22,6 +22,7 @@ interface Tool {
 }
 
 const TOOLS: Tool[] = [
+  { key: "menu-import", label: "Import menu with AI", desc: "Upload a photo, PDF or paste — AI extracts items, prices & categories", icon: "cloud-upload-outline", cost: 5, href: "/(owner)/menu-import" },
   { key: "menu", label: "Menu generator", desc: "AI item names + descriptions + photos", icon: "restaurant-outline", cost: 5, href: "/(owner)/menu" },
   { key: "review-reply", label: "Review reply assistant", desc: "Polite, on-brand replies in seconds", icon: "chatbubbles-outline", cost: 1, href: "/(owner)/feedback" },
   { key: "campaign", label: "Campaign writer", desc: "WhatsApp/SMS for inactive customers", icon: "megaphone-outline", cost: 3, href: "/(owner)/growth" },

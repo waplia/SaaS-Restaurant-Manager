@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Switch, TextInput,
-  Platform, Alert, Pressable,
+  Platform, Alert, Pressable, Modal, KeyboardAvoidingView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
@@ -32,6 +32,8 @@ export default function MenuScreen() {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const q = useQuery({
     queryKey: ["menu-items-mobile", restaurantId],
@@ -45,6 +47,13 @@ export default function MenuScreen() {
     queryFn: () => customFetch<Category[]>(`/api/restaurants/${restaurantId}/categories`),
   });
   const categories: Category[] = Array.isArray(categoriesQ.data) ? categoriesQ.data : [];
+
+  const onboardingQ = useQuery({
+    queryKey: ["onboarding-state", restaurantId],
+    queryFn: () => customFetch<{ defaultMenuId: number | null }>("/api/onboarding/state"),
+    staleTime: 60_000,
+  });
+  const defaultMenuId = onboardingQ.data?.defaultMenuId ?? null;
 
   const errToast = (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not save");
   const invalidate = () => qc.invalidateQueries({ queryKey: ["menu-items-mobile", restaurantId] });
@@ -77,15 +86,62 @@ export default function MenuScreen() {
     onError: errToast,
   });
 
+  const createCategory = useMutation({
+    mutationFn: (name: string) => {
+      if (!defaultMenuId) throw new Error("No menu set up yet. Finish onboarding first.");
+      return customFetch<Category>(`/api/restaurants/${restaurantId}/categories`, {
+        method: "POST", body: JSON.stringify({ name, menuId: defaultMenuId }),
+      });
+    },
+    onSuccess: () => {
+      setAddingCategory(false);
+      setNewCategoryName("");
+      qc.invalidateQueries({ queryKey: ["menu-categories-mobile", restaurantId] });
+    },
+    onError: errToast,
+  });
+
+  function promptAddCategory() {
+    if (!defaultMenuId) {
+      Alert.alert("Set up your menu first", "Finish onboarding to create your first menu, then categories can be added here.");
+      return;
+    }
+    if (Platform.OS === "ios") {
+      Alert.prompt(
+        "New category",
+        "Name this menu category (e.g. Starters, Main Course).",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Add", onPress: (val) => { const n = (val ?? "").trim(); if (n) createCategory.mutate(n); } },
+        ],
+        "plain-text",
+      );
+    } else {
+      setNewCategoryName("");
+      setAddingCategory(true);
+    }
+  }
+
   const addButton = (
-    <Pressable
-      onPress={() => setCreating(true)}
-      hitSlop={10}
-      style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
-    >
-      <Ionicons name="add" size={18} color="#fff" />
-      <Text style={styles.addBtnText}>Add</Text>
-    </Pressable>
+    <View style={{ flexDirection: "row", gap: 6 }}>
+      <Pressable
+        onPress={promptAddCategory}
+        hitSlop={10}
+        accessibilityLabel="Add category"
+        style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}
+      >
+        <Ionicons name="folder-open-outline" size={16} color={colors.foreground} />
+        <Text style={[styles.addBtnText, { color: colors.foreground }]}>Category</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => setCreating(true)}
+        hitSlop={10}
+        style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+      >
+        <Ionicons name="add" size={18} color="#fff" />
+        <Text style={styles.addBtnText}>Add</Text>
+      </Pressable>
+    </View>
   );
 
   return (
@@ -154,6 +210,7 @@ export default function MenuScreen() {
         submitting={create.isPending}
         categories={categories}
         onSubmit={(v) => create.mutate(v)}
+        onAddCategory={promptAddCategory}
       />
       <MenuItemForm
         visible={!!editing}
@@ -166,13 +223,64 @@ export default function MenuScreen() {
         onSubmit={(v) => editing && update.mutate({ id: editing.id, body: v })}
         onDelete={() => editing && deleteM.mutate(editing.id)}
         deleting={deleteM.isPending}
+        onAddCategory={promptAddCategory}
       />
+
+      <Modal
+        visible={addingCategory}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setAddingCategory(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>New category</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
+              Name this menu category (e.g. Starters, Main Course).
+            </Text>
+            <TextInput
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              placeholder="Category name"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              style={[styles.modalInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+            />
+            <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
+              <Pressable
+                onPress={() => setAddingCategory(false)}
+                style={({ pressed }) => [styles.modalBtn, { opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const n = newCategoryName.trim();
+                  if (n) createCategory.mutate(n);
+                }}
+                disabled={createCategory.isPending || newCategoryName.trim().length === 0}
+                style={({ pressed }) => [
+                  styles.modalBtn,
+                  { backgroundColor: colors.primary, opacity: (pressed || createCategory.isPending || newCategoryName.trim().length === 0) ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
+                  {createCategory.isPending ? "Adding…" : "Add"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
 function MenuItemForm({
-  visible, onClose, title, submitLabel, submitting, categories, initial, onSubmit, onDelete, deleting,
+  visible, onClose, title, submitLabel, submitting, categories, initial, onSubmit, onDelete, deleting, onAddCategory,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -184,6 +292,7 @@ function MenuItemForm({
   onSubmit: (v: { name: string; price: string; categoryId: number | null }) => void;
   onDelete?: () => void;
   deleting?: boolean;
+  onAddCategory?: () => void;
 }) {
   const colors = useColors();
   const [name, setName] = useState("");
@@ -229,11 +338,31 @@ function MenuItemForm({
                 <Text style={{ color: categoryId === c.id ? "#fff" : colors.foreground, fontSize: 12, fontFamily: "Inter_500Medium" }}>{c.name}</Text>
               </Pressable>
             ))}
+            {onAddCategory ? (
+              <Pressable
+                onPress={onAddCategory}
+                style={[styles.chip, { borderColor: colors.primary, borderStyle: "dashed", backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}
+              >
+                <Ionicons name="add" size={14} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>New</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         ) : (
-          <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingVertical: 6 }}>
-            No categories yet — add one from the web dashboard before creating items.
-          </Text>
+          <View style={{ gap: 8, paddingVertical: 4 }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+              No categories yet. Add your first one to start building the menu.
+            </Text>
+            {onAddCategory ? (
+              <Pressable
+                onPress={onAddCategory}
+                style={[styles.chip, { alignSelf: "flex-start", borderColor: colors.primary, borderStyle: "dashed", flexDirection: "row", alignItems: "center", gap: 4 }]}
+              >
+                <Ionicons name="add" size={14} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Add category</Text>
+              </Pressable>
+            ) : null}
+          </View>
         )}
       </FormField>
     </EntityFormSheet>
@@ -248,4 +377,10 @@ const styles = StyleSheet.create({
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalCard: { width: "100%", maxWidth: 380, borderRadius: 14, borderWidth: 1, padding: 18, gap: 12 },
+  modalTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  modalSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  modalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Inter_400Regular", fontSize: 14 },
+  modalBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8 },
 });
