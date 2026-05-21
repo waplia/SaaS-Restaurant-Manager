@@ -311,6 +311,7 @@ function Router() {
       <Route path="/admin/whatsapp" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/web-push" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/ai" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/admin/stock-food-images" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/health" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/metrics" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/implementations" component={() => <SuperAdminRoute component={AdminPage} />} />
