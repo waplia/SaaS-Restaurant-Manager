@@ -5,9 +5,9 @@
  *
  * Rendered as the `stock-food-images` section of /admin (see admin.tsx).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2, Loader2, ImageIcon, X } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, ImageIcon, X, Upload, RefreshCw, FileUp } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,17 @@ export default function AdminStockFoodImagesTab() {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [modalState, setModalState] = useState<{ mode: "create" } | { mode: "edit"; row: StockFoodImage } | null>(null);
   const [deleting, setDeleting] = useState<StockFoodImage | null>(null);
+  const [showBulk, setShowBulk] = useState(false);
+
+  const reseedMutation = useMutation({
+    mutationFn: async () => apiPost<{ ok: boolean; total: number }>(`/admin/stock-food-images/reseed`, {}),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["admin", "stock-food-images"] });
+      qc.invalidateQueries({ queryKey: ["stock-food-images"] });
+      toast({ title: "Catalog re-seeded", description: `Library now has ${data.total} images.` });
+    },
+    onError: (err: Error) => toast({ title: "Re-seed failed", description: err.message, variant: "destructive" }),
+  });
 
   const params = useMemo(() => {
     const s = new URLSearchParams();
@@ -97,9 +108,18 @@ export default function AdminStockFoodImagesTab() {
           <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
           Show inactive
         </label>
-        <Button onClick={() => setModalState({ mode: "create" })}>
-          <Plus className="w-4 h-4 mr-1" /> Add image
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => reseedMutation.mutate()} disabled={reseedMutation.isPending}>
+            {reseedMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+            Re-run seed
+          </Button>
+          <Button variant="outline" onClick={() => setShowBulk(true)}>
+            <FileUp className="w-4 h-4 mr-1" /> Bulk import
+          </Button>
+          <Button onClick={() => setModalState({ mode: "create" })}>
+            <Plus className="w-4 h-4 mr-1" /> Add image
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -166,6 +186,17 @@ export default function AdminStockFoodImagesTab() {
             qc.invalidateQueries({ queryKey: ["stock-food-images"] });
             toast({ title: "Saved" });
             setModalState(null);
+          }}
+        />
+      )}
+
+      {showBulk && (
+        <BulkImportModal
+          onClose={() => setShowBulk(false)}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ["admin", "stock-food-images"] });
+            qc.invalidateQueries({ queryKey: ["stock-food-images"] });
+            setShowBulk(false);
           }}
         />
       )}
@@ -253,16 +284,11 @@ function EditModal({
             <Input value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} placeholder="curry, snack, bread, rice…" />
           </div>
           <div className="col-span-2">
-            <Label>Image URL <span className="text-destructive">*</span></Label>
-            <Input value={form.imageUrl} onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://…" />
-            {form.imageUrl && (
-              <img
-                src={form.imageUrl}
-                alt="preview"
-                className="mt-2 max-h-32 rounded border border-border object-contain bg-muted"
-                onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }}
-              />
-            )}
+            <Label>Image <span className="text-destructive">*</span></Label>
+            <StockImageUploadField
+              value={form.imageUrl}
+              onChange={(url) => setForm((p) => ({ ...p, imageUrl: url }))}
+            />
           </div>
           <div className="col-span-2">
             <Label>Thumbnail URL</Label>
@@ -296,6 +322,164 @@ function EditModal({
           <Button disabled={disabled || mutation.isPending} onClick={() => mutation.mutate()}>
             {mutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
             {mode === "edit" ? "Save" : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Upload + URL field for stock food images. Uses the super-admin upload
+ * endpoints under `/admin/stock-food-images/uploads/*` so curators can drop
+ * a JPEG/PNG/WebP directly instead of hunting for a hot-link URL.
+ */
+function StockImageUploadField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [showUrl, setShowUrl] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Please choose an image file", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const presign = await apiPost<{ uploadURL: string; objectPath: string }>(
+        `/admin/stock-food-images/uploads/request-url`,
+        { name: file.name, size: file.size, contentType: file.type },
+      );
+      const put = await fetch(presign.uploadURL, {
+        method: "PUT", body: file, headers: { "Content-Type": file.type },
+      });
+      if (!put.ok) throw new Error("Upload failed");
+      const fin = await apiPost<{ publicUrl: string }>(
+        `/admin/stock-food-images/uploads/finalize`,
+        { objectPath: presign.objectPath },
+      );
+      onChange(fin.publicUrl);
+      toast({ title: "Image uploaded" });
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message ?? "Upload failed";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}>
+          {busy ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1" />}
+          Upload
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => setShowUrl((s) => !s)}>
+          URL
+        </Button>
+        {value && (
+          <Button type="button" size="sm" variant="ghost" onClick={() => onChange("")}>
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        <span className="text-[10px] text-muted-foreground truncate flex-1">{value || "No image"}</span>
+      </div>
+      <input
+        ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }}
+      />
+      {showUrl && (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://… or /api/public/storage/objects/…"
+        />
+      )}
+      {value && (
+        <img
+          src={value} alt="preview"
+          className="max-h-32 rounded border border-border object-contain bg-muted"
+          onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Bulk import modal — paste a JSON array of `{ name, imageUrl, ... }`
+ * objects (matching the BulkEntrySchema on the server). Existing rows
+ * with the same slug are skipped unless "Overwrite" is checked.
+ */
+function BulkImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [text, setText] = useState("");
+  const [overwrite, setOverwrite] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      let entries: unknown;
+      try { entries = JSON.parse(text); }
+      catch { throw new Error("Invalid JSON — must be an array of dish objects."); }
+      if (!Array.isArray(entries) || entries.length === 0) {
+        throw new Error("Provide a non-empty JSON array.");
+      }
+      return apiPost<{ inserted: number; updated: number; skipped: number; errors: Array<{ name: string; error: string }> }>(
+        `/admin/stock-food-images/bulk`, { entries, overwrite },
+      );
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Bulk import done",
+        description: `${data.inserted} added, ${data.updated} updated, ${data.skipped} skipped${data.errors.length ? `, ${data.errors.length} failed` : ""}.`,
+      });
+      onDone();
+    },
+    onError: (err: Error) => toast({ title: "Import failed", description: err.message, variant: "destructive" }),
+  });
+
+  const example = `[
+  {
+    "name": "Paneer Tikka",
+    "cuisine": "north-indian",
+    "category": "starter",
+    "imageUrl": "https://example.com/paneer-tikka.jpg",
+    "aliases": ["tandoori paneer"],
+    "tags": ["popular"],
+    "isVeg": true
+  }
+]`;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><FileUp className="w-4 h-4" /> Bulk import images</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Paste a JSON array of dishes. Each entry needs at minimum a <code>name</code> and <code>imageUrl</code>.
+            Rows already present (matched by slug) are skipped unless you tick Overwrite.
+          </p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={example}
+            rows={14}
+            className="w-full font-mono text-xs p-2 border border-border rounded bg-muted/30"
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
+            Overwrite existing rows with the same slug
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button disabled={!text.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
+            {mutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+            Import
           </Button>
         </DialogFooter>
       </DialogContent>

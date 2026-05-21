@@ -16,9 +16,21 @@ import { requireSuperAdmin } from "../middleware/authorize";
 import {
   findBestStockImageMatch,
   invalidateStockFoodCache,
+  seedStockFoodImages,
   slugifyName,
 } from "../lib/stockFoodImages";
 import { recordAuditLog } from "../lib/audit";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+  ObjectStorageNotConfiguredError,
+} from "../lib/objectStorage";
+import { setObjectAclPolicy } from "../lib/objectAcl";
+import { sanitizeStoredUpload, UploadValidationError } from "../lib/uploadSanitizer";
+
+const objectStorageService = new ObjectStorageService();
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // 4 MB for stock food photos
+const ALLOWED_UPLOAD_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 const router = Router();
 
@@ -80,13 +92,20 @@ router.get("/stock-food-images/match", async (req: Request, res: Response) => {
 
 // ─── Super-admin CRUD ─────────────────────────────────────────────────
 
+// imageUrl accepts either a fully-qualified URL or a root-relative storage
+// path (e.g. "/api/public/storage/objects/...") produced by the admin
+// upload endpoint below.
+const ImageUrlSchema = z.union([
+  z.string().trim().url().max(1000),
+  z.string().trim().regex(/^\/[^\s]+$/, "Must be an absolute URL or a root-relative path").max(1000),
+]);
 const BaseInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
   slug: z.string().trim().min(1).max(120).optional(),
   cuisine: z.string().trim().max(60).nullish(),
   category: z.string().trim().max(60).nullish(),
-  imageUrl: z.string().trim().url().max(1000),
-  thumbnailUrl: z.string().trim().url().max(1000).nullish(),
+  imageUrl: ImageUrlSchema,
+  thumbnailUrl: ImageUrlSchema.nullish(),
   aliases: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
   tags: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
   isVeg: z.boolean().optional(),
@@ -210,6 +229,182 @@ router.patch("/admin/stock-food-images/:id",
       entity: "stock_food_image", entityId: id, oldValue: before, newValue: row,
     });
     res.json(row);
+  });
+
+// ─── Super-admin: bulk import (CSV/JSON paste) ────────────────────────
+const BulkEntrySchema = BaseInputSchema.extend({
+  // In bulk, isVeg/isActive/sortOrder all default if missing.
+});
+const BulkBody = z.object({
+  entries: z.array(BulkEntrySchema).min(1).max(500),
+  /** If true, existing rows (matched by slug) are overwritten; otherwise skipped. */
+  overwrite: z.boolean().optional(),
+});
+
+router.post("/admin/stock-food-images/bulk",
+  requireSuperAdmin,
+  async (req: Request, res: Response) => {
+    const parsed = BulkBody.safeParse(req.body);
+    if (!parsed.success) {
+      return void res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
+    }
+    const { entries, overwrite } = parsed.data;
+    const existing = await db.select({
+      id: stockFoodImagesTable.id, slug: stockFoodImagesTable.slug,
+    }).from(stockFoodImagesTable);
+    const slugToId = new Map(existing.map((r) => [r.slug, r.id]));
+
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors: Array<{ name: string; error: string }> = [];
+
+    for (const entry of entries) {
+      try {
+        const slug = slugifyName(entry.slug ?? entry.name);
+        const values = {
+          slug,
+          name: entry.name,
+          cuisine: entry.cuisine ?? null,
+          category: entry.category ?? null,
+          imageUrl: entry.imageUrl,
+          thumbnailUrl: entry.thumbnailUrl ?? null,
+          aliases: entry.aliases ?? [],
+          tags: entry.tags ?? [],
+          isVeg: entry.isVeg ?? true,
+          isActive: entry.isActive ?? true,
+          sortOrder: entry.sortOrder ?? 0,
+          attribution: entry.attribution ?? null,
+        };
+        const existingId = slugToId.get(slug);
+        if (existingId) {
+          if (overwrite) {
+            await db.update(stockFoodImagesTable)
+              .set({ ...values, updatedAt: new Date() })
+              .where(eq(stockFoodImagesTable.id, existingId));
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          await db.insert(stockFoodImagesTable).values({
+            ...values, source: "bulk_import", createdBy: req.user?.sub ?? null,
+          });
+          inserted++;
+        }
+      } catch (err) {
+        errors.push({ name: entry.name, error: (err as Error).message ?? "unknown" });
+      }
+    }
+    invalidateStockFoodCache();
+    await recordAuditLog({
+      req, module: "khana_ai", action: "stock_food_image.bulk_import",
+      entity: "stock_food_image",
+      newValue: { inserted, updated, skipped, errorCount: errors.length, overwrite: !!overwrite },
+    });
+    res.json({ inserted, updated, skipped, errors });
+  });
+
+// ─── Super-admin: re-run the bundled seed catalog ─────────────────────
+router.post("/admin/stock-food-images/reseed",
+  requireSuperAdmin,
+  async (req: Request, res: Response) => {
+    // seedStockFoodImages is idempotent: only inserts missing slugs.
+    await seedStockFoodImages();
+    invalidateStockFoodCache();
+    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` })
+      .from(stockFoodImagesTable);
+    await recordAuditLog({
+      req, module: "khana_ai", action: "stock_food_image.reseed",
+      entity: "stock_food_image", newValue: { totalAfter: total },
+    });
+    res.json({ ok: true, total });
+  });
+
+// ─── Super-admin: presigned upload URL for stock food photos ──────────
+const RequestUploadBody = z.object({
+  name: z.string().trim().min(1).max(256).optional(),
+  size: z.number().int().positive().optional(),
+  contentType: z.string().trim().min(1).max(128).optional(),
+}).optional();
+
+router.post("/admin/stock-food-images/uploads/request-url",
+  requireSuperAdmin,
+  async (req: Request, res: Response) => {
+    const parsed = RequestUploadBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return void res.status(400).json({ error: "Invalid upload request" });
+    }
+    const meta = parsed.data ?? {};
+    if (meta.contentType) {
+      const ct = meta.contentType.toLowerCase().split(";")[0].trim();
+      if (!ALLOWED_UPLOAD_MIME.has(ct)) {
+        return void res.status(415).json({
+          error: `File type "${meta.contentType}" not allowed. Allowed: ${Array.from(ALLOWED_UPLOAD_MIME).join(", ")}.`,
+        });
+      }
+    }
+    if (meta.size != null && meta.size > MAX_UPLOAD_BYTES) {
+      return void res.status(413).json({
+        error: `File too large (${Math.round(meta.size / 1024)} KB). Max ${Math.round(MAX_UPLOAD_BYTES / 1024)} KB.`,
+      });
+    }
+    try {
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      res.json({ uploadURL, objectPath, maxBytes: MAX_UPLOAD_BYTES });
+    } catch (err) {
+      if (err instanceof ObjectStorageNotConfiguredError) {
+        return void res.status(503).json({ error: err.message });
+      }
+      req.log.error({ err }, "stock-food upload URL failed");
+      res.status(500).json({ error: `Couldn't start upload: ${(err as Error).message}` });
+    }
+  });
+
+router.post("/admin/stock-food-images/uploads/finalize",
+  requireSuperAdmin,
+  async (req: Request, res: Response) => {
+    const { objectPath } = req.body as { objectPath?: string };
+    if (!objectPath || typeof objectPath !== "string" || !objectPath.startsWith("/objects/")) {
+      return void res.status(400).json({ error: "objectPath is required" });
+    }
+    try {
+      let file;
+      try {
+        file = await objectStorageService.getObjectEntityFile(objectPath);
+      } catch (e) {
+        if (e instanceof ObjectNotFoundError) {
+          // Brief retry — GCS occasionally lags on freshly-PUT objects.
+          await new Promise((r) => setTimeout(r, 500));
+          file = await objectStorageService.getObjectEntityFile(objectPath);
+        } else throw e;
+      }
+      let result;
+      try {
+        result = await sanitizeStoredUpload(file, {
+          allowedKinds: ["image"], maxBytes: MAX_UPLOAD_BYTES,
+        });
+      } catch (e) {
+        if (e instanceof UploadValidationError) {
+          return void res.status(e.statusCode).json({ error: e.message });
+        }
+        throw e;
+      }
+      if (!ALLOWED_UPLOAD_MIME.has(result.mime)) {
+        await file.delete().catch(() => undefined);
+        return void res.status(415).json({ error: `Unsupported type "${result.mime}"` });
+      }
+      await setObjectAclPolicy(file, {
+        restaurantId: "system", uploaderId: String(req.user?.sub ?? ""), visibility: "public",
+      });
+      const wildcardPath = objectPath.replace(/^\/objects\//, "");
+      const publicUrl = `/api/public/storage/objects/${wildcardPath}`;
+      res.json({ objectPath, publicUrl, contentType: result.mime, size: result.size });
+    } catch (err) {
+      req.log.error({ err }, "stock-food upload finalize failed");
+      res.status(500).json({ error: `Couldn't finalize upload: ${(err as Error).message}` });
+    }
   });
 
 router.delete("/admin/stock-food-images/:id",

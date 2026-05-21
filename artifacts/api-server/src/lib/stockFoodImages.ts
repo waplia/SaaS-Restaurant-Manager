@@ -152,11 +152,15 @@ export async function findBestStockImageMatch(input: StockMatchInput): Promise<S
 export async function seedStockFoodImages(): Promise<void> {
   try {
     const existing = await db.select({ slug: stockFoodImagesTable.slug }).from(stockFoodImagesTable);
-    const have = new Set(existing.map((r) => r.slug));
+    // `seen` includes both rows already in the DB and slugs we've already
+    // queued in this run — protects against intra-catalog duplicate slugs
+    // hitting the UNIQUE index on a fresh-DB bulk insert.
+    const seen = new Set(existing.map((r) => r.slug));
     const toInsert: InsertStockFoodImage[] = [];
     for (const entry of STOCK_FOOD_IMAGE_SEED) {
       const slug = slugifyName(entry.slug ?? entry.name);
-      if (have.has(slug)) continue;
+      if (seen.has(slug)) continue;
+      seen.add(slug);
       toInsert.push({
         slug,
         name: entry.name,
@@ -174,7 +178,11 @@ export async function seedStockFoodImages(): Promise<void> {
       });
     }
     if (toInsert.length === 0) return;
-    await db.insert(stockFoodImagesTable).values(toInsert);
+    // Belt-and-suspenders: if another node also seeded concurrently and
+    // claimed a slug between our SELECT and INSERT, just skip the dup.
+    await db.insert(stockFoodImagesTable).values(toInsert).onConflictDoNothing({
+      target: stockFoodImagesTable.slug,
+    });
     invalidateStockFoodCache();
     logger.info({ added: toInsert.length }, "Stock food image catalog seeded");
   } catch (err) {

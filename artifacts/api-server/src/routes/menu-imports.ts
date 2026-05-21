@@ -821,6 +821,30 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
     photoQueue.push(...remaining);
   }
 
+  // Persist library-match / AI-fallback counts into the import history
+  // summary so the import-history UI shows the same breakdown that the
+  // backfill function records for photos.done/failed/skippedCredits.
+  if (libraryMatched > 0 || photoQueue.length > 0) {
+    try {
+      const [row] = await db.select({ summary: aiMenuImportsTable.summary })
+        .from(aiMenuImportsTable).where(eq(aiMenuImportsTable.id, id));
+      const prev = (row?.summary ?? {}) as Record<string, unknown>;
+      const prevLib = (prev.stockLibrary ?? {}) as { matched?: number; aiQueued?: number };
+      await db.update(aiMenuImportsTable).set({
+        summary: {
+          ...prev,
+          stockLibrary: {
+            matched: (prevLib.matched ?? 0) + libraryMatched,
+            aiQueued: (prevLib.aiQueued ?? 0) + photoQueue.length,
+          },
+        },
+        updatedAt: new Date(),
+      }).where(eq(aiMenuImportsTable.id, id));
+    } catch (err) {
+      req.log.warn({ err, importId: id }, "failed to persist stock-library summary");
+    }
+  }
+
   // Kick off AI image generation for every still-unmatched item, in the
   // background with a small concurrency cap so the HTTP response returns
   // immediately. Each image takes 5-15s; we don't want to block the user.
