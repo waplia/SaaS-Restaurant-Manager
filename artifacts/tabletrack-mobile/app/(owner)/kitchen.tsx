@@ -272,6 +272,26 @@ function KdsView() {
     try {
       await updateStatus.mutateAsync({ restaurantId, id: ticket.id, data: { status: nextStatus } });
       qc.invalidateQueries({ queryKey });
+      // Auto-jump to the tab the ticket just moved into so the cook never
+      // loses sight of an order they're actively working on. On mobile the
+      // KDS uses tabs (vs the web's side-by-side columns), so without this
+      // the card appears to "disappear" after Accept & Start / Mark Ready.
+      const destTab: KdsTabKey | null =
+        nextStatus === "preparing" ? "preparing"
+        : nextStatus === "ready" ? "ready"
+        : nextStatus === "served" ? "history"
+        : null;
+      const orderLabel = `#${ticket.orderNumber ?? ticket.id}`;
+      const verb =
+        nextStatus === "preparing" ? "started"
+        : nextStatus === "ready" ? "marked ready"
+        : "served";
+      if (destTab && destTab !== tab) {
+        setTab(destTab);
+        showToast("success", `${orderLabel} ${verb} — viewing ${destTab === "history" ? "History" : destTab[0].toUpperCase() + destTab.slice(1)}`);
+      } else {
+        showToast("success", `${orderLabel} ${verb}`);
+      }
     } catch (err) {
       if (previous) qc.setQueryData(queryKey, previous);
       showToast("error", (err as Error).message || "Couldn't update ticket. Please try again.");
@@ -281,7 +301,7 @@ function KdsView() {
         return rest;
       });
     }
-  }, [restaurantId, updateStatus, qc, ticketsQ.queryKey, pendingTicketIds, showToast]);
+  }, [restaurantId, updateStatus, qc, ticketsQ.queryKey, pendingTicketIds, showToast, tab]);
 
   const requestCancel = useCallback((ticket: KdsTicket) => {
     const role = user?.role ?? "";
