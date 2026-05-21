@@ -583,20 +583,6 @@ export default function LoginScreen() {
                   Create account
                 </Text>
               </Pressable>
-              {authSettings?.googleSignInEnabled && googleConfigured ? (
-                <GoogleSignInButton
-                  webClientId={authSettings?.googleClientId ?? undefined}
-                  iosClientId={authSettings?.googleIosClientId ?? authSettings?.googleClientId ?? undefined}
-                  androidClientId={authSettings?.googleAndroidClientId ?? authSettings?.googleClientId ?? undefined}
-                  label="Sign up with Google"
-                  disabled={loading}
-                  onIdToken={(t) => { void handleGoogleIdToken(t); }}
-                  onError={(m) => Alert.alert("Google sign-in failed", m)}
-                  colors={colors}
-                  styles={styles}
-                  testID="signup-google-button"
-                />
-              ) : null}
             </View>
           ) : null}
         </View>
