@@ -134,6 +134,7 @@ router.post(
         });
       } catch (sanErr) {
         if (sanErr instanceof UploadValidationError) {
+          req.log.warn({ objectPath, statusCode: sanErr.statusCode, reason: sanErr.message }, "Upload rejected by sanitizer");
           res.status(sanErr.statusCode).json({ error: sanErr.message });
           return;
         }
@@ -190,6 +191,7 @@ router.post(
         });
       } catch (sanErr) {
         if (sanErr instanceof UploadValidationError) {
+          req.log.warn({ objectPath, statusCode: sanErr.statusCode, reason: sanErr.message }, "Public upload rejected by sanitizer");
           res.status(sanErr.statusCode).json({ error: sanErr.message });
           return;
         }

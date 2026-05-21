@@ -346,7 +346,7 @@ export default function AiMenuImportPage() {
                         accept={
                           source === "pdf" ? "application/pdf" :
                           source === "csv" || source === "excel" ? ".csv,.xlsx,text/csv" :
-                          "image/jpeg,image/png,image/webp"
+                          "image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif"
                         }
                         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                       />
