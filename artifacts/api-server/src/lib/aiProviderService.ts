@@ -173,6 +173,7 @@ async function callOpenAICompatible(
   const baseUrl = provider.baseUrl
     ?? (provider.kind === "openai" ? "https://api.openai.com/v1"
       : provider.kind === "groq" ? "https://api.groq.com/openai/v1"
+      : provider.kind === "xai" ? "https://api.x.ai/v1"
       : provider.kind === "mistral" ? "https://api.mistral.ai/v1"
       : provider.kind === "openrouter" ? "https://openrouter.ai/api/v1"
       : provider.kind === "perplexity" ? "https://api.perplexity.ai"
@@ -375,6 +376,7 @@ async function callTextOnce(
       throw new Error("Stability provider supports image generation only, not text");
     case "openai":
     case "groq":
+    case "xai":
     case "mistral":
     case "openrouter":
     case "perplexity":
@@ -491,7 +493,7 @@ export class AIProviderService {
       // Pick any enabled text-capable provider as last-ditch.
       // Skip image-only providers (e.g. Stability) which cannot serve chat/text,
       // and skip providers without a usable default model.
-      const TEXT_KINDS = ["openai", "anthropic", "gemini", "groq", "mistral", "openrouter", "perplexity", "replicate", "custom"];
+      const TEXT_KINDS = ["openai", "anthropic", "gemini", "groq", "xai", "mistral", "openrouter", "perplexity", "replicate", "custom"];
       const candidates = await db.select().from(aiProvidersTable).where(eq(aiProvidersTable.isEnabled, true));
       const first = candidates.find((p) => TEXT_KINDS.includes(p.kind) && !!p.defaultModel);
       if (first) { primaryId = first.id; primaryModel = first.defaultModel; }
@@ -630,7 +632,7 @@ export class AIProviderService {
         return { text, inputTokens: u?.promptTokenCount ?? 0, outputTokens: u?.candidatesTokenCount ?? 0 };
       }
       // OpenAI-compatible vision (image_url with data URL)
-      if (["openai", "openrouter", "groq", "mistral", "perplexity", "custom"].includes(provider.kind)) {
+      if (["openai", "openrouter", "groq", "xai", "mistral", "perplexity", "custom"].includes(provider.kind)) {
         if (!provider.apiKey) throw new Error(`${provider.kind} provider ${provider.slug} has no API key`);
         const baseUrl = provider.baseUrl ?? "https://api.openai.com/v1";
         const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
