@@ -26,9 +26,9 @@ export default function SupportScreen() {
 
   const q = useQuery({
     queryKey: ["support-tickets"],
-    queryFn: () => customFetch<Ticket[] | { tickets?: Ticket[] }>(`/api/support/tickets`).catch(() => []),
+    queryFn: () => customFetch<Ticket[] | { data?: Ticket[]; tickets?: Ticket[] }>(`/api/support/tickets`).catch(() => []),
   });
-  const list: Ticket[] = Array.isArray(q.data) ? q.data : (q.data?.tickets ?? []);
+  const list: Ticket[] = Array.isArray(q.data) ? q.data : (q.data?.data ?? q.data?.tickets ?? []);
 
   const create = useMutation({
     mutationFn: () => customFetch(`/api/support/tickets`, {
