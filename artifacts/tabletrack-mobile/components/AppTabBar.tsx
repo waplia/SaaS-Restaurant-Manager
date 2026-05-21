@@ -21,6 +21,15 @@ export interface AppTab {
  * The center slot is the New Order action — it pushes the new-order modal
  * stack rather than focusing a tab.
  */
+// Routes on which the custom tab bar should NOT render. These are
+// screens whose own UI fills the bottom of the viewport (e.g. the Khana
+// AI chat has a sticky text/mic/send input row) and would otherwise be
+// hidden behind the floating bar. NOTE: setting `tabBarStyle: { display:
+// "none" }` in screenOptions does NOT work for a custom tab bar — that
+// option is only honored by the default `BottomTabBar`. We must check
+// the focused route name here and short-circuit the render.
+const HIDDEN_ON_ROUTES = new Set<string>(["khana-ai-chat"]);
+
 export function makeAppTabBar(tabs: AppTab[]) {
   return function AppTabBar(props: BottomTabBarProps) {
     const colors = useColors();
@@ -28,6 +37,9 @@ export function makeAppTabBar(tabs: AppTab[]) {
     const isWeb = Platform.OS === "web";
     const isIOS = Platform.OS === "ios";
     const bottom = isWeb ? 16 : insets.bottom;
+
+    const focusedRouteName = props.state.routes[props.state.index]?.name;
+    if (focusedRouteName && HIDDEN_ON_ROUTES.has(focusedRouteName)) return null;
 
     const left = tabs.slice(0, 2);
     const right = tabs.slice(2, 4);
