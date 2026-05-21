@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Linking, Platform,
-  TextInput, Alert,
+  TextInput, Alert, Modal, Share,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
@@ -24,9 +24,25 @@ type Staff = {
   role: string; isActive?: boolean;
 };
 
-type FormValues = { name: string; email?: string; phone?: string; role: string };
+type FormValues = { name: string; email?: string; phone?: string; role: string; password?: string };
 
 const EDITABLE_ROLES = ["manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"];
+
+// Generate a memorable-but-strong 10-char temp password. Mirrors the web
+// /staff page algorithm: at least one upper, one lower, one digit, one
+// special; ambiguous chars (I/l/0/O/1) excluded so it's easy to read
+// aloud or copy from a screenshot.
+function generateTempPassword(): string {
+  const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "!@#$";
+  const all = upper + lower + digits + special;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  let pwd = pick(upper) + pick(lower) + pick(digits) + pick(special);
+  for (let i = 4; i < 10; i++) pwd += pick(all);
+  return pwd.split("").sort(() => Math.random() - 0.5).join("");
+}
 
 export default function StaffScreen() {
   const colors = useColors();
@@ -35,6 +51,13 @@ export default function StaffScreen() {
   const isWeb = Platform.OS === "web";
   const [editing, setEditing] = useState<Staff | null>(null);
   const [creating, setCreating] = useState(false);
+  // After a successful invite we surface the generated password to the
+  // inviter once. It is NEVER fetched again from the server — if they
+  // dismiss this without copying it the new staff member must use the
+  // Forgot Password flow.
+  const [generatedCreds, setGeneratedCreds] = useState<
+    { name: string; email: string; password: string } | null
+  >(null);
   const limits = usePlanLimits();
 
   const q = useQuery({
@@ -48,11 +71,25 @@ export default function StaffScreen() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["staff-list", restaurantId] });
 
   const createM = useMutation({
-    mutationFn: (body: FormValues) =>
-      customFetch(`/api/restaurants/${restaurantId}/staff`, {
-        method: "POST", body: JSON.stringify(body),
-      }),
-    onSuccess: () => { setCreating(false); invalidate(); },
+    mutationFn: async (body: FormValues) => {
+      // Generate the temp password on the client so we can show it to the
+      // inviter after success. The API hashes it server-side and returns
+      // the created user — it never echoes the password back.
+      const password = generateTempPassword();
+      await customFetch(`/api/restaurants/${restaurantId}/staff`, {
+        method: "POST", body: JSON.stringify({ ...body, password }),
+      });
+      return { ...body, password };
+    },
+    onSuccess: (created) => {
+      setCreating(false);
+      invalidate();
+      setGeneratedCreds({
+        name: created.name,
+        email: created.email ?? "",
+        password: created.password!,
+      });
+    },
     onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not invite staff"),
   });
 
@@ -172,9 +209,128 @@ export default function StaffScreen() {
         onSubmit={(v) => editing && updateM.mutate({ userId: editing.id, body: v })}
         onDelete={editing ? () => confirmDelete(editing) : undefined}
       />
+
+      {/* One-time credentials reveal after a successful invite.
+          The password is held only in this component's state — closing this
+          modal discards it forever. Mirrors the web /staff page behavior. */}
+      <CredentialsModal
+        creds={generatedCreds}
+        onClose={() => setGeneratedCreds(null)}
+      />
     </View>
   );
 }
+
+function CredentialsModal({
+  creds, onClose,
+}: {
+  creds: { name: string; email: string; password: string } | null;
+  onClose: () => void;
+}) {
+  const colors = useColors();
+  if (!creds) return null;
+  const shareText =
+    `${creds.name}'s sign-in for the team app:\n\n` +
+    `Email: ${creds.email}\nTemporary password: ${creds.password}\n\n` +
+    `Please change this password on first login.`;
+  // On web `navigator.clipboard.writeText` works directly; on native we
+  // fall back to opening the share sheet (which lets the inviter paste
+  // into WhatsApp/SMS/Email — the most common share targets anyway).
+  // The password is also rendered as `selectable` Text so the user can
+  // long-press → copy as a last resort.
+  const copy = async () => {
+    if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(creds.password);
+        Alert.alert("Copied", "Password copied to clipboard.");
+        return;
+      } catch { /* fall through */ }
+    }
+    try {
+      await Share.share({ message: creds.password });
+    } catch {
+      Alert.alert("Long-press to copy", "Long-press the password to select and copy it.");
+    }
+  };
+  const share = async () => {
+    try { await Share.share({ message: shareText }); } catch { /* user-cancelled */ }
+  };
+  return (
+    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+      <View style={credStyles.backdrop}>
+        <View style={[credStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[credStyles.iconCircle, { backgroundColor: colors.primary + "22" }]}>
+            <Ionicons name="checkmark-circle" size={32} color={colors.primary} />
+          </View>
+          <Text style={[credStyles.title, { color: colors.foreground }]}>Staff invited</Text>
+          <Text style={[credStyles.subtitle, { color: colors.mutedForeground }]}>
+            {creds.name} has been added. Share these credentials securely — they
+            will not be shown again.
+          </Text>
+
+          <View style={[credStyles.credBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Text style={[credStyles.credLabel, { color: colors.mutedForeground }]}>Email</Text>
+            <Text style={[credStyles.credValue, { color: colors.foreground }]} selectable>
+              {creds.email || "—"}
+            </Text>
+            <View style={{ height: 10 }} />
+            <Text style={[credStyles.credLabel, { color: colors.mutedForeground }]}>Temporary password</Text>
+            <Text style={[credStyles.credPassword, { color: colors.foreground }]} selectable>
+              {creds.password}
+            </Text>
+          </View>
+
+          <Text style={[credStyles.hint, { color: "#b45309" }]}>
+            Ask {creds.name.split(" ")[0] || "them"} to change this password after first sign-in.
+          </Text>
+
+          <View style={credStyles.btnRow}>
+            <Pressable
+              onPress={share}
+              style={({ pressed }) => [credStyles.btn, credStyles.btnGhost, {
+                borderColor: colors.border, opacity: pressed ? 0.85 : 1,
+              }]}
+            >
+              <Ionicons name="share-outline" size={16} color={colors.foreground} />
+              <Text style={[credStyles.btnText, { color: colors.foreground }]}>Share</Text>
+            </Pressable>
+            <Pressable
+              onPress={copy}
+              style={({ pressed }) => [credStyles.btn, {
+                backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1,
+              }]}
+            >
+              <Ionicons name="copy-outline" size={16} color="#fff" />
+              <Text style={[credStyles.btnText, { color: "#fff" }]}>Copy password</Text>
+            </Pressable>
+          </View>
+          <Pressable onPress={onClose} hitSlop={10} style={credStyles.closeRow}>
+            <Text style={[credStyles.closeText, { color: colors.mutedForeground }]}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const credStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", padding: 24 },
+  card: { borderRadius: 18, borderWidth: 1, padding: 22, gap: 10, alignItems: "stretch" },
+  iconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", alignSelf: "center" },
+  title: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center", marginTop: 4 },
+  subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
+  credBox: { borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 8 },
+  credLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
+  credValue: { fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 2 },
+  credPassword: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: 1.5, marginTop: 4 },
+  hint: { fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center", marginTop: 2 },
+  btnRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  btn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10 },
+  btnGhost: { borderWidth: 1, backgroundColor: "transparent" },
+  btnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  closeRow: { alignItems: "center", paddingVertical: 8, marginTop: 2 },
+  closeText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+});
 
 function StaffForm({
   visible, title, submitLabel, mode, member, submitting, onClose, onSubmit, onDelete,

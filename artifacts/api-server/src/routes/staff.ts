@@ -192,9 +192,16 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
   const [dup] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (dup) return void res.status(409).json({ error: "Email already in use" });
 
-  // Generate a random password — the invited user is expected to reset via
-  // the standard "forgot password" flow before logging in.
-  const tempPassword = randomBytes(16).toString("hex");
+  // Accept a client-supplied temp password so the inviter UI (web /staff
+  // page, mobile staff invite sheet) can show it to the admin once for
+  // sharing. If the client omits one we generate a random hex — but in
+  // that case the inviter has no way to see it and the staff member must
+  // use Forgot Password to set their own. Either way the new account is
+  // expected to change this password on first login.
+  const clientPassword = typeof body.password === "string" ? body.password : "";
+  const tempPassword = clientPassword.length >= 8
+    ? clientPassword
+    : randomBytes(16).toString("hex");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   // Inherit tenant from the inviter so the new staff is scoped to the same tenant.
