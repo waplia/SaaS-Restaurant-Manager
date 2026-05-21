@@ -339,12 +339,26 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
                       </Pressable>
                     ))}
                   </View>
+
+                  {/* Action buttons live directly below the payment options
+                      so they're never hidden behind the device tab/gesture
+                      bar. Previously they were in a fixed footer that was
+                      covered by the bottom navigation. */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      { backgroundColor: colors.primary, opacity: pressed || busy ? 0.7 : 1, marginTop: 4 },
+                    ]}
+                    onPress={handlePay}
+                    disabled={busy}
+                  >
+                    <Ionicons name="card-outline" size={16} color="#fff" />
+                    <Text style={styles.primaryBtnText}>Take Payment</Text>
+                  </Pressable>
                 </View>
               )}
-            </ScrollView>
 
-            <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
-              <View style={styles.footerRow}>
+              <View style={[styles.section, { borderTopColor: colors.border, gap: 8 }]}>
                 {canAdvance && (
                   <Pressable
                     style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.primary, opacity: pressed || busy ? 0.7 : 1 }]}
@@ -355,35 +369,20 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
                     <Text style={styles.primaryBtnText}>Mark {next}</Text>
                   </Pressable>
                 )}
-                {!isPaid && order.status !== "cancelled" && (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.primaryBtn,
-                      { backgroundColor: canAdvance ? colors.muted : colors.primary, opacity: pressed || busy ? 0.7 : 1 },
-                    ]}
-                    onPress={handlePay}
-                    disabled={busy}
-                  >
-                    <Ionicons name="card-outline" size={16} color={canAdvance ? colors.foreground : "#fff"} />
-                    <Text style={[styles.primaryBtnText, { color: canAdvance ? colors.foreground : "#fff" }]}>
-                      Take Payment
+                <View style={styles.footerRow}>
+                  <Pressable style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={handlePriority} disabled={busy}>
+                    <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>
+                      {isPriority ? "Unmark" : "Priority"}
                     </Text>
                   </Pressable>
-                )}
+                  {order.status !== "cancelled" && order.status !== "completed" && (
+                    <Pressable style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={handleCancel} disabled={busy}>
+                      <Text style={[styles.secondaryBtnText, { color: "#b91c1c" }]}>Cancel</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
-              <View style={styles.footerRow}>
-                <Pressable style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={handlePriority} disabled={busy}>
-                  <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>
-                    {isPriority ? "Unmark" : "Priority"}
-                  </Text>
-                </Pressable>
-                {order.status !== "cancelled" && order.status !== "completed" && (
-                  <Pressable style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={handleCancel} disabled={busy}>
-                    <Text style={[styles.secondaryBtnText, { color: "#b91c1c" }]}>Cancel</Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
+            </ScrollView>
           </>
         )}
       </Animated.View>
@@ -411,7 +410,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  body: { padding: 16, gap: 12 },
+  body: { padding: 16, gap: 12, paddingBottom: 120 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   metaText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
