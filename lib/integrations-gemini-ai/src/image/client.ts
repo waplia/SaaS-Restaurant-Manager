@@ -37,7 +37,7 @@ export async function generateImage(
 ): Promise<{ b64_json: string; mimeType: string }> {
   const client = getGeminiClient();
   const response = await client.models.generateContent({
-    model: "gemini-2.5-flash-image",
+    model: "gemini-3.1-flash-image-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       responseModalities: [Modality.TEXT, Modality.IMAGE],
