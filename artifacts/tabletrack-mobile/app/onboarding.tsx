@@ -6,6 +6,7 @@ import {
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -562,6 +563,13 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProp
   const [form, setForm] = useState({ categoryId: 0, kitchenId: 0, name: "", price: "", isVeg: true });
   const [busy, setBusy] = useState(false);
 
+  async function reloadItems() {
+    try {
+      const fresh = await api.get<{ id: number; name: string; price: string }[]>(`/restaurants/${restaurantId}/items`);
+      setItems(fresh);
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -621,6 +629,20 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProp
           <Text style={{ color: colors.mutedForeground }}>₹{it.price}</Text>
         </View>
       ))}
+
+      <MenuImportPanel
+        restaurantId={restaurantId}
+        api={api}
+        colors={colors}
+        onSaved={async () => { await reloadItems(); await onChanged(); }}
+      />
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>or add manually</Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+      </View>
+
       <FormField label="Category" colors={colors}>
         <ChoiceRow
           options={cats.map(c => ({ id: c.id, label: c.name }))}
@@ -662,6 +684,395 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProp
           </Pressable>
         )}
       </View>
+    </View>
+  );
+}
+
+// ───── AI Menu Import panel (used inside ItemsStep) ──────────────
+// Mirrors the web /ai/menu-import flow: pick a source (photo / URL / text),
+// kick off the AI extraction job, poll until ready, then auto-save every row
+// the AI didn't flag for review or duplicate. Photo uses expo-image-picker +
+// the same presigned-URL storage flow that expenses use for receipts. PDF
+// / CSV / Excel are intentionally not exposed on mobile yet (no document
+// picker installed); users can do those on the web dashboard.
+
+type ImportSource = "image" | "url" | "text";
+
+interface ImportItemRow {
+  id: number;
+  status: "draft" | "saved" | "skipped" | "error" | "rolled_back";
+  needsReview: boolean;
+  duplicateMatchId: number | null;
+  structured: { name: string; price?: number | string | null; categoryName?: string | null };
+}
+interface ImportDetail {
+  import: {
+    id: number;
+    status: "pending" | "processing" | "ready" | "partially_saved" | "saved" | "failed" | "rolled_back";
+    errorMessage: string | null;
+    totalRows: number;
+    needsReviewCount: number;
+    savedItemCount: number;
+  };
+  items: ImportItemRow[];
+}
+
+interface MenuImportPanelProps {
+  restaurantId: number;
+  api: ApiHelpers;
+  colors: ReturnType<typeof useColors>;
+  onSaved: () => Promise<void> | void;
+}
+
+function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanelProps) {
+  const [open, setOpen] = useState(false);
+  const [source, setSource] = useState<ImportSource>("image");
+  const [url, setUrl] = useState("");
+  const [text, setText] = useState("");
+  const [picked, setPicked] = useState<{ uri: string; name: string; mime: string; size: number } | null>(null);
+  const [importId, setImportId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<ImportDetail | null>(null);
+  const [status, setStatus] = useState<"idle" | "uploading" | "starting" | "processing" | "saving" | "done" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelledRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelledRef.current = true;
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
+  }, []);
+
+  function reset() {
+    cancelledRef.current = true;
+    if (pollRef.current) clearTimeout(pollRef.current);
+    pollRef.current = null;
+    setImportId(null); setDetail(null); setStatus("idle");
+    setError(null); setUrl(""); setText(""); setPicked(null);
+  }
+
+  // Run an async update only if the panel is still mounted and the current
+  // import hasn't been cancelled by reset/close.
+  const safe = <T,>(fn: (v: T) => void) => (v: T) => {
+    if (!cancelledRef.current && mountedRef.current) fn(v);
+  };
+
+  async function pickPhoto() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission needed", "Allow photo access to attach a menu photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const a = result.assets[0];
+      const blob = await (await fetch(a.uri)).blob();
+      setPicked({
+        uri: a.uri,
+        name: a.fileName ?? `menu-${Date.now()}.jpg`,
+        mime: a.mimeType ?? "image/jpeg",
+        size: blob.size,
+      });
+    } catch (e) {
+      Alert.alert("Could not pick photo", e instanceof Error ? e.message : "Try again.");
+    }
+  }
+
+  async function uploadPickedPhoto(): Promise<string> {
+    if (!picked) throw new Error("No photo picked");
+    const presign = await api.post<{ uploadURL: string; objectPath: string }>(
+      `/restaurants/${restaurantId}/storage/uploads/request-url`,
+      { name: picked.name, size: picked.size, contentType: picked.mime },
+    );
+    const blob = await (await fetch(picked.uri)).blob();
+    const put = await fetch(presign.uploadURL, {
+      method: "PUT",
+      headers: { "Content-Type": picked.mime },
+      body: blob,
+    });
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+    await api.post(`/restaurants/${restaurantId}/storage/uploads/finalize`, { objectPath: presign.objectPath });
+    return presign.objectPath;
+  }
+
+  async function pollDetail(id: number) {
+    try {
+      const d = await api.get<ImportDetail>(`/restaurants/${restaurantId}/ai/menu-import/imports/${id}`);
+      if (cancelledRef.current || !mountedRef.current) return;
+      safe(setDetail)(d);
+      const s = d.import.status;
+      if (s === "pending" || s === "processing") {
+        safe(setStatus)("processing");
+        pollRef.current = setTimeout(() => {
+          if (!cancelledRef.current && mountedRef.current) void pollDetail(id);
+        }, 2500);
+        return;
+      }
+      if (s === "failed") {
+        safe(setStatus)("error");
+        safe(setError)(d.import.errorMessage ?? "Import failed.");
+        return;
+      }
+      // Ready (or partially_saved) → auto-save rows the AI is confident in.
+      await autoSave(d);
+    } catch (e) {
+      if (cancelledRef.current || !mountedRef.current) return;
+      safe(setStatus)("error");
+      safe(setError)(e instanceof Error ? e.message : "Could not load import.");
+    }
+  }
+
+  async function autoSave(d: ImportDetail) {
+    const rowIds = d.items
+      .filter(r => r.status === "draft" && !r.needsReview && !r.duplicateMatchId)
+      .map(r => r.id);
+    if (rowIds.length === 0) {
+      safe(setStatus)("done");
+      safe(setError)(d.import.totalRows === 0
+        ? "AI couldn't find any items. Try a clearer photo or paste the text."
+        : `All ${d.import.totalRows} extracted item${d.import.totalRows === 1 ? "" : "s"} need review on the web dashboard before saving.`);
+      return;
+    }
+    safe(setStatus)("saving");
+    try {
+      const res = await api.post<{ savedCount: number; errors: { rowId: number; error: string }[] }>(
+        `/restaurants/${restaurantId}/ai/menu-import/imports/${d.import.id}/save`,
+        { rowIds },
+      );
+      if (cancelledRef.current || !mountedRef.current) {
+        // Panel was closed mid-save; still refresh items so the user sees them.
+        await onSaved();
+        return;
+      }
+      safe(setStatus)("done");
+      const flagged = d.import.totalRows - rowIds.length;
+      const msg =
+        `Imported ${res.savedCount} item${res.savedCount === 1 ? "" : "s"}` +
+        (flagged > 0 ? ` · ${flagged} need review on the web dashboard` : "") +
+        (res.errors.length > 0 ? ` · ${res.errors.length} failed` : "");
+      safe(setError)(msg);
+      await onSaved();
+    } catch (e) {
+      if (cancelledRef.current || !mountedRef.current) return;
+      safe(setStatus)("error");
+      safe(setError)(e instanceof Error ? e.message : "Save failed.");
+    }
+  }
+
+  async function start() {
+    // Re-enable safe state updates for this run (reset() flips this true).
+    cancelledRef.current = false;
+    setError(null);
+    try {
+      const body: Record<string, unknown> = { source };
+      if (source === "image") {
+        if (!picked) { Alert.alert("Pick a photo", "Choose a photo of your menu first."); return; }
+        setStatus("uploading");
+        body.fileName = picked.name;
+        body.objectPath = await uploadPickedPhoto();
+      } else if (source === "url") {
+        if (!/^https?:\/\//i.test(url.trim())) { Alert.alert("Invalid URL", "Enter a full https:// URL."); return; }
+        body.url = url.trim();
+      } else {
+        if (text.trim().length < 5) { Alert.alert("Paste menu text", "Paste the menu text first (at least a few items)."); return; }
+        if (text.length > 200_000) { Alert.alert("Too long", "Text is too long (max 200,000 characters)."); return; }
+        body.text = text;
+      }
+      safe(setStatus)("starting");
+      const res = await api.post<{ id: number }>(`/restaurants/${restaurantId}/ai/menu-import/start`, body);
+      if (cancelledRef.current || !mountedRef.current) return;
+      safe(setImportId)(res.id);
+      safe(setStatus)("processing");
+      void pollDetail(res.id);
+    } catch (e) {
+      if (cancelledRef.current || !mountedRef.current) return;
+      safe(setStatus)("error");
+      safe(setError)(e instanceof Error ? e.message : "Could not start import.");
+    }
+  }
+
+  const isBusy = status === "uploading" || status === "starting" || status === "processing" || status === "saving";
+
+  if (!open) {
+    return (
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [styles.importCta, { borderColor: colors.primary, backgroundColor: colors.primary + "10", opacity: pressed ? 0.85 : 1 }]}
+        testID="menu-import-open"
+      >
+        <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Import menu with AI</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Photo, link or paste — AI extracts items automatically.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[styles.importCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Ionicons name="sparkles" size={16} color={colors.primary} />
+        <Text style={{ flex: 1, color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>AI Menu Import</Text>
+        <Pressable onPress={() => { reset(); setOpen(false); }} hitSlop={10}>
+          <Ionicons name="close" size={18} color={colors.mutedForeground} />
+        </Pressable>
+      </View>
+
+      {!importId && (
+        <>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {(["image", "url", "text"] as ImportSource[]).map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setSource(s)}
+                style={[styles.importTab, {
+                  borderColor: source === s ? colors.primary : colors.border,
+                  backgroundColor: source === s ? colors.primary + "12" : "transparent",
+                }]}
+              >
+                <Ionicons
+                  name={s === "image" ? "image-outline" : s === "url" ? "link-outline" : "document-text-outline"}
+                  size={14}
+                  color={source === s ? colors.primary : colors.mutedForeground}
+                />
+                <Text style={{ color: source === s ? colors.primary : colors.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium" }}>
+                  {s === "image" ? "Photo" : s === "url" ? "URL" : "Text"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {source === "image" && (
+            <View style={{ gap: 8 }}>
+              <Pressable onPress={pickPhoto} disabled={isBusy}
+                style={({ pressed }) => [styles.uploadDrop, { borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}>
+                <Ionicons name="cloud-upload-outline" size={22} color={colors.mutedForeground} />
+                <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                  {picked ? "Change photo" : "Pick a photo of your menu"}
+                </Text>
+                {picked && (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 11 }} numberOfLines={1}>
+                    {picked.name} · {(picked.size / 1024).toFixed(0)} KB
+                  </Text>
+                )}
+              </Pressable>
+              <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
+                Best results with a flat, well-lit photo. JPG / PNG up to 10 MB.
+              </Text>
+            </View>
+          )}
+
+          {source === "url" && (
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Menu URL</Text>
+              <BasicInput
+                value={url}
+                onChangeText={setUrl}
+                placeholder="https://example.com/menu"
+                colors={colors}
+                autoCapitalize="none"
+              />
+              <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>Works best for plain HTML menus.</Text>
+            </View>
+          )}
+
+          {source === "text" && (
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Paste menu text</Text>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder={"Paneer Tikka — 249\nButter Naan — 60\nVeg Biryani — 180"}
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                numberOfLines={6}
+                style={[styles.textArea, { borderColor: colors.border, color: colors.foreground }]}
+              />
+            </View>
+          )}
+
+          {status === "uploading" && <StatusRow icon="cloud-upload" label="Uploading photo…" colors={colors} spinning />}
+          {status === "starting" && <StatusRow icon="rocket-outline" label="Starting import…" colors={colors} spinning />}
+          {status === "error" && error && (
+            <View style={{ flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca" }}>
+              <Ionicons name="alert-circle" size={18} color="#dc2626" />
+              <Text style={{ color: "#991b1b", flex: 1, fontSize: 13 }}>{error}</Text>
+            </View>
+          )}
+
+          <Pressable
+            onPress={start}
+            disabled={isBusy}
+            style={({ pressed }) => [styles.primaryBtn, {
+              backgroundColor: colors.primary,
+              opacity: isBusy ? 0.6 : pressed ? 0.85 : 1,
+              alignSelf: "flex-start",
+              paddingHorizontal: 22,
+            }]}
+            testID="menu-import-start"
+          >
+            {isBusy ? <ActivityIndicator color="#fff" /> : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="sparkles" size={14} color="#fff" />
+                <Text style={styles.primaryBtnText}>Run import</Text>
+              </View>
+            )}
+          </Pressable>
+        </>
+      )}
+
+      {importId && (
+        <View style={{ gap: 10 }}>
+          {status === "uploading" && <StatusRow icon="cloud-upload" label="Uploading photo…" colors={colors} />}
+          {status === "starting" && <StatusRow icon="rocket-outline" label="Starting import…" colors={colors} />}
+          {status === "processing" && (
+            <StatusRow icon="sync" label={`AI is reading your menu — usually 30–90 seconds${detail ? ` · ${detail.import.totalRows} item${detail.import.totalRows === 1 ? "" : "s"} so far` : ""}.`} colors={colors} spinning />
+          )}
+          {status === "saving" && <StatusRow icon="save-outline" label="Saving items to your menu…" colors={colors} spinning />}
+          {status === "done" && (
+            <View style={{ flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0" }}>
+              <Ionicons name="checkmark-circle" size={18} color="#059669" />
+              <Text style={{ color: "#065f46", flex: 1, fontSize: 13 }}>{error ?? "Done."}</Text>
+            </View>
+          )}
+          {status === "error" && (
+            <View style={{ flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca" }}>
+              <Ionicons name="alert-circle" size={18} color="#dc2626" />
+              <Text style={{ color: "#991b1b", flex: 1, fontSize: 13 }}>{error ?? "Something went wrong."}</Text>
+            </View>
+          )}
+          {(status === "done" || status === "error") && (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable onPress={reset} style={({ pressed }) => [styles.ghostBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: "Inter_500Medium" }}>Import another</Text>
+              </Pressable>
+              <Pressable onPress={() => { reset(); setOpen(false); }} style={({ pressed }) => [styles.ghostBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: "Inter_500Medium" }}>Close</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
+    </View>
+  );
+}
+
+function StatusRow({ icon, label, colors, spinning }: { icon: keyof typeof Ionicons.glyphMap; label: string; colors: ReturnType<typeof useColors>; spinning?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 8, backgroundColor: colors.muted }}>
+      {spinning ? <ActivityIndicator color={colors.primary} size="small" /> : <Ionicons name={icon} size={16} color={colors.primary} />}
+      <Text style={{ color: colors.foreground, fontSize: 13, flex: 1 }}>{label}</Text>
     </View>
   );
 }
@@ -1020,5 +1431,25 @@ const styles = StyleSheet.create({
   choice: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1,
+  },
+  label: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  importCta: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14,
+  },
+  importCard: {
+    borderWidth: 1, borderRadius: 12, padding: 14, gap: 12,
+  },
+  importTab: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderWidth: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10,
+  },
+  uploadDrop: {
+    borderWidth: 1, borderStyle: "dashed", borderRadius: 10,
+    padding: 16, alignItems: "center", gap: 6,
+  },
+  textArea: {
+    borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 110,
+    textAlignVertical: "top", fontSize: 14, fontFamily: "Inter_400Regular",
   },
 });
