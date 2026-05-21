@@ -139,24 +139,34 @@ export default function StaffScreen() {
           : `${staff.length} members`}
         showBack
         right={
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Pressable onPress={() => router.push("/(owner)/attendance" as never)} hitSlop={10}>
-              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Attendance</Text>
+          // Three header actions need to fit on a 360-dp viewport:
+          //   Attendance (icon-only) · Invite (icon-only, sends email) · Add
+          // The previous version used text labels for all three, which
+          // overflowed and clipped "Add" off-screen on smaller phones.
+          // We keep "Add" as the primary text-bearing button since it's
+          // the most-used action; Invite and Attendance become icon
+          // buttons (with accessibility labels for screen readers).
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Pressable
+              onPress={() => router.push("/(owner)/attendance" as never)}
+              hitSlop={10}
+              accessibilityLabel="Attendance"
+              style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
             </Pressable>
-            {/* Invite → emails the staff member; they set their own password.
-                Add    → generates a password and shows it to the owner so
-                         the staff member can sign in immediately. */}
             <Pressable
               onPress={() => staffLimit.reached
                 ? Alert.alert("Plan limit reached", staffLimit.reason ?? "Upgrade your plan to invite more staff.")
                 : setCreating("invite")}
               hitSlop={10}
-              style={({ pressed }) => [styles.outlineBtn, {
-                borderColor: colors.primary,
+              accessibilityLabel="Invite staff via email"
+              style={({ pressed }) => [styles.iconBtn, {
+                borderWidth: 1, borderColor: colors.primary, borderRadius: 16,
                 opacity: staffLimit.reached ? 0.4 : (pressed ? 0.7 : 1),
-              }]}>
+              }]}
+            >
               <Ionicons name="mail-outline" size={16} color={colors.primary} />
-              <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Invite</Text>
             </Pressable>
             <Pressable
               onPress={() => staffLimit.reached
@@ -463,4 +473,5 @@ const styles = StyleSheet.create({
   addBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   outlineBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, backgroundColor: "transparent" },
   outlineBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  iconBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
 });
