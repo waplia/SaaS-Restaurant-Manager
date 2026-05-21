@@ -20,6 +20,8 @@ import { requireSuperAdmin } from "../middleware/authorize";
 import { validate } from "../middleware/validate";
 import { recordAuditLog } from "../lib/audit";
 import { sendStaffOtp, verifyStaffOtp } from "../lib/staffOtp";
+import { sendByTemplateKey } from "../lib/emailSender";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -275,6 +277,44 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
     userId: createdUser.id, userDisplay: createdUser.name ?? createdUser.email, role: createdUser.role,
     newValue: { source: "google", requirePhone },
   });
+
+  // Lifecycle emails — parity with /auth/register. Best-effort, never block.
+  void sendByTemplateKey("restaurant_welcome", createdUser.email, {
+    name: createdUser.name,
+    restaurant: createdTenant.name,
+    appName: "Khana Lagao",
+    appUrl: process.env.PUBLIC_APP_URL ?? "",
+  }, { tenantId: createdTenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: createdUser.id, to: createdUser.email, err: r?.error, skip: r?.skippedReason }, "restaurant_welcome email did not send (google signup)");
+    })
+    .catch((err) => logger.error({ err, userId: createdUser.id, to: createdUser.email }, "restaurant_welcome email threw (google signup)"));
+
+  void sendByTemplateKey("trial_started", createdUser.email, {
+    name: createdUser.name,
+    trialDays: String(trialPlan?.trialDays ?? settings.trialDays ?? 14),
+    trialEndsAt: trialEndsAt.toISOString().slice(0, 10),
+    appName: "Khana Lagao",
+  }, { tenantId: createdTenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: createdUser.id, to: createdUser.email, err: r?.error, skip: r?.skippedReason }, "trial_started email did not send (google signup)");
+    })
+    .catch((err) => logger.error({ err, userId: createdUser.id, to: createdUser.email }, "trial_started email threw (google signup)"));
+
+  void (async () => {
+    try {
+      const { runAutomationsForEvent } = await import("../lib/emailAutomations");
+      const ctx = {
+        userId: createdUser.id, userEmail: createdUser.email, userName: createdUser.name,
+        tenantId: createdTenant.id, restaurantId: createdUser.restaurantId ?? null,
+        restaurantName: createdTenant.name, trialEndsAt: trialEndsAt.toISOString(),
+      };
+      await runAutomationsForEvent("user.signup", ctx);
+      await runAutomationsForEvent("trial.started", ctx);
+    } catch (err) {
+      logger.warn({ err, userId: createdUser.id }, "google signup automation chain failed");
+    }
+  })();
 
   if (requirePhone) {
     res.status(201).json({

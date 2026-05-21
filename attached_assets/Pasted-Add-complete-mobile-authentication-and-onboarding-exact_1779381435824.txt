@@ -1,0 +1,202 @@
+Add complete mobile authentication and onboarding exactly like the web app, but optimized for mobile UI/UX.
+
+The mobile app must include:
+
+1. Welcome / Auth Landing Screen
+- App logo
+- App name and short tagline
+- Login button
+- Register / Create Account button
+- Continue with Google
+- Continue with Apple for iOS
+- Terms & Privacy links
+
+2. Register Flow
+Create a full registration screen with:
+- Full name
+- Email
+- Mobile number
+- Password
+- Confirm password
+- Referral code optional
+- Accept Terms & Privacy checkbox
+- Register button
+- Link: Already have an account? Login
+
+Registration must include validation, loading state, duplicate email/mobile checks, proper error messages, and success state.
+
+3. OTP Verification
+After registration, show OTP verification screen:
+- Mobile OTP verification
+- Email OTP verification if required
+- Resend OTP with timer
+- Change mobile/email option
+- Verify and continue button
+
+4. Login Flow
+Add login screen with:
+- Email/mobile login
+- Password
+- Forgot password
+- Login button
+- Google login
+- Apple login for iOS
+- Link: New user? Register
+
+5. Forgot Password
+Add forgot password flow:
+- Enter email/mobile
+- OTP verification
+- New password
+- Confirm password
+- Reset password success
+
+6. Complete Onboarding Wizard
+After registration or first login, user should not go directly to dashboard.
+Show a step-by-step onboarding wizard like the web app.
+
+Onboarding steps should include:
+
+Step 1: User Type / Role Selection
+- Business Owner
+- Manager
+- Staff
+- Customer
+- Delivery Partner
+- Admin if applicable
+
+Use cards/radio selection, not raw ID input.
+
+Step 2: Profile Setup
+- Profile photo upload
+- Full name
+- Email
+- Mobile number
+- Gender optional
+- Date of birth optional
+- Address optional
+
+Step 3: Business Setup
+- Business name
+- Business type/category
+- Business logo upload
+- Cover image upload
+- Address
+- City
+- State
+- Country
+- Pincode
+- GST number optional
+- Website optional
+- Business hours
+
+Step 4: App-Specific Setup
+Based on the app type, show relevant setup only.
+
+For restaurant/POS/QR menu app:
+- Restaurant type
+- Dining / takeaway / delivery options
+- Table setup
+- Menu category setup
+- First menu item setup
+- Payment method setup
+- Tax/service charge setup
+
+For SaaS/business app:
+- Company name
+- Industry
+- Team size
+- Workspace name
+- Invite team members
+- Choose default modules
+- Connect integrations
+
+For marketplace/customer app:
+- Location
+- Preferences
+- Saved addresses
+- Notification preferences
+
+Step 5: Permissions Setup
+Ask permissions contextually:
+- Notification permission for order/account alerts
+- Camera permission for QR scan/upload
+- Location permission for delivery/address
+- Contacts permission only if actually needed
+
+Do not ask all permissions at app start. Ask only when relevant.
+
+Step 6: Setup Checklist
+After onboarding, show a setup checklist:
+- Account created
+- Profile completed
+- Business details added
+- Logo uploaded
+- First item/menu/product added
+- Payment setup completed
+- Team member invited
+- App/profile published
+
+Checklist should show progress percentage and allow users to continue later.
+
+7. Dashboard After Onboarding
+After onboarding, redirect user to role-based dashboard.
+
+Dashboard must show:
+- Setup progress
+- Quick actions
+- Smart empty states
+- Helpful guides
+- Continue setup button
+- Role-based menu items
+
+Do not show a blank dashboard.
+
+8. Mobile UX Requirements
+- Use stepper/progress indicator
+- Save progress after every step
+- Allow skip only for optional steps
+- Allow back and edit previous steps
+- Use bottom sheet pickers/dropdowns
+- Use searchable dropdowns for records
+- Use image upload/crop option
+- No raw ID fields anywhere
+- No broken buttons
+- No mock data
+- No fake data
+- Fully responsive for all mobile screen sizes
+- Fast loading
+- Smooth transitions
+- Proper keyboard handling
+- Safe area support for iOS/Android
+- Dark/light mode support if available
+
+9. Security Requirements
+- Store auth token securely using secure storage
+- Protected routes
+- Session persistence
+- Auto logout on token expiry
+- Refresh token support if backend has it
+- Account deletion option
+- Logout from all devices option if backend supports it
+
+10. Backend/API Requirements
+Connect onboarding to real backend APIs.
+Do not create only UI.
+All data entered during registration and onboarding must be saved in database.
+User onboarding status must be saved, for example:
+
+onboarding_status:
+- not_started
+- in_progress
+- completed
+
+Also save current_onboarding_step so users can continue if they close the app.
+
+11. Web App Matching Requirement
+Mobile onboarding should match the same logic and setup flow as the web app.
+If the web app already has register, login, business setup, role selection, workspace setup, or checklist, reuse the same backend APIs and database structure.
+Mobile should not create separate duplicate logic unless required.
+
+Final result:
+Create a complete production-ready mobile authentication and onboarding system with login, register, OTP verification, forgot password, role selection, profile setup, business setup, app-specific setup, permission setup, setup checklist, and role-based dashboard redirection.
