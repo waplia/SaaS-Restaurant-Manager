@@ -145,7 +145,7 @@ export default function LoginScreen() {
 
   // password
   const [identifier, setIdentifier] = useState("");
-  const [idMode, setIdMode] = useState<"email" | "mobile">("email");
+  const [idMode, setIdMode] = useState<"email" | "mobile">("mobile");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 

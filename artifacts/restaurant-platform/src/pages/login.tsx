@@ -144,7 +144,7 @@ function PasswordTab({
   loginWith2faCheck: (identifier: string, password: string) => Promise<LoginResponse>;
 }) {
   const [identifier, setIdentifier] = useState("");
-  const [idMode, setIdMode] = useState<"email" | "mobile">("email");
+  const [idMode, setIdMode] = useState<"email" | "mobile">("mobile");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
