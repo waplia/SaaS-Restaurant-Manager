@@ -7,6 +7,7 @@ import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
 import { createHash } from "crypto";
 import { recordAuditLog } from "../lib/audit";
+import { normalizePhone, toE164 } from "@workspace/phone-utils";
 
 async function checkRestaurantFeature(
   restaurantId: number | null | undefined,
@@ -221,22 +222,33 @@ router.post("/public/orders/recent", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, slug));
   if (!restaurant) { await respondAfter; return void res.status(404).json(generic); }
 
+  // Normalize the caller-provided phone to the same canonical form we store
+  // (e.g. "+91 9876543210"), so callers can match historical orders regardless
+  // of whether they typed a country code, spaces, dashes, etc.
+  const normPhone = normalizePhone(phone, restaurant.country);
+  if (!normPhone) { await respondAfter; return void res.status(400).json(generic); }
+
   // Authenticate caller: token must match an order belonging to this
   // restaurant whose phone equals the requested phone. validateGuestToken
   // returns the order id when the HMAC is valid.
   if (!validateGuestToken(lastOrderId, lastOrderToken)) { await respondAfter; return void res.status(403).json(generic); }
   const [authOrder] = await db.select({ id: ordersTable.id, phone: ordersTable.customerPhone, rid: ordersTable.restaurantId })
     .from(ordersTable).where(eq(ordersTable.id, lastOrderId));
-  if (!authOrder || authOrder.rid !== restaurant.id || !authOrder.phone || authOrder.phone !== phone.trim()) {
+  if (!authOrder || authOrder.rid !== restaurant.id || !authOrder.phone
+      || normalizePhone(authOrder.phone, restaurant.country) !== normPhone) {
     await respondAfter; return void res.status(403).json(generic);
   }
 
+  // Match both the canonical "+<dial> <national>" form (new orders) and the
+  // raw value the caller submitted (legacy orders saved before normalization
+  // existed), so historical reorder history isn't hidden after the rollout.
+  const phoneCandidates = Array.from(new Set([normPhone, phone.trim()].filter(Boolean)));
   const orders = await db.select({
     id: ordersTable.id, orderNumber: ordersTable.orderNumber, totalAmount: ordersTable.totalAmount,
     createdAt: ordersTable.createdAt, orderType: ordersTable.orderType,
   }).from(ordersTable).where(and(
     eq(ordersTable.restaurantId, restaurant.id),
-    eq(ordersTable.customerPhone, phone.trim()),
+    inArray(ordersTable.customerPhone, phoneCandidates),
     sql`${ordersTable.status} <> 'cancelled'`,
   )).orderBy(desc(ordersTable.createdAt)).limit(5);
 
@@ -379,6 +391,17 @@ router.post("/public/orders", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
   if (!restaurant) return void res.status(400).json({ error: "Restaurant not found" });
 
+  // Normalize the guest-supplied phone to canonical "+<dial> <national>" so
+  // it survives Twilio / WhatsApp dispatch (toE164 strips spaces at send time)
+  // and so lookups / reorder flows can match consistently regardless of how
+  // the diner typed it. Falls back to the restaurant's configured country.
+  const normalizedCustomerPhone = customerPhone
+    ? normalizePhone(String(customerPhone), restaurant.country)
+    : null;
+  if (customerPhone && !normalizedCustomerPhone) {
+    return void res.status(400).json({ error: "Please enter a valid phone number." });
+  }
+
   // Reject orders whose tableId belongs to a different restaurant — without
   // this check a malicious payload could attach an order to the wrong tenant's
   // floor table (the per-restaurant scope below would still skip the status
@@ -397,9 +420,16 @@ router.post("/public/orders", async (req, res) => {
   // cart conversion). Public flow has no authenticated identity, so we only
   // resolve when the guest provided a phone number.
   let resolvedCustomerRow: typeof customersTable.$inferSelect | undefined;
-  if (customerPhone) {
+  if (normalizedCustomerPhone) {
+    // Tolerant match: canonical form for new rows, raw form for legacy rows
+    // saved before normalization. Without this, blacklist/VIP checks could
+    // silently miss customers whose stored phone is still in the old format.
+    const custCandidates = Array.from(new Set([
+      normalizedCustomerPhone,
+      String(customerPhone).trim(),
+    ].filter(Boolean)));
     const [cust] = await db.select().from(customersTable)
-      .where(and(eq(customersTable.phone, String(customerPhone)), eq(customersTable.restaurantId, restaurantId)));
+      .where(and(inArray(customersTable.phone, custCandidates), eq(customersTable.restaurantId, restaurantId)));
     resolvedCustomerRow = cust;
   }
 
@@ -493,7 +523,7 @@ router.post("/public/orders", async (req, res) => {
     restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
     subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
     serviceCharge: "0.00", discountAmount: "0.00",
-    totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: customerPhone ?? null, notes: notes ?? null,
+    totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
     customerId: resolvedCustomerRow?.id ?? null,
     vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
     vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
@@ -578,10 +608,17 @@ router.post("/public/orders", async (req, res) => {
         await db.update(cartSessionsTable)
           .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
           .where(and(eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.sessionToken, String(sessKey))));
-      } else if (resolvedCustomerRow?.id || customerPhone) {
+      } else if (resolvedCustomerRow?.id || normalizedCustomerPhone) {
         const conds = [eq(cartSessionsTable.restaurantId, restaurantId), eq(cartSessionsTable.status, "active")];
         if (resolvedCustomerRow?.id) conds.push(eq(cartSessionsTable.customerId, resolvedCustomerRow.id));
-        else conds.push(eq(cartSessionsTable.customerPhone, String(customerPhone)));
+        else if (normalizedCustomerPhone) {
+          // Tolerant match for legacy cart sessions saved before normalization.
+          const cartCandidates = Array.from(new Set([
+            normalizedCustomerPhone,
+            String(customerPhone).trim(),
+          ].filter(Boolean)));
+          conds.push(inArray(cartSessionsTable.customerPhone, cartCandidates));
+        }
         await db.update(cartSessionsTable)
           .set({ status: "converted", orderId: order.id, convertedAt: new Date() })
           .where(and(...conds));
@@ -732,19 +769,22 @@ router.post("/public/orders/:orderId/arrive", async (req, res) => {
   }
   try {
     const { sendWhatsApp, sendSms } = await import("../lib/notifications");
-    const [r] = await db.select({ phone: restaurantsTable.phone }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+    const [r] = await db.select({ phone: restaurantsTable.phone, country: restaurantsTable.country })
+      .from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
     const body = `🚗 Curbside arrival for #${order.orderNumber}. ${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}.`.trim();
-    if (r?.phone) {
+    // Convert to E.164 (no spaces) so Twilio / WhatsApp accept the recipient.
+    const dispatchTo = r?.phone ? (toE164(r.phone, r.country) ?? r.phone) : null;
+    if (dispatchTo) {
       let waOk = false;
       try {
-        await sendWhatsApp({ to: r.phone, body });
+        await sendWhatsApp({ to: dispatchTo, body });
         waOk = true;
       } catch (err) {
         logger.error?.({ err, orderId }, "curbside arrival WhatsApp failed; falling back to SMS");
       }
       if (!waOk) {
         try {
-          await sendSms({ to: r.phone, body });
+          await sendSms({ to: dispatchTo, body });
         } catch (err) {
           logger.error?.({ err, orderId }, "curbside arrival SMS fallback failed");
         }
@@ -1481,8 +1521,19 @@ router.post("/public/loyalty/lookup", async (req, res) => {
   const cfg = await loadLoyaltyConfig(restaurant.id);
   if (!cfg.enabled) return void res.status(404).json({ error: "Loyalty program not active" });
 
+  // For phone lookups, accept both the canonical "+<dial> <national>" form
+  // (which the UI now submits via PhoneInput) and any legacy raw value the
+  // caller might still have on file. We also fall back to normalizing the
+  // input so a guest who types "+91 9876543210" can find a customer that
+  // was saved as "9876543210" (and vice-versa).
+  const phoneLookupCandidates = hasPhone
+    ? Array.from(new Set([
+        phoneTrim,
+        normalizePhone(phoneTrim, null) ?? "",
+      ].filter(Boolean)))
+    : [];
   const identityFilter = hasPhone
-    ? eq(customersTable.phone, phoneTrim)
+    ? inArray(customersTable.phone, phoneLookupCandidates)
     : eq(customersTable.email, emailTrim);
   const [customer] = await db.select().from(customersTable)
     .where(and(eq(customersTable.restaurantId, restaurant.id), identityFilter));

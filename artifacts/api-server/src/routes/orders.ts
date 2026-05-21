@@ -3,6 +3,7 @@ import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm"
 import Stripe from "stripe";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
+import { toE164 } from "@workspace/phone-utils";
 import { triggerAutoPost } from "./accounting-books";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
@@ -217,7 +218,10 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
   }
   if (customer.phone) {
     const msg = `Hi ${customer.name}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
-    sendWhatsApp({ to: customer.phone, body: msg }).catch(console.error);
+    // Normalize to strict E.164 so WhatsApp / SMS providers accept the recipient.
+    const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
+    sendWhatsApp({ to, body: msg }).catch(console.error);
   }
 }
 
@@ -2394,7 +2398,8 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
       const [customer] = await db.select({ phone: customersTable.phone, email: customersTable.email, name: customersTable.name })
         .from(customersTable).where(eq(customersTable.id, order.customerId));
       if (customer?.phone) {
-        sendWhatsApp({ to: customer.phone, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
+        const to = toE164(customer.phone, null) ?? customer.phone;
+        sendWhatsApp({ to, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
       }
       if (customer?.email) {
         // Email the customer through the Super Admin–editable

@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
 import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/PhoneInput";
 
 const API_BASE = "/api";
 
@@ -1558,7 +1559,7 @@ export default function CustomerMenuPage() {
               <p className="font-semibold text-gray-800 mb-2 flex items-center gap-2"><RotateCcw className="w-4 h-4 text-orange-500" /> Reorder a recent order</p>
               <p className="text-xs text-gray-500 mb-2">Enter the phone number you used last time and we'll show your past orders.</p>
               <div className="flex gap-2">
-                <input type="tel" placeholder="Phone number" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={reorderPhone} onChange={e => setReorderPhone(e.target.value)} />
+                <PhoneInput value={reorderPhone} onChange={setReorderPhone} placeholder="Phone number" className="flex-1" />
                 <button type="button" onClick={fetchRecentOrders} disabled={reorderLoading} className="px-4 py-2 rounded-xl bg-orange-100 text-orange-700 text-sm font-semibold disabled:opacity-50">
                   {reorderLoading ? "…" : "Find"}
                 </button>
@@ -1584,7 +1585,7 @@ export default function CustomerMenuPage() {
             <p className="font-semibold text-gray-800 mb-3">Your Details {orderMode === "curbside" || !tableId ? "" : "(optional)"}</p>
             <div className="space-y-3">
               <input type="text" placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-              <input type="tel" placeholder={orderMode === "curbside" ? "Phone number *" : "Phone number"} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+              <PhoneInput value={customerPhone} onChange={setCustomerPhone} placeholder={orderMode === "curbside" ? "Phone number *" : "Phone number"} required={orderMode === "curbside" || !tableId} />
               <textarea placeholder="Special requests or notes" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300" rows={2} value={orderNotes} onChange={e => setOrderNotes(e.target.value)} />
             </div>
           </div>
@@ -2300,13 +2301,11 @@ export default function CustomerMenuPage() {
                 <label className="text-xs font-semibold text-gray-700 mb-1 block">{rewardsMode === "phone" ? "Phone number" : "Email address"}</label>
                 <div className="flex gap-2">
                   {rewardsMode === "phone" ? (
-                    <input
-                      type="tel"
-                      inputMode="tel"
+                    <PhoneInput
                       value={rewardsPhone}
-                      onChange={e => setRewardsPhone(e.target.value)}
+                      onChange={setRewardsPhone}
                       placeholder="Enter the phone you used to order"
-                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                      className="flex-1"
                     />
                   ) : (
                     <input
