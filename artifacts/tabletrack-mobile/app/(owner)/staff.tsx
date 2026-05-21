@@ -29,7 +29,7 @@ export default function StaffScreen() {
         subtitle={`${staff.length} members`}
         showBack
         right={
-          <Pressable onPress={() => router.push("/(owner)/attendance" as never)} hitSlop={8}>
+          <Pressable onPress={() => router.push("/(owner)/attendance" as never)} hitSlop={10}>
             <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Attendance</Text>
           </Pressable>
         }
@@ -54,7 +54,7 @@ export default function StaffScreen() {
                 </Text>
               </View>
               {s.phone ? (
-                <Pressable hitSlop={8} onPress={() => Linking.openURL(`tel:${s.phone}`)}>
+                <Pressable hitSlop={10} onPress={() => Linking.openURL(`tel:${s.phone}`)}>
                   <Ionicons name="call-outline" size={20} color={colors.primary} />
                 </Pressable>
               ) : null}

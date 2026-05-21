@@ -69,7 +69,7 @@ export default function NotificationsScreen() {
           list.some(n => !n.readAt) ? (
             <Pressable
               onPress={() => markRead.mutate(list.filter(n => !n.readAt).map(n => n.id))}
-              hitSlop={8}
+              hitSlop={10}
             >
               <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Mark all read</Text>
             </Pressable>

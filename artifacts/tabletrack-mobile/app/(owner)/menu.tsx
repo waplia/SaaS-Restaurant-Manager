@@ -73,7 +73,7 @@ export default function MenuScreen() {
   const addButton = (
     <Pressable
       onPress={() => setShowCreate(true)}
-      hitSlop={8}
+      hitSlop={10}
       style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
     >
       <Ionicons name="add" size={18} color="#fff" />

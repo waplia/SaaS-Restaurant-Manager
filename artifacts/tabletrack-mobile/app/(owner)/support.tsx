@@ -51,7 +51,7 @@ export default function SupportScreen() {
         title="Support"
         showBack
         right={
-          <Pressable onPress={() => setShowNew(s => !s)} hitSlop={8}>
+          <Pressable onPress={() => setShowNew(s => !s)} hitSlop={10}>
             <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
               {showNew ? "Cancel" : "+ New"}
             </Text>

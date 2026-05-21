@@ -69,7 +69,7 @@ export function MetricCard(props: MetricCardProps) {
           {onRetry ? (
             <Pressable
               onPress={onRetry}
-              hitSlop={8}
+              hitSlop={10}
               style={[styles.retryBtn, { borderColor: colors.border }]}
             >
               <Ionicons name="refresh" size={12} color={colors.foreground} />

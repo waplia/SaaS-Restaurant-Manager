@@ -39,7 +39,7 @@ export function NewOrderCenterButton({ size = 64 }: { size?: number }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", justifyContent: "center", marginTop: -22 },
+  wrap: { alignItems: "center", justifyContent: "center", marginTop: -22, overflow: "visible", paddingTop: 4, paddingHorizontal: 4 },
   btn: {
     alignItems: "center",
     justifyContent: "center",

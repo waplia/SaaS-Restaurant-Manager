@@ -423,7 +423,7 @@ export function VoiceOrderModal({ visible, restaurantId, tableId, menuItems, onC
                       <Pressable onPress={() => updateQty(idx, 1)} style={[styles.qtyBtn, { borderColor: colors.border }]}>
                         <Ionicons name="add" size={16} color={colors.text} />
                       </Pressable>
-                      <Pressable onPress={() => removeItem(idx)} style={{ marginLeft: 4 }} hitSlop={6}>
+                      <Pressable onPress={() => removeItem(idx)} style={{ marginLeft: 4 }} hitSlop={10}>
                         <Ionicons name="trash-outline" size={18} color="#ef4444" />
                       </Pressable>
                     </View>

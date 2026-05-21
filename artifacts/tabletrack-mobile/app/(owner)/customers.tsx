@@ -75,7 +75,7 @@ export default function CustomersScreen() {
                 </Text>
               </View>
               {c.phone ? (
-                <Pressable hitSlop={8} onPress={() => Linking.openURL(`tel:${c.phone}`)}>
+                <Pressable hitSlop={10} onPress={() => Linking.openURL(`tel:${c.phone}`)}>
                   <Ionicons name="call-outline" size={20} color={colors.primary} />
                 </Pressable>
               ) : null}

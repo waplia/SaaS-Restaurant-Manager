@@ -117,7 +117,7 @@ export default function MyDeliveriesScreen() {
               {user?.name ?? "Rider"} · ₹{totalCodOutstanding.toFixed(0)} cash to hand in
             </Text>
           </View>
-          <Pressable onPress={async () => { await logout(); router.replace("/login"); }} hitSlop={8}>
+          <Pressable onPress={async () => { await logout(); router.replace("/login"); }} hitSlop={10}>
             <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
           </Pressable>
         </View>

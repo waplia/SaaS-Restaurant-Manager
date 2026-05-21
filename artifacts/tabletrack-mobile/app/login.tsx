@@ -295,12 +295,12 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: isWeb ? 67 + 32 : insets.top + 32, paddingBottom: isWeb ? 34 : insets.bottom + 32 },
+          { paddingTop: isWeb ? 67 + 32 : insets.top + 16, paddingBottom: isWeb ? 34 : insets.bottom + 32 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
@@ -393,7 +393,7 @@ export default function LoginScreen() {
                         placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
                         secureTextEntry={!showPassword} testID="password-input"
                       />
-                      <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={8}>
+                      <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10}>
                         <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
                       </Pressable>
                     </View>

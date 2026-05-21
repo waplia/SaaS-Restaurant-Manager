@@ -78,9 +78,9 @@ export function makeAppTabBar(tabs: AppTab[]) {
   };
 }
 const styles = StyleSheet.create({
-  wrap: { position: "absolute", left: 0, right: 0, bottom: 0 },
-  row: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 4, paddingTop: 8, paddingBottom: 6, minHeight: 60 },
+  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, overflow: "visible" },
+  row: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 4, paddingTop: 8, paddingBottom: 6, minHeight: 60, overflow: "visible" },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, paddingVertical: 6 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  centerSlot: { width: 80, alignItems: "center", justifyContent: "center" },
+  centerSlot: { width: 80, alignItems: "center", justifyContent: "center", overflow: "visible" },
 });

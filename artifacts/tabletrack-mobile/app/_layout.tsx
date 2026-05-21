@@ -5,9 +5,11 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
@@ -102,6 +104,8 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    ...Ionicons.font,
+    ...Feather.font,
   });
 
   useEffect(() => {
@@ -164,6 +168,7 @@ export default function RootLayout() {
             <CartProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
+                  <StatusBar style="dark" translucent backgroundColor="transparent" />
                   <RootLayoutNav />
                 </KeyboardProvider>
               </GestureHandlerRootView>
