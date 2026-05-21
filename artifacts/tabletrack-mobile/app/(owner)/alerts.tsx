@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 13, fontFamily: "Inter_400Regular" },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   sevDot: { width: 4, height: 36, borderRadius: 2 },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "space-between" },
   rowTitle: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
   sevText: { fontSize: 10, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.5 },

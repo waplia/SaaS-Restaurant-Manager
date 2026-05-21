@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   balanceNum: { color: "#fff", fontSize: 36, fontFamily: "Inter_700Bold", marginTop: 4 },
   balanceSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
   chatCta: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1.5 },
-  iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   chatTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   chatDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   heading: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 4 },

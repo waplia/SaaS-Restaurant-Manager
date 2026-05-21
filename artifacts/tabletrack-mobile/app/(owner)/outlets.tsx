@@ -89,7 +89,7 @@ export default function OutletsScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14 },
-  iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   name: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },

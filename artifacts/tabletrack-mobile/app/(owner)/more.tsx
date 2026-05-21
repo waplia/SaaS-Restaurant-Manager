@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { allowedModules, ROLE_LABEL, type ModuleKey } from "@/lib/roles";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { AICreditChip } from "@/components/AICreditChip";
+import { CircleIcon } from "@/components/Icon";
 
 interface ModuleDef {
   key: ModuleKey;
@@ -105,9 +106,7 @@ export default function MoreScreen() {
                     },
                   ]}
                 >
-                  <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-                    <Ionicons name={m.icon} size={18} color={colors.primary} />
-                  </View>
+                  <CircleIcon name={m.icon} size={18} diameter={34} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{m.label}</Text>
                     <Text style={[styles.desc, { color: colors.mutedForeground }]} numberOfLines={1}>{m.desc}</Text>
@@ -132,7 +131,6 @@ const styles = StyleSheet.create({
   section: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 4 },
   card: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
-  iconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   desc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 });

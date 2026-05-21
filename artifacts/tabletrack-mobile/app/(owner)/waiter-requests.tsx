@@ -106,7 +106,7 @@ export default function WaiterRequestsScreen() {
 
 const styles = StyleSheet.create({
   card: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 12 },
-  iconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 14, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
   notes: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   time: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },

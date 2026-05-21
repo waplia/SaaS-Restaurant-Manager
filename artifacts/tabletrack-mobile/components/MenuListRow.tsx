@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { CircleIcon } from "@/components/Icon";
 
 export interface MenuListRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -48,9 +49,7 @@ export function MenuListRow({
         { backgroundColor: colors.card, borderColor: colors.border, opacity: disabled ? 0.5 : pressed ? 0.75 : 1 },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-        <Ionicons name={icon} size={20} color={colors.primary} />
-      </View>
+      <CircleIcon name={icon} size={18} diameter={36} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.label, { color: colors.foreground }]} numberOfLines={1}>{label}</Text>
         {description ? (
@@ -75,7 +74,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     borderRadius: 12, borderWidth: 1,
   },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   desc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   badge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center" },

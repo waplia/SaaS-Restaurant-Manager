@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontFamily: "Inter_700Bold" },
   sub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   card: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 12 },
-  iconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   cardTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   notes: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   time: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },

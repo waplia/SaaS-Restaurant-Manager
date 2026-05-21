@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   card: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 12 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   sub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   amount: { fontSize: 15, fontFamily: "Inter_700Bold" },

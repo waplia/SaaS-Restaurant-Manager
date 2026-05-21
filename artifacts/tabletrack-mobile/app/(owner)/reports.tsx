@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   popQty: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   section: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 4 },
   reportRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
-  iconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   reportTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   reportDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   note: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 8, lineHeight: 18 },

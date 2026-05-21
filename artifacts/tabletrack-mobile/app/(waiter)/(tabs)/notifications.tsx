@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginTop: 16 },
   list: { padding: 12, gap: 8 },
   notifCard: { flexDirection: "row", alignItems: "flex-start", borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
-  iconWrap: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   notifContent: { flex: 1, gap: 2 },
   notifTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   notifMsg: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },

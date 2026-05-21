@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 14, paddingVertical: 14, borderRadius: 12, borderWidth: 1,
   },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1 },
   rowTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
   rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular" },

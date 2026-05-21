@@ -707,9 +707,7 @@ function QuickAction({ icon, label, onPress }: { icon: keyof typeof Ionicons.gly
         },
       ]}
     >
-      <View style={[styles.quickIconWrap, { backgroundColor: colors.accent }]}>
-        <Ionicons name={icon} size={20} color={colors.primary} />
-      </View>
+      <Ionicons name={icon} size={24} color={colors.primary} />
       <Text style={[styles.quickLabel, { color: colors.foreground }]} numberOfLines={1}>
         {label}
       </Text>
@@ -747,9 +745,6 @@ const styles = StyleSheet.create({
     flexBasis: "23%", flexGrow: 1, minWidth: 76, minHeight: 76,
     alignItems: "center", justifyContent: "center", gap: 6,
     borderRadius: 14, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 6,
-  },
-  quickIconWrap: {
-    width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center",
   },
   quickLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   row2: { flexDirection: "row", gap: 10 },

@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   imageWrap: { width: 88, height: 88, borderRadius: 14, overflow: "hidden", position: "relative" },
   image: { width: "100%", height: "100%" },
   imagePh: { alignItems: "center", justifyContent: "center" },
-  bestBadge: { position: "absolute", top: 4, left: 4, flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#f97316", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 8 },
+  bestBadge: { position: "absolute", top: 4, left: 4, flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#f97316", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 },
   bestText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
   outChip: { position: "absolute", bottom: 4, left: 4, right: 4, backgroundColor: "rgba(0,0,0,0.7)", borderRadius: 6, paddingVertical: 2, alignItems: "center" },
   outText: { color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" },
