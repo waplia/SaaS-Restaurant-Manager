@@ -23,8 +23,12 @@ export default function IndexScreen() {
     );
   }
 
+  // First-time / signed-out users land on the welcome screen (Create account /
+  // Sign in / Continue with Google). Returning signed-in users go to their
+  // role dashboard. The login screen is now reached *through* welcome, not
+  // as the default entry point.
   if (!user) {
-    return <Redirect href="/login" />;
+    return <Redirect href="/welcome" />;
   }
 
   return <Redirect href={roleHomePath(user.role) as never} />;

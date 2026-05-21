@@ -438,6 +438,11 @@ export default function LoginScreen() {
                   >
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Sign in</Text>}
                   </Pressable>
+                  <Pressable onPress={() => router.push("/forgot-password" as never)} hitSlop={8}>
+                    <Text style={{ color: colors.primary, fontSize: 13, textAlign: "center", marginTop: 4, fontFamily: "Inter_500Medium" }}>
+                      Forgot password?
+                    </Text>
+                  </Pressable>
                   {authSettings?.googleSignInEnabled && googleConfigured ? (
                     <>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
