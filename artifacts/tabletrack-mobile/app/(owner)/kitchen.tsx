@@ -276,10 +276,13 @@ function KdsView() {
       // loses sight of an order they're actively working on. On mobile the
       // KDS uses tabs (vs the web's side-by-side columns), so without this
       // the card appears to "disappear" after Accept & Start / Mark Ready.
+      // Auto-jump only when the ticket moves to a workflow tab the cook is
+      // actively watching (Preparing / Ready). When marking served, the cook
+      // is finishing the order — they should stay on their current tab and
+      // simply see the card disappear, not get bounced to History.
       const destTab: KdsTabKey | null =
         nextStatus === "preparing" ? "preparing"
         : nextStatus === "ready" ? "ready"
-        : nextStatus === "served" ? "history"
         : null;
       const orderLabel = `#${ticket.orderNumber ?? ticket.id}`;
       const verb =
@@ -288,10 +291,8 @@ function KdsView() {
         : "served";
       if (destTab && destTab !== tab) {
         setTab(destTab);
-        showToast("success", `${orderLabel} ${verb}`);
-      } else {
-        showToast("success", `${orderLabel} ${verb}`);
       }
+      showToast("success", `${orderLabel} ${verb}`);
     } catch (err) {
       if (previous) qc.setQueryData(queryKey, previous);
       showToast("error", (err as Error).message || "Couldn't update ticket. Please try again.");
