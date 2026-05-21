@@ -165,4 +165,51 @@ router.post("/restaurants/:restaurantId/branches", requireRole("owner", "manager
   res.status(201).json(branch);
 });
 
+router.patch("/restaurants/:restaurantId/branches/:branchId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const branchId = Number(req.params.branchId);
+  const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  if (!restaurant) return void res.status(404).json({ error: "Not found" });
+  if (!assertRestaurantAccess(req, restaurant.tenantId)) return void res.status(403).json({ error: "Access denied" });
+  const [existing] = await db.select().from(branchesTable).where(and(eq(branchesTable.id, branchId), eq(branchesTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Branch not found" });
+
+  const { name, address, phone, isMain } = req.body ?? {};
+  const updates: Record<string, unknown> = {};
+  if (typeof name === "string" && name.trim()) updates.name = name.trim();
+  if (address !== undefined) updates.address = address === "" ? null : String(address);
+  if (phone !== undefined) updates.phone = phone === "" ? null : String(phone);
+  if (typeof isMain === "boolean") updates.isMain = isMain;
+
+  const [updated] = await db.update(branchesTable).set(updates).where(eq(branchesTable.id, branchId)).returning();
+  await recordAuditLog({
+    req, module: "restaurants", action: "branch.update", entity: "branch",
+    entityId: branchId, restaurantId, targetRestaurantId: restaurantId,
+    oldValue: { name: existing.name, address: existing.address, phone: existing.phone, isMain: existing.isMain },
+    newValue: updates,
+  });
+  res.json(updated);
+});
+
+router.delete("/restaurants/:restaurantId/branches/:branchId", requireRole("owner", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const branchId = Number(req.params.branchId);
+  const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+  if (!restaurant) return void res.status(404).json({ error: "Not found" });
+  if (!assertRestaurantAccess(req, restaurant.tenantId)) return void res.status(403).json({ error: "Access denied" });
+  const [existing] = await db.select().from(branchesTable).where(and(eq(branchesTable.id, branchId), eq(branchesTable.restaurantId, restaurantId)));
+  if (!existing) return void res.status(404).json({ error: "Branch not found" });
+  try {
+    await db.delete(branchesTable).where(eq(branchesTable.id, branchId));
+  } catch {
+    return void res.status(409).json({ error: "Cannot delete: branch has linked records" });
+  }
+  await recordAuditLog({
+    req, module: "restaurants", action: "branch.delete", entity: "branch",
+    entityId: branchId, restaurantId, targetRestaurantId: restaurantId,
+    oldValue: { name: existing.name, address: existing.address },
+  });
+  res.status(204).send();
+});
+
 export default router;

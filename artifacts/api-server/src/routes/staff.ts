@@ -13,6 +13,8 @@ import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { getObjectAclPolicy } from "../lib/objectAcl";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 const objectStorageService = new ObjectStorageService();
 
@@ -169,6 +171,60 @@ function buildStaffPatch(body: Record<string, unknown>): StaffPatch {
 
 const ALLOWED_ROLES = ["owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "hr_officer"];
 const ALLOWED_SALARY_TYPES = ["fixed_monthly", "daily_wage", "hourly_wage", "commission", "custom"];
+
+router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const role = typeof body.role === "string" ? body.role : "waiter";
+  const phone = typeof body.phone === "string" ? body.phone.trim() : null;
+
+  if (!name) return void res.status(400).json({ error: "name is required" });
+  if (!email) return void res.status(400).json({ error: "email is required" });
+  if (!ALLOWED_ROLES.includes(role)) return void res.status(400).json({ error: "Invalid role" });
+  if (role === "owner" && !req.user?.isSuperAdmin) return void res.status(403).json({ error: "Cannot assign owner role" });
+
+  const [dup] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  if (dup) return void res.status(409).json({ error: "Email already in use" });
+
+  // Generate a random password — the invited user is expected to reset via
+  // the standard "forgot password" flow before logging in.
+  const tempPassword = randomBytes(16).toString("hex");
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  // Inherit tenant from the inviter so the new staff is scoped to the same tenant.
+  const [inviter] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.sub));
+  const tenantId = inviter?.tenantId ?? null;
+
+  const [user] = await db.insert(usersTable).values({
+    name, email, passwordHash, role, phone, restaurantId, tenantId,
+    isActive: true,
+  }).returning();
+
+  await db.insert(staffTable).values({ userId: user.id, restaurantId });
+  await audit(restaurantId, req.user?.sub ?? null, "create", "staff", user.id, { email, role }, req.ip);
+
+  const rows = await loadStaffWithUser(restaurantId);
+  const row = rows.find((r) => r.userId === user.id);
+  res.status(201).json(row ? flattenStaffRow(row) : { id: user.id, name, email, role });
+});
+
+router.delete("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "super_admin"), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const userId = Number(req.params.userId);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user || user.restaurantId !== restaurantId) return void res.status(404).json({ error: "Not found" });
+  if (user.id === req.user?.sub) return void res.status(400).json({ error: "Cannot deactivate yourself" });
+  // Soft-delete: deactivate the user account and bump the token version so
+  // any active sessions are immediately invalidated. Hard delete is avoided
+  // because users are referenced by orders/audit logs/etc.
+  await db.update(usersTable)
+    .set({ isActive: false, tokenVersion: sql`${usersTable.tokenVersion} + 1`, updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
+  await audit(restaurantId, req.user?.sub ?? null, "delete", "staff", userId, { email: user.email }, req.ip);
+  res.status(204).send();
+});
 
 router.patch("/restaurants/:restaurantId/staff/:userId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);

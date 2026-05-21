@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Switch, TextInput,
-  Platform, Alert, Pressable, Modal, KeyboardAvoidingView,
+  Platform, Alert, Pressable,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
@@ -10,6 +10,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
 
 type MenuItem = {
   id: number;
@@ -29,13 +30,9 @@ export default function MenuScreen() {
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
   const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<MenuItem | null>(null);
 
-  // The API exposes menu items at `/restaurants/:id/items` — the previous
-  // `/menu/items` path doesn't exist and always returned 404, which is why
-  // this screen looked empty.
-  // Surface server errors rather than silently returning [] — a blank
-  // screen on a failed request hides real problems (auth, plan gate, etc).
   const q = useQuery({
     queryKey: ["menu-items-mobile", restaurantId],
     queryFn: () => customFetch<MenuItem[]>(`/api/restaurants/${restaurantId}/items`),
@@ -49,30 +46,40 @@ export default function MenuScreen() {
   });
   const categories: Category[] = Array.isArray(categoriesQ.data) ? categoriesQ.data : [];
 
+  const errToast = (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not save");
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["menu-items-mobile", restaurantId] });
+
   const toggle = useMutation({
     mutationFn: ({ id, isAvailable }: { id: number; isAvailable: boolean }) =>
       customFetch(`/api/restaurants/${restaurantId}/items/${id}`, {
         method: "PATCH", body: JSON.stringify({ isAvailable }),
       }),
-    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not update item"),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["menu-items-mobile", restaurantId] }),
+    onError: errToast,
+    onSettled: invalidate,
   });
 
   const create = useMutation({
-    mutationFn: (body: { name: string; price: string; categoryId: number | null }) =>
-      customFetch(`/api/restaurants/${restaurantId}/items`, {
-        method: "POST", body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      setShowCreate(false);
-      qc.invalidateQueries({ queryKey: ["menu-items-mobile", restaurantId] });
-    },
-    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not create item"),
+    mutationFn: (body: Partial<MenuItem>) =>
+      customFetch(`/api/restaurants/${restaurantId}/items`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => { setCreating(false); invalidate(); },
+    onError: errToast,
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Partial<MenuItem> }) =>
+      customFetch(`/api/restaurants/${restaurantId}/items/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { setEditing(null); invalidate(); },
+    onError: errToast,
+  });
+  const deleteM = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/restaurants/${restaurantId}/items/${id}`, { method: "DELETE" }),
+    onSuccess: () => { setEditing(null); invalidate(); },
+    onError: errToast,
   });
 
   const addButton = (
     <Pressable
-      onPress={() => setShowCreate(true)}
+      onPress={() => setCreating(true)}
       hitSlop={10}
       style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
     >
@@ -112,7 +119,17 @@ export default function MenuScreen() {
           contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: isWeb ? 100 : 100 }}
         >
           {filtered.map(item => (
-            <View key={item.id} style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border, opacity: item.isAvailable ? 1 : 0.6 }]}>
+            <Pressable
+              key={item.id}
+              onPress={() => setEditing(item)}
+              style={({ pressed }) => [
+                styles.row,
+                {
+                  backgroundColor: colors.card, borderColor: colors.border,
+                  opacity: pressed ? 0.85 : (item.isAvailable ? 1 : 0.6),
+                },
+              ]}
+            >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
                 <Text style={[styles.meta, { color: colors.mutedForeground }]}>
@@ -124,30 +141,49 @@ export default function MenuScreen() {
                 onValueChange={v => toggle.mutate({ id: item.id, isAvailable: v })}
                 trackColor={{ true: colors.primary, false: colors.border }}
               />
-            </View>
+            </Pressable>
           ))}
         </ScrollView>
       )}
 
-      <CreateItemModal
-        visible={showCreate}
-        onClose={() => setShowCreate(false)}
-        onSubmit={(v) => create.mutate(v)}
+      <MenuItemForm
+        visible={creating}
+        onClose={() => setCreating(false)}
+        title="New menu item"
+        submitLabel="Create item"
         submitting={create.isPending}
         categories={categories}
+        onSubmit={(v) => create.mutate(v)}
+      />
+      <MenuItemForm
+        visible={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit menu item"
+        submitLabel="Save changes"
+        submitting={update.isPending}
+        categories={categories}
+        initial={editing ?? undefined}
+        onSubmit={(v) => editing && update.mutate({ id: editing.id, body: v })}
+        onDelete={() => editing && deleteM.mutate(editing.id)}
+        deleting={deleteM.isPending}
       />
     </View>
   );
 }
 
-function CreateItemModal({
-  visible, onClose, onSubmit, submitting, categories,
+function MenuItemForm({
+  visible, onClose, title, submitLabel, submitting, categories, initial, onSubmit, onDelete, deleting,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (v: { name: string; price: string; categoryId: number | null }) => void;
+  title: string;
+  submitLabel: string;
   submitting: boolean;
   categories: Category[];
+  initial?: Partial<MenuItem>;
+  onSubmit: (v: { name: string; price: string; categoryId: number | null }) => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const colors = useColors();
   const [name, setName] = useState("");
@@ -155,67 +191,52 @@ function CreateItemModal({
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
   React.useEffect(() => {
-    if (visible) { setName(""); setPrice(""); setCategoryId(categories[0]?.id ?? null); }
-  }, [visible, categories]);
+    if (visible) {
+      setName(initial?.name ?? "");
+      setPrice(initial?.price != null ? String(initial.price) : "");
+      setCategoryId(initial?.categoryId ?? categories[0]?.id ?? null);
+    }
+  }, [visible, initial, categories]);
 
-  // `menu_items.category_id` is NOT NULL on the server, so block submit when
-  // no category is selected and surface a helpful message if none exist yet.
   const canSubmit = name.trim().length > 0 && price.trim().length > 0 && categoryId != null && !submitting;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={modalStyles.backdrop}>
-        <View style={[modalStyles.sheet, { backgroundColor: colors.card }]}>
-          <View style={modalStyles.headerRow}>
-            <Text style={[modalStyles.title, { color: colors.foreground }]}>New menu item</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={22} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
-
-          <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Name</Text>
-          <TextInput
-            value={name} onChangeText={setName} placeholder="e.g. Paneer Tikka"
-            placeholderTextColor={colors.mutedForeground}
-            style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-          />
-
-          <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Price (₹)</Text>
-          <TextInput
-            value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
-            placeholderTextColor={colors.mutedForeground}
-            style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-          />
-
-          <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Category</Text>
-          {categories.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-              {categories.map(c => (
-                <Pressable
-                  key={c.id}
-                  onPress={() => setCategoryId(c.id)}
-                  style={[modalStyles.chip, { borderColor: colors.border, backgroundColor: categoryId === c.id ? colors.primary : colors.background }]}
-                >
-                  <Text style={{ color: categoryId === c.id ? "#fff" : colors.foreground, fontSize: 12, fontFamily: "Inter_500Medium" }}>{c.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : (
-            <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingVertical: 6 }}>
-              No categories yet — add one from the web dashboard before creating items.
-            </Text>
-          )}
-
-          <Pressable
-            disabled={!canSubmit}
-            onPress={() => onSubmit({ name: name.trim(), price: price.trim(), categoryId })}
-            style={({ pressed }) => [modalStyles.submit, { backgroundColor: colors.primary, opacity: !canSubmit ? 0.4 : pressed ? 0.85 : 1 }]}
-          >
-            <Text style={modalStyles.submitText}>{submitting ? "Creating…" : "Create item"}</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    <EntityFormSheet
+      visible={visible} onClose={onClose} title={title}
+      submitting={submitting} canSubmit={canSubmit}
+      onSubmit={() => onSubmit({ name: name.trim(), price: price.trim(), categoryId })}
+      submitLabel={submitLabel}
+      onDelete={onDelete} deleting={deleting}
+      deleteConfirmMessage="Remove this item from the menu? Customers will no longer see it."
+    >
+      <FormField label="Name">
+        <TextInput value={name} onChangeText={setName} placeholder="e.g. Paneer Tikka"
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+      <FormField label="Price (₹)">
+        <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+      <FormField label="Category">
+        {categories.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+            {categories.map(c => (
+              <Pressable
+                key={c.id}
+                onPress={() => setCategoryId(c.id)}
+                style={[styles.chip, { borderColor: colors.border, backgroundColor: categoryId === c.id ? colors.primary : colors.background }]}
+              >
+                <Text style={{ color: categoryId === c.id ? "#fff" : colors.foreground, fontSize: 12, fontFamily: "Inter_500Medium" }}>{c.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", paddingVertical: 6 }}>
+            No categories yet — add one from the web dashboard before creating items.
+          </Text>
+        )}
+      </FormField>
+    </EntityFormSheet>
   );
 }
 
@@ -226,16 +247,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-});
-
-const modalStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  sheet: { padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 8 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  title: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  label: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 8 },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Inter_400Regular", fontSize: 14 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
-  submit: { marginTop: 16, paddingVertical: 12, borderRadius: 10, alignItems: "center" },
-  submitText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
 });

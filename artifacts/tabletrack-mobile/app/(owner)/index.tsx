@@ -350,6 +350,20 @@ export default function OwnerDashboard() {
           </Text>
           <Text style={[styles.title, { color: colors.foreground }]}>Today · {scopeLabel}</Text>
         </View>
+        {/* Top-right Khana AI shortcut — quick entry to the chat assistant
+            without scrolling to the bottom or hunting through the More menu. */}
+        <Pressable
+          onPress={() => router.push("/(owner)/khana-ai-chat" as never)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Open Khana AI"
+          style={({ pressed }) => [
+            styles.aiHeaderBtn,
+            { backgroundColor: "#ede9fe", opacity: pressed ? 0.75 : 1 },
+          ]}
+        >
+          <Ionicons name="sparkles" size={18} color="#7C3AED" />
+        </Pressable>
       </View>
 
       {/* Outlet scope selector — owners with multiple outlets only */}
@@ -726,6 +740,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 14, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
+  aiHeaderBtn: {
+    width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center",
+  },
   greeting: { fontSize: 13, fontFamily: "Inter_400Regular" },
   title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   scopePills: { gap: 8, paddingVertical: 2 },

@@ -10,6 +10,7 @@ import { customFetch } from "@workspace/api-client-react";
 import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
 
 type ExpenseCategory = { id: number; name: string; color: string; icon: string };
 type Expense = {
@@ -33,6 +34,7 @@ export default function MobileExpensesScreen() {
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [receiptPath, setReceiptPath] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
 
   async function pickAndUploadReceipt() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -79,6 +81,28 @@ export default function MobileExpensesScreen() {
   const { data: recent, refetch, isRefetching } = useQuery({
     queryKey: ["expenses", restaurantId, "recent"],
     queryFn: () => customFetch<ExpensesResponse>(`/api/restaurants/${restaurantId}/expenses?limit=20`),
+  });
+
+  const updateExpense = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+      customFetch(`/api/restaurants/${restaurantId}/expenses/${id}`, {
+        method: "PATCH", body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+    onError: () => Alert.alert("Error", "Could not update expense."),
+  });
+
+  const deleteExpense = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/restaurants/${restaurantId}/expenses/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+    onError: () => Alert.alert("Error", "Could not delete expense."),
   });
 
   const createExpense = useMutation({
@@ -258,7 +282,11 @@ export default function MobileExpensesScreen() {
           {recentList.slice(0, 10).map(e => {
             const cat = catMap.get(e.categoryId);
             return (
-              <View key={e.id} style={[styles.expenseRow, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                key={e.id}
+                onPress={() => setEditing(e)}
+                style={[styles.expenseRow, { borderBottomColor: colors.border }]}
+              >
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <View style={[styles.dot, { backgroundColor: cat?.color ?? "#64748b" }]} />
@@ -271,7 +299,7 @@ export default function MobileExpensesScreen() {
                 <Text style={[styles.expenseAmount, { color: colors.foreground }]}>
                   ₹{Number(e.amount).toLocaleString("en-IN")}
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
           {recentList.length === 0 && (
@@ -279,7 +307,115 @@ export default function MobileExpensesScreen() {
           )}
         </View>
       </ScrollView>
+      <ExpenseEditForm
+        visible={!!editing}
+        expense={editing}
+        categories={Array.isArray(cats) ? cats : []}
+        submitting={updateExpense.isPending}
+        deleting={deleteExpense.isPending}
+        onClose={() => setEditing(null)}
+        onSubmit={(v) => editing && updateExpense.mutate({ id: editing.id, body: v })}
+        onDelete={() => editing && deleteExpense.mutate(editing.id)}
+      />
     </KeyboardAvoidingView>
+  );
+}
+
+function ExpenseEditForm({
+  visible, expense, categories, submitting, deleting, onClose, onSubmit, onDelete,
+}: {
+  visible: boolean;
+  expense: Expense | null;
+  categories: ExpenseCategory[];
+  submitting: boolean;
+  deleting: boolean;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+  onDelete: () => void;
+}) {
+  const colors = useColors();
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [amount, setAmount] = useState("");
+  const [payee, setPayee] = useState("");
+  const [notes, setNotes] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+
+  React.useEffect(() => {
+    if (visible && expense) {
+      setCategoryId(expense.categoryId ?? null);
+      setAmount(String(expense.amount ?? ""));
+      setPayee(expense.payee ?? "");
+      setNotes(expense.notes ?? "");
+      setPaymentMethod(expense.paymentMethod ?? "cash");
+    }
+  }, [visible, expense]);
+
+  const canSubmit = !!categoryId && Number(amount) > 0 && !submitting;
+
+  return (
+    <EntityFormSheet
+      visible={visible} onClose={onClose} title="Edit expense"
+      submitting={submitting} canSubmit={canSubmit}
+      submitLabel="Save changes"
+      onSubmit={() => onSubmit({
+        categoryId,
+        amount: String(Number(amount)),
+        payee: payee || undefined,
+        paymentMethod,
+        notes: notes || undefined,
+      })}
+      onDelete={onDelete} deleting={deleting}
+      deleteConfirmMessage="Delete this expense entry? This cannot be undone."
+    >
+      <FormField label="Category">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {categories.map(c => {
+            const active = categoryId === c.id;
+            return (
+              <TouchableOpacity key={c.id} onPress={() => setCategoryId(c.id)}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 6,
+                  borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6,
+                  borderColor: active ? c.color : colors.border,
+                  backgroundColor: active ? `${c.color}20` : "transparent",
+                }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.color }} />
+                <Text style={{ color: active ? c.color : colors.foreground, fontSize: 12, fontFamily: "Inter_500Medium" }}>{c.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </FormField>
+      <FormField label="Amount (₹)">
+        <TextInput value={amount} onChangeText={setAmount} keyboardType="numeric"
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+      <FormField label="Payee">
+        <TextInput value={payee} onChangeText={setPayee}
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+      <FormField label="Payment method">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {["cash", "card", "upi", "bank transfer"].map(m => {
+            const active = paymentMethod === m;
+            return (
+              <TouchableOpacity key={m} onPress={() => setPaymentMethod(m)}
+                style={{
+                  borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6,
+                  borderColor: active ? colors.primary : colors.border,
+                  backgroundColor: active ? `${colors.primary}20` : "transparent",
+                }}>
+                <Text style={{ color: active ? colors.primary : colors.foreground, fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "capitalize" }}>{m}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </FormField>
+      <FormField label="Notes">
+        <TextInput value={notes} onChangeText={setNotes} multiline
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+    </EntityFormSheet>
   );
 }
 

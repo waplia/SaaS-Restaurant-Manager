@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, TextInput,
-  Platform, Modal, KeyboardAvoidingView, Alert,
+  Platform, Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
 
 type Item = {
   id: number;
@@ -38,10 +39,9 @@ export default function InventoryScreen() {
   const isWeb = Platform.OS === "web";
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "out">("all");
-  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Item | null>(null);
 
-  // Don't swallow errors — when the API returns 403 (plan gate) or any
-  // other failure we want to surface it instead of showing a blank list.
   const q = useQuery({
     queryKey: ["inventory", restaurantId],
     queryFn: () => customFetch<Item[]>(`/api/restaurants/${restaurantId}/inventory`),
@@ -56,21 +56,31 @@ export default function InventoryScreen() {
     return true;
   });
 
+  const errToast = (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not save");
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["inventory", restaurantId] });
+
   const create = useMutation({
-    mutationFn: (body: { name: string; unit: string; currentStock: string; minStockLevel: string; costPerUnit: string }) =>
-      customFetch(`/api/restaurants/${restaurantId}/inventory`, {
-        method: "POST", body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      setShowCreate(false);
-      qc.invalidateQueries({ queryKey: ["inventory", restaurantId] });
-    },
-    onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not create item"),
+    mutationFn: (body: Record<string, unknown>) =>
+      customFetch(`/api/restaurants/${restaurantId}/inventory`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => { setCreating(false); invalidate(); },
+    onError: errToast,
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+      customFetch(`/api/restaurants/${restaurantId}/inventory/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { setEditing(null); invalidate(); },
+    onError: errToast,
+  });
+  const deleteM = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/restaurants/${restaurantId}/inventory/${id}`, { method: "DELETE" }),
+    onSuccess: () => { setEditing(null); invalidate(); },
+    onError: errToast,
   });
 
   const addButton = (
     <Pressable
-      onPress={() => setShowCreate(true)}
+      onPress={() => setCreating(true)}
       hitSlop={10}
       style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
     >
@@ -128,7 +138,14 @@ export default function InventoryScreen() {
             const tone = qty === 0 ? "danger" : qty <= rp ? "warning" : "success";
             const label = qty === 0 ? "Out" : qty <= rp ? "Low" : "OK";
             return (
-              <View key={it.id} style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Pressable
+                key={it.id}
+                onPress={() => setEditing(it)}
+                style={({ pressed }) => [
+                  styles.row,
+                  { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{it.name}</Text>
                   <Text style={[styles.meta, { color: colors.mutedForeground }]}>
@@ -136,29 +153,47 @@ export default function InventoryScreen() {
                   </Text>
                 </View>
                 <StatusBadge label={label} tone={tone} />
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
       )}
 
-      <CreateInventoryModal
-        visible={showCreate}
-        onClose={() => setShowCreate(false)}
-        onSubmit={(v) => create.mutate(v)}
+      <InventoryForm
+        visible={creating}
+        onClose={() => setCreating(false)}
+        title="New stock item"
+        submitLabel="Create item"
         submitting={create.isPending}
+        onSubmit={(v) => create.mutate(v)}
+      />
+      <InventoryForm
+        visible={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit stock item"
+        submitLabel="Save changes"
+        submitting={update.isPending}
+        initial={editing ?? undefined}
+        onSubmit={(v) => editing && update.mutate({ id: editing.id, body: v })}
+        onDelete={() => editing && deleteM.mutate(editing.id)}
+        deleting={deleteM.isPending}
       />
     </View>
   );
 }
 
-function CreateInventoryModal({
-  visible, onClose, onSubmit, submitting,
+function InventoryForm({
+  visible, onClose, title, submitLabel, submitting, initial, onSubmit, onDelete, deleting,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (v: { name: string; unit: string; currentStock: string; minStockLevel: string; costPerUnit: string }) => void;
+  title: string;
+  submitLabel: string;
   submitting: boolean;
+  initial?: Partial<Item>;
+  onSubmit: (v: Record<string, unknown>) => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const colors = useColors();
   const [name, setName] = useState("");
@@ -168,82 +203,65 @@ function CreateInventoryModal({
   const [cost, setCost] = useState("");
 
   React.useEffect(() => {
-    if (visible) { setName(""); setUnit("kg"); setStock(""); setMinLevel(""); setCost(""); }
-  }, [visible]);
+    if (visible) {
+      setName(initial?.name ?? "");
+      setUnit(initial?.unit ?? "kg");
+      setStock(initial?.currentStock != null ? String(initial.currentStock) : initial?.quantity != null ? String(initial.quantity) : "");
+      setMinLevel(initial?.minStockLevel != null ? String(initial.minStockLevel) : initial?.reorderPoint != null ? String(initial.reorderPoint) : "");
+      setCost(initial?.costPerUnit != null ? String(initial.costPerUnit) : "");
+    }
+  }, [visible, initial]);
 
-  const canSubmit = name.trim().length > 0 && unit.trim().length > 0 && stock.trim().length > 0 && !submitting;
+  const canSubmit = name.trim().length > 0 && unit.trim().length > 0 && !submitting;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={modalStyles.backdrop}>
-        <View style={[modalStyles.sheet, { backgroundColor: colors.card }]}>
-          <View style={modalStyles.headerRow}>
-            <Text style={[modalStyles.title, { color: colors.foreground }]}>New stock item</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={22} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
-
-          <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Name</Text>
-          <TextInput
-            value={name} onChangeText={setName} placeholder="e.g. Basmati Rice"
-            placeholderTextColor={colors.mutedForeground}
-            style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-          />
-
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Unit</Text>
-              <TextInput
-                value={unit} onChangeText={setUnit} placeholder="kg, ltr, pc"
-                placeholderTextColor={colors.mutedForeground}
-                style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Current stock</Text>
-              <TextInput
-                value={stock} onChangeText={setStock} placeholder="0" keyboardType="decimal-pad"
-                placeholderTextColor={colors.mutedForeground}
-                style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              />
-            </View>
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Reorder at</Text>
-              <TextInput
-                value={minLevel} onChangeText={setMinLevel} placeholder="0" keyboardType="decimal-pad"
-                placeholderTextColor={colors.mutedForeground}
-                style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[modalStyles.label, { color: colors.mutedForeground }]}>Cost / unit (₹)</Text>
-              <TextInput
-                value={cost} onChangeText={setCost} placeholder="0.00" keyboardType="decimal-pad"
-                placeholderTextColor={colors.mutedForeground}
-                style={[modalStyles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              />
-            </View>
-          </View>
-
-          <Pressable
-            disabled={!canSubmit}
-            onPress={() => onSubmit({
-              name: name.trim(), unit: unit.trim(),
-              currentStock: stock.trim() || "0",
-              minStockLevel: minLevel.trim() || "0",
-              costPerUnit: cost.trim() || "0",
-            })}
-            style={({ pressed }) => [modalStyles.submit, { backgroundColor: colors.primary, opacity: !canSubmit ? 0.4 : pressed ? 0.85 : 1 }]}
-          >
-            <Text style={modalStyles.submitText}>{submitting ? "Creating…" : "Create item"}</Text>
-          </Pressable>
+    <EntityFormSheet
+      visible={visible} onClose={onClose} title={title}
+      submitting={submitting} canSubmit={canSubmit}
+      onSubmit={() => onSubmit({
+        name: name.trim(),
+        unit: unit.trim(),
+        currentStock: stock.trim() || "0",
+        minStockLevel: minLevel.trim() || "0",
+        costPerUnit: cost.trim() || "0",
+      })}
+      submitLabel={submitLabel}
+      onDelete={onDelete} deleting={deleting}
+      deleteConfirmMessage="Delete this stock item and its history?"
+    >
+      <FormField label="Name">
+        <TextInput value={name} onChangeText={setName} placeholder="e.g. Basmati Rice"
+          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+      </FormField>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <FormField label="Unit">
+            <TextInput value={unit} onChangeText={setUnit} placeholder="kg, ltr, pc"
+              placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+          </FormField>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        <View style={{ flex: 1 }}>
+          <FormField label="Current stock">
+            <TextInput value={stock} onChangeText={setStock} placeholder="0" keyboardType="decimal-pad"
+              placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+          </FormField>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <FormField label="Reorder at">
+            <TextInput value={minLevel} onChangeText={setMinLevel} placeholder="0" keyboardType="decimal-pad"
+              placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+          </FormField>
+        </View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Cost / unit (₹)">
+            <TextInput value={cost} onChangeText={setCost} placeholder="0.00" keyboardType="decimal-pad"
+              placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+          </FormField>
+        </View>
+      </View>
+    </EntityFormSheet>
   );
 }
 
@@ -256,15 +274,4 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-});
-
-const modalStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  sheet: { padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 8 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  title: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  label: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 8 },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Inter_400Regular", fontSize: 14 },
-  submit: { marginTop: 16, paddingVertical: 12, borderRadius: 10, alignItems: "center" },
-  submitText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
 });
