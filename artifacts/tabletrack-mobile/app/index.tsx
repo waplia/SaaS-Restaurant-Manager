@@ -23,12 +23,12 @@ export default function IndexScreen() {
     );
   }
 
-  // First-time / signed-out users land on the welcome screen (Create account /
-  // Sign in / Continue with Google). Returning signed-in users go to their
-  // role dashboard. The login screen is now reached *through* welcome, not
-  // as the default entry point.
+  // Signed-out users land directly on the login screen. The login screen
+  // exposes a "New to KhanaLagao? Create account" CTA that takes new users
+  // into the /register flow, which then routes owners into /onboarding on
+  // first sign-in. Returning signed-in users go to their role dashboard.
   if (!user) {
-    return <Redirect href="/welcome" />;
+    return <Redirect href="/login" />;
   }
 
   return <Redirect href={roleHomePath(user.role) as never} />;

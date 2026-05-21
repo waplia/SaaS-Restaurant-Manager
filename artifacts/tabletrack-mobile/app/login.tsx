@@ -85,6 +85,7 @@ interface PublicAuthSettings {
   emailOtpLoginEnabled: boolean;
   twoFactorEnabled: boolean;
   otpDefaultChannel: "sms" | "whatsapp";
+  signupEnabled?: boolean;
   googleSignInEnabled?: boolean;
   googleClientId?: string | null;
   googleIosClientId?: string | null;
@@ -559,23 +560,43 @@ export default function LoginScreen() {
               login: the backend's /auth/google/verify creates the account on
               first sign-in. Restaurant-name / phone collection happens on the
               /complete-profile screen if Super Admin requires it. */}
-          {!twoFa && authSettings?.googleSignInEnabled && googleConfigured ? (
-            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 }}>
+          {/* New-user CTA. Always shown (signup is gated server-side via
+              /auth/settings/public — the register screen handles the
+              disabled case). Primary path is the in-app register wizard;
+              Google sign-up is offered as a secondary option when it's
+              configured. */}
+          {!twoFa && (authSettings?.signupEnabled !== false) ? (
+            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 10 }}>
               <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: "center" }}>
-                New to {"KhanaLagao"}?
+                New to KhanaLagao?
               </Text>
-              <GoogleSignInButton
-                webClientId={authSettings?.googleClientId ?? undefined}
-                iosClientId={authSettings?.googleIosClientId ?? authSettings?.googleClientId ?? undefined}
-                androidClientId={authSettings?.googleAndroidClientId ?? authSettings?.googleClientId ?? undefined}
-                label="Sign up with Google"
-                disabled={loading}
-                onIdToken={(t) => { void handleGoogleIdToken(t); }}
-                onError={(m) => Alert.alert("Google sign-in failed", m)}
-                colors={colors}
-                styles={styles}
-                testID="signup-google-button"
-              />
+              <Pressable
+                onPress={() => router.push("/register" as never)}
+                style={({ pressed }) => [styles.secondaryBtn, {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.primary + "10",
+                  opacity: pressed ? 0.8 : 1,
+                }]}
+                testID="signup-create-account"
+              >
+                <Text style={[styles.secondaryBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  Create account
+                </Text>
+              </Pressable>
+              {authSettings?.googleSignInEnabled && googleConfigured ? (
+                <GoogleSignInButton
+                  webClientId={authSettings?.googleClientId ?? undefined}
+                  iosClientId={authSettings?.googleIosClientId ?? authSettings?.googleClientId ?? undefined}
+                  androidClientId={authSettings?.googleAndroidClientId ?? authSettings?.googleClientId ?? undefined}
+                  label="Sign up with Google"
+                  disabled={loading}
+                  onIdToken={(t) => { void handleGoogleIdToken(t); }}
+                  onError={(m) => Alert.alert("Google sign-in failed", m)}
+                  colors={colors}
+                  styles={styles}
+                  testID="signup-google-button"
+                />
+              ) : null}
             </View>
           ) : null}
         </View>
