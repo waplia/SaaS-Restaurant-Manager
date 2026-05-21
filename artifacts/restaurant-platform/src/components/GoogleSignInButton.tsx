@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppSettings } from "@/lib/appSettings";
 import { useAuth, type AuthUser } from "@/lib/auth";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 declare global {
   interface Window {
@@ -57,6 +57,7 @@ export function GoogleSignInButton({ label = "Continue with Google", mode = "log
   const [, navigate] = useLocation();
   const btnRef = useRef<HTMLDivElement>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [errCode, setErrCode] = useState<string | null>(null);
   const [config, setConfig] = useState<{ enabled: boolean; clientId: string | null } | null>(null);
 
   // Settings may not yet include googleSignInEnabled (older cache) — fetch from
@@ -90,7 +91,7 @@ export function GoogleSignInButton({ label = "Continue with Google", mode = "log
         window.google.accounts.id.initialize({
           client_id: config.clientId!,
           callback: async (resp) => {
-            if (!resp.credential) { setErr("Google sign-in was cancelled."); return; }
+            if (!resp.credential) { setErr("Google sign-in was cancelled."); setErrCode(null); return; }
             try {
               const r = await fetch("/api/auth/google/verify", {
                 method: "POST",
@@ -99,8 +100,11 @@ export function GoogleSignInButton({ label = "Continue with Google", mode = "log
               });
               const data = await r.json().catch(() => ({}));
               if (!r.ok) {
-                throw new Error((data as { error?: string }).error ?? "Google sign-in failed");
+                const d = data as { error?: string; code?: string };
+                setErrCode(d.code ?? null);
+                throw new Error(d.error ?? "Google sign-in failed");
               }
+              setErrCode(null);
               const payload = data as {
                 pending?: boolean;
                 pendingToken?: string;
@@ -150,8 +154,15 @@ export function GoogleSignInButton({ label = "Continue with Google", mode = "log
     <div className="space-y-2">
       <div ref={btnRef} className="w-full flex justify-center min-h-[44px]" />
       {err && (
-        <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-          {err}
+        <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 space-y-1">
+          <div>{err}</div>
+          {errCode === "account_not_registered" && mode !== "register" && (
+            <div>
+              <Link href="/register" className="underline font-medium">
+                Create an account
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

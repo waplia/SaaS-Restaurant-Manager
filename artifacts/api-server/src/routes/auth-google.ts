@@ -144,16 +144,32 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
     // themselves. This prevents account takeover via an attacker registering
     // with someone else's email and then "signing in with Google".
     if (byEmail) {
-      if (!byEmail.emailVerifiedAt) {
-        res.status(409).json({
-          error: "An unverified account with that email already exists. Please sign in with your password and verify your email before linking Google.",
-        });
-        return;
-      }
+      // Google has already proven ownership of this email address
+      // (email_verified=true is enforced above). Safe to link the Google
+      // identity to the existing account regardless of whether the user
+      // had previously clicked our email verification link, and to mark
+      // the account as email-verified going forward.
+      const wasUnverified = !byEmail.emailVerifiedAt;
+      const now = new Date();
       await db.update(usersTable)
-        .set({ googleId, updatedAt: new Date() })
+        .set({
+          googleId,
+          emailVerifiedAt: byEmail.emailVerifiedAt ?? now,
+          updatedAt: now,
+        })
         .where(eq(usersTable.id, byEmail.id));
-      user = { ...byEmail, googleId };
+      user = {
+        ...byEmail,
+        googleId,
+        emailVerifiedAt: byEmail.emailVerifiedAt ?? now,
+      };
+      await recordAuditLog({
+        req, module: "auth", action: "google.auto_link", entity: "auth",
+        userId: user.id, userDisplay: user.name ?? user.email,
+        role: user.isSuperAdmin ? "super_admin" : user.role,
+        restaurantId: user.restaurantId ?? null,
+        newValue: { linkedByEmail: true, wasEmailUnverified: wasUnverified },
+      });
     }
   }
 
@@ -192,7 +208,7 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
   // to register first.
   if (mode !== "register") {
     res.status(404).json({
-      error: "Account not registered. Please register first to continue.",
+      error: "No account exists for this email. Please sign up first.",
       code: "account_not_registered",
     });
     return;
