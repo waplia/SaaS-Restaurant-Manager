@@ -634,8 +634,14 @@ router.post("/public/orders", async (req, res) => {
   if (normalizedCustomerPhone) {
     try {
       const { sendWhatsApp } = await import("../lib/notifications");
+      const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
       const dispatchTo = toE164(normalizedCustomerPhone, restaurant.country) ?? normalizedCustomerPhone;
-      const body = `Hi ${order.customerName ?? "there"}, your order #${order.orderNumber} at ${restaurant.name} is received. Total: ₹${Number(order.totalAmount).toFixed(2)}. We'll notify you once it's ready. Thank you!`;
+      const safeName = order.customerName ?? "there";
+      const orderTotal = `₹${Number(order.totalAmount).toFixed(2)}`;
+      const rendered = await renderRestaurantEventBody(restaurantId, "order.placed",
+        [safeName, order.orderNumber, restaurant.name, orderTotal]);
+      const body = rendered
+        ?? `Hi ${safeName}, your order #${order.orderNumber} at ${restaurant.name} is received. Total: ${orderTotal}. We'll notify you once it's ready. Thank you!`;
       sendWhatsApp({
         to: dispatchTo,
         body,
@@ -1037,7 +1043,12 @@ router.post("/public/orders/:id/pay", async (req, res) => {
       const to = toE164(phone, restaurant?.country ?? null) ?? phone;
       const name = updated.customerName ?? order.customerName ?? "there";
       const total = Number(updated.totalAmount ?? order.totalAmount).toFixed(2);
-      const body = `Hi ${name}, your order #${updated.orderNumber ?? order.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${total}. Thank you!`;
+      const orderNumber = updated.orderNumber ?? order.orderNumber;
+      const restName = restaurant?.name ?? "our restaurant";
+      const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
+      const rendered = await renderRestaurantEventBody(order.restaurantId, "order.confirmed",
+        [name, orderNumber, restName, `₹${total}`, ""]);
+      const body = rendered ?? `Hi ${name}, your order #${orderNumber} at ${restName} is confirmed. Total: ₹${total}. Thank you!`;
       const { sendWhatsApp } = await import("../lib/notifications");
       sendWhatsApp({ to, body, restaurantId: order.restaurantId, meta: { event: "order.confirmed", orderId } }).catch(console.error);
     }

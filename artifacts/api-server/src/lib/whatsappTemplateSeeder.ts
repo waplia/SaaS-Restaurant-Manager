@@ -118,30 +118,46 @@ const SEEDS: SeedTpl[] = [
   // B. RESTAURANT UTILITY (15)
   // ════════════════════════════════════════════════════════════
   {
-    name: "restaurant_order_confirmed",
-    description: "Order confirmation to customer.",
+    name: "restaurant_order_placed",
+    description: "Sent the moment a customer places an order (before payment / staff acceptance).",
     category: "UTILITY",
-    defaultForEvent: "order.confirmed",
-    bodyText: "Hi {{1}}, your order #{{2}} at {{3}} is confirmed for {{4}}. Estimated time: {{5}} minutes.",
+    defaultForEvent: "order.placed",
+    bodyText: "Hi {{1}}, we've received your order #{{2}} at {{3}}. Total: {{4}}. We'll send another update when the kitchen starts preparing it.",
     variables: [
       { index: 1, key: "customer_first_name", label: "First name", example: "Anita" },
       { index: 2, key: "order_number", label: "Order number", example: "1042" },
       { index: 3, key: "restaurant_name", label: "Restaurant", example: "Spice Garden" },
       { index: 4, key: "order_total", label: "Order total", example: "₹650" },
-      { index: 5, key: "order_eta_minutes", label: "ETA minutes", example: "25" },
     ],
+    allowRestaurantEdit: true,
+  },
+  {
+    name: "restaurant_order_confirmed",
+    description: "Order confirmation to customer (payment received).",
+    category: "UTILITY",
+    defaultForEvent: "order.confirmed",
+    bodyText: "Hi {{1}}, your order #{{2}} at {{3}} is confirmed. Total: {{4}}. Thank you!",
+    variables: [
+      { index: 1, key: "customer_first_name", label: "First name", example: "Anita" },
+      { index: 2, key: "order_number", label: "Order number", example: "1042" },
+      { index: 3, key: "restaurant_name", label: "Restaurant", example: "Spice Garden" },
+      { index: 4, key: "order_total", label: "Order total", example: "₹650" },
+    ],
+    allowRestaurantEdit: true,
   },
   {
     name: "restaurant_order_preparing",
     description: "Order is being prepared.",
     category: "UTILITY",
     defaultForEvent: "order.preparing",
-    bodyText: "Order #{{1}} at {{2}} is being prepared. Estimated time: {{3}} minutes.",
+    bodyText: "Hi {{1}}, the kitchen has started preparing your order #{{2}} at {{3}}. Estimated time: {{4}} minutes.",
     variables: [
-      { index: 1, key: "order_number", label: "Order number", example: "1042" },
-      { index: 2, key: "restaurant_name", label: "Restaurant", example: "Spice Garden" },
-      { index: 3, key: "order_eta_minutes", label: "ETA minutes", example: "20" },
+      { index: 1, key: "customer_first_name", label: "First name", example: "Anita" },
+      { index: 2, key: "order_number", label: "Order number", example: "1042" },
+      { index: 3, key: "restaurant_name", label: "Restaurant", example: "Spice Garden" },
+      { index: 4, key: "order_eta_minutes", label: "ETA minutes", example: "20" },
     ],
+    allowRestaurantEdit: true,
   },
   {
     name: "restaurant_order_ready",
@@ -154,6 +170,7 @@ const SEEDS: SeedTpl[] = [
       { index: 2, key: "order_number", label: "Order number", example: "1042" },
       { index: 3, key: "restaurant_name", label: "Restaurant", example: "Spice Garden" },
     ],
+    allowRestaurantEdit: true,
   },
   {
     name: "restaurant_takeaway_ready",

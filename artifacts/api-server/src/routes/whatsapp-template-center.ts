@@ -584,10 +584,16 @@ async function resolveRestaurantPlanSlug(rid: number): Promise<string | null> {
  * restaurants cannot reach templates by guessing IDs.
  */
 function platformTemplateVisibleToRestaurant(
-  tpl: { status: string; assignedPlansJson: unknown; assignedRestaurantsJson: unknown },
+  tpl: { status: string; assignedPlansJson: unknown; assignedRestaurantsJson: unknown; allowRestaurantEdit?: boolean | null },
   rid: number,
   planSlug: string | null,
+  opts?: { isWebQr?: boolean },
 ): boolean {
+  // Web-QR restaurants send free-form text from their own scanned phone,
+  // so Meta-approval / plan-assignment gates don't apply. Any template
+  // explicitly marked editable by restaurants is fair game for them to
+  // clone and customise.
+  if (opts?.isWebQr && tpl.allowRestaurantEdit) return true;
   if (tpl.status !== "approved") return false;
   const plans = (tpl.assignedPlansJson ?? []) as string[];
   const rests = (tpl.assignedRestaurantsJson ?? []) as number[];
@@ -603,6 +609,8 @@ router.get("/restaurants/:restaurantId/whatsapp/template-center/templates",
   requireRole("owner", "manager", "super_admin"), validateRestaurantAccess, async (req, res) => {
     const rid = Number(req.params.restaurantId);
     const planSlug = await resolveRestaurantPlanSlug(rid);
+    const { resolveProviderType } = await import("../lib/whatsapp");
+    const isWebQr = (await resolveProviderType(rid)) === "web_qr";
 
     const own = await db.select().from(whatsappTemplatesTable)
       .where(and(eq(whatsappTemplatesTable.scope, "restaurant"), eq(whatsappTemplatesTable.restaurantId, rid)));
@@ -610,12 +618,15 @@ router.get("/restaurants/:restaurantId/whatsapp/template-center/templates",
       .where(and(eq(whatsappTemplatesTable.scope, "platform"), isNull(whatsappTemplatesTable.restaurantId)));
 
     // Only platform templates that are Meta-APPROVED and assigned to the
-    // restaurant (directly or via its plan) are exposed.
-    const filtered = platform.filter(t => platformTemplateVisibleToRestaurant(t, rid, planSlug));
+    // restaurant (directly or via its plan) are exposed — except for
+    // Web-QR restaurants, who can freely customise any template marked
+    // `allowRestaurantEdit` since they don't go through Meta.
+    const filtered = platform.filter(t => platformTemplateVisibleToRestaurant(t, rid, planSlug, { isWebQr }));
 
     res.json({
       data: { own, platform: filtered },
       planSlug,
+      isWebQr,
     });
   });
 
@@ -631,7 +642,9 @@ router.post("/restaurants/:restaurantId/whatsapp/template-center/templates/:plat
     // cloning, otherwise a restaurant could guess IDs to clone templates
     // it isn't entitled to.
     const planSlug = await resolveRestaurantPlanSlug(rid);
-    if (!platformTemplateVisibleToRestaurant(src, rid, planSlug)) {
+    const { resolveProviderType } = await import("../lib/whatsapp");
+    const isWebQr = (await resolveProviderType(rid)) === "web_qr";
+    if (!platformTemplateVisibleToRestaurant(src, rid, planSlug, { isWebQr })) {
       return void res.status(404).json({ error: "Platform template not found" });
     }
     if (!src.allowRestaurantEdit) return void res.status(403).json({ error: "This template is not editable by restaurants." });

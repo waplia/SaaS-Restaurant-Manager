@@ -230,7 +230,13 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
   }
   if (customer.phone) {
     const safeName = customer.name ?? paidOrder.customerName ?? "there";
-    const msg = `Hi ${safeName}, your order #${paidOrder.orderNumber} at ${restaurant?.name ?? "our restaurant"} is confirmed. Total: ₹${Number(paidOrder.totalAmount).toFixed(2)}. Thank you!`;
+    const total = Number(paidOrder.totalAmount).toFixed(2);
+    const restName = restaurant?.name ?? "our restaurant";
+    const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
+    const rendered = await renderRestaurantEventBody(restaurantId, "order.confirmed",
+      [safeName, paidOrder.orderNumber, restName, `₹${total}`, ""]);
+    const msg = rendered
+      ?? `Hi ${safeName}, your order #${paidOrder.orderNumber} at ${restName} is confirmed. Total: ₹${total}. Thank you!`;
     // Normalize to strict E.164 so WhatsApp / SMS providers accept the recipient.
     const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
@@ -2465,11 +2471,17 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
     const alreadySent = (dupe as any).rows?.length > 0 || (dupe as any).length > 0;
 
     if (custPhone && aggregateReady && !alreadySent) {
-      const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const [rCountry] = await db.select({ country: restaurantsTable.country, name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
       const to = toE164(custPhone, rCountry?.country ?? null) ?? custPhone;
-      const body = status === "preparing"
-        ? `Hi ${custName}, the kitchen has started preparing your order #${order?.orderNumber ?? updated.orderId}. We'll let you know when it's ready.`
-        : `Hi ${custName}, your order #${order?.orderNumber ?? updated.orderId} is ready! Please collect it.`;
+      const orderNum = order?.orderNumber ?? String(updated.orderId);
+      const restName = rCountry?.name ?? "our restaurant";
+      const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
+      const rendered = status === "preparing"
+        ? await renderRestaurantEventBody(restaurantId, "order.preparing", [custName, orderNum, restName, ""])
+        : await renderRestaurantEventBody(restaurantId, "order.ready", [custName, orderNum, restName]);
+      const body = rendered ?? (status === "preparing"
+        ? `Hi ${custName}, the kitchen has started preparing your order #${orderNum}. We'll let you know when it's ready.`
+        : `Hi ${custName}, your order #${orderNum} is ready! Please collect it.`);
       sendWhatsApp({
         to,
         body,

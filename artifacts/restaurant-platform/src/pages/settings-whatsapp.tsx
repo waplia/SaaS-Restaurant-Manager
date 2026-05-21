@@ -65,7 +65,7 @@ const STATUS_COLORS: Record<string, string> = {
 const EVENT_OPTIONS = ["", "subscription_reminder", "trial_expiring", "announcement", "order_confirmed", "order_ready"];
 
 export default function WhatsAppSection() {
-  const [tab, setTab] = useState<"settings" | "templates" | "logs" | "usage">("settings");
+  const [tab, setTab] = useState<"settings" | "templates" | "order-messages" | "logs" | "usage">("settings");
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -74,15 +74,16 @@ export default function WhatsAppSection() {
       </div>
       <p className="text-sm text-muted-foreground">Send order updates, reminders, and announcements via WhatsApp using the platform account or your own Meta WhatsApp Cloud API credentials.</p>
       <div className="border-b border-border flex gap-1">
-        {(["settings", "templates", "logs", "usage"] as const).map(k => (
+        {(["settings", "templates", "order-messages", "logs", "usage"] as const).map(k => (
           <button key={k} onClick={() => setTab(k)}
             className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px capitalize ${tab === k ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-            {k}
+            {k === "order-messages" ? "Order messages" : k}
           </button>
         ))}
       </div>
       {tab === "settings" && <SettingsTab />}
       {tab === "templates" && <TemplatesTab />}
+      {tab === "order-messages" && <OrderMessagesTab />}
       {tab === "logs" && <LogsTab />}
       {tab === "usage" && <UsageTab />}
     </div>
@@ -617,6 +618,159 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       <label className="text-xs font-medium text-foreground">{label}</label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ─── Order messages editor ────────────────────────────────────────
+// Lets restaurants on Web-QR (Baileys) customise the body of the four
+// transactional WhatsApp messages sent during an order's lifecycle.
+// On first edit we clone the platform template into a restaurant-scoped
+// copy; subsequent saves PUT the new body onto that copy.
+
+interface CenterTpl {
+  id: number; name: string; scope: "platform" | "restaurant"; bodyText: string | null;
+  defaultForEvent: string | null; allowRestaurantEdit: boolean; variablesJson?: unknown;
+}
+
+const ORDER_EVENTS: Array<{ key: string; label: string; description: string }> = [
+  { key: "order.placed",    label: "Order placed",    description: "Sent the moment a customer places an order." },
+  { key: "order.confirmed", label: "Order confirmed", description: "Sent after payment is received." },
+  { key: "order.preparing", label: "Order preparing", description: "Sent when the kitchen starts cooking." },
+  { key: "order.ready",     label: "Order ready",     description: "Sent when the food is ready to collect." },
+];
+
+function OrderMessagesTab() {
+  const rid = useRestaurantId();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<{ data: { own: CenterTpl[]; platform: CenterTpl[] }; isWebQr: boolean }>({
+    queryKey: ["whatsapp", "template-center", rid],
+    queryFn: () => apiFetch(`/restaurants/${rid}/whatsapp/template-center/templates`),
+  });
+
+  const own = data?.data.own ?? [];
+  const platform = data?.data.platform ?? [];
+  const isWebQr = !!data?.isWebQr;
+
+  const findOwn = (event: string) =>
+    own.find(t => t.defaultForEvent === event) ?? null;
+  const findPlatform = (event: string) =>
+    platform.find(t => t.defaultForEvent === event) ?? null;
+
+  if (isLoading) return <div className="text-sm text-muted-foreground p-6">Loading…</div>;
+
+  return (
+    <div className="space-y-3">
+      <div className={`rounded-xl border p-3 text-xs ${isWebQr ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"}`}>
+        {isWebQr
+          ? "Your WhatsApp is connected via QR scan, so you can freely edit the message each customer receives during their order — no Meta approval needed."
+          : "These messages are editable only when WhatsApp is connected via QR scan. Connect a phone in the Settings tab to start editing."}
+      </div>
+
+      <div className="space-y-3">
+        {ORDER_EVENTS.map(ev => {
+          const ownTpl = findOwn(ev.key);
+          const platTpl = findPlatform(ev.key);
+          return (
+            <OrderMessageCard
+              key={ev.key}
+              event={ev}
+              ownTpl={ownTpl}
+              platTpl={platTpl}
+              canEdit={isWebQr}
+              rid={rid!}
+              onSaved={() => qc.invalidateQueries({ queryKey: ["whatsapp", "template-center", rid] })}
+              toast={toast}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OrderMessageCard({ event, ownTpl, platTpl, canEdit, rid, onSaved, toast }: {
+  event: { key: string; label: string; description: string };
+  ownTpl: CenterTpl | null;
+  platTpl: CenterTpl | null;
+  canEdit: boolean;
+  rid: number;
+  onSaved: () => void;
+  toast: ReturnType<typeof useToast>["toast"];
+}) {
+  const source = ownTpl ?? platTpl;
+  const [body, setBody] = useState<string>(source?.bodyText ?? "");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setBody(source?.bodyText ?? ""); }, [source?.bodyText]);
+
+  const varMap: Record<string, string> = {};
+  ((source?.variablesJson as Array<{ index: number; label: string }>) ?? [])
+    .forEach(v => { varMap[String(v.index)] = v.label; });
+
+  const save = async () => {
+    if (!canEdit) return;
+    setSaving(true);
+    try {
+      let tplId = ownTpl?.id ?? null;
+      if (!tplId) {
+        if (!platTpl) throw new Error("Platform template unavailable");
+        const cloned = await apiAction<{ data: CenterTpl }>(
+          `/restaurants/${rid}/whatsapp/template-center/templates/${platTpl.id}/clone`, "POST");
+        tplId = cloned.data.id;
+      }
+      await apiAction(`/restaurants/${rid}/whatsapp/template-center/templates/${tplId}`, "PUT", { bodyText: body });
+      toast({ title: "Saved", description: `${event.label} message updated.` });
+      onSaved();
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => setBody(platTpl?.bodyText ?? "");
+  const dirty = (source?.bodyText ?? "") !== body;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">{event.label}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{event.description}</p>
+        </div>
+        <Badge variant="outline" className="text-[10px] shrink-0">
+          {ownTpl ? "Customised" : "Default"}
+        </Badge>
+      </div>
+      <textarea
+        className="w-full min-h-[88px] text-sm bg-background border border-border rounded-lg px-3 py-2 font-mono disabled:opacity-60"
+        value={body}
+        disabled={!canEdit}
+        onChange={e => setBody(e.target.value)}
+        placeholder={platTpl?.bodyText ?? ""}
+      />
+      {Object.keys(varMap).length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(varMap).map(([idx, label]) => (
+            <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+              {`{{${idx}}}`} = {label}
+            </span>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <div className="flex gap-2 justify-end">
+          {ownTpl && (
+            <Button variant="ghost" size="sm" onClick={reset} disabled={saving}>
+              Reset to default
+            </Button>
+          )}
+          <Button size="sm" onClick={save} disabled={!dirty || saving}>
+            <Save className="w-3.5 h-3.5 mr-1" /> {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
