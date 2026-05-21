@@ -325,7 +325,7 @@ export default function LoginScreen() {
               </Text>
               <View style={styles.field}>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Code</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
@@ -371,7 +371,7 @@ export default function LoginScreen() {
                 <>
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Email or mobile number</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                       <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}
@@ -385,7 +385,7 @@ export default function LoginScreen() {
                   </View>
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Password</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                       <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}
@@ -431,7 +431,7 @@ export default function LoginScreen() {
                 <>
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>{tab === "email" ? "Email" : "Phone number"}</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                       <Ionicons name={tab === "email" ? "mail-outline" : "call-outline"} size={18} color={colors.mutedForeground} />
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}
@@ -483,7 +483,7 @@ export default function LoginScreen() {
                   ) : null}
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Code</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                       <Ionicons name="key-outline" size={18} color={colors.mutedForeground} />
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}

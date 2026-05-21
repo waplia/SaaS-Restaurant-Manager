@@ -93,7 +93,7 @@ export default function CompleteProfileScreen() {
               {missingRestaurant && (
                 <View>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Restaurant name</Text>
-                  <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                     <Ionicons name="restaurant-outline" size={18} color={colors.mutedForeground} />
                     <TextInput style={[styles.input, { color: colors.foreground }]}
                       value={restaurantName} onChangeText={setRestaurantName}
@@ -103,7 +103,7 @@ export default function CompleteProfileScreen() {
               )}
               <View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                   <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
                   <TextInput style={[styles.input, { color: colors.foreground }]}
                     value={phone} onChangeText={setPhone} keyboardType="phone-pad"
@@ -132,7 +132,7 @@ export default function CompleteProfileScreen() {
             <View style={{ marginTop: 24, gap: 16 }}>
               <View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Verification code</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.input, backgroundColor: colors.muted }]}>
+                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
                   <Ionicons name="keypad-outline" size={18} color={colors.mutedForeground} />
                   <TextInput style={[styles.input, { color: colors.foreground, letterSpacing: 4 }]}
                     value={code} onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
