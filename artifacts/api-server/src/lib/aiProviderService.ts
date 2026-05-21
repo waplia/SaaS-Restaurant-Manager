@@ -169,6 +169,8 @@ async function checkRateLimit(
 export function defaultBaseUrlForKind(kind: string): string | null {
   switch (kind) {
     case "openai":      return "https://api.openai.com/v1";
+    case "anthropic":   return "https://api.anthropic.com";
+    case "gemini":      return "https://generativelanguage.googleapis.com";
     case "groq":        return "https://api.groq.com/openai/v1";
     case "xai":         return "https://api.x.ai/v1";
     case "mistral":     return "https://api.mistral.ai/v1";
@@ -179,6 +181,9 @@ export function defaultBaseUrlForKind(kind: string): string | null {
     default:            return null;
   }
 }
+
+/** Provider kinds we route through the OpenAI-compatible `/chat/completions` adapter. */
+export const OPENAI_COMPATIBLE_KINDS = ["openai", "openrouter", "groq", "xai", "mistral", "perplexity", "custom"] as const;
 
 // ---------- Adapter: OpenAI-compatible (OpenAI, Groq, Mistral, OpenRouter, Perplexity, Custom) ----------
 async function callOpenAICompatible(
@@ -246,9 +251,10 @@ async function callAnthropic(
   let client;
   if (provider.apiKey) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const baseURL = provider.baseUrl ?? defaultBaseUrlForKind("anthropic");
     client = new Anthropic({
       apiKey: provider.apiKey,
-      ...(provider.baseUrl ? { baseURL: provider.baseUrl } : {}),
+      ...(baseURL ? { baseURL } : {}),
     });
   } else if ((provider.config as { useReplitProxy?: boolean } | null)?.useReplitProxy) {
     client = anthropicProxy;
@@ -313,7 +319,7 @@ async function callReplicate(
   req: TextRequest,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   if (!provider.apiKey) throw new Error(`Replicate provider ${provider.slug} has no API key`);
-  const baseUrl = provider.baseUrl ?? "https://api.replicate.com/v1";
+  const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind("replicate")!;
   const prompt = (req.systemPrompt ? `${req.systemPrompt}\n\n` : "") + req.messages.map(m => m.content).join("\n");
   const startRes = await fetch(`${baseUrl}/models/${model}/predictions`, {
     method: "POST",
@@ -333,7 +339,7 @@ async function callStabilityImage(
   prompt: string,
 ): Promise<{ b64_json: string; mimeType: string }> {
   if (!provider.apiKey) throw new Error(`Stability provider ${provider.slug} has no API key`);
-  const baseUrl = provider.baseUrl ?? "https://api.stability.ai/v2beta";
+  const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind("stability")!;
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("output_format", "png");
@@ -353,7 +359,7 @@ async function callReplicateImage(
   prompt: string,
 ): Promise<{ b64_json: string; mimeType: string }> {
   if (!provider.apiKey) throw new Error(`Replicate provider ${provider.slug} has no API key`);
-  const baseUrl = provider.baseUrl ?? "https://api.replicate.com/v1";
+  const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind("replicate")!;
   const startRes = await fetch(`${baseUrl}/models/${model}/predictions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json", Prefer: "wait" },
@@ -641,7 +647,7 @@ export class AIProviderService {
         return { text, inputTokens: u?.promptTokenCount ?? 0, outputTokens: u?.candidatesTokenCount ?? 0 };
       }
       // OpenAI-compatible vision (image_url with data URL)
-      if (["openai", "openrouter", "groq", "xai", "mistral", "perplexity", "custom"].includes(provider.kind)) {
+      if ((OPENAI_COMPATIBLE_KINDS as readonly string[]).includes(provider.kind)) {
         if (!provider.apiKey) throw new Error(`${provider.kind} provider ${provider.slug} has no API key`);
         const baseUrl = provider.baseUrl ?? defaultBaseUrlForKind(provider.kind);
         if (!baseUrl) throw new Error(`No baseUrl configured for vision provider ${provider.slug} (kind=${provider.kind})`);
@@ -777,7 +783,8 @@ export class AIProviderService {
         case "openai": {
           if (!provider.apiKey) throw new Error(`OpenAI provider ${provider.slug} has no API key`);
           const { default: OpenAI } = await import("openai");
-          const client = new OpenAI({ apiKey: provider.apiKey });
+          const baseURL = provider.baseUrl ?? defaultBaseUrlForKind("openai");
+          const client = new OpenAI({ apiKey: provider.apiKey, ...(baseURL ? { baseURL } : {}) });
           const result = await client.images.generate({
             model: model || "gpt-image-1",
             prompt: req.prompt,

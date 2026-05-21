@@ -13,7 +13,7 @@ import {
 import { requireSuperAdmin } from "../middleware/authorize";
 import { encryptSecret, maskSecret } from "../lib/aiEncryption";
 import { recordAuditLog } from "../lib/audit";
-import { AIProviderService } from "../lib/aiProviderService";
+import { AIProviderService, defaultBaseUrlForKind } from "../lib/aiProviderService";
 
 const router = Router();
 router.use("/admin/ai", requireSuperAdmin);
@@ -38,12 +38,14 @@ router.post("/admin/ai/providers", async (req: Request, res: Response) => {
     timeoutMs, maxTokens, temperature, notes, isEnabled, config } = req.body ?? {};
   if (!slug || !name || !kind) return void res.status(400).json({ error: "slug, name, kind required" });
 
+  const kindStr = String(kind).trim();
+  const resolvedBaseUrl = (baseUrl && String(baseUrl).trim()) || defaultBaseUrlForKind(kindStr);
   const values: typeof aiProvidersTable.$inferInsert = {
     slug: String(slug).trim(),
     name: String(name).trim(),
-    kind: String(kind).trim(),
+    kind: kindStr,
     isEnabled: !!isEnabled,
-    baseUrl: baseUrl || null,
+    baseUrl: resolvedBaseUrl,
     orgId: orgId || null,
     defaultModel: defaultModel || null,
     backupModel: backupModel || null,
@@ -81,8 +83,12 @@ router.patch("/admin/ai/providers/:id", async (req: Request, res: Response) => {
 
   const b = req.body ?? {};
   const patch: Partial<typeof aiProvidersTable.$inferInsert> = { updatedAt: new Date() };
-  for (const k of ["name", "baseUrl", "orgId", "defaultModel", "backupModel", "notes"] as const) {
+  for (const k of ["name", "orgId", "defaultModel", "backupModel", "notes"] as const) {
     if (k in b) (patch as Record<string, unknown>)[k] = b[k] || null;
+  }
+  if ("baseUrl" in b) {
+    const trimmed = typeof b.baseUrl === "string" ? b.baseUrl.trim() : "";
+    patch.baseUrl = trimmed || defaultBaseUrlForKind(existing.kind);
   }
   if ("isEnabled" in b) {
     patch.isEnabled = !!b.isEnabled;
