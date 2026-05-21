@@ -26,23 +26,23 @@ const ORDER_TYPE_META: Record<string, { label: string; color: string }> = {
   qr: { label: "QR Online", color: "#0891b2" },
 };
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  new: { label: "New", color: "#f59e0b" },
-  pending: { label: "New", color: "#f59e0b" },
-  preparing: { label: "Cooking", color: "#3b82f6" },
-  in_progress: { label: "Cooking", color: "#3b82f6" },
+export const STATUS_META: Record<string, { label: string; color: string }> = {
+  new: { label: "New", color: "#3b82f6" },
+  pending: { label: "New", color: "#3b82f6" },
+  preparing: { label: "Preparing", color: "#f59e0b" },
+  in_progress: { label: "Preparing", color: "#f59e0b" },
   ready: { label: "Ready", color: "#22c55e" },
   served: { label: "Served", color: "#6b7280" },
   completed: { label: "Done", color: "#6b7280" },
   cancelled: { label: "Cancelled", color: "#b91c1c" },
 };
 
-const PRIMARY_FOR_STATUS: Record<string, { label: string; next: string } | null> = {
-  new: { label: "Accept & Start", next: "preparing" },
-  pending: { label: "Accept & Start", next: "preparing" },
-  preparing: { label: "Mark Ready", next: "ready" },
-  in_progress: { label: "Mark Ready", next: "ready" },
-  ready: { label: "Mark Served", next: "served" },
+const PRIMARY_FOR_STATUS: Record<string, { label: string; next: string; color: string } | null> = {
+  new: { label: "Start Preparing", next: "preparing", color: "#f59e0b" },
+  pending: { label: "Start Preparing", next: "preparing", color: "#f59e0b" },
+  preparing: { label: "Mark Ready", next: "ready", color: "#16a34a" },
+  in_progress: { label: "Mark Ready", next: "ready", color: "#16a34a" },
+  ready: { label: "Mark Served", next: "served", color: "#6b7280" },
   served: null,
   completed: null,
   cancelled: null,
@@ -210,7 +210,7 @@ export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction,
             style={({ pressed }) => [
               styles.primaryBtn,
               {
-                backgroundColor: allLocalReady && primary.next === "ready" ? "#16a34a" : colors.primary,
+                backgroundColor: allLocalReady && primary.next === "ready" ? "#16a34a" : primary.color,
                 opacity: isPending ? 0.6 : pressed ? 0.85 : 1,
               },
             ]}

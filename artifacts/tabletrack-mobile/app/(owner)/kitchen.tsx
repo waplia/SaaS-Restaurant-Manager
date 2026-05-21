@@ -22,7 +22,7 @@ import {
 import { useKdsRealtime, type ConnectionState } from "@/hooks/useKdsRealtime";
 import { useKdsSettings } from "@/hooks/useKdsSettings";
 import { useKdsSounds, type AlertSoundKey } from "@/hooks/useKdsSounds";
-import { KdsOrderCard, ITEM_CYCLE } from "@/components/kds/KdsOrderCard";
+import { KdsOrderCard, ITEM_CYCLE, STATUS_META } from "@/components/kds/KdsOrderCard";
 import { KdsCancelSheet } from "@/components/kds/KdsCancelSheet";
 import { KdsHistoryDetailSheet } from "@/components/kds/KdsHistoryDetailSheet";
 
@@ -283,12 +283,12 @@ function KdsView() {
         : null;
       const orderLabel = `#${ticket.orderNumber ?? ticket.id}`;
       const verb =
-        nextStatus === "preparing" ? "started"
-        : nextStatus === "ready" ? "marked ready"
+        nextStatus === "preparing" ? "moved to Preparing"
+        : nextStatus === "ready" ? "ready to serve"
         : "served";
       if (destTab && destTab !== tab) {
         setTab(destTab);
-        showToast("success", `${orderLabel} ${verb} — viewing ${destTab === "history" ? "History" : destTab[0].toUpperCase() + destTab.slice(1)}`);
+        showToast("success", `${orderLabel} ${verb}`);
       } else {
         showToast("success", `${orderLabel} ${verb}`);
       }
@@ -583,21 +583,36 @@ function KdsView() {
         {TABS.map((t) => {
           const count = t.key === "settings" ? 0 : buckets.counts[t.key];
           const active = tab === t.key;
+          // The 3 "upper" workflow categories (New/Preparing/Ready) each carry
+          // the same status color used on web KDS columns and on the ticket
+          // cards, so the cook reads the same colour story across surfaces.
+          const statusColor =
+            t.key === "new" ? STATUS_META.new.color
+            : t.key === "preparing" ? STATUS_META.preparing.color
+            : t.key === "ready" ? STATUS_META.ready.color
+            : colors.primary;
+          const activeColor = statusColor;
           return (
             <Pressable
               key={t.key}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); setTab(t.key); }}
               style={styles.tabBtn}
             >
+              {active && (t.key === "new" || t.key === "preparing" || t.key === "ready") ? (
+                <View style={[styles.tabActiveBar, { backgroundColor: activeColor }]} />
+              ) : null}
               <View>
-                <Ionicons name={t.icon} size={22} color={active ? colors.primary : colors.mutedForeground} />
+                <Ionicons name={t.icon} size={22} color={active ? activeColor : colors.mutedForeground} />
                 {count > 0 ? (
-                  <View style={styles.tabBadge}>
+                  <View style={[
+                    styles.tabBadge,
+                    (t.key === "new" || t.key === "preparing" || t.key === "ready") && { backgroundColor: statusColor },
+                  ]}>
                     <Text style={styles.tabBadgeText}>{count > 99 ? "99+" : count}</Text>
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.tabLabel, { color: active ? colors.primary : colors.mutedForeground }]}>{t.label}</Text>
+              <Text style={[styles.tabLabel, { color: active ? activeColor : colors.mutedForeground }]}>{t.label}</Text>
             </Pressable>
           );
         })}
@@ -911,7 +926,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, paddingTop: 6,
     position: "absolute", left: 0, right: 0, bottom: 0,
   },
-  tabBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 2 },
+  tabBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 2, position: "relative" },
+  tabActiveBar: { position: "absolute", top: -8, left: "20%", right: "20%", height: 3, borderRadius: 2 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   tabBadge: { position: "absolute", top: -4, right: -10, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: "#dc2626", alignItems: "center", justifyContent: "center" },
   tabBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
