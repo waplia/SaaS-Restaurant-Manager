@@ -372,7 +372,7 @@ function MenuUploadStep({ answers, patch }: { answers: WizardAnswers; patch: (p:
     try {
       const presign = await apiPost<{ uploadURL: string; objectPath: string }>(
         `/restaurants/${restaurantId}/storage/uploads/request-url`,
-        { fileName: file.name, contentType: file.type || "application/octet-stream" },
+        { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
       );
       const put = await fetch(presign.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
       if (!put.ok) throw new Error("Upload failed");
