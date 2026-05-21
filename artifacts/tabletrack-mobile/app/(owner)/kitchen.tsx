@@ -416,6 +416,33 @@ function KdsView() {
           <ConnectionDot state={connection} />
         </View>
 
+        {tab !== "settings" && tab !== "history" ? (
+          <View style={styles.statusBoxRow}>
+            {(["new", "preparing", "ready"] as const).map((k) => {
+              const meta = STATUS_META[k] ?? STATUS_META.new;
+              const active = tab === k;
+              const count = buckets.counts[k];
+              return (
+                <Pressable
+                  key={k}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setTab(k); }}
+                  style={({ pressed }) => [
+                    styles.statusBox,
+                    {
+                      backgroundColor: active ? meta.color : colors.muted,
+                      borderColor: active ? meta.color : colors.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.statusBoxCount, { color: active ? "#fff" : meta.color }]}>{count}</Text>
+                  <Text style={[styles.statusBoxLabel, { color: active ? "#fff" : colors.foreground }]}>{meta.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
           <StationChip label="All Stations" active={stationId === "all"} onPress={() => setStationId("all")} />
           {(kitchensQ.data ?? []).filter((k) => k.isActive !== false).map((k) => (
@@ -916,6 +943,10 @@ const styles = StyleSheet.create({
   header: { borderBottomWidth: 1, paddingHorizontal: 12, paddingBottom: 8, gap: 8 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 4 },
   title: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  statusBoxRow: { flexDirection: "row", gap: 8, paddingHorizontal: 4, paddingTop: 4, paddingBottom: 2 },
+  statusBox: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", gap: 2 },
+  statusBoxCount: { fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 26 },
+  statusBoxLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.4, textTransform: "uppercase" },
   chipsRow: { gap: 6, paddingHorizontal: 4, paddingVertical: 4 },
   filterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   filterLabelWrap: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
