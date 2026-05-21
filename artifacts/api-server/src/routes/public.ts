@@ -628,6 +628,25 @@ router.post("/public/orders", async (req, res) => {
     }
   }
 
+  // Immediate "order received" WhatsApp to the guest — without this the
+  // diner gets no confirmation until staff later marks the order ready /
+  // completed, which can be many minutes after they place the QR order.
+  if (normalizedCustomerPhone) {
+    try {
+      const { sendWhatsApp } = await import("../lib/notifications");
+      const dispatchTo = toE164(normalizedCustomerPhone, restaurant.country) ?? normalizedCustomerPhone;
+      const body = `Hi ${order.customerName ?? "there"}, your order #${order.orderNumber} at ${restaurant.name} is received. Total: ₹${Number(order.totalAmount).toFixed(2)}. We'll notify you once it's ready. Thank you!`;
+      sendWhatsApp({
+        to: dispatchTo,
+        body,
+        restaurantId,
+        meta: { event: "order.placed", orderId: order.id, channel: tableId ? "qr" : "online" },
+      }).catch((err) => logger.error?.({ err, orderId: order.id }, "public order placed WhatsApp failed"));
+    } catch (err) {
+      logger.error?.({ err, orderId: order.id }, "public order placed WhatsApp dispatch threw");
+    }
+  }
+
   const guestToken = generateGuestToken(order.id);
   const issuedToken = await issueTokenForOrder({
     orderId: order.id,

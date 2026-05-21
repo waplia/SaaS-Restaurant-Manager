@@ -11,6 +11,7 @@ import { seedAddonCatalogue } from "./lib/addons";
 import { seedDefaultManualMethods } from "./lib/paymentSettings";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
 import { seedDefaultWhatsAppTemplates } from "./lib/whatsappTemplateSeeder";
+import { resumePersistedSessions as resumeWhatsAppSessions } from "./lib/whatsappWebQr";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { backfillCustomerCrm } from "./lib/customerBackfill";
@@ -47,6 +48,11 @@ seedDefaultEmailTemplates().catch(err => console.error("Failed to seed default e
 seedDefaultWhatsAppTemplates()
   .then(r => logger.info({ inserted: r.inserted, skipped: r.skipped }, "WhatsApp template seeder completed"))
   .catch(err => console.error("Failed to seed default WhatsApp templates", err));
+// Re-establish Baileys (web QR) sessions that were "connected" before the
+// last restart. Without this, every server restart silently kills outbound
+// WhatsApp until staff manually re-scans the QR — every order-placed /
+// order-ready dispatch logs as `blocked: no_session` instead.
+resumeWhatsAppSessions().catch(err => console.error("Failed to resume WhatsApp sessions", err));
 runBootstrapPasswordReset().catch(err => console.error("Bootstrap password reset failed", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
