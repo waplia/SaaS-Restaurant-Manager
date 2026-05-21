@@ -22,6 +22,7 @@ import { recordAuditLog } from "../lib/audit";
 import { getAppSettings } from "../lib/appSettings";
 import { sendStaffOtp, verifyStaffOtp, normalizePhone, normalizeEmail, newRegistrationToken } from "../lib/staffOtp";
 import { sendLifecycleSms } from "../lib/smsSender";
+import { logger } from "../lib/logger";
 import { sendByTemplateKey } from "../lib/emailSender";
 
 const router = Router();
@@ -523,7 +524,9 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
     jti: session2.jti,
   };
 
-  // Best-effort welcome notifications (do not block).
+  // Best-effort welcome notifications (do not block). Mirror auth.ts so the
+  // OTP self-serve signup path fires the same emails + automation chain
+  // and surfaces any failure to the server log.
   void sendLifecycleSms({
     tenantId: tenant.id, restaurantId: restaurant.id, to: session.phone,
     eventKey: "welcome",
@@ -532,7 +535,38 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
   void sendByTemplateKey("restaurant_welcome", user.email, {
     name: user.name, restaurant: restaurant.name,
     appName: settings.appName, appUrl: process.env.PUBLIC_APP_URL ?? "",
-  }, { tenantId: tenant.id });
+  }, { tenantId: tenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: user.id, to: user.email, err: r?.error, skip: r?.skippedReason }, "restaurant_welcome (otp signup) did not send");
+    })
+    .catch((err) => logger.error({ err, userId: user.id, to: user.email }, "restaurant_welcome (otp signup) threw"));
+
+  void sendByTemplateKey("trial_started", user.email, {
+    name: user.name,
+    trialDays: String(trialDays),
+    trialEndsAt: trialEndsAt.toISOString().slice(0, 10),
+    appName: settings.appName,
+  }, { tenantId: tenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: user.id, to: user.email, err: r?.error, skip: r?.skippedReason }, "trial_started (otp signup) did not send");
+    })
+    .catch((err) => logger.error({ err, userId: user.id, to: user.email }, "trial_started (otp signup) threw"));
+
+  // Email Center automations: fire user.signup + trial.started events.
+  void (async () => {
+    try {
+      const { runAutomationsForEvent } = await import("../lib/emailAutomations");
+      const ctx = {
+        userId: user.id, userEmail: user.email, userName: user.name,
+        tenantId: tenant.id, restaurantId: restaurant.id,
+        restaurantName: restaurant.name, trialEndsAt: trialEndsAt.toISOString(),
+      };
+      await runAutomationsForEvent("user.signup", ctx);
+      await runAutomationsForEvent("trial.started", ctx);
+    } catch (err) {
+      logger.warn({ err, userId: user.id }, "otp signup automation chain failed");
+    }
+  })();
 
   await recordAuditLog({
     req, module: "auth", action: "register.complete", entity: "auth",

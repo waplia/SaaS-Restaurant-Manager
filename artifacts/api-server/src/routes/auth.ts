@@ -32,6 +32,7 @@ import { sendByTemplateKey } from "../lib/emailSender";
 import { getAppSettings } from "../lib/appSettings";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { recordAuditLog } from "../lib/audit";
+import { logger } from "../lib/logger";
 import bcrypt from "bcryptjs";
 import { normalizePhone, normalizeEmail } from "../lib/staffOtp";
 
@@ -225,18 +226,29 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       variables: { name: ownerName, restaurant: restaurantName, trialDays: 14 },
     });
   }
+  // Lifecycle emails — best-effort, never block registration. Errors are
+  // surfaced to the server log AND to email_logs so they don't disappear.
   void sendByTemplateKey("restaurant_welcome", user.email, {
     name: user.name,
     restaurant: restaurant.name,
     appName: "Khana Lagao",
     appUrl: process.env.PUBLIC_APP_URL ?? "",
-  }, { tenantId: tenant.id });
+  }, { tenantId: tenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: user.id, to: user.email, err: r?.error, skip: r?.skippedReason }, "restaurant_welcome email did not send");
+    })
+    .catch((err) => logger.error({ err, userId: user.id, to: user.email }, "restaurant_welcome email threw"));
+
   void sendByTemplateKey("trial_started", user.email, {
     name: user.name,
     trialDays: String(trialPlan?.trialDays ?? 14),
     trialEndsAt: trialEndsAt.toISOString().slice(0, 10),
     appName: "Khana Lagao",
-  }, { tenantId: tenant.id });
+  }, { tenantId: tenant.id })
+    .then((r) => {
+      if (!r?.ok) logger.warn({ userId: user.id, to: user.email, err: r?.error, skip: r?.skippedReason }, "trial_started email did not send");
+    })
+    .catch((err) => logger.error({ err, userId: user.id, to: user.email }, "trial_started email threw"));
 
   // Email Center automations: fire user.signup + trial.started events.
   void (async () => {
@@ -249,7 +261,9 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       };
       await runAutomationsForEvent("user.signup", ctx);
       await runAutomationsForEvent("trial.started", ctx);
-    } catch { /* never block signup */ }
+    } catch (err) {
+      logger.warn({ err, userId: user.id }, "signup automation chain failed");
+    }
   })();
 
   res.status(201).json({
