@@ -95,7 +95,7 @@ const emailKey = (req: { body?: { email?: string; identifier?: string } }) => {
 const loginLimitByIp = rateLimit({ name: "auth.login.ip", windowMs: 15 * 60 * 1000, max: 20 });
 const loginLimitByEmail = rateLimit({ name: "auth.login.email", windowMs: 15 * 60 * 1000, max: 10, ignoreIp: true, keyExtra: emailKey });
 
-const registerLimitByIp = rateLimit({ name: "auth.register.ip", windowMs: 60 * 60 * 1000, max: 5 });
+const registerLimitByIp = rateLimit({ name: "auth.register.ip", windowMs: 60 * 60 * 1000, max: 20 });
 
 const forgotLimitByIp = rateLimit({ name: "auth.forgot.ip", windowMs: 60 * 60 * 1000, max: 10 });
 const forgotLimitByEmail = rateLimit({ name: "auth.forgot.email", windowMs: 60 * 60 * 1000, max: 5, ignoreIp: true, keyExtra: emailKey });

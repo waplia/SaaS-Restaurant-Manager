@@ -34,8 +34,18 @@ export interface RateLimitOptions {
   name: string;
 }
 
+// In non-production environments (Replit dev preview, local, tests) the
+// preview iframe + the developer's own browser all share a single outbound
+// IP, which makes the per-IP buckets fire constantly during testing
+// (e.g. trying register a few times in a row hits the 5/hour cap and
+// returns 429). Production is unaffected.
+const RATE_LIMIT_BYPASSED =
+  process.env.RATE_LIMIT_DISABLED === "1" ||
+  (process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED !== "0");
+
 export function rateLimit(opts: RateLimitOptions) {
   return function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
+    if (RATE_LIMIT_BYPASSED) return next();
     const extra = opts.keyExtra?.(req) ?? "";
     if (opts.ignoreIp && !extra) {
       // No email yet (e.g. missing body field) — let the per-IP limiter
