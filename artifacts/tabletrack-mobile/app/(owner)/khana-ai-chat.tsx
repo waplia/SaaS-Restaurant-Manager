@@ -37,6 +37,7 @@ export default function KhanaAIChatScreen() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
 
   // Restore the prior conversation on mount.
   useEffect(() => {
@@ -185,14 +186,31 @@ export default function KhanaAIChatScreen() {
       </ScrollView>
       <View style={[styles.inputRow, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <TextInput
+          ref={inputRef}
           value={input}
           onChangeText={setInput}
-          placeholder="Ask Khana AI…"
+          placeholder="Ask Khana AI… (tap mic on keyboard for voice)"
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted }]}
           onSubmitEditing={() => sendText(input)}
           editable={!send.isPending}
+          multiline
         />
+        {/* Mic hint button — tapping focuses the input so the user can use
+            their keyboard's built-in voice-dictation mic. We intentionally
+            don't roll our own audio recorder: keyboard dictation already
+            handles permissions, language, and STT on both iOS & Android. */}
+        <Pressable
+          onPress={() => inputRef.current?.focus()}
+          disabled={send.isPending}
+          style={({ pressed }) => [
+            styles.micBtn,
+            { backgroundColor: colors.muted, opacity: send.isPending ? 0.4 : pressed ? 0.7 : 1 },
+          ]}
+          accessibilityLabel="Voice input"
+        >
+          <Ionicons name="mic-outline" size={18} color={colors.foreground} />
+        </Pressable>
         <Pressable
           onPress={() => sendText(input)}
           disabled={!input.trim() || send.isPending}
@@ -214,6 +232,7 @@ const styles = StyleSheet.create({
   sugg: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
   suggText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   inputRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, paddingBottom: Platform.OS === "ios" ? 28 : 12, borderTopWidth: 1 },
-  input: { flex: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, fontFamily: "Inter_400Regular", fontSize: 14 },
+  input: { flex: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, fontFamily: "Inter_400Regular", fontSize: 14, maxHeight: 120, minHeight: 40 },
+  micBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
 });

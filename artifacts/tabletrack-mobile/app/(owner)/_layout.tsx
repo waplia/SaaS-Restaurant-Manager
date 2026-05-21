@@ -53,7 +53,10 @@ export default function OwnerLayout() {
           <Tabs.Screen name="feedback" options={{ href: null }} />
           <Tabs.Screen name="growth" options={{ href: null }} />
           <Tabs.Screen name="khana-ai" options={{ href: null }} />
-          <Tabs.Screen name="khana-ai-chat" options={{ href: null }} />
+          {/* Chat needs the tab bar hidden so its bottom input row (text +
+              mic + send) isn't covered by the 5-slot bar on screens with
+              small height / when the keyboard is closed. */}
+          <Tabs.Screen name="khana-ai-chat" options={{ href: null, tabBarStyle: { display: "none" } }} />
           <Tabs.Screen name="finance" options={{ href: null }} />
           <Tabs.Screen name="reports" options={{ href: null }} />
           <Tabs.Screen name="support" options={{ href: null }} />
