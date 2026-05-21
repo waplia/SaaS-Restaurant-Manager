@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, count, sql, notInArray } from "drizzle-orm";
 import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, inventoryItemsTable, notificationsTable, menuItemsTable, orderItemsTable, auditLogsTable, usersTable, attendanceTable, expensesTable, expenseCategoriesTable, orderDiscountsTable, ticketDelayAlertsTable, devicesTable } from "../lib/db";
 import { AIProviderService } from "../lib/aiProviderService";
 import { loadKitchenDelayConfig } from "../lib/kitchenDelay";
@@ -108,7 +108,12 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
   const orders = await db
     .select({ totalAmount: ordersTable.totalAmount, createdAt: ordersTable.createdAt })
     .from(ordersTable)
-    .where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from)));
+    .where(and(
+      eq(ordersTable.restaurantId, restaurantId),
+      gte(ordersTable.createdAt, from),
+      // Cancelled / voided orders are not sales — exclude from the trend.
+      notInArray(ordersTable.status, ["cancelled", "voided"]),
+    ));
 
   type Bucket = { revenue: number; orders: number };
   const buckets: Record<string, Bucket> = {};
@@ -238,9 +243,12 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
   }
   from.setHours(0, 0, 0, 0);
 
+  // Sales reports exclude cancelled / voided orders so revenue, AOV, top
+  // items, and staff perf reflect actual money taken.
+  const notCancelled = notInArray(ordersTable.status, ["cancelled", "voided"]);
   const dateCondition = fromStr && toStr
-    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to))
-    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from));
+    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to), notCancelled)
+    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), notCancelled);
 
   const orders = await db.select().from(ordersTable).where(dateCondition);
   const totalRevenue = orders.reduce((s, o) => s + Number(o.totalAmount), 0);
@@ -278,6 +286,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
       FROM orders o
       WHERE o.restaurant_id = ${restaurantId}
         AND o.waiter_id IS NOT NULL
+        AND o.status NOT IN ('cancelled', 'voided')
         AND o.created_at >= ${from}
         ${to ? sql`AND o.created_at <= ${to}` : sql``}
       GROUP BY o.waiter_id

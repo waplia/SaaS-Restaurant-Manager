@@ -114,7 +114,7 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
   toEnd.setHours(23, 59, 59, 999);
 
   // Sales & discounts from completed/served/paid orders. Mirrors the
-  // existing reports.ts logic — anything other than `cancelled` counts.
+  // dashboard / reports logic — cancelled and voided orders never count.
   const [salesRow] = await db
     .select({
       gross: sql<string>`coalesce(sum(${ordersTable.totalAmount}), 0)::text`,
@@ -127,7 +127,7 @@ export async function computePnl(restaurantId: number, range: PnlRange): Promise
       eq(ordersTable.restaurantId, restaurantId),
       gte(ordersTable.createdAt, range.from),
       lte(ordersTable.createdAt, toEnd),
-      sql`${ordersTable.status} <> 'cancelled'`,
+      sql`${ordersTable.status} NOT IN ('cancelled', 'voided')`,
     ));
   const sales = num(salesRow?.gross);
   const discounts = num(salesRow?.discount);

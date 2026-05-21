@@ -50,7 +50,10 @@ const TAB_STATUSES: Record<Exclude<KdsTabKey, "settings">, Set<string>> = {
   new: new Set(["new", "pending"]),
   preparing: new Set(["preparing", "in_progress"]),
   ready: new Set(["ready"]),
-  history: new Set(["served", "completed", "cancelled"]),
+  // Cancelled / rejected tickets are not shown on the KDS — they're not
+  // actionable for the kitchen and only add noise. They remain in the
+  // order record for accounting / audit purposes.
+  history: new Set(["served", "completed"]),
 };
 
 const ORDER_TYPE_FILTER: Record<KdsFilterKey, (t: KdsTicket) => boolean> = {

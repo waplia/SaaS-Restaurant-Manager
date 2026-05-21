@@ -2226,7 +2226,13 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
   const { status, kitchenId } = req.query;
   const restaurantId = Number(req.params.restaurantId);
   const conditions: ReturnType<typeof eq>[] = [eq(kitchenTicketsTable.restaurantId, restaurantId)];
-  if (status) conditions.push(eq(kitchenTicketsTable.status, String(status)));
+  if (status) {
+    conditions.push(eq(kitchenTicketsTable.status, String(status)));
+  } else {
+    // Default: hide cancelled / rejected tickets from the KDS feed. They
+    // remain queryable explicitly via ?status=cancelled for audit views.
+    conditions.push(sql`${kitchenTicketsTable.status} <> 'cancelled'`);
+  }
   if (kitchenId) conditions.push(eq(kitchenTicketsTable.kitchenId, Number(kitchenId)));
 
   const tickets = await db.select().from(kitchenTicketsTable).where(and(...conditions)).orderBy(desc(kitchenTicketsTable.isPriority), kitchenTicketsTable.createdAt);
