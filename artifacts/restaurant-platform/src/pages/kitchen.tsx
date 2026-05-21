@@ -13,6 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import type { KitchenTicket, KitchenTicketItem, Kitchen } from "@/lib/types";
 import { io } from "socket.io-client";
+import { playNotificationChime, isSoundEnabled, setSoundEnabled as persistSoundEnabled } from "@/lib/notificationSound";
 import { printOrder, printKitchenTicket as printKitchenTicketNative, isDesktopPrintBridgeAvailable, type PrintSize } from "@/lib/printOrder";
 import { resolveImageUrl } from "@/components/ImageUploadField";
 
@@ -47,35 +48,9 @@ const STATUS_CONFIG: Record<string, { label: string; col: string; dot: string; b
   served: { label: "Served", col: "bg-gray-50 border-gray-200 text-gray-800", dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
 };
 
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = "sine";
-    gain.gain.setValueAtTime(0.4, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-    setTimeout(() => {
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.frequency.value = 1100;
-      osc2.type = "sine";
-      gain2.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      osc2.start();
-      osc2.stop(ctx.currentTime + 0.3);
-    }, 200);
-  } catch {
-    // ignore
-  }
-}
+// Sounds live in lib/notificationSound — kitchen uses the richer 3-second
+// chime so a new ticket has a distinctive, attention-grabbing tone and the
+// generic notification ping is reserved for status/alert events.
 
 function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | null) {
   const size: PrintSize = (ticket.kitchen?.paperSize === "a5" ? "a5" : "thermal-80mm");
@@ -324,7 +299,13 @@ export default function KitchenPage() {
   const updatePriority = useUpdateTicketPriority();
   const { data: restaurant } = useRestaurantInfo();
   const { toast } = useToast();
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  // Sound preference is shared with the global realtime chime in
+  // lib/notificationSound so muting in one place mutes everywhere.
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => isSoundEnabled());
+  const setSoundEnabled = useCallback((on: boolean) => {
+    persistSoundEnabled(on);
+    setSoundEnabledState(on);
+  }, []);
   const prevCountRef = useRef(0);
   const printedTicketIdsRef = useRef<Set<number>>(new Set());
   const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -402,7 +383,9 @@ export default function KitchenPage() {
         return;
       }
       void refetch();
-      if (soundEnabled) playBeep();
+      // The new-order chime is emitted globally by useSocket() in
+      // lib/realtime so we don't double-trigger it here. We just refresh
+      // the kitchen view and show the kitchen-specific toast.
       toast({ title: "New order received!", description: "Check the New Orders column." });
     });
 
@@ -423,7 +406,7 @@ export default function KitchenPage() {
         return;
       }
       void refetch();
-      if (soundEnabled) playBeep();
+      if (soundEnabled) playNotificationChime();
       toast({
         title: "Kitchen delay alert",
         description: `Order ${payload?.orderNumber ?? "#?"} is ${payload?.delayedByMinutes ?? 0} min late`,
@@ -437,7 +420,7 @@ export default function KitchenPage() {
   useEffect(() => {
     const newCount = newTickets.length;
     if (newCount > prevCountRef.current && prevCountRef.current > 0) {
-      if (soundEnabled) playBeep();
+      if (soundEnabled) playNotificationChime();
     }
     prevCountRef.current = newCount;
   }, [newTickets.length, soundEnabled]);
@@ -455,7 +438,7 @@ export default function KitchenPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSoundEnabled(v => !v)}
+              onClick={() => setSoundEnabled(!soundEnabled)}
               title={soundEnabled ? "Mute notifications" : "Enable sound"}
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}

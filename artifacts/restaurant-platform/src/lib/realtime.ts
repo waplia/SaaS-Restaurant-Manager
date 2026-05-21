@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
+import { playNewOrderChime, playNotificationChime } from "./notificationSound";
 
 const API_BASE = "";
 
@@ -26,6 +27,7 @@ export function useSocket(restaurantId: number) {
     socketRef.current = socket;
 
     socket.on("order:new", () => {
+      playNewOrderChime();
       void qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "summary", restaurantId] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "live-kitchen", restaurantId] });
@@ -52,10 +54,12 @@ export function useSocket(restaurantId: number) {
     });
 
     socket.on("notification:new", () => {
+      playNotificationChime();
       void qc.invalidateQueries({ queryKey: ["notifications", restaurantId] });
     });
 
     socket.on("waiter_request:new", () => {
+      playNotificationChime();
       void qc.invalidateQueries({ queryKey: ["waiter-requests", restaurantId] });
     });
 
@@ -71,6 +75,7 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["ops", "approvals"] });
     });
     socket.on("panic:raised", () => {
+      playNotificationChime();
       void qc.invalidateQueries({ queryKey: ["ops", "panic"] });
       void qc.invalidateQueries({ queryKey: ["ops", "digital-twin", restaurantId] });
     });
