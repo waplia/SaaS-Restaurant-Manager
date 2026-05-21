@@ -144,6 +144,7 @@ function PasswordTab({
   loginWith2faCheck: (identifier: string, password: string) => Promise<LoginResponse>;
 }) {
   const [identifier, setIdentifier] = useState("");
+  const [idMode, setIdMode] = useState<"email" | "mobile">("email");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
@@ -167,17 +168,45 @@ function PasswordTab({
   return (
     <form onSubmit={handle} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="identifier">Email or mobile number</Label>
-        <Input
-          id="identifier"
-          type="text"
-          inputMode="email"
-          value={identifier}
-          onChange={e => setIdentifier(e.target.value)}
-          required
-          autoComplete="username"
-          placeholder="you@restaurant.com or +91 98765 43210"
-        />
+        <div className="flex items-center justify-between">
+          <Label htmlFor="identifier">{idMode === "email" ? "Email" : "Mobile number"}</Label>
+          <div className="grid grid-cols-2 bg-muted rounded-md p-0.5 text-xs" role="tablist">
+            {(["email", "mobile"] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={idMode === m}
+                onClick={() => { setIdMode(m); setIdentifier(""); }}
+                className={`px-2.5 py-0.5 rounded transition-colors ${idMode === m ? "bg-card shadow-sm text-foreground font-medium" : "text-muted-foreground"}`}
+              >
+                {m === "email" ? "Email" : "Mobile"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {idMode === "email" ? (
+          <Input
+            id="identifier"
+            type="email"
+            inputMode="email"
+            value={identifier}
+            onChange={e => setIdentifier(e.target.value)}
+            required
+            autoComplete="username"
+            placeholder="you@restaurant.com"
+          />
+        ) : (
+          <PhoneInput
+            id="identifier"
+            value={identifier}
+            onChange={setIdentifier}
+            defaultCountry="IN"
+            placeholder="9876543210"
+            required
+            autoComplete="username"
+          />
+        )}
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">

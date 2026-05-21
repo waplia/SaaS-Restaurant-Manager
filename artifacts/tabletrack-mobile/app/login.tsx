@@ -11,6 +11,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useColors } from "@/hooks/useColors";
 import { useAuth, type AuthUser } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { PhoneInput } from "@/components/PhoneInput";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -144,6 +145,7 @@ export default function LoginScreen() {
 
   // password
   const [identifier, setIdentifier] = useState("");
+  const [idMode, setIdMode] = useState<"email" | "mobile">("email");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -160,27 +162,7 @@ export default function LoginScreen() {
 
   const [loading, setLoading] = useState(false);
 
-  // Auto-prefix +91 (India) when the user starts typing what looks like a
-  // local mobile number. We only act on the first keystroke: if the field is
-  // currently empty and the new value begins with a digit (not '+', '@', or
-  // a letter), we treat it as a phone number and prepend "+91 ". The user
-  // can still type/paste a full international number (+1, +44, …) or an
-  // email — those don't match `^\d` and pass through unchanged.
-  function autoPrefixIndia(current: string, next: string): string {
-    if (current.length === 0 && /^\d/.test(next)) {
-      return `+91 ${next}`;
-    }
-    return next;
-  }
-  const onChangeIdentifier = (v: string) => setIdentifier(autoPrefixIndia(identifier, v));
-  const onChangeOtpIdentifier = (v: string) => {
-    // Only auto-prefix on the mobile tab — email tab expects an email.
-    if (tab === "mobile") {
-      setOtpIdentifier(autoPrefixIndia(otpIdentifier, v));
-    } else {
-      setOtpIdentifier(v);
-    }
-  };
+  const onChangeOtpIdentifier = (v: string) => setOtpIdentifier(v);
 
   useEffect(() => {
     void (async () => {
@@ -392,18 +374,48 @@ export default function LoginScreen() {
               {tab === "password" && (
                 <>
                   <View style={styles.field}>
-                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Email or mobile number</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
-                      <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
-                      <TextInput
-                        style={[styles.input, { color: colors.foreground }]}
-                        value={identifier} onChangeText={onChangeIdentifier}
-                        placeholder="you@example.com or +91 98765 43210"
-                        placeholderTextColor={colors.mutedForeground}
-                        keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
-                        testID="email-input"
-                      />
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                        {idMode === "email" ? "Email" : "Mobile number"}
+                      </Text>
+                      <View style={[styles.idModeTabs, { backgroundColor: colors.muted }]}>
+                        {(["email", "mobile"] as const).map(m => (
+                          <Pressable
+                            key={m}
+                            onPress={() => { setIdMode(m); setIdentifier(""); }}
+                            style={[styles.idModeTab, idMode === m && { backgroundColor: colors.card }]}
+                          >
+                            <Text style={{
+                              color: idMode === m ? colors.foreground : colors.mutedForeground,
+                              fontFamily: "Inter_500Medium", fontSize: 12,
+                            }}>
+                              {m === "email" ? "Email" : "Mobile"}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
                     </View>
+                    {idMode === "email" ? (
+                      <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
+                        <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                        <TextInput
+                          style={[styles.input, { color: colors.foreground }]}
+                          value={identifier} onChangeText={setIdentifier}
+                          placeholder="you@example.com"
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+                          testID="email-input"
+                        />
+                      </View>
+                    ) : (
+                      <PhoneInput
+                        value={identifier}
+                        onChange={setIdentifier}
+                        defaultCountry="IN"
+                        placeholder="9876543210"
+                        testID="phone-input"
+                      />
+                    )}
                   </View>
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Password</Text>
@@ -453,17 +465,27 @@ export default function LoginScreen() {
                 <>
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>{tab === "email" ? "Email" : "Phone number"}</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
-                      <Ionicons name={tab === "email" ? "mail-outline" : "call-outline"} size={18} color={colors.mutedForeground} />
-                      <TextInput
-                        style={[styles.input, { color: colors.foreground }]}
-                        value={otpIdentifier} onChangeText={onChangeOtpIdentifier}
-                        placeholder={tab === "email" ? "you@example.com" : "+91 9876543210"}
-                        placeholderTextColor={colors.mutedForeground}
-                        keyboardType={tab === "email" ? "email-address" : "phone-pad"}
-                        autoCapitalize="none" autoCorrect={false}
+                    {tab === "email" ? (
+                      <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
+                        <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                        <TextInput
+                          style={[styles.input, { color: colors.foreground }]}
+                          value={otpIdentifier} onChangeText={onChangeOtpIdentifier}
+                          placeholder="you@example.com"
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="email-address"
+                          autoCapitalize="none" autoCorrect={false}
+                        />
+                      </View>
+                    ) : (
+                      <PhoneInput
+                        value={otpIdentifier}
+                        onChange={setOtpIdentifier}
+                        defaultCountry="IN"
+                        placeholder="9876543210"
+                        testID="otp-phone-input"
                       />
-                    </View>
+                    )}
                   </View>
                   {tab === "mobile" && (
                     <View style={styles.field}>
@@ -580,4 +602,6 @@ const styles = StyleSheet.create({
   secondaryBtn: { paddingHorizontal: 16, paddingVertical: 14, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   secondaryBtnText: { fontSize: 15, fontFamily: "Inter_500Medium" },
   channelBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  idModeTabs: { flexDirection: "row", padding: 2, borderRadius: 8, gap: 2 },
+  idModeTab: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
 });
