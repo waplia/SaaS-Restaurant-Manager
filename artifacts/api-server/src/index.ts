@@ -10,6 +10,7 @@ import { seedDefaultFestivals } from "./routes/advanced-growth";
 import { seedAddonCatalogue } from "./lib/addons";
 import { seedDefaultManualMethods } from "./lib/paymentSettings";
 import { seedDefaultEmailTemplates } from "./lib/emailSender";
+import { seedDefaultWhatsAppTemplates } from "./lib/whatsappTemplateSeeder";
 import { logger } from "./lib/logger";
 import { backfillDefaultKitchens } from "./lib/kitchenRouting";
 import { backfillCustomerCrm } from "./lib/customerBackfill";
@@ -43,6 +44,9 @@ seedDefaultFestivals().catch(err => console.error("Failed to seed default festiv
 seedAddonCatalogue().catch(err => console.error("Failed to seed add-on catalogue", err));
 seedDefaultManualMethods().catch(err => console.error("Failed to seed default manual payment methods", err));
 seedDefaultEmailTemplates().catch(err => console.error("Failed to seed default email templates", err));
+seedDefaultWhatsAppTemplates()
+  .then(r => logger.info({ inserted: r.inserted, skipped: r.skipped }, "WhatsApp template seeder completed"))
+  .catch(err => console.error("Failed to seed default WhatsApp templates", err));
 runBootstrapPasswordReset().catch(err => console.error("Bootstrap password reset failed", err));
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {

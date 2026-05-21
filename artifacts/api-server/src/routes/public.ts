@@ -777,8 +777,19 @@ router.post("/public/orders/:orderId/arrive", async (req, res) => {
     if (dispatchTo) {
       let waOk = false;
       try {
-        await sendWhatsApp({ to: dispatchTo, body });
-        waOk = true;
+        const waResult = await sendWhatsApp({
+          to: dispatchTo,
+          body,
+          restaurantId: order.restaurantId,
+          meta: { event: "order.curbside_arrival", orderId },
+        });
+        // Only treat as delivered when the provider returned a real message id.
+        // Guard-blocked sends (disabled/no_session/quota) return { sid: null }
+        // without throwing — those must still trigger the SMS fallback.
+        waOk = Boolean(waResult?.sid);
+        if (!waOk) {
+          logger.warn?.({ orderId }, "curbside arrival WhatsApp blocked or returned no sid; falling back to SMS");
+        }
       } catch (err) {
         logger.error?.({ err, orderId }, "curbside arrival WhatsApp failed; falling back to SMS");
       }

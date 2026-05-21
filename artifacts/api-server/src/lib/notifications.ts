@@ -50,21 +50,59 @@ export async function sendEmail(opts: {
   }
 }
 
+/**
+ * Send a free-form WhatsApp message.
+ *
+ * As of May 2026, when a `restaurantId` is supplied this routes through
+ * the unified WhatsApp dispatcher (lib/whatsapp.ts) so the restaurant's
+ * scanned Web-QR session (Baileys) or Meta Cloud API is used, quotas /
+ * safe-send guards are honoured, and the send lands in `whatsapp_logs`.
+ *
+ * Legacy callers without a restaurant context fall through to the
+ * Twilio sandbox path (used only by platform OTPs in pre-tenant flows).
+ */
 export async function sendWhatsApp(opts: {
   to: string;
   body: string;
+  /** Restaurant context — required for Web-QR / Cloud-API dispatch. */
+  restaurantId?: number | null;
+  /** Free-form context recorded on the whatsapp_logs row. */
+  meta?: Record<string, unknown>;
 }): Promise<{ sid: string | null }> {
+  if (opts.restaurantId) {
+    const { sendWhatsAppMessage } = await import("./whatsapp");
+    const result = await sendWhatsAppMessage({
+      restaurantId: opts.restaurantId,
+      to: opts.to,
+      body: opts.body,
+      category: "transactional",
+      meta: opts.meta,
+    });
+    if (result.status === "sent") {
+      return { sid: result.providerMessageId };
+    }
+    // Don't throw on guard-blocked sends (quota / safe-send / no session)
+    // — the unified dispatcher already logged the reason. Throwing would
+    // surface red error logs for legitimate restaurant configuration.
+    if (result.status === "blocked") {
+      logger.info({ to: opts.to, restaurantId: opts.restaurantId, reason: result.error },
+        "WhatsApp send blocked by restaurant configuration");
+      return { sid: null };
+    }
+    throw new Error(result.error ?? "WhatsApp send failed");
+  }
+
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
     if (process.env.NOTIFICATIONS_ALLOW_STUBS === "1") {
       logger.info({ to: opts.to, body: opts.body }, "[WhatsApp stub] Would send WhatsApp message");
       return { sid: null };
     }
-    throw new Error("WhatsApp provider not configured (set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN)");
+    throw new Error("WhatsApp provider not configured (set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN, or pass restaurantId)");
   }
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
   const formBody = new URLSearchParams({
     From: TWILIO_WHATSAPP_FROM,
-    To: `whatsapp:${opts.to}`,
+    To: `whatsapp:${opts.to.startsWith("+") ? opts.to : `+${opts.to}`}`,
     Body: opts.body,
   });
   try {

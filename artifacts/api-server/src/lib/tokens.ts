@@ -231,7 +231,12 @@ export async function syncTokenWithTickets(orderId: number, restaurantId: number
       .replace(/\{name\}/g, maskName(updated.customerName, true) ?? "Guest")
       .replace(/\{token\}/g, updated.token)
       .replace(/\{counter\}/g, String(updated.counter));
-    sendWhatsApp({ to: updated.customerPhone, body }).catch((err) => {
+    sendWhatsApp({
+      to: updated.customerPhone,
+      body,
+      restaurantId,
+      meta: { event: "order.token_ready", tokenId: updated.id, orderId },
+    }).catch((err) => {
       logger.error({ err: (err as Error).message, tokenId: updated.id }, "token whatsapp failed");
     });
     await db.update(orderTokensTable).set({ notifiedReadyAt: new Date() }).where(eq(orderTokensTable.id, updated.id));

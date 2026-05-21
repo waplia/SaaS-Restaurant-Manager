@@ -544,7 +544,12 @@ router.patch(`${BASE}/queue/:id`, requireRole(...SERVICE_ROLES), requirePlanFeat
     const to = toE164(row.phone, r?.country ?? DEFAULT_ISO);
     if (to) {
       Promise.allSettled([
-        sendWhatsApp({ to, body }),
+        sendWhatsApp({
+          to,
+          body,
+          restaurantId: rid(req),
+          meta: { event: "order.takeaway_ready", ticketId: id },
+        }),
         sendSms({ to, body }),
       ]).then(results => {
         for (const r of results) if (r.status === "rejected") logger.warn({ err: r.reason }, "[queue] notification failed");

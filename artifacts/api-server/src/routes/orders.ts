@@ -221,7 +221,7 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
     // Normalize to strict E.164 so WhatsApp / SMS providers accept the recipient.
     const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
-    sendWhatsApp({ to, body: msg }).catch(console.error);
+    sendWhatsApp({ to, body: msg, restaurantId, meta: { event: "order.confirmed", orderId: paidOrder.id } }).catch(console.error);
   }
 }
 
@@ -2400,8 +2400,14 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotenc
       const [customer] = await db.select({ phone: customersTable.phone, email: customersTable.email, name: customersTable.name })
         .from(customersTable).where(eq(customersTable.id, order.customerId));
       if (customer?.phone) {
-        const to = toE164(customer.phone, null) ?? customer.phone;
-        sendWhatsApp({ to, body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.` }).catch(console.error);
+        const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+        const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
+        sendWhatsApp({
+          to,
+          body: `Hi ${customer.name}, your order #${order.orderNumber} is ready! Please collect it.`,
+          restaurantId,
+          meta: { event: "order.ready", orderId: updated.orderId },
+        }).catch(console.error);
       }
       if (customer?.email) {
         // Email the customer through the Super Admin–editable

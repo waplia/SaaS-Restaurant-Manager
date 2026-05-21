@@ -1,9 +1,15 @@
 /**
  * Shared, dependency-free utilities for country-aware phone-number handling.
  *
- * Storage format used across the system:  `+<dial> <national>`
- *   - `+91 9876543210`
- *   - `+1 5551234567`
+ * Storage format used across the system:  `<dial> <national>` (no leading "+")
+ *   - `91 9876543210`
+ *   - `1 5551234567`
+ *
+ * The leading "+" was dropped on 2026-05-21 because most messaging
+ * providers (Meta Cloud API, Baileys / WhatsApp Web, Twilio) accept —
+ * and Baileys *prefers* — bare digits. Legacy stored values that still
+ * begin with "+" are silently accepted by {@link parsePhone} and
+ * re-normalised on the next write.
  *
  * This package is intentionally framework-free so it can be consumed by:
  *   - The Express API server (server-side normalisation before insert)
@@ -16,7 +22,7 @@ export interface CountryCode {
   name: string;
   /** ISO-3166-1 alpha-2 code, e.g. "IN". */
   iso: string;
-  /** Dialing code including a leading "+", e.g. "+91". */
+  /** Dialing code without leading "+", e.g. "91". */
   code: string;
   /** Regional indicator emoji flag. */
   flag: string;
@@ -24,7 +30,7 @@ export interface CountryCode {
 
 /** Default country used when no restaurant context is available. */
 export const DEFAULT_ISO = "IN";
-export const DEFAULT_CODE = "+91";
+export const DEFAULT_CODE = "91";
 
 /** Convert an ISO-3166 alpha-2 code into its regional-indicator emoji flag. */
 export function isoFlag(iso: string): string {
@@ -93,7 +99,7 @@ const RAW: Array<[string, string, string]> = [
 export const COUNTRY_CODES: ReadonlyArray<CountryCode> = Object.freeze(
   RAW.map(([iso, dial, name]) => ({
     iso,
-    code: `+${dial}`,
+    code: dial,
     name,
     flag: isoFlag(iso),
   })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -101,7 +107,7 @@ export const COUNTRY_CODES: ReadonlyArray<CountryCode> = Object.freeze(
 
 const BY_ISO = new Map<string, CountryCode>(COUNTRY_CODES.map((c) => [c.iso, c]));
 // Pre-sort dial-codes longest-first so we always match the most specific
-// region (e.g. "+1268" Antigua wins over "+1" US/Canada).
+// region (e.g. "1268" Antigua wins over "1" US/Canada).
 const DIAL_CODES_LONGEST_FIRST: string[] = Array.from(
   new Set(COUNTRY_CODES.map((c) => c.code)),
 ).sort((a, b) => b.length - a.length);
@@ -112,10 +118,10 @@ export function countryByIso(iso: string | null | undefined): CountryCode | unde
   return BY_ISO.get(iso.toUpperCase());
 }
 
-/** Look up a country by dial code, e.g. "+91". Returns the first match. */
+/** Look up a country by dial code. Accepts "91" or legacy "+91". */
 export function countryByDial(code: string | null | undefined): CountryCode | undefined {
   if (!code) return undefined;
-  const norm = code.startsWith("+") ? code : `+${code}`;
+  const norm = code.replace(/^\+/, "");
   return COUNTRY_CODES.find((c) => c.code === norm);
 }
 
@@ -128,8 +134,10 @@ export function resolveCountry(iso?: string | null): CountryCode {
  * Split a stored phone string into its country + national parts.
  *
  * Accepts any of:
- *   - `"+91 9876543210"`  (canonical storage format)
- *   - `"+919876543210"`   (no space)
+ *   - `"91 9876543210"`   (canonical storage format)
+ *   - `"+91 9876543210"`  (legacy storage — still parsed)
+ *   - `"+919876543210"`   (legacy compact)
+ *   - `"919876543210"`    (compact, no space — parsed when it starts with a known dial code)
  *   - `"+1-555-123-4567"` (dashes)
  *   - `"9876543210"`      (national-only — assumed to be {@link defaultIso})
  *   - `""` / `null`       (empty)
@@ -142,22 +150,33 @@ export function parsePhone(
   const v = (value ?? "").trim();
   if (!v) return { country: def, national: "" };
 
-  if (v.startsWith("+")) {
-    for (const code of DIAL_CODES_LONGEST_FIRST) {
-      if (v.startsWith(code)) {
-        const country = countryByDial(code) ?? def;
-        const national = v.slice(code.length).replace(/^[\s\-]+/, "");
-        return { country, national };
-      }
-    }
-    // Unknown +-prefix — strip the "+" so it isn't presented as garbage.
-    return { country: def, national: v.replace(/^\+/, "") };
+  // Strip a single leading "+" from legacy stored values so we can fall
+  // through to the unified prefix-match below.
+  const hadPlus = v.startsWith("+");
+  const stripped = hadPlus ? v.slice(1) : v;
+
+  // Space- or dash-separated form: `"<dial> <national>"` or `"<dial>-<national>"`.
+  const sepMatch = stripped.match(/^(\d{1,4})[\s\-]+(.+)$/);
+  if (sepMatch) {
+    const country = countryByDial(sepMatch[1]) ?? def;
+    return { country, national: sepMatch[2].replace(/^[\s\-]+/, "") };
   }
 
-  return { country: def, national: v };
+  // Compact international form — match longest known dial code.
+  if (hadPlus || /^\d{6,}$/.test(stripped)) {
+    for (const code of DIAL_CODES_LONGEST_FIRST) {
+      if (stripped.startsWith(code) && stripped.length > code.length) {
+        const country = countryByDial(code) ?? def;
+        return { country, national: stripped.slice(code.length) };
+      }
+    }
+    if (hadPlus) return { country: def, national: stripped };
+  }
+
+  return { country: def, national: stripped };
 }
 
-/** Build the canonical `"+<dial> <national>"` storage string. */
+/** Build the canonical `"<dial> <national>"` storage string (no leading "+"). */
 export function formatPhone(country: CountryCode, national: string): string {
   const trimmed = (national ?? "").replace(/[^\d\s\-]/g, "").trim();
   if (!trimmed) return "";
@@ -166,9 +185,9 @@ export function formatPhone(country: CountryCode, national: string): string {
 
 /**
  * Normalise an arbitrary user-supplied phone string to the canonical
- * storage format, using `restaurantIso` as the fallback country when the
- * input has no `+`-prefix. Returns `null` when the result is too short
- * to be a usable phone number.
+ * `"<dial> <national>"` storage format (no leading "+"), using
+ * `restaurantIso` as the fallback country when the input has no dial
+ * prefix. Returns `null` when the result is too short to be usable.
  */
 export function normalizePhone(
   raw: string | null | undefined,
@@ -194,8 +213,9 @@ export function isValidPhone(
 }
 
 /**
- * Produce an E.164-style string with no spaces, e.g. `"+919876543210"`.
- * Useful for SMS / WhatsApp APIs that reject whitespace.
+ * Produce a bare-digits dispatch string (no "+", no spaces), e.g.
+ * `"919876543210"`. WhatsApp Cloud API / Baileys / Twilio all accept
+ * this form, and Baileys specifically requires it.
  */
 export function toE164(
   raw: string | null | undefined,
