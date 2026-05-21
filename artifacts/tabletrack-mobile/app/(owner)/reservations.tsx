@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
+import { PhoneInput } from "@/components/PhoneInput";
 
 type Reservation = {
   id: number;
@@ -250,8 +251,7 @@ function ReservationForm({
           placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
       </FormField>
       <FormField label="Phone">
-        <TextInput value={guestPhone} onChangeText={setGuestPhone} keyboardType="phone-pad"
-          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+        <PhoneInput value={guestPhone} onChange={setGuestPhone} />
       </FormField>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <View style={{ flex: 1 }}>

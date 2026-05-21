@@ -1,11 +1,19 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, TextInput, Alert, Platform, KeyboardAvoidingView } from "react-native";
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, TextInput, Alert, Platform, KeyboardAvoidingView, Linking } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
+
+type PublicAppSettings = {
+  appName?: string;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  supportWhatsapp?: string | null;
+};
 
 type Ticket = {
   id: number;
@@ -29,6 +37,26 @@ export default function SupportScreen() {
     queryFn: () => customFetch<Ticket[] | { data?: Ticket[]; tickets?: Ticket[] }>(`/api/support/tickets`).catch(() => []),
   });
   const list: Ticket[] = Array.isArray(q.data) ? q.data : (q.data?.data ?? q.data?.tickets ?? []);
+
+  // Public settings — these power the contact buttons (WhatsApp, phone,
+  // email) and are configurable by Super Admin from /admin-settings. The
+  // /public/app-settings endpoint is unauthenticated and short-cached, so
+  // changes go live everywhere within ~15s without a code deploy.
+  const settingsQ = useQuery<PublicAppSettings>({
+    queryKey: ["public-app-settings-support"],
+    queryFn: () => customFetch<PublicAppSettings>(`/api/public/app-settings`).catch(() => ({})),
+    staleTime: 60_000,
+  });
+  const s = settingsQ.data ?? {};
+
+  const openWhatsapp = (raw: string) => {
+    const digits = raw.replace(/[^\d+]/g, "").replace(/^\+/, "");
+    const appName = s.appName ?? "TableTrack";
+    const text = encodeURIComponent(`Hi ${appName} support, I need help with my account.`);
+    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+      Alert.alert("Couldn't open WhatsApp", "Please install WhatsApp or use email instead.");
+    });
+  };
 
   const create = useMutation({
     mutationFn: () => customFetch(`/api/support/tickets`, {
@@ -59,9 +87,46 @@ export default function SupportScreen() {
         }
       />
       <ScrollView
-        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); settingsQ.refetch(); }} tintColor={colors.primary} />}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: isWeb ? 100 : 100 }}
       >
+        {/* Quick-contact row — shown only for channels the admin has configured.
+            Tapping each opens the appropriate native app (WhatsApp, dialer, mail). */}
+        {(s.supportWhatsapp || s.supportPhone || s.supportEmail) ? (
+          <View style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.contactTitle, { color: colors.foreground }]}>Talk to us directly</Text>
+            <View style={styles.contactRow}>
+              {s.supportWhatsapp ? (
+                <Pressable
+                  onPress={() => openWhatsapp(s.supportWhatsapp!)}
+                  style={({ pressed }) => [styles.contactBtn, { backgroundColor: "#25D366", opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                  <Text style={styles.contactBtnText}>WhatsApp</Text>
+                </Pressable>
+              ) : null}
+              {s.supportPhone ? (
+                <Pressable
+                  onPress={() => Linking.openURL(`tel:${s.supportPhone}`).catch(() => {})}
+                  style={({ pressed }) => [styles.contactBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <Ionicons name="call" size={16} color="#fff" />
+                  <Text style={styles.contactBtnText}>Call</Text>
+                </Pressable>
+              ) : null}
+              {s.supportEmail ? (
+                <Pressable
+                  onPress={() => Linking.openURL(`mailto:${s.supportEmail}`).catch(() => {})}
+                  style={({ pressed }) => [styles.contactBtn, { backgroundColor: colors.foreground, opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <Ionicons name="mail" size={16} color={colors.background} />
+                  <Text style={[styles.contactBtnText, { color: colors.background }]}>Email</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         {showNew ? (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, gap: 10 }]}>
             <TextInput
@@ -124,4 +189,12 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 10, fontFamily: "Inter_400Regular", fontSize: 14 },
   submit: { paddingVertical: 12, borderRadius: 10, alignItems: "center" },
   submitText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  contactCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 10 },
+  contactTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  contactBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+  },
+  contactBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

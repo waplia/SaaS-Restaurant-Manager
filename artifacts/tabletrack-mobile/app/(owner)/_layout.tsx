@@ -4,7 +4,6 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AuthGate } from "@/components/AuthGate";
 import { makeAppTabBar } from "@/components/AppTabBar";
-import { KhanaAiFab } from "@/components/KhanaAiFab";
 
 // Custom 5-slot tab bar with raised center "New Order" button.
 // The middle slot is a phantom route — its tab press is intercepted and
@@ -59,10 +58,6 @@ export default function OwnerLayout() {
           <Tabs.Screen name="reports" options={{ href: null }} />
           <Tabs.Screen name="support" options={{ href: null }} />
         </Tabs>
-        {/* Global Khana AI floating action button — rendered as a sibling so
-            it sits above every owner tab screen, horizontally centered just
-            above the bottom tab bar. */}
-        <KhanaAiFab />
       </View>
     </AuthGate>
   );

@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ROLE_LABEL } from "@/lib/roles";
 import { router } from "expo-router";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
+import { PhoneInput } from "@/components/PhoneInput";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 
 // The staff list API (`flattenStaffRow`) returns `id` set to the *user* id
@@ -233,8 +234,7 @@ function StaffForm({
         </FormField>
       ) : null}
       <FormField label="Phone">
-        <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad"
-          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+        <PhoneInput value={phone} onChange={setPhone} />
       </FormField>
       <FormField label="Role">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>

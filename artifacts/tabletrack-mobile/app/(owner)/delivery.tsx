@@ -46,18 +46,25 @@ export default function DeliveryScreen() {
         refreshControl={<RefreshControl refreshing={ordersQ.isRefetching} onRefresh={() => { ordersQ.refetch(); codQ.refetch(); }} tintColor={colors.primary} />}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: isWeb ? 100 : 100 }}
       >
-        {codQ.data ? (
-          <View style={[styles.codCard, { backgroundColor: colors.accent, borderColor: colors.primary + "30" }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.codLabel, { color: colors.mutedForeground }]}>Cash on delivery today</Text>
-              <Text style={[styles.codTotal, { color: colors.foreground }]}>₹{codQ.data.totalDue.toFixed(0)}</Text>
-              <Text style={[styles.codSub, { color: colors.mutedForeground }]}>
-                Collected ₹{codQ.data.collected.toFixed(0)} · Pending ₹{codQ.data.pending.toFixed(0)}
-              </Text>
+        {codQ.data ? (() => {
+          // Decimal columns commonly come back as strings from the API; cast
+          // defensively so `.toFixed` never crashes on string/null/undefined.
+          const totalDue = Number(codQ.data.totalDue) || 0;
+          const collected = Number(codQ.data.collected) || 0;
+          const pending = Number(codQ.data.pending) || 0;
+          return (
+            <View style={[styles.codCard, { backgroundColor: colors.accent, borderColor: colors.primary + "30" }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.codLabel, { color: colors.mutedForeground }]}>Cash on delivery today</Text>
+                <Text style={[styles.codTotal, { color: colors.foreground }]}>₹{totalDue.toFixed(0)}</Text>
+                <Text style={[styles.codSub, { color: colors.mutedForeground }]}>
+                  Collected ₹{collected.toFixed(0)} · Pending ₹{pending.toFixed(0)}
+                </Text>
+              </View>
+              <Ionicons name="cash-outline" size={32} color={colors.primary} />
             </View>
-            <Ionicons name="cash-outline" size={32} color={colors.primary} />
-          </View>
-        ) : null}
+          );
+        })() : null}
 
         {list.length === 0 ? (
           <View style={{ marginTop: 40 }}>
@@ -80,7 +87,7 @@ export default function DeliveryScreen() {
                 <Text style={[styles.rider, { color: colors.mutedForeground }]}>
                   {o.riderName ? `Rider: ${o.riderName}` : "No rider assigned"}
                 </Text>
-                <Text style={[styles.amount, { color: colors.foreground }]}>₹{(o.totalAmount ?? 0).toFixed(0)}</Text>
+                <Text style={[styles.amount, { color: colors.foreground }]}>₹{(Number(o.totalAmount) || 0).toFixed(0)}</Text>
               </View>
             </View>
           ))

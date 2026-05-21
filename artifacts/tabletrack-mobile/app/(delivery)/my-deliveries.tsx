@@ -82,7 +82,7 @@ export default function MyDeliveriesScreen() {
   };
 
   const markDelivered = (a: Assignment) => {
-    const codAmt = Number(a.codAmount);
+    const codAmt = Number(a.codAmount) || 0;
     if (codAmt > 0 && !a.codCollected) {
       Alert.alert(
         "Collect COD?",
@@ -105,7 +105,7 @@ export default function MyDeliveriesScreen() {
 
   const totalCodOutstanding = assignments
     .filter(a => a.codCollected && !a.codHandedIn)
-    .reduce((sum, a) => sum + Number(a.codAmount), 0);
+    .reduce((sum, a) => sum + (Number(a.codAmount) || 0), 0);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -161,7 +161,11 @@ export default function MyDeliveriesScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: isWeb ? 34 : insets.bottom + 24 }]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
           renderItem={({ item: a }) => {
-            const codAmt = Number(a.codAmount);
+            // API may return COD/total as string, number, null, or undefined.
+            // Defensive Number(... || 0) so .toFixed never crashes if the
+            // server omits a field on a partial payload.
+            const codAmt = Number(a.codAmount) || 0;
+            const orderTotal = Number(a.order?.totalAmount) || 0;
             return (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.cardHeader}>
@@ -182,7 +186,7 @@ export default function MyDeliveriesScreen() {
                 <View style={styles.amountsRow}>
                   <View>
                     <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Total</Text>
-                    <Text style={[styles.amount, { color: colors.foreground }]}>₹{Number(a.order.totalAmount).toFixed(0)}</Text>
+                    <Text style={[styles.amount, { color: colors.foreground }]}>₹{orderTotal.toFixed(0)}</Text>
                   </View>
                   {codAmt > 0 && (
                     <View>

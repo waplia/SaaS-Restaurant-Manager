@@ -15,6 +15,10 @@ import { ObjectStorageService } from "../lib/objectStorage";
 import { getObjectAclPolicy } from "../lib/objectAcl";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
+import { sendByTemplateKey } from "../lib/emailSender";
+import { getAppSettings } from "../lib/appSettings";
+import { logger } from "../lib/logger";
+import { restaurantsTable } from "../lib/db";
 
 const objectStorageService = new ObjectStorageService();
 
@@ -204,6 +208,41 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
 
   await db.insert(staffTable).values({ userId: user.id, restaurantId });
   await audit(restaurantId, req.user?.sub ?? null, "create", "staff", user.id, { email, role }, req.ip);
+
+  // Fire-and-forget invite email. The new staff member doesn't know their
+  // (random) temp password — the email points them at the on-page OTP
+  // "Forgot password" flow with their email pre-filled, which is the
+  // documented onboarding path. We never await the send or fail the
+  // create call if email is misconfigured — the row already exists and
+  // the inviter can always re-share the link manually.
+  (async () => {
+    try {
+      const settings = await getAppSettings();
+      const appName = settings.appName ?? "TableTrack";
+      const appUrl = (settings as { appUrl?: string }).appUrl
+        ?? process.env.PUBLIC_APP_URL
+        ?? "";
+      const [restaurant] = await db.select({ name: restaurantsTable.name })
+        .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      const acceptUrl = appUrl
+        ? `${appUrl.replace(/\/$/, "")}/forgot-password?email=${encodeURIComponent(email)}`
+        : `/forgot-password?email=${encodeURIComponent(email)}`;
+      await sendByTemplateKey("staff_invite", email, {
+        name,
+        inviterName: inviter?.name ?? "Your manager",
+        restaurant: restaurant?.name ?? "your restaurant",
+        role: role.replace(/_/g, " "),
+        acceptUrl,
+        appName,
+      }, {
+        tenantId,
+        restaurantId,
+        recipientType: "user",
+      });
+    } catch (err) {
+      logger.warn({ err, userId: user.id, email }, "Failed to send staff_invite email");
+    }
+  })();
 
   const rows = await loadStaffWithUser(restaurantId);
   const row = rows.find((r) => r.userId === user.id);

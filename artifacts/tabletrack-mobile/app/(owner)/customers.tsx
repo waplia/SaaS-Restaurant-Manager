@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
+import { PhoneInput } from "@/components/PhoneInput";
 
 type Customer = {
   id: number;
@@ -202,8 +203,7 @@ function CustomerForm({
           placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
       </FormField>
       <FormField label="Phone">
-        <TextInput value={phone} onChangeText={setPhone} placeholder="+91 98765 43210"
-          keyboardType="phone-pad" placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+        <PhoneInput value={phone} onChange={setPhone} />
       </FormField>
       <FormField label="Email (optional)">
         <TextInput value={email} onChangeText={setEmail} placeholder="name@example.com"
