@@ -62,7 +62,7 @@ export async function requestManagerDiscountOtp(opts: {
     expiresAt,
   }).returning();
 
-  const body = `${code} is your ${restaurant?.name ?? "KhanaLagao"} manager OTP to approve a high-value discount. Expires in 5 minutes.`;
+  const body = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
 
   let smsLogId: number | undefined;
   try {

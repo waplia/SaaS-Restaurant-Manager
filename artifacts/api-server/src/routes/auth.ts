@@ -689,7 +689,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     // response (still constant-time / anti-enumeration friendly because
     // the email send was already fire-and-forget too).
     if (user.phone) {
-      const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
+      const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
       void (async () => {
         try {
           const { sendSmsMessage } = await import("../lib/smsSender");
@@ -697,7 +697,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
             to: user.phone!,
             body: fallbackBody,
             eventKey: "password_reset_otp",
-            variables: { otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+            variables: { code, otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
             tenantId: user.tenantId,
             purpose: "password_reset",
             messageType: "otp",
@@ -843,7 +843,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
       // so the user can still complete the flow.
       devCode = code;
     }
-    const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
+    const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
     void (async () => {
       try {
         const { sendSmsMessage } = await import("../lib/smsSender");
@@ -851,7 +851,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
           to: user.phone!,
           body: fallbackBody,
           eventKey: "password_reset_otp",
-          variables: { otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+          variables: { code, otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
           tenantId: user.tenantId,
           purpose: "password_reset",
           messageType: "otp",

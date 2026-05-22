@@ -79,7 +79,7 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
 
   const appName = settings.appName || "KhanaLagao";
   const variables = { code, name: input.name ?? "there", appName, minutes: 5 };
-  const fallbackBody = `${code} is your ${appName} verification code. Expires in 5 minutes. Do not share.`;
+  const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
 
   try {
     if (channel === "sms") {

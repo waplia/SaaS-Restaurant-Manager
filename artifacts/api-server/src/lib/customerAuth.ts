@@ -65,7 +65,7 @@ export async function requestCustomerOtp(rawPhone: string): Promise<OtpRequestRe
     expiresAt,
   }).returning();
 
-  const body = `${code} is your TableTrack loyalty wallet code. Expires in 5 minutes.`;
+  const body = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
   try {
     const send = await sendSmsMessage({
       to: phone,
