@@ -774,7 +774,10 @@ function PaymentSection() {
   const onlineKey = (type: string, gateway: string | null) => `${type}:${gateway ?? ""}`;
   const onlineByKey = new Map(data.onlineMethods.map(m => [onlineKey(m.type, m.gatewayCode), m] as const));
   const manualUpi = data.manualUpi;
-  const ownGateways = ["razorpay", "cashfree", "stripe", "phonepe", "payu"];
+  const ownGateways = [
+    "razorpay", "cashfree", "stripe", "phonepe", "payu", "paytm",
+    "ccavenue", "billdesk", "instamojo", "easebuzz", "pinelabs", "juspay",
+  ];
 
   return (
     <div className="space-y-6">

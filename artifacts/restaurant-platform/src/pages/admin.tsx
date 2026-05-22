@@ -1415,10 +1415,19 @@ export default function AdminPage() {
 // Payment methods (super-admin)
 // ────────────────────────────────────────────────────────────────
 const PROVIDER_LABEL: Record<string, { title: string; subtitle: string; icon: typeof CreditCard }> = {
-  cashfree: { title: "Cashfree",  subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
-  razorpay: { title: "Razorpay",  subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
-  bank:     { title: "Bank transfer", subtitle: "Manual — tenant submits proof of transfer", icon: Landmark },
-  upi:      { title: "UPI",       subtitle: "Manual — tenant pays to your UPI ID and submits reference", icon: Smartphone },
+  cashfree:  { title: "Cashfree",            subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
+  razorpay:  { title: "Razorpay",            subtitle: "Online checkout (UPI, cards, netbanking)", icon: CreditCard },
+  phonepe:   { title: "PhonePe",             subtitle: "PhonePe Payment Gateway (UPI-first)", icon: Smartphone },
+  payu:      { title: "PayU",                subtitle: "PayU India (cards, UPI, netbanking, wallets)", icon: CreditCard },
+  paytm:     { title: "Paytm",               subtitle: "Paytm Payment Gateway (UPI, wallet, cards)", icon: Smartphone },
+  ccavenue:  { title: "CCAvenue",            subtitle: "CCAvenue gateway (multi-currency, cards, UPI)", icon: CreditCard },
+  billdesk:  { title: "BillDesk",            subtitle: "BillDesk (netbanking-led, cards, UPI)", icon: Landmark },
+  instamojo: { title: "Instamojo",           subtitle: "Instamojo (smart checkout, payment links)", icon: CreditCard },
+  easebuzz:  { title: "Easebuzz",            subtitle: "Easebuzz (cards, UPI, netbanking, wallets)", icon: CreditCard },
+  pinelabs:  { title: "Pine Labs / Plural",  subtitle: "Plural by Pine Labs (cards, UPI, EMI, BNPL)", icon: CreditCard },
+  juspay:    { title: "Juspay Orchestration",subtitle: "Juspay router across upstream PSPs", icon: CreditCard },
+  bank:      { title: "Bank transfer",       subtitle: "Manual — tenant submits proof of transfer", icon: Landmark },
+  upi:       { title: "UPI",                 subtitle: "Manual — tenant pays to your UPI ID and submits reference", icon: Smartphone },
 };
 
 export function PaymentMethodsTab() {
@@ -1487,6 +1496,23 @@ function ProviderCard({ row }: { row: PaymentProviderRow }) {
   );
 }
 
+function EnvSelect({ provider, config, setConfig }: { provider: string; config: Record<string, string>; setConfig: React.Dispatch<React.SetStateAction<Record<string, string>>> }) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`${provider}-env`}>Environment</Label>
+      <select
+        id={`${provider}-env`}
+        value={config.env ?? "sandbox"}
+        onChange={e => setConfig(c => ({ ...c, env: e.target.value }))}
+        className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+      >
+        <option value="sandbox">Sandbox / Test</option>
+        <option value="production">Production / Live</option>
+      </select>
+    </div>
+  );
+}
+
 function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow; onClose: () => void; onSaved: () => void }) {
   const update = useUpdateAdminPaymentMethod();
   const { toast } = useToast();
@@ -1543,6 +1569,76 @@ function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow
           {field("webhookSecret", "Webhook secret", { type: "password", help: "Used to verify webhooks at /api/razorpay/webhook" })}
         </div>
       )}
+      {row.provider === "phonepe" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID", { placeholder: "PGTESTPAYUAT…" })}
+          {field("saltKey", "Salt key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("saltIndex", "Salt index", { placeholder: "1" })}
+          <EnvSelect provider="phonepe" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "payu" && (
+        <div className="space-y-3">
+          {field("merchantKey", "Merchant key", { placeholder: "gtKFFx" })}
+          {field("merchantSalt", "Merchant salt", { type: "password", placeholder: "Leave masked value to keep current" })}
+          <EnvSelect provider="payu" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "paytm" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID (MID)", { placeholder: "ABCxxx12345xxxxx" })}
+          {field("merchantKey", "Merchant key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("website", "Website", { placeholder: "WEBSTAGING (sandbox) or DEFAULT (live)" })}
+          <EnvSelect provider="paytm" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "ccavenue" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID")}
+          {field("accessCode", "Access code")}
+          {field("workingKey", "Working key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          <EnvSelect provider="ccavenue" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "billdesk" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID")}
+          {field("securityId", "Security ID")}
+          {field("checksumKey", "Checksum key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          <EnvSelect provider="billdesk" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "instamojo" && (
+        <div className="space-y-3">
+          {field("apiKey", "API key")}
+          {field("authToken", "Auth token", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("privateSalt", "Private salt", { type: "password", help: "Used to verify webhook signatures." })}
+          <EnvSelect provider="instamojo" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "easebuzz" && (
+        <div className="space-y-3">
+          {field("merchantKey", "Merchant key")}
+          {field("merchantSalt", "Merchant salt", { type: "password", placeholder: "Leave masked value to keep current" })}
+          <EnvSelect provider="easebuzz" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "pinelabs" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID")}
+          {field("accessCode", "Access code", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("secret", "Secret", { type: "password", help: "Plural API shared secret." })}
+          <EnvSelect provider="pinelabs" config={config} setConfig={setConfig} />
+        </div>
+      )}
+      {row.provider === "juspay" && (
+        <div className="space-y-3">
+          {field("merchantId", "Merchant ID")}
+          {field("apiKey", "API key", { type: "password", placeholder: "Leave masked value to keep current" })}
+          {field("clientId", "Client ID", { help: "Optional — required for the JS SDK." })}
+          <EnvSelect provider="juspay" config={config} setConfig={setConfig} />
+        </div>
+      )}
       {row.provider === "bank" && (
         <div className="space-y-3">
           <div className="grid sm:grid-cols-2 gap-3">
@@ -1574,10 +1670,10 @@ function ProviderConfigForm({ row, onClose, onSaved }: { row: PaymentProviderRow
         </div>
       )}
 
-      {(row.provider === "cashfree" || row.provider === "razorpay") && (
+      {row.provider !== "bank" && row.provider !== "upi" && (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
-          Use as the default online provider (only one can be default).
+          Use as the default online provider (only one gateway can be default).
         </label>
       )}
 

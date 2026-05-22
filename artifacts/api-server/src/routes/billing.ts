@@ -15,6 +15,7 @@ import { sendLifecycleSms } from "../lib/smsSender";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
   type ProviderKey, type BankConfig, type UpiConfig,
+  GATEWAY_PROVIDERS,
   listProviderRows, getProviderRow, upsertProvider, maskConfig,
   getEffectiveCashfreeConfig, getEffectiveRazorpayConfig, getEnabledManualMethods,
   DEFAULT_BANK_CONFIG, DEFAULT_UPI_CONFIG,
@@ -28,7 +29,7 @@ import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
 
-const PROVIDERS: ProviderKey[] = ["cashfree", "razorpay", "bank", "upi"];
+const PROVIDERS: ProviderKey[] = [...GATEWAY_PROVIDERS, "bank", "upi"];
 
 function isProvider(s: string): s is ProviderKey {
   return (PROVIDERS as string[]).includes(s);

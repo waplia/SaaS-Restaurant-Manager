@@ -3,7 +3,31 @@ import { db, paymentMethodSettingsTable } from "./db";
 import { envCashfreeConfig, type CashfreeConfig } from "./cashfree";
 import type { RazorpayConfig } from "./razorpay";
 
-export type ProviderKey = "cashfree" | "razorpay" | "bank" | "upi";
+export type ProviderKey =
+  | "cashfree"
+  | "razorpay"
+  | "phonepe"
+  | "payu"
+  | "paytm"
+  | "ccavenue"
+  | "billdesk"
+  | "instamojo"
+  | "easebuzz"
+  | "pinelabs"
+  | "juspay"
+  | "bank"
+  | "upi";
+
+/** All providers that route money through an external gateway (i.e. not the
+ * manual bank/UPI rows). Default-provider exclusivity applies across this set. */
+export const GATEWAY_PROVIDERS: ProviderKey[] = [
+  "cashfree", "razorpay", "phonepe", "payu", "paytm",
+  "ccavenue", "billdesk", "instamojo", "easebuzz", "pinelabs", "juspay",
+];
+
+export function isGatewayProvider(p: ProviderKey): boolean {
+  return (GATEWAY_PROVIDERS as string[]).includes(p);
+}
 
 export interface PaymentMethodRow {
   provider: ProviderKey;
@@ -55,6 +79,15 @@ export const DEFAULT_UPI_CONFIG: UpiConfig & { _placeholder?: boolean } = {
 const SECRET_FIELDS: Record<ProviderKey, string[]> = {
   cashfree: ["secretKey"],
   razorpay: ["keySecret", "webhookSecret"],
+  phonepe: ["saltKey"],
+  payu: ["merchantSalt"],
+  paytm: ["merchantKey"],
+  ccavenue: ["workingKey"],
+  billdesk: ["checksumKey"],
+  instamojo: ["authToken", "privateSalt"],
+  easebuzz: ["merchantSalt"],
+  pinelabs: ["accessCode", "secret"],
+  juspay: ["apiKey"],
   bank: [],
   upi: [],
 };
@@ -218,12 +251,15 @@ export async function upsertProvider(
     });
   }
 
-  // Default provider is exclusive between online providers (cashfree/razorpay).
-  if ((provider === "cashfree" || provider === "razorpay") && isDefault) {
-    const other = provider === "cashfree" ? "razorpay" : "cashfree";
-    await db.update(paymentMethodSettingsTable)
-      .set({ isDefault: false, updatedAt: new Date() })
-      .where(eq(paymentMethodSettingsTable.provider, other));
+  // Default provider is exclusive across all gateway providers — at most one
+  // gateway can hold isDefault=true at a time. Manual bank/UPI are never default.
+  if (isGatewayProvider(provider) && isDefault) {
+    for (const other of GATEWAY_PROVIDERS) {
+      if (other === provider) continue;
+      await db.update(paymentMethodSettingsTable)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(eq(paymentMethodSettingsTable.provider, other));
+    }
   }
 
   return (await getProviderRow(provider))!;
