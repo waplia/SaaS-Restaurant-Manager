@@ -1,0 +1,450 @@
+==================================================
+12. BLUETOOTH + USB PRINTER SETTINGS AND INTERNAL TESTING
+==================================================
+
+Add complete printer connection support for mobile app and web/admin where applicable.
+
+Printer support required:
+- Bluetooth thermal printer
+- USB / OTG thermal printer
+- LAN/WiFi printer if already available or planned
+- ESC/POS command support
+- 58mm printer layout
+- 80mm printer layout
+
+Printer use cases:
+- Customer bill/invoice printing
+- KOT printing
+- Token printing
+- Reprint bill
+- Reprint KOT
+- Cancelled item KOT
+- Modified item KOT
+- UPI QR bill printing
+
+Important:
+KOT and customer bill are different.
+KOT should go to kitchen.
+Bill should go to customer.
+UPI QR should print only on customer bill/invoice, not on KOT.
+
+==================================================
+13. PRINTER SETTINGS MODULE
+==================================================
+
+Create Printer Settings in restaurant admin/mobile settings.
+
+Printer setup fields:
+- Printer name
+- Printer connection type:
+  - Bluetooth
+  - USB / OTG
+  - LAN / WiFi optional
+- Printer role:
+  - Bill Printer
+  - KOT Printer
+  - Token Printer
+  - Bar Printer
+  - Kitchen Printer
+- Paper size:
+  - 58mm
+  - 80mm
+- Branch/outlet assignment
+- Kitchen station assignment
+- Is default printer
+- Auto print enabled
+- Print copies
+- Character width setting
+- Feed lines after print
+- Cut paper enabled if supported
+- Open cash drawer if supported
+- Buzzer/beep if supported
+- Enable/disable printer
+
+No raw ID inputs.
+Use dropdowns/searchable pickers for outlet, station, printer role, and paper size.
+
+==================================================
+14. BLUETOOTH PRINTER FLOW
+==================================================
+
+For Bluetooth printer:
+
+Mobile app should support:
+- Scan nearby Bluetooth printers
+- Show paired printers
+- Request Bluetooth permissions
+- Pair/connect printer
+- Save selected printer
+- Test connection
+- Test print
+- Print bill
+- Print KOT
+- Reconnect automatically if disconnected
+- Show connection status
+- Show printer offline warning
+- Retry failed print
+
+Android permissions:
+- BLUETOOTH
+- BLUETOOTH_ADMIN if needed
+- BLUETOOTH_SCAN for newer Android
+- BLUETOOTH_CONNECT for newer Android
+- Location permission only if required by Android Bluetooth scanning
+
+Bluetooth UI:
+- Search Printers
+- Paired Devices
+- Connect
+- Disconnect
+- Test Print
+- Set as Default
+- Last connected printer
+- Connection status badge
+
+Important:
+Bluetooth printing is mainly for Android.
+For iOS, show supported options only if library/device supports iOS Bluetooth printing. Otherwise show LAN/WiFi printing or compatible printer flow.
+
+==================================================
+15. USB / OTG PRINTER FLOW
+==================================================
+
+For USB printer:
+
+Mobile app should support:
+- Detect USB/OTG printer
+- Ask USB permission
+- Show connected USB devices
+- Select USB printer
+- Test connection
+- Test print
+- Save USB printer config if possible
+- Print bill/KOT/token
+- Show disconnect warning
+- Retry failed print
+
+USB UI:
+- Detect USB Printer
+- Connected USB Devices
+- Grant Permission
+- Test Print
+- Set as Default
+- USB connection status
+
+Important:
+USB printing is mostly Android POS/tablet use case.
+Handle cases where USB device is disconnected or permission is denied.
+
+==================================================
+16. PRINT TEMPLATES
+==================================================
+
+Create print templates for:
+
+A. Customer Bill / Invoice
+Should include:
+- Restaurant name
+- Outlet name
+- Address
+- Phone
+- GST/FSSAI if available
+- Bill number
+- Order number
+- Table number/customer name
+- Date/time
+- Items
+- Quantity
+- Rate
+- Amount
+- Discount
+- Tax/GST
+- Service charge
+- Packing/delivery charge
+- Grand total
+- Payment status
+- Payment mode
+- UPI QR if enabled
+- UPI ID if enabled
+- Thank you message
+
+B. KOT
+Should include:
+- KOT number
+- Order number
+- Table number
+- Order type
+- Waiter/staff name
+- Kitchen station
+- Date/time
+- Item name
+- Quantity
+- Modifiers/add-ons
+- Special instructions
+- Priority
+- New/modified/cancelled marker
+
+KOT should not include:
+- Prices
+- Tax
+- Discount
+- Payment QR
+- Customer payment details
+
+C. Token
+Should include:
+- Token number
+- Order number
+- Customer name/phone optional
+- Pickup/delivery type
+- Date/time
+- Short item summary optional
+
+==================================================
+17. UPI QR PRINTING WITH PRINTER
+==================================================
+
+When restaurant profile has UPI QR enabled:
+
+- Generate UPI QR from restaurant/outlet UPI ID.
+- Print QR on customer bill only.
+- QR should include final bill amount.
+- QR should use invoice/order reference.
+- QR should fit correctly on 58mm and 80mm paper.
+- QR should be readable after printing.
+- Add QR print preview.
+- Add test UPI QR print.
+
+UPI QR format:
+
+upi://pay?pa={upi_id}&pn={merchant_name}&am={bill_amount}&cu=INR&tn={bill_or_order_note}&tr={order_or_invoice_number}
+
+Fallback:
+- If UPI QR enabled but UPI ID missing, show admin warning.
+- Do not crash print flow.
+- Print bill without QR if UPI ID is missing and log warning.
+
+==================================================
+18. KOT STATION-WISE PRINTER ROUTING
+==================================================
+
+Add station-wise printer routing.
+
+Kitchen stations:
+- Main Kitchen
+- Tandoor
+- Chinese
+- Beverage
+- Dessert
+- Bar
+- Packaging
+
+Menu item/category should map to kitchen station.
+Printer should map to kitchen station.
+
+When order is placed:
+- Split items by station.
+- Print station-specific KOT.
+- Each printer receives only its station items.
+
+Example:
+- Paneer Tikka → Tandoor Printer
+- Fried Rice → Chinese Printer
+- Cold Coffee → Beverage Printer
+
+If no station printer configured:
+- Use default KOT printer.
+- If default missing, show print queue warning.
+
+==================================================
+19. PRINT QUEUE AND RETRY SYSTEM
+==================================================
+
+Add print queue system.
+
+Print job statuses:
+- queued
+- printing
+- printed
+- failed
+- retrying
+- cancelled
+
+Print job fields:
+- restaurant_id
+- outlet_id
+- printer_id
+- print_type: bill/kot/token/test
+- order_id
+- invoice_id
+- kot_id
+- payload_json
+- status
+- error_message
+- retry_count
+- printed_by
+- printed_at
+- created_at
+
+Features:
+- Auto retry failed prints
+- Manual retry
+- Cancel print job
+- Reprint
+- Print history
+- Failed print log
+- Printer offline detection
+- Duplicate print protection
+- Print copy count
+- Last print status
+
+==================================================
+20. INTERNAL TESTING MODE
+==================================================
+
+Add proper internal printer testing tools.
+
+Printer Test Center should include:
+
+A. Connection Tests
+- Test Bluetooth scan
+- Test Bluetooth connect
+- Test USB detect
+- Test USB permission
+- Test printer status
+- Test reconnect
+
+B. Print Tests
+- Print sample 58mm bill
+- Print sample 80mm bill
+- Print sample KOT
+- Print sample token
+- Print sample UPI QR bill
+- Print sample cancelled KOT
+- Print sample modified KOT
+- Print Hindi/Unicode text test if supported
+- Print long item name test
+- Print special instruction test
+- Print QR readability test
+- Print cut/feed test
+
+C. Layout Tests
+- Check text alignment
+- Check column width
+- Check QR size
+- Check paper cut
+- Check logo print if supported
+- Check bold/large text
+- Check item wrapping
+- Check total alignment
+
+D. Error Tests
+- Printer disconnected
+- Bluetooth permission denied
+- USB permission denied
+- Paper out/offline simulated if possible
+- Wrong paper size
+- Failed print retry
+- Duplicate print prevention
+
+Add internal test result screen:
+- Test name
+- Status: pass/fail
+- Error message
+- Device/printer info
+- Timestamp
+- Retry button
+- Save test log
+
+Add “Run Full Printer Test” button for internal QA.
+
+==================================================
+21. MOBILE PRINTER UX
+==================================================
+
+Mobile printer setup should be simple:
+
+Step 1: Choose printer type
+- Bluetooth
+- USB / OTG
+- LAN / WiFi if available
+
+Step 2: Discover/select printer
+
+Step 3: Assign role
+- Bill
+- KOT
+- Token
+- Station printer
+
+Step 4: Select paper size
+- 58mm
+- 80mm
+
+Step 5: Test print
+
+Step 6: Save as default
+
+Use clean mobile UI:
+- Bottom sheets
+- Large buttons
+- Status badges
+- Permission helper screens
+- Troubleshooting tips
+- Retry actions
+
+Show clear printer status:
+- Connected
+- Disconnected
+- Permission required
+- Test passed
+- Test failed
+- Offline
+- Default printer
+
+==================================================
+22. PERMISSIONS AND SECURITY
+==================================================
+
+Role permissions:
+- Owner/admin can add/edit/delete printers
+- Manager can test printers if allowed
+- Cashier can print/reprint bills
+- Kitchen staff can reprint KOT only if allowed
+- Staff cannot change printer configuration unless permitted
+
+Audit logs:
+- Printer added
+- Printer updated
+- Printer deleted
+- Printer connected
+- Test print performed
+- Bill printed
+- KOT printed
+- Reprint done
+- Print failed
+- Printer role changed
+
+==================================================
+23. FINAL RESULT FOR PRINTER UPGRADE
+==================================================
+
+Final result should include:
+
+- Bluetooth printer support
+- USB/OTG printer support
+- Printer settings module
+- Bill/KOT/token templates
+- UPI QR printing on customer bills
+- No UPI QR on KOT
+- Station-wise KOT routing
+- Print queue
+- Retry failed print
+- Reprint bill/KOT
+- Internal printer test center
+- Sample test prints for 58mm and 80mm
+- Proper Android Bluetooth/USB permission handling
+- Mobile-friendly printer setup wizard
+- Real print logs and audit logs
+- No mock printer status
+- No broken print buttons

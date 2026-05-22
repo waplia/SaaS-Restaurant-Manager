@@ -1,0 +1,345 @@
+Apply the following restaurant profile, outlet switching, mobile parity, and UPI QR billing upgrades.
+
+Current issue:
+- Mobile app does not show the same restaurant profile options as the web app.
+- Restaurant profile needs UPI ID support.
+- UPI QR should print on customer bill using the restaurant’s saved UPI ID.
+- Restaurant profile access should be moved to the top area where owner name is currently showing.
+- Outlet switching should be available from the home screen top area.
+
+==================================================
+1. RESTAURANT PROFILE PARITY: WEB + MOBILE
+==================================================
+
+Make the mobile app Restaurant Profile module match the web Restaurant Profile module completely.
+
+Mobile app should show the same restaurant profile options, fields, settings, and actions as web.
+
+Do not keep mobile profile limited or different unless screen size requires mobile-friendly layout.
+
+Restaurant Profile should include:
+- Restaurant name
+- Owner name
+- Business type
+- Restaurant category
+- Logo upload
+- Cover image upload
+- Phone number
+- Email
+- Website
+- GST number
+- FSSAI number if available
+- Full address
+- City
+- State
+- Country
+- Pincode
+- Opening hours
+- Closing hours
+- Service types
+  - Dine-in
+  - Takeaway
+  - Delivery
+  - QR ordering
+  - Counter billing
+- Tax settings if already available in web
+- Invoice/bill settings if already available in web
+- Social links if available
+- Business description
+- Terms/instructions if available
+- UPI payment details
+- Save/update button
+- Validation and loading states
+
+If web has more restaurant profile fields than this list, include all existing web fields in mobile also.
+
+Use same backend APIs and database fields for web and mobile. Do not create duplicate mobile-only profile logic.
+
+==================================================
+2. ADD UPI ID FIELD IN RESTAURANT PROFILE
+==================================================
+
+Add UPI ID / VPA option in Restaurant Profile on both web and mobile app.
+
+Fields:
+- Enable UPI QR on Bill: Yes/No
+- UPI ID / VPA
+- UPI merchant name
+- QR label/title
+- Payment note format optional
+- Show UPI QR on invoice/bill: Yes/No
+- Show UPI ID text below QR: Yes/No
+
+Example UPI ID:
+restaurantname@paytm
+restaurantname@ybl
+restaurantname@okaxis
+restaurantname@upi
+
+Validation:
+- UPI ID should not be empty if Enable UPI QR on Bill is enabled.
+- Validate basic UPI format.
+- Show helper text: “This UPI ID will be used to generate QR code on printed bills.”
+
+Security:
+- UPI ID can be visible to customer on invoice, but update permission should only be for restaurant owner/admin/manager with permission.
+
+==================================================
+3. PRINT UPI QR ON BILL / INVOICE
+==================================================
+
+When restaurant has UPI QR enabled in profile, generate and print QR code on the customer bill/invoice.
+
+UPI QR should use this format:
+
+upi://pay?pa={upi_id}&pn={merchant_name}&am={bill_amount}&cu=INR&tn={bill_or_order_note}&tr={order_or_invoice_number}
+
+QR should include:
+- Restaurant UPI ID
+- Merchant name
+- Final payable amount
+- Currency INR
+- Invoice/order reference
+- Payment note
+
+Bill print layout should show:
+- UPI QR code
+- “Scan to Pay”
+- UPI ID text if enabled
+- Amount
+- Invoice/order number
+
+Add setting:
+- Print QR only for unpaid bills
+- Print QR for all bills
+- Print QR only when payment method is UPI/online
+- Hide QR after bill is marked paid optional
+
+For KOT:
+- Do not print UPI QR on KOT.
+- UPI QR should print only on customer bill/invoice/receipt, not kitchen ticket.
+
+For 58mm and 80mm printers:
+- QR should be properly sized.
+- QR should not cut off.
+- Text should be readable.
+- Add test print for UPI QR bill.
+
+==================================================
+4. RESTAURANT PROFILE ACCESS POSITION
+==================================================
+
+Move Restaurant Profile access to the top side of the app/web layout.
+
+Where owner name is currently showing on top, replace or enhance it with a restaurant profile selector/card.
+
+Top area should show:
+- Restaurant logo/avatar
+- Restaurant name
+- Current outlet name
+- Owner/admin name optional
+- Dropdown arrow
+
+On click/tap, open a dropdown/bottom sheet with:
+- View Restaurant Profile
+- Edit Restaurant Profile
+- Outlet switcher
+- Account settings
+- Logout
+
+Do not hide restaurant profile deep inside settings only. It should be accessible from the top header area.
+
+Mobile behavior:
+- On mobile, tapping the top restaurant area should open a bottom sheet.
+- Bottom sheet should show restaurant profile, outlet switcher, and account actions.
+
+Web behavior:
+- On web, clicking top restaurant/owner area should open a dropdown menu or side panel.
+
+==================================================
+5. OUTLET SWITCHING FROM HOME SCREEN
+==================================================
+
+Add outlet switching from the home screen top area.
+
+Current outlet should be visible on the home/dashboard top header.
+
+Example:
+Restaurant Name
+Outlet: Malviya Nagar ▼
+
+When user taps/clicks outlet:
+Show outlet switcher with:
+- Search outlet
+- List of outlets
+- Outlet name
+- Outlet address/area
+- Active outlet badge
+- Switch button
+
+After switching outlet:
+- Update active outlet globally
+- Refresh dashboard data
+- Refresh orders
+- Refresh KDS
+- Refresh POS
+- Refresh menu availability
+- Refresh tables
+- Refresh staff permissions if outlet-specific
+- Refresh reports
+- Refresh printer/KOT settings if outlet-specific
+- Store selected outlet in user session/local storage
+
+Do not ask user to enter outlet ID manually.
+Use outlet dropdown/searchable picker from real outlet records.
+
+If only one outlet exists:
+- Show outlet name but do not force switcher.
+- Optionally show “Add Outlet” only for owner/admin if allowed.
+
+==================================================
+6. ROLE AND PERMISSION RULES
+==================================================
+
+Restaurant profile edit permission:
+- Owner: full access
+- Admin: full access if allowed
+- Manager: edit limited fields if permission enabled
+- Staff: view only or no access
+
+UPI ID edit permission:
+- Owner/admin only by default
+- Manager only if permission enabled
+
+Outlet switching:
+- Owner/admin can switch all assigned outlets
+- Manager/staff can switch only outlets assigned to them
+- If user has one outlet only, auto-select it
+
+==================================================
+7. MOBILE UI REQUIREMENTS
+==================================================
+
+Mobile restaurant profile should be clean and attractive.
+
+Use:
+- Top restaurant header card
+- Logo upload
+- Cover image upload
+- Grouped profile sections
+- Collapsible sections
+- Bottom sheet outlet switcher
+- Searchable dropdowns
+- Image picker/upload
+- Save progress/loading states
+- Validation messages
+- Success toast
+
+Restaurant profile sections:
+- Basic Details
+- Contact Details
+- Address
+- Business Documents
+- Service Options
+- Billing & Invoice
+- UPI QR Payment
+- Opening Hours
+- Social Links
+- Advanced Settings
+
+No long ugly single-page form. Use grouped sections with good spacing.
+
+==================================================
+8. WEB UI REQUIREMENTS
+==================================================
+
+Web restaurant profile should also include the new UPI QR section.
+
+Add UPI QR Payment section in Restaurant Profile:
+- Enable UPI QR on bill
+- UPI ID / VPA
+- Merchant name
+- QR preview
+- Test bill QR print
+- Save
+
+Add QR preview:
+- Show sample QR generated from entered UPI ID
+- Show sample bill amount placeholder
+- Show “Scan to Pay” preview
+
+==================================================
+9. DATABASE/API REQUIREMENTS
+==================================================
+
+Extend restaurant/outlet profile data.
+
+Add fields where appropriate:
+
+restaurants or restaurant_profiles:
+- upi_qr_enabled
+- upi_id
+- upi_merchant_name
+- upi_qr_label
+- show_upi_qr_on_bill
+- show_upi_id_on_bill
+- upi_payment_note_format
+
+If UPI is outlet-specific, add same fields to outlets also:
+- outlet_upi_qr_enabled
+- outlet_upi_id
+- outlet_upi_merchant_name
+
+Important:
+Allow configuration whether UPI ID is restaurant-level or outlet-level.
+If outlet-level UPI exists, bill should use outlet UPI.
+If outlet UPI is empty, fallback to restaurant UPI.
+
+API updates:
+- GET restaurant profile
+- UPDATE restaurant profile
+- GET mobile restaurant profile
+- UPDATE mobile restaurant profile
+- GET outlets for current user
+- SWITCH active outlet
+- GET active outlet
+- UPDATE outlet UPI settings if outlet-specific
+- GENERATE bill QR preview
+- PRINT test bill with UPI QR
+
+==================================================
+10. BILL PRINTING LOGIC
+==================================================
+
+When printing bill:
+
+1. Get active outlet.
+2. Check outlet UPI settings.
+3. If outlet UPI enabled, use outlet UPI ID.
+4. Else fallback to restaurant profile UPI ID.
+5. Generate UPI QR using final payable amount.
+6. Print QR on invoice/bill if enabled.
+7. Do not print QR on KOT.
+
+Add fallback:
+- If UPI QR enabled but UPI ID missing, do not crash.
+- Show warning to admin: “UPI QR is enabled but UPI ID is missing.”
+
+==================================================
+11. FINAL RESULT
+==================================================
+
+Final result should be:
+
+- Mobile app restaurant profile matches web restaurant profile.
+- UPI ID option is available in both web and mobile restaurant profile.
+- Saved UPI ID generates QR on printed customer bill.
+- UPI QR does not print on KOT.
+- Restaurant profile is accessible from the top header where owner name currently shows.
+- Active outlet can be switched from home/dashboard top area.
+- Outlet switching updates all outlet-specific data across POS, orders, KDS, menu, tables, staff, reports, and printers.
+- No raw outlet ID input.
+- No duplicate profile logic.
+- No mock data.
+- No broken routes.
+- Fully mobile responsive and production ready.
