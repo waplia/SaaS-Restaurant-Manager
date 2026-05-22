@@ -1,142 +1,142 @@
 [
   {
-    "name": "Butter Roti",
-    "hint": "tandoori roti glistening with melted butter brushed on top",
-    "slug": "butter-roti",
-    "category": "bread",
-    "file": "butter-roti.png"
+    "name": "Plain Rice",
+    "category": "rice",
+    "hint": "fluffy white plain steamed basmati rice in a bowl",
+    "slug": "plain-rice",
+    "file": "plain-rice.png"
   },
   {
-    "name": "Plain Naan",
-    "hint": "leavened white-flour naan, teardrop-shaped, soft with bubble char marks",
-    "slug": "plain-naan",
-    "category": "bread",
-    "file": "plain-naan.png"
+    "name": "Ghee Rice",
+    "category": "rice",
+    "hint": "fragrant ghee-tossed basmati rice with cashews and fried onions on top",
+    "slug": "ghee-rice",
+    "file": "ghee-rice.png"
   },
   {
-    "name": "Cheese Naan",
-    "hint": "naan stuffed with melted mozzarella cheese oozing out, golden crust",
-    "slug": "cheese-naan",
-    "category": "bread",
-    "file": "cheese-naan.png"
+    "name": "Tomato Rice",
+    "category": "rice",
+    "hint": "tangy red South Indian tomato rice with curry leaves and peanut garnish",
+    "slug": "tomato-rice",
+    "file": "tomato-rice.png"
   },
   {
-    "name": "Chur Chur Naan",
-    "hint": "Amritsari chur chur naan crumbled and tossed with butter, flaky layers",
-    "slug": "chur-chur-naan",
-    "category": "bread",
-    "file": "chur-chur-naan.png"
+    "name": "Coconut Rice",
+    "category": "rice",
+    "hint": "white South Indian coconut rice with fresh grated coconut, cashews and curry leaves",
+    "slug": "coconut-rice",
+    "file": "coconut-rice.png"
   },
   {
-    "name": "Pudina Paratha",
-    "hint": "layered paratha flecked with dried mint leaves",
-    "slug": "pudina-paratha",
-    "category": "bread",
-    "file": "pudina-paratha.png"
+    "name": "Peas Pulao",
+    "category": "rice",
+    "hint": "basmati rice pulao with green peas and whole garam masala, ghee glaze",
+    "slug": "peas-pulao",
+    "file": "peas-pulao.png"
   },
   {
-    "name": "Onion Paratha",
-    "hint": "paratha stuffed with spiced onion filling, golden crisp surface",
-    "slug": "onion-paratha",
-    "category": "bread",
-    "file": "onion-paratha.png"
+    "name": "Kashmiri Pulao",
+    "category": "rice",
+    "hint": "sweet Kashmiri pulao with saffron, dry fruits cashews almonds raisins, pomegranate seeds on top",
+    "slug": "kashmiri-pulao",
+    "file": "kashmiri-pulao.png"
   },
   {
-    "name": "Methi Paratha",
-    "hint": "green-flecked fenugreek leaf paratha, golden brown with ghee",
-    "slug": "methi-paratha",
-    "category": "bread",
-    "file": "methi-paratha.png"
+    "name": "Paneer Pulao",
+    "category": "rice",
+    "hint": "basmati pulao with paneer cubes and whole spices, garnished with coriander",
+    "slug": "paneer-pulao",
+    "file": "paneer-pulao.png"
   },
   {
-    "name": "Mix Paratha",
-    "hint": "stuffed mixed-vegetable paratha cut showing colorful filling",
-    "slug": "mix-paratha",
-    "category": "bread",
-    "file": "mix-paratha.png"
+    "name": "Hyderabadi Veg Biryani",
+    "category": "biryani",
+    "hint": "fragrant Hyderabadi vegetable dum biryani with vivid saffron strands, fried onion birista and mint, in copper handi",
+    "slug": "hyderabadi-veg-biryani",
+    "file": "hyderabadi-veg-biryani.png"
   },
   {
-    "name": "Plain Paratha",
-    "hint": "simple triangular plain whole wheat paratha, golden ghee-roasted layers",
-    "slug": "plain-paratha",
-    "category": "bread",
-    "file": "plain-paratha.png"
+    "name": "Paneer Biryani",
+    "category": "biryani",
+    "hint": "layered paneer biryani with saffron rice, fried onions and mint garnish",
+    "slug": "paneer-biryani",
+    "file": "paneer-biryani.png"
   },
   {
-    "name": "Tawa Roti",
-    "hint": "whole wheat roti cooked on iron tawa with light brown spots",
-    "slug": "tawa-roti",
-    "category": "bread",
-    "file": "tawa-roti.png"
+    "name": "Mushroom Biryani",
+    "category": "biryani",
+    "hint": "mushroom dum biryani with whole spices, saffron and mint",
+    "slug": "mushroom-biryani",
+    "file": "mushroom-biryani.png"
   },
   {
-    "name": "Phulka",
-    "hint": "puffed thin whole-wheat phulka roti, perfectly round",
-    "slug": "phulka",
-    "category": "bread",
-    "file": "phulka.png"
+    "name": "Soya Chaap Biryani",
+    "category": "biryani",
+    "hint": "soya chaap biryani layered with basmati rice, saffron and fried onions",
+    "slug": "soya-chaap-biryani",
+    "file": "soya-chaap-biryani.png"
   },
   {
-    "name": "Rumali Roti",
-    "hint": "paper-thin handkerchief rumali roti folded loosely on a plate",
-    "slug": "rumali-roti",
-    "category": "bread",
-    "file": "rumali-roti.png"
+    "name": "Kolkata Veg Biryani",
+    "category": "biryani",
+    "hint": "Bengali Kolkata-style vegetable biryani with potato chunks and boiled egg-style aloo, light golden saffron rice",
+    "slug": "kolkata-veg-biryani",
+    "file": "kolkata-veg-biryani.png"
   },
   {
-    "name": "Missi Roti",
-    "hint": "Punjabi besan-and-wheat missi roti with onions and spices, yellow-brown",
-    "slug": "missi-roti",
-    "category": "bread",
-    "file": "missi-roti.png"
+    "name": "Lucknowi Veg Biryani",
+    "category": "biryani",
+    "hint": "Awadhi Lucknowi vegetable dum biryani with delicate spices, mild golden rice and rose-water aroma",
+    "slug": "lucknowi-veg-biryani",
+    "file": "lucknowi-veg-biryani.png"
   },
   {
-    "name": "Makki Roti",
-    "hint": "Punjabi golden yellow cornmeal makki di roti with butter dollop",
-    "slug": "makki-roti",
-    "category": "bread",
-    "file": "makki-roti.png"
+    "name": "Tawa Pulao",
+    "category": "rice",
+    "hint": "Mumbai street-style tawa pulao with pav bhaji masala, vegetables and rice cooked on a flat iron tawa",
+    "slug": "tawa-pulao",
+    "file": "tawa-pulao.png"
   },
   {
-    "name": "Bajra Roti",
-    "hint": "rustic dark grey bajra millet flatbread served with white butter",
-    "slug": "bajra-roti",
-    "category": "bread",
-    "file": "bajra-roti.png"
+    "name": "Masala Rice",
+    "category": "rice",
+    "hint": "spiced masala rice with vegetables and Indian spices, coriander garnish",
+    "slug": "masala-rice",
+    "file": "masala-rice.png"
   },
   {
-    "name": "Jowar Roti",
-    "hint": "round white sorghum jowar bhakri roti, rustic farmhouse style",
-    "slug": "jowar-roti",
-    "category": "bread",
-    "file": "jowar-roti.png"
+    "name": "Khichdi",
+    "category": "rice",
+    "hint": "comforting yellow rice and moong dal khichdi with ghee and tempering, served in a brass bowl",
+    "slug": "khichdi",
+    "file": "khichdi.png"
   },
   {
-    "name": "Aloo Kulcha",
-    "hint": "stuffed potato kulcha torn open showing aloo filling, golden crust",
-    "slug": "aloo-kulcha",
-    "category": "bread",
-    "file": "aloo-kulcha.png"
+    "name": "Dal Khichdi",
+    "category": "rice",
+    "hint": "yellow dal khichdi with cumin tempering and ghee, papad on side",
+    "slug": "dal-khichdi",
+    "file": "dal-khichdi.png"
   },
   {
-    "name": "Amritsari Kulcha",
-    "hint": "crispy Amritsari kulcha with chole on the side, butter glaze",
-    "slug": "amritsari-kulcha",
-    "category": "bread",
-    "file": "amritsari-kulcha.png"
+    "name": "Masala Khichdi",
+    "category": "rice",
+    "hint": "spiced vegetable masala khichdi with peas, carrots and tomatoes, garam masala",
+    "slug": "masala-khichdi",
+    "file": "masala-khichdi.png"
   },
   {
-    "name": "Poori",
-    "hint": "round puffed golden deep-fried poori on a plate",
-    "slug": "poori",
-    "category": "bread",
-    "file": "poori.png"
+    "name": "Bisi Bele Bath",
+    "category": "rice",
+    "hint": "Karnataka bisi bele bath, spiced rice and lentil one-pot dish with vegetables, ghee and crispy boondi on top",
+    "slug": "bisi-bele-bath",
+    "file": "bisi-bele-bath.png"
   },
   {
-    "name": "Bedmi Poori",
-    "hint": "Uttar Pradesh urad-dal stuffed bedmi poori, puffed golden, served with aloo sabzi",
-    "slug": "bedmi-poori",
-    "category": "bread",
-    "file": "bedmi-poori.png"
+    "name": "Vangi Bath",
+    "category": "rice",
+    "hint": "Karnataka brinjal-rice vangi bath with eggplant cubes, sambar masala and curry leaves",
+    "slug": "vangi-bath",
+    "file": "vangi-bath.png"
   }
 ]
