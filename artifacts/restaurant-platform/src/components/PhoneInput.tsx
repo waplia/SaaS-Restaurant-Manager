@@ -118,11 +118,11 @@ export function PhoneInput({
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-10 min-w-[7rem] justify-between gap-1 px-2"
+        className="h-12 min-w-[7rem] justify-between gap-1 px-3 text-base"
       >
-        <span className="text-base leading-none">{displayCountry.flag}</span>
-        <span className="text-sm font-medium">{displayCountry.code}</span>
-        <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+        <span className="text-lg leading-none">{displayCountry.flag}</span>
+        <span className="text-base font-medium">{displayCountry.code}</span>
+        <ChevronDown className="w-4 h-4 opacity-60" />
       </Button>
       <Input
         id={id}
@@ -135,7 +135,7 @@ export function PhoneInput({
         onChange={e => emit(displayCountry, e.target.value)}
         placeholder={placeholder}
         maxLength={expectedNationalLength(displayCountry.iso)}
-        className="flex-1"
+        className="flex-1 h-12 text-base"
       />
 
       {open && (
