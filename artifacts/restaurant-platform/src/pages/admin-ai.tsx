@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Activity, Brain, Cpu, FileText, ShieldAlert, ScrollText, BarChart3,
   Plus, Pencil, Trash2, X, RefreshCw, CheckCircle, AlertTriangle, Zap, Loader2,
-  Wallet, Coins, Package, Ban, Search, ArrowDownToLine,
+  Wallet, Coins, Package, Ban, Search, ArrowDownToLine, Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch, apiAction } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-type SubTab = "dashboard" | "providers" | "models" | "prompts" | "safety" | "logs" | "costs" | "credit-rules" | "recharge-packages" | "wallets" | "ledger";
+type SubTab = "dashboard" | "providers" | "models" | "prompts" | "safety" | "logs" | "costs" | "credit-rules" | "plan-credits" | "recharge-packages" | "wallets" | "ledger";
 
 interface AiProvider {
   id: number; slug: string; name: string; kind: string; isEnabled: boolean;
@@ -1704,6 +1704,151 @@ function LedgerSubTab() {
   );
 }
 
+// ─── Plan Credits (per-subscription-plan default credits) ───────────────────
+interface PlanCreditRow {
+  id: number; name: string; slug: string; price: string; currency: string;
+  billingPeriod: string; isActive: boolean;
+  aiEnabled: boolean;
+  aiMonthlyIncludedCredits: number;
+  aiDailyRequestCap: number;
+}
+function PlanCreditsSubTab() {
+  const qc = useQueryClient(); const { toast } = useToast();
+  const { data = [], isLoading } = useQuery<PlanCreditRow[]>({
+    queryKey: ["admin-ai", "plan-credits"],
+    queryFn: async () => {
+      const res = await apiFetch<{ rows: PlanCreditRow[] }>("/admin/ai/plan-credits");
+      return res?.rows ?? [];
+    },
+  });
+  const [drafts, setDrafts] = useState<Record<number, { aiEnabled: boolean; aiMonthlyIncludedCredits: number; aiDailyRequestCap: number }>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  const getRow = (p: PlanCreditRow) =>
+    drafts[p.id] ?? {
+      aiEnabled: p.aiEnabled,
+      aiMonthlyIncludedCredits: p.aiMonthlyIncludedCredits,
+      aiDailyRequestCap: p.aiDailyRequestCap,
+    };
+  const isDirty = (p: PlanCreditRow) => {
+    const d = drafts[p.id]; if (!d) return false;
+    return d.aiEnabled !== p.aiEnabled
+      || d.aiMonthlyIncludedCredits !== p.aiMonthlyIncludedCredits
+      || d.aiDailyRequestCap !== p.aiDailyRequestCap;
+  };
+  const update = (id: number, patch: Partial<{ aiEnabled: boolean; aiMonthlyIncludedCredits: number; aiDailyRequestCap: number }>) => {
+    setDrafts(prev => {
+      const base = prev[id] ?? (() => {
+        const p = data.find(x => x.id === id);
+        return p ? { aiEnabled: p.aiEnabled, aiMonthlyIncludedCredits: p.aiMonthlyIncludedCredits, aiDailyRequestCap: p.aiDailyRequestCap } : { aiEnabled: false, aiMonthlyIncludedCredits: 0, aiDailyRequestCap: 0 };
+      })();
+      return { ...prev, [id]: { ...base, ...patch } };
+    });
+  };
+  const save = async (p: PlanCreditRow) => {
+    const d = drafts[p.id]; if (!d) return;
+    setSavingId(p.id);
+    try {
+      await apiAction(`/admin/ai/plan-credits/${p.id}`, "PATCH", d);
+      toast({ title: `${p.name} updated`, description: `Monthly credits: ${d.aiMonthlyIncludedCredits.toLocaleString()}` });
+      setDrafts(prev => { const n = { ...prev }; delete n[p.id]; return n; });
+      void qc.invalidateQueries({ queryKey: ["admin-ai", "plan-credits"] });
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    } finally { setSavingId(null); }
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-3 border-b border-border">
+        <p className="font-semibold text-sm flex items-center gap-2">
+          <Gift className="w-4 h-4 text-primary" />
+          Default credits per plan
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Set how many AI credits each subscription plan grants per month. New tenants on a plan, and the monthly allocation cron, both use these values.
+        </p>
+      </div>
+      {isLoading ? (
+        <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left">Plan</th>
+              <th className="px-3 py-2 text-left">Price</th>
+              <th className="px-3 py-2 text-center">AI enabled</th>
+              <th className="px-3 py-2 text-right">Monthly credits</th>
+              <th className="px-3 py-2 text-right">Daily request cap</th>
+              <th className="px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {data.map(p => {
+              const d = getRow(p);
+              const dirty = isDirty(p);
+              return (
+                <tr key={p.id} className="hover:bg-muted/20">
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{p.name}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">{p.slug}{p.isActive ? "" : " · inactive"}</div>
+                  </td>
+                  <td className="px-3 py-2 tabular-nums text-xs text-muted-foreground">
+                    {p.currency} {Number(p.price).toLocaleString()} / {p.billingPeriod}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={d.aiEnabled}
+                      onChange={e => update(p.id, { aiEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-primary cursor-pointer"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number" min={0} step={50}
+                      value={d.aiMonthlyIncludedCredits}
+                      onChange={e => update(p.id, { aiMonthlyIncludedCredits: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-28 text-right rounded-md border border-input bg-background px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number" min={0} step={10}
+                      value={d.aiDailyRequestCap}
+                      onChange={e => update(p.id, { aiDailyRequestCap: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-24 text-right rounded-md border border-input bg-background px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                      title="0 means no daily cap"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      size="sm"
+                      variant={dirty ? "default" : "outline"}
+                      disabled={!dirty || savingId === p.id}
+                      onClick={() => void save(p)}
+                      className="gap-1"
+                    >
+                      {savingId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                      Save
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+            {data.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-muted-foreground text-xs">No subscription plans yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      )}
+      <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
+        Tip: set <span className="font-mono">Daily request cap</span> to <span className="font-mono">0</span> for no limit. Disable AI on a plan by unchecking <span className="font-mono">AI enabled</span> — tenants on that plan won't be able to use any AI feature.
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Tab Container ──────────────────────────────────────────────────────
 export default function AdminAiTab() {
   const [sub, setSub] = useState<SubTab>("dashboard");
@@ -1714,6 +1859,7 @@ export default function AdminAiTab() {
     { id: "prompts", label: "Prompt Templates", icon: FileText },
     { id: "safety", label: "Safety Settings", icon: ShieldAlert },
     { id: "credit-rules", label: "Credit Rules", icon: Coins },
+    { id: "plan-credits", label: "Plan Credits", icon: Gift },
     { id: "recharge-packages", label: "Recharge Packages", icon: Package },
     { id: "wallets", label: "Wallets", icon: Wallet },
     { id: "ledger", label: "Ledger", icon: ArrowDownToLine },
@@ -1738,6 +1884,7 @@ export default function AdminAiTab() {
       {sub === "prompts" && <PromptsSubTab />}
       {sub === "safety" && <SafetySubTab />}
       {sub === "credit-rules" && <CreditRulesSubTab />}
+      {sub === "plan-credits" && <PlanCreditsSubTab />}
       {sub === "recharge-packages" && <RechargePackagesSubTab />}
       {sub === "wallets" && <WalletsSubTab />}
       {sub === "ledger" && <LedgerSubTab />}

@@ -131,6 +131,61 @@ router.delete("/admin/ai/credit-rules/:id", async (req: Request, res: Response) 
   res.json({ ok: true });
 });
 
+// ─── Plan default credits ────────────────────────────────────────────────────
+// Per-subscription-plan defaults that govern how many AI credits each tenant
+// on that plan is granted each month (`aiMonthlyIncludedCredits`), plus the
+// plan-level AI toggle and the daily request cap. Used by the admin AI center
+// "Plan Credits" tab so super-admins can dial these knobs without editing
+// every plan record manually.
+
+router.get("/admin/ai/plan-credits", async (_req: Request, res: Response) => {
+  const rows = await db.select({
+    id: subscriptionPlansTable.id,
+    name: subscriptionPlansTable.name,
+    slug: subscriptionPlansTable.slug,
+    price: subscriptionPlansTable.price,
+    currency: subscriptionPlansTable.currency,
+    billingPeriod: subscriptionPlansTable.billingPeriod,
+    isActive: subscriptionPlansTable.isActive,
+    aiEnabled: subscriptionPlansTable.aiEnabled,
+    aiMonthlyIncludedCredits: subscriptionPlansTable.aiMonthlyIncludedCredits,
+    aiDailyRequestCap: subscriptionPlansTable.aiDailyRequestCap,
+  }).from(subscriptionPlansTable).orderBy(subscriptionPlansTable.price);
+  res.json({ rows });
+});
+
+router.patch("/admin/ai/plan-credits/:id", async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [old] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
+  if (!old) return void res.status(404).json({ error: "Plan not found" });
+  const b = req.body ?? {};
+  const update: Partial<typeof subscriptionPlansTable.$inferInsert> = { updatedAt: new Date() };
+  if (b.aiEnabled != null) update.aiEnabled = !!b.aiEnabled;
+  if (b.aiMonthlyIncludedCredits != null) {
+    const n = Number(b.aiMonthlyIncludedCredits);
+    if (!Number.isFinite(n) || n < 0) return void res.status(400).json({ error: "aiMonthlyIncludedCredits must be a non-negative number" });
+    update.aiMonthlyIncludedCredits = Math.floor(n);
+  }
+  if (b.aiDailyRequestCap != null) {
+    const n = Number(b.aiDailyRequestCap);
+    if (!Number.isFinite(n) || n < 0) return void res.status(400).json({ error: "aiDailyRequestCap must be a non-negative number" });
+    update.aiDailyRequestCap = Math.floor(n);
+  }
+  const [row] = await db.update(subscriptionPlansTable).set(update).where(eq(subscriptionPlansTable.id, id)).returning();
+  await recordAuditLog({
+    req, module: MODULE, action: "plan_credits.update", entity: "subscription_plan", entityId: id,
+    oldValue: { aiEnabled: old.aiEnabled, aiMonthlyIncludedCredits: old.aiMonthlyIncludedCredits, aiDailyRequestCap: old.aiDailyRequestCap },
+    newValue: { aiEnabled: row.aiEnabled, aiMonthlyIncludedCredits: row.aiMonthlyIncludedCredits, aiDailyRequestCap: row.aiDailyRequestCap },
+  });
+  res.json({
+    id: row.id, name: row.name, slug: row.slug, price: row.price, currency: row.currency,
+    billingPeriod: row.billingPeriod, isActive: row.isActive,
+    aiEnabled: row.aiEnabled,
+    aiMonthlyIncludedCredits: row.aiMonthlyIncludedCredits,
+    aiDailyRequestCap: row.aiDailyRequestCap,
+  });
+});
+
 // ─── Recharge Packages ───────────────────────────────────────────────────────
 
 router.get("/admin/ai/recharge-packages", async (req: Request, res: Response) => {

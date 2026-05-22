@@ -2,7 +2,7 @@
  * Khana AI — AI Menu Import (PDF / image / screenshot / Excel / CSV / URL / text).
  * Mounted under /restaurants/:restaurantId/ai/menu-import.
  */
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import dns from "node:dns/promises";
 import net from "node:net";
@@ -499,7 +499,7 @@ async function processImport(importId: number, body: StartBody, ctx: ProcessCtx)
       status: "ready",
       totalRows: draftRows.length,
       needsReviewCount,
-      actualCredits: Math.min(realCredits, ctx.reservation?.reservedCredits ?? realCredits),
+      actualCredits: ctx.reservation ? Math.min(realCredits, ctx.reservation.reservedCredits) : 0,
       summary: { extractedCount: draftRows.length, needsReviewCount, requestLogId, pdfPages, realUnits },
       updatedAt: new Date(),
     }).where(eq(aiMenuImportsTable.id, importId));
@@ -544,37 +544,14 @@ router.post(
     }
     next();
   },
-  requireAiCredits("ai_menu_import", async (req) => {
-    const body = (req.body ?? {}) as StartBody;
-    const { units, unitType } = estimateUnits(body);
-    const restaurantId = Number(req.params.restaurantId);
-    // First-time onboarding bonus: if this restaurant has never run a menu
-    // import and has no menu items yet, the very first import is free.
-    // This matches the "import your menu right after signup" flow on mobile
-    // onboarding so new users aren't blocked by an empty credit wallet.
-    // Subsequent imports (after any items exist, or after any prior import
-    // attempt) fall back to the normal credit pricing.
-    try {
-      const [{ priorImports }] = await db
-        .select({ priorImports: sql<number>`count(*)::int` })
-        .from(aiMenuImportsTable)
-        .where(eq(aiMenuImportsTable.restaurantId, restaurantId));
-      const [{ existingItems }] = await db
-        .select({ existingItems: sql<number>`count(*)::int` })
-        .from(menuItemsTable)
-        .where(eq(menuItemsTable.restaurantId, restaurantId));
-      if (priorImports === 0 && existingItems === 0) {
-        return {
-          credits: 0,
-          units,
-          meta: { source: body.source, unitType, onboardingFree: true },
-        };
-      }
-    } catch (err) {
-      req.log.warn({ err }, "menu-import onboarding-free check failed; falling back to paid");
-    }
-    return { units, meta: { source: body.source, unitType } };
-  }),
+  // AI menu import is FREE for all tenants on both web and mobile. We skip
+  // the `requireAiCredits` middleware entirely so menu imports never block
+  // on plan flags, daily/feature caps, or wallet balance. The downstream
+  // processImport handles `ctx.reservation = null` cleanly.
+  (_req: Request, res: Response, next: NextFunction) => {
+    res.locals.aiCreditReservation = null;
+    next();
+  },
   async (req: Request, res: Response) => {
     const reservation = (res.locals.aiCreditReservation as AiCreditReservation | null) ?? null;
     const restaurantId = Number(req.params.restaurantId);

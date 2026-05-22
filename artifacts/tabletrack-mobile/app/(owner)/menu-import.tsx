@@ -129,12 +129,18 @@ export default function MenuImportScreen() {
   }
 
   async function autoSave(importId: number, d: ImportDetail) {
-    const rowIds = d.items.filter(r => r.status === "draft" && !r.needsReview && !r.duplicateMatchId).map(r => r.id);
+    // Save every draft row the AI extracted, including low-confidence and
+    // zero-price items (the user can edit them later in the menu screen).
+    // Skip rows that already match an existing item to avoid duplicates.
+    const rowIds = d.items.filter(r => r.status === "draft" && !r.duplicateMatchId).map(r => r.id);
+    const duplicates = d.items.filter(r => r.status === "draft" && !!r.duplicateMatchId).length;
     if (rowIds.length === 0) {
       setStatus("done");
       setSummary(d.import.totalRows === 0
         ? "AI couldn't find any items. Try a clearer photo or paste the text."
-        : `All ${d.import.totalRows} extracted item${d.import.totalRows === 1 ? "" : "s"} need review on the web dashboard before saving.`);
+        : duplicates > 0
+          ? `All ${duplicates} extracted item${duplicates === 1 ? "" : "s"} already exist in your menu.`
+          : "Nothing to save.");
       return;
     }
     setStatus("saving");
@@ -144,10 +150,11 @@ export default function MenuImportScreen() {
       );
       if (cancelledRef.current) return;
       setStatus("done");
-      const flagged = d.import.totalRows - rowIds.length;
+      const needsReviewCount = d.items.filter(r => r.status === "draft" && !r.duplicateMatchId && r.needsReview).length;
       setSummary(
         `Imported ${res.savedCount} item${res.savedCount === 1 ? "" : "s"}` +
-        (flagged > 0 ? ` · ${flagged} need review on the web dashboard` : "") +
+        (needsReviewCount > 0 ? ` · ${needsReviewCount} flagged — review prices in the menu screen` : "") +
+        (duplicates > 0 ? ` · skipped ${duplicates} already in menu` : "") +
         (res.errors.length > 0 ? ` · ${res.errors.length} failed` : "")
       );
       qc.invalidateQueries({ queryKey: ["menu-items-mobile", restaurantId] });
