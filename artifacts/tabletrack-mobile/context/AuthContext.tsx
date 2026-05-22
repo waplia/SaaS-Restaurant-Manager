@@ -46,6 +46,8 @@ interface AuthContextType {
   setOutletScopeId: (id: number | null) => void;
   /** Convenience: the effective restaurantId reports/sales should use. */
   effectiveRestaurantId: number;
+  /** Branch id (rows in `branches`) the owner picked, or null = all branches. */
+  effectiveBranchId: number | null;
   login: (token: string, refreshToken: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
   updateTokens: (accessToken: string, refreshToken: string) => Promise<void>;
@@ -244,18 +246,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const restaurantId = user?.restaurantId ?? 1;
   const tenantId = user?.tenantId ?? null;
-  // Match the dashboard's `canSwitchScope` predicate exactly: only role==="owner"
-  // may set the outlet scope, so only owners' scope selection should affect
-  // downstream report queries. Anything else (manager / admin / superadmin)
-  // is pinned to their own restaurant to avoid cross-outlet data leakage.
+  // `outletScopeId` is the branch id (rows in the `branches` table) the
+  // owner has selected as their active outlet. Dashboard / reports
+  // endpoints stay restaurant-scoped — `branchId` is passed alongside as
+  // a query filter. `effectiveRestaurantId` is preserved for callers that
+  // still read it, but it's always just the user's own restaurant now.
   const isScopeOwner = user?.role === "owner";
-  const effectiveRestaurantId = isScopeOwner && outletScopeId != null ? outletScopeId : restaurantId;
+  const effectiveBranchId = isScopeOwner ? outletScopeId : null;
+  const effectiveRestaurantId = restaurantId;
   const setOutletScopeId = useCallback((id: number | null) => {
     setOutletScopeIdState(id);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, outletScopeId, setOutletScopeId, effectiveRestaurantId, login, logout, updateTokens }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, outletScopeId, setOutletScopeId, effectiveRestaurantId, effectiveBranchId, login, logout, updateTokens }}>
       {children}
     </AuthContext.Provider>
   );

@@ -10,6 +10,10 @@ import { kitchensTable } from "./kitchens";
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  // Which physical outlet/branch this order belongs to. Nullable so legacy
+  // orders predating multi-branch support stay readable; new orders should
+  // always carry the active branch so dashboard/reports can scope by outlet.
+  branchId: integer("branch_id"),
   tableId: integer("table_id").references(() => floorTablesTable.id),
   waiterId: integer("waiter_id").references(() => usersTable.id),
   orderNumber: text("order_number").notNull(),

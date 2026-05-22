@@ -22,11 +22,11 @@ function ReportsScreen() {
 
   const trendQ = useQuery({
     queryKey: ["revenue-trend-7d", restaurantId, outletScopeId],
-    queryFn: () => customFetch<Trend[]>(`/api/restaurants/${restaurantId}/dashboard/revenue-trend?days=7`).catch(() => []),
+    queryFn: () => customFetch<Trend[]>(`/api/restaurants/${restaurantId}/dashboard/revenue-trend?days=7${outletScopeId != null ? `&branchId=${outletScopeId}` : ""}`).catch(() => []),
   });
   const popularQ = useQuery({
     queryKey: ["popular-items-7d", restaurantId, outletScopeId],
-    queryFn: () => customFetch<Popular[]>(`/api/restaurants/${restaurantId}/dashboard/popular-items?days=7`).catch(() => []),
+    queryFn: () => customFetch<Popular[]>(`/api/restaurants/${restaurantId}/dashboard/popular-items?days=7${outletScopeId != null ? `&branchId=${outletScopeId}` : ""}`).catch(() => []),
   });
   // Resolve the active outlet's display name so the report header can tell
   // the owner exactly whose sales these numbers represent. The numbers are

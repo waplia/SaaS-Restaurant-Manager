@@ -591,8 +591,34 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     }
   }
 
+  // Branch attribution: prefer an explicit branchId from the client (mobile
+  // passes the currently-selected outlet). Fallback to the restaurant's main
+  // branch so dashboard/reports can scope by outlet even when the caller
+  // doesn't volunteer one. `null` is fine — legacy orders with null branch
+  // get rolled into the main branch on the read side.
+  let resolvedBranchId: number | null = null;
+  const rawBranchId = (req.body?.branchId);
+  if (rawBranchId != null && rawBranchId !== "") {
+    const n = Number(rawBranchId);
+    if (Number.isFinite(n)) {
+      const { branchesTable } = await import("../lib/db");
+      const [b] = await db.select({ id: branchesTable.id })
+        .from(branchesTable)
+        .where(and(eq(branchesTable.id, n), eq(branchesTable.restaurantId, restaurantId)));
+      if (b) resolvedBranchId = b.id;
+    }
+  }
+  if (resolvedBranchId == null) {
+    const { branchesTable } = await import("../lib/db");
+    const [main] = await db.select({ id: branchesTable.id })
+      .from(branchesTable)
+      .where(and(eq(branchesTable.restaurantId, restaurantId), eq(branchesTable.isMain, true)));
+    if (main) resolvedBranchId = main.id;
+  }
+
   const [order] = await db.insert(ordersTable).values({
     restaurantId,
+    branchId: resolvedBranchId,
     tableId,
     orderNumber: generateOrderNumber(),
     orderType: orderType ?? (ckContext ? "delivery" : "dine_in"),

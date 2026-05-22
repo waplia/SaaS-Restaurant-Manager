@@ -41,9 +41,34 @@ function istMonthKey(d: Date): string {
 
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
+/**
+ * Parse the optional `?branchId=` query and build a drizzle WHERE clause
+ * for orders scoped to that branch. Legacy orders predating multi-branch
+ * support have `branch_id IS NULL`; we treat them as belonging to the
+ * restaurant's "main" branch so historical sales remain visible there.
+ * Returns `undefined` when no branch filter is requested.
+ */
+async function ordersBranchFilter(restaurantId: number, branchIdRaw: unknown) {
+  if (branchIdRaw == null || branchIdRaw === "") return undefined;
+  const branchId = Number(branchIdRaw);
+  if (!Number.isFinite(branchId)) return undefined;
+  const { branchesTable } = await import("../lib/db");
+  const [b] = await db
+    .select({ id: branchesTable.id, isMain: branchesTable.isMain })
+    .from(branchesTable)
+    .where(and(eq(branchesTable.id, branchId), eq(branchesTable.restaurantId, restaurantId)));
+  if (!b) return undefined;
+  if (b.isMain) {
+    // Main branch swallows null branch_id rows so historical orders aren't lost.
+    return sql`(${ordersTable.branchId} = ${branchId} OR ${ordersTable.branchId} IS NULL)`;
+  }
+  return eq(ordersTable.branchId, branchId);
+}
+
 router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const today = istStartOfToday();
+  const branchFilter = await ordersBranchFilter(restaurantId, req.query.branchId);
 
   // monthStart for expense aggregation — IST month, not UTC month (otherwise
   // on the 1st of an IST month before 05:30 IST we'd query the prior month).
@@ -75,12 +100,12 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
     yesterdayOrders,
     monthExpensesRow,
   ] = await Promise.all([
-    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, today))),
+    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, today), branchFilter)),
     db.select().from(floorTablesTable).where(and(eq(floorTablesTable.restaurantId, restaurantId), eq(floorTablesTable.isActive, true))),
     db.select({ count: count() }).from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.restaurantId, restaurantId), sql`status IN ('new','preparing')`)),
     db.select({ currentStock: inventoryItemsTable.currentStock, minStockLevel: inventoryItemsTable.minStockLevel }).from(inventoryItemsTable).where(eq(inventoryItemsTable.restaurantId, restaurantId)),
     db.select({ count: count() }).from(notificationsTable).where(and(eq(notificationsTable.restaurantId, restaurantId), eq(notificationsTable.isRead, false))),
-    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`)),
+    db.select(orderCols).from(ordersTable).where(and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, new Date(today.getTime() - 86400000)), sql`created_at < ${today}`, branchFilter)),
     db.select({ sum: sql<string>`coalesce(sum(${expensesTable.amount}), 0)::text` }).from(expensesTable).where(and(eq(expensesTable.restaurantId, restaurantId), gte(expensesTable.expenseDate, monthStartStr))),
   ]);
 
@@ -127,6 +152,7 @@ router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
 
 router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  const branchFilter = await ordersBranchFilter(restaurantId, req.query.branchId);
   const period = String(req.query.period ?? "7d");
   const from = new Date();
   if (period === "1y") { from.setFullYear(from.getFullYear() - 1); }
@@ -147,6 +173,7 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
       // Only paid orders are real sales — exclude cancelled, voided and
       // any in-progress / pending ticket that hasn't been billed yet.
       eq(ordersTable.paymentStatus, "paid"),
+      branchFilter,
     ));
 
   type Bucket = { revenue: number; orders: number };
@@ -197,6 +224,7 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
 
 router.get("/restaurants/:restaurantId/dashboard/popular-items", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  const branchFilter = await ordersBranchFilter(restaurantId, req.query.branchId);
   const limit = Number(req.query.limit ?? 10);
   const from = new Date();
   from.setDate(from.getDate() - 30);
@@ -216,6 +244,7 @@ router.get("/restaurants/:restaurantId/dashboard/popular-items", async (req, res
       // Only paid orders are real sales — matches dashboard summary,
       // revenue-trend, reports, and P&L semantics.
       eq(ordersTable.paymentStatus, "paid"),
+      branchFilter,
     ))
     .groupBy(orderItemsTable.menuItemId, orderItemsTable.menuItemName)
     .orderBy(desc(sql`count(*)`))
@@ -264,6 +293,27 @@ router.get("/restaurants/:restaurantId/dashboard/live-kitchen", requirePlanFeatu
 
 router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("advanced_reports"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  const branchFilter = await ordersBranchFilter(restaurantId, req.query.branchId);
+  // Raw branch id (validated) for embedding into raw-SQL subqueries that
+  // don't go through drizzle's `where`. `null` = no branch filter.
+  const branchIdRaw = req.query.branchId == null || req.query.branchId === ""
+    ? null
+    : (Number.isFinite(Number(req.query.branchId)) ? Number(req.query.branchId) : null);
+  // For the raw-SQL CTEs below we need the same NULL→main rollup logic the
+  // drizzle helper applies. Resolve whether the picked branch is main.
+  let branchSql = sql``;
+  if (branchIdRaw != null) {
+    const { branchesTable } = await import("../lib/db");
+    const [b] = await db
+      .select({ id: branchesTable.id, isMain: branchesTable.isMain })
+      .from(branchesTable)
+      .where(and(eq(branchesTable.id, branchIdRaw), eq(branchesTable.restaurantId, restaurantId)));
+    if (b) {
+      branchSql = b.isMain
+        ? sql`AND (o.branch_id = ${branchIdRaw} OR o.branch_id IS NULL)`
+        : sql`AND o.branch_id = ${branchIdRaw}`;
+    }
+  }
   const { period, from: fromStr, to: toStr } = req.query;
   let from = new Date();
   let to = new Date();
@@ -286,8 +336,8 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
   // in-progress orders still moving through the kitchen.
   const paidOnly = eq(ordersTable.paymentStatus, "paid");
   const dateCondition = fromStr && toStr
-    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to), paidOnly)
-    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), paidOnly);
+    ? and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to), paidOnly, branchFilter)
+    : and(eq(ordersTable.restaurantId, restaurantId), gte(ordersTable.createdAt, from), paidOnly, branchFilter);
 
   const orders = await db.select().from(ordersTable).where(dateCondition);
   const totalRevenue = orders.reduce((s, o) => s + Number(o.totalAmount), 0);
@@ -328,6 +378,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
         AND o.payment_status = 'paid'
         AND o.created_at >= ${from}
         ${to ? sql`AND o.created_at <= ${to}` : sql``}
+        ${branchSql}
       GROUP BY o.waiter_id
     ),
     attendance_stats AS (
@@ -406,6 +457,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
     WHERE o.restaurant_id = ${restaurantId}
       AND o.created_at >= ${from}
       ${fromStr && toStr ? sql`AND o.created_at <= ${to}` : sql``}
+      ${branchSql}
     GROUP BY d.recorded_by_user_id, u.name, d.type, d.reason
     ORDER BY SUM(d.amount) DESC
   `);
@@ -477,6 +529,7 @@ router.get("/restaurants/:restaurantId/dashboard/reports", requirePlanFeature("a
      AND o.restaurant_id = ${restaurantId}
      AND o.created_at >= ${from}
      ${fromStr && toStr ? sql`AND o.created_at <= ${to}` : sql``}
+     ${branchSql}
     WHERE d.restaurant_id = ${restaurantId}
       AND d.assigned_user_id IS NOT NULL
     GROUP BY d.id, d.name, d.type, d.is_handheld, d.assigned_user_id, u.name

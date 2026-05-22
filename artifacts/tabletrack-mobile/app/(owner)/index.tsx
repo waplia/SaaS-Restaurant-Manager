@@ -59,47 +59,51 @@ export default function OwnerDashboard() {
   const isOwner = user?.role === "owner";
   // Owners can switch between "all outlets" and a specific outlet; managers
   // are locked to the outlet they're assigned to (enforced server-side too).
-  const canSwitchScope = isOwner && tenantId != null;
+  const canSwitchScope = isOwner && restaurantId != null;
 
-  // ---- Tenant outlet list (drives the scope selector + comparison)
+  // ---- Outlet list (drives the scope selector + comparison).
+  // Outlets in this product are rows of the `branches` table under the
+  // user's restaurant — what the user sees in More → Outlets. Each id
+  // is a branchId that the dashboard / reports endpoints accept as a
+  // `?branchId=` filter.
   const tenantBranchesQ = useQuery({
-    queryKey: ["tenant-branches", tenantId],
-    queryFn: () => customFetch<TenantBranch[]>(`/api/tenants/${tenantId}/branches`),
-    enabled: tenantId != null,
+    queryKey: ["restaurant-branches", restaurantId],
+    queryFn: () => customFetch<TenantBranch[]>(`/api/restaurants/${restaurantId}/branches`).catch(() => [] as TenantBranch[]),
+    enabled: restaurantId != null,
+    staleTime: 60 * 1000,
   });
   const tenantBranches: TenantBranch[] = Array.isArray(tenantBranchesQ.data)
-    ? (tenantBranchesQ.data as TenantBranch[])
+    ? (tenantBranchesQ.data as TenantBranch[]).filter(b => b.isActive !== false)
     : [];
   const hasMultipleOutlets = tenantBranches.length > 1;
 
-  // Scope: null = all outlets (tenant-wide), number = specific restaurant id.
-  // Lifted into AuthContext so every report / sales screen honours the same
-  // selection — picking an outlet here counts sales against that outlet only
-  // across the whole app (dashboard, reports, etc.).
-  const scopeOutletId = outletScopeId;
+  // Scope: null = all branches under this restaurant, number = a specific
+  // branch (rows in the `branches` table). Lifted into AuthContext so
+  // every report / sales screen honours the same selection.
+  const scopeOutletId = canSwitchScope ? outletScopeId : null;
   const setScopeOutletId = setOutletScopeId;
   const [outletSort, setOutletSort] = useState<SortKey>("revenue");
 
-  // For non-owners we always pin scope to the user's own restaurant.
-  const effectiveScope: number | null = canSwitchScope ? scopeOutletId : restaurantId;
-  const isAllOutlets = effectiveScope == null;
-  const restaurantScopeId = effectiveScope ?? restaurantId;
+  // Dashboards stay restaurant-scoped; the picked branch is passed as a
+  // `?branchId=` query so the server-side filter narrows orders/sales.
+  const restaurantScopeId = restaurantId;
+  const isAllOutlets = scopeOutletId == null;
+  const branchQS = scopeOutletId == null ? "" : `?branchId=${scopeOutletId}`;
+  const branchQSAmp = scopeOutletId == null ? "" : `&branchId=${scopeOutletId}`;
 
-  // ---- Today's KPIs — tenant or restaurant scoped depending on selection.
+  // ---- Today's KPIs — restaurant + optional branch filter.
   const summaryQ = useQuery({
-    queryKey: isAllOutlets
-      ? ["tenant-summary", tenantId]
-      : getGetDashboardSummaryQueryKey(restaurantScopeId),
-    queryFn: () =>
-      isAllOutlets
-        ? customFetch<DashboardSummary>(`/api/tenants/${tenantId}/dashboard/summary`)
-        : getDashboardSummary(restaurantScopeId),
-    enabled: !isAllOutlets || tenantId != null,
+    queryKey: ["dashboard-summary", restaurantScopeId, scopeOutletId],
+    queryFn: () => customFetch<DashboardSummary>(
+      `/api/restaurants/${restaurantScopeId}/dashboard/summary${branchQS}`,
+    ),
+    enabled: restaurantScopeId != null,
   });
 
-  // ---- Live orders (open + in-kitchen + ready) — restaurant-scoped only.
-  // Skipped in "All outlets" mode because there is no tenant-wide live orders
-  // endpoint; we surface a placeholder card instead.
+  // ---- Live orders (open + in-kitchen + ready) — restaurant-scoped.
+  // Always enabled now that the dashboard isn't gated on a tenant-aggregate
+  // mode; the branch filter doesn't apply here because the live queue is
+  // shared across outlets for the kitchen.
   const liveOrdersQ = useQuery({
     queryKey: ["live-orders", restaurantScopeId],
     queryFn: async () => {
@@ -117,61 +121,56 @@ export default function OwnerDashboard() {
       });
       return { counts, orders: all };
     },
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
     refetchInterval: 30_000,
   });
 
-  // ---- Revenue trend
+  // ---- Revenue trend (restaurant + optional branch filter)
   const trendQ = useQuery({
-    queryKey: isAllOutlets
-      ? ["tenant-trend", tenantId]
-      : getGetRevenueTrendQueryKey(restaurantScopeId, { period: "7d" }),
-    queryFn: () =>
-      isAllOutlets
-        ? customFetch<Array<{ date: string; revenue: string }>>(
-            `/api/tenants/${tenantId}/dashboard/revenue-trend?period=7d`,
-          )
-        : getRevenueTrend(restaurantScopeId, { period: "7d" }),
-    enabled: !isAllOutlets || tenantId != null,
+    queryKey: ["revenue-trend-7d", restaurantScopeId, scopeOutletId],
+    queryFn: () => customFetch<Array<{ date: string; revenue: string }>>(
+      `/api/restaurants/${restaurantScopeId}/dashboard/revenue-trend?period=7d${branchQSAmp}`,
+    ),
+    enabled: restaurantScopeId != null,
   });
 
   // ---- The remaining cards are restaurant-scoped (no tenant aggregate API).
   const stockQ = useQuery({
     queryKey: getListInventoryItemsQueryKey(restaurantScopeId, { lowStock: true }),
     queryFn: () => listInventoryItems(restaurantScopeId, { lowStock: true }),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
   });
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const attendanceQ = useQuery({
     queryKey: getListAttendanceQueryKey(restaurantScopeId, { date: todayStr }),
     queryFn: () => listAttendance(restaurantScopeId, { date: todayStr }),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
   });
 
   const cashQ = useQuery({
     queryKey: ["cash-register-current", restaurantScopeId],
     queryFn: () => customFetch<CashSession>(`/api/restaurants/${restaurantScopeId}/cash-register/current`),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
   });
 
   const fraudQ = useQuery({
     queryKey: ["fraud-alerts", restaurantScopeId],
     queryFn: () => customFetch<FraudListResp>(`/api/restaurants/${restaurantScopeId}/fraud-alerts?status=open`),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
     refetchInterval: 30_000,
   });
 
   const reviewsQ = useQuery({
     queryKey: ["reviews-feedback", restaurantScopeId],
     queryFn: () => customFetch<ReviewsResp>(`/api/restaurants/${restaurantScopeId}/reviews/feedback?limit=50`),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
   });
 
   const ticketsQ = useQuery({
     queryKey: ["support-tickets-open", restaurantScopeId],
     queryFn: () => customFetch<TicketsResp>(`/api/support/tickets?status=open&limit=50`),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
   });
 
   // Manager approvals inbox: pending discount/void/refund + ops approvals.
@@ -183,7 +182,7 @@ export default function OwnerDashboard() {
     queryFn: () => customFetch<ApprovalRow[]>(
       `/api/restaurants/${restaurantScopeId}/ops/approvals?status=pending`,
     ),
-    enabled: !isAllOutlets,
+    enabled: restaurantScopeId != null,
     refetchInterval: 60_000,
   });
 
@@ -336,7 +335,7 @@ export default function OwnerDashboard() {
 
   const scopeLabel = isAllOutlets
     ? "All outlets"
-    : (tenantBranches.find((b) => b.id === restaurantScopeId)?.name ?? "Outlet");
+    : (tenantBranches.find((b) => b.id === scopeOutletId)?.name ?? "Outlet");
 
   return (
     <ScrollView
@@ -830,16 +829,16 @@ function RestaurantTopCard({
   const branches: TenantBranch[] = (tenantBranches ?? []).filter(b => b.isActive !== false);
   const activeBranch = scopeOutletId == null ? null : branches.find(b => b.id === scopeOutletId);
 
-  // For the avatar/logo on the card we show the active outlet's restaurant
-  // info; when "all outlets" is selected we fall back to the user's own
-  // restaurant record. Skipped when no outlet is resolvable.
-  const cardRestaurantId = activeBranch?.id ?? restaurantId;
+  // The branding (name/logo/city) on the card is the user's restaurant —
+  // the branch picker only changes which outlet's sales are scoped, not
+  // which brand we're looking at. (Branch ids are NOT restaurant ids, so
+  // we must never fetch `/api/restaurants/<branchId>`.)
   const restaurantQ = useQuery({
-    queryKey: ["restaurant-info", cardRestaurantId],
+    queryKey: ["restaurant-info", restaurantId],
     queryFn: () => customFetch<{ id: number; name: string; logoUrl?: string | null; city?: string | null }>(
-      `/api/restaurants/${cardRestaurantId}`,
+      `/api/restaurants/${restaurantId}`,
     ),
-    enabled: cardRestaurantId != null,
+    enabled: restaurantId != null,
     staleTime: 5 * 60 * 1000,
   });
   const r = restaurantQ.data;
