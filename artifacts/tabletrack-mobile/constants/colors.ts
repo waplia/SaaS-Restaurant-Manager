@@ -1,50 +1,13 @@
+import { palette } from "@/theme/tokens";
+
+/**
+ * Legacy colors export. Prefer `useTheme()` from `@/theme` in new code.
+ * The shape below matches what `hooks/useColors.ts` expects so existing
+ * screens keep working unchanged.
+ */
 const colors = {
-  light: {
-    text: "#251e1a",
-    tint: "#f97316",
-    background: "#ffffff",
-    foreground: "#251e1a",
-    card: "#ffffff",
-    cardForeground: "#251e1a",
-    primary: "#f97316",
-    primaryForeground: "#ffffff",
-    secondary: "#f0eae8",
-    secondaryForeground: "#251e1a",
-    muted: "#f5f3f2",
-    mutedForeground: "#786e69",
-    accent: "#fff3e8",
-    accentForeground: "#9a4200",
-    destructive: "#ef4444",
-    destructiveForeground: "#ffffff",
-    border: "#e8e3e0",
-    input: "#e0dbd8",
-    success: "#22c55e",
-    warning: "#f59e0b",
-    info: "#3b82f6",
-  },
-  dark: {
-    text: "#faf6f4",
-    tint: "#f97316",
-    background: "#0f0d0c",
-    foreground: "#faf6f4",
-    card: "#1c1815",
-    cardForeground: "#faf6f4",
-    primary: "#f97316",
-    primaryForeground: "#ffffff",
-    secondary: "#2a2421",
-    secondaryForeground: "#faf6f4",
-    muted: "#211d1a",
-    mutedForeground: "#9c918b",
-    accent: "#3d2210",
-    accentForeground: "#fdba74",
-    destructive: "#f04545",
-    destructiveForeground: "#ffffff",
-    border: "#2d2623",
-    input: "#352e2a",
-    success: "#22c55e",
-    warning: "#f59e0b",
-    info: "#60a5fa",
-  },
+  light: palette.light,
+  dark: palette.dark,
   radius: 8,
 };
 
