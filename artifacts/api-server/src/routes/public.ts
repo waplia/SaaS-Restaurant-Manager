@@ -1002,6 +1002,14 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
     const { getPaymentConfig, decryptManualUpi } = await import("../lib/paymentConfig");
     const cfg = await getPaymentConfig(order.restaurantId);
     const vpa = decryptManualUpi(cfg.manualUpi);
+    // NPCI UPI Linking Spec v1.6 fields. `tr` (transaction reference) must
+    // be unique alphanumeric ≤35 chars — we encode the order id plus a
+    // short timestamp suffix so collisions are impossible even if a
+    // customer retries from a stale tab. `mc=5812` is the MCC for
+    // "Eating Places, Restaurants" per ISO 18245; supplying it gives the
+    // receiving UPI app a legitimate merchant context and meaningfully
+    // reduces risk-policy rejections compared to a bare upi://pay link.
+    const txnRef = `TT${order.id}${Date.now().toString(36).toUpperCase().slice(-6)}`;
     return void res.json({
       mode: "manual_upi",
       paymentSource: "manual_upi",
@@ -1015,6 +1023,9 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
       enableCopyUpiId: cfg.manualUpi?.enableCopyUpiId ?? true,
       totalAmount: order.totalAmount,
       orderId: order.id,
+      orderNumber: order.orderNumber,
+      txnRef,
+      merchantCategoryCode: "5812",
     });
   }
   // Own-gateway: behaviour identical to platform_gateway today (PhonePe /

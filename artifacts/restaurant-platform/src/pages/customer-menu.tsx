@@ -239,6 +239,9 @@ interface PaymentIntentResponse {
   enableStaticQr?: boolean;
   staticQrUrl?: string | null;
   enableCopyUpiId?: boolean;
+  orderNumber?: string;
+  txnRef?: string;
+  merchantCategoryCode?: string;
 }
 
 const STATUS_STEPS = [
@@ -1197,8 +1200,25 @@ export default function CustomerMenuPage() {
     // admin Manual UPI queue (#588); customer side never auto-marks paid.
     const amount = Number(paymentIntent.totalAmount).toFixed(2);
     const upi = paymentIntent.upiId ?? "";
+    // NPCI UPI Linking Spec v1.6 — full parameter set. `tr` (txn ref) is
+    // required for merchant intents; without it Paytm/PhonePe treat the
+    // link as P2P and apply stricter risk checks. `mc=5812` declares the
+    // restaurant MCC. `mode=02` = collect via intent, `purpose=00` = default.
+    // Order matters less than completeness; UPI apps parse by key.
+    const txnRef = paymentIntent.txnRef ?? `TT${orderResult.orderId}`;
+    const mcc = paymentIntent.merchantCategoryCode ?? "5812";
     const upiParams = upi
-      ? `pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order #${orderResult.orderNumber}`)}`
+      ? [
+          `pa=${encodeURIComponent(upi)}`,
+          `pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}`,
+          `am=${amount}`,
+          `cu=INR`,
+          `tn=${encodeURIComponent(`Order ${orderResult.orderNumber}`)}`,
+          `tr=${encodeURIComponent(txnRef)}`,
+          `mc=${mcc}`,
+          `mode=02`,
+          `purpose=00`,
+        ].join("&")
       : "";
     const intentUrl = upi ? `upi://pay?${upiParams}` : null;
     // Per-app deep links. On Android, intent:// with `package=` opens that
