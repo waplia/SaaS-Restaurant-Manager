@@ -490,6 +490,11 @@ export interface UpdateMenuItemInput {
   allergens?: string[];
   sortOrder?: number;
   kitchenId?: number | null;
+  // Image provenance — used by the auto-persist on photo pick so the
+  // stock-image library and AI photo flows record where the photo came
+  // from in the restaurant_menu_item_images audit table.
+  libraryImageId?: number | null;
+  imageSource?: "library" | "upload" | "ai_generated" | "reuse" | "";
 }
 
 export interface InventoryItem {

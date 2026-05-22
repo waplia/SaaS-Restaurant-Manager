@@ -1,16 +1,42 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Switch, TextInput,
-  Platform, Alert, Pressable, Modal, KeyboardAvoidingView,
+  Platform, Alert, Pressable, Modal, KeyboardAvoidingView, Image, ActivityIndicator,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
+
+/**
+ * Build the diner-facing absolute URL for an image path stored on the
+ * menu item. Most paths are saved as `/api/public/storage/objects/...`
+ * (already absolute-from-root) or `/objects/...` (legacy). We accept any
+ * fully-qualified `http(s)://` URL untouched.
+ */
+function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN ?? "").replace(/^https?:\/\//, "");
+  const base = domain ? `https://${domain}` : "";
+  if (url.startsWith("/objects/")) return `${base}/api/public/storage${url}`;
+  if (url.startsWith("/")) return `${base}${url}`;
+  return url;
+}
+
+interface StockFoodImage {
+  id: number;
+  name: string;
+  imageUrl: string;
+  thumbnailUrl: string | null;
+  isVeg: boolean;
+  cuisine: string | null;
+}
 
 type MenuItem = {
   id: number;
@@ -77,6 +103,18 @@ export default function MenuScreen() {
     mutationFn: ({ id, body }: { id: number; body: Partial<MenuItem> }) =>
       customFetch(`/api/restaurants/${restaurantId}/items/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { setEditing(null); invalidate(); },
+    onError: errToast,
+  });
+  // Dedicated mutation for auto-persisting just the photo while the owner
+  // is still editing — must NOT close the edit sheet (unlike `update`).
+  const persistPhoto = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Partial<MenuItem> }) =>
+      customFetch(`/api/restaurants/${restaurantId}/items/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (_data, vars) => {
+      // Reflect the saved photo on the open editor + the list behind it.
+      setEditing(prev => prev && prev.id === vars.id ? { ...prev, ...vars.body } : prev);
+      invalidate();
+    },
     onError: errToast,
   });
   const deleteM = useMutation({
@@ -209,6 +247,7 @@ export default function MenuScreen() {
         submitLabel="Create item"
         submitting={create.isPending}
         categories={categories}
+        restaurantId={restaurantId}
         onSubmit={(v) => create.mutate(v)}
         onAddCategory={promptAddCategory}
       />
@@ -219,7 +258,17 @@ export default function MenuScreen() {
         submitLabel="Save changes"
         submitting={update.isPending}
         categories={categories}
+        restaurantId={restaurantId}
         initial={editing ?? undefined}
+        editingItemId={editing?.id ?? null}
+        onPersistImage={(body) => {
+          if (!editing) return;
+          // Persist immediately so the photo shows up on the diner QR menu
+          // even if the owner closes the form without tapping Save. Uses
+          // the dedicated `persistPhoto` mutation so it doesn't dismiss
+          // the edit sheet (the regular `update` would).
+          persistPhoto.mutate({ id: editing.id, body });
+        }}
         onSubmit={(v) => editing && update.mutate({ id: editing.id, body: v })}
         onDelete={() => editing && deleteM.mutate(editing.id)}
         deleting={deleteM.isPending}
@@ -280,7 +329,8 @@ export default function MenuScreen() {
 }
 
 function MenuItemForm({
-  visible, onClose, title, submitLabel, submitting, categories, initial, onSubmit, onDelete, deleting, onAddCategory,
+  visible, onClose, title, submitLabel, submitting, categories, initial, onSubmit, onDelete, deleting,
+  onAddCategory, restaurantId, editingItemId, onPersistImage,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -289,31 +339,154 @@ function MenuItemForm({
   submitting: boolean;
   categories: Category[];
   initial?: Partial<MenuItem>;
-  onSubmit: (v: { name: string; price: string; categoryId: number | null }) => void;
+  onSubmit: (v: {
+    name: string;
+    price: string;
+    categoryId: number | null;
+    imageUrl?: string | null;
+    libraryImageId?: number | null;
+    imageSource?: string;
+  }) => void;
   onDelete?: () => void;
   deleting?: boolean;
   onAddCategory?: () => void;
+  restaurantId: number | null | undefined;
+  editingItemId?: number | null;
+  onPersistImage?: (body: { imageUrl: string; libraryImageId?: number | null; imageSource?: string }) => void;
 }) {
   const colors = useColors();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [libraryImageId, setLibraryImageId] = useState<number | null>(null);
+  const [imageSource, setImageSource] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySuggestions, setLibrarySuggestions] = useState<StockFoodImage[]>([]);
 
   React.useEffect(() => {
     if (visible) {
       setName(initial?.name ?? "");
       setPrice(initial?.price != null ? String(initial.price) : "");
       setCategoryId(initial?.categoryId ?? categories[0]?.id ?? null);
+      setImageUrl(initial?.imageUrl ?? "");
+      setLibraryImageId(null);
+      setImageSource("");
+      setLibraryOpen(false);
+      setLibrarySuggestions([]);
     }
   }, [visible, initial, categories]);
 
   const canSubmit = name.trim().length > 0 && price.trim().length > 0 && categoryId != null && !submitting;
 
+  /**
+   * Apply a photo locally and, if we're editing an existing item, push
+   * it to the server right away so the new photo is visible to diners
+   * even if the owner backs out of the form without tapping Save.
+   */
+  function applyPhoto(url: string, opts: { libraryImageId?: number | null; source: string }) {
+    setImageUrl(url);
+    setLibraryImageId(opts.libraryImageId ?? null);
+    setImageSource(opts.source);
+    if (editingItemId && onPersistImage) {
+      onPersistImage({ imageUrl: url, libraryImageId: opts.libraryImageId ?? null, imageSource: opts.source });
+    }
+  }
+
+  async function pickAndUpload() {
+    if (!restaurantId) {
+      Alert.alert("Not ready", "Restaurant context isn't loaded yet. Please try again in a moment.");
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Allow photo access to upload a menu photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setUploading(true);
+    try {
+      const fileName = asset.fileName ?? `menu-photo-${Date.now()}.jpg`;
+      const contentType = asset.mimeType ?? "image/jpeg";
+      const blob = await (await fetch(asset.uri)).blob();
+      const presign = await customFetch<{ uploadURL: string; objectPath: string }>(
+        `/api/restaurants/${restaurantId}/storage/uploads/request-url`,
+        { method: "POST", body: JSON.stringify({ name: fileName, size: blob.size, contentType }) },
+      );
+      const put = await fetch(presign.uploadURL, {
+        method: "PUT", headers: { "Content-Type": contentType }, body: blob,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      // Use the PUBLIC finalize so diners can fetch the photo without auth.
+      // The endpoint returns the canonical `/objects/...` path; the
+      // diner-facing URL is `/api/public/storage` + that path (same as
+      // ImageUploadField on the web app).
+      const finalized = await customFetch<{ ok: boolean; objectPath: string }>(
+        `/api/restaurants/${restaurantId}/storage/uploads/finalize-public`,
+        { method: "POST", body: JSON.stringify({ objectPath: presign.objectPath }) },
+      );
+      const publicUrl = `/api/public/storage${finalized.objectPath}`;
+      applyPhoto(publicUrl, { source: "upload" });
+    } catch (e: unknown) {
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function openLibrary() {
+    setLibraryOpen(true);
+    setLibraryLoading(true);
+    try {
+      const query = name.trim();
+      let list: StockFoodImage[] = [];
+      if (query.length > 0) {
+        // /suggest returns { suggestions: [{row, score, matchedOn}, ...] }
+        const res = await customFetch<{ suggestions?: Array<{ row: StockFoodImage }> }>(
+          `/api/stock-food-images/suggest?name=${encodeURIComponent(query)}&limit=12`,
+        );
+        list = (res.suggestions ?? []).map((s) => s.row).filter(Boolean);
+      }
+      if (list.length === 0) {
+        // Fall back to popular images when there's no name yet or no matches.
+        const res = await customFetch<{ rows?: StockFoodImage[] }>(`/api/stock-food-images/popular?limit=12`);
+        list = res.rows ?? [];
+      }
+      setLibrarySuggestions(list);
+    } catch (e: unknown) {
+      Alert.alert("Couldn't load library", e instanceof Error ? e.message : "Please try again.");
+      setLibrarySuggestions([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
+  function chooseLibraryImage(img: StockFoodImage) {
+    applyPhoto(img.imageUrl, { libraryImageId: img.id, source: "library" });
+    setLibraryOpen(false);
+  }
+
+  const previewUrl = resolveImageUrl(imageUrl);
+
   return (
     <EntityFormSheet
       visible={visible} onClose={onClose} title={title}
       submitting={submitting} canSubmit={canSubmit}
-      onSubmit={() => onSubmit({ name: name.trim(), price: price.trim(), categoryId })}
+      onSubmit={() => onSubmit({
+        name: name.trim(),
+        price: price.trim(),
+        categoryId,
+        imageUrl: imageUrl || null,
+        libraryImageId: libraryImageId ?? undefined,
+        imageSource: imageSource || undefined,
+      })}
       submitLabel={submitLabel}
       onDelete={onDelete} deleting={deleting}
       deleteConfirmMessage="Remove this item from the menu? Customers will no longer see it."
@@ -326,6 +499,132 @@ function MenuItemForm({
         <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
           placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
       </FormField>
+      <FormField label="Photo">
+        <View style={{ gap: 8 }}>
+          {previewUrl ? (
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: previewUrl }}
+                style={{ width: "100%", height: 160, borderRadius: 10, backgroundColor: colors.muted }}
+                resizeMode="cover"
+              />
+              <Pressable
+                onPress={() => applyPhoto("", { source: "" })}
+                style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 16, padding: 6 }}
+                hitSlop={8}
+                accessibilityLabel="Remove photo"
+              >
+                <Ionicons name="close" size={14} color="#fff" />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{
+              width: "100%", height: 120, borderRadius: 10, borderWidth: 1, borderStyle: "dashed",
+              borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 4,
+              backgroundColor: colors.muted,
+            }}>
+              <Ionicons name="image-outline" size={24} color={colors.mutedForeground} />
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                No photo yet
+              </Text>
+            </View>
+          )}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={openLibrary}
+              disabled={uploading || libraryLoading}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  flex: 1, borderColor: colors.primary, backgroundColor: colors.background,
+                  flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="images-outline" size={16} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                Pick from library
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={pickAndUpload}
+              disabled={uploading}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  flex: 1, borderColor: colors.border, backgroundColor: colors.background,
+                  flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color={colors.foreground} />
+              ) : (
+                <Ionicons name="cloud-upload-outline" size={16} color={colors.foreground} />
+              )}
+              <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                {uploading ? "Uploading…" : "Upload"}
+              </Text>
+            </Pressable>
+          </View>
+          {editingItemId && imageSource ? (
+            <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>
+              Photo saved — diners can see it on the QR menu now.
+            </Text>
+          ) : null}
+        </View>
+      </FormField>
+
+      <Modal visible={libraryOpen} animationType="slide" transparent onRequestClose={() => setLibraryOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{
+            backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+            padding: 16, maxHeight: "75%",
+          }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 15 }}>
+                Choose a photo
+              </Text>
+              <Pressable onPress={() => setLibraryOpen(false)} hitSlop={10}>
+                <Ionicons name="close" size={20} color={colors.foreground} />
+              </Pressable>
+            </View>
+            {libraryLoading ? (
+              <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : librarySuggestions.length === 0 ? (
+              <View style={{ paddingVertical: 32, alignItems: "center", gap: 6 }}>
+                <Ionicons name="images-outline" size={28} color={colors.mutedForeground} />
+                <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" }}>
+                  No matches found. Try uploading your own photo.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 16 }}>
+                {librarySuggestions.map((img) => (
+                  <Pressable
+                    key={img.id}
+                    onPress={() => chooseLibraryImage(img)}
+                    style={({ pressed }) => ({
+                      width: "31%", aspectRatio: 1, borderRadius: 10, overflow: "hidden",
+                      borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1,
+                    })}
+                  >
+                    <Image
+                      source={{ uri: img.thumbnailUrl || img.imageUrl }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
       <FormField label="Category">
         {categories.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>

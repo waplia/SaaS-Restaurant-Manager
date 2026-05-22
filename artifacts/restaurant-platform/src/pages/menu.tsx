@@ -812,11 +812,44 @@ export default function MenuPage() {
       setItemForm(prev => ({ ...prev, imageUrl: res.payload.imageUrl, libraryImageId: null, imageSource: "ai_generated" }));
       const drafts = await apiGet<AiDraftsResponse>(`/restaurants/${RESTAURANT_ID}/items/${editItem.id}/ai-drafts`);
       setAiDrafts(drafts);
-      toast({ title: "Photo suggested — accept or regenerate" });
+      // Auto-persist so the photo is saved on the item immediately —
+      // diners see it on the QR menu without the owner having to remember
+      // to click "Save changes" on the modal.
+      await persistImageIfEditing(res.payload.imageUrl, null, "ai_generated");
     } catch (e: unknown) {
       toast({ title: (e as { message?: string })?.message ?? "Photo generation failed", variant: "destructive" });
     } finally {
       setAiBusy(null);
+    }
+  };
+
+  /**
+   * When the item is already saved, persist the chosen photo right away
+   * via PATCH so it shows up everywhere (QR menu, POS, mobile) without
+   * waiting for the user to click "Save changes". For brand-new items we
+   * only update the form state — the picked photo flushes to the DB when
+   * the user saves the item for the first time.
+   */
+  const persistImageIfEditing = async (
+    imageUrl: string,
+    libraryImageId: number | null,
+    imageSource: ItemForm["imageSource"],
+  ) => {
+    if (!editItem) {
+      toast({ title: "Photo selected — click Save to keep it" });
+      return;
+    }
+    try {
+      await updateItem.mutateAsync({
+        id: editItem.id,
+        imageUrl: imageUrl || null,
+        libraryImageId: libraryImageId ?? undefined,
+        imageSource: imageSource || undefined,
+      });
+      setEditItem(prev => prev ? { ...prev, imageUrl } : prev);
+      toast({ title: "Photo saved" });
+    } catch (e: unknown) {
+      toast({ title: (e as { message?: string })?.message ?? "Couldn't save photo", variant: "destructive" });
     }
   };
 
@@ -1512,7 +1545,16 @@ export default function MenuPage() {
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <ImageUploadField label="Photo" value={itemForm.imageUrl} onChange={url => setItemForm(p => ({ ...p, imageUrl: url, libraryImageId: null, imageSource: url ? "upload" : "" }))} />
+                      <ImageUploadField
+                        label="Photo"
+                        value={itemForm.imageUrl}
+                        onChange={url => {
+                          setItemForm(p => ({ ...p, imageUrl: url, libraryImageId: null, imageSource: url ? "upload" : "" }));
+                          // Persist immediately for existing items so the diner-facing
+                          // QR menu picks it up without the owner remembering to save.
+                          void persistImageIfEditing(url, null, url ? "upload" : "");
+                        }}
+                      />
                       <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Button
@@ -1548,12 +1590,15 @@ export default function MenuPage() {
                         itemName={itemForm.name}
                         itemId={editItem?.id}
                         itemIsVeg={itemForm.isVeg}
-                        onSelect={(sel) => setItemForm(p => ({
-                          ...p,
-                          imageUrl: sel.url,
-                          libraryImageId: sel.libraryImageId ?? null,
-                          imageSource: sel.source,
-                        }))}
+                        onSelect={(sel) => {
+                          setItemForm(p => ({
+                            ...p,
+                            imageUrl: sel.url,
+                            libraryImageId: sel.libraryImageId ?? null,
+                            imageSource: sel.source,
+                          }));
+                          void persistImageIfEditing(sel.url, sel.libraryImageId ?? null, sel.source);
+                        }}
                       />
                     </div>
                     <div>
