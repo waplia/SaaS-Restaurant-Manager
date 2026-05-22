@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gt } from "drizzle-orm";
 import {
   db,
   usersTable,
@@ -8,6 +8,8 @@ import {
   staffBankAccountsTable,
   staffAdvancesTable,
   auditLogsTable,
+  tenantsTable,
+  subscriptionPlansTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
@@ -191,6 +193,41 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
 
   const [dup] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (dup) return void res.status(409).json({ error: "Email already in use" });
+
+  // Server-side plan limit enforcement (mirrors the check in users.ts so the
+  // mobile staff-invite flow can't bypass the limit by going through /staff).
+  // Counts active users in the inviter's tenant; super admins are exempt.
+  if (!req.user!.isSuperAdmin) {
+    const [inviterRow] = await db.select({ tenantId: usersTable.tenantId })
+      .from(usersTable).where(eq(usersTable.id, req.user!.sub));
+    const tenantIdForLimit = inviterRow?.tenantId ?? null;
+    if (tenantIdForLimit) {
+      const [tenant] = await db.select({ planId: tenantsTable.planId })
+        .from(tenantsTable).where(eq(tenantsTable.id, tenantIdForLimit));
+      if (tenant?.planId) {
+        const [plan] = await db.select({ name: subscriptionPlansTable.name, maxStaff: subscriptionPlansTable.maxStaff })
+          .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
+        if (plan && plan.maxStaff > 0) {
+          const existing = await db.select({ id: usersTable.id }).from(usersTable)
+            .where(and(eq(usersTable.tenantId, tenantIdForLimit), eq(usersTable.isActive, true)));
+          if (existing.length >= plan.maxStaff) {
+            const suggested = await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable)
+              .where(and(eq(subscriptionPlansTable.isActive, true), gt(subscriptionPlansTable.maxStaff, plan.maxStaff)))
+              .orderBy(subscriptionPlansTable.price).limit(1);
+            return void res.status(402).json({
+              code: "PLAN_LIMIT_REACHED",
+              error: `Your plan allows a maximum of ${plan.maxStaff} staff account(s). Upgrade to add more.`,
+              feature: "maxStaff",
+              currentPlan: plan.name,
+              currentLimit: plan.maxStaff,
+              currentUsage: existing.length,
+              suggestedPlan: suggested[0]?.name ?? null,
+            });
+          }
+        }
+      }
+    }
+  }
 
   // Accept a client-supplied temp password so the inviter UI (web /staff
   // page, mobile staff invite sheet) can show it to the admin once for

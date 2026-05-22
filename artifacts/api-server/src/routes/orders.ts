@@ -1590,7 +1590,10 @@ router.post("/restaurants/:restaurantId/orders/:id/split", idempotency(), async 
       }).where(and(
         eq(ordersTable.id, orderId),
         eq(ordersTable.restaurantId, restaurantId),
-        notInArray(ordersTable.status, ["completed", "cancelled"]),
+        // Allow paying a "completed" but still-unpaid order (e.g. the waiter
+        // closed the order and the guest is paying at the till afterwards).
+        // Only cancelled or already-paid orders are non-payable.
+        ne(ordersTable.status, "cancelled"),
         ne(ordersTable.paymentStatus, "paid"),
       )).returning();
       if (!u) throw new Error("ORDER_ALREADY_PAID");
@@ -1898,8 +1901,16 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
   const [order] = await db.select().from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
-  if (order.status === "completed" || order.status === "cancelled") {
-    return void res.status(400).json({ error: "Order is already completed or cancelled" });
+  // A "completed" order can still be unpaid (e.g. the waiter closed the order
+  // and the guest is settling at the till afterwards). Only block payment if
+  // the order is cancelled or already paid — those are the truly non-payable
+  // states. Concurrency is still guarded by the conditional UPDATE below
+  // (ne(paymentStatus, "paid")).
+  if (order.status === "cancelled") {
+    return void res.status(400).json({ error: "Order is cancelled and cannot be paid" });
+  }
+  if (order.paymentStatus === "paid") {
+    return void res.status(400).json({ error: "Order is already paid" });
   }
 
   // Room charge: post the order onto the guest's hotel folio instead of taking
@@ -1937,7 +1948,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
         }).where(and(
           eq(ordersTable.id, orderId),
           eq(ordersTable.restaurantId, restaurantId),
-          notInArray(ordersTable.status, ["completed", "cancelled"]),
+          // See main /pay handler — completed-but-unpaid orders remain payable.
+          ne(ordersTable.status, "cancelled"),
           ne(ordersTable.paymentStatus, "paid"),
         )).returning();
         if (!u) throw new Error("ORDER_ALREADY_PAID");
@@ -2123,7 +2135,10 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
       }).where(and(
         eq(ordersTable.id, orderId),
         eq(ordersTable.restaurantId, restaurantId),
-        notInArray(ordersTable.status, ["completed", "cancelled"]),
+        // Allow paying a "completed" but still-unpaid order (settle-after-close
+        // flow). Cancelled orders and already-paid orders stay non-payable;
+        // ne(paymentStatus, "paid") preserves the double-payment guard.
+        ne(ordersTable.status, "cancelled"),
         ne(ordersTable.paymentStatus, "paid"),
       )).returning();
       if (!u) throw new Error("ORDER_ALREADY_PAID");
