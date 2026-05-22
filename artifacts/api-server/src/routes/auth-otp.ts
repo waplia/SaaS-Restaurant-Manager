@@ -56,7 +56,10 @@ router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBod
     return;
   }
 
-  // Look up the user (silent fail to avoid leaking which identifiers exist).
+  // Look up the user. Per product decision, we trade off the small
+  // enumeration risk for a clear error so legitimate users with a typo
+  // (or a deleted account) don't sit forever waiting for an OTP that
+  // was never sent.
   let user: typeof usersTable.$inferSelect | undefined;
   if (channel === "email") {
     [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(identifier)));
@@ -66,21 +69,32 @@ router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBod
       .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
   }
 
-  // Always respond success-like to avoid enumeration. Only actually send if user exists.
-  if (user && user.isActive) {
-    const r = await sendStaffOtp({
-      channel,
-      identifier,
-      purpose: "login",
-      userId: user.id,
-      tenantId: user.tenantId,
-      restaurantId: user.restaurantId,
-      name: user.name,
+  if (!user) {
+    res.status(404).json({
+      error: channel === "email"
+        ? "No account found for this email. Please check the spelling or create a new account."
+        : "No account found for this mobile number. Please check it or create a new account.",
     });
-    res.json({ ok: true, channel });
     return;
   }
-  // Unknown user — still pretend a code was sent.
+  if (!user.isActive) {
+    res.status(403).json({ error: "This account has been disabled. Please contact support." });
+    return;
+  }
+
+  const r = await sendStaffOtp({
+    channel,
+    identifier,
+    purpose: "login",
+    userId: user.id,
+    tenantId: user.tenantId,
+    restaurantId: user.restaurantId,
+    name: user.name,
+  });
+  if (!r.ok) {
+    res.status(502).json({ error: r.error ?? "Could not send code. Please try again in a minute." });
+    return;
+  }
   res.json({ ok: true, channel });
 });
 
