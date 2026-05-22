@@ -423,7 +423,7 @@ function BranchSection() {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 interface BranchRow { id: number; name: string; address: string | null; phone: string | null; isMain: boolean; isActive: boolean; }
 
