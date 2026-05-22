@@ -77,6 +77,34 @@ export const restaurantsTable = pgTable("restaurants", {
     allowCashDeclaration: true,
     syncToPayroll: true,
   }),
+  // ── Restaurant profile extensions (Task #600) ───────────────────────
+  // Statutory IDs printed on receipts and required by Indian tax law.
+  gstin: text("gstin"),
+  fssaiLicense: text("fssai_license"),
+  // Business profile fields surfaced on web + mobile Restaurant Profile.
+  website: text("website"),
+  socialLinks: jsonb("social_links").$type<{
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    youtube?: string;
+    zomato?: string;
+    swiggy?: string;
+  }>().notNull().default({}),
+  // ── UPI QR on bills (Task #600) ─────────────────────────────────────
+  // When `upiQrEnabled` is true and `upiId` is set, customer bills render
+  // a "Scan to Pay" QR encoding upi://pay?pa=…&pn=…&am=…&tn=…&tr=…
+  // KOTs never include the QR regardless of these flags.
+  upiQrEnabled: boolean("upi_qr_enabled").notNull().default(false),
+  upiId: text("upi_id"),
+  upiMerchantName: text("upi_merchant_name"),
+  upiQrLabel: text("upi_qr_label").default("Scan to Pay"),
+  showUpiQrOnBill: boolean("show_upi_qr_on_bill").notNull().default(true),
+  showUpiIdOnBill: boolean("show_upi_id_on_bill").notNull().default(false),
+  // Format template used to build the txn note. Supports {orderNumber}.
+  upiPaymentNoteFormat: text("upi_payment_note_format").default("Bill {orderNumber}"),
+  // all | unpaid | upi_online_only | hide_after_paid
+  upiPrintQrMode: text("upi_print_qr_mode").notNull().default("all"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -90,6 +118,13 @@ export const branchesTable = pgTable("branches", {
   isMain: boolean("is_main").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   cloudKitchenEnabled: boolean("cloud_kitchen_enabled").notNull().default(false),
+  // Per-outlet UPI override (Task #600). When `upiId` is set on a branch the
+  // bill resolver uses it instead of the restaurant-level UPI; merchant name
+  // falls back the same way. `upiQrEnabled` here is tri-state: null = inherit
+  // the restaurant-level toggle, true/false = explicit per-outlet override.
+  upiId: text("upi_id"),
+  upiMerchantName: text("upi_merchant_name"),
+  upiQrEnabled: boolean("upi_qr_enabled"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

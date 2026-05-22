@@ -80,7 +80,15 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (!existing) return void res.status(404).json({ error: "Not found" });
   if (!assertRestaurantAccess(req, existing.tenantId)) return void res.status(403).json({ error: "Access denied" });
 
-  const { name, description, phone, email, address, city, country, timezone, currency, taxRate, serviceCharge, logoUrl, coverImageUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron, acceptedPaymentMethods, enableVoiceOrdering, enableOnlinePayment, googleReviewLink } = req.body;
+  const {
+    name, description, phone, email, address, city, country, timezone, currency, taxRate, serviceCharge,
+    logoUrl, coverImageUrl, openingTime, closingTime, autoReorderEnabled, autoReorderCron,
+    acceptedPaymentMethods, enableVoiceOrdering, enableOnlinePayment, googleReviewLink,
+    // Task #600 — restaurant profile + UPI QR fields
+    gstin, fssaiLicense, website, socialLinks,
+    upiQrEnabled, upiId, upiMerchantName, upiQrLabel,
+    showUpiQrOnBill, showUpiIdOnBill, upiPaymentNoteFormat, upiPrintQrMode,
+  } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
@@ -105,6 +113,23 @@ router.patch("/restaurants/:id", requireRole("owner", "super_admin"), async (req
   if (enableVoiceOrdering !== undefined) updates.enableVoiceOrdering = !!enableVoiceOrdering;
   if (enableOnlinePayment !== undefined) updates.enableOnlinePayment = !!enableOnlinePayment;
   if (googleReviewLink !== undefined) updates.googleReviewLink = googleReviewLink === "" ? null : googleReviewLink;
+  // Task #600 — restaurant profile + UPI QR fields
+  if (gstin !== undefined) updates.gstin = gstin === "" ? null : String(gstin).trim();
+  if (fssaiLicense !== undefined) updates.fssaiLicense = fssaiLicense === "" ? null : String(fssaiLicense).trim();
+  if (website !== undefined) updates.website = website === "" ? null : String(website).trim();
+  if (socialLinks !== undefined && socialLinks && typeof socialLinks === "object") {
+    updates.socialLinks = socialLinks;
+  }
+  if (upiQrEnabled !== undefined) updates.upiQrEnabled = !!upiQrEnabled;
+  if (upiId !== undefined) updates.upiId = upiId === "" ? null : String(upiId).trim();
+  if (upiMerchantName !== undefined) updates.upiMerchantName = upiMerchantName === "" ? null : String(upiMerchantName).trim();
+  if (upiQrLabel !== undefined) updates.upiQrLabel = upiQrLabel === "" ? null : String(upiQrLabel);
+  if (showUpiQrOnBill !== undefined) updates.showUpiQrOnBill = !!showUpiQrOnBill;
+  if (showUpiIdOnBill !== undefined) updates.showUpiIdOnBill = !!showUpiIdOnBill;
+  if (upiPaymentNoteFormat !== undefined) updates.upiPaymentNoteFormat = upiPaymentNoteFormat === "" ? null : String(upiPaymentNoteFormat);
+  if (upiPrintQrMode !== undefined && ["all", "unpaid", "upi_online_only", "hide_after_paid"].includes(String(upiPrintQrMode))) {
+    updates.upiPrintQrMode = String(upiPrintQrMode);
+  }
   const [updated] = await db.update(restaurantsTable)
     .set(updates)
     .where(eq(restaurantsTable.id, Number(req.params.id)))
@@ -156,8 +181,13 @@ router.post("/restaurants/:restaurantId/branches", requireRole("owner", "manager
     }
   }
 
-  const { name, address, phone, isMain } = req.body;
-  const [branch] = await db.insert(branchesTable).values({ restaurantId, name, address, phone, isMain }).returning();
+  const { name, address, phone, isMain, upiId, upiMerchantName, upiQrEnabled } = req.body;
+  const [branch] = await db.insert(branchesTable).values({
+    restaurantId, name, address, phone, isMain,
+    upiId: upiId ? String(upiId).trim() : null,
+    upiMerchantName: upiMerchantName ? String(upiMerchantName).trim() : null,
+    upiQrEnabled: typeof upiQrEnabled === "boolean" ? upiQrEnabled : null,
+  }).returning();
   await recordAuditLog({
     req, module: "restaurants", action: "branch.create", entity: "branch",
     entityId: branch.id, restaurantId, targetRestaurantId: restaurantId,
@@ -175,12 +205,16 @@ router.patch("/restaurants/:restaurantId/branches/:branchId", requireRole("owner
   const [existing] = await db.select().from(branchesTable).where(and(eq(branchesTable.id, branchId), eq(branchesTable.restaurantId, restaurantId)));
   if (!existing) return void res.status(404).json({ error: "Branch not found" });
 
-  const { name, address, phone, isMain } = req.body ?? {};
+  const { name, address, phone, isMain, upiId, upiMerchantName, upiQrEnabled } = req.body ?? {};
   const updates: Record<string, unknown> = {};
   if (typeof name === "string" && name.trim()) updates.name = name.trim();
   if (address !== undefined) updates.address = address === "" ? null : String(address);
   if (phone !== undefined) updates.phone = phone === "" ? null : String(phone);
   if (typeof isMain === "boolean") updates.isMain = isMain;
+  // Task #600 — per-outlet UPI overrides; null clears so we inherit restaurant defaults.
+  if (upiId !== undefined) updates.upiId = upiId === "" || upiId === null ? null : String(upiId).trim();
+  if (upiMerchantName !== undefined) updates.upiMerchantName = upiMerchantName === "" || upiMerchantName === null ? null : String(upiMerchantName).trim();
+  if (upiQrEnabled === null || typeof upiQrEnabled === "boolean") updates.upiQrEnabled = upiQrEnabled;
 
   const [updated] = await db.update(branchesTable).set(updates).where(eq(branchesTable.id, branchId)).returning();
   await recordAuditLog({

@@ -236,6 +236,53 @@ async function renderReceipt(device, payload) {
     }
   }
 
+  // UPI Scan-to-Pay QR on customer bill (Task #600).
+  // KOTs go through `renderKot` below which deliberately never includes a QR.
+  // Mode gating mirrors the web printOrder.ts logic so receipts stay
+  // consistent regardless of where they're rendered from.
+  if (r.upiQrEnabled && r.upiId && r.showUpiQrOnBill !== false) {
+    const mode = String(r.upiPrintQrMode || "all");
+    const isPaid = !!payload.payment && String(payload.payment.method || "").toLowerCase() !== "pending";
+    const isUpiPaid = isPaid && /upi/i.test(String(payload.payment?.method || ""));
+    let show = true;
+    if (mode === "unpaid" || mode === "hide_after_paid") show = !isPaid;
+    else if (mode === "upi_online_only") show = isUpiPaid;
+
+    if (show) {
+      const note = String(r.upiPaymentNoteFormat || "Bill {orderNumber}").replace(
+        "{orderNumber}",
+        String(payload.orderNumber || ""),
+      );
+      const params = new URLSearchParams({
+        pa: String(r.upiId),
+        pn: String(r.upiMerchantName || r.name || "Restaurant"),
+        am: Number(grand).toFixed(2),
+        cu: "INR",
+        tn: note,
+        tr: String(payload.orderNumber || ""),
+      });
+      const upiUrl = `upi://pay?${params.toString()}`;
+      device.newLine();
+      device.drawLine();
+      device.alignCenter();
+      device.bold(true);
+      device.println(String(r.upiQrLabel || "Scan to Pay"));
+      device.bold(false);
+      // `printQR` is provided by node-thermal-printer for both EPSON and STAR
+      // command sets; cellSize 6 keeps the symbol readable on 58mm rolls.
+      if (typeof device.printQR === "function") {
+        device.printQR(upiUrl, { cellSize: 6, correction: "M", model: 2 });
+      }
+      device.println(`Amount: ${money(grand)}`);
+      if (r.showUpiIdOnBill) device.println(String(r.upiId));
+    }
+  }
+
+  if (r.fssaiLicense) {
+    device.alignCenter();
+    device.println(`FSSAI Lic: ${r.fssaiLicense}`);
+  }
+
   device.newLine();
   device.alignCenter();
   device.println(payload.footer || "Thank you for dining with us!");

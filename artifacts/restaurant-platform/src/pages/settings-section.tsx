@@ -1,3 +1,4 @@
+import React from "react";
 import { useParams, Redirect } from "wouter";
 import WhatsAppSection from "./settings-whatsapp";
 import WebPushSection from "./settings-web-push";
@@ -30,6 +31,7 @@ const SECTION_PLAN_FEATURE: Partial<Record<SectionKey, string>> = {
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
   "currencies", "taxes", "loyalty", "discounts", "whatsapp", "web-push",
+  "upi-qr",
 ]);
 
 const ALLOWED_KEYS = new Set<SectionKey>([
@@ -39,7 +41,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "downloads", "menu-image", "delivery", "allergens", "kot",
   "cancellation-reasons", "order-settings", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "whatsapp", "web-push",
-  "direct-ordering",
+  "direct-ordering", "upi-qr",
 ]);
 
 function findMeta(key: SectionKey) {
@@ -139,6 +141,7 @@ function renderSection(key: SectionKey) {
     case "discounts": return <DiscountsSection />;
     case "whatsapp": return <WhatsAppSection />;
     case "web-push": return <WebPushSection />;
+    case "upi-qr": return <UpiQrSection />;
     default: return null;
   }
 }
@@ -3026,5 +3029,129 @@ function _UnusedLegacyLoyaltySection() {
         </>
       )}
     </SettingForm>
+  );
+}
+
+/* ---------------- UPI QR on Bills (Task #600) ----------------
+ *
+ * Controls the customer-bill "Scan to Pay" QR. Distinct from the Manual UPI
+ * online-checkout configuration in `payment` (that one is for the QR menu
+ * online flow). This section only governs the QR rendered on printed bills.
+ * KOTs never include the QR regardless of these flags. */
+function UpiQrSection() {
+  const { data: r } = useRestaurantInfo();
+  const update = useUpdateRestaurant();
+  const [draft, setDraft] = React.useState<{
+    upiQrEnabled: boolean; upiId: string; upiMerchantName: string; upiQrLabel: string;
+    showUpiQrOnBill: boolean; showUpiIdOnBill: boolean;
+    upiPaymentNoteFormat: string; upiPrintQrMode: string;
+  } | null>(null);
+  const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!r) return;
+    const rr = r as Record<string, unknown>;
+    setDraft({
+      upiQrEnabled: !!rr.upiQrEnabled,
+      upiId: (rr.upiId as string) ?? "",
+      upiMerchantName: (rr.upiMerchantName as string) ?? (r.name ?? ""),
+      upiQrLabel: (rr.upiQrLabel as string) ?? "Scan to Pay",
+      showUpiQrOnBill: rr.showUpiQrOnBill !== false,
+      showUpiIdOnBill: !!rr.showUpiIdOnBill,
+      upiPaymentNoteFormat: (rr.upiPaymentNoteFormat as string) ?? "Bill {orderNumber}",
+      upiPrintQrMode: (rr.upiPrintQrMode as string) ?? "all",
+    });
+  }, [r]);
+
+  // Live QR preview — rendered from a sample upi:// link so admins can verify
+  // the VPA scans cleanly before committing.
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!draft?.upiId) { setQrDataUrl(null); return; }
+      try {
+        const QR = (await import("qrcode")).default;
+        const note = (draft.upiPaymentNoteFormat || "Bill {orderNumber}").replace("{orderNumber}", "PREVIEW");
+        const url = `upi://pay?pa=${encodeURIComponent(draft.upiId)}&pn=${encodeURIComponent(draft.upiMerchantName || "Restaurant")}&am=100.00&cu=INR&tn=${encodeURIComponent(note)}&tr=PREVIEW`;
+        const dataUrl = await QR.toDataURL(url, { width: 220, margin: 1 });
+        if (alive) setQrDataUrl(dataUrl);
+      } catch { if (alive) setQrDataUrl(null); }
+    })();
+    return () => { alive = false; };
+  }, [draft?.upiId, draft?.upiMerchantName, draft?.upiPaymentNoteFormat]);
+
+  if (!draft) return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
+  const save = () => update.mutate(draft);
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <p className="text-sm text-muted-foreground">
+        Show a “Scan to Pay” UPI QR on customer bills (thermal 58/80&nbsp;mm, A5, browser). The QR encodes
+        the bill amount and reference so the customer's app pre-fills correctly. <strong>Never printed on KOTs.</strong>
+      </p>
+
+      <Toggle
+        label="Enable UPI QR on bills"
+        hint="Master switch for the printed Scan-to-Pay QR. Per-outlet overrides can be set under Outlets &amp; Branches."
+        checked={draft.upiQrEnabled}
+        onChange={v => setDraft(d => d && ({ ...d, upiQrEnabled: v }))}
+      />
+
+      <Row>
+        <Field label="UPI ID / VPA" hint="Your merchant UPI handle, e.g. restaurant@oksbi">
+          <Input value={draft.upiId} onChange={e => setDraft(d => d && ({ ...d, upiId: e.target.value.trim() }))} placeholder="restaurant@bank" />
+        </Field>
+        <Field label="Merchant name on QR" hint="Shown inside the customer's UPI app">
+          <Input value={draft.upiMerchantName} onChange={e => setDraft(d => d && ({ ...d, upiMerchantName: e.target.value }))} />
+        </Field>
+      </Row>
+
+      <Row>
+        <Field label="Bill label above QR">
+          <Input value={draft.upiQrLabel} onChange={e => setDraft(d => d && ({ ...d, upiQrLabel: e.target.value }))} placeholder="Scan to Pay" />
+        </Field>
+        <Field label="Payment note format" hint="Available token: {orderNumber}">
+          <Input value={draft.upiPaymentNoteFormat} onChange={e => setDraft(d => d && ({ ...d, upiPaymentNoteFormat: e.target.value }))} placeholder="Bill {orderNumber}" />
+        </Field>
+      </Row>
+
+      <Toggle
+        label="Print UPI ID (VPA) below the QR"
+        hint="Lets customers copy/paste the UPI handle if the QR scan fails."
+        checked={draft.showUpiIdOnBill}
+        onChange={v => setDraft(d => d && ({ ...d, showUpiIdOnBill: v }))}
+      />
+
+      <Field label="When to print the QR" hint="Controls when the Scan-to-Pay block appears on the printed bill.">
+        <Select
+          value={draft.upiPrintQrMode}
+          onChange={v => setDraft(d => d && ({ ...d, upiPrintQrMode: v }))}
+          options={[
+            { value: "all", label: "Always print on every bill" },
+            { value: "unpaid", label: "Only on unpaid bills" },
+            { value: "upi_online_only", label: "Only when customer chose Pay Online → UPI" },
+            { value: "hide_after_paid", label: "Hide once the bill is fully paid" },
+          ]}
+        />
+      </Field>
+
+      <div className="border border-border rounded-lg p-4 bg-card flex items-center gap-4">
+        <div className="flex-shrink-0 w-[200px] h-[200px] bg-white border border-border rounded flex items-center justify-center">
+          {qrDataUrl
+            ? <img src={qrDataUrl} alt="UPI QR preview" className="w-[180px] h-[180px]" />
+            : <span className="text-xs text-muted-foreground text-center px-2">Enter a UPI ID to preview the QR.</span>}
+        </div>
+        <div className="text-sm space-y-1.5">
+          <p className="font-semibold">{draft.upiQrLabel || "Scan to Pay"}</p>
+          {draft.showUpiIdOnBill && draft.upiId && <p className="text-xs text-muted-foreground font-mono">{draft.upiId}</p>}
+          <p className="text-xs text-muted-foreground">Sample amount ₹100.00 · ref PREVIEW</p>
+          <p className="text-[11px] text-muted-foreground pt-2">QR generated locally — never sent to a third party.</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={update.isPending}>{update.isPending ? "Saving…" : "Save changes"}</Button>
+      </div>
+    </div>
   );
 }

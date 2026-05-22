@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform,
+  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform, Image, Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -343,6 +343,16 @@ export default function OwnerDashboard() {
       ]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshAll} tintColor={colors.primary} />}
     >
+      {/* Restaurant + outlet top card — parity with the web sidebar restaurant
+          card (Task #600). Tapping opens the Profile screen for full edits;
+          the outlet name reflects the same scope state used below. */}
+      <RestaurantTopCard
+        scopeOutletId={scopeOutletId}
+        canSwitch={canSwitchScope && hasMultipleOutlets}
+        outlets={tenantBranches}
+        onSelectOutlet={setScopeOutletId}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
@@ -774,3 +784,108 @@ const styles = StyleSheet.create({
   cardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
   cardTitle: { fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "uppercase", letterSpacing: 0.4 },
 });
+
+/** Restaurant + outlet top card for the owner home. Shows the restaurant
+ *  name & logo with the active outlet underneath, opens the Profile screen
+ *  on tap, and (for multi-outlet owners) reveals a quick-pick bottom sheet
+ *  for switching outlet without scrolling down to the scope pills. */
+function RestaurantTopCard({
+  scopeOutletId, canSwitch, outlets, onSelectOutlet,
+}: {
+  scopeOutletId: number | null;
+  canSwitch: boolean;
+  outlets: TenantBranch[];
+  onSelectOutlet: (id: number | null) => void;
+}) {
+  const colors = useColors();
+  const { restaurantId } = useAuth();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const restaurantQ = useQuery({
+    queryKey: ["restaurant-info", restaurantId],
+    queryFn: () => customFetch<{ id: number; name: string; logoUrl?: string | null; city?: string | null }>(
+      `/api/restaurants/${restaurantId}`,
+    ),
+    enabled: restaurantId != null,
+    staleTime: 5 * 60 * 1000,
+  });
+  const r = restaurantQ.data;
+  const activeOutlet = scopeOutletId == null ? null : outlets.find(o => o.id === scopeOutletId);
+  const outletLabel = !outlets.length
+    ? (r?.city || "")
+    : activeOutlet ? activeOutlet.name : `All outlets · ${outlets.length}`;
+
+  return (
+    <View style={[
+      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 },
+    ]}>
+      <Pressable
+        onPress={() => router.push("/(owner)/profile" as never)}
+        style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, opacity: pressed ? 0.7 : 1 })}
+      >
+        {r?.logoUrl
+          ? <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.muted, overflow: "hidden" }}>
+              {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
+              <Image source={{ uri: r.logoUrl }} style={{ width: "100%", height: "100%" }} />
+            </View>
+          : <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>{(r?.name ?? "R")[0]?.toUpperCase()}</Text>
+            </View>
+        }
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: colors.foreground }}>
+            {r?.name ?? "Restaurant"}
+          </Text>
+          <Text numberOfLines={1} style={{ fontFamily: "Inter_500Medium", fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+            {outletLabel || "Tap to edit profile"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
+      {canSwitch && (
+        <Pressable
+          onPress={() => setPickerOpen(true)}
+          hitSlop={8}
+          style={({ pressed }) => ({ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 4 })}
+          accessibilityLabel="Switch outlet"
+        >
+          <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
+          <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: colors.primary }}>Switch</Text>
+        </Pressable>
+      )}
+
+      {pickerOpen && (
+        <Modal transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+          <Pressable onPress={() => setPickerOpen(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 8, paddingBottom: 28, paddingHorizontal: 12 }}>
+              <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 8 }} />
+              <Text style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: colors.foreground, paddingHorizontal: 4, paddingBottom: 8 }}>Switch outlet</Text>
+              <Pressable
+                onPress={() => { onSelectOutlet(null); setPickerOpen(false); }}
+                style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: scopeOutletId == null ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
+              >
+                <Ionicons name="layers-outline" size={18} color={scopeOutletId == null ? colors.primary : colors.mutedForeground} />
+                <Text style={{ flex: 1, fontFamily: "Inter_600SemiBold", color: scopeOutletId == null ? colors.primary : colors.foreground }}>All outlets</Text>
+                {scopeOutletId == null && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+              </Pressable>
+              {outlets.map(o => (
+                <Pressable
+                  key={o.id}
+                  onPress={() => { onSelectOutlet(o.id); setPickerOpen(false); }}
+                  style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: scopeOutletId === o.id ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Ionicons name="business-outline" size={18} color={scopeOutletId === o.id ? colors.primary : colors.mutedForeground} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: "Inter_600SemiBold", color: scopeOutletId === o.id ? colors.primary : colors.foreground }}>{o.name}</Text>
+                    {o.city ? <Text numberOfLines={1} style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{o.city}</Text> : null}
+                  </View>
+                  {scopeOutletId === o.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                </Pressable>
+              ))}
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+    </View>
+  );
+}

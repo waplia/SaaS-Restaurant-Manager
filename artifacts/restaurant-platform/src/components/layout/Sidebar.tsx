@@ -8,7 +8,9 @@ import {
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
   Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket, Globe,
 } from "lucide-react";
-import { useWaiterRequests } from "@/lib/hooks";
+import { useWaiterRequests, useRestaurantInfo } from "@/lib/hooks";
+import { useBranchContext } from "@/lib/branch";
+import { BranchSwitcher } from "./BranchSwitcher";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
@@ -864,25 +866,151 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </Link>
         )}
 
-        <div className="mt-2 pt-3 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
-              {initials}
+        <SidebarRestaurantCard initials={initials} onNavigate={onNavigate} />
+      </div>
+    </aside>
+  );
+}
+
+/** Footer card replacing the old user-name pill — surfaces the active
+ *  restaurant + outlet, links to View / Edit profile, and offers an inline
+ *  outlet switcher for owners who manage multiple outlets. Task #600. */
+function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onNavigate: () => void }) {
+  const { user, logout } = useAuth();
+  const { data: restaurant } = useRestaurantInfo();
+  const { branches, selectedBranchId, setSelectedBranchId, hasMultipleBranches } = useBranchContext();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const logoUrl = resolveImageUrl(restaurant?.logoUrl ?? null);
+  const restaurantName = restaurant?.name || "Restaurant";
+  const activeBranch = selectedBranchId == null
+    ? null
+    : branches.find(b => b.id === selectedBranchId) ?? null;
+  const outletLabel = !hasMultipleBranches
+    ? null
+    : activeBranch
+      ? activeBranch.name
+      : `All outlets · ${branches.length}`;
+
+  return (
+    <div ref={ref} className="mt-2 pt-3 border-t border-sidebar-border relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-sidebar-accent transition-colors"
+        data-testid="sidebar-restaurant-card"
+        aria-expanded={open}
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt="" className="w-8 h-8 rounded-md object-cover bg-card flex-shrink-0" />
+        ) : (
+          <div className="w-8 h-8 rounded-md bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+            {initials}
+          </div>
+        )}
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-sidebar-foreground font-semibold truncate text-sm">{restaurantName}</p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {outletLabel ?? (user?.name ? `${user.name}` : "")}
+          </p>
+        </div>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute left-3 right-3 bottom-full mb-2 z-50 rounded-lg border border-border bg-popover shadow-xl overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-border">
+            <p className="text-xs text-muted-foreground">Signed in as</p>
+            <p className="text-sm font-medium truncate">{user?.name ?? "—"}</p>
+            <p className="text-[11px] text-muted-foreground capitalize truncate">{user?.role ?? ""}</p>
+          </div>
+
+          {hasMultipleBranches && (
+            <div className="px-2 py-2 border-b border-border">
+              <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Active outlet</p>
+              <button
+                type="button"
+                onClick={() => { setSelectedBranchId(null); }}
+                className={cn(
+                  "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-muted/40",
+                  selectedBranchId == null && "bg-primary/10 text-primary",
+                )}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span className="flex-1 truncate">All outlets</span>
+                {selectedBranchId == null && <span className="text-[10px]">●</span>}
+              </button>
+              <div className="max-h-44 overflow-y-auto">
+                {branches.map(b => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => { setSelectedBranchId(b.id); }}
+                    className={cn(
+                      "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-muted/40",
+                      selectedBranchId === b.id && "bg-primary/10 text-primary",
+                    )}
+                  >
+                    <Building2 className="w-3.5 h-3.5 opacity-70" />
+                    <span className="flex-1 truncate">{b.name}</span>
+                    {selectedBranchId === b.id && <span className="text-[10px]">●</span>}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sidebar-foreground font-medium truncate text-sm">{user?.name ?? "—"}</p>
-              <p className="text-xs text-muted-foreground capitalize truncate">{user?.role ?? ""}</p>
-            </div>
+          )}
+
+          <div className="py-1">
+            <Link
+              href="/settings/general"
+              onClick={() => { setOpen(false); onNavigate(); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
+            >
+              <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+              View / Edit profile
+            </Link>
+            <Link
+              href="/settings/upi-qr"
+              onClick={() => { setOpen(false); onNavigate(); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+              UPI QR on bills
+            </Link>
+            <Link
+              href="/settings"
+              onClick={() => { setOpen(false); onNavigate(); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
+            >
+              <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+              Account &amp; Settings
+            </Link>
             <button
-              onClick={logout}
-              title="Sign out"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors flex-shrink-0"
+              type="button"
+              onClick={() => { setOpen(false); logout(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+              data-testid="sidebar-logout"
             >
               <LogOut className="w-3.5 h-3.5" />
+              Sign out
             </button>
           </div>
         </div>
-      </div>
-    </aside>
+      )}
+      {/* Tiny pill on the right for keyboard / power users who prefer the
+          original "log out fast" affordance. */}
+      <span className="sr-only">
+        <BranchSwitcher />
+      </span>
+    </div>
   );
 }

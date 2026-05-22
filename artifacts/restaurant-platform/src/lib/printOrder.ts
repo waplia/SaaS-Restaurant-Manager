@@ -1,4 +1,8 @@
-export type PrintSize = "thermal-80mm" | "a5";
+export type PrintSize = "thermal-58mm" | "thermal-80mm" | "a5";
+
+/** Modes for when the Scan-to-Pay UPI QR block is included on the bill.
+ *  Mirrors `restaurants.upi_print_qr_mode`. KOTs NEVER print the QR. */
+export type UpiPrintQrMode = "all" | "unpaid" | "upi_online_only" | "hide_after_paid";
 
 export interface PrintModifier {
   name: string;
@@ -33,6 +37,19 @@ export interface PrintRestaurant {
   address?: string | null;
   phone?: string | null;
   gstin?: string | null;
+  fssaiLicense?: string | null;
+  // ── UPI QR on bills (Task #600) ────────────────────────────────────
+  // Effective values after the outlet→restaurant fallback. The caller is
+  // responsible for resolving any per-branch overrides before invoking
+  // printOrder so the print layer stays presentation-only.
+  upiQrEnabled?: boolean | null;
+  upiId?: string | null;
+  upiMerchantName?: string | null;
+  upiQrLabel?: string | null;
+  showUpiQrOnBill?: boolean | null;
+  showUpiIdOnBill?: boolean | null;
+  upiPaymentNoteFormat?: string | null;
+  upiPrintQrMode?: UpiPrintQrMode | null;
 }
 
 export interface PrintPayment {
@@ -42,7 +59,13 @@ export interface PrintPayment {
 }
 
 export interface PrintOrderArgs {
+  /** Bill paper size. Thermal sizes mirror the physical paper width; A5 is
+   *  used for A5 sheet printers and as the cleanest browser fallback. */
   size: PrintSize;
+  /** Optional pre-computed UPI QR PNG data URL. When set the print layer
+   *  embeds it as-is. Built by `printOrder()` when not provided so existing
+   *  call sites continue to work without changes. */
+  upiQrDataUrl?: string | null;
   documentTitle?: string;
   orderNumber: string;
   createdAt?: string | Date;
@@ -117,7 +140,15 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
     footer,
   } = args;
 
-  const isThermal = size === "thermal-80mm";
+  const isThermal58 = size === "thermal-58mm";
+  const isThermal80 = size === "thermal-80mm";
+  const isThermal = isThermal58 || isThermal80;
+  const paperWidth = isThermal58 ? "58mm" : "80mm";
+  // 58mm rolls are physically narrower — drop a couple of CSS units so the
+  // grand-total and item lines don't wrap on cheap consumer hardware.
+  const thermalBodyFont = isThermal58 ? 11 : 12;
+  const thermalBrandFont = isThermal58 ? 14 : 16;
+  const thermalGrandFont = isThermal58 ? 13 : 14;
   const displayTotal = splitTotal ?? totalAmount;
   const change = payment?.tendered != null
     ? Math.max(0, payment.tendered - displayTotal)
@@ -274,33 +305,82 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
         ${headerMeta ? `<div class="meta-row">${headerMeta}</div>` : ""}
       </div>`;
 
-  const footerHtml = `<div class="footer center">${escapeHtml(footer ?? "Thank you for dining with us!")}</div>`;
+  // ── UPI Scan-to-Pay block (Task #600) ──────────────────────────────
+  // Mode resolution is intentionally permissive — the caller (POS / order
+  // drawer) is the source of truth for whether the bill is paid and the
+  // payment method, but we still gate purely-decorative rendering here so
+  // the same `printOrder()` call can be reused from anywhere without each
+  // call site re-implementing the rules.
+  const upiMode: UpiPrintQrMode = (restaurant?.upiPrintQrMode ?? "all") as UpiPrintQrMode;
+  const isPaid = payment != null && payment.method !== "pending";
+  const isUpiPaid = isPaid && /upi/i.test(payment?.method ?? "");
+  let showQrByMode = true;
+  if (upiMode === "unpaid") showQrByMode = !isPaid;
+  else if (upiMode === "hide_after_paid") showQrByMode = !isPaid;
+  else if (upiMode === "upi_online_only") showQrByMode = isUpiPaid;
+  const wantsUpiBlock =
+    !!restaurant?.upiQrEnabled &&
+    restaurant?.showUpiQrOnBill !== false &&
+    !!restaurant?.upiId &&
+    !!args.upiQrDataUrl &&
+    showQrByMode;
+  const upiBlock = wantsUpiBlock
+    ? (isThermal
+        ? `
+          <div class="sep"></div>
+          <div class="upi center">
+            <div class="bold">${escapeHtml(restaurant?.upiQrLabel || "Scan to Pay")}</div>
+            <img src="${escapeHtml(args.upiQrDataUrl!)}" class="qr" alt="UPI QR"/>
+            ${restaurant?.showUpiIdOnBill ? `<div class="sub mono">${escapeHtml(restaurant?.upiId || "")}</div>` : ""}
+            <div class="sub">Amount: ${money(displayTotal)}</div>
+          </div>`
+        : `
+          <div class="upi">
+            <div class="upi-inner">
+              <img src="${escapeHtml(args.upiQrDataUrl!)}" class="qr" alt="UPI QR"/>
+              <div>
+                <div class="upi-label">${escapeHtml(restaurant?.upiQrLabel || "Scan to Pay")}</div>
+                <div class="upi-amount">${money(displayTotal)}</div>
+                ${restaurant?.showUpiIdOnBill ? `<div class="upi-vpa">${escapeHtml(restaurant?.upiId || "")}</div>` : ""}
+                <div class="upi-hint">Any UPI app · GPay · PhonePe · Paytm</div>
+              </div>
+            </div>
+          </div>`)
+    : "";
+
+  const fssaiLine = restaurant?.fssaiLicense
+    ? `<div class="footer center sub">FSSAI Lic: ${escapeHtml(restaurant.fssaiLicense)}</div>`
+    : "";
+  const footerHtml = `<div class="footer center">${escapeHtml(footer ?? "Thank you for dining with us!")}</div>${fssaiLine}`;
 
   const css = isThermal
     ? `
-      @page { size: 80mm auto; margin: 0; }
+      @page { size: ${paperWidth} auto; margin: 0; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { background: #fff; color: #000; }
-      body { font-family: 'Courier New', ui-monospace, monospace; font-size: 12px; width: 80mm; padding: 6mm 4mm; }
+      body { font-family: 'Courier New', ui-monospace, monospace; font-size: ${thermalBodyFont}px; width: ${paperWidth}; padding: 4mm 3mm; }
       .center { text-align: center; }
       .bold { font-weight: 700; }
+      .mono { font-family: 'Courier New', ui-monospace, monospace; }
       .sep { border-top: 1px dashed #555; margin: 6px 0; }
       .row { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; }
       .num { font-variant-numeric: tabular-nums; font-family: 'Courier New', ui-monospace, monospace; white-space: nowrap; }
-      .header .logo { max-width: 60mm; max-height: 22mm; object-fit: contain; margin-bottom: 4px; }
-      .brand { font-size: 16px; font-weight: 700; }
-      .doctype { font-size: 12px; margin-top: 2px; letter-spacing: .04em; text-transform: uppercase; }
-      .sub { font-size: 11px; color: #333; }
+      .header .logo { max-width: ${isThermal58 ? "44mm" : "60mm"}; max-height: ${isThermal58 ? "16mm" : "22mm"}; object-fit: contain; margin-bottom: 4px; }
+      .brand { font-size: ${thermalBrandFont}px; font-weight: 700; }
+      .doctype { font-size: ${thermalBodyFont}px; margin-top: 2px; letter-spacing: .04em; text-transform: uppercase; }
+      .sub { font-size: ${thermalBodyFont - 1}px; color: #333; }
       .meta { margin: 2px 0; }
-      .col-head { font-size: 11px; font-weight: 700; }
+      .col-head { font-size: ${thermalBodyFont - 1}px; font-weight: 700; }
       .item .iname { flex: 1; }
-      .mod { display: flex; justify-content: space-between; font-size: 11px; color: #333; padding-left: 8px; }
-      .notes { font-size: 11px; color: #555; padding-left: 8px; font-style: italic; }
+      .mod { display: flex; justify-content: space-between; font-size: ${thermalBodyFont - 1}px; color: #333; padding-left: 8px; }
+      .notes { font-size: ${thermalBodyFont - 1}px; color: #555; padding-left: 8px; font-style: italic; }
       .totals { margin-top: 4px; }
-      .grand { font-size: 14px; font-weight: 700; }
+      .grand { font-size: ${thermalGrandFont}px; font-weight: 700; }
       .payment { margin-top: 4px; }
-      .footer { margin-top: 8px; font-size: 11px; }
-      @media print { body { width: 80mm; } }
+      .upi { margin-top: 6px; }
+      .upi .qr { width: ${isThermal58 ? "40mm" : "50mm"}; height: ${isThermal58 ? "40mm" : "50mm"}; margin: 4px auto; display: block; image-rendering: pixelated; }
+      .footer { margin-top: 8px; font-size: ${thermalBodyFont - 1}px; }
+      @media print { body { width: ${paperWidth}; } }
     `
     : `
       @page { size: A5; margin: 10mm; }
@@ -333,6 +413,13 @@ function buildOrderPrintHTML(args: PrintOrderArgs): string {
       .totals .grand { font-size: 13pt; font-weight: 700; padding-top: 4px; }
       .payment { margin-top: 14px; padding: 8px 10px; border: 1px solid #e5e5e5; border-radius: 4px; }
       .payment .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 10pt; }
+      .upi { margin-top: 14px; padding: 10px; border: 1px dashed #999; border-radius: 6px; background: #fafafa; }
+      .upi .upi-inner { display: flex; align-items: center; gap: 14px; }
+      .upi .qr { width: 38mm; height: 38mm; background: #fff; padding: 2px; }
+      .upi .upi-label { font-size: 12pt; font-weight: 700; }
+      .upi .upi-amount { font-size: 11pt; color: #444; margin-top: 2px; }
+      .upi .upi-vpa { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 10pt; margin-top: 4px; color: #555; }
+      .upi .upi-hint { font-size: 9pt; color: #888; margin-top: 4px; }
       .footer { margin-top: 24px; font-size: 9pt; color: #666; border-top: 1px dashed #ccc; padding-top: 8px; }
       @media print { .brand-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     `;
@@ -349,6 +436,7 @@ ${headerHtml}
 ${itemsBlock}
 ${totalsBlock}
 ${paymentBlock}
+${upiBlock}
 ${footerHtml}
 <script>window.addEventListener('load', function(){ setTimeout(function(){ window.focus(); window.print(); }, 250); });</script>
 </body>
@@ -382,32 +470,83 @@ export function isDesktopPrintBridgeAvailable(): boolean {
   return getBridge() !== null;
 }
 
-export function printOrder(args: PrintOrderArgs): void {
-  const bridge = getBridge();
-  // Only thermal jobs go through the native bridge — A5/A4 stays in the
-  // browser since those use a regular OS printer dialog anyway.
-  if (bridge && args.size === "thermal-80mm") {
-    bridge.print!({ template: "receipt", payload: args }).then((r) => {
-      if (!r?.ok) {
-        // Fall back to the browser path if the bridge couldn't print, so
-        // the cashier still gets a receipt out instead of losing the job.
-        // eslint-disable-next-line no-console
-        console.warn("[printOrder] desktop bridge failed, using browser fallback:", r?.error);
-        openBrowserPrint(args);
-      }
-    }).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn("[printOrder] desktop bridge threw, using browser fallback:", err);
-      openBrowserPrint(args);
+/** Build the UPI deep-link string honoring the configured payment-note format.
+ *  Exported for tests and the desktop bridge fallback. */
+export function buildUpiPaymentUrl(opts: {
+  upiId: string;
+  merchantName?: string | null;
+  amount: number;
+  orderNumber: string;
+  noteFormat?: string | null;
+}): string {
+  const note = (opts.noteFormat || "Bill {orderNumber}").replace("{orderNumber}", opts.orderNumber);
+  const amt = (Number.isFinite(opts.amount) ? opts.amount : 0).toFixed(2);
+  const params = new URLSearchParams({
+    pa: opts.upiId,
+    pn: opts.merchantName || "Restaurant",
+    am: amt,
+    cu: "INR",
+    tn: note,
+    tr: opts.orderNumber,
+  });
+  return `upi://pay?${params.toString()}`;
+}
+
+/** Generate a PNG data URL for the bill UPI QR. Returns null when the
+ *  restaurant has no UPI ID configured, when QR is disabled, or when the
+ *  `qrcode` lib isn't bundled in the host (e.g. SSR). */
+export async function maybeBuildBillUpiQr(args: PrintOrderArgs): Promise<string | null> {
+  const r = args.restaurant;
+  if (!r?.upiQrEnabled || !r.upiId || r.showUpiQrOnBill === false) return null;
+  try {
+    const QR = (await import("qrcode")).default;
+    const url = buildUpiPaymentUrl({
+      upiId: r.upiId,
+      merchantName: r.upiMerchantName,
+      amount: args.splitTotal ?? args.totalAmount,
+      orderNumber: args.orderNumber,
+      noteFormat: r.upiPaymentNoteFormat,
     });
-    return;
+    return await QR.toDataURL(url, { width: 320, margin: 1, errorCorrectionLevel: "M" });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[printOrder] QR generation failed; printing bill without QR:", err);
+    return null;
   }
-  openBrowserPrint(args);
+}
+
+export function printOrder(args: PrintOrderArgs): void {
+  // Pre-compute the UPI QR (if applicable) so the print HTML can embed it
+  // synchronously — the popup window can't safely await an async import once
+  // it's opened. We deliberately fire-and-forget here; existing callers do
+  // not await this function.
+  void (async () => {
+    const qr = args.upiQrDataUrl ?? (await maybeBuildBillUpiQr(args));
+    const enriched: PrintOrderArgs = { ...args, upiQrDataUrl: qr };
+    const bridge = getBridge();
+    const goesToBridge = bridge && (enriched.size === "thermal-58mm" || enriched.size === "thermal-80mm");
+    if (goesToBridge) {
+      try {
+        const r = await bridge!.print!({ template: "receipt", payload: enriched });
+        if (!r?.ok) {
+          // eslint-disable-next-line no-console
+          console.warn("[printOrder] desktop bridge failed, using browser fallback:", r?.error);
+          openBrowserPrint(enriched);
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[printOrder] desktop bridge threw, using browser fallback:", err);
+        openBrowserPrint(enriched);
+      }
+      return;
+    }
+    openBrowserPrint(enriched);
+  })();
 }
 
 function openBrowserPrint(args: PrintOrderArgs): void {
   const html = buildOrderPrintHTML(args);
-  const isThermal = args.size === "thermal-80mm";
+  const isThermal = args.size === "thermal-58mm" || args.size === "thermal-80mm";
   const features = isThermal ? "width=380,height=720" : "width=720,height=900";
   const w = window.open("", "_blank", features);
   if (!w) return;

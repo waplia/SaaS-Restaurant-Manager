@@ -19,7 +19,7 @@ export type SectionKey =
   | "reservation" | "about-us" | "customer-site" | "receipt" | "printer"
   | "downloads" | "menu-image" | "delivery" | "allergens" | "kot"
   | "cancellation-reasons" | "order-settings" | "order-capacity" | "refund-reasons" | "direct-ordering"
-  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "web-push" | "token-display"
+  | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "web-push" | "token-display" | "upi-qr"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
   | "accounting" | "account" | "sessions" | "customer-app";
 
@@ -91,6 +91,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     label: "Payments",
     items: [
       { key: "payment", label: "Payment Gateway", icon: CreditCard, ownerOnly: true },
+      { key: "upi-qr", label: "UPI QR on Bills", icon: CreditCard, ownerOnly: true },
       { key: "accounting", label: "Accounting", icon: Calculator, href: "/settings/accounting" },
       { key: "billing", label: "Billing", icon: BadgeDollarSign, ownerOnly: true },
       { key: "subscription", label: "Subscription & Plan", icon: BadgeDollarSign, href: "/settings/subscription" },
