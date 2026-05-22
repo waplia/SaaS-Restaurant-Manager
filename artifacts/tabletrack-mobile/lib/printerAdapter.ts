@@ -1,25 +1,31 @@
 /**
- * Thin wrapper around native Bluetooth / USB thermal-printer modules.
+ * Thin wrapper around native Bluetooth / USB thermal-printer modules with a
+ * built-in **system print** fallback (AirPrint on iOS / Android Print
+ * Service) so the printer flow works in Expo Go and in any build that
+ * doesn't link the optional ESC/POS native modules.
  *
- * The TableTrack mobile bundle does **not** ship a native printer module by
- * default — that would force every release to include a config plugin and
- * rebuild via EAS. Instead, this adapter probes for the most common community
- * modules at runtime (e.g. `react-native-bluetooth-escpos-printer`,
- * `react-native-thermal-receipt-printer-image-qr`, `react-native-tscbluetooth`)
- * and degrades gracefully when nothing is installed.
+ * Tiers, in order of preference per connection type:
+ *   1. Native ESC/POS modules (`react-native-bluetooth-escpos-printer`,
+ *      `react-native-thermal-receipt-printer-image-qr`,
+ *      `react-native-usb-printer`) — required for *raw* Bluetooth/USB
+ *      thermal printing. Only present in custom dev builds.
+ *   2. `expo-print` system print — works in Expo Go on iOS & Android.
+ *      Routes the receipt through AirPrint / Android Print Service. Pairs
+ *      with any networked or AirPrint receipt printer, no native build
+ *      required.
  *
- * In the no-native-module case:
- *   - `scanBluetooth` / `scanUsb` return an empty list with `available: false`
- *     so the UI can show clear "Install native build" guidance instead of a
- *     mysterious crash.
- *   - `print` still resolves successfully but records "no-native" in the print
- *     job result so the server-side queue marks the attempt as failed (and
- *     retry/fallback to the desktop bridge can take over).
+ * The adapter probes for native modules at runtime and degrades gracefully:
+ *   - `scanBluetooth` / `scanUsb` return `available: false` when the native
+ *     module is missing, so the UI can offer the system-print fallback
+ *     instead of crashing.
+ *   - `print({ type: "system" }, base64)` renders the ESC/POS payload as
+ *     plain text inside an HTML page and hands it to the OS print sheet.
  *
  * Callers should NEVER `import` a native module directly — go through this
- * adapter so the Expo dev/web bundle keeps working.
+ * adapter so the Expo Go / web bundle keeps working.
  */
 import { Platform } from "react-native";
+import * as Print from "expo-print";
 
 export interface ScannedPrinter {
   id: string;
@@ -34,12 +40,19 @@ export interface ScannedPrinter {
 export interface AdapterCapability {
   bluetooth: boolean;
   usb: boolean;
+  /** AirPrint (iOS) / Android Print Service. Always available on device builds. */
+  system: boolean;
   reason?: string;
 }
 
 export interface PrintResult {
   ok: boolean;
   error?: string;
+  /** Transport actually used. May differ from requested when native modules
+   *  are unavailable and the adapter falls back to the OS print sheet. */
+  transportUsed?: "bluetooth" | "usb" | "lan" | "browser" | "system";
+  /** True when the requested transport was unavailable and we fell back. */
+  fellBack?: boolean;
 }
 
 type NativeBtModule = {
@@ -97,14 +110,22 @@ function getUsb(): NativeUsbModule | null {
 
 export function getCapabilities(): AdapterCapability {
   if (Platform.OS === "web") {
-    return { bluetooth: false, usb: false, reason: "Native printing is unavailable in the web preview. Use the desktop print bridge or install the mobile build." };
+    return { bluetooth: false, usb: false, system: false, reason: "Native printing is unavailable in the web preview. Use the desktop print bridge or install the mobile build." };
   }
   const bt = !!getBt();
   const usb = Platform.OS === "android" && !!getUsb();
+  // expo-print is bundled with Expo Go and every dev/standalone build, so
+  // system print is always available on iOS & Android device runtimes.
+  const system = true;
   if (!bt && !usb) {
-    return { bluetooth: false, usb: false, reason: "Native printer module not installed in this build. Settings will save, but live scanning/printing requires a rebuild with the printer plugin." };
+    return {
+      bluetooth: false,
+      usb: false,
+      system,
+      reason: "Bluetooth/USB thermal printer modules aren't linked in this build (Expo Go can't access them). You can still print via AirPrint / Android Print to any networked or AirPrint-enabled receipt printer.",
+    };
   }
-  return { bluetooth: bt, usb };
+  return { bluetooth: bt, usb, system };
 }
 
 export async function scanBluetooth(): Promise<{ available: boolean; devices: ScannedPrinter[]; error?: string }> {
@@ -150,35 +171,110 @@ export async function scanUsb(): Promise<{ available: boolean; devices: ScannedP
 }
 
 /**
+ * Strip ESC/POS control bytes from a base64 payload so it can be displayed
+ * as a plain-text receipt inside an HTML page for AirPrint / Android Print.
+ * Keeps printable ASCII + newlines; drops ESC (0x1B), GS (0x1D), and other
+ * control sequences (including the 1-2 bytes that typically follow them).
+ */
+function escposToPlainText(base64: string): string {
+  let bin: string;
+  try {
+    // atob exists in Hermes / RN runtime; fall back to Buffer if not.
+    bin = typeof atob === "function" ? atob(base64) : Buffer.from(base64, "base64").toString("binary");
+  } catch { return ""; }
+  let out = "";
+  for (let i = 0; i < bin.length; i++) {
+    const c = bin.charCodeAt(i);
+    if (c === 0x1B || c === 0x1D) {
+      // Skip ESC/GS plus one parameter byte (most commands are 2-3 bytes;
+      // this is a pragmatic best-effort, not a full ESC/POS parser).
+      i += 1;
+      continue;
+    }
+    if (c === 0x0A) { out += "\n"; continue; }
+    if (c >= 0x20 && c < 0x7F) out += bin[i];
+  }
+  return out.trim();
+}
+
+async function systemPrint(base64Payload: string, deviceName?: string): Promise<PrintResult> {
+  try {
+    const text = escposToPlainText(base64Payload) || "TableTrack receipt";
+    const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = `<!doctype html><html><head><meta charset="utf-8"/><style>
+      @page { margin: 8mm; }
+      body { font-family: -apple-system, "Helvetica Neue", monospace; font-size: 12pt; color: #000; }
+      .header { text-align: center; font-weight: 700; margin-bottom: 8px; }
+      pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: "Menlo", "Courier New", monospace; font-size: 11pt; }
+    </style></head><body>
+      <div class="header">TableTrack${deviceName ? " · " + deviceName : ""}</div>
+      <pre>${escaped}</pre>
+    </body></html>`;
+    await Print.printAsync({ html });
+    return { ok: true, transportUsed: "system" };
+  } catch (err) {
+    const msg = (err as Error).message || "";
+    // User cancelled the system print sheet — treat as non-error.
+    if (/cancel/i.test(msg)) return { ok: false, error: "Print cancelled" };
+    return { ok: false, error: msg };
+  }
+}
+
+/**
  * Send a pre-rendered ESC/POS payload to a printer. `base64Payload` is the
  * output of `EscPosBuilder.base64()`.
+ *
+ * For `type: "system"` (or when native modules are missing on bluetooth/usb),
+ * the payload is converted to plain text and routed through the OS print
+ * sheet (AirPrint / Android Print Service).
  */
 export async function print(
-  connection: { type: "bluetooth" | "usb" | "lan" | "browser"; address?: string; vendorId?: string; productId?: string; host?: string; port?: number },
+  connection: { type: "bluetooth" | "usb" | "lan" | "browser" | "system"; address?: string; vendorId?: string; productId?: string; host?: string; port?: number; deviceName?: string },
   base64Payload: string,
 ): Promise<PrintResult> {
+  if (connection.type === "system") {
+    if (Platform.OS === "web") return { ok: false, error: "System print is unavailable on web" };
+    return systemPrint(base64Payload, connection.deviceName);
+  }
   if (connection.type === "bluetooth") {
     const bt = getBt();
-    if (!bt) return { ok: false, error: "Bluetooth printer module not installed in this build" };
+    if (!bt) {
+      // Expo Go can't link the native Bluetooth ESC/POS module — fall back
+      // to AirPrint / Android Print so the user still gets a printed page.
+      // Mark fellBack so callers can show "printed via system print" instead
+      // of falsely reporting the Bluetooth transport as healthy.
+      if (Platform.OS !== "web") {
+        const r = await systemPrint(base64Payload, connection.deviceName);
+        return { ...r, fellBack: r.ok };
+      }
+      return { ok: false, error: "Bluetooth printer module not installed in this build" };
+    }
     if (!connection.address) return { ok: false, error: "Bluetooth address missing" };
     try {
       if (bt.connect) await bt.connect(connection.address);
       if (!bt.printRaw) return { ok: false, error: "Native module does not expose printRaw" };
       await bt.printRaw(base64Payload);
-      return { ok: true };
+      return { ok: true, transportUsed: "bluetooth" };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }
   }
   if (connection.type === "usb") {
     const usb = getUsb();
-    if (!usb || !usb.printRaw) return { ok: false, error: "USB printer module not installed in this build" };
+    if (!usb || !usb.printRaw) {
+      // Same fallback for USB: route through the OS print sheet.
+      if (Platform.OS !== "web") {
+        const r = await systemPrint(base64Payload, connection.deviceName);
+        return { ...r, fellBack: r.ok };
+      }
+      return { ok: false, error: "USB printer module not installed in this build" };
+    }
     if (!connection.vendorId || !connection.productId) {
       return { ok: false, error: "USB vendor/product id missing" };
     }
     try {
       await usb.printRaw(base64Payload, connection.vendorId, connection.productId);
-      return { ok: true };
+      return { ok: true, transportUsed: "usb" };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }

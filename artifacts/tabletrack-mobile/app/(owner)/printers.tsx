@@ -15,7 +15,7 @@ import { AppSwitch } from "@/components/ui/AppSwitch";
 import { AppEmptyState } from "@/components/ui/AppEmptyState";
 import { getCapabilities, scanBluetooth, scanUsb, print, type ScannedPrinter } from "@/lib/printerAdapter";
 
-type PrinterConnection = "bluetooth" | "usb" | "lan" | "browser";
+type PrinterConnection = "bluetooth" | "usb" | "lan" | "browser" | "system";
 type PrinterRole = "bill" | "kot" | "token" | "bar" | "kitchen";
 type PrinterPaperSize = "58mm" | "80mm";
 
@@ -55,7 +55,11 @@ const ROLE_LABEL: Record<PrinterRole, string> = {
   bill: "Bill", kot: "KOT", token: "Token", bar: "Bar", kitchen: "Kitchen",
 };
 const CONN_LABEL: Record<PrinterConnection, string> = {
-  bluetooth: "Bluetooth", usb: "USB / OTG", lan: "LAN", browser: "Browser",
+  system: "AirPrint / Android Print (works in Expo Go)",
+  bluetooth: "Bluetooth (requires dev build)",
+  usb: "USB / OTG (requires dev build)",
+  lan: "LAN",
+  browser: "Browser",
 };
 
 export default function PrintersScreen() {
@@ -220,6 +224,7 @@ function iconForConn(c: PrinterConnection): React.ComponentProps<typeof Ionicons
   if (c === "bluetooth") return "bluetooth";
   if (c === "usb") return "hardware-chip-outline";
   if (c === "lan") return "wifi";
+  if (c === "system") return "print";
   return "globe-outline";
 }
 
@@ -244,7 +249,9 @@ interface WizardState {
   isDefault: boolean;
 }
 const INITIAL: WizardState = {
-  step: 0, connectionType: "bluetooth", selectedDevice: null,
+  // Default to "system" so Expo Go users get a path that actually works
+  // out of the box (AirPrint / Android Print Service).
+  step: 0, connectionType: "system", selectedDevice: null,
   manualAddress: "", manualVid: "", manualPid: "", manualHost: "", manualPort: "9100",
   paperSize: "80mm", role: "bill", name: "", copies: 1,
   cutPaper: true, cashDrawerKick: false, buzzer: false, autoPrint: false, isDefault: false,
@@ -288,7 +295,9 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
             ? { vendorId: w.selectedDevice?.vendorId ?? w.manualVid, productId: w.selectedDevice?.productId ?? w.manualPid, deviceName: w.selectedDevice?.name }
             : w.connectionType === "lan"
               ? { host: w.manualHost, port: Number(w.manualPort) || 9100 }
-              : {};
+              : w.connectionType === "system"
+                ? { deviceName: w.name || "System printer" }
+                : {};
       return customFetch<PrinterRecord>(`/api/restaurants/${restaurantId}/printers`, {
         method: "POST",
         body: JSON.stringify({
@@ -326,6 +335,9 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
     if (w.connectionType === "lan") {
       return { host: w.manualHost, port: Number(w.manualPort) || 9100 };
     }
+    if (w.connectionType === "system") {
+      return { deviceName: w.name || "System printer" };
+    }
     return {};
   }, [w]);
 
@@ -333,7 +345,7 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
   // "TableTrack test print\n\n\n" + cut. Kept here so the wizard doesn't
   // need a saved printer to run a real test against the selected hardware.
   const TEST_PAYLOAD_B64 = "G0AKVGFibGVUcmFjayB0ZXN0IHByaW50CgoKHWlB";
-  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; fellBack?: boolean; transportUsed?: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const runTest = useCallback(async () => {
     setTesting(true); setTestResult(null);
@@ -346,6 +358,7 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
         productId: typeof conn.productId === "string" ? conn.productId : undefined,
         host: typeof conn.host === "string" ? conn.host : undefined,
         port: typeof conn.port === "number" ? conn.port : undefined,
+        deviceName: typeof conn.deviceName === "string" ? conn.deviceName : w.name || undefined,
       }, TEST_PAYLOAD_B64);
       setTestResult(r);
     } finally { setTesting(false); }
@@ -423,6 +436,13 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
                 LAN printing is handled by the desktop print bridge.
               </AppText>
             </>
+          ) : w.connectionType === "system" ? (
+            <AppCard padding={16} background={colors.infoSoft ?? colors.muted}>
+              <AppText variant="bodyMd" style={{ fontWeight: "600", marginBottom: 6 }}>No setup needed</AppText>
+              <AppText variant="label" style={{ color: colors.mutedForeground }}>
+                Tapping Test or Print will open the iOS / Android print sheet, where you can pick any AirPrint or Android Print-compatible printer on your network. Works in Expo Go — no dev build required.
+              </AppText>
+            </AppCard>
           ) : (
             <AppText variant="body">Browser printer uses the device's native print dialog.</AppText>
           )}
@@ -467,8 +487,17 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
           {testResult && (
             <AppCard padding={16} background={testResult.ok ? colors.card : colors.warningSoft}>
               <AppText variant="bodyMd">
-                {testResult.ok ? "Test print sent successfully." : "Test print failed."}
+                {testResult.ok
+                  ? testResult.fellBack
+                    ? "Printed via the system print sheet (AirPrint / Android Print)."
+                    : "Test print sent successfully."
+                  : "Test print failed."}
               </AppText>
+              {testResult.ok && testResult.fellBack && (
+                <AppText variant="label" style={{ color: colors.mutedForeground, marginTop: 4 }}>
+                  This build doesn't include the native Bluetooth/USB thermal module, so we routed the page through the OS print sheet. To print raw ESC/POS to your thermal printer, install a custom dev build.
+                </AppText>
+              )}
               {testResult.error && (
                 <AppText variant="label" style={{ color: colors.mutedForeground, marginTop: 4 }}>
                   {testResult.error}
@@ -622,6 +651,7 @@ function TestCenter({ printers, restaurantId, onClose }: { printers: PrinterReco
           address: String(p.connection?.address ?? ""),
           vendorId: String(p.connection?.vendorId ?? ""),
           productId: String(p.connection?.productId ?? ""),
+          deviceName: typeof p.connection?.deviceName === "string" ? p.connection.deviceName : p.name,
           host: String(p.connection?.host ?? ""),
           port: Number(p.connection?.port ?? 9100),
         },

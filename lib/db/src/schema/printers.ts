@@ -7,7 +7,7 @@ import { restaurantsTable, branchesTable } from "./restaurants";
 import { kitchensTable } from "./kitchens";
 import { ordersTable } from "./orders";
 
-export type PrinterConnection = "bluetooth" | "usb" | "lan" | "browser";
+export type PrinterConnection = "bluetooth" | "usb" | "lan" | "browser" | "system";
 export type PrinterRole = "bill" | "kot" | "token" | "bar" | "kitchen";
 export type PrinterPaperSize = "58mm" | "80mm";
 
@@ -119,7 +119,7 @@ export type Printer = typeof printersTable.$inferSelect;
 export type PrintJob = typeof printJobsTable.$inferSelect;
 
 export const PRINTER_ROLES: PrinterRole[] = ["bill", "kot", "token", "bar", "kitchen"];
-export const PRINTER_CONNECTIONS: PrinterConnection[] = ["bluetooth", "usb", "lan", "browser"];
+export const PRINTER_CONNECTIONS: PrinterConnection[] = ["bluetooth", "usb", "lan", "browser", "system"];
 export const PRINTER_PAPER_SIZES: PrinterPaperSize[] = ["58mm", "80mm"];
 export const PRINT_JOB_STATUSES: PrintJobStatus[] = [
   "queued", "printing", "printed", "failed", "retrying", "cancelled",
