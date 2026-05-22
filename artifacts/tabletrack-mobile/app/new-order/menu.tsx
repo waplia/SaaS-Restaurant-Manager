@@ -91,7 +91,7 @@ export default function NewOrderMenuScreen() {
     queryFn: () => listMenuCategories(restaurantId),
     staleTime: 5 * 60 * 1000,
   });
-  const categories = (Array.isArray(catsQ.data) ? catsQ.data : []) as MenuCategory[];
+  const allCategories = (Array.isArray(catsQ.data) ? catsQ.data : []) as MenuCategory[];
 
   // Pull all items once — keeps fast local filtering for search + filters.
   const itemsQ = useQuery({
@@ -100,6 +100,18 @@ export default function NewOrderMenuScreen() {
     staleTime: 60_000,
   });
   const allItems = (Array.isArray(itemsQ.data) ? itemsQ.data : []) as ExtendedMenuItem[];
+
+  // Only show categories that have at least one available item — hides empty
+  // categories from the chips row.
+  const categories = useMemo(() => {
+    const withItems = new Set<number>();
+    for (const it of allItems) {
+      if (it.isAvailable === false) continue;
+      const cid = (it as { categoryId?: number | null }).categoryId;
+      if (cid != null) withItems.add(cid);
+    }
+    return allCategories.filter((c) => withItems.has(c.id));
+  }, [allCategories, allItems]);
 
   // Restaurant settings for tax / service charge applied to cart totals.
   const settingsQ = useQuery({
