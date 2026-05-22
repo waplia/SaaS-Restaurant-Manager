@@ -15,7 +15,7 @@
     "release:linux": "electron-builder --linux AppImage --publish always"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "^38.0.0",
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
