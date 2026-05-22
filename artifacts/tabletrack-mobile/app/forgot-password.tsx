@@ -33,19 +33,29 @@ export default function ForgotPasswordScreen() {
 
   const identifierLabel = method === "phone" ? phone : email;
 
+  // Convert the PhoneInput's stored value ("91 9876543210") to E.164 form
+  // ("+919876543210") for the API.
+  function toE164(raw: string): string {
+    const p = parsePhone(raw, "IN");
+    const digits = p.national.replace(/\D+/g, "");
+    if (!digits) return raw.trim();
+    return `+${p.country.code.replace(/^\+/, "")}${digits}`;
+  }
+
   // Validate the phone using the shared country metadata (same source the
   // register / wallet flows use) so users get the right country-aware
-  // length check, country code prefix, and E.164 formatting.
+  // length check.
   function validatePhone(): string | null {
     const parsed = parsePhone(phone, "IN");
-    if (!parsed.country.iso || !parsed.national) {
+    const digits = parsed.national.replace(/\D+/g, "");
+    if (!parsed.country.iso || !digits) {
       return "Enter your mobile number.";
     }
     const expected = expectedNationalLength(parsed.country.iso);
-    if (expected > 0 && parsed.national.length !== expected) {
+    if (expected > 0 && expected < 15 && digits.length !== expected) {
       return `Enter a ${expected}-digit mobile number for ${parsed.country.name}.`;
     }
-    if (!parsed.e164) {
+    if (digits.length < 6) {
       return "Enter a valid mobile number.";
     }
     return null;
@@ -67,7 +77,7 @@ export default function ForgotPasswordScreen() {
         ? `${getApiBaseUrl()}/api/auth/forgot-password-phone`
         : `${getApiBaseUrl()}/api/auth/forgot-password`;
       const body = method === "phone"
-        ? { phone: parsePhone(phone, "IN").e164 || phone.trim() }
+        ? { phone: toE164(phone) }
         : { email: email.trim() };
       const r = await fetch(url, {
         method: "POST",
@@ -112,7 +122,7 @@ export default function ForgotPasswordScreen() {
         ? `${getApiBaseUrl()}/api/auth/reset-password-phone`
         : `${getApiBaseUrl()}/api/auth/reset-password`;
       const body = method === "phone"
-        ? { phone: parsePhone(phone, "IN").e164 || phone.trim(), code: code.trim(), newPassword: password }
+        ? { phone: toE164(phone), code: code.trim(), newPassword: password }
         : { email: email.trim().toLowerCase(), code: code.trim(), newPassword: password };
       const r = await fetch(url, {
         method: "POST",
