@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
-  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket, Globe,
+  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket, Globe, Printer,
 } from "lucide-react";
 import { useWaiterRequests, useRestaurantInfo } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
@@ -313,6 +313,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/marketplace/supplier-catalog", label: "Supplier Catalog", icon: Truck, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/marketplace/purchase-requests", label: "Bulk RFQs", icon: FileText, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/settings/devices", label: "Hardware & Devices", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
+      { kind: "link", href: "/settings/printers", label: "Printers (BT / USB / LAN)", icon: Printer, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
       { kind: "link", href: "/settings/terminals", label: "Card Terminals", icon: CreditCard, roles: ["owner", "manager", "cashier"], planGate: "card_terminal", badge: "premium" },
       { kind: "link", href: "/settings/token-display", label: "Token Display", icon: BellRing, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/kitchens", label: "Kitchen Stations", icon: ChefHat, roles: ["owner", "manager"] },

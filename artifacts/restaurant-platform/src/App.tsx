@@ -42,6 +42,7 @@ import SettingsSectionPage from "@/pages/settings-section";
 import SettingsAccountPage from "@/pages/settings-account";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
+import SettingsPrintersPage from "@/pages/settings-printers";
 import SettingsTerminalsPage from "@/pages/settings-terminals";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
 import SettingsOrderCapacityPage from "@/pages/settings-order-capacity";
@@ -477,6 +478,7 @@ function Router() {
       <Route path="/settings/subscription" component={() => <RoleProtectedRoute component={SubscriptionPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
+      <Route path="/settings/printers" component={() => <RoleProtectedRoute component={SettingsPrintersPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsTerminalsPage} feature="card_terminal" />} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/order-capacity" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsOrderCapacityPage} feature="ops_order_capacity" />} allow={["owner", "manager"]} />} />

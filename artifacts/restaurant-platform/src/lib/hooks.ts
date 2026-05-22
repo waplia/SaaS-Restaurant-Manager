@@ -430,6 +430,15 @@ export function useKitchens() {
   });
 }
 
+export function useRestaurantBranches() {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["restaurant-branches", RESTAURANT_ID],
+    queryFn: () => apiGet<Array<{ id: number; name: string }>>(`/restaurants/${RESTAURANT_ID}/branches`),
+    staleTime: 30000,
+  });
+}
+
 export function useCreateKitchen() {
   const RESTAURANT_ID = useRestaurantId();
   const qc = useQueryClient();
@@ -3742,6 +3751,193 @@ export function useDeviceHeartbeat() {
     },
   });
 }
+
+// ─── Printers (Task #599) ────────────────────────────────────────────────
+export type PrinterConnection = "bluetooth" | "usb" | "lan" | "browser";
+export type PrinterRole = "bill" | "kot" | "token" | "bar" | "kitchen";
+export type PrinterPaperSize = "58mm" | "80mm";
+export type PrintJobStatus = "queued" | "printing" | "printed" | "failed" | "retrying" | "cancelled";
+export type PrintJobType =
+  | "bill" | "kot" | "token" | "reprint_bill" | "reprint_kot"
+  | "cancelled_kot" | "modified_kot" | "test";
+
+export interface PrinterRecord {
+  id: number;
+  restaurantId: number;
+  branchId: number | null;
+  kitchenId: number | null;
+  name: string;
+  connectionType: PrinterConnection;
+  role: PrinterRole;
+  paperSize: PrinterPaperSize;
+  connection: Record<string, unknown>;
+  isDefault: boolean;
+  autoPrint: boolean;
+  enabled: boolean;
+  copies: number;
+  charactersPerLine: number;
+  feedLines: number;
+  cutPaper: boolean;
+  cashDrawerKick: boolean;
+  buzzer: boolean;
+  status: string;
+  lastTestAt: string | null;
+  lastTestError: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrintJobRecord {
+  id: number;
+  restaurantId: number;
+  branchId: number | null;
+  printerId: number | null;
+  printType: PrintJobType;
+  orderId: number | null;
+  invoiceNumber: string | null;
+  kotNumber: string | null;
+  kitchenId: number | null;
+  payload: Record<string, unknown>;
+  status: PrintJobStatus;
+  error: string | null;
+  retryCount: number;
+  maxRetries: number;
+  copies: number;
+  copiesPrinted: number;
+  dedupeKey: string | null;
+  requestedBy: number | null;
+  requestedByName: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  nextAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function usePrinters(filters?: { branchId?: number | null; role?: PrinterRole; connectionType?: PrinterConnection }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (filters?.branchId != null) params.set("branchId", String(filters.branchId));
+  if (filters?.role) params.set("role", filters.role);
+  if (filters?.connectionType) params.set("connectionType", filters.connectionType);
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return useQuery({
+    queryKey: ["printers", RESTAURANT_ID, filters ?? {}],
+    queryFn: () => apiGet<PrinterRecord[]>(`/restaurants/${RESTAURANT_ID}/printers${q}`),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCreatePrinter() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (data: Partial<PrinterRecord>) =>
+      apiPost<PrinterRecord>(`/restaurants/${RESTAURANT_ID}/printers`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["printers", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdatePrinter() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<PrinterRecord>) =>
+      apiPatch<PrinterRecord>(`/restaurants/${RESTAURANT_ID}/printers/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["printers", RESTAURANT_ID] }),
+  });
+}
+
+export function useDeletePrinter() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/printers/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["printers", RESTAURANT_ID] }),
+  });
+}
+
+export function useTestPrintPrinter() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<{ queued: boolean; jobId: number }>(`/restaurants/${RESTAURANT_ID}/printers/${id}/test-print`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["print-jobs", RESTAURANT_ID] }),
+  });
+}
+
+export function useSetDefaultPrinter() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<{ ok: boolean }>(`/restaurants/${RESTAURANT_ID}/printers/${id}/set-default`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["printers", RESTAURANT_ID] }),
+  });
+}
+
+export function usePrintJobs(filters?: { status?: PrintJobStatus; printerId?: number; printType?: PrintJobType; limit?: number }) {
+  const RESTAURANT_ID = useRestaurantId();
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.printerId != null) params.set("printerId", String(filters.printerId));
+  if (filters?.printType) params.set("printType", filters.printType);
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return useQuery({
+    queryKey: ["print-jobs", RESTAURANT_ID, filters ?? {}],
+    queryFn: () => apiGet<PrintJobRecord[]>(`/restaurants/${RESTAURANT_ID}/print-jobs${q}`),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useRetryPrintJob() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<PrintJobRecord>(`/restaurants/${RESTAURANT_ID}/print-jobs/${id}/retry`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["print-jobs", RESTAURANT_ID] }),
+  });
+}
+
+export function useCancelPrintJob() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<PrintJobRecord>(`/restaurants/${RESTAURANT_ID}/print-jobs/${id}/cancel`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["print-jobs", RESTAURANT_ID] }),
+  });
+}
+
+export function useReprintJob() {
+  const qc = useQueryClient();
+  const RESTAURANT_ID = useRestaurantId();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<PrintJobRecord>(`/restaurants/${RESTAURANT_ID}/print-jobs/${id}/reprint`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["print-jobs", RESTAURANT_ID] }),
+  });
+}
+
+export const PRINTER_ROLE_LABEL: Record<PrinterRole, string> = {
+  bill: "Bill / Invoice",
+  kot: "KOT (Kitchen)",
+  token: "Token",
+  bar: "Bar",
+  kitchen: "Kitchen (generic)",
+};
+
+export const PRINTER_CONNECTION_LABEL: Record<PrinterConnection, string> = {
+  bluetooth: "Bluetooth",
+  usb: "USB / OTG",
+  lan: "LAN (Ethernet/Wi-Fi)",
+  browser: "Browser dialog",
+};
 
 export function useEvents(params?: Record<string, unknown>) {
   const RESTAURANT_ID = useRestaurantId();

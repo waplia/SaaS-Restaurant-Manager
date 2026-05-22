@@ -47,6 +47,7 @@ export * from "./addons";
 export * from "./fintech";
 export * from "./documents";
 export * from "./devices";
+export * from "./printers";
 export * from "./health-scores";
 export * from "./tokens";
 export * from "./sop-training";

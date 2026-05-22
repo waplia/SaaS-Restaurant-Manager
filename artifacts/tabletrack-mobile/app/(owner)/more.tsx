@@ -42,6 +42,7 @@ const MODULES: ModuleDef[] = [
   { key: "coupons", label: "Coupons", desc: "Create, edit & delete discount codes", icon: "pricetag-outline", href: "/(owner)/coupons", group: "grow", feature: "discounts_promotions" },
   { key: "khana_ai", label: "Khana AI", desc: "AI tools & chat", icon: "sparkles-outline", href: "/(owner)/khana-ai", group: "grow", feature: "khana_ai_enabled" },
   { key: "outlets", label: "Outlets", desc: "Switch branch / compare", icon: "business-outline", href: "/(owner)/outlets", group: "system" },
+  { key: "printers", label: "Printers", desc: "Bluetooth / USB thermal printers", icon: "print-outline", href: "/(owner)/printers", group: "system" },
   { key: "notifications", label: "Notifications", desc: "All alerts in one place", icon: "notifications-outline", href: "/(owner)/notifications", group: "system" },
   { key: "support", label: "Support", desc: "Help & tickets", icon: "help-buoy-outline", href: "/(owner)/support", group: "system" },
   { key: "settings", label: "Settings", desc: "Profile, security, language", icon: "settings-outline", href: "/(owner)/settings", group: "system" },

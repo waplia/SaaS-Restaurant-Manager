@@ -354,25 +354,62 @@ function KdsView() {
     void advanceTicket(ticket);
   }, [advanceTicket]);
 
-  // Reprint mirrors the web KDS reprint button. The web KDS's reprint is also
-  // purely client-side (it opens the browser print dialog) — there is no
-  // server-side reprint endpoint today, and the task explicitly forbids
-  // adding one. On mobile there's no browser print dialog either, so the
-  // most useful thing we can do is show the cook which physical printer is
-  // configured for this station so they (or the host) can retrieve / re-run
-  // the paper ticket manually. We keep the wording honest so it doesn't
-  // imply the server queued a new job. A real reprint endpoint is tracked
-  // as a follow-up.
-  const reprintKot = useCallback((ticket: KdsTicket) => {
-    const printer = ticket.kitchen?.printerName;
+  // Queues a real KOT reprint through the print-jobs API. The server routes
+  // the job to the configured KOT printer for this station (or the default
+  // KOT printer if the station has none). Whichever device claims the job
+  // (mobile via printerAdapter, or the desktop print bridge) emits the paper
+  // ticket. We surface a toast immediately based on the queue response.
+  const reprintKot = useCallback(async (ticket: KdsTicket) => {
     const station = ticket.kitchen?.name ?? "this station";
-    if (printer && String(printer).trim()) {
-      showToast("success", `Reprint manually at ${printer} (${station})`);
-      Haptics.selectionAsync().catch(() => {});
-    } else {
-      showToast("error", `No printer configured for ${station}`);
+    try {
+      const items = (ticket.items ?? []).map((it) => ({
+        name: (it as { menuItemName?: string; name?: string }).menuItemName
+          ?? (it as { name?: string }).name
+          ?? "Item",
+        qty: it.quantity ?? 1,
+        modifiers: (it.modifiers ?? []).map((m) => `${m.quantity > 1 ? `${m.quantity}x ` : ""}${m.name}`),
+        notes: it.notes ?? undefined,
+      }));
+      const payload = {
+        type: "kot",
+        payload: {
+          paperSize: ticket.kitchen?.paperSize ?? "80mm",
+          kotNumber: String(ticket.id),
+          orderNumber: ticket.orderNumber ? String(ticket.orderNumber) : undefined,
+          tableLabel: ticket.tableNumber ?? undefined,
+          customerName: ticket.customerName ?? undefined,
+          orderType: ticket.orderType ?? undefined,
+          stationName: ticket.kitchen?.name,
+          marker: "new",
+          items,
+          printedAt: new Date().toISOString(),
+        },
+      };
+      const resp = await customFetch<{ id: number; status: string; error?: string }>(
+        `/api/restaurants/${restaurantId}/print-jobs`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            printType: "reprint_kot",
+            role: "kot",
+            kitchenId: ticket.kitchenId ?? null,
+            orderId: ticket.orderId ?? null,
+            kotNumber: String(ticket.id),
+            payload,
+            dedupeKey: `reprint-kot-${ticket.id}-${Date.now()}`,
+          }),
+        },
+      );
+      if (resp.status === "failed") {
+        showToast("error", resp.error || `No KOT printer configured for ${station}`);
+      } else {
+        showToast("success", `KOT reprint queued for ${station}`);
+        Haptics.selectionAsync().catch(() => {});
+      }
+    } catch (err) {
+      showToast("error", (err as Error).message || "Couldn't queue KOT reprint");
     }
-  }, [showToast]);
+  }, [restaurantId, showToast]);
 
   const autoAcceptedIds = useRef<Set<number>>(new Set());
   useEffect(() => {
