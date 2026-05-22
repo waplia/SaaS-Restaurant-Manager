@@ -197,31 +197,41 @@ export default function MenuScreen() {
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
           contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: isWeb ? 100 : 100 }}
         >
-          {filtered.map(item => (
-            <Pressable
-              key={item.id}
-              onPress={() => setEditing(item)}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: colors.card, borderColor: colors.border,
-                  opacity: pressed ? 0.85 : (item.isAvailable ? 1 : 0.6),
-                },
-              ]}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
-                <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-                  ₹{item.price ?? "0"}{item.categoryName ? ` · ${item.categoryName}` : ""}
-                </Text>
-              </View>
-              <Switch
-                value={item.isAvailable ?? true}
-                onValueChange={v => toggle.mutate({ id: item.id, isAvailable: v })}
-                trackColor={{ true: colors.primary, false: colors.border }}
-              />
-            </Pressable>
-          ))}
+          {filtered.map(item => {
+            const thumb = resolveImageUrl(item.imageUrl);
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setEditing(item)}
+                style={({ pressed }) => [
+                  styles.row,
+                  {
+                    backgroundColor: colors.card, borderColor: colors.border,
+                    opacity: pressed ? 0.85 : (item.isAvailable ? 1 : 0.6),
+                  },
+                ]}
+              >
+                {thumb ? (
+                  <Image source={{ uri: thumb }} style={styles.thumb} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.muted }]}>
+                    <Ionicons name="fast-food-outline" size={20} color={colors.mutedForeground} />
+                  </View>
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                    ₹{item.price ?? "0"}{item.categoryName ? ` · ${item.categoryName}` : ""}
+                  </Text>
+                </View>
+                <Switch
+                  value={item.isAvailable ?? true}
+                  onValueChange={v => toggle.mutate({ id: item.id, isAvailable: v })}
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                />
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -703,6 +713,8 @@ function MenuItemForm({
 const styles = StyleSheet.create({
   search: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, borderWidth: 1 },
+  thumb: { width: 44, height: 44, borderRadius: 8 },
+  thumbPlaceholder: { alignItems: "center", justifyContent: "center" },
   name: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },

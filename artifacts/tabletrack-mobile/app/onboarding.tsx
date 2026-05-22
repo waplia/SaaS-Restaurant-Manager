@@ -578,10 +578,7 @@ function CategoriesStep({ restaurantId, defaultMenuId, api, onChanged, onAdvance
 
 function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors, onMenuImportBusyChange }: StepProps) {
   const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
-  const [kitchens, setKitchens] = useState<{ id: number; name: string; isDefault?: boolean }[]>([]);
   const [items, setItems] = useState<{ id: number; name: string; price: string }[]>([]);
-  const [form, setForm] = useState({ categoryId: 0, kitchenId: 0, name: "", price: "", isVeg: true });
-  const [busy, setBusy] = useState(false);
 
   async function reloadItems() {
     try {
@@ -593,44 +590,14 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors, onMenuImpo
   useEffect(() => {
     void (async () => {
       try {
-        const [c, k, i] = await Promise.all([
+        const [c, i] = await Promise.all([
           api.get<{ id: number; name: string }[]>(`/restaurants/${restaurantId}/categories`),
-          api.get<{ id: number; name: string; isDefault?: boolean }[]>(`/restaurants/${restaurantId}/kitchens`),
           api.get<{ id: number; name: string; price: string }[]>(`/restaurants/${restaurantId}/items`),
         ]);
-        setCats(c); setKitchens(k); setItems(i);
-        const defKitchen = k.find(x => x.isDefault) ?? k[0];
-        setForm(f => ({
-          ...f,
-          categoryId: c[0]?.id ?? 0,
-          kitchenId: defKitchen?.id ?? 0,
-        }));
+        setCats(c); setItems(i);
       } catch {}
     })();
   }, [restaurantId]);
-
-  async function add() {
-    if (!form.categoryId || !form.kitchenId || !form.name.trim() || !form.price) {
-      Alert.alert("Required", "Pick a category, kitchen, name and price.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await api.post(`/restaurants/${restaurantId}/items`, {
-        categoryId: form.categoryId,
-        kitchenId: form.kitchenId,
-        name: form.name.trim(),
-        price: form.price,
-        isVeg: form.isVeg,
-      });
-      const fresh = await api.get<typeof items>(`/restaurants/${restaurantId}/items`);
-      setItems(fresh);
-      setForm({ ...form, name: "", price: "" });
-      await onChanged();
-    } catch (e) {
-      Alert.alert("Couldn't add", e instanceof Error ? e.message : "Try again");
-    } finally { setBusy(false); }
-  }
 
   if (cats.length === 0) {
     return (
@@ -658,53 +625,11 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors, onMenuImpo
         onBusyChange={onMenuImportBusyChange}
       />
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>or add manually</Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-      </View>
-
-      <FormField label="Category" colors={colors}>
-        <ChoiceRow
-          options={cats.map(c => ({ id: c.id, label: c.name }))}
-          selected={form.categoryId}
-          onSelect={(id) => setForm({ ...form, categoryId: id as number })}
-          colors={colors}
-        />
-      </FormField>
-      <FormField label="Kitchen" colors={colors}>
-        <ChoiceRow
-          options={kitchens.map(k => ({ id: k.id, label: k.name }))}
-          selected={form.kitchenId}
-          onSelect={(id) => setForm({ ...form, kitchenId: id as number })}
-          colors={colors}
-        />
-      </FormField>
-      <FormField label="Type" colors={colors}>
-        <ChoiceRow
-          options={[{ id: "veg", label: "Veg" }, { id: "nonveg", label: "Non-veg" }]}
-          selected={form.isVeg ? "veg" : "nonveg"}
-          onSelect={(id) => setForm({ ...form, isVeg: id === "veg" })}
-          colors={colors}
-        />
-      </FormField>
-      <FormField label="Item name" colors={colors}>
-        <BasicInput value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="Paneer Tikka" colors={colors} />
-      </FormField>
-      <FormField label="Price (₹)" colors={colors}>
-        <BasicInput value={form.price} onChangeText={(v) => setForm({ ...form, price: v })} placeholder="280" keyboardType="number-pad" colors={colors} />
-      </FormField>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <Pressable onPress={add} disabled={busy}
-          style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.primary, opacity: busy ? 0.5 : pressed ? 0.85 : 1, paddingHorizontal: 22 }]}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Add item</Text>}
+      {items.length > 0 && (
+        <Pressable onPress={onAdvance} style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}>
+          <Text style={styles.primaryBtnText}>Continue</Text>
         </Pressable>
-        {items.length > 0 && (
-          <Pressable onPress={onAdvance} style={({ pressed }) => [styles.ghostBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
-            <Text style={{ color: colors.foreground, fontSize: 14, fontFamily: "Inter_500Medium" }}>Continue</Text>
-          </Pressable>
-        )}
-      </View>
+      )}
     </View>
   );
 }
