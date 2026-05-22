@@ -33,7 +33,7 @@ export default function OwnerProfileScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: isWeb ? 67 + 16 : insets.top + 16, paddingBottom: isWeb ? 34 + 90 : insets.bottom + 90 },
+        { paddingTop: isWeb ? 67 + 16 : insets.top + 16, paddingBottom: isWeb ? 34 + 90 : insets.bottom + (Platform.OS === "android" ? 140 : 110) },
       ]}
     >
       <View style={styles.avatarSection}>

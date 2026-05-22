@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -9,6 +10,7 @@ import { ROLE_LABEL } from "@/lib/roles";
 
 export default function SettingsScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const isWeb = Platform.OS === "web";
 
@@ -36,7 +38,7 @@ export default function SettingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionHeader title="Settings" showBack />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: isWeb ? 100 : 100 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: isWeb ? 100 : insets.bottom + (Platform.OS === "android" ? 140 : 110) }}>
         <View style={styles.profile}>
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
             <Text style={styles.avatarText}>{(user?.name ?? "U")[0]?.toUpperCase()}</Text>
