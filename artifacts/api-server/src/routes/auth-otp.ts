@@ -28,6 +28,30 @@ import { sendByTemplateKey } from "../lib/emailSender";
 
 const router = Router();
 
+// Look up a user by phone with several common shape variants. Users
+// commonly type just the local digits ("9602374514") into the login form
+// while the DB stores the full E.164 ("+919602374514"). Try in order:
+//  1) exact match on digits-only normalisation (back-compat)
+//  2) digits-only suffix match (last 10 digits) — covers bare local input
+async function findUserByPhoneFlexible(raw: string) {
+  const normalized = normalizePhone(raw);
+  const digitsOnly = normalized.replace(/[^0-9]/g, "");
+  // Exact normalised match first (covers "+919602374514" or "919602374514").
+  let [u] = await db.select().from(usersTable)
+    .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
+  if (u) return u;
+  // Suffix match on the trailing significant digits. Use up to 10 digits
+  // to match standard mobile numbers globally; require at least 7 to avoid
+  // collisions on very short inputs.
+  if (digitsOnly.length >= 7) {
+    const suffix = digitsOnly.slice(-10);
+    const matches = await db.select().from(usersTable)
+      .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9]', '', 'g') LIKE ${"%" + suffix}`);
+    if (matches.length === 1) return matches[0];
+  }
+  return undefined;
+}
+
 const otpRequestLimit = rateLimit({ name: "auth.otp.request.ip", windowMs: 60 * 1000, max: 5 });
 const otpVerifyLimit = rateLimit({ name: "auth.otp.verify.ip", windowMs: 15 * 60 * 1000, max: 30 });
 const regStartLimit = rateLimit({ name: "auth.register.start.ip", windowMs: 60 * 60 * 1000, max: 10 });
@@ -64,9 +88,7 @@ router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBod
   if (channel === "email") {
     [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(identifier)));
   } else {
-    const normalized = normalizePhone(identifier);
-    [user] = await db.select().from(usersTable)
-      .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
+    user = await findUserByPhoneFlexible(identifier);
   }
 
   if (!user) {
@@ -113,9 +135,7 @@ router.post("/auth/verify-otp", otpVerifyLimit, validate({ body: VerifyOtpBody }
   if (channel === "email") {
     [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(identifier)));
   } else {
-    const normalized = normalizePhone(identifier);
-    [user] = await db.select().from(usersTable)
-      .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
+    user = await findUserByPhoneFlexible(identifier);
   }
   if (!user || !user.isActive) {
     res.status(401).json({ error: "Invalid code or account not found." });
