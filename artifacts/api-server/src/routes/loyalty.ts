@@ -8,6 +8,7 @@ import {
   loyaltyBirthdayGrantsTable, loyaltyReferralsTable,
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
+import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
   loadLoyalty2Config, isLoyaltyMechanicEnabled,
@@ -91,7 +92,7 @@ router.get("/restaurants/:restaurantId/loyalty/cashback/:customerId", async (req
   res.json({ wallet, transactions: txns });
 });
 
-router.post("/restaurants/:restaurantId/loyalty/cashback/:customerId", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/loyalty/cashback/:customerId", requireRole("owner", "manager", "super_admin"), requirePlanFeature("loyalty_program"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const customerId = Number(req.params.customerId);
   const { amount, type, reason } = req.body as { amount: number; type: "credit" | "redeem"; reason?: string };
@@ -108,7 +109,7 @@ router.post("/restaurants/:restaurantId/loyalty/cashback/:customerId", requireRo
 });
 
 // === Stamps ===
-router.post("/restaurants/:restaurantId/loyalty/stamps/:customerId", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/loyalty/stamps/:customerId", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("loyalty_program"), async (req, res) => {
   const { cardKey, qty } = req.body as { cardKey: string; qty?: number };
   if (!cardKey) return void res.status(400).json({ error: "cardKey required" });
   await manualAddStamp(Number(req.params.restaurantId), Number(req.params.customerId), cardKey, Math.max(1, Number(qty ?? 1)));
@@ -156,7 +157,7 @@ router.get("/restaurants/:restaurantId/loyalty/family/:customerId", async (req, 
   res.json(await getFamilyGroupForCustomer(Number(req.params.restaurantId), Number(req.params.customerId)) ?? { group: null, members: [] });
 });
 
-router.post("/restaurants/:restaurantId/loyalty/family/:customerId/add", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/loyalty/family/:customerId/add", requireRole("owner", "manager", "waiter", "super_admin"), requirePlanFeature("loyalty_program"), async (req, res) => {
   const cfg = await loadLoyalty2Config(Number(req.params.restaurantId));
   const result = await addFamilyMemberByPhone({
     restaurantId: Number(req.params.restaurantId),
@@ -169,7 +170,7 @@ router.post("/restaurants/:restaurantId/loyalty/family/:customerId/add", require
   res.json(result);
 });
 
-router.post("/restaurants/:restaurantId/loyalty/family/:customerId/remove", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/loyalty/family/:customerId/remove", requireRole("owner", "manager", "super_admin"), requirePlanFeature("loyalty_program"), async (req, res) => {
   await removeFamilyMember(Number(req.params.restaurantId), Number(req.body?.memberCustomerId));
   await logAudit({ restaurantId: Number(req.params.restaurantId), customerId: Number(req.params.customerId), action: "family_member_removed", payload: req.body });
   res.json({ ok: true });

@@ -2237,7 +2237,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
   res.json(updated);
 });
 
-router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
+router.get("/restaurants/:restaurantId/kitchen/tickets", requirePlanFeature("kitchen_display"), async (req, res) => {
   const { status, kitchenId } = req.query;
   const restaurantId = Number(req.params.restaurantId);
   const conditions: ReturnType<typeof eq>[] = [eq(kitchenTicketsTable.restaurantId, restaurantId)];
@@ -2333,7 +2333,7 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", async (req, res) => {
   res.json(enriched);
 });
 
-router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", idempotency(), async (req, res) => {
+router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePlanFeature("kitchen_display"), idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { status } = req.body;
   const now = new Date();
@@ -2587,7 +2587,7 @@ router.patch(
   },
 );
 
-router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "super_admin"), requirePlanFeature("kitchen_display"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const [existing] = await db.select().from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId)));
   if (!existing) return void res.status(404).json({ error: "Not found" });

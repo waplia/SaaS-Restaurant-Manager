@@ -1460,6 +1460,9 @@ router.post("/public/restaurants/:slug/reservations", async (req, res) => {
   const [restaurant] = await db.select({ id: restaurantsTable.id, name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
+  const featureOk = await checkRestaurantFeature(restaurant.id, "reservations");
+  if (!featureOk.ok) return void res.status(featureOk.status).json({ error: featureOk.error });
+
   const [reservation] = await db.insert(reservationsTable).values({
     restaurantId: restaurant.id,
     guestName: guestName.trim(),
