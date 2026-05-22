@@ -1305,6 +1305,24 @@ export default function PosPage() {
   const restaurantIdForVoice = useRestaurantId();
   const { data: allMenuItems = [] } = useMenuItems({});
 
+  // Hide categories that have no available items — keeps the POS category
+  // bar in sync with the diner-facing menu (which also hides empty cats).
+  const nonEmptyCategoryIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const it of allMenuItems as MenuItem[]) {
+      if (it.isAvailable && it.categoryId != null) ids.add(it.categoryId);
+    }
+    return ids;
+  }, [allMenuItems]);
+  const visibleCategories = (categories as MenuCategory[]).filter(c => nonEmptyCategoryIds.has(c.id));
+
+  // If the currently-selected category becomes empty/hidden, fall back to "All".
+  useEffect(() => {
+    if (selectedCat != null && !nonEmptyCategoryIds.has(selectedCat)) {
+      setSelectedCat(undefined);
+    }
+  }, [selectedCat, nonEmptyCategoryIds]);
+
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const voidOrder = useVoidOrder();
@@ -1816,7 +1834,7 @@ export default function PosPage() {
           <div className="border-b border-border flex-shrink-0 bg-background overflow-x-auto">
             <div className="flex gap-1.5 px-4 py-2 w-max min-w-full">
               <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)} className="flex-shrink-0 h-7 text-xs px-3">All</Button>
-              {(categories as MenuCategory[]).map(c => (
+              {visibleCategories.map(c => (
                 <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">
                   {c.name}
                 </Button>

@@ -31,6 +31,13 @@ export default function CustomerMenuScreen() {
     queryFn: () => listMenuCategories(restaurantId),
   });
 
+  // Load all items once to know which categories are non-empty (mirrors the
+  // diner-facing QR menu, which also hides categories with zero items).
+  const { data: allItems } = useQuery({
+    queryKey: getListMenuItemsQueryKey(restaurantId, {}),
+    queryFn: () => listMenuItems(restaurantId, {}),
+  });
+
   const menuParams = selectedCategoryId ? { categoryId: selectedCategoryId } : {};
   const { data: menuItems, isLoading } = useQuery({
     queryKey: getListMenuItemsQueryKey(restaurantId, menuParams),
@@ -38,14 +45,22 @@ export default function CustomerMenuScreen() {
     enabled: selectedCategoryId !== null,
   });
 
-  const categoryList = (Array.isArray(categories) ? categories : []) as MenuCategory[];
+  const allItemsList = (Array.isArray(allItems) ? allItems : []) as MenuItem[];
+  const nonEmptyCatIds = new Set<number>();
+  for (const it of allItemsList) {
+    if (it.isAvailable !== false && it.categoryId != null) nonEmptyCatIds.add(it.categoryId);
+  }
+  const categoryList = ((Array.isArray(categories) ? categories : []) as MenuCategory[])
+    .filter((c) => nonEmptyCatIds.has(c.id));
   const itemList = (Array.isArray(menuItems) ? menuItems : []) as MenuItem[];
 
+  const visibleCatIdsKey = categoryList.map((c) => c.id).join(",");
   useEffect(() => {
-    if (categoryList.length > 0 && selectedCategoryId === null) {
+    if (categoryList.length === 0) return;
+    if (selectedCategoryId === null || !categoryList.some((c) => c.id === selectedCategoryId)) {
       setSelectedCategoryId(categoryList[0].id);
     }
-  }, [categoryList.length]);
+  }, [visibleCatIdsKey, selectedCategoryId]);
 
   const getQty = (menuItemId: number) => cart.items.find((i) => i.menuItemId === menuItemId)?.quantity ?? 0;
 
