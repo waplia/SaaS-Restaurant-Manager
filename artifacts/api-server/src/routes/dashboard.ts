@@ -10,15 +10,45 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
 
+// Restaurant local "start of today" — defaults to IST (the schema default
+// for restaurants.timezone is Asia/Kolkata, the scheduler and forecasts
+// also assume IST). Server clock is UTC, so `new Date().setHours(0,0,0,0)`
+// would treat anything before 05:30 IST as already "tomorrow" and zero
+// out today's sales for the first ~5.5h of every Indian morning.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+function istStartOfToday(): Date {
+  const istNow = new Date(Date.now() + IST_OFFSET_MS);
+  istNow.setUTCHours(0, 0, 0, 0);
+  return new Date(istNow.getTime() - IST_OFFSET_MS);
+}
+// IST wall-clock Y/M/D for an instant (server clock is UTC, so the usual
+// Date.getFullYear/getMonth/getDate would return UTC components and slip a
+// day around midnight IST).
+function istParts(d: Date): { y: number; m: number; d: number } {
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  return { y: ist.getUTCFullYear(), m: ist.getUTCMonth(), d: ist.getUTCDate() };
+}
+// YYYY-MM-DD in IST for a Date.
+function istDateKey(d: Date): string {
+  const { y, m, d: day } = istParts(d);
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+// YYYY-MM in IST for a Date.
+function istMonthKey(d: Date): string {
+  const { y, m } = istParts(d);
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/dashboard/summary", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = istStartOfToday();
 
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthStartStr = monthStart.toISOString().slice(0, 10);
+  // monthStart for expense aggregation — IST month, not UTC month (otherwise
+  // on the 1st of an IST month before 05:30 IST we'd query the prior month).
+  const { y: istY, m: istM } = istParts(today);
+  const monthStartStr = `${istY}-${String(istM + 1).padStart(2, "0")}-01`;
 
   // Ensure recurring templates that became due are materialized into expenses
   // before we read this month's totals — otherwise the dashboard can show stale
@@ -104,7 +134,8 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
   else if (period === "90d") { from.setDate(from.getDate() - 90); }
   else { from.setDate(from.getDate() - 7); }
   const days = Math.ceil((new Date().getTime() - from.getTime()) / 86400000);
-  from.setHours(0, 0, 0, 0);
+  // Snap to IST midnight so trend buckets line up with the dashboard summary.
+  from.setTime(istStartOfToday().getTime() - (days - 1) * 86400000);
 
   const groupBy = String(req.query.groupBy ?? "daily");
   const orders = await db
@@ -121,41 +152,42 @@ router.get("/restaurants/:restaurantId/dashboard/revenue-trend", async (req, res
   type Bucket = { revenue: number; orders: number };
   const buckets: Record<string, Bucket> = {};
 
+  // Bucket keys are IST dates so the chart labels match the dashboard's
+  // "today" — using raw UTC ISO dates would label an IST evening order as
+  // the previous day.
   if (groupBy === "weekly") {
     for (let i = 0; i < days; i += 7) {
-      const d = new Date(from);
-      d.setDate(d.getDate() + i);
-      buckets[d.toISOString().split("T")[0]] = { revenue: 0, orders: 0 };
+      const d = new Date(from.getTime() + i * 86400000);
+      buckets[istDateKey(d)] = { revenue: 0, orders: 0 };
     }
     for (const o of orders) {
       const diff = Math.floor((o.createdAt.getTime() - from.getTime()) / (7 * 86400000));
-      const weekStart = new Date(from);
-      weekStart.setDate(weekStart.getDate() + diff * 7);
-      const key = weekStart.toISOString().split("T")[0];
+      const weekStart = new Date(from.getTime() + diff * 7 * 86400000);
+      const key = istDateKey(weekStart);
       if (!buckets[key]) buckets[key] = { revenue: 0, orders: 0 };
       buckets[key].revenue += Number(o.totalAmount);
       buckets[key].orders++;
     }
   } else if (groupBy === "monthly") {
-    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
-    const end = new Date();
-    while (cur <= end) {
-      const key = cur.toISOString().slice(0, 7);
-      buckets[key] = { revenue: 0, orders: 0 };
-      cur.setMonth(cur.getMonth() + 1);
+    const fromParts = istParts(from);
+    const endParts = istParts(new Date());
+    let curY = fromParts.y, curM = fromParts.m;
+    while (curY < endParts.y || (curY === endParts.y && curM <= endParts.m)) {
+      buckets[`${curY}-${String(curM + 1).padStart(2, "0")}`] = { revenue: 0, orders: 0 };
+      curM++;
+      if (curM > 11) { curM = 0; curY++; }
     }
     for (const o of orders) {
-      const key = o.createdAt.toISOString().slice(0, 7);
+      const key = istMonthKey(o.createdAt);
       if (buckets[key]) { buckets[key].revenue += Number(o.totalAmount); buckets[key].orders++; }
     }
   } else {
     for (let i = 0; i < days; i++) {
-      const d = new Date(from);
-      d.setDate(d.getDate() + i);
-      buckets[d.toISOString().split("T")[0]] = { revenue: 0, orders: 0 };
+      const d = new Date(from.getTime() + i * 86400000);
+      buckets[istDateKey(d)] = { revenue: 0, orders: 0 };
     }
     for (const o of orders) {
-      const key = o.createdAt.toISOString().split("T")[0];
+      const key = istDateKey(o.createdAt);
       if (buckets[key]) { buckets[key].revenue += Number(o.totalAmount); buckets[key].orders++; }
     }
   }

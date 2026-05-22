@@ -165,12 +165,17 @@ router.get(
     }
 
     try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // IST start-of-day — server clock is UTC, so vanilla setHours(0,0,0,0)
+    // makes the dashboard show ₹0 sales for the first 5h30m of every
+    // Indian morning. Matches the restaurants.timezone schema default.
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(Date.now() + IST_OFFSET_MS);
+    istNow.setUTCHours(0, 0, 0, 0);
+    const today = new Date(istNow.getTime() - IST_OFFSET_MS);
     const yesterday = new Date(today.getTime() - 86400000);
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-      .toISOString()
-      .slice(0, 10);
+    // IST month — istNow already carries IST wall-clock components in its
+    // UTC accessors (we shifted it by +5h30m above).
+    const monthStart = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
     await Promise.all(
       ids.map((id) => generateDueRecurringExpenses(id).catch(() => undefined)),
