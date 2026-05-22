@@ -348,7 +348,7 @@ export default function OwnerDashboard() {
           the outlet name reflects the same scope state used below. */}
       <RestaurantTopCard
         scopeOutletId={scopeOutletId}
-        canSwitch={canSwitchScope && hasMultipleOutlets}
+        canSwitch={canSwitchScope}
         outlets={tenantBranches}
         onSelectOutlet={setScopeOutletId}
       />
