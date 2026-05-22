@@ -42,6 +42,37 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Android 8+ requires a notification channel per custom sound — the server
+// picks the right channel via `channelId` in the push payload so each
+// notification type plays the same chime as the web client
+// (restaurant-platform/src/lib/notificationSound.ts). The .wav files live
+// in assets/sounds/ and are bundled by the expo-notifications plugin
+// declaration in app.json.
+async function registerNotificationChannels(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync("new-order", {
+      name: "New orders",
+      description: "Triumphant chime for new incoming orders.",
+      importance: Notifications.AndroidImportance.MAX,
+      sound: "new-order.wav",
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#F97316",
+    });
+    await Notifications.setNotificationChannelAsync("notification", {
+      name: "Alerts & requests",
+      description:
+        "Soft chime for waiter calls, kitchen alerts, approvals and other notifications.",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "notification.wav",
+      vibrationPattern: [0, 200, 100, 200],
+      lightColor: "#F97316",
+    });
+  } catch (err) {
+    console.warn("[notifications] failed to register channels", err);
+  }
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, retry: 2 },
@@ -122,6 +153,9 @@ export default function RootLayout() {
   // caches, and taps deep-link the user into the right screen.
   useEffect(() => {
     if (Platform.OS === "web") return;
+    // Register Android channels once at startup so custom sounds work for
+    // every push regardless of which screen first triggers a notification.
+    void registerNotificationChannels();
     const receivedSub = Notifications.addNotificationReceivedListener(() => {
       // Invalidate the most-watched dashboard queries so badges/counters
       // catch up immediately when an order/alert/notification arrives.

@@ -168,18 +168,37 @@ export async function sendPush(opts: {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  /**
+   * Custom sound filename bundled in the mobile app (e.g. "new-order.wav",
+   * "notification.wav"). iOS uses this filename verbatim from the app
+   * bundle. Android uses the matching notification channel set up in
+   * `_layout.tsx`; pass `channelId` for that. Falls back to the OS
+   * default sound when omitted.
+   */
+  sound?: string;
+  /**
+   * Android notification channel id (registered in the mobile app's
+   * `_layout.tsx`). Determines which channel — and therefore which
+   * custom sound — Android plays. Ignored on iOS.
+   */
+  channelId?: string;
 }): Promise<void> {
   const tokens = (Array.isArray(opts.to) ? opts.to : [opts.to]).filter(t => typeof t === "string" && t.startsWith("ExponentPushToken"));
   if (tokens.length === 0) {
     throw new Error("No valid Expo push tokens");
   }
-  const messages = tokens.map(token => ({
-    to: token,
-    sound: "default",
-    title: opts.title,
-    body: opts.body,
-    data: opts.data ?? {},
-  }));
+  const sound = opts.sound ?? "default";
+  const messages = tokens.map(token => {
+    const msg: Record<string, unknown> = {
+      to: token,
+      sound,
+      title: opts.title,
+      body: opts.body,
+      data: opts.data ?? {},
+    };
+    if (opts.channelId) msg.channelId = opts.channelId;
+    return msg;
+  });
   try {
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
