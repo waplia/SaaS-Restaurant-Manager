@@ -591,9 +591,42 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     resolvedCustomerId = cust?.id;
     resolvedCustomerRow = cust;
   } else if (customerPhone) {
+    const { canonicalPhone } = await import("../lib/customerLinkOnOrder");
+    const canon = canonicalPhone(String(customerPhone));
+    const candidates = Array.from(new Set([
+      canon ?? "",
+      String(customerPhone).trim(),
+    ].filter(Boolean)));
     const [cust] = await db.select().from(customersTable)
-      .where(and(eq(customersTable.phone, String(customerPhone)), eq(customersTable.restaurantId, restaurantId)));
+      .where(and(inArray(customersTable.phone, candidates), eq(customersTable.restaurantId, restaurantId)));
     if (cust) { resolvedCustomerRow = cust; resolvedCustomerId = cust.id; }
+  }
+
+  // Auto-provision a customers row + wallet link when a phone is provided but
+  // no CRM row exists yet. Without this, the wallet can never associate orders
+  // placed via the POS / mobile new-order flow with a customer account, so the
+  // diner sees no visits and no restaurants in their wallet.
+  if (!resolvedCustomerId && customerPhone) {
+    const { ensureCustomerAndWalletLink } = await import("../lib/customerLinkOnOrder");
+    const newId = await ensureCustomerAndWalletLink({
+      restaurantId,
+      name: customerName ?? null,
+      rawPhone: String(customerPhone),
+    });
+    if (newId != null) {
+      resolvedCustomerId = newId;
+      const [row] = await db.select().from(customersTable).where(eq(customersTable.id, newId));
+      resolvedCustomerRow = row;
+    }
+  } else if (resolvedCustomerId && customerPhone) {
+    // Customer row already existed — still make sure the wallet link is in place.
+    const { ensureCustomerAndWalletLink } = await import("../lib/customerLinkOnOrder");
+    await ensureCustomerAndWalletLink({
+      restaurantId,
+      name: customerName ?? null,
+      rawPhone: String(customerPhone),
+      existingCustomerId: resolvedCustomerId,
+    });
   }
 
   // Blacklist intercept (cust_blacklist) — feature-gated; only enforced if the

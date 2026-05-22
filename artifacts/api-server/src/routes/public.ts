@@ -451,6 +451,21 @@ router.post("/public/orders", async (req, res) => {
     const [cust] = await db.select().from(customersTable)
       .where(and(inArray(customersTable.phone, custCandidates), eq(customersTable.restaurantId, restaurantId)));
     resolvedCustomerRow = cust;
+
+    // Auto-provision a CRM customer + wallet link from the diner's phone.
+    // Without this, QR/online orders never become "visits" in the diner's
+    // wallet and the restaurant never appears in their network list.
+    const { ensureCustomerAndWalletLink } = await import("../lib/customerLinkOnOrder");
+    const ensuredId = await ensureCustomerAndWalletLink({
+      restaurantId,
+      name: customerName ?? null,
+      rawPhone: normalizedCustomerPhone,
+      existingCustomerId: resolvedCustomerRow?.id ?? null,
+    });
+    if (ensuredId != null && !resolvedCustomerRow) {
+      const [row] = await db.select().from(customersTable).where(eq(customersTable.id, ensuredId));
+      resolvedCustomerRow = row;
+    }
   }
 
   // Blacklist intercept (cust_blacklist) — public flow has no staff to

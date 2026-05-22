@@ -245,8 +245,11 @@ router.get("/wallet/summary", requireCustomer, async (req, res) => {
     loadMembers(restaurantIds),
   ]);
 
-  // Orders table has no direct customerId FK in this schema → approximate
-  // visits by matching the customer's phone via customers join. Re-query.
+  // Attribute visits ONLY to orders this wallet owns: either bound by
+  // orders.customerId to one of the linked customer rows, or — for legacy
+  // orders predating customer auto-provisioning — by canonical phone match
+  // on the order itself. Never join broadly by restaurant alone, otherwise
+  // a linked diner would see other guests' orders/spend at the same venue.
   const visitsByRest = await db.select({
     restaurantId: ordersTable.restaurantId,
     count: sql<number>`COUNT(*)::int`,
@@ -254,12 +257,17 @@ router.get("/wallet/summary", requireCustomer, async (req, res) => {
     lastAt: sql<Date>`MAX(${ordersTable.createdAt})`,
   })
     .from(ordersTable)
-    .innerJoin(customersTable, and(
-      eq(customersTable.restaurantId, ordersTable.restaurantId),
-      // Best-effort visit attribution by phone match
-      sql`${customersTable.phone} = (SELECT phone FROM customer_users WHERE id = ${uid})`,
+    .where(and(
+      inArray(ordersTable.restaurantId, restaurantIds),
+      sql`(
+        ${ordersTable.customerId} = ANY(${customerIds})
+        OR (
+          ${ordersTable.customerId} IS NULL
+          AND REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
+              = (SELECT phone FROM customer_users WHERE id = ${uid})
+        )
+      )`,
     ))
-    .where(inArray(ordersTable.restaurantId, restaurantIds))
     .groupBy(ordersTable.restaurantId);
 
   const restMap = new Map(restaurants.map(r => [r.id, r]));
@@ -365,8 +373,12 @@ router.get("/wallet/visits", requireCustomer, async (req, res) => {
   if (links.length === 0) return void res.json([]);
   const restaurantIds = [...new Set(links.map(l => l.restaurantId))];
 
-  // Best-effort: join orders to customers by phone since orders table has no
-  // direct customer FK in this schema.
+  // Only return orders this wallet actually owns: bound by orders.customerId
+  // to one of the linked customer rows, or — for legacy orders predating
+  // customer auto-provisioning — by canonical phone match on the order itself.
+  // Joining only on restaurant + phone-equality would leak other diners'
+  // orders to anyone linked to the venue.
+  const customerIds = links.map(l => l.customerId);
   const rows = await db.select({
     id: ordersTable.id,
     orderNumber: ordersTable.orderNumber,
@@ -379,12 +391,18 @@ router.get("/wallet/visits", requireCustomer, async (req, res) => {
     restaurantLogo: restaurantsTable.logoUrl,
   })
     .from(ordersTable)
-    .innerJoin(customersTable, and(
-      eq(customersTable.restaurantId, ordersTable.restaurantId),
-      sql`${customersTable.phone} = (SELECT phone FROM customer_users WHERE id = ${uid})`,
-    ))
     .innerJoin(restaurantsTable, eq(restaurantsTable.id, ordersTable.restaurantId))
-    .where(inArray(ordersTable.restaurantId, restaurantIds))
+    .where(and(
+      inArray(ordersTable.restaurantId, restaurantIds),
+      sql`(
+        ${ordersTable.customerId} = ANY(${customerIds})
+        OR (
+          ${ordersTable.customerId} IS NULL
+          AND REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
+              = (SELECT phone FROM customer_users WHERE id = ${uid})
+        )
+      )`,
+    ))
     .orderBy(desc(ordersTable.createdAt))
     .limit(50);
   res.json(rows);

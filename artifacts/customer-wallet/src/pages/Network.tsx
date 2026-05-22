@@ -10,11 +10,44 @@ interface Member {
   allowCrossEarn: boolean; allowCrossRedeem: boolean;
 }
 
+interface MyRestaurant {
+  id: number; name: string; city: string | null;
+  logoUrl: string | null; currency: string; inNetwork: boolean;
+}
+
 export default function Network() {
-  const { data = [], isLoading } = useQuery({
+  const networkQ = useQuery({
     queryKey: ["wallet-network-public"],
     queryFn: () => api<Member[]>("/wallet/network/public"),
   });
+  // Always show the diner's own restaurants too — these are places they've
+  // ordered from (linked via phone match). Without this, the page is empty
+  // for any restaurant that hasn't opted into the cross-restaurant network.
+  const meQ = useQuery({
+    queryKey: ["wallet-me"],
+    queryFn: () => api<{ restaurants: MyRestaurant[] }>("/wallet/me"),
+  });
+
+  const isLoading = networkQ.isLoading || meQ.isLoading;
+  const networkMembers = networkQ.data ?? [];
+  const myRestaurants = meQ.data?.restaurants ?? [];
+  // Merge: network members + any "my restaurants" not already shown.
+  const networkIds = new Set(networkMembers.map(m => m.restaurantId));
+  const extras: Member[] = myRestaurants
+    .filter(r => !networkIds.has(r.id))
+    .map(r => ({
+      restaurantId: r.id,
+      name: r.name,
+      city: r.city,
+      country: null,
+      logoUrl: r.logoUrl,
+      coverImageUrl: null,
+      currency: r.currency,
+      blurb: null,
+      allowCrossEarn: false,
+      allowCrossRedeem: false,
+    }));
+  const data: Member[] = [...networkMembers, ...extras];
 
   return (
     <>
