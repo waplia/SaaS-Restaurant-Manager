@@ -43,9 +43,11 @@ export default function ApprovalsScreen() {
     queryKey: ["pending-leaves", restaurantId],
     queryFn: () => customFetch<Array<{ id: number; userName?: string; startDate: string; endDate: string; reason?: string; status?: string }>>(`/api/restaurants/${restaurantId}/leave-requests?status=pending`).catch(() => []),
   });
+  // The PO list endpoint returns every PO regardless of status, so we filter
+  // client-side to surface only those awaiting approval (status = "pending").
   const posQ = useQuery({
     queryKey: ["pending-pos", restaurantId],
-    queryFn: () => customFetch<Array<{ id: number; supplierName?: string; total?: string; status?: string; createdAt: string }>>(`/api/restaurants/${restaurantId}/purchase-orders?status=pending_approval`).catch(() => []),
+    queryFn: () => customFetch<Array<{ id: number; supplierName?: string; totalAmount?: string; total?: string; status?: string; createdAt: string }>>(`/api/restaurants/${restaurantId}/purchase-orders`).catch(() => []),
   });
 
   const items: ApprovalItem[] = useMemo(() => {
@@ -66,52 +68,60 @@ export default function ApprovalsScreen() {
       });
     }
     for (const p of (Array.isArray(posQ.data) ? posQ.data : [])) {
+      if ((p.status ?? "pending") !== "pending") continue;
+      const amt = p.totalAmount ?? p.total;
       out.push({
         kind: "purchase_order", id: p.id,
         title: p.supplierName ?? `PO #${p.id}`,
         subtitle: new Date(p.createdAt).toLocaleDateString(),
-        amount: p.total ? `₹${p.total}` : undefined,
+        amount: amt ? `₹${amt}` : undefined,
       });
     }
     return activeKind === "all" ? out : out.filter(i => i.kind === activeKind);
   }, [expensesQ.data, leavesQ.data, posQ.data, activeKind]);
 
+  // Purchase orders don't have dedicated /approve and /reject endpoints —
+  // they're driven by the generic PATCH /purchase-orders/:id with a new
+  // status. Expenses and leaves do have dedicated endpoints.
+  function buildRequest(action: "approve" | "reject", kind: ApprovalKind, id: number):
+    { url: string; method: "POST" | "PATCH"; body: unknown } {
+    if (kind === "purchase_order") {
+      return {
+        url: `/api/restaurants/${restaurantId}/purchase-orders/${id}`,
+        method: "PATCH",
+        body: { status: action === "approve" ? "approved" : "cancelled" },
+      };
+    }
+    const base =
+      kind === "expense"
+        ? `/api/restaurants/${restaurantId}/expenses/${id}`
+        : `/api/restaurants/${restaurantId}/leave-requests/${id}`;
+    const body =
+      action === "reject" && kind === "expense" ? { reason: "Rejected from mobile" } : {};
+    return { url: `${base}/${action}`, method: "POST", body };
+  }
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["pending-expenses"] });
+    qc.invalidateQueries({ queryKey: ["pending-leaves"] });
+    qc.invalidateQueries({ queryKey: ["pending-pos"] });
+  };
+
   const approve = useMutation({
     mutationFn: async ({ kind, id }: { kind: ApprovalKind; id: number }) => {
-      const map: Record<string, string> = {
-        expense: `/api/restaurants/${restaurantId}/expenses/${id}/approve`,
-        leave: `/api/restaurants/${restaurantId}/leave-requests/${id}/approve`,
-        purchase_order: `/api/restaurants/${restaurantId}/purchase-orders/${id}/approve`,
-      };
-      const url = map[kind];
-      if (!url) throw new Error("Unsupported");
-      return customFetch(url, { method: "POST", body: JSON.stringify({}) });
+      const { url, method, body } = buildRequest("approve", kind, id);
+      return customFetch(url, { method, body: JSON.stringify(body) });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pending-expenses"] });
-      qc.invalidateQueries({ queryKey: ["pending-leaves"] });
-      qc.invalidateQueries({ queryKey: ["pending-pos"] });
-    },
+    onSuccess: invalidateAll,
     onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not approve"),
   });
 
   const reject = useMutation({
     mutationFn: async ({ kind, id }: { kind: ApprovalKind; id: number }) => {
-      const map: Record<string, string> = {
-        expense: `/api/restaurants/${restaurantId}/expenses/${id}/reject`,
-        leave: `/api/restaurants/${restaurantId}/leave-requests/${id}/reject`,
-        purchase_order: `/api/restaurants/${restaurantId}/purchase-orders/${id}/reject`,
-      };
-      const url = map[kind];
-      if (!url) throw new Error("Unsupported");
-      const reason = kind === "expense" ? "Rejected from mobile" : undefined;
-      return customFetch(url, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) });
+      const { url, method, body } = buildRequest("reject", kind, id);
+      return customFetch(url, { method, body: JSON.stringify(body) });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pending-expenses"] });
-      qc.invalidateQueries({ queryKey: ["pending-leaves"] });
-      qc.invalidateQueries({ queryKey: ["pending-pos"] });
-    },
+    onSuccess: invalidateAll,
     onError: (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not reject"),
   });
 
