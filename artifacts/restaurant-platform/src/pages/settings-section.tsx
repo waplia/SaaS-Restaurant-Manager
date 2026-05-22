@@ -913,22 +913,17 @@ function PaymentSection() {
                   <span>Enable</span>
                 </label>
               </div>
-              <Row>
-                <Field label="UPI ID / VPA">
-                  <Input
-                    placeholder="merchant@okhdfcbank"
-                    defaultValue={manualUpi?.upiId ?? ""}
-                    onBlur={e => upsertManualUpi.mutate({ upiId: e.target.value || null })}
-                  />
-                </Field>
-                <Field label="Merchant name shown to customer">
-                  <Input
-                    placeholder="Your Restaurant Pvt Ltd"
-                    defaultValue={manualUpi?.merchantName ?? ""}
-                    onBlur={e => upsertManualUpi.mutate({ merchantName: e.target.value || null })}
-                  />
-                </Field>
-              </Row>
+              <ManualUpiIdentityForm
+                initialVpa={manualUpi?.upiId ?? ""}
+                initialMerchantName={manualUpi?.merchantName ?? ""}
+                onSave={(vpa, merchantName) =>
+                  upsertManualUpi.mutate({
+                    upiId: vpa || null,
+                    merchantName: merchantName || null,
+                  })
+                }
+                saving={upsertManualUpi.isPending}
+              />
               <Row>
                 <Toggle label="Show dynamic QR" checked={manualUpi?.enableDynamicQr ?? true} onChange={v => upsertManualUpi.mutate({ enableDynamicQr: v })} />
                 <Toggle label="Show intent link (mobile)" checked={manualUpi?.enableIntentLink ?? true} onChange={v => upsertManualUpi.mutate({ enableIntentLink: v })} />
@@ -939,6 +934,80 @@ function PaymentSection() {
               </Row>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Controlled VPA + merchant-name editor with an explicit Save button so a
+ * typed value isn't lost if the admin closes the panel before blurring the
+ * field. Also flags personal-tier VPAs (which PhonePe/Paytm reject under
+ * the 2024 NPCI risk policy) and nudges the admin toward a merchant VPA. */
+function ManualUpiIdentityForm({
+  initialVpa,
+  initialMerchantName,
+  onSave,
+  saving,
+}: {
+  initialVpa: string;
+  initialMerchantName: string;
+  onSave: (vpa: string, merchantName: string) => void;
+  saving: boolean;
+}) {
+  const [vpa, setVpa] = useState(initialVpa);
+  const [merchantName, setMerchantName] = useState(initialMerchantName);
+  const [savedFlash, setSavedFlash] = useState(false);
+  useEffect(() => { setVpa(initialVpa); }, [initialVpa]);
+  useEffect(() => { setMerchantName(initialMerchantName); }, [initialMerchantName]);
+  const dirty = vpa !== initialVpa || merchantName !== initialMerchantName;
+  // Personal-tier handles that NPCI member apps now decline for collect-style
+  // intents. Merchant-tier handles look like @paytm, @ybl-merchant,
+  // @okhdfcbankmerchant, or the bank's explicit P2M suffixes.
+  const PERSONAL_SUFFIXES = ["@ybl", "@ibl", "@axl", "@apl", "@okhdfcbank", "@okicici", "@oksbi", "@okaxis", "@upi", "@paytm"];
+  const handle = vpa.trim().toLowerCase();
+  const looksPersonal = handle.length > 0 && PERSONAL_SUFFIXES.some(s => handle.endsWith(s)) && !handle.includes("merchant");
+  return (
+    <div className="space-y-3">
+      <Row>
+        <Field label="UPI ID / VPA">
+          <Input
+            placeholder="merchantname@paytm or merchantname@hdfcbankmerchant"
+            value={vpa}
+            onChange={e => setVpa(e.target.value)}
+          />
+        </Field>
+        <Field label="Merchant name shown to customer">
+          <Input
+            placeholder="Your Restaurant Pvt Ltd"
+            value={merchantName}
+            onChange={e => setMerchantName(e.target.value)}
+          />
+        </Field>
+      </Row>
+      {looksPersonal && (
+        <div className="text-xs rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2">
+          <p className="font-semibold">Heads up — this looks like a personal UPI ID.</p>
+          <p className="mt-1">PhonePe and Paytm now block payment intents to personal handles under the NPCI 2024 risk policy. Ask your bank for a merchant / P2M VPA (e.g. <span className="font-mono">name@paytm</span>, <span className="font-mono">name@hdfcbankmerchant</span>, <span className="font-mono">name@ybl-merchant</span>) so customers can actually pay you.</p>
+        </div>
+      )}
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          disabled={!dirty || saving}
+          onClick={() => {
+            onSave(vpa.trim(), merchantName.trim());
+            setSavedFlash(true);
+            setTimeout(() => setSavedFlash(false), 2000);
+          }}
+        >
+          {saving ? "Saving…" : dirty ? "Save UPI ID" : "Saved"}
+        </Button>
+        {savedFlash && !dirty && !saving && (
+          <span className="text-xs text-green-700 font-medium">✓ Saved</span>
+        )}
+        {dirty && !saving && (
+          <span className="text-xs text-amber-700 font-medium">Unsaved changes</span>
         )}
       </div>
     </div>
