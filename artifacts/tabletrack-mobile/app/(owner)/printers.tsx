@@ -55,9 +55,9 @@ const ROLE_LABEL: Record<PrinterRole, string> = {
   bill: "Bill", kot: "KOT", token: "Token", bar: "Bar", kitchen: "Kitchen",
 };
 const CONN_LABEL: Record<PrinterConnection, string> = {
-  system: "AirPrint / Android Print (works in Expo Go)",
-  bluetooth: "Bluetooth (requires dev build)",
-  usb: "USB / OTG (requires dev build)",
+  system: "AirPrint / Android Print",
+  bluetooth: "Bluetooth",
+  usb: "USB / OTG",
   lan: "LAN",
   browser: "Browser",
 };
@@ -440,7 +440,7 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
             <AppCard padding={16} background={colors.infoSoft ?? colors.muted}>
               <AppText variant="bodyMd" style={{ fontWeight: "600", marginBottom: 6 }}>No setup needed</AppText>
               <AppText variant="label" style={{ color: colors.mutedForeground }}>
-                Tapping Test or Print will open the iOS / Android print sheet, where you can pick any AirPrint or Android Print-compatible printer on your network. Works in Expo Go — no dev build required.
+                Tapping Test or Print will open the iOS / Android print sheet, where you can pick any AirPrint or Android Print-compatible printer on your network.
               </AppText>
             </AppCard>
           ) : (
@@ -495,7 +495,7 @@ function PrinterWizard({ restaurantId, onClose }: { restaurantId: number; onClos
               </AppText>
               {testResult.ok && testResult.fellBack && (
                 <AppText variant="label" style={{ color: colors.mutedForeground, marginTop: 4 }}>
-                  This build doesn't include the native Bluetooth/USB thermal module, so we routed the page through the OS print sheet. To print raw ESC/POS to your thermal printer, install a custom dev build.
+                  The Bluetooth/USB thermal driver isn't available right now, so we routed the page through the OS print sheet instead.
                 </AppText>
               )}
               {testResult.error && (
