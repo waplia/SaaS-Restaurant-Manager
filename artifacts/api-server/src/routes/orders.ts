@@ -380,6 +380,7 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     hotelStayId, banquetEventId,
     brandId, channelKey, channelExternalOrderId,
     vehicleColor, vehicleModel, vehicleNumber, parkingSpot,
+    deliveryAddress,
   } = req.body;
 
   if (orderType === "curbside") {
@@ -674,6 +675,9 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     vehicleModel: orderType === "curbside" ? String(vehicleModel).slice(0, 80) : null,
     vehicleNumber: orderType === "curbside" && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
     parkingSpot: orderType === "curbside" && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
+    deliveryAddress: typeof deliveryAddress === "string" && deliveryAddress.trim()
+      ? deliveryAddress.trim().slice(0, 500)
+      : null,
   }).returning();
 
   // Deduct packaging stock for cloud-kitchen orders

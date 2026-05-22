@@ -22,7 +22,7 @@ import { useCart, type CartModifier } from "@/context/CartContext";
 import { ItemCard } from "@/components/ItemCard";
 import { ModifierBottomSheet } from "@/components/ModifierBottomSheet";
 import { MobileCartBar } from "@/components/MobileCartBar";
-import { CartSummarySheet } from "@/components/CartSummarySheet";
+import { CartSummarySheet, type CartCustomerPayload } from "@/components/CartSummarySheet";
 import { EmptyState } from "@/components/EmptyState";
 import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
 
@@ -156,7 +156,7 @@ export default function NewOrderMenuScreen() {
   // withTimeout — a stuck network call is aborted and the spinner is
   // guaranteed to clear within a few seconds.
 
-  const handleSend = async () => {
+  const handleSend = async (customerOverride?: CartCustomerPayload) => {
     if (cart.items.length === 0) {
       Alert.alert("Empty Cart", "Add items first.");
       return;
@@ -195,9 +195,13 @@ export default function NewOrderMenuScreen() {
       if (orderId == null) {
         const body: Record<string, unknown> = { orderType: orderTypeForApi, items: [] };
         if (resolvedTableId) body.tableId = resolvedTableId;
-        if (cart.customer?.name) body.customerName = cart.customer.name;
-        if (cart.customer?.phone) body.customerPhone = cart.customer.phone;
-        if (cart.customer?.address) body.deliveryAddress = cart.customer.address;
+        // Prefer the payload passed straight from the cart sheet — this
+        // avoids a race where freshly-typed name/address haven't yet
+        // propagated through React context by the time we read cart.customer.
+        const customerForSend = customerOverride ?? cart.customer ?? null;
+        if (customerForSend?.name) body.customerName = customerForSend.name;
+        if (customerForSend?.phone) body.customerPhone = customerForSend.phone;
+        if (customerForSend?.address) body.deliveryAddress = customerForSend.address;
 
         const created = await withTimeout((signal) =>
           customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
