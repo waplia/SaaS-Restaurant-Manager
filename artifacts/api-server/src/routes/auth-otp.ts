@@ -21,6 +21,7 @@ import { validate } from "../middleware/validate";
 import { recordAuditLog } from "../lib/audit";
 import { getAppSettings } from "../lib/appSettings";
 import { sendStaffOtp, verifyStaffOtp, normalizePhone, normalizeEmail, newRegistrationToken } from "../lib/staffOtp";
+import { parsePhone } from "@workspace/phone-utils";
 import { sendLifecycleSms } from "../lib/smsSender";
 import { logger } from "../lib/logger";
 import { sendByTemplateKey } from "../lib/emailSender";
@@ -354,17 +355,30 @@ router.post("/auth/register/start", regStartLimit, validate({ body: RegisterStar
     return;
   }
   const { countryCode, phone, channel } = req.body as z.infer<typeof RegisterStartBody>;
-  // Defensive: if the user already typed the country code in the phone
-  // input (e.g. "+91 8306020200" or "918306020200" with +91 selector),
-  // strip it so we don't end up with "+91918306020200".
+  // Canonicalise via the shared parser so we tolerate every shape the
+  // various clients can send: "+91" + "8306020200", "+91" + "918306020200"
+  // (country code accidentally re-typed), "+9183" + "06020200" (mobile
+  // splitPhone greedy match), or already-E.164 strings. parsePhone matches
+  // the longest known dial code, so doubled prefixes collapse to one.
   const ccDigits = countryCode.replace(/\D/g, "");
-  let localDigits = phone.replace(/\D/g, "");
+  let localDigits = phone.replace(/\D/g, "").replace(/^0+/, "");
+  // First pass: if the user re-typed the country code inside the phone
+  // field, strip it. parsePhone alone only collapses one prefix layer.
   if (ccDigits && localDigits.startsWith(ccDigits)) {
-    localDigits = localDigits.slice(ccDigits.length);
+    localDigits = localDigits.slice(ccDigits.length).replace(/^0+/, "");
   }
-  // Also strip a single leading 0 (national trunk prefix, e.g. "08306…")
-  localDigits = localDigits.replace(/^0+/, "");
-  const fullPhone = normalizePhone(`+${ccDigits}${localDigits}`);
+  // Second pass: hand the combined string to the shared parser so any
+  // remaining shape (extra dial code embedded, oversized cc field, etc.)
+  // collapses to the canonical form via longest-known-dial-code match.
+  const parsed = parsePhone(`+${ccDigits}${localDigits}`, undefined);
+  const finalCc = (parsed.country.code || ccDigits).replace(/\D/g, "");
+  let finalNational = parsed.national.replace(/\D/g, "");
+  // Third pass: if the parsed national still starts with the dial code
+  // (e.g. caller sent "+91" + "919183…"), strip it once more.
+  if (finalCc && finalNational.startsWith(finalCc)) {
+    finalNational = finalNational.slice(finalCc.length).replace(/^0+/, "");
+  }
+  const fullPhone = normalizePhone(`+${finalCc}${finalNational}`);
   if (fullPhone.length < 8) {
     res.status(400).json({ error: "Enter a valid phone number." });
     return;

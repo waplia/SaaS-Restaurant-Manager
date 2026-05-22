@@ -11,6 +11,7 @@ import { useAuth, type AuthUser } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 import { PhoneInput } from "@/components/PhoneInput";
 import { roleHomePath } from "@/lib/roles";
+import { parsePhone } from "@workspace/phone-utils";
 
 type Step = "details" | "otp";
 type Channel = "sms" | "whatsapp";
@@ -33,14 +34,15 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-// Splits "+91 9876543210" → { countryCode: "+91", local: "9876543210" }.
-// Mirrors the parsing in web register.tsx so the API behaves identically.
+// Splits any user-typed phone ("+91 9876543210", "919876543210", "9876543210",
+// "+918306020200") into { countryCode, local } using the shared phone-utils
+// parser. This mirrors the web register flow and matches the longest known
+// dial code so doubled prefixes ("+91" + "919876…") can't slip through.
 function splitPhone(input: string): { countryCode: string; local: string } {
-  const trimmed = input.trim();
-  const m = trimmed.match(/^(\+\d{1,4})(.*)$/);
+  const { country, national } = parsePhone(input.trim(), "IN");
   return {
-    countryCode: m?.[1] ?? "+91",
-    local: (m?.[2] ?? trimmed).replace(/[^\d]/g, ""),
+    countryCode: `+${country.code.replace(/\D/g, "")}`,
+    local: national.replace(/\D/g, ""),
   };
 }
 
