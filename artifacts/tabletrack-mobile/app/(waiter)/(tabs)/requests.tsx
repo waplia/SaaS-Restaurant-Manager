@@ -93,30 +93,58 @@ export default function WaiterRequestsTab() {
         >
           {list.map((r) => (
             <View key={r.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-                <Ionicons name={ICON[r.type] ?? "alert-circle-outline"} size={20} color={colors.primary} />
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
+                  <Ionicons name={ICON[r.type] ?? "alert-circle-outline"} size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: colors.foreground }]}>
+                    {formatRequestLabel(r.type)}
+                    {r.tableNumber != null ? ` · Table ${r.tableNumber}` : ""}
+                  </Text>
+                  {r.note ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{r.note}</Text> : null}
+                  <Text style={[styles.time, { color: colors.mutedForeground }]}>
+                    {new Date(r.createdAt).toLocaleTimeString()}
+                    {r.status === "acknowledged" ? " · Acknowledged" : ""}
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-                  {formatRequestLabel(r.type)}
-                  {r.tableNumber != null ? ` · Table ${r.tableNumber}` : ""}
-                </Text>
-                {r.note ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{r.note}</Text> : null}
-                <Text style={[styles.time, { color: colors.mutedForeground }]}>
-                  {new Date(r.createdAt).toLocaleTimeString()}
-                  {r.status === "acknowledged" ? " · Acknowledged" : ""}
-                </Text>
-              </View>
-              <View style={{ gap: 6 }}>
-                {r.status === "pending" ? (
-                  <Pressable
-                    onPress={() => ack.mutate(r.id)}
-                    style={[styles.btn, { borderColor: colors.border, borderWidth: 1 }]}
-                  >
-                    <Text style={[styles.btnText, { color: colors.foreground }]}>Ack</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={() => resolve.mutate(r.id)} style={[styles.btn, { backgroundColor: colors.primary }]}>
+              {/* Big, thumb-friendly action buttons live BELOW the request so
+                  the waiter can hit them one-handed without aiming at small
+                  targets crammed against the right edge of the card. */}
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => ack.mutate(r.id)}
+                  disabled={r.status !== "pending" || ack.isPending}
+                  style={({ pressed }) => [
+                    styles.btn,
+                    styles.btnAck,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      opacity: r.status !== "pending" ? 0.5 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={r.status === "acknowledged" ? "checkmark-circle" : "checkmark-outline"}
+                    size={20}
+                    color={colors.foreground}
+                  />
+                  <Text style={[styles.btnText, { color: colors.foreground }]}>
+                    {r.status === "acknowledged" ? "Acknowledged" : "Acknowledge"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => resolve.mutate(r.id)}
+                  disabled={resolve.isPending}
+                  style={({ pressed }) => [
+                    styles.btn,
+                    styles.btnDone,
+                    { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Ionicons name="checkmark-done" size={20} color="#fff" />
                   <Text style={[styles.btnText, { color: "#fff" }]}>Done</Text>
                 </Pressable>
               </View>
@@ -133,11 +161,25 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   title: { fontSize: 22, fontFamily: "Inter_700Bold" },
   sub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  card: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 12 },
-  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  notes: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  card: { flexDirection: "column", gap: 12, borderRadius: 14, borderWidth: 1, padding: 14 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  cardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  notes: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   time: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
-  btn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, alignItems: "center" },
-  btnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  actions: { flexDirection: "row", gap: 10, marginTop: 2 },
+  btn: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  btnAck: { borderWidth: 1 },
+  btnDone: {},
+  btnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
