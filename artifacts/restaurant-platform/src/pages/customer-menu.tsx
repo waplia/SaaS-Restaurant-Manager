@@ -1274,6 +1274,41 @@ export default function CustomerMenuPage() {
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs text-gray-500 mb-1 text-center">Scan with any UPI app to pay {currSymbol}{amount}</p>
                 <img src={dynamicUpiQr} alt={`UPI QR for ${currSymbol}${amount}`} className="mx-auto w-60 h-60 rounded-lg border border-gray-200 bg-white p-2" />
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <a
+                    href={dynamicUpiQr}
+                    download={`upi-${orderResult.orderNumber}-${amount}.png`}
+                    className="text-xs font-semibold text-orange-600 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100"
+                  >
+                    Save QR
+                  </a>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const blob = await (await fetch(dynamicUpiQr)).blob();
+                        // Web Share API works on most mobile browsers and lets
+                        // the customer push the QR straight into WhatsApp,
+                        // Photos, etc. Fall back to download if unsupported.
+                        const file = new File([blob], `upi-${orderResult.orderNumber}.png`, { type: "image/png" });
+                        const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean; share?: (d: { files: File[]; title?: string; text?: string }) => Promise<void> };
+                        if (nav.canShare?.({ files: [file] }) && nav.share) {
+                          await nav.share({ files: [file], title: "UPI Payment QR", text: `Pay ${currSymbol}${amount} via UPI` });
+                        } else {
+                          const a = document.createElement("a");
+                          a.href = dynamicUpiQr;
+                          a.download = `upi-${orderResult.orderNumber}-${amount}.png`;
+                          a.click();
+                        }
+                      } catch {
+                        /* user dismissed the share sheet — no-op */
+                      }
+                    }}
+                    className="text-xs font-semibold text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
+                  >
+                    Share
+                  </button>
+                </div>
                 <p className="text-[11px] text-gray-400 text-center mt-2">Works with PhonePe, Google Pay, Paytm, BHIM, Amazon Pay, CRED and all bank UPI apps</p>
               </div>
             ) : paymentIntent.enableStaticQr && paymentIntent.staticQrUrl ? (
