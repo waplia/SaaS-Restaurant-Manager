@@ -270,6 +270,80 @@ async function callProvider(provider: SmsProvider, to: string, body: string, tem
     return { providerMessageId: text.slice(0, 200) };
   }
 
+  if (provider.type === "vonage") {
+    const apiKey = cfg.apiKey ?? "";
+    const apiSecret = cfg.apiSecret ?? "";
+    const from = cfg.from ?? "";
+    if (!apiKey || !apiSecret || !from) {
+      throw new Error("Vonage provider missing apiKey/apiSecret/from");
+    }
+    const endpoint = cfg.endpoint && cfg.endpoint.trim().length > 0
+      ? cfg.endpoint
+      : "https://rest.nexmo.com/sms/json";
+    // Vonage rejects "+" — recipient must be digits only in E.164 form.
+    const toDigits = to.replace(/[^\d]/g, "");
+    // Auto-detect Unicode when the body contains non-GSM characters,
+    // unless the admin explicitly forced "text" or "unicode" via config.
+    const explicitType = cfg.type;
+    const looksUnicode = /[^\x00-\x7F]/.test(body);
+    const messageType = explicitType === "unicode" || explicitType === "text"
+      ? explicitType
+      : (looksUnicode ? "unicode" : "text");
+    const form = new URLSearchParams({
+      api_key: apiKey,
+      api_secret: apiSecret,
+      from,
+      to: toDigits,
+      text: body,
+      type: messageType,
+    });
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: form.toString(),
+    });
+    if (!res.ok) {
+      throw new ProviderSendError(
+        `Vonage ${res.status}: ${(await res.text()).slice(0, 400)}`,
+        `http_${res.status}`,
+      );
+    }
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const messages = Array.isArray(json.messages) ? (json.messages as Array<Record<string, unknown>>) : [];
+    if (messages.length === 0) {
+      throw new ProviderSendError(
+        `Vonage: empty response — ${JSON.stringify(json).slice(0, 400)}`,
+        "empty_response",
+        json,
+      );
+    }
+    // Vonage returns a per-message status string ("0" = success). Any
+    // non-zero entry in the batch means the send did not go through.
+    const failed = messages.find(m => String(m["status"] ?? "") !== "0");
+    if (failed) {
+      const code = String(failed["status"] ?? "unknown");
+      const text = String(failed["error-text"] ?? failed["error_text"] ?? "Vonage send failed");
+      throw new ProviderSendError(`Vonage [${code}]: ${text}`, `vonage_${code}`, failed);
+    }
+    const first = messages[0];
+    const messageId = typeof first["message-id"] === "string"
+      ? (first["message-id"] as string)
+      : (typeof first["message_id"] === "string" ? (first["message_id"] as string) : null);
+    const price = typeof first["message-price"] === "string"
+      ? (first["message-price"] as string)
+      : (typeof first["message_price"] === "string" ? (first["message_price"] as string) : null);
+    const currency = typeof first["currency"] === "string" ? (first["currency"] as string) : null;
+    return {
+      providerMessageId: messageId,
+      cost: price,
+      costCurrency: currency,
+      providerResponse: json,
+    };
+  }
+
   if (provider.type === "custom") {
     const baseUrl = cfg.baseUrl ?? "";
     if (!baseUrl) throw new Error("Custom provider missing baseUrl");

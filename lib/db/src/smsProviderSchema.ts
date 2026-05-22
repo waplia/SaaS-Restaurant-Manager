@@ -20,6 +20,7 @@ export type SmsProviderTypeKey =
   | "fast2sms"
   | "gupshup"
   | "2factor"
+  | "vonage"
   | "custom";
 
 export type SmsProviderFieldKind =
@@ -174,6 +175,34 @@ const TWOFACTOR: SmsProviderSchema = {
   ],
 };
 
+const VONAGE: SmsProviderSchema = {
+  type: "vonage",
+  label: "Vonage (Nexmo)",
+  description: "Global SMS via the Vonage Messages / SMS API. Credentials from Vonage Dashboard → API settings.",
+  fields: [
+    { key: "apiKey", label: "API Key", kind: "text", required: true,
+      helper: "Vonage Dashboard → API settings → API key.",
+      placeholder: "abcd1234" },
+    { key: "apiSecret", label: "API Secret", kind: "secret", required: true,
+      helper: "Vonage Dashboard → API settings → API secret. Treat like a password." },
+    { key: "from", label: "From (sender ID or number)", kind: "text", required: true,
+      helper: "An alphanumeric sender ID (max 11 chars, where allowed) or an E.164 number you own (+1415…).",
+      placeholder: "TableTrack" },
+    { key: "endpoint", label: "API endpoint", kind: "select", required: true, defaultValue: "https://rest.nexmo.com/sms/json",
+      helper: "Use the EU endpoint if your Vonage account is provisioned in the EU region.",
+      options: [
+        { value: "https://rest.nexmo.com/sms/json", label: "Global (rest.nexmo.com)" },
+        { value: "https://api-eu.vonage.com/sms/json", label: "EU (api-eu.vonage.com)" },
+      ] },
+    { key: "type", label: "Message type", kind: "select", defaultValue: "text",
+      helper: "Use Unicode for non-Latin scripts (emoji, Devanagari, etc.).",
+      options: [
+        { value: "text", label: "Text (GSM-7)" },
+        { value: "unicode", label: "Unicode (UCS-2)" },
+      ] },
+  ],
+};
+
 const CUSTOM: SmsProviderSchema = {
   type: "custom",
   label: "Custom HTTP",
@@ -204,6 +233,7 @@ export const SMS_PROVIDER_SCHEMAS: Record<SmsProviderTypeKey, SmsProviderSchema>
   fast2sms: FAST2SMS,
   gupshup: GUPSHUP,
   "2factor": TWOFACTOR,
+  vonage: VONAGE,
   custom: CUSTOM,
 };
 

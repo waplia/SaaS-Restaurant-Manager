@@ -28,7 +28,7 @@ import {
 
 const router = Router();
 
-const VALID_PROVIDERS: SmsProviderType[] = ["twilio", "msg91", "textlocal", "fast2sms", "gupshup", "2factor", "custom"];
+const VALID_PROVIDERS: SmsProviderType[] = ["twilio", "msg91", "textlocal", "fast2sms", "gupshup", "2factor", "vonage", "custom"];
 
 // Keys that must never leak in GET responses (mask everything that looks like
 // a credential, token, secret, key, password, signing key, etc).

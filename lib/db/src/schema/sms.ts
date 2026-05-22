@@ -3,7 +3,7 @@ import { tenantsTable } from "./tenants";
 import { restaurantsTable } from "./restaurants";
 import { usersTable } from "./users";
 
-export type SmsProviderType = "twilio" | "msg91" | "textlocal" | "fast2sms" | "gupshup" | "2factor" | "custom";
+export type SmsProviderType = "twilio" | "msg91" | "textlocal" | "fast2sms" | "gupshup" | "2factor" | "vonage" | "custom";
 export type SmsLogStatus = "queued" | "sent" | "delivered" | "failed" | "blocked";
 export type SmsMessageType = "otp" | "transactional" | "promotional" | "voice_otp" | "test";
 export type SmsPurpose =
