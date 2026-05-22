@@ -20,10 +20,12 @@ import {
   aiMenuImportsTable,
   aiMenuImportItemsTable,
   restaurantSettingsTable,
+  restaurantMenuItemImagesTable,
 } from "./db";
 import { AIProviderService } from "./aiProviderService";
 // Setup wizard generation is free for all plans — no AI credit reservation.
 import { logger } from "./logger";
+import { findBestStockImageMatch } from "./stockFoodImages";
 
 export interface WizardOutlet {
   name: string;
@@ -285,25 +287,52 @@ export async function runSetupWizardGeneration(opts: {
             return created.id;
           };
           const savedIds: number[] = [];
+          // Track inserted items so we can attach curated stock library
+          // images after the loop (mirrors menu-imports.ts /save behaviour).
+          const inserted: Array<{ itemId: number; name: string; isVeg: boolean }> = [];
           for (const draft of drafts) {
             const s = (draft.structured ?? {}) as { name?: string; categoryName?: string; price?: number; description?: string; dietTag?: string; prepTimeMinutes?: number; tags?: string[]; allergens?: string[] };
             const name = String(s.name ?? "").trim();
             if (!name) continue;
             const categoryId = await resolveCat(s.categoryName || "Uncategorised");
-            await tx.insert(menuItemsTable).values({
+            const isVeg = s.dietTag === "veg";
+            const [row] = await tx.insert(menuItemsTable).values({
               restaurantId,
               categoryId,
               name,
               description: s.description ?? "",
               price: Number(s.price ?? 0).toFixed(2),
-              isVeg: s.dietTag === "veg",
+              isVeg,
               isAvailable: true,
               preparationTime: s.prepTimeMinutes ?? 15,
               tags: (s.tags ?? []).slice(0, 12),
               allergens: (s.allergens ?? []).slice(0, 8),
-            });
+            }).returning({ id: menuItemsTable.id });
             savedIds.push(draft.id);
+            inserted.push({ itemId: row.id, name, isVeg });
             itemsImported += 1;
+          }
+          // Auto-attach curated stock library images — same matching logic
+          // the menu-imports save endpoint uses, so onboarding and the
+          // standalone import produce identical visual results.
+          for (const it of inserted) {
+            try {
+              const match = await findBestStockImageMatch({ name: it.name, isVeg: it.isVeg });
+              if (!match) continue;
+              await tx.update(menuItemsTable)
+                .set({ imageUrl: match.row.imageUrl, updatedAt: new Date() })
+                .where(eq(menuItemsTable.id, it.itemId));
+              await tx.insert(restaurantMenuItemImagesTable).values({
+                restaurantId,
+                menuItemId: it.itemId,
+                libraryImageId: match.row.id,
+                imageUrl: match.row.imageUrl,
+                source: "menu_import_library",
+                attachedBy: userId,
+              });
+            } catch (err) {
+              logger.warn({ err, itemId: it.itemId }, "setup-wizard: stock library match failed");
+            }
           }
           if (savedIds.length > 0) {
             await tx.update(aiMenuImportItemsTable)

@@ -889,14 +889,18 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved, onBusyChange }: M
   }
 
   async function autoSave(d: ImportDetail) {
+    // Save every draft row that isn't a confirmed duplicate. Low-confidence /
+    // needs-review items are still saved — the import history surfaces them
+    // so the owner can edit on the web dashboard, instead of silently
+    // dropping them on mobile.
     const rowIds = d.items
-      .filter(r => r.status === "draft" && !r.needsReview && !r.duplicateMatchId)
+      .filter(r => r.status === "draft" && !r.duplicateMatchId)
       .map(r => r.id);
     if (rowIds.length === 0) {
       safe(setStatus)("done");
       safe(setError)(d.import.totalRows === 0
         ? "AI couldn't find any items. Try a clearer photo or paste the text."
-        : `All ${d.import.totalRows} extracted item${d.import.totalRows === 1 ? "" : "s"} need review on the web dashboard before saving.`);
+        : `All ${d.import.totalRows} extracted item${d.import.totalRows === 1 ? "" : "s"} look like duplicates of items already on your menu.`);
       return;
     }
     safe(setStatus)("saving");
