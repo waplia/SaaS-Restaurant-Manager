@@ -60,6 +60,7 @@ export default function OwnerLayout() {
           <Tabs.Screen name="finance" options={{ href: null }} />
           <Tabs.Screen name="reports" options={{ href: null }} />
           <Tabs.Screen name="support" options={{ href: null }} />
+          <Tabs.Screen name="billing" options={{ href: null }} />
         </Tabs>
       </View>
     </AuthGate>

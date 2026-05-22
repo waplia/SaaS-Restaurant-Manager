@@ -48,13 +48,15 @@ export type ModuleKey =
   | "approvals"
   | "outlets"
   | "support"
-  | "settings";
+  | "settings"
+  | "billing";
 
 const FULL: ModuleKey[] = [
   "dashboard", "orders", "kitchen", "tables", "waiter_requests", "reservations",
   "delivery", "inventory", "menu", "staff", "attendance", "tasks", "customers",
   "feedback", "growth", "khana_ai", "finance", "expenses", "reports",
   "notifications", "alerts", "approvals", "outlets", "support", "settings",
+  "billing",
 ];
 
 const ROLE_ACCESS: Record<StaffRole, ModuleKey[]> = {
@@ -64,7 +66,7 @@ const ROLE_ACCESS: Record<StaffRole, ModuleKey[]> = {
     "dashboard", "orders", "kitchen", "tables", "waiter_requests", "reservations",
     "delivery", "inventory", "menu", "staff", "attendance", "tasks",
     "customers", "feedback", "growth", "khana_ai", "reports", "notifications",
-    "alerts", "approvals", "outlets", "support", "settings",
+    "alerts", "approvals", "outlets", "support", "settings", "billing",
   ],
   cashier: [
     "dashboard", "orders", "tables", "expenses", "notifications", "alerts",

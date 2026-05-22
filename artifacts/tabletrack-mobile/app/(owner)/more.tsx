@@ -34,6 +34,7 @@ const MODULES: ModuleDef[] = [
   { key: "finance", label: "Finance", desc: "Payments & settlements", icon: "card-outline", href: "/(owner)/finance", group: "money" },
   { key: "expenses", label: "Expenses", desc: "Add & approve expenses", icon: "wallet-outline", href: "/(owner)/expenses", group: "money" },
   { key: "reports", label: "Reports", desc: "Sales, P&L, staff, AI", icon: "bar-chart-outline", href: "/(owner)/reports", group: "money" },
+  { key: "billing", label: "Plans & Billing", desc: "Plan, usage, invoices, upgrade", icon: "pricetags-outline", href: "/(owner)/billing", group: "money" },
   { key: "growth", label: "Growth Engine", desc: "Campaigns, coupons, referrals", icon: "rocket-outline", href: "/(owner)/growth", group: "grow" },
   { key: "khana_ai", label: "Khana AI", desc: "AI tools & chat", icon: "sparkles-outline", href: "/(owner)/khana-ai", group: "grow" },
   { key: "outlets", label: "Outlets", desc: "Switch branch / compare", icon: "business-outline", href: "/(owner)/outlets", group: "system" },

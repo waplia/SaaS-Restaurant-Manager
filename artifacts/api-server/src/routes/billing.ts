@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from "express";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, count } from "drizzle-orm";
 import {
   db, paymentMethodSettingsTable, manualPaymentRequestsTable, subscriptionPaymentsTable,
   tenantsTable, subscriptionPlansTable, usersTable, auditLogsTable,
   notificationsTable, restaurantsTable, subscriptionCouponsTable,
+  floorTablesTable, menuItemsTable, tenantAddonsTable, addonsTable,
 } from "../lib/db";
+import { getOrCreateWallet, summarizeWallet } from "../lib/aiCredits";
 import {
   validateCoupon, recordRedemption, snapshotCoupon, countPriorPayments, effectiveStatus,
 } from "../lib/coupons";
@@ -856,6 +858,230 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
   } catch { /* non-fatal */ }
   res.json({ ok: true });
 });
+
+// ─── Mobile billing endpoints (Task #583) ────────────────────────
+// Aggregator + invoices + upgrade-request + mobile-config used by the
+// TableTrack mobile app's "Plans & Pricing" / "Billing" screens. Owner-,
+// manager-, and super-admin only; gated additionally by validateRestaurantAccess.
+
+function webBillingPortalUrl(): string {
+  const base = (process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "");
+  return `${base}/app/settings/subscription`;
+}
+
+function isAndroidGatewayCheckoutEnabled(): boolean {
+  const v = process.env.MOBILE_ANDROID_GATEWAY_CHECKOUT_ENABLED;
+  return v === "1" || v === "true" || v === "yes";
+}
+
+router.get(
+  "/restaurants/:restaurantId/billing/mobile-summary",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) return void res.status(403).json({ error: "No tenant" });
+    const restaurantId = Number(req.params.restaurantId);
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
+
+    const plan = tenant.planId
+      ? await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId)).then(r => r[0] ?? null)
+      : null;
+    const plans = await db.select().from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.isActive, true))
+      .orderBy(subscriptionPlansTable.price);
+
+    const [staffCountRow, tableCountRow, menuItemCountRow, branchCountRow] = await Promise.all([
+      db.select({ n: count() }).from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.isActive, true))),
+      db.select({ n: count() }).from(floorTablesTable).where(eq(floorTablesTable.restaurantId, restaurantId)),
+      db.select({ n: count() }).from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId)),
+      db.select({ n: count() }).from(restaurantsTable).where(and(eq(restaurantsTable.tenantId, tenantId), eq(restaurantsTable.isActive, true))),
+    ]);
+
+    const wallet = await getOrCreateWallet(tenantId);
+    const balance = summarizeWallet(wallet);
+
+    const installedAddons = await db.select({
+      id: tenantAddonsTable.id,
+      addonId: tenantAddonsTable.addonId,
+      key: addonsTable.key,
+      name: addonsTable.name,
+      icon: addonsTable.icon,
+      category: addonsTable.category,
+      pricing: addonsTable.pricing,
+      status: tenantAddonsTable.status,
+      billingCycle: tenantAddonsTable.billingCycle,
+      pricePaid: tenantAddonsTable.pricePaid,
+      currency: tenantAddonsTable.currency,
+      trialEndsAt: tenantAddonsTable.trialEndsAt,
+      currentPeriodEndsAt: tenantAddonsTable.currentPeriodEndsAt,
+    })
+      .from(tenantAddonsTable)
+      .innerJoin(addonsTable, eq(addonsTable.id, tenantAddonsTable.addonId))
+      .where(eq(tenantAddonsTable.tenantId, tenantId));
+
+    res.json({
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        planStatus: tenant.planStatus,
+        trialEndsAt: tenant.trialEndsAt,
+        subscriptionStartedAt: tenant.subscriptionStartedAt,
+        subscriptionEndsAt: tenant.subscriptionEndsAt,
+        isSuspended: tenant.isSuspended,
+      },
+      plan,
+      plans,
+      usage: {
+        branches: { used: Number(branchCountRow[0]?.n ?? 0), limit: plan?.maxBranches ?? null },
+        staff: { used: Number(staffCountRow[0]?.n ?? 0), limit: plan?.maxStaff ?? null },
+        tables: { used: Number(tableCountRow[0]?.n ?? 0), limit: plan?.maxTables ?? null },
+        menuItems: { used: Number(menuItemCountRow[0]?.n ?? 0), limit: plan?.maxMenuItems ?? null },
+      },
+      aiCredits: plan?.aiEnabled ? {
+        enabled: true,
+        included: balance.monthly + (plan.aiMonthlyIncludedCredits ?? 0) > 0 ? (plan.aiMonthlyIncludedCredits ?? 0) : 0,
+        available: balance.available,
+        used: balance.used,
+        purchased: balance.purchased,
+        bonus: balance.bonus,
+        isBlocked: balance.isBlocked,
+      } : { enabled: false, included: 0, available: 0, used: 0, purchased: 0, bonus: 0, isBlocked: false },
+      addons: installedAddons,
+    });
+  },
+);
+
+router.get(
+  "/restaurants/:restaurantId/billing/invoices",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) return void res.status(403).json({ error: "No tenant" });
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+
+    const payments = await db.select({
+      id: subscriptionPaymentsTable.id,
+      kind: subscriptionPaymentsTable.provider,
+      planName: subscriptionPlansTable.name,
+      amount: subscriptionPaymentsTable.amount,
+      currency: subscriptionPaymentsTable.currency,
+      externalRef: subscriptionPaymentsTable.externalRef,
+      periodStart: subscriptionPaymentsTable.periodStart,
+      periodEnd: subscriptionPaymentsTable.periodEnd,
+      status: subscriptionPaymentsTable.status,
+      createdAt: subscriptionPaymentsTable.createdAt,
+    })
+      .from(subscriptionPaymentsTable)
+      .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, subscriptionPaymentsTable.planId))
+      .where(eq(subscriptionPaymentsTable.tenantId, tenantId))
+      .orderBy(desc(subscriptionPaymentsTable.createdAt))
+      .limit(limit);
+
+    const manualRequests = await db.select({
+      id: manualPaymentRequestsTable.id,
+      planName: subscriptionPlansTable.name,
+      amount: manualPaymentRequestsTable.amount,
+      currency: manualPaymentRequestsTable.currency,
+      method: manualPaymentRequestsTable.method,
+      reference: manualPaymentRequestsTable.reference,
+      status: manualPaymentRequestsTable.status,
+      reviewerNote: manualPaymentRequestsTable.reviewerNote,
+      reviewedAt: manualPaymentRequestsTable.reviewedAt,
+      createdAt: manualPaymentRequestsTable.createdAt,
+    })
+      .from(manualPaymentRequestsTable)
+      .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, manualPaymentRequestsTable.planId))
+      .where(eq(manualPaymentRequestsTable.tenantId, tenantId))
+      .orderBy(desc(manualPaymentRequestsTable.createdAt))
+      .limit(limit);
+
+    res.json({ payments, manualRequests });
+  },
+);
+
+router.get(
+  "/restaurants/:restaurantId/billing/mobile-config",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (_req, res) => {
+    const androidPay = isAndroidGatewayCheckoutEnabled();
+    res.json({
+      webBillingPortalUrl: webBillingPortalUrl(),
+      gatewayCheckoutEnabledAndroid: androidPay,
+      iosUpgradeOptions: ["contact_sales", "request_upgrade", "continue_on_web"],
+      androidUpgradeOptions: androidPay
+        ? ["contact_sales", "request_upgrade", "continue_on_web", "pay_now"]
+        : ["contact_sales", "request_upgrade", "continue_on_web"],
+    });
+  },
+);
+
+router.post(
+  "/restaurants/:restaurantId/billing/upgrade-request",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) return void res.status(403).json({ error: "No tenant" });
+    const { targetPlanId, billingPeriod, note, contactMethod } = (req.body ?? {}) as {
+      targetPlanId?: number; billingPeriod?: "monthly" | "yearly"; note?: string;
+      contactMethod?: "email" | "phone" | "whatsapp";
+    };
+
+    let targetPlanName = "a higher plan";
+    if (targetPlanId) {
+      const [tp] = await db.select({ name: subscriptionPlansTable.name })
+        .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, targetPlanId));
+      if (tp) targetPlanName = tp.name;
+    }
+
+    const [user] = await db.select({ name: usersTable.name, email: usersTable.email, phone: usersTable.phone })
+      .from(usersTable).where(eq(usersTable.id, req.user?.id ?? 0));
+    const [tenant] = await db.select({ name: tenantsTable.name }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+
+    await recordAuditLog({
+      req, module: "billing", action: "upgrade_request.submit", entity: "tenant",
+      entityId: tenantId, restaurantId: Number(req.params.restaurantId),
+      newValue: { targetPlanId: targetPlanId ?? null, billingPeriod: billingPeriod ?? null, note: note ?? null, contactMethod: contactMethod ?? null, source: "mobile" },
+      details: `tenant=${tenantId} target=${targetPlanId ?? "-"} period=${billingPeriod ?? "-"}`,
+    });
+
+    await notifyTenant(
+      tenantId,
+      "subscription.upgrade_requested",
+      "Upgrade request received",
+      `Your request to upgrade to ${targetPlanName} has been received. Our team will reach out shortly.`,
+      tenantId,
+    );
+
+    // Email super-admin support inbox so the request lands somewhere actionable
+    // beyond the audit log. Non-fatal if the template isn't configured.
+    try {
+      const adminEmail = process.env.BILLING_UPGRADE_INBOX
+        ?? process.env.SUPPORT_EMAIL
+        ?? "support@khanalagao.com";
+      const subject = `Upgrade request: ${tenant?.name ?? `Tenant #${tenantId}`}`;
+      const body = [
+        `Tenant: ${tenant?.name ?? `#${tenantId}`} (id ${tenantId})`,
+        `Requested by: ${user?.name ?? "unknown"} <${user?.email ?? "no email"}> ${user?.phone ?? ""}`.trim(),
+        `Target plan: ${targetPlanName}${targetPlanId ? ` (id ${targetPlanId})` : ""}`,
+        `Billing period: ${billingPeriod ?? "—"}`,
+        `Preferred contact: ${contactMethod ?? "—"}`,
+        `Note: ${note ?? "—"}`,
+        `Source: mobile`,
+      ].join("\n");
+      const html = `<pre style="font-family:ui-monospace,Menlo,monospace;font-size:13px">${body.replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]!))}</pre>`;
+      const { sendEmail } = await import("../lib/emailSender");
+      await sendEmail({ to: adminEmail, subject, text: body, html, kind: "transactional" });
+    } catch { /* non-fatal */ }
+
+    res.status(201).json({ ok: true });
+  },
+);
 
 // Helper export so the existing subscriptions router can reuse the
 // "is cashfree configured?" calculation without duplicating the SQL.
