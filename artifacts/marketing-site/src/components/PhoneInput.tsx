@@ -61,6 +61,16 @@ export function PhoneInput({
   const displayCountry =
     parsed.country.iso ? parsed.country : resolveCountry(effectiveDefault);
 
+  function handleTyped(raw: string) {
+    const m = raw.match(/^\s*(\+|00)\s*([\d\s\-]*)$/);
+    if (m) {
+      const p = parsePhone("+" + m[2].replace(/\D+/g, ""), displayCountry.iso);
+      emit(p.country, p.national);
+      return;
+    }
+    emit(displayCountry, raw);
+  }
+
   function emit(country: CountryCode, national: string) {
     onChange(formatPhone(country, national));
   }
@@ -124,7 +134,7 @@ export function PhoneInput({
         required={required}
         disabled={disabled}
         value={parsed.national}
-        onChange={e => emit(displayCountry, e.target.value)}
+        onChange={e => handleTyped(e.target.value)}
         onBlur={onBlur}
         placeholder={placeholder}
         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"

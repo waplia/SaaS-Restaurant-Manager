@@ -60,6 +60,16 @@ export function PhoneInput({
   const displayCountry =
     parsed.country.iso ? parsed.country : resolveCountry(defaultCountry);
 
+  function handleTyped(raw: string) {
+    const m = raw.match(/^\s*(\+|00)\s*([\d\s\-]*)$/);
+    if (m) {
+      const p = parsePhone("+" + m[2].replace(/\D+/g, ""), displayCountry.iso);
+      emit(p.country, p.national);
+      return;
+    }
+    emit(displayCountry, raw);
+  }
+
   function emit(country: CountryCode, national: string) {
     const cap = expectedNationalLength(country.iso);
     const digits = national.replace(/\D+/g, "").slice(0, cap);
@@ -126,9 +136,8 @@ export function PhoneInput({
         disabled={disabled}
         autoFocus={autoFocus}
         value={parsed.national}
-        onChange={e => emit(displayCountry, e.target.value)}
+        onChange={e => handleTyped(e.target.value)}
         placeholder={placeholder}
-        maxLength={expectedNationalLength(displayCountry.iso)}
         data-testid={inputTestId}
         className="input flex-1"
       />

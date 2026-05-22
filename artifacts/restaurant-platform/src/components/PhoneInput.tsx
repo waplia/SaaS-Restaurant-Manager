@@ -69,6 +69,23 @@ export function PhoneInput({
     onChange(formatPhone(country, digits));
   }
 
+  // When the user types/pastes a number that begins with an international
+  // prefix ("+44…", "0044…", "00 44 …"), auto-detect the country from the
+  // dial code and switch the flag/code accordingly so the SMS is delivered
+  // to the right region without forcing the user to open the country picker.
+  function handleTyped(raw: string) {
+    const m = raw.match(/^\s*(\+|00)\s*([\d\s\-]*)$/);
+    if (m) {
+      // Always re-parse when input starts with "+" or "00" — never let the
+      // remaining digits be treated as a national number under the current
+      // country (would silently mis-route SMS to the wrong country).
+      const p = parsePhone("+" + m[2].replace(/\D+/g, ""), displayCountry.iso);
+      emit(p.country, p.national);
+      return;
+    }
+    emit(displayCountry, raw);
+  }
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -132,9 +149,12 @@ export function PhoneInput({
         required={required}
         disabled={disabled}
         value={parsed.national}
-        onChange={e => emit(displayCountry, e.target.value)}
+        onChange={e => handleTyped(e.target.value)}
         placeholder={placeholder}
-        maxLength={expectedNationalLength(displayCountry.iso)}
+        // No maxLength — the browser truncates pasted international numbers
+        // ("+919602374514") before our onChange handler can detect the dial
+        // code and switch country. `emit()` slices to the per-country cap
+        // after parsing, so typed-past-cap input is still bounded.
         className="flex-1 h-12 text-base"
       />
 

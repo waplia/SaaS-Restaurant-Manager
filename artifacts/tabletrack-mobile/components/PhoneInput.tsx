@@ -65,6 +65,19 @@ export function PhoneInput({
     onChange(formatPhone(next, digits));
   }
 
+  // Auto-detect country when the user types/pastes a number that begins
+  // with an international prefix ("+44…", "0044…"). Switches flag/code so
+  // the SMS is routed to the right region without opening the country picker.
+  function handleTyped(raw: string) {
+    const m = raw.match(/^\s*(\+|00)\s*([\d\s\-]*)$/);
+    if (m) {
+      const p = parsePhone("+" + m[2].replace(/\D+/g, ""), country.iso);
+      emit(p.country, p.national);
+      return;
+    }
+    emit(country, raw);
+  }
+
   return (
     <View style={styles.row}>
       <Pressable
@@ -85,12 +98,11 @@ export function PhoneInput({
       </Pressable>
       <TextInput
         value={parsed.national}
-        onChangeText={t => emit(country, t)}
+        onChangeText={handleTyped}
         placeholder={placeholder}
         placeholderTextColor={colors.mutedForeground}
         keyboardType="phone-pad"
         editable={editable}
-        maxLength={expectedNationalLength(country.iso)}
         testID={testID}
         style={[
           styles.input,
