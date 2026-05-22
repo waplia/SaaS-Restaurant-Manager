@@ -93,6 +93,16 @@ export async function seed(): Promise<void> {
     { eventKey: "demo_booked" as const, name: "Demo booked",
       body: "Thanks {{name}}! Your Khana Lagao demo for {{restaurant}} is booked for {{when}}. We will reach out soon.",
       variables: ["name", "restaurant", "when"] },
+    // Mirrors khanalagao_staff_invite WhatsApp template. Sent in addition
+    // to the existing invite email when the owner provided a phone number.
+    { eventKey: "staff_invite" as const, name: "Staff invite",
+      body: "Hi {{name}}, {{inviterName}} invited you to {{restaurant}} on {{appName}} as {{role}}. Sign in at {{acceptUrl}} (use Forgot Password to set your password).",
+      variables: ["name", "inviterName", "restaurant", "role", "acceptUrl", "appName"] },
+    // Mirrors khanalagao_password_reset_otp WhatsApp template. Sent when
+    // the user requesting a reset also has a phone number on file.
+    { eventKey: "password_reset_otp" as const, name: "Password reset OTP",
+      body: "{{otp}} is your Khana Lagao password reset code. It expires in {{ttlMinutes}} minutes. Do not share this code.",
+      variables: ["otp", "ttlMinutes"] },
   ];
   for (const tpl of smsTemplates) {
     await db.insert(smsTemplatesTable).values(tpl).onConflictDoNothing();

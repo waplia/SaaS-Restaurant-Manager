@@ -334,6 +334,23 @@ const SEEDS: SeedTpl[] = [
   // C. INTERNAL / STAFF UTILITY (5)
   // ════════════════════════════════════════════════════════════
   {
+    // Sent by /restaurants/:id/staff create flow when the inviter provided
+    // a phone number. UTILITY (not AUTHENTICATION) because it isn't an OTP.
+    name: "khanalagao_staff_invite",
+    description: "Invitation to a newly-added staff member with sign-in link.",
+    category: "UTILITY",
+    defaultForEvent: "staff.invite",
+    bodyText: "Hi {{1}}, {{2}} added you to {{3}} on {{6}} as {{4}}. Sign in here: {{5}} — use Forgot Password to set your password.",
+    variables: [
+      { index: 1, key: "name", label: "Staff name", example: "Ravi" },
+      { index: 2, key: "inviterName", label: "Inviter", example: "Anita" },
+      { index: 3, key: "restaurant", label: "Restaurant", example: "Spice Garden" },
+      { index: 4, key: "role", label: "Role", example: "waiter" },
+      { index: 5, key: "acceptUrl", label: "Sign-in URL", example: "https://app.khanalagao.com/app/forgot-password?email=ravi@example.com" },
+      { index: 6, key: "appName", label: "App name", example: "KhanaLagao" },
+    ],
+  },
+  {
     name: "staff_shift_reminder",
     description: "Reminder for staff shift.",
     category: "UTILITY",

@@ -291,18 +291,75 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
       const [restaurant] = await db.select({ name: restaurantsTable.name })
         .from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
       const acceptUrl = `${origin}${webBase}/forgot-password?email=${encodeURIComponent(email)}`;
-      await sendByTemplateKey("staff_invite", email, {
+      const inviterName = inviter?.name ?? "Your manager";
+      const restaurantName = restaurant?.name ?? "your restaurant";
+      const roleLabel = role.replace(/_/g, " ");
+      const inviteVars = {
         name,
-        inviterName: inviter?.name ?? "Your manager",
-        restaurant: restaurant?.name ?? "your restaurant",
-        role: role.replace(/_/g, " "),
+        inviterName,
+        restaurant: restaurantName,
+        role: roleLabel,
         acceptUrl,
         appName,
-      }, {
+      };
+      await sendByTemplateKey("staff_invite", email, inviteVars, {
         tenantId,
         restaurantId,
         recipientType: "user",
       });
+
+      // Also notify by SMS + WhatsApp if a phone was provided. Both channels
+      // share the same `staff_invite` event key / template name so the
+      // recipient gets the same content regardless of which channel they
+      // see first. Failures are swallowed — the account is already created
+      // and the email was the primary delivery path. Mobile staff-invite UI
+      // flows through this exact same code, so no client-side changes are
+      // needed when SMS/WA providers are reconfigured later.
+      if (phone) {
+        // Mask all but the last 4 digits before logging to avoid writing
+        // recipient phone numbers into server logs (PII hygiene).
+        const phoneTail = phone.replace(/\D/g, "").slice(-4);
+        const fallbackBody =
+          `Hi ${name}, ${inviterName} invited you to ${restaurantName} on ${appName} as ${roleLabel}. ` +
+          `Sign in: ${acceptUrl} — use Forgot Password to set your password.`;
+        try {
+          const { sendSmsMessage } = await import("../lib/smsSender");
+          const smsRes = await sendSmsMessage({
+            to: phone,
+            body: fallbackBody,
+            eventKey: "staff_invite",
+            variables: inviteVars,
+            tenantId,
+            restaurantId,
+            purpose: "staff_invite",
+            messageType: "transactional",
+          });
+          if (!smsRes.ok) {
+            logger.info({ userId: user.id, phoneTail, reason: smsRes.error }, "staff_invite SMS not sent");
+          }
+        } catch (err) {
+          logger.warn({ err, userId: user.id, phoneTail }, "Failed to send staff_invite SMS");
+        }
+        try {
+          const { sendWhatsAppMessage } = await import("../lib/whatsapp");
+          const waRes = await sendWhatsAppMessage({
+            restaurantId,
+            tenantId,
+            to: phone,
+            templateName: "khanalagao_staff_invite",
+            templateVariables: [name, inviterName, restaurantName, roleLabel, acceptUrl, appName],
+            body: fallbackBody,
+            category: "transactional",
+            purpose: "transactional",
+            meta: { event: "staff.invite", userId: user.id },
+          });
+          if (waRes.status !== "sent") {
+            logger.info({ userId: user.id, phoneTail, reason: waRes.error }, "staff_invite WhatsApp not sent");
+          }
+        } catch (err) {
+          logger.warn({ err, userId: user.id, phoneTail }, "Failed to send staff_invite WhatsApp");
+        }
+      }
     } catch (err) {
       logger.warn({ err, userId: user.id, email }, "Failed to send staff_invite email");
     }

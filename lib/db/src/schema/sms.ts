@@ -21,6 +21,11 @@ export const SMS_TEMPLATE_EVENT_KEYS = [
   "payment_received",
   "restaurant_suspended",
   "demo_booked",
+  // Mobile-number-driven notifications wired from /staff and
+  // /auth/forgot-password so the recipient gets the message even when
+  // email isn't usable. Mirrors the WhatsApp templates of the same names.
+  "staff_invite",
+  "password_reset_otp",
 ] as const;
 export type SmsTemplateEventKey = (typeof SMS_TEMPLATE_EVENT_KEYS)[number];
 

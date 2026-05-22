@@ -630,6 +630,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
   const [user] = await db
     .select({
       id: usersTable.id, email: usersTable.email, name: usersTable.name,
+      phone: usersTable.phone,
       tenantId: usersTable.tenantId, isActive: usersTable.isActive,
     })
     .from(usersTable)
@@ -659,6 +660,61 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
       ttlMinutes: String(RESET_OTP_TTL_MINUTES),
       appName: "Khana Lagao",
     }, { tenantId: user.tenantId });
+
+    // Also dispatch the OTP via SMS + WhatsApp if the account has a phone
+    // on file, so password reset works for users who can't reach their
+    // email (mobile-only operators). Both helpers no-op gracefully when
+    // the corresponding provider isn't configured — we never block the
+    // response (still constant-time / anti-enumeration friendly because
+    // the email send was already fire-and-forget too).
+    if (user.phone) {
+      const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
+      void (async () => {
+        try {
+          const { sendSmsMessage } = await import("../lib/smsSender");
+          const r = await sendSmsMessage({
+            to: user.phone!,
+            body: fallbackBody,
+            eventKey: "password_reset_otp",
+            variables: { otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+            tenantId: user.tenantId,
+            purpose: "password_reset",
+            messageType: "otp",
+          });
+          if (!r.ok) {
+            console.info(`[forgot-password] SMS not sent for user ${user.id}: ${r.error}`);
+          }
+        } catch (err) {
+          console.warn(`[forgot-password] SMS error for user ${user.id}:`, err);
+        }
+      })();
+      void (async () => {
+        try {
+          const { sendWhatsAppMessage } = await import("../lib/whatsapp");
+          const r = await sendWhatsAppMessage({
+            restaurantId: null,
+            tenantId: user.tenantId ?? undefined,
+            to: user.phone!,
+            templateName: "khanalagao_password_reset_otp",
+            templateVariables: [code, String(RESET_OTP_TTL_MINUTES)],
+            body: fallbackBody,
+            // SafeSend classification — OTPs are operational/transactional
+            // traffic from a quiet-hours / opt-in perspective.
+            category: "transactional",
+            // `purpose: "otp"` triggers the AUTHENTICATION-template guard
+            // (Task #533) so we fail closed if someone swaps the template.
+            purpose: "otp",
+            skipQuota: true,
+            meta: { event: "auth.password_reset", userId: user.id },
+          });
+          if (r.status !== "sent") {
+            console.info(`[forgot-password] WhatsApp not sent for user ${user.id}: ${r.error}`);
+          }
+        } catch (err) {
+          console.warn(`[forgot-password] WhatsApp error for user ${user.id}:`, err);
+        }
+      })();
+    }
   }
   res.json({
     success: true,
