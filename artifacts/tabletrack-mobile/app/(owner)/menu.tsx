@@ -362,6 +362,7 @@ function MenuItemForm({
   const [libraryImageId, setLibraryImageId] = useState<number | null>(null);
   const [imageSource, setImageSource] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [librarySuggestions, setLibrarySuggestions] = useState<StockFoodImage[]>([]);
@@ -438,6 +439,29 @@ function MenuItemForm({
       Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function generateAiPhoto() {
+    if (!restaurantId) {
+      Alert.alert("Not ready", "Restaurant context isn't loaded yet. Please try again in a moment.");
+      return;
+    }
+    if (!editingItemId) {
+      Alert.alert("Save the item first", "Create the menu item before generating an AI photo.");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const res = await customFetch<{ payload: { imageUrl: string } }>(
+        `/api/restaurants/${restaurantId}/items/${editingItemId}/ai-photo`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      applyPhoto(res.payload.imageUrl, { source: "ai_generated" });
+    } catch (e: unknown) {
+      Alert.alert("Photo generation failed", e instanceof Error ? e.message : "Could not generate photo.");
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -529,10 +553,10 @@ function MenuItemForm({
               </Text>
             </View>
           )}
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <Pressable
               onPress={openLibrary}
-              disabled={uploading || libraryLoading}
+              disabled={uploading || libraryLoading || generating}
               style={({ pressed }) => [
                 styles.chip,
                 {
@@ -549,7 +573,7 @@ function MenuItemForm({
             </Pressable>
             <Pressable
               onPress={pickAndUpload}
-              disabled={uploading}
+              disabled={uploading || generating}
               style={({ pressed }) => [
                 styles.chip,
                 {
@@ -569,6 +593,29 @@ function MenuItemForm({
               </Text>
             </Pressable>
           </View>
+          {editingItemId ? (
+            <Pressable
+              onPress={generateAiPhoto}
+              disabled={uploading || libraryLoading || generating}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  borderColor: colors.primary, backgroundColor: colors.primary,
+                  flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+                  opacity: pressed ? 0.85 : (generating ? 0.7 : 1),
+                },
+              ]}
+            >
+              {generating ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="sparkles-outline" size={16} color="#fff" />
+              )}
+              <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                {generating ? "Generating…" : "Generate with AI"}
+              </Text>
+            </Pressable>
+          ) : null}
           {editingItemId && imageSource ? (
             <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>
               Photo saved — diners can see it on the QR menu now.

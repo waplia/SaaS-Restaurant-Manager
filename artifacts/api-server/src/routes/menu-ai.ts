@@ -235,7 +235,8 @@ router.post(
         },
       });
 
-      const payload: PhotoDraftPayload = { imageUrl: objectPath };
+      const { normalizeStoredImageUrl } = await import("../lib/imageUrl");
+      const payload: PhotoDraftPayload = { imageUrl: normalizeStoredImageUrl(objectPath) ?? objectPath };
       const [draft] = await db
         .insert(menuItemAiDraftsTable)
         .values({ menuItemId: itemId, restaurantId, kind: "photo", payload })

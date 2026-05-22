@@ -4,6 +4,7 @@ import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTabl
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { recordLibraryImageUsage } from "../lib/stockFoodImages";
+import { normalizeStoredImageUrl } from "../lib/imageUrl";
 
 type ImageSource = "library" | "ai_generated" | "upload" | "reuse";
 const VALID_IMAGE_SOURCES = new Set<ImageSource>(["library", "ai_generated", "upload", "reuse"]);
@@ -149,7 +150,8 @@ router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", 
     }
   }
 
-  const { categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId } = req.body;
+  const { categoryId, name, description, price, imageUrl: rawImageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId } = req.body;
+  const imageUrl = normalizeStoredImageUrl(rawImageUrl as string | null | undefined);
   const [item] = await db.insert(menuItemsTable).values({ restaurantId, categoryId, name, description, price, imageUrl, isVeg, preparationTime, calories, tags, allergens, kitchenId: kitchenId ?? null }).returning();
   if (imageUrl) {
     const meta = parseImageMeta(req.body as Record<string, unknown>);
@@ -176,7 +178,7 @@ router.patch("/restaurants/:restaurantId/items/:id", requireRole("owner", "manag
   const updates: Record<string, unknown> = { name, description, price, isVeg, isAvailable, preparationTime, calories, sortOrder, categoryId, updatedAt: new Date() };
   if (tags !== undefined) updates.tags = tags;
   if (allergens !== undefined) updates.allergens = allergens;
-  if (imageUrl !== undefined) updates.imageUrl = imageUrl === "" ? null : imageUrl;
+  if (imageUrl !== undefined) updates.imageUrl = imageUrl === "" ? null : normalizeStoredImageUrl(imageUrl as string | null);
   if (kitchenId !== undefined) updates.kitchenId = kitchenId === "" ? null : kitchenId;
   const decOrNull = (v: unknown) => (v === "" || v == null ? null : String(Number(v)));
   if (proteinG !== undefined) updates.proteinG = decOrNull(proteinG);

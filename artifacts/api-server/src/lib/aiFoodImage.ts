@@ -21,6 +21,7 @@ import {
 } from "./aiCredits";
 import { ObjectStorageService, isObjectStorageConfigured } from "./objectStorage";
 import { setObjectAclPolicy } from "./objectAcl";
+import { normalizeStoredImageUrl } from "./imageUrl";
 
 const objectStorage = new ObjectStorageService();
 
@@ -227,8 +228,9 @@ export async function generateAndAttachItemPhoto(opts: {
     // not lock the import out of rollback. We also require .returning() so
     // we can detect the row vanishing mid-backfill (race with rollback)
     // and surface it as a failure instead of falsely reporting success.
+    const storedImageUrl = normalizeStoredImageUrl(objectPath) ?? objectPath;
     const updated = await db.update(menuItemsTable)
-      .set({ imageUrl: objectPath })
+      .set({ imageUrl: storedImageUrl })
       .where(eq(menuItemsTable.id, opts.itemId))
       .returning({ id: menuItemsTable.id });
     if (updated.length === 0) {
@@ -241,7 +243,7 @@ export async function generateAndAttachItemPhoto(opts: {
         restaurantId: opts.restaurantId,
         menuItemId: opts.itemId,
         libraryImageId: null,
-        imageUrl: objectPath,
+        imageUrl: storedImageUrl,
         source: "menu_import_ai",
         attachedBy: opts.userId,
       });
