@@ -4,7 +4,7 @@ import {
   ShieldCheck, LayoutDashboard, TrendingUp, Activity, History, Building2, Package, Tag, FileCheck2,
   CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Bell, Inbox, FileText, LifeBuoy,
   Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X, ListChecks,
-  Image as ImageIconLucide,
+  Image as ImageIconLucide, UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -31,6 +31,7 @@ const NAV: NavEntry[] = [
       { kind: "link", href: "/admin/approvals", label: "Approvals", icon: FileCheck2, badgeKey: "approvals" },
       { kind: "link", href: "/admin/implementations", label: "Implementations", icon: ListChecks },
       { kind: "link", href: "/admin/audit-logs", label: "Audit Logs", icon: History },
+      { kind: "link", href: "/admin/deleted-accounts", label: "Deleted Accounts", icon: UserX },
     ],
   },
   // 3. Plans & Billing

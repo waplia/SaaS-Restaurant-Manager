@@ -46,6 +46,14 @@ export const usersTable = pgTable("users", {
   passwordResetCodeExpiresAt: timestamp("password_reset_code_expires_at"),
   passwordResetAttempts: integer("password_reset_attempts").notNull().default(0),
   notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
+  // Soft-delete (Task #573, account self-deletion from mobile).
+  // Set when the user confirms account deletion via password+OTP.
+  // `isActive` is also flipped to false so every existing
+  // `isActive`-gated query (login, authenticate middleware, fanouts)
+  // naturally excludes deleted users. The row is preserved so a
+  // super-admin can restore it from the "Deleted accounts" panel.
+  deletedAt: timestamp("deleted_at"),
+  deletionReason: text("deletion_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

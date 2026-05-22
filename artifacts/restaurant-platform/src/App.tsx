@@ -69,6 +69,7 @@ const PurchaseRequestsPage = lazy(() => import("@/pages/purchase-requests"));
 const SupplierPortalPage = lazy(() => import("@/pages/supplier-portal"));
 import AdminAddonsPage from "@/pages/admin-addons";
 import AdminAuditLogsPage from "@/pages/admin-audit-logs";
+import AdminDeletedAccountsPage from "@/pages/admin-deleted-accounts";
 import AdminBlogPage from "@/pages/admin-blog";
 import AdminSupportPage from "@/pages/admin-support";
 import SupportPage from "@/pages/support";
@@ -318,6 +319,7 @@ function Router() {
       <Route path="/setup/onboarding" component={() => <ProtectedRoute component={SetupOnboardingPage} />} />
       <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
       <Route path="/admin/audit-logs" component={() => <SuperAdminRoute component={AdminAuditLogsPage} />} />
+      <Route path="/admin/deleted-accounts" component={() => <SuperAdminRoute component={AdminDeletedAccountsPage} />} />
       <Route path="/admin/blog" component={() => <SuperAdminRoute component={AdminBlogPage} />} />
       <Route path="/admin/support" component={() => <SuperAdminRoute component={AdminSupportPage} />} />
       <Route path="/support" component={() => <RoleProtectedRoute component={SupportPage} allow={["owner", "manager"]} />} />

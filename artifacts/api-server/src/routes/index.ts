@@ -126,6 +126,8 @@ import loyaltyNetworkRouter from "./loyalty-network";
 import webPushRouter from "./web-push";
 import adminWebPushRouter from "./admin-web-push";
 import phonepeRouter, { phonepePublicRouter } from "./phonepe";
+import accountRouter from "./account";
+import adminUsersRouter from "./admin-users";
 
 const router: IRouter = Router();
 
@@ -171,6 +173,8 @@ router.use(authenticate);
 router.use(maintenanceMode);
 
 router.use(adminSettingsRouter);
+router.use(accountRouter);
+router.use(adminUsersRouter);
 router.use(tenantsRouter);
 router.use(restaurantsRouter);
 router.use(usersRouter);

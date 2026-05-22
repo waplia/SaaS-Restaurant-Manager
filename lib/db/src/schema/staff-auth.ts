@@ -1,7 +1,7 @@
 import { pgTable, serial, integer, text, boolean, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 
 export type StaffOtpChannel = "sms" | "email" | "whatsapp";
-export type StaffOtpPurpose = "login" | "register" | "two_factor" | "verify_email" | "verify_mobile";
+export type StaffOtpPurpose = "login" | "register" | "two_factor" | "verify_email" | "verify_mobile" | "account_deletion";
 
 export const staffOtpsTable = pgTable("staff_otps", {
   id: serial("id").primaryKey(),
