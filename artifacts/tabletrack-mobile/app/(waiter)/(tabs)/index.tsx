@@ -12,12 +12,18 @@ import { TableCard } from "@/components/TableCard";
 import { EmptyState } from "@/components/EmptyState";
 import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 
 export default function TablesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const { restaurantId } = useAuth();
+  // Reuse the canonical "New Order" flow so tapping a table on the Tables
+  // tab lands in the same rich menu (search, filters, categories, voice,
+  // modifiers, cart sheet) as the raised "New Order" tab — with the table
+  // pre-attached so the waiter skips the type/table picker steps.
+  const { startOrder, attachTable } = useCart();
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: getListFloorTablesQueryKey(restaurantId),
@@ -56,7 +62,15 @@ export default function TablesScreen() {
               label={t.tableNumber ?? `T${t.id}`}
               capacity={t.capacity ?? 4}
               status={t.status ?? "available"}
-              onPress={() => router.push({ pathname: "/(waiter)/order/[tableId]", params: { tableId: String(t.id) } })}
+              onPress={() => {
+                const label = t.tableNumber ?? `T${t.id}`;
+                startOrder("dine_in");
+                attachTable(restaurantId, t.id, label);
+                router.push({
+                  pathname: "/new-order/menu",
+                  params: { tableId: String(t.id), tableLabel: label },
+                } as never);
+              }}
             />
           )}
         />
