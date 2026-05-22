@@ -55,11 +55,14 @@ export default function MoreScreen() {
 
   const allowed = useMemo(() => new Set(allowedModules(user?.role)), [user?.role]);
   const grouped = useMemo(() => {
+    const order: ModuleDef["group"][] = ["sell", "operate", "people", "money", "grow", "system"];
     const out: Record<string, ModuleDef[]> = {};
+    for (const g of order) out[g] = [];
     for (const m of MODULES) {
       if (!allowed.has(m.key)) continue;
-      (out[m.group] ??= []).push(m);
+      out[m.group].push(m);
     }
+    for (const g of order) if (out[g].length === 0) delete out[g];
     return out;
   }, [allowed]);
 
