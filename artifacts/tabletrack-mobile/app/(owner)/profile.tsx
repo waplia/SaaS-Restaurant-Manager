@@ -58,6 +58,79 @@ export default function OwnerProfileScreen() {
     enabled: restaurantId != null,
   });
 
+  // Payment-config drives whether the QR-menu Pay Online flow surfaces
+  // "UPI (Restaurant's own)" using the VPA above. Mirrors the web
+  // Settings → Payments → Manual UPI toggle so owners can flip it from
+  // the same screen where they enter the UPI ID.
+  const paymentCfgQ = useQuery<{
+    settings: { onlineEnabled: boolean; onlinePaymentSource: string };
+    onlineMethods: Array<{ id: number; type: string; gatewayCode: string | null; isEnabled: boolean }>;
+    manualUpi: null | { upiId: string | null; merchantName: string | null };
+  }>({
+    queryKey: ["payment-config", restaurantId],
+    queryFn: () => customFetch(`/api/restaurants/${restaurantId}/payment-config`),
+    enabled: restaurantId != null,
+  });
+  const manualUpiEnabled = !!paymentCfgQ.data?.onlineMethods.find(
+    m => m.type === "manual_upi" && m.gatewayCode == null,
+  )?.isEnabled;
+
+  const toggleQrMenuUpiMut = useMutation({
+    mutationFn: async (enable: boolean) => {
+      // Use the SAVED restaurant values (not the unsaved `draft`) so this
+      // toggle can never publish a UPI ID the owner only typed but didn't
+      // commit via "Save changes". The UI separately refuses the toggle
+      // when there are unsaved UPI edits in the form.
+      const saved = restaurantQ.data;
+      const cfg = paymentCfgQ.data;
+      if (enable) {
+        // 1. Ensure the master "Accept online payments" setting is true —
+        //    flipping Manual UPI is a no-op for customers otherwise.
+        if (cfg?.settings.onlineEnabled === false) {
+          await customFetch(`/api/restaurants/${restaurantId}/payment-config/settings`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ onlineEnabled: true }),
+          });
+        }
+        // 2. Sync the persisted VPA / merchant name into payment-config so
+        //    both surfaces (printed-bill QR and QR-menu checkout) read the
+        //    same identity. Skip if it already matches to avoid a needless
+        //    write.
+        const desiredVpa = (saved?.upiId ?? "").trim() || null;
+        const desiredMerch = (saved?.upiMerchantName ?? saved?.name ?? "").trim() || null;
+        const cur = cfg?.manualUpi;
+        if (desiredVpa && (cur?.upiId !== desiredVpa || cur?.merchantName !== desiredMerch)) {
+          await customFetch(`/api/restaurants/${restaurantId}/payment-config/manual-upi`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ upiId: desiredVpa, merchantName: desiredMerch }),
+          });
+        }
+      }
+      // 3. Flip the method row last so a failure in steps 1/2 doesn't leave
+      //    the customer-visible toggle on without a backing identity.
+      await customFetch(`/api/restaurants/${restaurantId}/payment-config/methods`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: "online",
+          type: "manual_upi",
+          isEnabled: enable,
+          label: "UPI (Restaurant's own)",
+        }),
+      });
+    },
+    // Always refetch after the sequence (success OR failure) so the toggle
+    // reflects the actual server state, not the optimistic intent — this
+    // covers the partial-failure case where step 1/2 succeeded but step 3
+    // didn't.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["payment-config", restaurantId] }),
+    onError: (err: unknown) => {
+      Alert.alert("Could not update", err instanceof Error ? err.message : "Try again.");
+    },
+  });
+
   const [draft, setDraft] = useState<DraftFields>({});
   useEffect(() => {
     if (restaurantQ.data) {
@@ -170,6 +243,32 @@ export default function OwnerProfileScreen() {
               value={!!draft.showUpiIdOnBill}
               onChange={v => setField("showUpiIdOnBill", v)}
               disabled={!canEdit}
+            />
+            <ToggleRow
+              colors={colors}
+              label="Accept UPI on customer QR menu"
+              value={manualUpiEnabled}
+              onChange={v => {
+                if (v) {
+                  const savedVpa = (restaurantQ.data?.upiId ?? "").trim();
+                  if (!savedVpa) {
+                    Alert.alert("UPI ID required", "Enter your UPI ID above and tap Save changes first, then enable this.");
+                    return;
+                  }
+                  // Block the toggle when the form has unsaved UPI edits — the
+                  // toggle syncs identity from the saved record, so flipping it
+                  // now would publish stale values to the QR-menu checkout.
+                  const dirty =
+                    (draft.upiId ?? "").trim() !== savedVpa ||
+                    (draft.upiMerchantName ?? "").trim() !== (restaurantQ.data?.upiMerchantName ?? "").trim();
+                  if (dirty) {
+                    Alert.alert("Save first", "You have unsaved UPI changes. Tap Save changes, then enable this.");
+                    return;
+                  }
+                }
+                toggleQrMenuUpiMut.mutate(v);
+              }}
+              disabled={!canEdit || toggleQrMenuUpiMut.isPending || paymentCfgQ.isLoading}
             />
             <View style={[styles.fieldBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>When to print</Text>
