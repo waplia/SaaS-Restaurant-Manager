@@ -300,7 +300,29 @@ export async function upsertMethod(restaurantId: number, input: UpsertMethodInpu
       config: input.config ?? {},
     })
     .returning();
+  await reconcileOnlineSource(restaurantId, input);
   return created;
+}
+
+/** When an admin enables an online method whose `type` isn't permitted by the
+ *  current `onlinePaymentSource`, broaden the source to "mixed" so the method
+ *  actually shows up at checkout. Prevents the silent misconfiguration where
+ *  toggling Manual UPI on does nothing because the source is still locked to
+ *  `own_gateway` / `platform_gateway`. */
+async function reconcileOnlineSource(restaurantId: number, input: UpsertMethodInput): Promise<void> {
+  if (input.category !== "online" || !input.isEnabled) return;
+  if (!(input.type === "platform_gateway" || input.type === "own_gateway" || input.type === "manual_upi")) return;
+  const [settings] = await db
+    .select()
+    .from(restaurantPaymentSettingsTable)
+    .where(eq(restaurantPaymentSettingsTable.restaurantId, restaurantId));
+  if (!settings) return;
+  const src = settings.onlinePaymentSource;
+  if (src === "mixed" || src === input.type) return;
+  await db
+    .update(restaurantPaymentSettingsTable)
+    .set({ onlinePaymentSource: "mixed", updatedAt: new Date() })
+    .where(eq(restaurantPaymentSettingsTable.restaurantId, restaurantId));
 }
 
 export async function deleteMethod(restaurantId: number, methodId: number): Promise<void> {
