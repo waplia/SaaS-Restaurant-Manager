@@ -396,6 +396,40 @@ export default function CustomerMenuPage() {
   const [cardNumber, setCardNumber] = useState("");
   // Task #587 — manual UPI customer-side capture (UTR + optional screenshot).
   const [upiUtr, setUpiUtr] = useState("");
+  // Dynamic UPI QR — generated client-side from the NPCI intent URL so it
+  // encodes the exact amount, order ref, MCC and merchant VPA. Any UPI app
+  // (PhonePe, Paytm, GPay, BHIM, Amazon Pay, CRED, bank apps…) can scan it,
+  // which replaces the per-app deep-link buttons that PhonePe/Paytm reject
+  // for non-onboarded merchants.
+  const [dynamicUpiQr, setDynamicUpiQr] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const upi = paymentIntent?.upiId;
+    if (!paymentIntent || paymentIntent.mode !== "manual_upi" || !upi || !orderResult) {
+      setDynamicUpiQr(null);
+      return;
+    }
+    const amount = Number(paymentIntent.totalAmount).toFixed(2);
+    const txnRef = paymentIntent.txnRef ?? `TT${orderResult.orderId}`;
+    const mcc = paymentIntent.merchantCategoryCode ?? "5812";
+    const params = [
+      `pa=${encodeURIComponent(upi)}`,
+      `pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}`,
+      `am=${amount}`,
+      `cu=INR`,
+      `tn=${encodeURIComponent(`Order ${orderResult.orderNumber}`)}`,
+      `tr=${encodeURIComponent(txnRef)}`,
+      `mc=${mcc}`,
+      `mode=02`,
+      `purpose=00`,
+    ].join("&");
+    const intentUrl = `upi://pay?${params}`;
+    import("qrcode").then(({ default: QRCode }) =>
+      QRCode.toDataURL(intentUrl, { width: 280, margin: 1, errorCorrectionLevel: "M" })
+    ).then(url => { if (!cancelled) setDynamicUpiQr(url); })
+      .catch(() => { if (!cancelled) setDynamicUpiQr(null); });
+    return () => { cancelled = true; };
+  }, [paymentIntent, orderResult]);
   const [upiScreenshot, setUpiScreenshot] = useState<File | null>(null);
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
@@ -1221,28 +1255,6 @@ export default function CustomerMenuPage() {
         ].join("&")
       : "";
     const intentUrl = upi ? `upi://pay?${upiParams}` : null;
-    // Per-app deep links. On Android, intent:// with `package=` opens that
-    // specific app directly; on iOS, the app's custom URL scheme is used
-    // (phonepe://, paytmmp://, tez://, credpay://). When the targeted app
-    // is missing the OS falls back to the system chooser via the generic
-    // upi:// link, so the customer is never stuck.
-    const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-    const buildAppLink = (pkg: string, iosScheme: string | null): string | null => {
-      if (!upi) return null;
-      if (isAndroid) {
-        return `intent://pay?${upiParams}#Intent;scheme=upi;package=${pkg};S.browser_fallback_url=${encodeURIComponent(intentUrl ?? "")};end`;
-      }
-      if (iosScheme) return `${iosScheme}://pay?${upiParams}`;
-      return intentUrl;
-    };
-    const upiApps: Array<{ name: string; color: string; href: string | null }> = [
-      { name: "PhonePe",     color: "bg-[#5f259f]", href: buildAppLink("com.phonepe.app", "phonepe") },
-      { name: "Google Pay",  color: "bg-[#1a73e8]", href: buildAppLink("com.google.android.apps.nbu.paisa.user", "tez") },
-      { name: "Paytm",       color: "bg-[#00baf2]", href: buildAppLink("net.one97.paytm", "paytmmp") },
-      { name: "BHIM",        color: "bg-[#00b9f1]", href: buildAppLink("in.org.npci.upiapp", "upi") },
-      { name: "Amazon Pay",  color: "bg-[#ff9900]", href: buildAppLink("in.amazon.mShop.android.shopping", null) },
-      { name: "CRED",        color: "bg-black",     href: buildAppLink("com.dreamplug.androidapp", "credpay") },
-    ];
     return (
       <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
         <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -1258,12 +1270,18 @@ export default function CustomerMenuPage() {
               <p className="text-2xl font-bold text-orange-500">{currSymbol}{amount}</p>
             </div>
 
-            {paymentIntent.enableStaticQr && paymentIntent.staticQrUrl && (
+            {dynamicUpiQr ? (
               <div className="border-t border-gray-100 pt-3">
-                <p className="text-xs text-gray-500 mb-2">Scan QR with any UPI app</p>
+                <p className="text-xs text-gray-500 mb-1 text-center">Scan with any UPI app to pay {currSymbol}{amount}</p>
+                <img src={dynamicUpiQr} alt={`UPI QR for ${currSymbol}${amount}`} className="mx-auto w-60 h-60 rounded-lg border border-gray-200 bg-white p-2" />
+                <p className="text-[11px] text-gray-400 text-center mt-2">Works with PhonePe, Google Pay, Paytm, BHIM, Amazon Pay, CRED and all bank UPI apps</p>
+              </div>
+            ) : paymentIntent.enableStaticQr && paymentIntent.staticQrUrl ? (
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs text-gray-500 mb-2 text-center">Scan QR with any UPI app</p>
                 <img src={paymentIntent.staticQrUrl} alt="UPI QR" className="mx-auto w-48 h-48 rounded-lg border border-gray-200" />
               </div>
-            )}
+            ) : null}
 
             {(paymentIntent.enableCopyUpiId ?? true) && upi && (
               <div className="border-t border-gray-100 pt-3">
@@ -1284,22 +1302,11 @@ export default function CustomerMenuPage() {
 
             {(paymentIntent.enableIntentLink ?? true) && intentUrl && (
               <div className="border-t border-gray-100 pt-3 space-y-2">
-                <p className="text-xs text-gray-500">Open UPI app to pay {currSymbol}{amount}</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {upiApps.map(app => app.href ? (
-                    <a
-                      key={app.name}
-                      href={app.href}
-                      className={`${app.color} text-white text-xs font-semibold text-center rounded-xl py-3 px-1 hover:opacity-90 active:opacity-80`}
-                    >
-                      {app.name}
-                    </a>
-                  ) : null)}
-                </div>
-                <a href={intentUrl} className="block w-full bg-orange-500 text-white text-center font-semibold rounded-xl py-3 mt-2 hover:bg-orange-600">
-                  Any other UPI app
+                <p className="text-xs text-gray-500 text-center">Paying from your phone?</p>
+                <a href={intentUrl} className="block w-full bg-orange-500 text-white text-center font-semibold rounded-xl py-3 hover:bg-orange-600">
+                  Open in UPI app
                 </a>
-                <p className="text-[11px] text-gray-400 text-center">If your app isn't installed, the system chooser will open the apps you have.</p>
+                <p className="text-[11px] text-gray-400 text-center">Your phone will let you choose any UPI app you have installed.</p>
               </div>
             )}
 
