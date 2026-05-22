@@ -1,218 +1,266 @@
 [
   {
-    "name": "Mysore Masala Dosa",
-    "category": "dosa",
-    "hint": "Mysore masala dosa with red garlic chutney smear inside, potato filling, coconut chutney and sambar",
-    "cuisine": "south-indian",
-    "slug": "mysore-masala-dosa",
-    "file": "mysore-masala-dosa.png"
+    "name": "Golgappa",
+    "category": "chaat",
+    "hint": "Delhi-style golgappa puris with spicy mint water in a clay matka, garnished with coriander",
+    "cuisine": "north-indian",
+    "slug": "golgappa",
+    "file": "golgappa.png"
   },
   {
-    "name": "Onion Rava Dosa",
-    "category": "dosa",
-    "hint": "lacy rava dosa topped with chopped onions, green chillies and coriander, crisp golden",
-    "cuisine": "south-indian",
-    "slug": "onion-rava-dosa",
-    "file": "onion-rava-dosa.png"
+    "name": "Puchka",
+    "category": "chaat",
+    "hint": "Bengali Kolkata puchka, crisp hollow puris stuffed with mashed potato, black chickpeas and tangy tamarind water, on a sal-leaf plate",
+    "cuisine": "east-indian",
+    "slug": "puchka",
+    "file": "puchka.png"
   },
   {
-    "name": "Paper Dosa",
-    "category": "dosa",
-    "hint": "extra-thin extra-long paper dosa rolled into a tube, golden crisp, with coconut chutney and sambar",
-    "cuisine": "south-indian",
-    "slug": "paper-dosa",
-    "file": "paper-dosa.png"
+    "name": "Jhal Muri",
+    "category": "chaat",
+    "hint": "Bengali jhal muri, spicy puffed rice mix with mustard oil, chopped onion, tomato, peanuts and coriander, in a paper cone",
+    "cuisine": "east-indian",
+    "slug": "jhal-muri",
+    "file": "jhal-muri.png"
   },
   {
-    "name": "Set Dosa",
-    "category": "dosa",
-    "hint": "Karnataka set dosa, stack of three small soft spongy dosas, with coconut chutney and sambar",
-    "cuisine": "south-indian",
-    "slug": "set-dosa",
-    "file": "set-dosa.png"
+    "name": "Aloo Tikki Chaat",
+    "category": "chaat",
+    "hint": "aloo tikki chaat topped with chole, whipped yogurt, tamarind chutney, green chutney, sev and pomegranate",
+    "cuisine": "north-indian",
+    "slug": "aloo-tikki-chaat",
+    "file": "aloo-tikki-chaat.png"
   },
   {
-    "name": "Ghee Roast Dosa",
-    "category": "dosa",
-    "hint": "Mangalore ghee roast dosa, deep golden glossy crisp dosa cone with ghee glaze, chutneys on side",
-    "cuisine": "south-indian",
-    "slug": "ghee-roast-dosa",
-    "file": "ghee-roast-dosa.png"
+    "name": "Raj Kachori",
+    "category": "chaat",
+    "hint": "giant crisp raj kachori shell loaded with sprouts, potato, yogurt, chutneys, sev and pomegranate",
+    "cuisine": "north-indian",
+    "slug": "raj-kachori",
+    "file": "raj-kachori.png"
   },
   {
-    "name": "Cheese Dosa",
-    "category": "dosa",
-    "hint": "crisp dosa with melted cheese filling oozing out, golden brown",
-    "cuisine": "south-indian",
-    "slug": "cheese-dosa",
-    "file": "cheese-dosa.png"
+    "name": "Dahi Bhalla",
+    "category": "chaat",
+    "hint": "soft lentil bhallas in creamy yogurt topped with tamarind chutney, green chutney, red chilli powder and sev",
+    "cuisine": "north-indian",
+    "slug": "dahi-bhalla",
+    "file": "dahi-bhalla.png"
   },
   {
-    "name": "Paneer Dosa",
-    "category": "dosa",
-    "hint": "dosa stuffed with crumbled spiced paneer bhurji filling",
-    "cuisine": "south-indian",
-    "slug": "paneer-dosa",
-    "file": "paneer-dosa.png"
+    "name": "Samosa Chaat",
+    "category": "chaat",
+    "hint": "crushed samosa topped with chole, yogurt, chutneys, onion, sev and coriander on a plate",
+    "cuisine": "north-indian",
+    "slug": "samosa-chaat",
+    "file": "samosa-chaat.png"
   },
   {
-    "name": "Podi Dosa",
-    "category": "dosa",
-    "hint": "dosa smeared with red gunpowder podi spice and ghee, folded, with chutney",
-    "cuisine": "south-indian",
-    "slug": "podi-dosa",
-    "file": "podi-dosa.png"
+    "name": "Kachori Chaat",
+    "category": "chaat",
+    "hint": "broken kachori topped with chole, yogurt, tamarind chutney and sev",
+    "cuisine": "north-indian",
+    "slug": "kachori-chaat",
+    "file": "kachori-chaat.png"
   },
   {
-    "name": "Neer Dosa",
-    "category": "dosa",
-    "hint": "Mangalorean neer dosa, soft white lacy rice crepe folded into triangles, with coconut chutney",
-    "cuisine": "south-indian",
-    "slug": "neer-dosa",
-    "file": "neer-dosa.png"
+    "name": "Chole Kulche",
+    "category": "chaat",
+    "hint": "Delhi chole kulche, soft kulcha bread with spicy chole curry, onion and lemon",
+    "cuisine": "north-indian",
+    "slug": "chole-kulche",
+    "file": "chole-kulche.png"
   },
   {
-    "name": "Onion Uttapam",
-    "category": "uttapam",
-    "hint": "thick spongy uttapam topped with chopped onions and green chillies, golden cooked",
-    "cuisine": "south-indian",
-    "slug": "onion-uttapam",
-    "file": "onion-uttapam.png"
+    "name": "Dabeli",
+    "category": "chaat",
+    "hint": "Gujarati Kutchi dabeli, sweet-spicy potato filling in a pav bun with pomegranate seeds, sev and roasted peanuts",
+    "cuisine": "west-indian",
+    "slug": "dabeli",
+    "file": "dabeli.png"
   },
   {
-    "name": "Tomato Uttapam",
-    "category": "uttapam",
-    "hint": "uttapam topped with chopped tomatoes and coriander, golden underside",
-    "cuisine": "south-indian",
-    "slug": "tomato-uttapam",
-    "file": "tomato-uttapam.png"
+    "name": "Bread Pakora",
+    "category": "chaat",
+    "hint": "golden deep-fried bread pakora triangles stuffed with spiced potato, with green chutney",
+    "cuisine": "north-indian",
+    "slug": "bread-pakora",
+    "file": "bread-pakora.png"
   },
   {
-    "name": "Mixed Uttapam",
-    "category": "uttapam",
-    "hint": "uttapam loaded with onions, tomatoes, capsicum, carrots and coriander toppings",
-    "cuisine": "south-indian",
-    "slug": "mixed-uttapam",
-    "file": "mixed-uttapam.png"
+    "name": "Aloo Samosa",
+    "category": "chaat",
+    "hint": "aloo samosa, golden flaky triangular pastries with spiced potato filling, served with chutneys",
+    "cuisine": "north-indian",
+    "slug": "aloo-samosa",
+    "file": "aloo-samosa.png"
   },
   {
-    "name": "Rava Idli",
-    "category": "idli",
-    "hint": "Karnataka rava idli, soft semolina idlis garnished with cashew and coriander, sambar on side",
-    "cuisine": "south-indian",
-    "slug": "rava-idli",
-    "file": "rava-idli.png"
+    "name": "Punjabi Samosa",
+    "category": "chaat",
+    "hint": "large Punjabi samosa with thick flaky crust and spiced potato-pea filling, served with tamarind and mint chutney",
+    "cuisine": "north-indian",
+    "slug": "punjabi-samosa",
+    "file": "punjabi-samosa.png"
   },
   {
-    "name": "Mini Idli",
-    "category": "idli",
-    "hint": "small bite-sized mini idlis bathed in sambar in a bowl, ghee on top",
-    "cuisine": "south-indian",
-    "slug": "mini-idli",
-    "file": "mini-idli.png"
+    "name": "Paneer Samosa",
+    "category": "chaat",
+    "hint": "samosa filled with spiced paneer and capsicum, golden crisp, with chutneys",
+    "cuisine": "north-indian",
+    "slug": "paneer-samosa",
+    "file": "paneer-samosa.png"
   },
   {
-    "name": "Thatte Idli",
-    "category": "idli",
-    "hint": "Karnataka large flat thatte idli on a plate, soft white, with chutney and sambar",
-    "cuisine": "south-indian",
-    "slug": "thatte-idli",
-    "file": "thatte-idli.png"
+    "name": "Pyaaz Kachori",
+    "category": "chaat",
+    "hint": "Rajasthani pyaaz kachori, golden round kachoris stuffed with spicy onion masala, with chutneys",
+    "cuisine": "north-indian",
+    "slug": "pyaaz-kachori",
+    "file": "pyaaz-kachori.png"
   },
   {
-    "name": "Sambar Idli",
-    "category": "idli",
-    "hint": "idlis soaked in hot sambar with vegetables in a bowl, ghee garnish",
-    "cuisine": "south-indian",
-    "slug": "sambar-idli",
-    "file": "sambar-idli.png"
+    "name": "Dal Kachori",
+    "category": "chaat",
+    "hint": "moong dal kachori, round crisp golden balls with spicy lentil filling, with tamarind chutney",
+    "cuisine": "north-indian",
+    "slug": "dal-kachori",
+    "file": "dal-kachori.png"
   },
   {
-    "name": "Sambar Vada",
-    "category": "vada",
-    "hint": "medu vadas soaked in hot sambar in a bowl, coriander garnish",
-    "cuisine": "south-indian",
-    "slug": "sambar-vada",
-    "file": "sambar-vada.png"
+    "name": "Matar Kachori",
+    "category": "chaat",
+    "hint": "green pea matar kachori, round golden kachoris with spicy green pea filling, with chutney",
+    "cuisine": "north-indian",
+    "slug": "matar-kachori",
+    "file": "matar-kachori.png"
   },
   {
-    "name": "Appam",
-    "category": "breakfast",
-    "hint": "Kerala appam, lacy crisp-edged soft-centred white rice hopper, served with vegetable stew",
-    "cuisine": "south-indian",
-    "slug": "appam",
-    "file": "appam.png"
+    "name": "Mirchi Bada",
+    "category": "chaat",
+    "hint": "Rajasthani mirchi bada, large green chilli stuffed with spiced potato, dipped in besan batter and deep-fried golden",
+    "cuisine": "north-indian",
+    "slug": "mirchi-bada",
+    "file": "mirchi-bada.png"
   },
   {
-    "name": "Puttu",
-    "category": "breakfast",
-    "hint": "Kerala puttu, cylindrical steamed rice flour and coconut layers, with kadala curry",
-    "cuisine": "south-indian",
-    "slug": "puttu",
-    "file": "puttu.png"
+    "name": "Batata Vada",
+    "category": "chaat",
+    "hint": "Maharashtrian batata vada, round golden besan-coated potato fritters with green chutney",
+    "cuisine": "west-indian",
+    "slug": "batata-vada",
+    "file": "batata-vada.png"
   },
   {
-    "name": "Idiyappam",
-    "category": "breakfast",
-    "hint": "Kerala idiyappam string hoppers, white rice noodle nests, with vegetable stew or sweetened coconut milk",
-    "cuisine": "south-indian",
-    "slug": "idiyappam",
-    "file": "idiyappam.png"
+    "name": "Paneer Pakora",
+    "category": "chaat",
+    "hint": "golden besan-battered paneer pakora cubes with green chutney",
+    "cuisine": "north-indian",
+    "slug": "paneer-pakora",
+    "file": "paneer-pakora.png"
   },
   {
-    "name": "Adai Dosa",
-    "category": "dosa",
-    "hint": "Tamil adai, thick mixed-lentil dosa, brown and crisp with onion and curry leaves",
-    "cuisine": "south-indian",
-    "slug": "adai-dosa",
-    "file": "adai-dosa.png"
+    "name": "Mix Pakora",
+    "category": "chaat",
+    "hint": "mixed vegetable pakoras — onion, potato, spinach, cauliflower — in a basket with green chutney",
+    "cuisine": "north-indian",
+    "slug": "mix-pakora",
+    "file": "mix-pakora.png"
   },
   {
-    "name": "Pesarattu",
-    "category": "dosa",
-    "hint": "Andhra green moong dal pesarattu, green-tinted dosa with chopped onions and ginger on top",
-    "cuisine": "south-indian",
-    "slug": "pesarattu",
-    "file": "pesarattu.png"
+    "name": "Palak Pakora",
+    "category": "chaat",
+    "hint": "crispy palak pakora spinach leaf fritters dipped in besan and deep-fried, with chutney",
+    "cuisine": "north-indian",
+    "slug": "palak-pakora",
+    "file": "palak-pakora.png"
   },
   {
-    "name": "Avial",
-    "category": "curry",
-    "hint": "Kerala avial, mixed vegetables in thick coconut-yogurt gravy with curry leaves and coconut oil drizzle",
-    "cuisine": "south-indian",
-    "slug": "avial",
-    "file": "avial.png"
+    "name": "Corn Chaat",
+    "category": "chaat",
+    "hint": "tangy spiced corn chaat with chopped onion, tomato, coriander, lemon and chaat masala in a cup",
+    "cuisine": "north-indian",
+    "slug": "corn-chaat",
+    "file": "corn-chaat.png"
   },
   {
-    "name": "Poriyal",
-    "category": "sabzi",
-    "hint": "South Indian dry poriyal stir-fried vegetables with grated coconut and curry leaves",
-    "cuisine": "south-indian",
-    "slug": "poriyal",
-    "file": "poriyal.png"
+    "name": "Masala Corn",
+    "category": "chaat",
+    "hint": "buttery masala sweet corn with chaat masala, lemon, coriander and chilli powder, in a paper cup",
+    "cuisine": "north-indian",
+    "slug": "masala-corn",
+    "file": "masala-corn.png"
   },
   {
-    "name": "Kootu",
-    "category": "curry",
-    "hint": "South Indian kootu, mixed vegetables and lentil curry with coconut and curry leaves",
-    "cuisine": "south-indian",
-    "slug": "kootu",
-    "file": "kootu.png"
+    "name": "Momos Veg",
+    "category": "chaat",
+    "hint": "steamed veg momos dumplings in a bamboo basket with fiery red chilli garlic schezwan chutney",
+    "cuisine": "indo-chinese",
+    "slug": "momos-veg",
+    "file": "momos-veg.png"
   },
   {
-    "name": "Vegetable Stew",
-    "category": "curry",
-    "hint": "Kerala vegetable stew, white coconut-milk curry with carrots, beans, potato and curry leaves, served with appam",
-    "cuisine": "south-indian",
-    "slug": "vegetable-stew",
-    "file": "vegetable-stew.png"
+    "name": "Fried Momos Veg",
+    "category": "chaat",
+    "hint": "golden crisp deep-fried veg momos with red schezwan dip",
+    "cuisine": "indo-chinese",
+    "slug": "fried-momos-veg",
+    "file": "fried-momos-veg.png"
   },
   {
-    "name": "Malabar Parotta",
-    "category": "bread",
-    "hint": "Kerala Malabar parotta, layered flaky white-flour flatbread torn open showing layers, on a plate",
-    "cuisine": "south-indian",
-    "slug": "malabar-parotta",
-    "file": "malabar-parotta.png"
+    "name": "Tandoori Momos Veg",
+    "category": "chaat",
+    "hint": "tandoori momos, char-grilled red marinated veg momos on a skewer with mint chutney",
+    "cuisine": "indo-chinese",
+    "slug": "tandoori-momos-veg",
+    "file": "tandoori-momos-veg.png"
+  },
+  {
+    "name": "Spring Roll Veg",
+    "category": "chaat",
+    "hint": "golden crispy vegetable spring rolls sliced diagonally with schezwan dip",
+    "cuisine": "indo-chinese",
+    "slug": "spring-roll-veg",
+    "file": "spring-roll-veg.png"
+  },
+  {
+    "name": "Frankie Veg",
+    "category": "chaat",
+    "hint": "Mumbai veg frankie, wheat roti wrap stuffed with spiced potato or veg filling, onions and chutneys, wrapped in butter paper",
+    "cuisine": "west-indian",
+    "slug": "frankie-veg",
+    "file": "frankie-veg.png"
+  },
+  {
+    "name": "Kathi Roll Veg",
+    "category": "chaat",
+    "hint": "Kolkata veg kathi roll, paratha wrap with paneer or aloo filling, onions, green chutney, wrapped in paper",
+    "cuisine": "east-indian",
+    "slug": "kathi-roll-veg",
+    "file": "kathi-roll-veg.png"
+  },
+  {
+    "name": "Paneer Roll",
+    "category": "chaat",
+    "hint": "paneer kathi roll, soft paratha wrap with grilled paneer tikka, onions, green chutney",
+    "cuisine": "north-indian",
+    "slug": "paneer-roll",
+    "file": "paneer-roll.png"
+  },
+  {
+    "name": "Aloo Roll",
+    "category": "chaat",
+    "hint": "aloo kathi roll, paratha wrap with spiced potato filling, onions, chutneys",
+    "cuisine": "north-indian",
+    "slug": "aloo-roll",
+    "file": "aloo-roll.png"
+  },
+  {
+    "name": "Chowmein Street Style",
+    "category": "chaat",
+    "hint": "Indian street-style veg chowmein hakka noodles stir-fried with vegetables, in a paper plate, garnished with spring onion",
+    "cuisine": "indo-chinese",
+    "slug": "chowmein-street-style",
+    "file": "chowmein-street-style.png"
   }
 ]

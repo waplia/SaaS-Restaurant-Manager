@@ -1,0 +1,144 @@
+6. Chinese / Indo-Chinese Veg
+Veg Hakka Noodles
+Veg Schezwan Noodles
+Veg Chowmein
+Chilli Garlic Noodles
+Veg Fried Rice
+Schezwan Fried Rice
+Triple Schezwan Rice
+Manchurian Gravy
+Manchurian Dry
+Chilli Paneer
+Paneer 65
+Chilli Mushroom
+Crispy Corn
+Honey Chilli Potato
+Chilli Potato
+Veg Spring Roll
+Veg Momos
+Fried Momos
+Tandoori Momos
+Schezwan Momos
+Veg Manchow Soup
+Hot and Sour Soup
+Sweet Corn Soup
+Lemon Coriander Soup
+Tomato Soup
+Clear Soup
+7. Tandoor & Starters Veg
+Paneer Tikka
+Malai Paneer Tikka
+Achari Paneer Tikka
+Hariyali Paneer Tikka
+Tandoori Paneer
+Paneer Seekh Kebab
+Veg Seekh Kebab
+Hara Bhara Kebab
+Dahi Ke Kebab
+Mushroom Tikka
+Tandoori Mushroom
+Stuffed Mushroom
+Tandoori Aloo
+Veg Platter
+Tandoori Broccoli
+Tandoori Momos
+Soya Chaap Tikka
+Malai Chaap
+Achari Chaap
+Afghani Chaap
+Veg Cutlet
+Cheese Corn Balls
+Crispy Veg
+8. Non-Veg Chicken
+Butter Chicken
+Chicken Curry
+Chicken Masala
+Kadai Chicken
+Chicken Do Pyaza
+Chicken Lababdar
+Chicken Tikka Masala
+Chicken Changezi
+Chicken Korma
+Chicken Handi
+Chicken Kolhapuri
+Chicken Chettinad
+Chicken Sukka
+Chicken Ghee Roast
+Chicken 65
+Chilli Chicken
+Chicken Manchurian
+Chicken Lollipop
+Chicken Fry
+Chicken Pakora
+Chicken Tikka
+Malai Chicken Tikka
+Achari Chicken Tikka
+Hariyali Chicken Tikka
+Tandoori Chicken
+Afghani Chicken
+Chicken Seekh Kebab
+Chicken Reshmi Kebab
+Chicken Tangdi Kebab
+Chicken Biryani
+Hyderabadi Chicken Biryani
+Lucknowi Chicken Biryani
+Kolkata Chicken Biryani
+Chicken Pulao
+Chicken Roll
+Chicken Shawarma
+Chicken Momos
+Chicken Fried Rice
+Chicken Noodles
+Chicken Soup
+Chicken Burger
+Chicken Sandwich
+Chicken Pizza
+9. Non-Veg Mutton
+Mutton Curry
+Mutton Masala
+Mutton Rogan Josh
+Mutton Korma
+Mutton Handi
+Mutton Rara
+Mutton Do Pyaza
+Mutton Keema
+Keema Matar
+Mutton Seekh Kebab
+Mutton Galouti Kebab
+Mutton Shami Kebab
+Mutton Boti Kebab
+Mutton Chaap
+Mutton Fry
+Mutton Sukka
+Mutton Ghee Roast
+Laal Maas
+Mutton Biryani
+Hyderabadi Mutton Biryani
+Lucknowi Mutton Biryani
+Kolkata Mutton Biryani
+Mutton Pulao
+Mutton Roll
+Mutton Soup
+Paya Soup
+Nihari
+Mutton Stew
+10. Non-Veg Egg
+Boiled Egg
+Half Fry Egg
+Omelette
+Masala Omelette
+Cheese Omelette
+Bread Omelette
+Egg Bhurji
+Egg Curry
+Egg Masala
+Egg Keema
+Egg Roll
+Egg Biryani
+Egg Fried Rice
+Egg Noodles
+Egg Sandwich
+Egg Paratha
+Egg Dosa
+Egg Pakora
+Egg Maggi
