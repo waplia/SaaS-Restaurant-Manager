@@ -105,7 +105,7 @@ export default function RegisterPage() {
         password: details.password,
       });
       acceptAuthPayload(r);
-      navigate("/setup-wizard");
+      navigate("/welcome");
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Registration failed"); }
     finally { setLoading(false); }
   }
@@ -126,7 +126,7 @@ export default function RegisterPage() {
         password: details.password,
       });
       acceptAuthPayload(r);
-      navigate("/setup-wizard");
+      navigate("/welcome");
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Registration failed"); }
     finally { setLoading(false); }
   }

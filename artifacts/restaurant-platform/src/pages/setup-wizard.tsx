@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Flame, ChevronRight, ChevronLeft, Loader2, Plus, Trash2, Check, Sparkles, Rocket,
@@ -256,62 +257,80 @@ export default function SetupWizardPage() {
   const isLast = stepIdx === STEPS.length - 1;
   const canGenerate = !!answers.restaurantType && typeof answers.taxRate === "number" && answers.taxRate >= 0;
 
+  const pct = Math.round(((stepIdx + 1) / STEPS.length) * 100);
+
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="border-b bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50">
+      <div className="border-b border-orange-100/70 bg-white/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center shadow-sm">
             <Flame className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="font-bold">KhanaLagao</div>
-            <div className="text-xs text-muted-foreground">AI Setup Wizard</div>
+            <div className="font-bold leading-tight">Let's set you up</div>
+            <div className="text-xs text-muted-foreground">{step.title}</div>
           </div>
-          <div className="ml-auto text-sm text-muted-foreground">Step {stepIdx + 1} of {STEPS.length}</div>
+          <div className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
+            {stepIdx + 1} / {STEPS.length} · {pct}%
+          </div>
         </div>
         <div className="max-w-4xl mx-auto px-4 pb-3">
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary transition-all" style={{ width: `${((stepIdx + 1) / STEPS.length) * 100}%` }} />
+          <div className="h-1.5 bg-orange-100 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-primary to-orange-600 rounded-full"
+              initial={false}
+              animate={{ width: `${pct}%` }}
+              transition={{ type: "spring", stiffness: 120, damping: 20 }}
+            />
           </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-10">
-        <div className="bg-card border rounded-2xl p-8 shadow-sm space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-primary" />
+      <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+            className="bg-white border border-orange-100 rounded-3xl p-6 md:p-8 shadow-lg shadow-orange-100/40 space-y-6"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/15 to-orange-200/40 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-6 h-6 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold tracking-tight">{step.title}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{stepDescription(step.id)}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold">{step.title}</h2>
-              <p className="text-sm text-muted-foreground">{stepDescription(step.id)}</p>
-            </div>
-          </div>
 
-          <StepBody stepId={step.id} answers={answers} patch={patch} />
+            <StepBody stepId={step.id} answers={answers} patch={patch} />
 
-          <div className="flex items-center justify-between pt-4 border-t">
-            <Button variant="ghost" onClick={prev} disabled={stepIdx === 0}>
-              <ChevronLeft className="w-4 h-4 mr-1" /> Back
-            </Button>
-            <div className="flex items-center gap-2">
-              {isOptional(step.id) && (
-                <Button variant="ghost" onClick={next}>Skip</Button>
-              )}
-              {isLast ? (
-                <Button onClick={() => { setGenerating(true); generateMut.mutate(); }} disabled={!canGenerate || generateMut.isPending}>
-                  <Sparkles className="w-4 h-4 mr-2" /> Generate setup with Khana AI
-                </Button>
-              ) : (
-                <Button onClick={next} disabled={!canProceed()}>
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              )}
+            <div className="flex items-center justify-between pt-5 border-t border-orange-100">
+              <Button variant="ghost" onClick={prev} disabled={stepIdx === 0} className="text-muted-foreground">
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+              <div className="flex items-center gap-2">
+                {isOptional(step.id) && (
+                  <Button variant="ghost" onClick={next} className="text-muted-foreground">Skip for now</Button>
+                )}
+                {isLast ? (
+                  <Button size="lg" onClick={() => { setGenerating(true); generateMut.mutate(); }} disabled={!canGenerate || generateMut.isPending} className="shadow-md shadow-orange-200">
+                    <Sparkles className="w-4 h-4 mr-2" /> Launch with Khana AI
+                  </Button>
+                ) : (
+                  <Button size="lg" onClick={next} disabled={!canProceed()} className="shadow-md shadow-orange-200">
+                    Continue <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-        <p className="text-xs text-center text-muted-foreground mt-4">
-          Generating your setup is free — you can edit everything later from Settings.
+          </motion.div>
+        </AnimatePresence>
+        <p className="text-xs text-center text-muted-foreground mt-5">
+          Free to set up. You can change anything later from Settings.
         </p>
       </div>
     </div>

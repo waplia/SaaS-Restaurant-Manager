@@ -58,6 +58,7 @@ import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import OnboardingPage from "@/pages/onboarding";
 import SetupWizardPage from "@/pages/setup-wizard";
+import WelcomePage from "@/pages/welcome";
 import SetupOnboardingPage from "@/pages/setup-onboarding";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import CompleteProfilePage from "@/pages/complete-profile";
@@ -317,6 +318,7 @@ function Router() {
       <Route path="/admin/health" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/metrics" component={() => <SuperAdminRoute component={AdminPage} />} />
       <Route path="/admin/implementations" component={() => <SuperAdminRoute component={AdminPage} />} />
+      <Route path="/welcome" component={() => <ProtectedRoute component={WelcomePage} />} />
       <Route path="/setup/onboarding" component={() => <ProtectedRoute component={SetupOnboardingPage} />} />
       <Route path="/admin/leads" component={() => <SuperAdminRoute component={AdminLeadsPage} />} />
       <Route path="/admin/audit-logs" component={() => <SuperAdminRoute component={AdminAuditLogsPage} />} />
