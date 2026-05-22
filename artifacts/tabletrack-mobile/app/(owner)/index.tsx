@@ -353,7 +353,12 @@ export default function OwnerDashboard() {
           here is LOCAL to the card label only and intentionally independent
           from the tenantBranches scope pills below, which compare separate
           tenant-level brands. */}
-      <RestaurantTopCard canSwitch={canSwitchScope} />
+      <RestaurantTopCard
+        canSwitch={canSwitchScope}
+        tenantBranches={tenantBranches}
+        scopeOutletId={scopeOutletId}
+        onPickOutlet={setScopeOutletId}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -801,42 +806,48 @@ type RestaurantBranch = {
   isActive?: boolean | null;
 };
 
-function RestaurantTopCard({ canSwitch }: { canSwitch: boolean }) {
+function RestaurantTopCard({
+  canSwitch,
+  tenantBranches,
+  scopeOutletId,
+  onPickOutlet,
+}: {
+  canSwitch: boolean;
+  tenantBranches: TenantBranch[];
+  scopeOutletId: number | null;
+  onPickOutlet: (id: number | null) => void;
+}) {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Local UI selection — purely controls the label shown on the card.
-  // Real dashboard data is not branch-scoped (yet), so switching here
-  // is informational. `null` = "All outlets".
-  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
 
+  // The card now drives the *real* dashboard scope (lifted into AuthContext).
+  // Outlets shown here are tenant branches — each item's `id` is a separate
+  // restaurantId that the dashboard / reports APIs can be scoped to. (The
+  // previous behaviour pointed at `branchesTable` sub-branches of one
+  // restaurant, which is a different concept and made the picker
+  // informational only — sales never actually changed when switching.)
+  const branches: TenantBranch[] = (tenantBranches ?? []).filter(b => b.isActive !== false);
+  const activeBranch = scopeOutletId == null ? null : branches.find(b => b.id === scopeOutletId);
+
+  // For the avatar/logo on the card we show the active outlet's restaurant
+  // info; when "all outlets" is selected we fall back to the user's own
+  // restaurant record. Skipped when no outlet is resolvable.
+  const cardRestaurantId = activeBranch?.id ?? restaurantId;
   const restaurantQ = useQuery({
-    queryKey: ["restaurant-info", restaurantId],
+    queryKey: ["restaurant-info", cardRestaurantId],
     queryFn: () => customFetch<{ id: number; name: string; logoUrl?: string | null; city?: string | null }>(
-      `/api/restaurants/${restaurantId}`,
+      `/api/restaurants/${cardRestaurantId}`,
     ),
-    enabled: restaurantId != null,
+    enabled: cardRestaurantId != null,
     staleTime: 5 * 60 * 1000,
   });
-  // Outlets in this product = branches of the active restaurant (matches
-  // the Outlets management page in More). Tenant-level "brands" are a
-  // separate concept used by the comparison rail further down the home.
-  const branchesQ = useQuery({
-    queryKey: ["branches", restaurantId],
-    queryFn: () => customFetch<RestaurantBranch[]>(`/api/restaurants/${restaurantId}/branches`).catch(() => [] as RestaurantBranch[]),
-    enabled: restaurantId != null,
-    staleTime: 60 * 1000,
-  });
   const r = restaurantQ.data;
-  const branches: RestaurantBranch[] = Array.isArray(branchesQ.data)
-    ? branchesQ.data.filter(b => b.isActive !== false)
-    : [];
-  const activeBranch = selectedBranchId == null ? null : branches.find(b => b.id === selectedBranchId);
   const outletLabel = activeBranch
     ? activeBranch.name
     : branches.length
       ? `All outlets · ${branches.length}`
-      : (r?.city || "");
+      : (r?.name || r?.city || "");
 
   // Restaurant Profile lives under More now — the home top card is purely
   // an outlet switcher. If the user can't switch outlets (single outlet
@@ -880,25 +891,25 @@ function RestaurantTopCard({ canSwitch }: { canSwitch: boolean }) {
               <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 8 }} />
               <Text style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: colors.foreground, paddingHorizontal: 4, paddingBottom: 8 }}>Switch outlet</Text>
               <Pressable
-                onPress={() => { setSelectedBranchId(null); setPickerOpen(false); }}
-                style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: selectedBranchId == null ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
+                onPress={() => { onPickOutlet(null); setPickerOpen(false); }}
+                style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: scopeOutletId == null ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
               >
-                <Ionicons name="layers-outline" size={18} color={selectedBranchId == null ? colors.primary : colors.mutedForeground} />
-                <Text style={{ flex: 1, fontFamily: "Inter_600SemiBold", color: selectedBranchId == null ? colors.primary : colors.foreground }}>All outlets</Text>
-                {selectedBranchId == null && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                <Ionicons name="layers-outline" size={18} color={scopeOutletId == null ? colors.primary : colors.mutedForeground} />
+                <Text style={{ flex: 1, fontFamily: "Inter_600SemiBold", color: scopeOutletId == null ? colors.primary : colors.foreground }}>All outlets</Text>
+                {scopeOutletId == null && <Ionicons name="checkmark" size={18} color={colors.primary} />}
               </Pressable>
               {branches.map(b => (
                 <Pressable
                   key={b.id}
-                  onPress={() => { setSelectedBranchId(b.id); setPickerOpen(false); }}
-                  style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: selectedBranchId === b.id ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
+                  onPress={() => { onPickOutlet(b.id); setPickerOpen(false); }}
+                  style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: scopeOutletId === b.id ? colors.primary + "1A" : "transparent", opacity: pressed ? 0.7 : 1 })}
                 >
-                  <Ionicons name={b.isMain ? "star" : "business-outline"} size={18} color={selectedBranchId === b.id ? colors.primary : colors.mutedForeground} />
+                  <Ionicons name="business-outline" size={18} color={scopeOutletId === b.id ? colors.primary : colors.mutedForeground} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: "Inter_600SemiBold", color: selectedBranchId === b.id ? colors.primary : colors.foreground }}>{b.name}</Text>
-                    {b.address ? <Text numberOfLines={1} style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{b.address}</Text> : null}
+                    <Text numberOfLines={1} style={{ fontFamily: "Inter_600SemiBold", color: scopeOutletId === b.id ? colors.primary : colors.foreground }}>{b.name}</Text>
+                    {b.city ? <Text numberOfLines={1} style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{b.city}</Text> : null}
                   </View>
-                  {selectedBranchId === b.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  {scopeOutletId === b.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                 </Pressable>
               ))}
               <Pressable
