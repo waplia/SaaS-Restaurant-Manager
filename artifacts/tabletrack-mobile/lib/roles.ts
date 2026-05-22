@@ -39,6 +39,7 @@ export type ModuleKey =
   | "customers"
   | "feedback"
   | "growth"
+  | "coupons"
   | "khana_ai"
   | "finance"
   | "expenses"
@@ -54,7 +55,7 @@ export type ModuleKey =
 const FULL: ModuleKey[] = [
   "dashboard", "orders", "kitchen", "tables", "waiter_requests", "reservations",
   "delivery", "inventory", "menu", "staff", "attendance", "tasks", "customers",
-  "feedback", "growth", "khana_ai", "finance", "expenses", "reports",
+  "feedback", "growth", "coupons", "khana_ai", "finance", "expenses", "reports",
   "notifications", "alerts", "approvals", "outlets", "support", "settings",
   "billing",
 ];
@@ -65,7 +66,7 @@ const ROLE_ACCESS: Record<StaffRole, ModuleKey[]> = {
   manager: [
     "dashboard", "orders", "kitchen", "tables", "waiter_requests", "reservations",
     "delivery", "inventory", "menu", "staff", "attendance", "tasks",
-    "customers", "feedback", "growth", "khana_ai", "reports", "notifications",
+    "customers", "feedback", "growth", "coupons", "khana_ai", "reports", "notifications",
     "alerts", "approvals", "outlets", "support", "settings", "billing",
   ],
   cashier: [
@@ -98,7 +99,7 @@ const ROLE_ACCESS: Record<StaffRole, ModuleKey[]> = {
     "approvals", "support", "settings",
   ],
   marketing: [
-    "customers", "feedback", "growth", "khana_ai", "reports", "notifications",
+    "customers", "feedback", "growth", "coupons", "khana_ai", "reports", "notifications",
     "alerts", "support", "settings",
   ],
   accountant: [

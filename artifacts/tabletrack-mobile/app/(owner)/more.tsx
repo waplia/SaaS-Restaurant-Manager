@@ -36,7 +36,7 @@ const MODULES: ModuleDef[] = [
   { key: "reports", label: "Reports", desc: "Sales, P&L, staff, AI", icon: "bar-chart-outline", href: "/(owner)/reports", group: "money" },
   { key: "billing", label: "Plans & Billing", desc: "Plan, usage, invoices, upgrade", icon: "pricetags-outline", href: "/(owner)/billing", group: "system" },
   { key: "growth", label: "Growth Engine", desc: "Campaigns, coupons, referrals", icon: "rocket-outline", href: "/(owner)/growth", group: "grow" },
-  { key: "growth", label: "Coupons", desc: "Create, edit & delete discount codes", icon: "pricetag-outline", href: "/(owner)/coupons", group: "grow" },
+  { key: "coupons", label: "Coupons", desc: "Create, edit & delete discount codes", icon: "pricetag-outline", href: "/(owner)/coupons", group: "grow" },
   { key: "khana_ai", label: "Khana AI", desc: "AI tools & chat", icon: "sparkles-outline", href: "/(owner)/khana-ai", group: "grow" },
   { key: "outlets", label: "Outlets", desc: "Switch branch / compare", icon: "business-outline", href: "/(owner)/outlets", group: "system" },
   { key: "notifications", label: "Notifications", desc: "All alerts in one place", icon: "notifications-outline", href: "/(owner)/notifications", group: "system" },
