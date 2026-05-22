@@ -24,7 +24,6 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { AIProviderService } from "../lib/aiProviderService";
 import {
-  requireAiCredits,
   commitReservation,
   refundReservation,
   reserveCredits,
