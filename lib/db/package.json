@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./planFeatures": "./src/planFeatures.ts",
-    "./addonCatalogue": "./src/addonCatalogue.ts"
+    "./addonCatalogue": "./src/addonCatalogue.ts",
+    "./smsProviderSchema": "./src/smsProviderSchema.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

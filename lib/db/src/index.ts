@@ -17,3 +17,4 @@ export * from "./schema";
 export * from "./planFeatures";
 export * from "./auditEntities";
 export * from "./scopes";
+export * from "./smsProviderSchema";

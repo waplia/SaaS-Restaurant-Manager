@@ -12,6 +12,11 @@ import {
   type SmsProviderType,
   type SmsTemplateEventKey,
 } from "../lib/db";
+import {
+  SMS_PROVIDER_SCHEMAS,
+  validateSmsProviderConfig,
+  getSmsProviderSchema,
+} from "@workspace/db/smsProviderSchema";
 import { requireSuperAdmin } from "../middleware/authorize";
 import {
   sendSmsMessage,
@@ -108,6 +113,13 @@ router.post("/admin/sms/providers", requireSuperAdmin, async (req, res) => {
     return;
   }
   if (!name || typeof name !== "string") { res.status(400).json({ error: "name is required" }); return; }
+  // Field-level validation driven by the shared provider schema so the
+  // form and the API can never disagree on required fields.
+  const fieldErrors = validateSmsProviderConfig(type, config, null);
+  if (fieldErrors.length > 0) {
+    res.status(400).json({ error: fieldErrors[0].message, fieldErrors });
+    return;
+  }
   if (isDefault) {
     await db.update(smsProvidersTable).set({ isDefault: false }).where(eq(smsProvidersTable.isDefault, true));
   }
@@ -122,9 +134,11 @@ router.patch("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => 
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { name, isEnabled, isDefault, config } = req.body ?? {};
-  if (isDefault === true) {
-    await db.update(smsProvidersTable).set({ isDefault: false }).where(eq(smsProvidersTable.isDefault, true));
-  }
+  // Load current row up-front so we can merge secrets and validate the
+  // post-merge config against the schema.
+  const [existing] = await db.select().from(smsProvidersTable).where(eq(smsProvidersTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (typeof name === "string") update.name = name;
   if (typeof isEnabled === "boolean") update.isEnabled = isEnabled;
@@ -132,14 +146,31 @@ router.patch("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => 
   if (config && typeof config === "object") {
     // Merge against stored config so masked secrets echoed back by the UI
     // don't overwrite the real credentials in the DB.
-    const [existing] = await db.select({ config: smsProvidersTable.config })
-      .from(smsProvidersTable).where(eq(smsProvidersTable.id, id));
-    update.config = mergeProviderConfig(existing?.config, config);
+    const merged = mergeProviderConfig(existing.config, config);
+    const existingCfg = (existing.config && typeof existing.config === "object" && !Array.isArray(existing.config))
+      ? (existing.config as Record<string, unknown>) : {};
+    const fieldErrors = validateSmsProviderConfig(existing.type, merged, existingCfg);
+    if (fieldErrors.length > 0) {
+      res.status(400).json({ error: fieldErrors[0].message, fieldErrors });
+      return;
+    }
+    update.config = merged;
+  }
+  if (isDefault === true) {
+    await db.update(smsProvidersTable).set({ isDefault: false }).where(eq(smsProvidersTable.isDefault, true));
   }
   const [row] = await db.update(smsProvidersTable).set(update).where(eq(smsProvidersTable.id, id)).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   await audit(req.user?.id, "sms.provider.updated", "sms_provider", id, { fields: Object.keys(update) });
   res.json(maskProviderRow(row));
+});
+
+// Per-provider field schema for the Add/Edit Provider form. Returns the
+// same descriptors used by the API to validate `config` on save, so the
+// UI can render labeled inputs, helper text, and the right input kind
+// without hard-coding the shape on the client.
+router.get("/admin/sms/provider-schemas", requireSuperAdmin, (_req, res) => {
+  res.json(SMS_PROVIDER_SCHEMAS);
 });
 
 router.delete("/admin/sms/providers/:id", requireSuperAdmin, async (req, res) => {
@@ -158,9 +189,36 @@ router.post("/admin/sms/providers/:id/test", requireSuperAdmin, async (req, res)
     body: typeof message === "string" && message.length > 0 ? message : "Khana Lagao SMS test from super-admin console.",
     providerId: id,
     bypassQuota: true,
+    messageType: "test",
   });
-  await audit(req.user?.id, "sms.provider.tested", "sms_provider", id, { ok: result.ok, status: result.status });
-  res.status(result.ok ? 200 : 502).json(result);
+
+  // Record the outcome on the provider row so the list view can show a
+  // "Reachable / Last test failed / Not tested" pill at a glance.
+  const errSummary = result.ok
+    ? null
+    : [result.errorCode, result.error].filter(Boolean).join(": ").slice(0, 500);
+  await db.update(smsProvidersTable).set({
+    lastTestStatus: result.ok ? "ok" : "failed",
+    lastTestError: errSummary,
+    lastTestAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(smsProvidersTable.id, id));
+
+  await audit(req.user?.id, "sms.provider.tested", "sms_provider", id, {
+    ok: result.ok, status: result.status, errorCode: result.errorCode ?? null,
+  });
+  // Always reply 200 — the body's `ok` flag is the source of truth, so
+  // the UI can render the gateway's real error code/message inline
+  // without the API client treating a soft-fail as a hard HTTP error.
+  res.status(200).json({
+    ok: result.ok,
+    status: result.status,
+    error: result.error ?? null,
+    errorCode: result.errorCode ?? null,
+    providerMessageId: result.providerMessageId ?? null,
+    providerSessionId: result.providerSessionId ?? null,
+    testedAt: new Date().toISOString(),
+  });
 });
 
 // ───────── Templates ─────────

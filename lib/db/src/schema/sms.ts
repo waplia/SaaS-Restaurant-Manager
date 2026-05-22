@@ -43,6 +43,12 @@ export const smsProvidersTable = pgTable("sms_providers", {
   balance: decimal("balance", { precision: 12, scale: 2 }),
   balanceCurrency: text("balance_currency"),
   balanceCheckedAt: timestamp("balance_checked_at"),
+  // Outcome of the most recent "Send test" run from the super-admin
+  // console: "ok" | "failed" | null (= never tested). Drives the
+  // "Reachable / Last test failed / Not tested" pill on the providers list.
+  lastTestStatus: text("last_test_status"),
+  lastTestError: text("last_test_error"),
+  lastTestAt: timestamp("last_test_at"),
   createdBy: integer("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

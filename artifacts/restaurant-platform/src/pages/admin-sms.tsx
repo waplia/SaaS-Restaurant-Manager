@@ -1,6 +1,7 @@
-import { useState } from "react";
+import * as React from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch, apiAction } from "@/lib/api";
+import { apiFetch, apiAction, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,18 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, MessageSquare, Plus, RefreshCcw, Send, Trash2, FileText, Activity, BarChart3, Settings as SettingsIcon } from "lucide-react";
+import { Loader2, MessageSquare, Plus, RefreshCcw, Send, Trash2, FileText, Activity, BarChart3, Settings as SettingsIcon, Eye, EyeOff, CheckCircle2, XCircle, CircleDashed } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SMS_PROVIDER_TYPE_OPTIONS,
+  getSmsProviderSchema,
+  smsProviderDefaultConfig,
+  validateSmsProviderConfig,
+  isMaskedSmsSecret,
+  type SmsProviderField,
+  type SmsProviderSchema,
+} from "@workspace/db/smsProviderSchema";
 
-const PROVIDER_TYPES = [
-  { value: "twilio", label: "Twilio" },
-  { value: "msg91", label: "MSG91 (India / DLT)" },
-  { value: "textlocal", label: "Textlocal" },
-  { value: "fast2sms", label: "Fast2SMS" },
-  { value: "gupshup", label: "Gupshup Enterprise" },
-  { value: "2factor", label: "2Factor.in (India / DLT)" },
-  { value: "custom", label: "Custom HTTP" },
-] as const;
+const PROVIDER_TYPES = SMS_PROVIDER_TYPE_OPTIONS;
 
 const EVENT_KEYS = [
   "welcome", "otp", "trial_ending", "subscription_activated",
@@ -32,7 +34,10 @@ type SubTab = "providers" | "templates" | "logs" | "failed" | "usage";
 type SmsProvider = {
   id: number; type: string; name: string;
   isEnabled: boolean; isDefault: boolean;
-  config: Record<string, string>;
+  config: Record<string, unknown>;
+  lastTestStatus: "ok" | "failed" | null;
+  lastTestError: string | null;
+  lastTestAt: string | null;
   createdAt: string;
 };
 type SmsTemplate = {
@@ -115,15 +120,17 @@ function ProvidersPanel() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground"><tr>
               <th className="text-left p-3">Name</th><th className="text-left p-3">Type</th>
+              <th className="text-left p-3">Status</th>
               <th className="text-left p-3">Enabled</th><th className="text-left p-3">Default</th>
               <th className="text-right p-3">Actions</th>
             </tr></thead>
             <tbody>
-              {providers?.length === 0 && <tr><td colSpan={5} className="text-center p-6 text-muted-foreground">No providers configured yet.</td></tr>}
+              {providers?.length === 0 && <tr><td colSpan={6} className="text-center p-6 text-muted-foreground">No providers configured yet.</td></tr>}
               {providers?.map(p => (
                 <tr key={p.id} className="border-t border-border">
                   <td className="p-3 font-medium">{p.name}</td>
                   <td className="p-3 text-muted-foreground">{p.type}</td>
+                  <td className="p-3"><ProviderStatusPill provider={p} /></td>
                   <td className="p-3">{p.isEnabled ? "✓" : "—"}</td>
                   <td className="p-3">{p.isDefault ? "★" : "—"}</td>
                   <td className="p-3 text-right space-x-1">
@@ -147,56 +154,306 @@ function ProvidersPanel() {
   );
 }
 
+function ProviderStatusPill({ provider }: { provider: SmsProvider }) {
+  const when = provider.lastTestAt ? new Date(provider.lastTestAt).toLocaleString() : null;
+  if (provider.lastTestStatus === "ok") {
+    return (
+      <span title={`Last tested ${when}`} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
+        <CheckCircle2 className="w-3 h-3" />Reachable
+        {when && <span className="text-[10px] text-green-700/70">· {when}</span>}
+      </span>
+    );
+  }
+  if (provider.lastTestStatus === "failed") {
+    return (
+      <span title={provider.lastTestError ? `${provider.lastTestError}\n(${when ?? ""})` : `Last tested ${when}`}
+        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">
+        <XCircle className="w-3 h-3" />Last test failed
+        {when && <span className="text-[10px] text-red-700/70">· {when}</span>}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+      <CircleDashed className="w-3 h-3" />Not tested
+    </span>
+  );
+}
+
+// ─────────── Provider field input (driven by the shared schema) ───────────
+function ProviderFieldInput({
+  field, value, onChange, error,
+}: {
+  field: SmsProviderField;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  error?: string;
+}) {
+  const [reveal, setReveal] = useState(false);
+  const id = `cfg-${field.key}`;
+  const errorCls = error ? "border-destructive focus-visible:ring-destructive" : "";
+
+  let input: React.JSX.Element;
+  if (field.kind === "boolean") {
+    input = (
+      <div className="flex items-center justify-between">
+        <Label htmlFor={id} className="font-normal">{field.label}</Label>
+        <Switch id={id} checked={value === true} onCheckedChange={onChange} />
+      </div>
+    );
+  } else if (field.kind === "select") {
+    input = (
+      <Select value={String(value ?? field.defaultValue ?? "")} onValueChange={onChange}>
+        <SelectTrigger id={id} className={errorCls}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {(field.options ?? []).map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    );
+  } else if (field.kind === "number") {
+    input = (
+      <Input id={id} type="number" className={errorCls}
+        min={field.min} max={field.max}
+        value={value === undefined || value === null ? "" : String(value)}
+        placeholder={field.placeholder}
+        onChange={e => {
+          const raw = e.target.value;
+          if (raw === "") { onChange(undefined); return; }
+          const n = Number(raw);
+          onChange(Number.isFinite(n) ? n : raw);
+        }}
+      />
+    );
+  } else if (field.kind === "textarea") {
+    input = (
+      <Textarea id={id} rows={4} className={`font-mono text-xs ${errorCls}`}
+        value={typeof value === "string" ? value : (value == null ? "" : JSON.stringify(value, null, 2))}
+        placeholder={field.placeholder}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+  } else if (field.kind === "secret") {
+    input = (
+      <div className="relative">
+        <Input id={id} type={reveal ? "text" : "password"}
+          className={`pr-9 ${errorCls}`}
+          autoComplete="off"
+          value={typeof value === "string" ? value : ""}
+          placeholder={field.placeholder ?? (isMaskedSmsSecret(value) ? "" : "")}
+          onChange={e => onChange(e.target.value)}
+        />
+        <button type="button" tabIndex={-1}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+          onClick={() => setReveal(v => !v)}
+          aria-label={reveal ? "Hide" : "Show"}>
+          {reveal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    );
+  } else {
+    input = (
+      <Input id={id} type={field.kind === "url" ? "url" : "text"} className={errorCls}
+        value={typeof value === "string" ? value : (value == null ? "" : String(value))}
+        placeholder={field.placeholder}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+  }
+
+  if (field.kind === "boolean") {
+    return (
+      <div className="space-y-1">
+        {input}
+        {field.helper && <p className="text-xs text-muted-foreground">{field.helper}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{field.label}{field.required && <span className="text-destructive"> *</span>}</Label>
+      {input}
+      {field.helper && <p className="text-xs text-muted-foreground">{field.helper}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 function ProviderDialog({ provider, onClose }: { provider: SmsProvider | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(provider?.name ?? "");
   const [type, setType] = useState<string>(provider?.type ?? "twilio");
   const [isEnabled, setIsEnabled] = useState(provider?.isEnabled ?? true);
   const [isDefault, setIsDefault] = useState(provider?.isDefault ?? false);
-  const [configJson, setConfigJson] = useState(JSON.stringify(provider?.config ?? {}, null, 2));
+  // Seed config: existing values for edits, or schema-provided defaults
+  // for new providers. Persisted across type switches via per-type state
+  // so the admin doesn't lose data when they change their mind.
+  const initialPerType = useMemo(() => {
+    const seed: Record<string, Record<string, unknown>> = {};
+    const startType = provider?.type ?? "twilio";
+    seed[startType] = provider
+      ? { ...(provider.config ?? {}) }
+      : { ...smsProviderDefaultConfig(startType) };
+    return seed;
+  }, [provider]);
+  const [perTypeConfig, setPerTypeConfig] = useState<Record<string, Record<string, unknown>>>(initialPerType);
+  const [showAdvanced, setShowAdvanced] = useState(type === "custom");
+  const [advancedJson, setAdvancedJson] = useState<string>(() =>
+    JSON.stringify(perTypeConfig[type] ?? {}, null, 2));
+  const [advancedJsonError, setAdvancedJsonError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const schema: SmsProviderSchema | null = getSmsProviderSchema(type);
+  const config = perTypeConfig[type] ?? {};
+
+  function switchType(next: string) {
+    setType(next);
+    setFieldErrors({});
+    setPerTypeConfig(prev => {
+      if (prev[next]) return prev;
+      return { ...prev, [next]: { ...smsProviderDefaultConfig(next) } };
+    });
+    // Reset advanced JSON to mirror the newly-active config.
+    setAdvancedJson(JSON.stringify(perTypeConfig[next] ?? smsProviderDefaultConfig(next), null, 2));
+    setAdvancedJsonError(null);
+    if (next === "custom") setShowAdvanced(true);
+  }
+
+  function setFieldValue(key: string, value: unknown) {
+    setPerTypeConfig(prev => {
+      const cur = { ...(prev[type] ?? {}) };
+      if (value === undefined) delete cur[key];
+      else cur[key] = value;
+      const nextState = { ...prev, [type]: cur };
+      // Keep the advanced JSON view in sync when it's not the active editor.
+      if (!showAdvanced) setAdvancedJson(JSON.stringify(cur, null, 2));
+      return nextState;
+    });
+    if (fieldErrors[key]) {
+      setFieldErrors(prev => {
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      });
+    }
+  }
+
+  function commitAdvancedJson(text: string) {
+    setAdvancedJson(text);
+    try {
+      const parsed = text.trim() === "" ? {} : JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setAdvancedJsonError("Must be a JSON object");
+        return;
+      }
+      setAdvancedJsonError(null);
+      setPerTypeConfig(prev => ({ ...prev, [type]: parsed as Record<string, unknown> }));
+    } catch (e) {
+      setAdvancedJsonError((e as Error).message);
+    }
+  }
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      let config: Record<string, unknown>;
-      try { config = JSON.parse(configJson || "{}"); }
-      catch { throw new Error("Config must be valid JSON"); }
+      if (!name.trim()) throw new Error("Name is required");
+      if (advancedJsonError) throw new Error(`Advanced JSON: ${advancedJsonError}`);
+      const errs = validateSmsProviderConfig(type, config, provider?.config ?? null);
+      if (errs.length > 0) {
+        const map: Record<string, string> = {};
+        for (const e of errs) map[e.key] = e.message;
+        setFieldErrors(map);
+        throw new Error(errs[0].message);
+      }
       const body = { name, type, isEnabled, isDefault, config };
       return provider
         ? apiAction(`/admin/sms/providers/${provider.id}`, "PATCH", body)
         : apiAction("/admin/sms/providers", "POST", body);
     },
     onSuccess: () => { toast.success("Provider saved"); qc.invalidateQueries({ queryKey: ["admin", "sms", "providers"] }); onClose(); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      // Hydrate inline errors from the server's field-level validation if present.
+      if (e instanceof ApiError && e.data && typeof e.data === "object") {
+        const data = e.data as { fieldErrors?: { key: string; message: string }[] };
+        if (Array.isArray(data.fieldErrors)) {
+          const map: Record<string, string> = {};
+          for (const f of data.fieldErrors) map[f.key] = f.message;
+          setFieldErrors(map);
+        }
+      }
+      toast.error(e.message);
+    },
   });
-
-  const placeholder: Record<string, string> = {
-    twilio: '{ "accountSid": "AC...", "authToken": "...", "senderId": "+1XXXXXXXXXX" }',
-    msg91: '{ "authKey": "...", "senderId": "KHANAL", "route": "4", "countryCode": "91" }',
-    textlocal: '{ "apiKey": "...", "senderId": "TXTLCL" }',
-    fast2sms: '{ "apiKey": "...", "route": "q", "senderId": "TXTLCL" }',
-    gupshup: '{ "apiKey": "...", "senderId": "...", "userId": "..." }',
-    "2factor": '{\n  "apiKey": "...",\n  "senderId": "TFCTR",\n  "otpTemplateName": "OTP1",\n  "transactionalTemplateId": "",\n  "promotionalTemplateId": "",\n  "defaultCountryCode": "+91",\n  "otpLength": 6,\n  "otpExpiryMinutes": 5,\n  "resendCooldownSeconds": 30,\n  "maxAttempts": 5,\n  "maxResends": 3,\n  "dailyLimit": 0,\n  "monthlyLimit": 0,\n  "smsOtpEnabled": true,\n  "voiceOtpEnabled": false,\n  "transactionalEnabled": true,\n  "promotionalEnabled": true,\n  "mode": "live"\n}',
-    custom: '{ "baseUrl": "https://gateway.example.com/send", "method": "POST", "headers": { "Authorization": "Bearer …" }, "bodyTemplate": "{\\"to\\":\\"{{to}}\\",\\"message\\":\\"{{message}}\\"}" }',
-  };
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{provider ? "Edit provider" : "Add SMS provider"}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-          <div className="space-y-1"><Label>Provider type</Label>
-            <Select value={type} onValueChange={setType}>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="prov-name">Name <span className="text-destructive">*</span></Label>
+            <Input id="prov-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Twilio production" />
+          </div>
+          <div className="space-y-1">
+            <Label>Provider type</Label>
+            <Select value={type} onValueChange={switchType} disabled={!!provider}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{PROVIDER_TYPES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
             </Select>
+            {schema?.description && <p className="text-xs text-muted-foreground">{schema.description}</p>}
+            {provider && <p className="text-xs text-muted-foreground">Type can't be changed for an existing provider.</p>}
           </div>
           <div className="flex items-center justify-between"><Label>Enabled</Label><Switch checked={isEnabled} onCheckedChange={setIsEnabled} /></div>
           <div className="flex items-center justify-between"><Label>Default provider</Label><Switch checked={isDefault} onCheckedChange={setIsDefault} /></div>
-          <div className="space-y-1">
-            <Label>Config (JSON)</Label>
-            <Textarea rows={8} className="font-mono text-xs" value={configJson} onChange={e => setConfigJson(e.target.value)} placeholder={placeholder[type]} />
-            <p className="text-xs text-muted-foreground">Example for {type}: <code>{placeholder[type]}</code></p>
+
+          {!showAdvanced && schema && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <h4 className="text-sm font-semibold">{schema.label} credentials</h4>
+              {schema.fields.map(field => (
+                <ProviderFieldInput
+                  key={field.key}
+                  field={field}
+                  value={config[field.key]}
+                  error={fieldErrors[field.key]}
+                  onChange={v => setFieldValue(field.key, v)}
+                />
+              ))}
+              {provider && schema.fields.some(f => f.kind === "secret") && (
+                <p className="text-xs text-muted-foreground">
+                  Existing secrets are masked. Leave them as-is to keep the stored value.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="border-t border-border pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Advanced (raw JSON)</Label>
+              <Switch checked={showAdvanced} onCheckedChange={v => {
+                setShowAdvanced(v);
+                if (v) setAdvancedJson(JSON.stringify(config, null, 2));
+                else if (!advancedJsonError) {
+                  // Pull JSON edits back into the per-field form.
+                  try {
+                    const parsed = JSON.parse(advancedJson || "{}");
+                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                      setPerTypeConfig(prev => ({ ...prev, [type]: parsed as Record<string, unknown> }));
+                    }
+                  } catch { /* keep what we had */ }
+                }
+              }} />
+            </div>
+            {showAdvanced && (
+              <>
+                <Textarea rows={8} className="font-mono text-xs"
+                  value={advancedJson}
+                  onChange={e => commitAdvancedJson(e.target.value)}
+                />
+                {advancedJsonError && <p className="text-xs text-destructive">{advancedJsonError}</p>}
+                <p className="text-xs text-muted-foreground">
+                  Edits here apply to the same config saved by the form above. Use this for unknown keys or Custom HTTP power-user setups.
+                </p>
+              </>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -208,14 +465,40 @@ function ProviderDialog({ provider, onClose }: { provider: SmsProvider | null; o
   );
 }
 
+type ProviderTestResponse = {
+  ok: boolean;
+  status: string;
+  error: string | null;
+  errorCode: string | null;
+  providerMessageId: string | null;
+  providerSessionId: string | null;
+  testedAt: string;
+};
+
 function ProviderTestDialog({ provider, onClose }: { provider: SmsProvider; onClose: () => void }) {
+  const qc = useQueryClient();
   const [to, setTo] = useState("");
   const [message, setMessage] = useState("KhanaLagao SMS test from super-admin console.");
+  const [result, setResult] = useState<ProviderTestResponse | null>(null);
   const sendMut = useMutation({
-    mutationFn: () => apiAction(`/admin/sms/providers/${provider.id}/test`, "POST", { to, message }),
-    onSuccess: (r: { ok: boolean; status: string; error?: string }) =>
-      r.ok ? toast.success(`Sent — status ${r.status}`) : toast.error(r.error ?? "Test failed"),
-    onError: (e: Error) => toast.error(e.message),
+    mutationFn: () => apiAction<ProviderTestResponse>(`/admin/sms/providers/${provider.id}/test`, "POST", { to, message }),
+    onSuccess: (r) => {
+      setResult(r);
+      qc.invalidateQueries({ queryKey: ["admin", "sms", "providers"] });
+      if (r.ok) toast.success(`Sent — status ${r.status}`);
+      else toast.error(`Test failed${r.errorCode ? ` (${r.errorCode})` : ""}`);
+    },
+    onError: (e: Error) => {
+      // The test endpoint replies 200 even on provider-side failures, so
+      // we only land here on transport / auth / 4xx-validation errors.
+      setResult({
+        ok: false, status: "failed",
+        error: e.message, errorCode: e instanceof ApiError ? String(e.status) : null,
+        providerMessageId: null, providerSessionId: null,
+        testedAt: new Date().toISOString(),
+      });
+      toast.error(e.message);
+    },
   });
   return (
     <Dialog open onOpenChange={onClose}>
@@ -224,6 +507,29 @@ function ProviderTestDialog({ provider, onClose }: { provider: SmsProvider; onCl
         <div className="space-y-3">
           <div className="space-y-1"><Label>Recipient phone (e.g. +91…)</Label><Input value={to} onChange={e => setTo(e.target.value)} /></div>
           <div className="space-y-1"><Label>Message</Label><Textarea rows={3} value={message} onChange={e => setMessage(e.target.value)} /></div>
+          {result && (
+            <div className={`rounded-md border p-3 text-sm ${
+              result.ok
+                ? "border-green-300 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-200"
+                : "border-red-300 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-200"
+            }`}>
+              <div className="font-semibold flex items-center gap-1.5">
+                {result.ok
+                  ? <><CheckCircle2 className="w-4 h-4" />Reachable — gateway accepted the message</>
+                  : <><XCircle className="w-4 h-4" />Test failed</>}
+              </div>
+              {result.ok && result.providerMessageId && (
+                <div className="text-xs mt-1">Provider message id: <code className="font-mono">{result.providerMessageId}</code></div>
+              )}
+              {!result.ok && (
+                <div className="text-xs mt-1 break-words">
+                  {result.errorCode && <div><strong>Code:</strong> <code className="font-mono">{result.errorCode}</code></div>}
+                  {result.error && <div className="mt-0.5"><strong>Message:</strong> {result.error}</div>}
+                </div>
+              )}
+              <div className="text-[10px] opacity-70 mt-1">{new Date(result.testedAt).toLocaleString()}</div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Close</Button>
