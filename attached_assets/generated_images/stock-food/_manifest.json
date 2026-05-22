@@ -1,938 +1,1127 @@
 [
   {
-    "name": "Khaman",
-    "category": "regional-west",
-    "hint": "Khaman, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "khaman",
-    "file": "khaman.png"
-  },
-  {
-    "name": "Jalebi Fafda",
-    "category": "regional-west",
-    "hint": "Jalebi Fafda, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "jalebi-fafda",
-    "file": "jalebi-fafda.png"
-  },
-  {
-    "name": "Methi Thepla",
-    "category": "regional-west",
-    "hint": "Methi Thepla, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "methi-thepla",
-    "file": "methi-thepla.png"
-  },
-  {
-    "name": "Undhiyu",
-    "category": "regional-west",
-    "hint": "Undhiyu, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "undhiyu",
-    "file": "undhiyu.png"
-  },
-  {
-    "name": "Dal Dhokli",
-    "category": "regional-west",
-    "hint": "Dal Dhokli, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "dal-dhokli",
-    "file": "dal-dhokli.png"
-  },
-  {
-    "name": "Khakhra",
-    "category": "regional-west",
-    "hint": "Khakhra, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "khakhra",
-    "file": "khakhra.png"
-  },
-  {
-    "name": "Gujarati Kadhi",
-    "category": "regional-west",
-    "hint": "Gujarati Kadhi, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "gujarati-kadhi",
-    "file": "gujarati-kadhi.png"
-  },
-  {
-    "name": "Gujarati Thali",
-    "category": "regional-west",
-    "hint": "Gujarati Thali, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "gujarati-thali",
-    "file": "gujarati-thali.png"
-  },
-  {
-    "name": "Mawa Kachori",
-    "category": "regional-west",
-    "hint": "Mawa Kachori, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "name": "Cutting Chai",
+    "category": "beverage-hot",
+    "hint": "Cutting Chai, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "mawa-kachori",
-    "file": "mawa-kachori.png"
+    "slug": "cutting-chai",
+    "file": "cutting-chai.png"
   },
   {
-    "name": "Pithla Bhakri",
-    "category": "regional-west",
-    "hint": "Pithla Bhakri, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "pithla-bhakri",
-    "file": "pithla-bhakri.png"
-  },
-  {
-    "name": "Thalipeeth",
-    "category": "regional-west",
-    "hint": "Thalipeeth, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "thalipeeth",
-    "file": "thalipeeth.png"
-  },
-  {
-    "name": "Kothimbir Vadi",
-    "category": "regional-west",
-    "hint": "Kothimbir Vadi, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "kothimbir-vadi",
-    "file": "kothimbir-vadi.png"
-  },
-  {
-    "name": "Puran Poli",
-    "category": "regional-west",
-    "hint": "Puran Poli, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "puran-poli",
-    "file": "puran-poli.png"
-  },
-  {
-    "name": "Luchi",
-    "category": "regional-east",
-    "hint": "Luchi, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "luchi",
-    "file": "luchi.png"
-  },
-  {
-    "name": "Aloo Dum",
-    "category": "regional-east",
-    "hint": "Aloo Dum, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "aloo-dum",
-    "file": "aloo-dum.png"
-  },
-  {
-    "name": "Kosha Mangsho",
-    "category": "regional-east",
-    "hint": "Kosha Mangsho, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "kosha-mangsho",
-    "file": "kosha-mangsho.png"
-  },
-  {
-    "name": "Rohu Curry",
-    "category": "regional-east",
-    "hint": "Rohu Curry, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "rohu-curry",
-    "file": "rohu-curry.png"
-  },
-  {
-    "name": "Chingri Malai Curry",
-    "category": "regional-east",
-    "hint": "Chingri Malai Curry, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "chingri-malai-curry",
-    "file": "chingri-malai-curry.png"
-  },
-  {
-    "name": "Kolkata Biryani",
-    "category": "regional-east",
-    "hint": "Kolkata Biryani, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "kolkata-biryani",
-    "file": "kolkata-biryani.png"
-  },
-  {
-    "name": "Egg Roll Kolkata",
-    "category": "regional-east",
-    "hint": "Egg Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "egg-roll-kolkata",
-    "file": "egg-roll-kolkata.png"
-  },
-  {
-    "name": "Chicken Roll Kolkata",
-    "category": "regional-east",
-    "hint": "Chicken Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "chicken-roll-kolkata",
-    "file": "chicken-roll-kolkata.png"
-  },
-  {
-    "name": "Mutton Roll Kolkata",
-    "category": "regional-east",
-    "hint": "Mutton Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "mutton-roll-kolkata",
-    "file": "mutton-roll-kolkata.png"
-  },
-  {
-    "name": "Mughlai Paratha",
-    "category": "regional-east",
-    "hint": "Mughlai Paratha, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "mughlai-paratha",
-    "file": "mughlai-paratha.png"
-  },
-  {
-    "name": "Ghugni",
-    "category": "regional-east",
-    "hint": "Ghugni, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "ghugni",
-    "file": "ghugni.png"
-  },
-  {
-    "name": "Momo",
-    "category": "regional-east",
-    "hint": "Momo, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "indo-chinese",
-    "isVeg": true,
-    "slug": "momo",
-    "file": "momo.png"
-  },
-  {
-    "name": "Thukpa",
-    "category": "regional-east",
-    "hint": "Thukpa, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "indo-chinese",
-    "isVeg": true,
-    "slug": "thukpa",
-    "file": "thukpa.png"
-  },
-  {
-    "name": "Shukto",
-    "category": "regional-east",
-    "hint": "Shukto, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "shukto",
-    "file": "shukto.png"
-  },
-  {
-    "name": "Begun Bhaja",
-    "category": "regional-east",
-    "hint": "Begun Bhaja, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "begun-bhaja",
-    "file": "begun-bhaja.png"
-  },
-  {
-    "name": "Cholar Dal",
-    "category": "regional-east",
-    "hint": "Cholar Dal, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "cholar-dal",
-    "file": "cholar-dal.png"
-  },
-  {
-    "name": "Mishti Doi",
-    "category": "regional-east",
-    "hint": "Mishti Doi, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "mishti-doi",
-    "file": "mishti-doi.png"
-  },
-  {
-    "name": "Cham Cham",
-    "category": "regional-east",
-    "hint": "Cham Cham, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "cham-cham",
-    "file": "cham-cham.png"
-  },
-  {
-    "name": "Pitha",
-    "category": "regional-east",
-    "hint": "Pitha, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "pitha",
-    "file": "pitha.png"
-  },
-  {
-    "name": "Dalma",
-    "category": "regional-east",
-    "hint": "Dalma, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "dalma",
-    "file": "dalma.png"
-  },
-  {
-    "name": "Pakhala Bhata",
-    "category": "regional-east",
-    "hint": "Pakhala Bhata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": true,
-    "slug": "pakhala-bhata",
-    "file": "pakhala-bhata.png"
-  },
-  {
-    "name": "Assamese Fish Tenga",
-    "category": "regional-east",
-    "hint": "Assamese Fish Tenga, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
-    "cuisine": "east-indian",
-    "isVeg": false,
-    "slug": "assamese-fish-tenga",
-    "file": "assamese-fish-tenga.png"
-  },
-  {
-    "name": "Hyderabadi Biryani",
-    "category": "regional-south",
-    "hint": "Hyderabadi Biryani, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "hyderabadi-biryani",
-    "file": "hyderabadi-biryani.png"
-  },
-  {
-    "name": "Andhra Chicken Curry",
-    "category": "regional-south",
-    "hint": "Andhra Chicken Curry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "andhra-chicken-curry",
-    "file": "andhra-chicken-curry.png"
-  },
-  {
-    "name": "Andhra Meals",
-    "category": "regional-south",
-    "hint": "Andhra Meals, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "andhra-meals",
-    "file": "andhra-meals.png"
-  },
-  {
-    "name": "Gongura Chicken",
-    "category": "regional-south",
-    "hint": "Gongura Chicken, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "gongura-chicken",
-    "file": "gongura-chicken.png"
-  },
-  {
-    "name": "Gongura Mutton",
-    "category": "regional-south",
-    "hint": "Gongura Mutton, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "gongura-mutton",
-    "file": "gongura-mutton.png"
-  },
-  {
-    "name": "Punugulu",
-    "category": "regional-south",
-    "hint": "Punugulu, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "punugulu",
-    "file": "punugulu.png"
-  },
-  {
-    "name": "Mirchi Bajji",
-    "category": "regional-south",
-    "hint": "Mirchi Bajji, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "mirchi-bajji",
-    "file": "mirchi-bajji.png"
-  },
-  {
-    "name": "Chettinad Chicken",
-    "category": "regional-south",
-    "hint": "Chettinad Chicken, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "chettinad-chicken",
-    "file": "chettinad-chicken.png"
-  },
-  {
-    "name": "Kothu Parotta",
-    "category": "regional-south",
-    "hint": "Kothu Parotta, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "kothu-parotta",
-    "file": "kothu-parotta.png"
-  },
-  {
-    "name": "Parotta Salna",
-    "category": "regional-south",
-    "hint": "Parotta Salna, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "parotta-salna",
-    "file": "parotta-salna.png"
-  },
-  {
-    "name": "Kerala Sadya",
-    "category": "regional-south",
-    "hint": "Kerala Sadya, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "kerala-sadya",
-    "file": "kerala-sadya.png"
-  },
-  {
-    "name": "Kerala Beef Fry",
-    "category": "regional-south",
-    "hint": "Kerala Beef Fry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "kerala-beef-fry",
-    "file": "kerala-beef-fry.png"
-  },
-  {
-    "name": "Kerala Chicken Curry",
-    "category": "regional-south",
-    "hint": "Kerala Chicken Curry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "kerala-chicken-curry",
-    "file": "kerala-chicken-curry.png"
-  },
-  {
-    "name": "Mangalore Buns",
-    "category": "regional-south",
-    "hint": "Mangalore Buns, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "mangalore-buns",
-    "file": "mangalore-buns.png"
-  },
-  {
-    "name": "Goli Baje",
-    "category": "regional-south",
-    "hint": "Goli Baje, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "goli-baje",
-    "file": "goli-baje.png"
-  },
-  {
-    "name": "Akki Roti",
-    "category": "regional-south",
-    "hint": "Akki Roti, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "akki-roti",
-    "file": "akki-roti.png"
-  },
-  {
-    "name": "Ragi Mudde",
-    "category": "regional-south",
-    "hint": "Ragi Mudde, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "ragi-mudde",
-    "file": "ragi-mudde.png"
-  },
-  {
-    "name": "Veg Thali",
-    "category": "thali",
-    "hint": "Veg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Ginger Tea",
+    "category": "beverage-hot",
+    "hint": "Ginger Tea, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "veg-thali",
-    "file": "veg-thali.png"
+    "slug": "ginger-tea",
+    "file": "ginger-tea.png"
   },
   {
-    "name": "Special Veg Thali",
-    "category": "thali",
-    "hint": "Special Veg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Cardamom Tea",
+    "category": "beverage-hot",
+    "hint": "Cardamom Tea, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "special-veg-thali",
-    "file": "special-veg-thali.png"
+    "slug": "cardamom-tea",
+    "file": "cardamom-tea.png"
   },
   {
-    "name": "Punjabi Thali",
-    "category": "thali",
-    "hint": "Punjabi Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Lemon Tea",
+    "category": "beverage-hot",
+    "hint": "Lemon Tea, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "punjabi-thali",
-    "file": "punjabi-thali.png"
+    "slug": "lemon-tea",
+    "file": "lemon-tea.png"
   },
   {
-    "name": "Rajasthani Thali",
-    "category": "thali",
-    "hint": "Rajasthani Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Green Tea",
+    "category": "beverage-hot",
+    "hint": "Green Tea, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "rajasthani-thali",
-    "file": "rajasthani-thali.png"
+    "slug": "green-tea",
+    "file": "green-tea.png"
   },
   {
-    "name": "South Indian Thali",
-    "category": "thali",
-    "hint": "South Indian Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Black Tea",
+    "category": "beverage-hot",
+    "hint": "Black Tea, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "south-indian-thali",
-    "file": "south-indian-thali.png"
+    "slug": "black-tea",
+    "file": "black-tea.png"
   },
   {
-    "name": "North Indian Thali",
-    "category": "thali",
-    "hint": "North Indian Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Tandoori Chai",
+    "category": "beverage-hot",
+    "hint": "Tandoori Chai, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "north-indian-thali",
-    "file": "north-indian-thali.png"
+    "slug": "tandoori-chai",
+    "file": "tandoori-chai.png"
   },
   {
-    "name": "Mini Thali",
-    "category": "thali",
-    "hint": "Mini Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "name": "Kulhad Chai",
+    "category": "beverage-hot",
+    "hint": "Kulhad Chai, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "mini-thali",
-    "file": "mini-thali.png"
+    "slug": "kulhad-chai",
+    "file": "kulhad-chai.png"
   },
   {
-    "name": "Deluxe Thali",
-    "category": "thali",
-    "hint": "Deluxe Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "deluxe-thali",
-    "file": "deluxe-thali.png"
-  },
-  {
-    "name": "Executive Thali",
-    "category": "thali",
-    "hint": "Executive Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "executive-thali",
-    "file": "executive-thali.png"
-  },
-  {
-    "name": "Dal Rice Combo",
-    "category": "thali",
-    "hint": "Dal Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "dal-rice-combo",
-    "file": "dal-rice-combo.png"
-  },
-  {
-    "name": "Rajma Rice Combo",
-    "category": "thali",
-    "hint": "Rajma Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "rajma-rice-combo",
-    "file": "rajma-rice-combo.png"
-  },
-  {
-    "name": "Chole Rice Combo",
-    "category": "thali",
-    "hint": "Chole Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "chole-rice-combo",
-    "file": "chole-rice-combo.png"
-  },
-  {
-    "name": "Kadhi Rice Combo",
-    "category": "thali",
-    "hint": "Kadhi Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "kadhi-rice-combo",
-    "file": "kadhi-rice-combo.png"
-  },
-  {
-    "name": "Paneer Rice Combo",
-    "category": "thali",
-    "hint": "Paneer Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "paneer-rice-combo",
-    "file": "paneer-rice-combo.png"
-  },
-  {
-    "name": "Chicken Thali",
-    "category": "thali",
-    "hint": "Chicken Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-thali",
-    "file": "chicken-thali.png"
-  },
-  {
-    "name": "Mutton Thali",
-    "category": "thali",
-    "hint": "Mutton Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-thali",
-    "file": "mutton-thali.png"
-  },
-  {
-    "name": "Fish Thali",
-    "category": "thali",
-    "hint": "Fish Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "fish-thali",
-    "file": "fish-thali.png"
-  },
-  {
-    "name": "Egg Thali",
-    "category": "thali",
-    "hint": "Egg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-thali",
-    "file": "egg-thali.png"
-  },
-  {
-    "name": "Biryani Combo",
-    "category": "thali",
-    "hint": "Biryani Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "biryani-combo",
-    "file": "biryani-combo.png"
-  },
-  {
-    "name": "Paratha Combo",
-    "category": "thali",
-    "hint": "Paratha Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "paratha-combo",
-    "file": "paratha-combo.png"
-  },
-  {
-    "name": "Chole Bhature Combo",
-    "category": "thali",
-    "hint": "Chole Bhature Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "chole-bhature-combo",
-    "file": "chole-bhature-combo.png"
-  },
-  {
-    "name": "Poori Sabzi Combo",
-    "category": "thali",
-    "hint": "Poori Sabzi Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "poori-sabzi-combo",
-    "file": "poori-sabzi-combo.png"
-  },
-  {
-    "name": "Kala Jamun",
-    "category": "dessert",
-    "hint": "Kala Jamun, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "kala-jamun",
-    "file": "kala-jamun.png"
-  },
-  {
-    "name": "Rabri",
-    "category": "dessert",
-    "hint": "Rabri, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "rabri",
-    "file": "rabri.png"
-  },
-  {
-    "name": "Phirni",
-    "category": "dessert",
-    "hint": "Phirni, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "phirni",
-    "file": "phirni.png"
-  },
-  {
-    "name": "Sooji Halwa",
-    "category": "dessert",
-    "hint": "Sooji Halwa, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "sooji-halwa",
-    "file": "sooji-halwa.png"
-  },
-  {
-    "name": "Badam Halwa",
-    "category": "dessert",
-    "hint": "Badam Halwa, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "badam-halwa",
-    "file": "badam-halwa.png"
-  },
-  {
-    "name": "Ladoo",
-    "category": "dessert",
-    "hint": "Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "ladoo",
-    "file": "ladoo.png"
-  },
-  {
-    "name": "Besan Ladoo",
-    "category": "dessert",
-    "hint": "Besan Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "besan-ladoo",
-    "file": "besan-ladoo.png"
-  },
-  {
-    "name": "Motichoor Ladoo",
-    "category": "dessert",
-    "hint": "Motichoor Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "motichoor-ladoo",
-    "file": "motichoor-ladoo.png"
-  },
-  {
-    "name": "Boondi Ladoo",
-    "category": "dessert",
-    "hint": "Boondi Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "boondi-ladoo",
-    "file": "boondi-ladoo.png"
-  },
-  {
-    "name": "Kaju Katli",
-    "category": "dessert",
-    "hint": "Kaju Katli, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "kaju-katli",
-    "file": "kaju-katli.png"
-  },
-  {
-    "name": "Barfi",
-    "category": "dessert",
-    "hint": "Barfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "barfi",
-    "file": "barfi.png"
-  },
-  {
-    "name": "Milk Cake",
-    "category": "dessert",
-    "hint": "Milk Cake, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "milk-cake",
-    "file": "milk-cake.png"
-  },
-  {
-    "name": "Peda",
-    "category": "dessert",
-    "hint": "Peda, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "peda",
-    "file": "peda.png"
-  },
-  {
-    "name": "Malpua",
-    "category": "dessert",
-    "hint": "Malpua, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "malpua",
-    "file": "malpua.png"
-  },
-  {
-    "name": "Balushahi",
-    "category": "dessert",
-    "hint": "Balushahi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "balushahi",
-    "file": "balushahi.png"
-  },
-  {
-    "name": "Shrikhand",
-    "category": "dessert",
-    "hint": "Shrikhand, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "shrikhand",
-    "file": "shrikhand.png"
-  },
-  {
-    "name": "Aamras",
-    "category": "dessert",
-    "hint": "Aamras, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "aamras",
-    "file": "aamras.png"
-  },
-  {
-    "name": "Malai Kulfi",
-    "category": "dessert",
-    "hint": "Malai Kulfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "malai-kulfi",
-    "file": "malai-kulfi.png"
-  },
-  {
-    "name": "Pista Kulfi",
-    "category": "dessert",
-    "hint": "Pista Kulfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "pista-kulfi",
-    "file": "pista-kulfi.png"
-  },
-  {
-    "name": "Ice Cream",
-    "category": "dessert",
-    "hint": "Ice Cream, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Coffee",
+    "category": "beverage-hot",
+    "hint": "Coffee, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "ice-cream",
-    "file": "ice-cream.png"
+    "slug": "coffee",
+    "file": "coffee.png"
   },
   {
-    "name": "Brownie",
-    "category": "dessert",
-    "hint": "Brownie, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Black Coffee",
+    "category": "beverage-hot",
+    "hint": "Black Coffee, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "brownie",
-    "file": "brownie.png"
+    "slug": "black-coffee",
+    "file": "black-coffee.png"
   },
   {
-    "name": "Brownie with Ice Cream",
-    "category": "dessert",
-    "hint": "Brownie with Ice Cream, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Cold Coffee",
+    "category": "beverage-hot",
+    "hint": "Cold Coffee, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "brownie-with-ice-cream",
-    "file": "brownie-with-ice-cream.png"
+    "slug": "cold-coffee",
+    "file": "cold-coffee.png"
   },
   {
-    "name": "Cake Slice",
-    "category": "dessert",
-    "hint": "Cake Slice, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Hot Chocolate",
+    "category": "beverage-hot",
+    "hint": "Hot Chocolate, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "cake-slice",
-    "file": "cake-slice.png"
+    "slug": "hot-chocolate",
+    "file": "hot-chocolate.png"
   },
   {
-    "name": "Pastry",
-    "category": "dessert",
-    "hint": "Pastry, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Cappuccino",
+    "category": "beverage-hot",
+    "hint": "Cappuccino, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "pastry",
-    "file": "pastry.png"
+    "slug": "cappuccino",
+    "file": "cappuccino.png"
   },
   {
-    "name": "Cheesecake",
-    "category": "dessert",
-    "hint": "Cheesecake, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Latte",
+    "category": "beverage-hot",
+    "hint": "Latte, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "cheesecake",
-    "file": "cheesecake.png"
+    "slug": "latte",
+    "file": "latte.png"
   },
   {
-    "name": "Chocolate Mousse",
-    "category": "dessert",
-    "hint": "Chocolate Mousse, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Espresso",
+    "category": "beverage-hot",
+    "hint": "Espresso, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "chocolate-mousse",
-    "file": "chocolate-mousse.png"
+    "slug": "espresso",
+    "file": "espresso.png"
   },
   {
-    "name": "Fruit Custard",
-    "category": "dessert",
-    "hint": "Fruit Custard, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Americano",
+    "category": "beverage-hot",
+    "hint": "Americano, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "fruit-custard",
-    "file": "fruit-custard.png"
+    "slug": "americano",
+    "file": "americano.png"
   },
   {
-    "name": "Caramel Custard",
-    "category": "dessert",
-    "hint": "Caramel Custard, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "name": "Mocha",
+    "category": "beverage-hot",
+    "hint": "Mocha, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
     "cuisine": "continental",
     "isVeg": true,
-    "slug": "caramel-custard",
-    "file": "caramel-custard.png"
+    "slug": "mocha",
+    "file": "mocha.png"
   },
   {
-    "name": "Payasam",
-    "category": "dessert",
-    "hint": "Payasam, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "south-indian",
+    "name": "Milk",
+    "category": "beverage-hot",
+    "hint": "Milk, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
+    "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "payasam",
-    "file": "payasam.png"
+    "slug": "milk",
+    "file": "milk.png"
   },
   {
-    "name": "Ada Pradhaman",
-    "category": "dessert",
-    "hint": "Ada Pradhaman, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
-    "cuisine": "south-indian",
+    "name": "Badam Milk",
+    "category": "beverage-hot",
+    "hint": "Badam Milk, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
+    "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "ada-pradhaman",
-    "file": "ada-pradhaman.png"
+    "slug": "badam-milk",
+    "file": "badam-milk.png"
+  },
+  {
+    "name": "Turmeric Milk",
+    "category": "beverage-hot",
+    "hint": "Turmeric Milk, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "turmeric-milk",
+    "file": "turmeric-milk.png"
+  },
+  {
+    "name": "Kesar Milk",
+    "category": "beverage-hot",
+    "hint": "Kesar Milk, hot drink served in a cup or kulhad, steam rising, garnished appropriately",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kesar-milk",
+    "file": "kesar-milk.png"
+  },
+  {
+    "name": "Lassi",
+    "category": "beverage-cold",
+    "hint": "Lassi, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "lassi",
+    "file": "lassi.png"
+  },
+  {
+    "name": "Rose Lassi",
+    "category": "beverage-cold",
+    "hint": "Rose Lassi, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "rose-lassi",
+    "file": "rose-lassi.png"
+  },
+  {
+    "name": "Chaas",
+    "category": "beverage-cold",
+    "hint": "Chaas, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "chaas",
+    "file": "chaas.png"
+  },
+  {
+    "name": "Masala Chaas",
+    "category": "beverage-cold",
+    "hint": "Masala Chaas, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "masala-chaas",
+    "file": "masala-chaas.png"
+  },
+  {
+    "name": "Shikanji",
+    "category": "beverage-cold",
+    "hint": "Shikanji, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "shikanji",
+    "file": "shikanji.png"
+  },
+  {
+    "name": "Jaljeera",
+    "category": "beverage-cold",
+    "hint": "Jaljeera, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "jaljeera",
+    "file": "jaljeera.png"
+  },
+  {
+    "name": "Aam Panna",
+    "category": "beverage-cold",
+    "hint": "Aam Panna, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "aam-panna",
+    "file": "aam-panna.png"
+  },
+  {
+    "name": "Kokum Sharbat",
+    "category": "beverage-cold",
+    "hint": "Kokum Sharbat, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kokum-sharbat",
+    "file": "kokum-sharbat.png"
+  },
+  {
+    "name": "Rooh Afza",
+    "category": "beverage-cold",
+    "hint": "Rooh Afza, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "rooh-afza",
+    "file": "rooh-afza.png"
+  },
+  {
+    "name": "Sugarcane Juice",
+    "category": "beverage-cold",
+    "hint": "Sugarcane Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "sugarcane-juice",
+    "file": "sugarcane-juice.png"
+  },
+  {
+    "name": "Coconut Water",
+    "category": "beverage-cold",
+    "hint": "Coconut Water, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "coconut-water",
+    "file": "coconut-water.png"
+  },
+  {
+    "name": "Orange Juice",
+    "category": "beverage-cold",
+    "hint": "Orange Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "orange-juice",
+    "file": "orange-juice.png"
+  },
+  {
+    "name": "Mosambi Juice",
+    "category": "beverage-cold",
+    "hint": "Mosambi Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mosambi-juice",
+    "file": "mosambi-juice.png"
+  },
+  {
+    "name": "Apple Juice",
+    "category": "beverage-cold",
+    "hint": "Apple Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "apple-juice",
+    "file": "apple-juice.png"
+  },
+  {
+    "name": "Pineapple Juice",
+    "category": "beverage-cold",
+    "hint": "Pineapple Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pineapple-juice",
+    "file": "pineapple-juice.png"
+  },
+  {
+    "name": "Watermelon Juice",
+    "category": "beverage-cold",
+    "hint": "Watermelon Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "watermelon-juice",
+    "file": "watermelon-juice.png"
+  },
+  {
+    "name": "Pomegranate Juice",
+    "category": "beverage-cold",
+    "hint": "Pomegranate Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pomegranate-juice",
+    "file": "pomegranate-juice.png"
+  },
+  {
+    "name": "Mango Juice",
+    "category": "beverage-cold",
+    "hint": "Mango Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mango-juice",
+    "file": "mango-juice.png"
+  },
+  {
+    "name": "Mixed Fruit Juice",
+    "category": "beverage-cold",
+    "hint": "Mixed Fruit Juice, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mixed-fruit-juice",
+    "file": "mixed-fruit-juice.png"
+  },
+  {
+    "name": "Banana Shake",
+    "category": "beverage-cold",
+    "hint": "Banana Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "banana-shake",
+    "file": "banana-shake.png"
+  },
+  {
+    "name": "Mango Shake",
+    "category": "beverage-cold",
+    "hint": "Mango Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mango-shake",
+    "file": "mango-shake.png"
+  },
+  {
+    "name": "Strawberry Shake",
+    "category": "beverage-cold",
+    "hint": "Strawberry Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "strawberry-shake",
+    "file": "strawberry-shake.png"
+  },
+  {
+    "name": "Chocolate Shake",
+    "category": "beverage-cold",
+    "hint": "Chocolate Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "chocolate-shake",
+    "file": "chocolate-shake.png"
+  },
+  {
+    "name": "Oreo Shake",
+    "category": "beverage-cold",
+    "hint": "Oreo Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "oreo-shake",
+    "file": "oreo-shake.png"
+  },
+  {
+    "name": "KitKat Shake",
+    "category": "beverage-cold",
+    "hint": "KitKat Shake, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "kitkat-shake",
+    "file": "kitkat-shake.png"
+  },
+  {
+    "name": "Iced Tea",
+    "category": "beverage-cold",
+    "hint": "Iced Tea, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "iced-tea",
+    "file": "iced-tea.png"
+  },
+  {
+    "name": "Lemon Iced Tea",
+    "category": "beverage-cold",
+    "hint": "Lemon Iced Tea, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "lemon-iced-tea",
+    "file": "lemon-iced-tea.png"
+  },
+  {
+    "name": "Peach Iced Tea",
+    "category": "beverage-cold",
+    "hint": "Peach Iced Tea, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "peach-iced-tea",
+    "file": "peach-iced-tea.png"
+  },
+  {
+    "name": "Blue Lagoon",
+    "category": "beverage-cold",
+    "hint": "Blue Lagoon, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "blue-lagoon",
+    "file": "blue-lagoon.png"
+  },
+  {
+    "name": "Virgin Mojito",
+    "category": "beverage-cold",
+    "hint": "Virgin Mojito, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "virgin-mojito",
+    "file": "virgin-mojito.png"
+  },
+  {
+    "name": "Mint Mojito",
+    "category": "beverage-cold",
+    "hint": "Mint Mojito, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mint-mojito",
+    "file": "mint-mojito.png"
+  },
+  {
+    "name": "Watermelon Mojito",
+    "category": "beverage-cold",
+    "hint": "Watermelon Mojito, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "watermelon-mojito",
+    "file": "watermelon-mojito.png"
+  },
+  {
+    "name": "Fresh Lime Soda",
+    "category": "beverage-cold",
+    "hint": "Fresh Lime Soda, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "fresh-lime-soda",
+    "file": "fresh-lime-soda.png"
+  },
+  {
+    "name": "Soda",
+    "category": "beverage-cold",
+    "hint": "Soda, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "soda",
+    "file": "soda.png"
+  },
+  {
+    "name": "Mineral Water",
+    "category": "beverage-cold",
+    "hint": "Mineral Water, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mineral-water",
+    "file": "mineral-water.png"
+  },
+  {
+    "name": "Soft Drink",
+    "category": "beverage-cold",
+    "hint": "Soft Drink, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "soft-drink",
+    "file": "soft-drink.png"
+  },
+  {
+    "name": "Cola",
+    "category": "beverage-cold",
+    "hint": "Cola, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cola",
+    "file": "cola.png"
+  },
+  {
+    "name": "Lemon Soda",
+    "category": "beverage-cold",
+    "hint": "Lemon Soda, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "lemon-soda",
+    "file": "lemon-soda.png"
+  },
+  {
+    "name": "Energy Drink",
+    "category": "beverage-cold",
+    "hint": "Energy Drink, refreshing cold drink in a tall glass, garnished with mint, fruit slice or straw, condensation on the glass",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "energy-drink",
+    "file": "energy-drink.png"
+  },
+  {
+    "name": "Green Apple Mojito",
+    "category": "mocktail",
+    "hint": "Green Apple Mojito, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "green-apple-mojito",
+    "file": "green-apple-mojito.png"
+  },
+  {
+    "name": "Strawberry Mojito",
+    "category": "mocktail",
+    "hint": "Strawberry Mojito, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "strawberry-mojito",
+    "file": "strawberry-mojito.png"
+  },
+  {
+    "name": "Orange Mocktail",
+    "category": "mocktail",
+    "hint": "Orange Mocktail, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "orange-mocktail",
+    "file": "orange-mocktail.png"
+  },
+  {
+    "name": "Pineapple Mocktail",
+    "category": "mocktail",
+    "hint": "Pineapple Mocktail, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pineapple-mocktail",
+    "file": "pineapple-mocktail.png"
+  },
+  {
+    "name": "Fruit Punch",
+    "category": "mocktail",
+    "hint": "Fruit Punch, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "fruit-punch",
+    "file": "fruit-punch.png"
+  },
+  {
+    "name": "Cinderella Mocktail",
+    "category": "mocktail",
+    "hint": "Cinderella Mocktail, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cinderella-mocktail",
+    "file": "cinderella-mocktail.png"
+  },
+  {
+    "name": "Mint Cooler",
+    "category": "mocktail",
+    "hint": "Mint Cooler, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mint-cooler",
+    "file": "mint-cooler.png"
+  },
+  {
+    "name": "Lemon Mint Cooler",
+    "category": "mocktail",
+    "hint": "Lemon Mint Cooler, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "lemon-mint-cooler",
+    "file": "lemon-mint-cooler.png"
+  },
+  {
+    "name": "Masala Soda",
+    "category": "mocktail",
+    "hint": "Masala Soda, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "masala-soda",
+    "file": "masala-soda.png"
+  },
+  {
+    "name": "Jeera Soda",
+    "category": "mocktail",
+    "hint": "Jeera Soda, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "jeera-soda",
+    "file": "jeera-soda.png"
+  },
+  {
+    "name": "Cold Coffee Mocktail",
+    "category": "mocktail",
+    "hint": "Cold Coffee Mocktail, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cold-coffee-mocktail",
+    "file": "cold-coffee-mocktail.png"
+  },
+  {
+    "name": "Mango Cooler",
+    "category": "mocktail",
+    "hint": "Mango Cooler, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mango-cooler",
+    "file": "mango-cooler.png"
+  },
+  {
+    "name": "Kokum Cooler",
+    "category": "mocktail",
+    "hint": "Kokum Cooler, vibrant colourful mocktail in a tall fancy cocktail glass with garnish, ice, mint leaves and fruit slices, bar style presentation",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "kokum-cooler",
+    "file": "kokum-cooler.png"
+  },
+  {
+    "name": "Veg Puff",
+    "category": "bakery",
+    "hint": "Veg Puff, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "veg-puff",
+    "file": "veg-puff.png"
+  },
+  {
+    "name": "Paneer Puff",
+    "category": "bakery",
+    "hint": "Paneer Puff, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "paneer-puff",
+    "file": "paneer-puff.png"
+  },
+  {
+    "name": "Egg Puff",
+    "category": "bakery",
+    "hint": "Egg Puff, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "egg-puff",
+    "file": "egg-puff.png"
+  },
+  {
+    "name": "Chicken Puff",
+    "category": "bakery",
+    "hint": "Chicken Puff, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-puff",
+    "file": "chicken-puff.png"
+  },
+  {
+    "name": "Croissant",
+    "category": "bakery",
+    "hint": "Croissant, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "croissant",
+    "file": "croissant.png"
+  },
+  {
+    "name": "Bun Maska",
+    "category": "bakery",
+    "hint": "Bun Maska, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "bun-maska",
+    "file": "bun-maska.png"
+  },
+  {
+    "name": "Burger Bun",
+    "category": "bakery",
+    "hint": "Burger Bun, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "burger-bun",
+    "file": "burger-bun.png"
+  },
+  {
+    "name": "Muffin",
+    "category": "bakery",
+    "hint": "Muffin, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "muffin",
+    "file": "muffin.png"
+  },
+  {
+    "name": "Donut",
+    "category": "bakery",
+    "hint": "Donut, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "donut",
+    "file": "donut.png"
+  },
+  {
+    "name": "Cupcake",
+    "category": "bakery",
+    "hint": "Cupcake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cupcake",
+    "file": "cupcake.png"
+  },
+  {
+    "name": "Chocolate Cake",
+    "category": "bakery",
+    "hint": "Chocolate Cake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "chocolate-cake",
+    "file": "chocolate-cake.png"
+  },
+  {
+    "name": "Black Forest Cake",
+    "category": "bakery",
+    "hint": "Black Forest Cake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "black-forest-cake",
+    "file": "black-forest-cake.png"
+  },
+  {
+    "name": "Red Velvet Cake",
+    "category": "bakery",
+    "hint": "Red Velvet Cake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "red-velvet-cake",
+    "file": "red-velvet-cake.png"
+  },
+  {
+    "name": "Pineapple Cake",
+    "category": "bakery",
+    "hint": "Pineapple Cake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pineapple-cake",
+    "file": "pineapple-cake.png"
+  },
+  {
+    "name": "Butterscotch Cake",
+    "category": "bakery",
+    "hint": "Butterscotch Cake, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "butterscotch-cake",
+    "file": "butterscotch-cake.png"
+  },
+  {
+    "name": "Cookies",
+    "category": "bakery",
+    "hint": "Cookies, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cookies",
+    "file": "cookies.png"
+  },
+  {
+    "name": "Rusk",
+    "category": "bakery",
+    "hint": "Rusk, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "rusk",
+    "file": "rusk.png"
+  },
+  {
+    "name": "Khari",
+    "category": "bakery",
+    "hint": "Khari, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "khari",
+    "file": "khari.png"
+  },
+  {
+    "name": "Cream Roll",
+    "category": "bakery",
+    "hint": "Cream Roll, bakery / cafe item displayed on a wooden board, parchment or ceramic plate, fresh-baked golden look",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cream-roll",
+    "file": "cream-roll.png"
+  },
+  {
+    "name": "Green Salad",
+    "category": "sides",
+    "hint": "Green Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "green-salad",
+    "file": "green-salad.png"
+  },
+  {
+    "name": "Onion Salad",
+    "category": "sides",
+    "hint": "Onion Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "onion-salad",
+    "file": "onion-salad.png"
+  },
+  {
+    "name": "Kachumber Salad",
+    "category": "sides",
+    "hint": "Kachumber Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kachumber-salad",
+    "file": "kachumber-salad.png"
+  },
+  {
+    "name": "Russian Salad",
+    "category": "sides",
+    "hint": "Russian Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "russian-salad",
+    "file": "russian-salad.png"
+  },
+  {
+    "name": "Sprout Salad",
+    "category": "sides",
+    "hint": "Sprout Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "sprout-salad",
+    "file": "sprout-salad.png"
+  },
+  {
+    "name": "Caesar Salad",
+    "category": "sides",
+    "hint": "Caesar Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "caesar-salad",
+    "file": "caesar-salad.png"
+  },
+  {
+    "name": "Chicken Salad",
+    "category": "sides",
+    "hint": "Chicken Salad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "chicken-salad",
+    "file": "chicken-salad.png"
+  },
+  {
+    "name": "Boondi Raita",
+    "category": "sides",
+    "hint": "Boondi Raita, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "boondi-raita",
+    "file": "boondi-raita.png"
+  },
+  {
+    "name": "Plain Curd",
+    "category": "sides",
+    "hint": "Plain Curd, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "plain-curd",
+    "file": "plain-curd.png"
+  },
+  {
+    "name": "Veg Raita",
+    "category": "sides",
+    "hint": "Veg Raita, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "veg-raita",
+    "file": "veg-raita.png"
+  },
+  {
+    "name": "Pineapple Raita",
+    "category": "sides",
+    "hint": "Pineapple Raita, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "pineapple-raita",
+    "file": "pineapple-raita.png"
+  },
+  {
+    "name": "Cucumber Raita",
+    "category": "sides",
+    "hint": "Cucumber Raita, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "cucumber-raita",
+    "file": "cucumber-raita.png"
+  },
+  {
+    "name": "Mint Chutney",
+    "category": "sides",
+    "hint": "Mint Chutney, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "mint-chutney",
+    "file": "mint-chutney.png"
+  },
+  {
+    "name": "Tamarind Chutney",
+    "category": "sides",
+    "hint": "Tamarind Chutney, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "tamarind-chutney",
+    "file": "tamarind-chutney.png"
+  },
+  {
+    "name": "Garlic Chutney",
+    "category": "sides",
+    "hint": "Garlic Chutney, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "garlic-chutney",
+    "file": "garlic-chutney.png"
+  },
+  {
+    "name": "Pickle",
+    "category": "sides",
+    "hint": "Pickle, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "pickle",
+    "file": "pickle.png"
+  },
+  {
+    "name": "Papad",
+    "category": "sides",
+    "hint": "Papad, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "papad",
+    "file": "papad.png"
+  },
+  {
+    "name": "Extra Butter",
+    "category": "sides",
+    "hint": "Extra Butter, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-butter",
+    "file": "extra-butter.png"
+  },
+  {
+    "name": "Extra Cheese",
+    "category": "sides",
+    "hint": "Extra Cheese, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-cheese",
+    "file": "extra-cheese.png"
+  },
+  {
+    "name": "Extra Gravy",
+    "category": "sides",
+    "hint": "Extra Gravy, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-gravy",
+    "file": "extra-gravy.png"
+  },
+  {
+    "name": "Extra Pav",
+    "category": "sides",
+    "hint": "Extra Pav, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-pav",
+    "file": "extra-pav.png"
+  },
+  {
+    "name": "Extra Bhatura",
+    "category": "sides",
+    "hint": "Extra Bhatura, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-bhatura",
+    "file": "extra-bhatura.png"
+  },
+  {
+    "name": "Extra Roti",
+    "category": "sides",
+    "hint": "Extra Roti, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-roti",
+    "file": "extra-roti.png"
+  },
+  {
+    "name": "Extra Rice",
+    "category": "sides",
+    "hint": "Extra Rice, small Indian side dish or accompaniment, served in a small steel bowl or on the side of a plate",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "extra-rice",
+    "file": "extra-rice.png"
+  },
+  {
+    "name": "Mini Dosa",
+    "category": "kids",
+    "hint": "Mini Dosa, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mini-dosa",
+    "file": "mini-dosa.png"
+  },
+  {
+    "name": "Mini Uttapam",
+    "category": "kids",
+    "hint": "Mini Uttapam, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mini-uttapam",
+    "file": "mini-uttapam.png"
+  },
+  {
+    "name": "Smiley Fries",
+    "category": "kids",
+    "hint": "Smiley Fries, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "smiley-fries",
+    "file": "smiley-fries.png"
+  },
+  {
+    "name": "Plain Maggi",
+    "category": "kids",
+    "hint": "Plain Maggi, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "plain-maggi",
+    "file": "plain-maggi.png"
+  },
+  {
+    "name": "Mini Pizza",
+    "category": "kids",
+    "hint": "Mini Pizza, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mini-pizza",
+    "file": "mini-pizza.png"
+  },
+  {
+    "name": "Mini Burger",
+    "category": "kids",
+    "hint": "Mini Burger, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mini-burger",
+    "file": "mini-burger.png"
+  },
+  {
+    "name": "Pasta",
+    "category": "kids",
+    "hint": "Pasta, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pasta",
+    "file": "pasta.png"
+  },
+  {
+    "name": "Paneer Nuggets",
+    "category": "kids",
+    "hint": "Paneer Nuggets, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "paneer-nuggets",
+    "file": "paneer-nuggets.png"
+  },
+  {
+    "name": "Chicken Nuggets",
+    "category": "kids",
+    "hint": "Chicken Nuggets, kid-friendly portion, fun colourful plating on a colourful kids plate with ketchup, small portions",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-nuggets",
+    "file": "chicken-nuggets.png"
   }
 ]
