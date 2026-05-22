@@ -1,142 +1,218 @@
 [
   {
-    "name": "Plain Rice",
-    "category": "rice",
-    "hint": "fluffy white plain steamed basmati rice in a bowl",
-    "slug": "plain-rice",
-    "file": "plain-rice.png"
+    "name": "Mysore Masala Dosa",
+    "category": "dosa",
+    "hint": "Mysore masala dosa with red garlic chutney smear inside, potato filling, coconut chutney and sambar",
+    "cuisine": "south-indian",
+    "slug": "mysore-masala-dosa",
+    "file": "mysore-masala-dosa.png"
   },
   {
-    "name": "Ghee Rice",
-    "category": "rice",
-    "hint": "fragrant ghee-tossed basmati rice with cashews and fried onions on top",
-    "slug": "ghee-rice",
-    "file": "ghee-rice.png"
+    "name": "Onion Rava Dosa",
+    "category": "dosa",
+    "hint": "lacy rava dosa topped with chopped onions, green chillies and coriander, crisp golden",
+    "cuisine": "south-indian",
+    "slug": "onion-rava-dosa",
+    "file": "onion-rava-dosa.png"
   },
   {
-    "name": "Tomato Rice",
-    "category": "rice",
-    "hint": "tangy red South Indian tomato rice with curry leaves and peanut garnish",
-    "slug": "tomato-rice",
-    "file": "tomato-rice.png"
+    "name": "Paper Dosa",
+    "category": "dosa",
+    "hint": "extra-thin extra-long paper dosa rolled into a tube, golden crisp, with coconut chutney and sambar",
+    "cuisine": "south-indian",
+    "slug": "paper-dosa",
+    "file": "paper-dosa.png"
   },
   {
-    "name": "Coconut Rice",
-    "category": "rice",
-    "hint": "white South Indian coconut rice with fresh grated coconut, cashews and curry leaves",
-    "slug": "coconut-rice",
-    "file": "coconut-rice.png"
+    "name": "Set Dosa",
+    "category": "dosa",
+    "hint": "Karnataka set dosa, stack of three small soft spongy dosas, with coconut chutney and sambar",
+    "cuisine": "south-indian",
+    "slug": "set-dosa",
+    "file": "set-dosa.png"
   },
   {
-    "name": "Peas Pulao",
-    "category": "rice",
-    "hint": "basmati rice pulao with green peas and whole garam masala, ghee glaze",
-    "slug": "peas-pulao",
-    "file": "peas-pulao.png"
+    "name": "Ghee Roast Dosa",
+    "category": "dosa",
+    "hint": "Mangalore ghee roast dosa, deep golden glossy crisp dosa cone with ghee glaze, chutneys on side",
+    "cuisine": "south-indian",
+    "slug": "ghee-roast-dosa",
+    "file": "ghee-roast-dosa.png"
   },
   {
-    "name": "Kashmiri Pulao",
-    "category": "rice",
-    "hint": "sweet Kashmiri pulao with saffron, dry fruits cashews almonds raisins, pomegranate seeds on top",
-    "slug": "kashmiri-pulao",
-    "file": "kashmiri-pulao.png"
+    "name": "Cheese Dosa",
+    "category": "dosa",
+    "hint": "crisp dosa with melted cheese filling oozing out, golden brown",
+    "cuisine": "south-indian",
+    "slug": "cheese-dosa",
+    "file": "cheese-dosa.png"
   },
   {
-    "name": "Paneer Pulao",
-    "category": "rice",
-    "hint": "basmati pulao with paneer cubes and whole spices, garnished with coriander",
-    "slug": "paneer-pulao",
-    "file": "paneer-pulao.png"
+    "name": "Paneer Dosa",
+    "category": "dosa",
+    "hint": "dosa stuffed with crumbled spiced paneer bhurji filling",
+    "cuisine": "south-indian",
+    "slug": "paneer-dosa",
+    "file": "paneer-dosa.png"
   },
   {
-    "name": "Hyderabadi Veg Biryani",
-    "category": "biryani",
-    "hint": "fragrant Hyderabadi vegetable dum biryani with vivid saffron strands, fried onion birista and mint, in copper handi",
-    "slug": "hyderabadi-veg-biryani",
-    "file": "hyderabadi-veg-biryani.png"
+    "name": "Podi Dosa",
+    "category": "dosa",
+    "hint": "dosa smeared with red gunpowder podi spice and ghee, folded, with chutney",
+    "cuisine": "south-indian",
+    "slug": "podi-dosa",
+    "file": "podi-dosa.png"
   },
   {
-    "name": "Paneer Biryani",
-    "category": "biryani",
-    "hint": "layered paneer biryani with saffron rice, fried onions and mint garnish",
-    "slug": "paneer-biryani",
-    "file": "paneer-biryani.png"
+    "name": "Neer Dosa",
+    "category": "dosa",
+    "hint": "Mangalorean neer dosa, soft white lacy rice crepe folded into triangles, with coconut chutney",
+    "cuisine": "south-indian",
+    "slug": "neer-dosa",
+    "file": "neer-dosa.png"
   },
   {
-    "name": "Mushroom Biryani",
-    "category": "biryani",
-    "hint": "mushroom dum biryani with whole spices, saffron and mint",
-    "slug": "mushroom-biryani",
-    "file": "mushroom-biryani.png"
+    "name": "Onion Uttapam",
+    "category": "uttapam",
+    "hint": "thick spongy uttapam topped with chopped onions and green chillies, golden cooked",
+    "cuisine": "south-indian",
+    "slug": "onion-uttapam",
+    "file": "onion-uttapam.png"
   },
   {
-    "name": "Soya Chaap Biryani",
-    "category": "biryani",
-    "hint": "soya chaap biryani layered with basmati rice, saffron and fried onions",
-    "slug": "soya-chaap-biryani",
-    "file": "soya-chaap-biryani.png"
+    "name": "Tomato Uttapam",
+    "category": "uttapam",
+    "hint": "uttapam topped with chopped tomatoes and coriander, golden underside",
+    "cuisine": "south-indian",
+    "slug": "tomato-uttapam",
+    "file": "tomato-uttapam.png"
   },
   {
-    "name": "Kolkata Veg Biryani",
-    "category": "biryani",
-    "hint": "Bengali Kolkata-style vegetable biryani with potato chunks and boiled egg-style aloo, light golden saffron rice",
-    "slug": "kolkata-veg-biryani",
-    "file": "kolkata-veg-biryani.png"
+    "name": "Mixed Uttapam",
+    "category": "uttapam",
+    "hint": "uttapam loaded with onions, tomatoes, capsicum, carrots and coriander toppings",
+    "cuisine": "south-indian",
+    "slug": "mixed-uttapam",
+    "file": "mixed-uttapam.png"
   },
   {
-    "name": "Lucknowi Veg Biryani",
-    "category": "biryani",
-    "hint": "Awadhi Lucknowi vegetable dum biryani with delicate spices, mild golden rice and rose-water aroma",
-    "slug": "lucknowi-veg-biryani",
-    "file": "lucknowi-veg-biryani.png"
+    "name": "Rava Idli",
+    "category": "idli",
+    "hint": "Karnataka rava idli, soft semolina idlis garnished with cashew and coriander, sambar on side",
+    "cuisine": "south-indian",
+    "slug": "rava-idli",
+    "file": "rava-idli.png"
   },
   {
-    "name": "Tawa Pulao",
-    "category": "rice",
-    "hint": "Mumbai street-style tawa pulao with pav bhaji masala, vegetables and rice cooked on a flat iron tawa",
-    "slug": "tawa-pulao",
-    "file": "tawa-pulao.png"
+    "name": "Mini Idli",
+    "category": "idli",
+    "hint": "small bite-sized mini idlis bathed in sambar in a bowl, ghee on top",
+    "cuisine": "south-indian",
+    "slug": "mini-idli",
+    "file": "mini-idli.png"
   },
   {
-    "name": "Masala Rice",
-    "category": "rice",
-    "hint": "spiced masala rice with vegetables and Indian spices, coriander garnish",
-    "slug": "masala-rice",
-    "file": "masala-rice.png"
+    "name": "Thatte Idli",
+    "category": "idli",
+    "hint": "Karnataka large flat thatte idli on a plate, soft white, with chutney and sambar",
+    "cuisine": "south-indian",
+    "slug": "thatte-idli",
+    "file": "thatte-idli.png"
   },
   {
-    "name": "Khichdi",
-    "category": "rice",
-    "hint": "comforting yellow rice and moong dal khichdi with ghee and tempering, served in a brass bowl",
-    "slug": "khichdi",
-    "file": "khichdi.png"
+    "name": "Sambar Idli",
+    "category": "idli",
+    "hint": "idlis soaked in hot sambar with vegetables in a bowl, ghee garnish",
+    "cuisine": "south-indian",
+    "slug": "sambar-idli",
+    "file": "sambar-idli.png"
   },
   {
-    "name": "Dal Khichdi",
-    "category": "rice",
-    "hint": "yellow dal khichdi with cumin tempering and ghee, papad on side",
-    "slug": "dal-khichdi",
-    "file": "dal-khichdi.png"
+    "name": "Sambar Vada",
+    "category": "vada",
+    "hint": "medu vadas soaked in hot sambar in a bowl, coriander garnish",
+    "cuisine": "south-indian",
+    "slug": "sambar-vada",
+    "file": "sambar-vada.png"
   },
   {
-    "name": "Masala Khichdi",
-    "category": "rice",
-    "hint": "spiced vegetable masala khichdi with peas, carrots and tomatoes, garam masala",
-    "slug": "masala-khichdi",
-    "file": "masala-khichdi.png"
+    "name": "Appam",
+    "category": "breakfast",
+    "hint": "Kerala appam, lacy crisp-edged soft-centred white rice hopper, served with vegetable stew",
+    "cuisine": "south-indian",
+    "slug": "appam",
+    "file": "appam.png"
   },
   {
-    "name": "Bisi Bele Bath",
-    "category": "rice",
-    "hint": "Karnataka bisi bele bath, spiced rice and lentil one-pot dish with vegetables, ghee and crispy boondi on top",
-    "slug": "bisi-bele-bath",
-    "file": "bisi-bele-bath.png"
+    "name": "Puttu",
+    "category": "breakfast",
+    "hint": "Kerala puttu, cylindrical steamed rice flour and coconut layers, with kadala curry",
+    "cuisine": "south-indian",
+    "slug": "puttu",
+    "file": "puttu.png"
   },
   {
-    "name": "Vangi Bath",
-    "category": "rice",
-    "hint": "Karnataka brinjal-rice vangi bath with eggplant cubes, sambar masala and curry leaves",
-    "slug": "vangi-bath",
-    "file": "vangi-bath.png"
+    "name": "Idiyappam",
+    "category": "breakfast",
+    "hint": "Kerala idiyappam string hoppers, white rice noodle nests, with vegetable stew or sweetened coconut milk",
+    "cuisine": "south-indian",
+    "slug": "idiyappam",
+    "file": "idiyappam.png"
+  },
+  {
+    "name": "Adai Dosa",
+    "category": "dosa",
+    "hint": "Tamil adai, thick mixed-lentil dosa, brown and crisp with onion and curry leaves",
+    "cuisine": "south-indian",
+    "slug": "adai-dosa",
+    "file": "adai-dosa.png"
+  },
+  {
+    "name": "Pesarattu",
+    "category": "dosa",
+    "hint": "Andhra green moong dal pesarattu, green-tinted dosa with chopped onions and ginger on top",
+    "cuisine": "south-indian",
+    "slug": "pesarattu",
+    "file": "pesarattu.png"
+  },
+  {
+    "name": "Avial",
+    "category": "curry",
+    "hint": "Kerala avial, mixed vegetables in thick coconut-yogurt gravy with curry leaves and coconut oil drizzle",
+    "cuisine": "south-indian",
+    "slug": "avial",
+    "file": "avial.png"
+  },
+  {
+    "name": "Poriyal",
+    "category": "sabzi",
+    "hint": "South Indian dry poriyal stir-fried vegetables with grated coconut and curry leaves",
+    "cuisine": "south-indian",
+    "slug": "poriyal",
+    "file": "poriyal.png"
+  },
+  {
+    "name": "Kootu",
+    "category": "curry",
+    "hint": "South Indian kootu, mixed vegetables and lentil curry with coconut and curry leaves",
+    "cuisine": "south-indian",
+    "slug": "kootu",
+    "file": "kootu.png"
+  },
+  {
+    "name": "Vegetable Stew",
+    "category": "curry",
+    "hint": "Kerala vegetable stew, white coconut-milk curry with carrots, beans, potato and curry leaves, served with appam",
+    "cuisine": "south-indian",
+    "slug": "vegetable-stew",
+    "file": "vegetable-stew.png"
+  },
+  {
+    "name": "Malabar Parotta",
+    "category": "bread",
+    "hint": "Kerala Malabar parotta, layered flaky white-flour flatbread torn open showing layers, on a plate",
+    "cuisine": "south-indian",
+    "slug": "malabar-parotta",
+    "file": "malabar-parotta.png"
   }
 ]

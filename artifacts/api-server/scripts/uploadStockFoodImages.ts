@@ -37,6 +37,10 @@ interface ManifestEntry {
   hint: string;
   slug: string;
   file: string;
+  /** Optional cuisine override; defaults to north-indian for backwards compat. */
+  cuisine?: string;
+  /** Optional veg flag; defaults to true. */
+  isVeg?: boolean;
 }
 
 // Resolve relative to *this script file* (not cwd) so the importer can be
@@ -110,21 +114,23 @@ async function main(): Promise<void> {
       const wildcardPath = objectPath.replace(/^\/objects\//, "");
       const publicUrl = `/api/public/storage/objects/${wildcardPath}`;
 
+      const cuisine = entry.cuisine ?? "north-indian";
+      const isVeg = entry.isVeg ?? true;
       await db.insert(stockFoodImagesTable).values({
         slug,
         name: entry.name,
-        cuisine: "north-indian",
+        cuisine,
         category: entry.category,
         imageUrl: publicUrl,
         thumbnailUrl: null,
         aliases: [],
-        tags: ["north-indian", "veg", entry.category],
-        isVeg: true,
+        tags: [cuisine, isVeg ? "veg" : "non-veg", entry.category],
+        isVeg,
         isActive: true,
         sortOrder: 0,
         attribution: "AI generated",
         source: "ai_bulk",
-        dietaryType: "veg",
+        dietaryType: isVeg ? "veg" : "non-veg",
         mealType: entry.category,
         spiceLevel: null,
         provider: "google-imagen",
