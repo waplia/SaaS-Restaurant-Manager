@@ -26,7 +26,7 @@ export default function Rewards() {
           <div className="skeleton h-20" />
         ) : (data?.available.length ?? 0) === 0 ? (
           <div className="card p-6 text-center text-sm text-zinc-500">
-            No rewards waiting. Visit a TableTrack restaurant to unlock more!
+            No rewards waiting. Visit a KhanaLagao restaurant to unlock more!
           </div>
         ) : (
           <ul className="space-y-2">

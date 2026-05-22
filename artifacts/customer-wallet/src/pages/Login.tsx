@@ -90,8 +90,8 @@ export default function Login() {
           <div className="w-16 h-16 rounded-3xl bg-[rgb(var(--primary))] text-white flex items-center justify-center mb-4 shadow-lg">
             <Wallet size={30} />
           </div>
-          <h1 className="text-3xl font-semibold text-center">TableTrack Wallet</h1>
-          <p className="text-zinc-600 text-center mt-2">Your loyalty across every restaurant.</p>
+          <h1 className="text-3xl font-semibold text-center">KhanaLagao Wallet</h1>
+          <p className="text-zinc-600 text-center mt-2">Your loyalty across every KhanaLagao restaurant.</p>
         </div>
 
         {stage === "phone" && (
@@ -137,7 +137,7 @@ export default function Login() {
               {loading ? "Verifying…" : "Verify & sign in"}
             </button>
             <button type="button" className="text-sm text-zinc-500 w-full text-center"
-              onClick={() => { setStage("phone"); setCode(""); setError(null); setDevCode(null); }}
+              onClick={() => { setStage("phone"); setCode(""); setError(null); }}
               data-testid="button-change-number">
               Use a different number
             </button>
@@ -169,7 +169,7 @@ export default function Login() {
               {loading ? "Creating account…" : "Create account & sign in"}
             </button>
             <button type="button" className="text-sm text-zinc-500 w-full text-center"
-              onClick={() => { setStage("phone"); setCode(""); setName(""); setError(null); setDevCode(null); }}
+              onClick={() => { setStage("phone"); setCode(""); setName(""); setError(null); }}
               data-testid="button-cancel-register">
               Use a different number
             </button>

@@ -27,7 +27,7 @@ export default function Profile() {
 
   return (
     <>
-      <Header title="Profile" subtitle="Manage your TableTrack identity." />
+      <Header title="Profile" subtitle="Manage your KhanaLagao identity." />
       <section className="container-app">
         <div className="card p-5">
           <div className="flex items-center gap-3">

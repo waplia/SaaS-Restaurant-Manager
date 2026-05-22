@@ -17,14 +17,14 @@ export default function Visits() {
 
   return (
     <>
-      <Header title="Recent visits" subtitle="Your orders across every restaurant in the network." />
+      <Header title="Recent visits" subtitle="Your orders across every KhanaLagao restaurant." />
       <section className="container-app">
         {isLoading ? (
           <div className="space-y-2"><div className="skeleton h-16" /><div className="skeleton h-16" /></div>
         ) : data.length === 0 ? (
           <div className="card p-8 text-center">
             <Receipt size={28} className="mx-auto text-zinc-300 mb-3" />
-            <p className="text-sm text-zinc-500">No visits yet. They'll appear after you order at a TableTrack restaurant.</p>
+            <p className="text-sm text-zinc-500">No visits yet. They'll appear after you order at a KhanaLagao restaurant.</p>
           </div>
         ) : (
           <ul className="card divide-y divide-[rgb(var(--border))]">
