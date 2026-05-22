@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import { Loader2, CheckCircle2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
@@ -134,7 +135,7 @@ export default function CustomerSurveyPage() {
               {survey.collectPhone && (
                 <div>
                   <Label>Phone (optional)</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} data-testid="input-phone" />
+                  <PhoneInput value={phone} onChange={(v) => setPhone(v)} />
                 </div>
               )}
               {survey.collectTableNumber && (

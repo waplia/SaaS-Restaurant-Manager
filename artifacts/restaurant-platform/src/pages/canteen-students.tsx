@@ -3,6 +3,7 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Plus, QrCode, RefreshCw, Wallet, Trash2, History, Users } from "lucide-react";
 import {
@@ -174,7 +175,7 @@ function StudentDetailDrawer({ student, onClose }: { student: Student; onClose: 
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Input placeholder="Name *" value={g.name} onChange={e => setG({ ...g, name: e.target.value })} />
           <Input placeholder="Relation" value={g.relation} onChange={e => setG({ ...g, relation: e.target.value })} />
-          <Input placeholder="Phone" value={g.phone} onChange={e => setG({ ...g, phone: e.target.value })} />
+          <PhoneInput placeholder="Phone" value={g.phone} onChange={v => setG({ ...g, phone: v })} />
           <Input placeholder="Email" value={g.email} onChange={e => setG({ ...g, email: e.target.value })} />
         </div>
         <Button size="sm" onClick={async () => {

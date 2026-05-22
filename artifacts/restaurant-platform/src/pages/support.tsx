@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -290,7 +291,7 @@ function CallbackDialog({ onClose }: { onClose: () => void }) {
           <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
         <div className="p-6 space-y-3">
-          <div><Label>Phone number</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98xxxxxxxx" /></div>
+          <div><Label>Phone number</Label><PhoneInput value={phone} onChange={v => setPhone(v)} /></div>
           <div><Label>Preferred time</Label><Input value={preferredTime} onChange={e => setPreferredTime(e.target.value)} placeholder="e.g. Today between 4-6 PM" /></div>
           <div><Label>Topic</Label><Input value={topic} onChange={e => setTopic(e.target.value)} placeholder="What would you like to discuss?" /></div>
           <div><Label>Notes</Label><Textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Additional context (optional)" /></div>

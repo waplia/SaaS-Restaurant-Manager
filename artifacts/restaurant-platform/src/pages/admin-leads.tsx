@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -708,7 +709,7 @@ function ConvertDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 9876543210" data-testid="input-convert-phone" />
+              <PhoneInput value={phone} onChange={(v) => setPhone(v)} />
             </div>
             <div>
               <Label className="text-xs">City</Label>

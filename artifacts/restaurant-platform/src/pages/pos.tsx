@@ -13,6 +13,7 @@ import {
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy } from "@/lib/types";
@@ -1786,14 +1787,14 @@ export default function PosPage() {
 
           {/* Customer phone lookup for loyalty */}
           {!placedOrder && !linkedCustomerId && (
-            <div className="flex gap-1.5 px-4 pb-2">
-              <Input
-                className="h-7 text-xs flex-1"
+            <div className="flex gap-1.5 px-4 pb-2 items-start">
+              <PhoneInput
+                className="flex-1"
                 placeholder="Phone to link loyalty (optional)"
                 value={customerPhone}
-                onChange={e => { setCustomerPhone(e.target.value); setPhoneQuery(e.target.value); }}
+                onChange={v => { setCustomerPhone(v); setPhoneQuery(v); }}
               />
-              <Button size="sm" variant="outline" className="h-7 text-xs px-2 flex-shrink-0" onClick={handleLinkCustomer} disabled={!foundCustomer}>
+              <Button size="sm" variant="outline" className="h-12 text-xs px-2 flex-shrink-0" onClick={handleLinkCustomer} disabled={!foundCustomer}>
                 <UserCheck className="w-3.5 h-3.5" />
               </Button>
             </div>

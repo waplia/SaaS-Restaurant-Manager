@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -379,7 +380,7 @@ export function QueueManagerPage() {
           <CardHeader><CardTitle>Add ticket</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             <div><Label>Name</Label><Input value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} /></div>
-            <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+            <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={v => setForm({ ...form, phone: v })} /></div>
             <div><Label>Party size</Label><Input type="number" value={form.partySize} onChange={e => setForm({ ...form, partySize: Number(e.target.value) })} /></div>
             <div><Label>ETA (mins)</Label><Input type="number" value={form.estimatedMinutes} onChange={e => setForm({ ...form, estimatedMinutes: Number(e.target.value) })} /></div>
             <Button onClick={() => create.mutate()} disabled={!form.customerName || create.isPending}>Issue ticket</Button>
@@ -461,7 +462,7 @@ export function PreorderPage() {
               </Select>
             </div>
             <div><Label>Customer</Label><Input value={bkForm.customerName} onChange={e => setBkForm({ ...bkForm, customerName: e.target.value })} /></div>
-            <div><Label>Phone</Label><Input value={bkForm.phone} onChange={e => setBkForm({ ...bkForm, phone: e.target.value })} /></div>
+            <div><Label>Phone</Label><PhoneInput value={bkForm.phone} onChange={v => setBkForm({ ...bkForm, phone: v })} /></div>
             <Button onClick={() => createBooking.mutate()} disabled={!bkForm.slotId || !bkForm.customerName || createBooking.isPending}>Book</Button>
           </CardContent>
         </Card>

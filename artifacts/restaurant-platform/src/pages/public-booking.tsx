@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { CalendarDays, Clock, Users, CheckCircle2, AlertCircle, Search, ArrowLeft, Phone, Mail, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/PhoneInput";
 
 const API_BASE = "/api";
 
@@ -196,8 +197,7 @@ export default function PublicBookingPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block flex items-center gap-1"><Phone className="w-3.5 h-3.5" />Phone *</label>
-              <input className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" required type="tel"
-                value={form.guestPhone} onChange={e => setForm(f => ({ ...f, guestPhone: e.target.value }))} placeholder="+91 ..." />
+              <PhoneInput required value={form.guestPhone} onChange={v => setForm(f => ({ ...f, guestPhone: v }))} />
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block flex items-center gap-1"><Mail className="w-3.5 h-3.5" />Email</label>
@@ -258,8 +258,7 @@ export default function PublicBookingPage() {
             <form onSubmit={handleLookup} className="space-y-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">Phone number *</label>
-                <input className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" required type="tel"
-                  value={lookupPhone} onChange={e => setLookupPhone(e.target.value)} placeholder="The number you booked with" />
+                <PhoneInput required value={lookupPhone} onChange={v => setLookupPhone(v)} placeholder="The number you booked with" />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Reservation date *</label>

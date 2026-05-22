@@ -14,6 +14,7 @@ import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import {
   Plus, AlertTriangle, Search, Pencil, Trash2, X,
@@ -590,7 +591,7 @@ function SuppliersTab() {
               <div><Label>Company Name *</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Fresh Foods Co." /></div>
               <div><Label>Contact Person</Label><Input value={form.contactPerson} onChange={e => setForm(p => ({ ...p, contactPerson: e.target.value }))} placeholder="Sales representative name" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+                <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} /></div>
                 <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
               </div>
               <div><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
@@ -614,7 +615,7 @@ function SuppliersTab() {
               <div><Label>Company Name *</Label><Input value={editSupplier.name} onChange={e => setEditSupplier(p => p && ({ ...p, name: e.target.value }))} /></div>
               <div><Label>Contact Person</Label><Input value={editSupplier.contactPerson ?? ""} onChange={e => setEditSupplier(p => p && ({ ...p, contactPerson: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Phone</Label><Input value={editSupplier.phone ?? ""} onChange={e => setEditSupplier(p => p && ({ ...p, phone: e.target.value }))} /></div>
+                <div><Label>Phone</Label><PhoneInput value={editSupplier.phone ?? ""} onChange={v => setEditSupplier(p => p && ({ ...p, phone: v }))} /></div>
                 <div><Label>Email</Label><Input value={editSupplier.email ?? ""} onChange={e => setEditSupplier(p => p && ({ ...p, email: e.target.value }))} /></div>
               </div>
               <div><Label>Address</Label><Input value={editSupplier.address ?? ""} onChange={e => setEditSupplier(p => p && ({ ...p, address: e.target.value }))} /></div>

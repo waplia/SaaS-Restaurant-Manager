@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { resolveImageUrl } from "@/components/ImageUploadField";
 import {
@@ -181,7 +182,7 @@ function ProfileTab({ member }: { member: StaffMember }) {
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Full Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
           <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-          <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+          <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} /></div>
           <div>
             <Label>Role</Label>
             <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
@@ -1336,7 +1337,7 @@ function TeamTab({
             <div className="space-y-3">
               <div><Label>Full Name</Label><Input placeholder="Rahul Kumar" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
               <div><Label>Email</Label><Input type="email" placeholder="rahul@spicegarden.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-              <div><Label>Phone</Label><Input placeholder="+91 98765 43210" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} /></div>
               <div>
                 <Label>Role</Label>
                 <select className="w-full mt-1 border border-input rounded-md px-3 py-2 text-sm bg-background" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>

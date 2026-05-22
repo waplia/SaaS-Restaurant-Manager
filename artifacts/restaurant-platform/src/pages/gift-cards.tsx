@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -344,7 +345,7 @@ function IssueDialog({ open, onClose, onIssued, restaurantId }: { open: boolean;
             <div><Label>Recipient email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Recipient phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} /></div>
+            <div><Label>Recipient phone</Label><PhoneInput value={phone} onChange={v => setPhone(v)} /></div>
             <div><Label>Sender name</Label><Input value={sender} onChange={e => setSender(e.target.value)} /></div>
           </div>
           <div><Label>Message</Label><Textarea value={message} onChange={e => setMessage(e.target.value)} maxLength={500} placeholder="Optional gift message" /></div>
@@ -512,7 +513,7 @@ function DetailDrawer({ giftCardId, restaurantId, onClose, onChanged }: { giftCa
                   <div className="grid grid-cols-3 gap-2">
                     <Input placeholder="To name" value={transferTo.name} onChange={e => setTransferTo({ ...transferTo, name: e.target.value })} />
                     <Input placeholder="To email" value={transferTo.email} onChange={e => setTransferTo({ ...transferTo, email: e.target.value })} />
-                    <Input placeholder="To phone" value={transferTo.phone} onChange={e => setTransferTo({ ...transferTo, phone: e.target.value })} />
+                    <PhoneInput placeholder="To phone" value={transferTo.phone} onChange={v => setTransferTo({ ...transferTo, phone: v })} />
                   </div>
                   <Button variant="outline" onClick={doTransfer} disabled={!transferTo.name && !transferTo.email && !transferTo.phone}><Send className="w-4 h-4 mr-1" /> Transfer</Button>
                   <div className="flex gap-2 items-center">

@@ -4,6 +4,7 @@ import { Layout as AppLayout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -63,7 +64,7 @@ function GuestsTab() {
               <div className="grid gap-3">
                 <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-guest-name" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-guest-phone" /></div>
+                  <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} /></div>
                   <div><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="input-guest-email" /></div>
                 </div>
                 <div><Label>Allergies</Label><Input value={form.allergies} onChange={(e) => setForm({ ...form, allergies: e.target.value })} /></div>

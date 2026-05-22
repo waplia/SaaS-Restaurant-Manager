@@ -3,6 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -246,7 +247,7 @@ export default function CorporateCompanyDetailPage() {
             <div><Label>Name *</Label><Input value={String(empForm.name ?? "")} onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>Email</Label><Input value={String(empForm.email ?? "")} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} /></div>
-              <div><Label>Phone</Label><Input value={String(empForm.phone ?? "")} onChange={e => setEmpForm(f => ({ ...f, phone: e.target.value }))} /></div>
+              <div><Label>Phone</Label><PhoneInput value={String(empForm.phone ?? "")} onChange={v => setEmpForm(f => ({ ...f, phone: v }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>Department</Label>

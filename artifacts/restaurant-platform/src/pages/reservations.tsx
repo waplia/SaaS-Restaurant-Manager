@@ -10,6 +10,7 @@ import {
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Label } from "@/components/ui/label";
 import {
   Plus, X, CalendarDays, Clock, Users, Phone, Mail, Pencil, Trash2,
@@ -128,7 +129,7 @@ function ReservationForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Phone</Label>
-              <Input value={form.guestPhone ?? ""} onChange={e => setForm(f => ({ ...f, guestPhone: e.target.value }))} placeholder="+91 ..." />
+              <PhoneInput value={form.guestPhone ?? ""} onChange={v => setForm(f => ({ ...f, guestPhone: v }))} />
             </div>
             <div>
               <Label>Email</Label>

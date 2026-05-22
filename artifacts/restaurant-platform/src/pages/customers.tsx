@@ -916,7 +916,7 @@ function LoyaltyTwoStaffActions({ customerId }: { customerId: number }) {
         <div className="space-y-2">
           <p className="text-xs font-medium">Family group ({summary.family?.members?.length ?? 0} members)</p>
           <div className="flex gap-2">
-            <Input placeholder="Member phone" value={familyPhone} onChange={e => setFamilyPhone(e.target.value)} className="h-8 text-sm" />
+            <PhoneInput placeholder="Member phone" value={familyPhone} onChange={v => setFamilyPhone(v)} className="flex-1" />
             <Button size="sm" className="h-8" disabled={!familyPhone || family.isPending}
               onClick={async () => {
                 try { const r = await family.mutateAsync({ customerId, phone: familyPhone }); if (!(r as any).ok) toast({ title: (r as any).reason || "Could not add", variant: "destructive" }); else { toast({ title: "Member added" }); setFamilyPhone(""); } }
