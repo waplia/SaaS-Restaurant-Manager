@@ -402,6 +402,13 @@ export default function CustomerMenuPage() {
   // which replaces the per-app deep-link buttons that PhonePe/Paytm reject
   // for non-onboarded merchants.
   const [dynamicUpiQr, setDynamicUpiQr] = useState<string | null>(null);
+  const [upiScreenshot, setUpiScreenshot] = useState<File | null>(null);
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  const [placing, setPlacing] = useState(false);
+  const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   useEffect(() => {
     let cancelled = false;
     const upi = paymentIntent?.upiId;
@@ -430,13 +437,6 @@ export default function CustomerMenuPage() {
       .catch(() => { if (!cancelled) setDynamicUpiQr(null); });
     return () => { cancelled = true; };
   }, [paymentIntent, orderResult]);
-  const [upiScreenshot, setUpiScreenshot] = useState<File | null>(null);
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvc, setCardCvc] = useState("");
-  const [cardError, setCardError] = useState<string | null>(null);
-
-  const [placing, setPlacing] = useState(false);
-  const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
 
   const [waiterModalOpen, setWaiterModalOpen] = useState(false);
