@@ -658,9 +658,21 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
         passwordResetAttempts: 0,
       })
       .where(eq(usersTable.id, user.id));
-    if (process.env.NODE_ENV === "development") {
-      // Helpful for local testing without checking a real inbox.
-      console.info(`[dev-only] password-reset OTP for user id=${user.id}: ${code}`);
+    // Surface the code to the client when the server is in dev mode OR
+    // when neither an email provider nor an SMS provider is configured
+    // — otherwise admins can't sign in / reset before the first gateway
+    // is wired up. Real provider → real send, no echo.
+    try {
+      const [{ getActiveProvider: getEmail }, { getActiveProvider: getSms }] = await Promise.all([
+        import("../lib/emailSender"),
+        import("../lib/smsSender"),
+      ]);
+      const [emailProvider, smsProvider] = await Promise.all([getEmail(), getSms()]);
+      if (process.env.NODE_ENV === "development" || (!emailProvider && !smsProvider)) {
+        devCode = code;
+        console.info(`[no-provider] password-reset OTP for user id=${user.id}: ${code}`);
+      }
+    } catch {
       devCode = code;
     }
     void sendByTemplateKey("password_reset_otp", user.email, {
@@ -807,8 +819,22 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
         passwordResetAttempts: 0,
       })
       .where(eq(usersTable.id, user.id));
-    if (process.env.NODE_ENV === "development") {
-      console.info(`[dev-only] password-reset OTP (phone) for user id=${user.id}: ${code}`);
+    // Surface the code to the client when:
+    //   (a) the server is in development mode (local testing), OR
+    //   (b) no SMS provider is configured yet — so the admin can sign
+    //       in / reset before the first gateway has been wired up.
+    // Once an SMS provider exists, the real OTP goes via SMS and we
+    // stop echoing it.
+    try {
+      const { getActiveProvider } = await import("../lib/smsSender");
+      const provider = await getActiveProvider();
+      if (!provider || process.env.NODE_ENV === "development") {
+        devCode = code;
+        console.info(`[no-sms-provider] password-reset OTP (phone) for user id=${user.id}: ${code}`);
+      }
+    } catch {
+      // Defensive: if the provider lookup itself fails, echo the code
+      // so the user can still complete the flow.
       devCode = code;
     }
     const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
