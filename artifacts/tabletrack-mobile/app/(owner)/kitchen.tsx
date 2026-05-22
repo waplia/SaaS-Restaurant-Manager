@@ -61,7 +61,7 @@ const SERVER_TO_CLIENT_STATUS: Record<string, ItemStatus> = {
   out_of_stock: "oos",
 };
 
-export default function KitchenScreen() {
+function KitchenScreen() {
   return (
     <RoleGate module="kitchen">
       <KdsView />
@@ -995,3 +995,6 @@ const styles = StyleSheet.create({
   undoText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
   undoLink: { color: "#fbbf24", fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(KitchenScreen, "kitchen_display");

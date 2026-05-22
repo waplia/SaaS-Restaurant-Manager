@@ -31,7 +31,7 @@ const TOOLS: Tool[] = [
   { key: "stock", label: "Smart reorder", desc: "AI suggests POs from sales velocity", icon: "cube-outline", cost: 2, href: "/(owner)/inventory" },
 ];
 
-export default function KhanaAIScreen() {
+function KhanaAIScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -116,3 +116,6 @@ const styles = StyleSheet.create({
   costChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   costText: { fontSize: 11, fontFamily: "Inter_700Bold" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(KhanaAIScreen, "khana_ai_enabled");

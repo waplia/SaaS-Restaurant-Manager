@@ -35,7 +35,7 @@ type Campaign = {
 const CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 const CAMPAIGN_TYPES = ["promotion", "winback", "newsletter", "loyalty", "custom"] as const;
 
-export default function GrowthScreen() {
+function GrowthScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
@@ -437,3 +437,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(GrowthScreen, "discounts_promotions");

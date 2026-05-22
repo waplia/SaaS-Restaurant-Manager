@@ -32,7 +32,7 @@ function itemReorder(it: Item): number {
   return Number(it.minStockLevel ?? it.reorderPoint ?? 0);
 }
 
-export default function InventoryScreen() {
+function InventoryScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
@@ -275,3 +275,6 @@ const styles = StyleSheet.create({
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(InventoryScreen, "inventory_management");

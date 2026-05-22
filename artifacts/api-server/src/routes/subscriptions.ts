@@ -21,7 +21,7 @@ function getStripe(): Stripe | null {
   return key ? new Stripe(key) : null;
 }
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "cashier", "counter_staff", "canteen_admin", "auditor", "accountant", "staff", "delivery_executive", "food_court_owner", "food_court_cashier", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "chef", "cashier", "counter_staff", "canteen_admin", "auditor", "accountant", "staff", "delivery_executive", "food_court_owner", "food_court_cashier", "inventory_manager", "hr", "payroll", "marketing", "super_admin"), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
   const tenantId = req.user?.tenantId;

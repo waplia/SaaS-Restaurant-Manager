@@ -35,7 +35,7 @@ const resName = (r: Reservation) => r.guestName ?? r.customerName ?? "Guest";
 const resPhone = (r: Reservation) => r.guestPhone ?? r.customerPhone ?? "";
 const resWhen = (r: Reservation) => r.scheduledAt ?? r.reservationTime ?? "";
 
-export default function ReservationsScreen() {
+function ReservationsScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
@@ -294,3 +294,6 @@ const styles = StyleSheet.create({
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(ReservationsScreen, "reservations");

@@ -12,7 +12,7 @@ import { BRAND } from "@/constants/brand";
 type Trend = { date: string; revenue: number };
 type Popular = { itemName: string; quantity: number; revenue?: number };
 
-export default function ReportsScreen() {
+function ReportsScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const isWeb = Platform.OS === "web";
@@ -116,3 +116,6 @@ const styles = StyleSheet.create({
   reportDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   note: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 8, lineHeight: 18 },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(ReportsScreen, "advanced_reports");

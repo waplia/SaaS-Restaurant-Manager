@@ -19,7 +19,7 @@ type Expense = {
 };
 type ExpensesResponse = { data: Expense[]; total: number; totalAmount: string };
 
-export default function MobileExpensesScreen() {
+function MobileExpensesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -444,3 +444,6 @@ const styles = StyleSheet.create({
   expenseAmount: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   empty: { fontSize: 13, textAlign: "center", paddingVertical: 20 },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(MobileExpensesScreen, "expense_tracking");

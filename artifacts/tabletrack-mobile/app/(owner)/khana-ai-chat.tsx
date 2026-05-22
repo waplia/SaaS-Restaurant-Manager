@@ -47,7 +47,7 @@ type ChatResponse = {
   creditsCharged?: number;
 };
 
-export default function KhanaAIChatScreen() {
+function KhanaAIChatScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const greeting: Msg = { role: "assistant", content: "Hi! Ask me about today's sales, low stock, top items, staff, customers — anything." };
@@ -406,3 +406,6 @@ const styles = StyleSheet.create({
   micBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(KhanaAIChatScreen, "dashboard_chat_enabled");

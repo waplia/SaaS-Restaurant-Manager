@@ -23,7 +23,7 @@ type DeliveryOrder = {
 
 type CodSummary = { totalDue: number; collected: number; pending: number };
 
-export default function DeliveryScreen() {
+function DeliveryScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const isWeb = Platform.OS === "web";
@@ -111,3 +111,6 @@ const styles = StyleSheet.create({
   rider: { fontSize: 12, fontFamily: "Inter_500Medium" },
   amount: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(DeliveryScreen, "delivery_module");

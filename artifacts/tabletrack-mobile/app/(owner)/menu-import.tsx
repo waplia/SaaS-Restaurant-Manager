@@ -34,7 +34,7 @@ type ImportDetail = {
   items: ImportRow[];
 };
 
-export default function MenuImportScreen() {
+function MenuImportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -371,3 +371,6 @@ const styles = StyleSheet.create({
   secondaryBtn: { alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   secondaryBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(MenuImportScreen, "ai_menu_drafts");

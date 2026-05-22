@@ -31,7 +31,7 @@ type Coupon = {
   maxDiscountAmount?: string | null;
 };
 
-export default function CouponsScreen() {
+function CouponsScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
@@ -277,3 +277,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
 });
+
+import { withPlanGate } from "@/components/PlanGate";
+export default withPlanGate(CouponsScreen, "discounts_promotions");
