@@ -240,6 +240,7 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
         planId: trialPlan?.id ?? null,
         planStatus: "trial",
         trialEndsAt,
+        subscriptionStartedAt: new Date(),
         isActive: true,
       }).returning();
       const [r] = await tx.insert(restaurantsTable).values({
@@ -271,6 +272,14 @@ router.post("/auth/google/verify", googleLimit, validate({ body: VerifyBody }), 
       return;
     }
     throw err;
+  }
+
+  // Grant trial plan's monthly AI credits immediately on Google signup.
+  try {
+    const { creditMonthlyAllocation } = await import("../lib/aiCredits");
+    await creditMonthlyAllocation(createdTenant.id);
+  } catch (err) {
+    logger.warn({ err, tenantId: createdTenant.id }, "initial AI credit allocation failed (google signup)");
   }
 
   await recordAuditLog({

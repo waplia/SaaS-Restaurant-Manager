@@ -575,9 +575,15 @@ export async function creditMonthlyAllocation(tenantId: number): Promise<{ alloc
     id: tenantsTable.id, planId: tenantsTable.planId, planStatus: tenantsTable.planStatus,
     subscriptionStartedAt: tenantsTable.subscriptionStartedAt,
     subscriptionEndsAt: tenantsTable.subscriptionEndsAt,
+    createdAt: tenantsTable.createdAt,
   }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   if (!tenant || !tenant.planId) return { allocated: false, credits: 0 };
-  if (tenant.planStatus !== "active") return { allocated: false, credits: 0 };
+  // Trial tenants are paying customers in waiting — they get the plan's
+  // included credits just like active subscribers. Only paused/expired/
+  // cancelled accounts skip the allocation.
+  if (tenant.planStatus !== "active" && tenant.planStatus !== "trial") {
+    return { allocated: false, credits: 0 };
+  }
 
   const [plan] = await db.select({
     id: subscriptionPlansTable.id,
@@ -586,7 +592,12 @@ export async function creditMonthlyAllocation(tenantId: number): Promise<{ alloc
   }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, tenant.planId));
   if (!plan || !plan.aiEnabled || plan.monthly <= 0) return { allocated: false, credits: 0 };
 
-  const { periodStart, periodEnd } = computeTenantRenewalPeriod(tenant.subscriptionStartedAt);
+  // Defensive: if subscriptionStartedAt is missing (legacy tenant rows),
+  // anchor the renewal cycle to createdAt instead of `now()` so periodStart
+  // is stable across daily sweep runs and the (tenantId, periodStart)
+  // uniqueness guard still prevents over-allocation.
+  const anchor = tenant.subscriptionStartedAt ?? tenant.createdAt;
+  const { periodStart, periodEnd } = computeTenantRenewalPeriod(anchor);
   // Ensure wallet exists outside the tx (lazy, idempotent — uses upsert semantics).
   await getOrCreateWallet(tenantId);
 
@@ -644,7 +655,10 @@ export async function creditMonthlyAllocation(tenantId: number): Promise<{ alloc
 export async function runMonthlyAllocationSweep(): Promise<{ allocated: number; total: number }> {
   const tenants = await db.select({ id: tenantsTable.id })
     .from(tenantsTable)
-    .where(and(eq(tenantsTable.planStatus, "active"), eq(tenantsTable.isActive, true)));
+    .where(and(
+      inArray(tenantsTable.planStatus, ["active", "trial"]),
+      eq(tenantsTable.isActive, true),
+    ));
   let allocated = 0;
   for (const t of tenants) {
     try {

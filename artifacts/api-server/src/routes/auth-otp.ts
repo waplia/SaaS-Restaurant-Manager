@@ -498,6 +498,7 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
         planId: trialPlan?.id ?? null,
         planStatus: "trial",
         trialEndsAt,
+        subscriptionStartedAt: new Date(),
         isActive: true,
       }).returning();
       const [r] = await tx.insert(restaurantsTable).values({
@@ -533,6 +534,15 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
       return;
     }
     throw err;
+  }
+
+  // Grant trial plan's monthly AI credits immediately. Best-effort: failure
+  // here must not break signup — the daily sweep will retry.
+  try {
+    const { creditMonthlyAllocation } = await import("../lib/aiCredits");
+    await creditMonthlyAllocation(tenant.id);
+  } catch (err) {
+    logger.warn({ err, tenantId: tenant.id }, "initial AI credit allocation failed (otp signup)");
   }
 
   const session2 = await createSession({ userId: user.id, req });

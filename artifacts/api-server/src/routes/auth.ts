@@ -164,6 +164,10 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
         planId: trialPlan?.id ?? null,
         planStatus: "trial",
         trialEndsAt,
+        // Anchor the monthly AI credit renewal cycle to the trial start so
+        // creditMonthlyAllocation's (tenantId, periodStart) idempotency works
+        // and the daily sweep cannot re-allocate within the same cycle.
+        subscriptionStartedAt: new Date(),
         isActive: true,
       }).returning();
 
@@ -205,6 +209,16 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       return;
     }
     throw err;
+  }
+
+  // Grant the trial plan's monthly AI credits to the brand-new tenant so the
+  // owner can use Khana AI features (menu import, descriptions, photos, etc.)
+  // from day one without waiting for the daily allocation sweep.
+  try {
+    const { creditMonthlyAllocation } = await import("../lib/aiCredits");
+    await creditMonthlyAllocation(tenant.id);
+  } catch (err) {
+    req.log.warn({ err, tenantId: tenant.id }, "initial AI credit allocation failed (auth/register)");
   }
 
   const session = await createSession({ userId: user.id, req });
