@@ -15,8 +15,14 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
 
+// Scope tightly to this router's own paths (all live under
+// `/staff/:userId/...`). Using the bare `/restaurants/:restaurantId`
+// prefix would fire this owner/manager-only gate for any nested route,
+// 403-ing the waiter app's calls to /waiter-requests, /orders, etc.
+// before they ever reach their actual handlers. Same regression as
+// staff.ts — keep gates pinned to the surface they actually guard.
 router.use(
-  "/restaurants/:restaurantId",
+  "/restaurants/:restaurantId/staff/:userId",
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
 );

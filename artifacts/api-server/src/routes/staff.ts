@@ -29,8 +29,17 @@ const router = Router();
 // Privileged-only router scope: all HR/payroll data (PII, salary, documents,
 // bank info) is restricted to owner/manager/super_admin. Non-privileged roles
 // hitting any of these routes get 403.
+//
+// IMPORTANT: this gate MUST be scoped to `/restaurants/:restaurantId/staff`,
+// NOT the bare `/restaurants/:restaurantId` prefix. With the broader prefix,
+// because this router is mounted before waiterRequestsRouter / orders / etc.
+// in routes/index.ts, the owner/manager-only `requireRole` here would fire
+// for *any* `/restaurants/:id/*` request (e.g. the waiter app calling
+// `/waiter-requests`) and return 403 before reaching the actual handler —
+// breaking the waiter Requests tab and any other non-staff endpoint mounted
+// after this router. Keep the path tight to this router's own surface.
 router.use(
-  "/restaurants/:restaurantId",
+  "/restaurants/:restaurantId/staff",
   requireRole("owner", "manager", "super_admin"),
   validateRestaurantAccess,
 );
