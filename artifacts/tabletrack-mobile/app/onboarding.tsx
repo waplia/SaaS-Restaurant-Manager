@@ -78,7 +78,18 @@ export default function OnboardingScreen() {
   const [loadingState, setLoadingState] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
   const [view, setView] = useState<"wizard" | "checklist">("wizard");
+  const [menuImportBusy, setMenuImportBusy] = useState(false);
   const resumedRef = useRef(false);
+
+  // Defensive guard: if the user navigates away from the menu_items step or
+  // switches to the checklist view, clear any stale import-busy lock so the
+  // Next button can't end up permanently disabled.
+  const activeStepId = STEPS[activeIdx]?.id;
+  useEffect(() => {
+    if (activeStepId !== "menu_items" || view !== "wizard") {
+      setMenuImportBusy(false);
+    }
+  }, [activeStepId, view]);
 
   // Owners/managers only; everyone else goes straight to their dashboard.
   const isOwnerRole = user?.role === "owner" || user?.role === "manager" || user?.isSuperAdmin;
@@ -209,6 +220,7 @@ export default function OnboardingScreen() {
                 onComplete={completeOnboarding}
                 state={state}
                 colors={colors}
+                onMenuImportBusyChange={setMenuImportBusy}
               />
 
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 24, gap: 8 }}>
@@ -241,11 +253,15 @@ export default function OnboardingScreen() {
                       }}
                       disabled={(() => {
                         const st = stepStatus.get(activeStep.id);
-                        return !st?.completed && !st?.skipped && !activeStep.skippable;
+                        const incomplete = !st?.completed && !st?.skipped && !activeStep.skippable;
+                        const importLocked = activeStep.id === "menu_items" && menuImportBusy;
+                        return incomplete || importLocked;
                       })()}
                       style={({ pressed }) => {
                         const st = stepStatus.get(activeStep.id);
-                        const disabled = !st?.completed && !st?.skipped && !activeStep.skippable;
+                        const incomplete = !st?.completed && !st?.skipped && !activeStep.skippable;
+                        const importLocked = activeStep.id === "menu_items" && menuImportBusy;
+                        const disabled = incomplete || importLocked;
                         return [styles.primaryBtn, {
                           backgroundColor: colors.primary,
                           opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
@@ -253,7 +269,9 @@ export default function OnboardingScreen() {
                         }];
                       }}
                     >
-                      <Text style={styles.primaryBtnText}>Next</Text>
+                      <Text style={styles.primaryBtnText}>
+                        {activeStep.id === "menu_items" && menuImportBusy ? "Importing…" : "Next"}
+                      </Text>
                       <Ionicons name="chevron-forward" size={16} color="#fff" />
                     </Pressable>
                   )}
@@ -331,6 +349,7 @@ interface StepProps {
   onComplete: () => void;
   state: OnboardingState;
   colors: ReturnType<typeof useColors>;
+  onMenuImportBusyChange?: (busy: boolean) => void;
 }
 
 function StepView(p: StepProps) {
@@ -557,7 +576,7 @@ function CategoriesStep({ restaurantId, defaultMenuId, api, onChanged, onAdvance
   );
 }
 
-function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProps) {
+function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors, onMenuImportBusyChange }: StepProps) {
   const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
   const [kitchens, setKitchens] = useState<{ id: number; name: string; isDefault?: boolean }[]>([]);
   const [items, setItems] = useState<{ id: number; name: string; price: string }[]>([]);
@@ -636,6 +655,7 @@ function ItemsStep({ restaurantId, api, onChanged, onAdvance, colors }: StepProp
         api={api}
         colors={colors}
         onSaved={async () => { await reloadItems(); await onChanged(); }}
+        onBusyChange={onMenuImportBusyChange}
       />
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
@@ -725,9 +745,10 @@ interface MenuImportPanelProps {
   api: ApiHelpers;
   colors: ReturnType<typeof useColors>;
   onSaved: () => Promise<void> | void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanelProps) {
+function MenuImportPanel({ restaurantId, api, colors, onSaved, onBusyChange }: MenuImportPanelProps) {
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<ImportSource>("image");
   const [url, setUrl] = useState("");
@@ -747,8 +768,10 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
       mountedRef.current = false;
       cancelledRef.current = true;
       if (pollRef.current) clearTimeout(pollRef.current);
+      // Release any parent "import busy" lock if we unmount mid-import.
+      onBusyChange?.(false);
     };
-  }, []);
+  }, [onBusyChange]);
 
   function reset() {
     cancelledRef.current = true;
@@ -939,6 +962,10 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved }: MenuImportPanel
   }
 
   const isBusy = status === "uploading" || status === "starting" || status === "processing" || status === "saving";
+
+  // Surface busy state to the parent so the onboarding "Next" button can be
+  // disabled while an AI menu import is still extracting / saving items.
+  useEffect(() => { onBusyChange?.(isBusy); }, [isBusy, onBusyChange]);
 
   if (!open) {
     return (
