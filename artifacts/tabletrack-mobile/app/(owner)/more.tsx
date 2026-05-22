@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -85,17 +85,33 @@ export default function MoreScreen() {
   const allowed = useMemo(() => new Set(allowedModules(user?.role)), [user?.role]);
   const planMap = usePlanModuleMap();
 
+  // Free-text filter for the module list. Matches case-insensitively
+  // against label, description, and group label so users can type
+  // "stock" → Inventory, "bill" → Plans & Billing, "money" → group, etc.
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+
   const grouped = useMemo(() => {
     const order: ModuleDef["group"][] = ["sell", "operate", "people", "money", "grow", "system"];
     const out: Record<string, ModuleDef[]> = {};
     for (const g of order) out[g] = [];
     for (const m of MODULES) {
       if (!allowed.has(m.key)) continue;
+      if (normalizedQuery) {
+        const groupLabel = GROUP_LABEL[m.group].toLowerCase();
+        const hay = `${m.label} ${m.desc} ${groupLabel}`.toLowerCase();
+        if (!hay.includes(normalizedQuery)) continue;
+      }
       out[m.group].push(m);
     }
     for (const g of order) if (out[g].length === 0) delete out[g];
     return out;
-  }, [allowed]);
+  }, [allowed, normalizedQuery]);
+
+  const groupedEntries = Object.entries(grouped);
+  const showProfileRow =
+    !normalizedQuery &&
+    (user?.role === "owner" || user?.role === "super_admin" || user?.role === "manager");
 
   // Resolve "locked by plan" — only a hard lock once the subscription
   // query has actually returned (isResolved). Until then we treat the
@@ -134,7 +150,36 @@ export default function MoreScreen() {
           <AICreditChip />
         </View>
 
-        {(user?.role === "owner" || user?.role === "super_admin" || user?.role === "manager") && (
+        <View
+          style={[
+            styles.searchWrap,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search options"
+            placeholderTextColor={colors.mutedForeground}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            style={[styles.searchInput, { color: colors.foreground }]}
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => setQuery("")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+        </View>
+
+        {showProfileRow && (
           <View style={{ gap: 8 }}>
             <Text style={[styles.section, { color: colors.mutedForeground }]}>Profile</Text>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -158,7 +203,19 @@ export default function MoreScreen() {
           </View>
         )}
 
-        {Object.entries(grouped).map(([group, items]) => (
+        {normalizedQuery && groupedEntries.length === 0 && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 20, alignItems: "center", gap: 6 }]}>
+            <Ionicons name="search-outline" size={22} color={colors.mutedForeground} />
+            <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
+              No matches for &ldquo;{query}&rdquo;
+            </Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, textAlign: "center" }}>
+              Try a different word — like &ldquo;menu&rdquo;, &ldquo;staff&rdquo;, or &ldquo;reports&rdquo;.
+            </Text>
+          </View>
+        )}
+
+        {groupedEntries.map(([group, items]) => (
           <View key={group} style={{ gap: 8 }}>
             <Text style={[styles.section, { color: colors.mutedForeground }]}>{GROUP_LABEL[group as ModuleDef["group"]]}</Text>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -217,4 +274,19 @@ const styles = StyleSheet.create({
   desc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   lockBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   lockBadgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 },
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 10 : 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    paddingVertical: 0,
+  },
 });
