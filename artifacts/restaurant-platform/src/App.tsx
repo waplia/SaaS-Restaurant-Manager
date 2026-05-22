@@ -58,7 +58,7 @@ import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import OnboardingPage from "@/pages/onboarding";
 import SetupWizardPage from "@/pages/setup-wizard";
-import WelcomePage from "@/pages/welcome";
+import WelcomePage, { hasSeenWelcome } from "@/pages/welcome";
 import SetupOnboardingPage from "@/pages/setup-onboarding";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import CompleteProfilePage from "@/pages/complete-profile";
@@ -240,9 +240,20 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="text-muted-foreground text-sm">Loading…</div></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
+  // First-time owners / managers should see the animated welcome intro before
+  // anything else. Skip for super-admins and staff portal roles.
+  if (
+    user &&
+    !user.isSuperAdmin &&
+    (user.role === "owner" || user.role === "manager") &&
+    !hasSeenWelcome(user.id) &&
+    Component !== WelcomePage
+  ) {
+    return <Redirect to="/welcome" />;
+  }
   return <Component />;
 }
 
@@ -251,6 +262,13 @@ function RoleProtectedRoute({ component: Component, allow }: { component: React.
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="text-muted-foreground text-sm">Loading…</div></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
   if (!user || (!user.isSuperAdmin && !allow.includes(user.role))) return <Redirect to="/dashboard" />;
+  if (
+    !user.isSuperAdmin &&
+    (user.role === "owner" || user.role === "manager") &&
+    !hasSeenWelcome(user.id)
+  ) {
+    return <Redirect to="/welcome" />;
+  }
   return <Component />;
 }
 
@@ -272,6 +290,9 @@ function PublicOnlyRoute({ component: Component }: { component: React.ComponentT
   if (isAuthenticated) {
     if (user?.isSuperAdmin) return <Redirect to="/admin" />;
     if (user?.role && PORTAL_ROLES.includes(user.role)) return <Redirect to="/portal" />;
+    if (user && (user.role === "owner" || user.role === "manager") && !hasSeenWelcome(user.id)) {
+      return <Redirect to="/welcome" />;
+    }
     return <Redirect to="/dashboard" />;
   }
   return <Component />;
@@ -283,6 +304,9 @@ function RootRedirect() {
   if (!isAuthenticated) return <Redirect to="/login" />;
   if (user?.isSuperAdmin) return <Redirect to="/admin" />;
   if (user?.role && PORTAL_ROLES.includes(user.role)) return <Redirect to="/portal" />;
+  if (user && (user.role === "owner" || user.role === "manager") && !hasSeenWelcome(user.id)) {
+    return <Redirect to="/welcome" />;
+  }
   return <Redirect to="/dashboard" />;
 }
 
