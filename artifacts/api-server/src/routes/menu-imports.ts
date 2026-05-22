@@ -354,15 +354,36 @@ async function processImport(importId: number, body: StartBody, ctx: ProcessCtx)
 
     let aiData: AiStructuredResponse;
     let requestLogId: number | null = null;
+    // Some providers (notably Gemini) return transient 503 "UNAVAILABLE /
+    // high demand" errors during peak load. Retry a few times with
+    // exponential backoff before surfacing the failure to the user.
+    const isTransient = (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return /\b(503|429|UNAVAILABLE|high demand|overloaded|rate.?limit|temporarily|timeout|ETIMEDOUT|ECONNRESET)\b/i.test(msg);
+    };
+    const withRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+      const delays = [1500, 4000, 9000];
+      let lastErr: unknown;
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try { return await fn(); }
+        catch (err) {
+          lastErr = err;
+          if (attempt === delays.length || !isTransient(err)) throw err;
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+      }
+      throw lastErr;
+    };
+
     if (imageDataUrl) {
-      const v = await AIProviderService.generateVision({
+      const v = await withRetry(() => AIProviderService.generateVision({
         featureSlug: "ai_menu_import",
         tenantId: ctx.tenantId, restaurantId: ctx.restaurantId, userId: ctx.userId,
         metadata: { importId, source: body.source, fileName: body.fileName },
       }, {
         messages: [{ role: "user", content: STRUCTURING_INSTRUCTIONS + "\n\nExtract every item from the attached document." }],
-        imageDataUrl, temperature: 0.2, maxTokens: 8000,
-      });
+        imageDataUrl: imageDataUrl!, temperature: 0.2, maxTokens: 8000,
+      }));
       requestLogId = v.requestLogId ?? null;
       const cleaned = v.text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
       try { aiData = JSON.parse(cleaned) as AiStructuredResponse; }
@@ -372,14 +393,14 @@ async function processImport(importId: number, body: StartBody, ctx: ProcessCtx)
         aiData = JSON.parse(m[0]) as AiStructuredResponse;
       }
     } else if (textPayload) {
-      const r = await AIProviderService.generateJson<AiStructuredResponse>({
+      const r = await withRetry(() => AIProviderService.generateJson<AiStructuredResponse>({
         featureSlug: "ai_menu_import",
         tenantId: ctx.tenantId, restaurantId: ctx.restaurantId, userId: ctx.userId,
         metadata: { importId, source: body.source, fileName: body.fileName },
       }, {
         messages: [{ role: "user", content: `${STRUCTURING_INSTRUCTIONS}\n\nSource:\n"""\n${textPayload}\n"""` }],
         temperature: 0.2, maxTokens: 8000,
-      });
+      }));
       aiData = r.data;
       requestLogId = r.result.requestLogId ?? null;
     } else {

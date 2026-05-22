@@ -344,13 +344,27 @@ function MenuUploadStep({ answers, patch }: { answers: WizardAnswers; patch: (p:
   const importId = answers.menuImportId ?? null;
   const { data: importStatus } = useQuery({
     queryKey: ["setup-wizard-import", restaurantId, importId],
-    queryFn: () => apiGet<{ id: number; status: string; itemCount?: number }>(`/restaurants/${restaurantId}/ai/menu-import/imports/${importId}`),
+    queryFn: () => apiGet<{ id: number; status: string; itemCount?: number; totalRows?: number; errorMessage?: string | null }>(`/restaurants/${restaurantId}/ai/menu-import/imports/${importId}`),
     enabled: !!restaurantId && !!importId,
     refetchInterval: (q) => {
       const s = (q.state.data as { status?: string } | undefined)?.status;
       return s && (s === "ready" || s === "failed" || s === "saved") ? false : 2000;
     },
   });
+
+  function friendlyError(raw: string | null | undefined): string {
+    if (!raw) return "Khana AI couldn't read this menu. Please try again or upload a different file.";
+    try {
+      const parsed = JSON.parse(raw);
+      const m = parsed?.error?.message ?? parsed?.message;
+      if (typeof m === "string") {
+        if (/high demand|UNAVAILABLE|503|overloaded/i.test(m)) return "Our AI provider is busy right now. Please try again in a minute.";
+        return m;
+      }
+    } catch { /* not JSON */ }
+    if (/high demand|UNAVAILABLE|503|overloaded/i.test(raw)) return "Our AI provider is busy right now. Please try again in a minute.";
+    return raw.length > 220 ? raw.slice(0, 220) + "…" : raw;
+  }
 
   async function start(body: { source: string; text?: string; url?: string; objectPath?: string; fileName?: string }) {
     setSubmitting(true);
@@ -392,17 +406,40 @@ function MenuUploadStep({ answers, patch }: { answers: WizardAnswers; patch: (p:
   if (importId) {
     const s = importStatus?.status ?? "pending";
     const ready = s === "ready" || s === "saved";
+    const failed = s === "failed";
+    const itemsDetected = importStatus?.itemCount ?? importStatus?.totalRows ?? null;
+    const statusLabel: Record<string, string> = {
+      pending: "Queued…",
+      processing: "Khana AI is reading your menu line by line…",
+      ready: "Ready",
+      saved: "Saved",
+      partially_saved: "Partially saved",
+      failed: "Import failed",
+    };
     return (
       <div className="space-y-3">
-        <div className="border rounded-xl p-4 flex items-center gap-3">
-          {ready ? <Check className="w-5 h-5 text-green-600" /> : <Loader2 className="w-5 h-5 animate-spin text-primary" />}
-          <div className="flex-1">
+        <div className={cn("border rounded-xl p-4 flex items-center gap-3", failed && "border-destructive/40 bg-destructive/5")}>
+          {failed ? (
+            <span className="w-5 h-5 rounded-full bg-destructive/15 text-destructive grid place-items-center text-xs font-bold">!</span>
+          ) : ready ? (
+            <Check className="w-5 h-5 text-green-600" />
+          ) : (
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+          )}
+          <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">Menu import #{importId}</div>
-            <div className="text-xs text-muted-foreground">Status: {s}{importStatus?.itemCount != null && ` · ${importStatus.itemCount} items detected`}</div>
+            <div className={cn("text-xs", failed ? "text-destructive" : "text-muted-foreground")}>
+              {failed ? friendlyError(importStatus?.errorMessage) : statusLabel[s] ?? s}
+              {!failed && itemsDetected != null && itemsDetected > 0 && ` · ${itemsDetected} items detected`}
+            </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => patch({ menuImportId: null })}>Replace</Button>
+          <Button variant="ghost" size="sm" onClick={() => patch({ menuImportId: null })}>
+            {failed ? "Try again" : "Replace"}
+          </Button>
         </div>
-        <p className="text-xs text-muted-foreground">When you click "Generate", Khana AI will save these items into your menu.</p>
+        {!failed && (
+          <p className="text-xs text-muted-foreground">When you click "Generate", Khana AI will save these items into your menu.</p>
+        )}
       </div>
     );
   }
