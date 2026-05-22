@@ -8,6 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { PhoneInput } from "@/components/PhoneInput";
+import { parsePhone, expectedNationalLength } from "@workspace/phone-utils";
 
 // OTP-based password reset (replaces the old email-link flow).
 //   step "email"   → enter email, server emails a 6-digit code
@@ -31,6 +33,24 @@ export default function ForgotPasswordScreen() {
 
   const identifierLabel = method === "phone" ? phone : email;
 
+  // Validate the phone using the shared country metadata (same source the
+  // register / wallet flows use) so users get the right country-aware
+  // length check, country code prefix, and E.164 formatting.
+  function validatePhone(): string | null {
+    const parsed = parsePhone(phone, "IN");
+    if (!parsed.country.iso || !parsed.national) {
+      return "Enter your mobile number.";
+    }
+    const expected = expectedNationalLength(parsed.country.iso);
+    if (expected > 0 && parsed.national.length !== expected) {
+      return `Enter a ${expected}-digit mobile number for ${parsed.country.name}.`;
+    }
+    if (!parsed.e164) {
+      return "Enter a valid mobile number.";
+    }
+    return null;
+  }
+
   async function requestCode(isResend = false) {
     if (method === "email") {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -38,11 +58,8 @@ export default function ForgotPasswordScreen() {
         return;
       }
     } else {
-      const cleaned = phone.replace(/[^\d+]/g, "");
-      if (cleaned.length < 7) {
-        Alert.alert("Required", "Enter a valid phone number (with country code).");
-        return;
-      }
+      const err = validatePhone();
+      if (err) { Alert.alert("Check your number", err); return; }
     }
     setLoading(true);
     try {
@@ -50,7 +67,7 @@ export default function ForgotPasswordScreen() {
         ? `${getApiBaseUrl()}/api/auth/forgot-password-phone`
         : `${getApiBaseUrl()}/api/auth/forgot-password`;
       const body = method === "phone"
-        ? { phone: phone.trim() }
+        ? { phone: parsePhone(phone, "IN").e164 || phone.trim() }
         : { email: email.trim() };
       const r = await fetch(url, {
         method: "POST",
@@ -88,7 +105,7 @@ export default function ForgotPasswordScreen() {
         ? `${getApiBaseUrl()}/api/auth/reset-password-phone`
         : `${getApiBaseUrl()}/api/auth/reset-password`;
       const body = method === "phone"
-        ? { phone: phone.trim(), code: code.trim(), newPassword: password }
+        ? { phone: parsePhone(phone, "IN").e164 || phone.trim(), code: code.trim(), newPassword: password }
         : { email: email.trim().toLowerCase(), code: code.trim(), newPassword: password };
       const r = await fetch(url, {
         method: "POST",
@@ -168,17 +185,9 @@ export default function ForgotPasswordScreen() {
               ) : (
                 <View style={{ gap: 6 }}>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                  <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-                    <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
-                    <TextInput
-                      style={[styles.input, { color: colors.foreground }]}
-                      value={phone} onChangeText={setPhone}
-                      placeholder="+91 98765 43210" placeholderTextColor={colors.mutedForeground}
-                      keyboardType="phone-pad" autoCapitalize="none" autoCorrect={false}
-                    />
-                  </View>
+                  <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" testID="forgot-phone" />
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
-                    Use the phone number on your account. Include the country code.
+                    Use the mobile number on your account. We'll send the code via SMS.
                   </Text>
                 </View>
               )}

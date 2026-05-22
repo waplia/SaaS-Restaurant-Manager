@@ -1,0 +1,114 @@
+Improve the Android UI quality so it looks equally premium and attractive as iOS.
+
+Audit every mobile screen on Android and fix all platform-specific design issues without changing backend logic or removing features.
+
+Main issues to fix:
+
+1. Global Font
+- Do not use default Android font only.
+- Add one premium custom font globally, such as Inter, Manrope, Plus Jakarta Sans, or Poppins.
+- Use the same font on Android and iOS.
+- Create AppText component and replace raw Text usage where possible.
+
+2. Android Shadows / Cards
+- iOS shadows look soft but Android shadows often look flat or harsh.
+- Add Android-specific elevation.
+- Add soft borders, clean backgrounds, and consistent border radius.
+- Cards should look premium even without shadow.
+- Use card radius 16–24px and padding 16–20px.
+
+3. Default Components
+- Replace default Android-looking Button, TextInput, Picker, Dropdown, Modal, and Alert.
+- Use custom components:
+  - AppButton
+  - AppInput
+  - AppCard
+  - AppDropdown
+  - AppBottomSheet
+  - AppModal
+  - AppSwitch
+- Android should not show basic native/default style components.
+
+4. Icons
+- Use one consistent icon library across the app, preferably lucide-react-native or @expo/vector-icons.
+- Fix boxed icons, missing icons, inconsistent icon sizes, and fallback icons.
+- Use consistent icon size, stroke width, color, and container style.
+- Do not mix many icon libraries randomly.
+
+5. Status Bar and Navigation Bar
+- Set Android status bar color to match screen background.
+- Set Android bottom navigation bar color to match app theme.
+- Avoid default black/gray Android system bars.
+- Use SafeAreaView properly.
+- Support edge-to-edge layout carefully.
+
+6. Spacing and Layout
+- Add consistent spacing scale.
+- Use minimum 16px screen padding.
+- Use good vertical spacing between sections.
+- Use minimum button height 48px.
+- Use proper touch targets.
+- Fix screens that feel cramped on Android.
+- Make dashboard cards and menu items visually larger and cleaner.
+
+7. Typography Hierarchy
+- Add clear heading, subheading, body, caption, and label styles.
+- Make headings stronger.
+- Use proper line height.
+- Avoid tiny text.
+- Use medium/semi-bold weights for labels and buttons.
+
+8. Colors and Theme
+- Define proper theme colors globally.
+- Android should not use random gray/default backgrounds.
+- Use a clean background like #F8FAFC or theme-based surface color.
+- Use consistent primary, secondary, success, warning, danger, border, muted colors.
+- Fix dark mode/light mode conflicts.
+
+9. Images and Avatars
+- Fix image scaling on Android.
+- Use proper resizeMode.
+- Use rounded image containers.
+- Add placeholders/loading skeletons.
+- Fix logo/avatar cropping.
+
+10. Bottom Tabs and Header
+- Make Android bottom tab navigation modern and premium.
+- Use proper active/inactive state.
+- Add clean icons and labels.
+- Fix header height, alignment, back button, and title spacing.
+
+11. Forms
+- Inputs should have rounded corners, border, background, icon support, error state, helper text, and focus state.
+- Dropdowns should open as bottom sheets/searchable pickers instead of raw Android picker.
+- No raw ID fields anywhere.
+
+12. Android Testing
+- Test on multiple Android screen sizes.
+- Fix Samsung/Xiaomi/Pixel layout issues.
+- Fix keyboard overlap using KeyboardAvoidingView or equivalent.
+- Fix safe area and bottom button overlap.
+
+Create a shared mobile design system:
+- AppScreen
+- AppText
+- AppButton
+- AppInput
+- AppCard
+- AppIcon
+- AppBottomSheet
+- AppDropdown
+- AppHeader
+- AppEmptyState
+- AppSkeleton
+- AppBadge
+- Theme colors
+- Typography scale
+- Spacing scale
+- Border radius scale
+- Shadow/elevation helpers for iOS and Android
+
+Use this design system across all screens so Android and iOS look consistent.
+
+Final result:
+Android app should look modern, premium, clean, smooth, and equal to iOS. No default Android-looking UI, no boxed icons, no rough shadows, no cramped screens, no black system bars, and no inconsistent fonts.
