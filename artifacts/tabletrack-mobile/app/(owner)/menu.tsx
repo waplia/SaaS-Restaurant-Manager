@@ -12,22 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
-
-/**
- * Build the diner-facing absolute URL for an image path stored on the
- * menu item. Most paths are saved as `/api/public/storage/objects/...`
- * (already absolute-from-root) or `/objects/...` (legacy). We accept any
- * fully-qualified `http(s)://` URL untouched.
- */
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url)) return url;
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN ?? "").replace(/^https?:\/\//, "");
-  const base = domain ? `https://${domain}` : "";
-  if (url.startsWith("/objects/")) return `${base}/api/public/storage${url}`;
-  if (url.startsWith("/")) return `${base}${url}`;
-  return url;
-}
+import { resolveImageUrl } from "@/lib/resolveImageUrl";
 
 interface StockFoodImage {
   id: number;
