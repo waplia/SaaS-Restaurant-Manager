@@ -117,7 +117,36 @@ router.get("/restaurants/:restaurantId/items", async (req, res) => {
   if (categoryId) conditions.push(eq(menuItemsTable.categoryId, Number(categoryId)));
   if (search) conditions.push(ilike(menuItemsTable.name, `%${search}%`));
   const rows = await db.select().from(menuItemsTable).where(and(...conditions));
-  res.json(rows);
+  // Annotate each item with active modifier-group counts so clients can decide
+  // whether to show "Add" vs "Customize". Items with a required group MUST be
+  // customized — otherwise the per-item POST fails enrichment with a 400.
+  const itemIds = rows.map(r => r.id);
+  const groupRows = itemIds.length > 0
+    ? await db
+        .select({
+          menuItemId: modifierGroupsTable.menuItemId,
+          isRequired: modifierGroupsTable.isRequired,
+        })
+        .from(modifierGroupsTable)
+        .where(and(
+          inArray(modifierGroupsTable.menuItemId, itemIds),
+          eq(modifierGroupsTable.isActive, true),
+        ))
+    : [];
+  const groupCount = new Map<number, number>();
+  const requiredByItem = new Map<number, boolean>();
+  for (const g of groupRows) {
+    if (g.menuItemId == null) continue;
+    groupCount.set(g.menuItemId, (groupCount.get(g.menuItemId) ?? 0) + 1);
+    if (g.isRequired) requiredByItem.set(g.menuItemId, true);
+  }
+  const enriched = rows.map(r => ({
+    ...r,
+    modifierGroupCount: groupCount.get(r.id) ?? 0,
+    hasModifiers: (groupCount.get(r.id) ?? 0) > 0,
+    hasRequiredModifiers: requiredByItem.get(r.id) === true,
+  }));
+  res.json(enriched);
 });
 
 router.post("/restaurants/:restaurantId/items", requireRole("owner", "manager", "super_admin"), async (req, res) => {
