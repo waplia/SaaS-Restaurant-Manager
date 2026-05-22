@@ -1,1055 +1,983 @@
 [
   {
-    "name": "Veg Hakka Noodles",
-    "category": "chinese",
-    "hint": "Veg Hakka Noodles, restaurant style, garnished beautifully",
+    "name": "Fish Masala",
+    "category": "seafood",
+    "hint": "Fish Masala, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "fish-masala",
+    "file": "fish-masala.png"
+  },
+  {
+    "name": "Fish Fry",
+    "category": "seafood",
+    "hint": "Fish Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "fish-fry",
+    "file": "fish-fry.png"
+  },
+  {
+    "name": "Tawa Fish",
+    "category": "seafood",
+    "hint": "Tawa Fish, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "tawa-fish",
+    "file": "tawa-fish.png"
+  },
+  {
+    "name": "Fish Tikka",
+    "category": "seafood",
+    "hint": "Fish Tikka, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "fish-tikka",
+    "file": "fish-tikka.png"
+  },
+  {
+    "name": "Amritsari Fish",
+    "category": "seafood",
+    "hint": "Amritsari Fish, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "amritsari-fish",
+    "file": "amritsari-fish.png"
+  },
+  {
+    "name": "Fish Pakora",
+    "category": "seafood",
+    "hint": "Fish Pakora, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "fish-pakora",
+    "file": "fish-pakora.png"
+  },
+  {
+    "name": "Fish Koliwada",
+    "category": "seafood",
+    "hint": "Fish Koliwada, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "fish-koliwada",
+    "file": "fish-koliwada.png"
+  },
+  {
+    "name": "Fish Moilee",
+    "category": "seafood",
+    "hint": "Fish Moilee, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "fish-moilee",
+    "file": "fish-moilee.png"
+  },
+  {
+    "name": "Malabar Fish Curry",
+    "category": "seafood",
+    "hint": "Malabar Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "malabar-fish-curry",
+    "file": "malabar-fish-curry.png"
+  },
+  {
+    "name": "Bengali Fish Curry",
+    "category": "seafood",
+    "hint": "Bengali Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "east-indian",
+    "isVeg": false,
+    "slug": "bengali-fish-curry",
+    "file": "bengali-fish-curry.png"
+  },
+  {
+    "name": "Rohu Fish Curry",
+    "category": "seafood",
+    "hint": "Rohu Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "east-indian",
+    "isVeg": false,
+    "slug": "rohu-fish-curry",
+    "file": "rohu-fish-curry.png"
+  },
+  {
+    "name": "Pomfret Fry",
+    "category": "seafood",
+    "hint": "Pomfret Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "pomfret-fry",
+    "file": "pomfret-fry.png"
+  },
+  {
+    "name": "Pomfret Curry",
+    "category": "seafood",
+    "hint": "Pomfret Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "pomfret-curry",
+    "file": "pomfret-curry.png"
+  },
+  {
+    "name": "Surmai Fry",
+    "category": "seafood",
+    "hint": "Surmai Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "surmai-fry",
+    "file": "surmai-fry.png"
+  },
+  {
+    "name": "Surmai Curry",
+    "category": "seafood",
+    "hint": "Surmai Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "surmai-curry",
+    "file": "surmai-curry.png"
+  },
+  {
+    "name": "Prawn Curry",
+    "category": "seafood",
+    "hint": "Prawn Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "prawn-curry",
+    "file": "prawn-curry.png"
+  },
+  {
+    "name": "Prawn Fry",
+    "category": "seafood",
+    "hint": "Prawn Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "prawn-fry",
+    "file": "prawn-fry.png"
+  },
+  {
+    "name": "Prawn Biryani",
+    "category": "seafood",
+    "hint": "Prawn Biryani, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "prawn-biryani",
+    "file": "prawn-biryani.png"
+  },
+  {
+    "name": "Prawn Ghee Roast",
+    "category": "seafood",
+    "hint": "Prawn Ghee Roast, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "prawn-ghee-roast",
+    "file": "prawn-ghee-roast.png"
+  },
+  {
+    "name": "Prawn Koliwada",
+    "category": "seafood",
+    "hint": "Prawn Koliwada, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "west-indian",
+    "isVeg": false,
+    "slug": "prawn-koliwada",
+    "file": "prawn-koliwada.png"
+  },
+  {
+    "name": "Chilli Prawn",
+    "category": "seafood",
+    "hint": "Chilli Prawn, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
     "cuisine": "indo-chinese",
+    "isVeg": false,
+    "slug": "chilli-prawn",
+    "file": "chilli-prawn.png"
+  },
+  {
+    "name": "Crab Curry",
+    "category": "seafood",
+    "hint": "Crab Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "crab-curry",
+    "file": "crab-curry.png"
+  },
+  {
+    "name": "Crab Masala",
+    "category": "seafood",
+    "hint": "Crab Masala, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "crab-masala",
+    "file": "crab-masala.png"
+  },
+  {
+    "name": "Crab Fry",
+    "category": "seafood",
+    "hint": "Crab Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "crab-fry",
+    "file": "crab-fry.png"
+  },
+  {
+    "name": "Squid Fry",
+    "category": "seafood",
+    "hint": "Squid Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "squid-fry",
+    "file": "squid-fry.png"
+  },
+  {
+    "name": "Seafood Platter",
+    "category": "seafood",
+    "hint": "Seafood Platter, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "seafood-platter",
+    "file": "seafood-platter.png"
+  },
+  {
+    "name": "Veg Roll",
+    "category": "wraps",
+    "hint": "Veg Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-hakka-noodles",
-    "file": "veg-hakka-noodles.png"
+    "slug": "veg-roll",
+    "file": "veg-roll.png"
   },
   {
-    "name": "Veg Schezwan Noodles",
-    "category": "chinese",
-    "hint": "Veg Schezwan Noodles, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Soya Chaap Roll",
+    "category": "wraps",
+    "hint": "Soya Chaap Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-schezwan-noodles",
-    "file": "veg-schezwan-noodles.png"
+    "slug": "soya-chaap-roll",
+    "file": "soya-chaap-roll.png"
   },
   {
-    "name": "Veg Chowmein",
-    "category": "chinese",
-    "hint": "Veg Chowmein, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Cheese Roll",
+    "category": "wraps",
+    "hint": "Cheese Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-chowmein",
-    "file": "veg-chowmein.png"
+    "slug": "cheese-roll",
+    "file": "cheese-roll.png"
   },
   {
-    "name": "Chilli Garlic Noodles",
-    "category": "chinese",
-    "hint": "Chilli Garlic Noodles, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Kathi Roll",
+    "category": "wraps",
+    "hint": "Kathi Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "chilli-garlic-noodles",
-    "file": "chilli-garlic-noodles.png"
+    "slug": "kathi-roll",
+    "file": "kathi-roll.png"
   },
   {
-    "name": "Veg Fried Rice",
-    "category": "chinese",
-    "hint": "Veg Fried Rice, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Frankie Roll",
+    "category": "wraps",
+    "hint": "Frankie Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-fried-rice",
-    "file": "veg-fried-rice.png"
+    "slug": "frankie-roll",
+    "file": "frankie-roll.png"
   },
   {
-    "name": "Triple Schezwan Rice",
-    "category": "chinese",
-    "hint": "Triple Schezwan Rice, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Veg Wrap",
+    "category": "wraps",
+    "hint": "Veg Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "triple-schezwan-rice",
-    "file": "triple-schezwan-rice.png"
+    "slug": "veg-wrap",
+    "file": "veg-wrap.png"
   },
   {
-    "name": "Manchurian Gravy",
-    "category": "chinese",
-    "hint": "Manchurian Gravy, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Paneer Wrap",
+    "category": "wraps",
+    "hint": "Paneer Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "manchurian-gravy",
-    "file": "manchurian-gravy.png"
+    "slug": "paneer-wrap",
+    "file": "paneer-wrap.png"
   },
   {
-    "name": "Manchurian Dry",
-    "category": "chinese",
-    "hint": "Manchurian Dry, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Chicken Wrap",
+    "category": "wraps",
+    "hint": "Chicken Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-wrap",
+    "file": "chicken-wrap.png"
+  },
+  {
+    "name": "Veg Sandwich",
+    "category": "wraps",
+    "hint": "Veg Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "manchurian-dry",
-    "file": "manchurian-dry.png"
+    "slug": "veg-sandwich",
+    "file": "veg-sandwich.png"
   },
   {
-    "name": "Paneer 65",
-    "category": "chinese",
-    "hint": "Paneer 65, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Grilled Sandwich",
+    "category": "wraps",
+    "hint": "Grilled Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "paneer-65",
-    "file": "paneer-65.png"
+    "slug": "grilled-sandwich",
+    "file": "grilled-sandwich.png"
   },
   {
-    "name": "Chilli Mushroom",
-    "category": "chinese",
-    "hint": "Chilli Mushroom, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Cheese Sandwich",
+    "category": "wraps",
+    "hint": "Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "chilli-mushroom",
-    "file": "chilli-mushroom.png"
+    "slug": "cheese-sandwich",
+    "file": "cheese-sandwich.png"
   },
   {
-    "name": "Crispy Corn",
-    "category": "chinese",
-    "hint": "Crispy Corn, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Veg Cheese Sandwich",
+    "category": "wraps",
+    "hint": "Veg Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "crispy-corn",
-    "file": "crispy-corn.png"
+    "slug": "veg-cheese-sandwich",
+    "file": "veg-cheese-sandwich.png"
   },
   {
-    "name": "Honey Chilli Potato",
-    "category": "chinese",
-    "hint": "Honey Chilli Potato, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Club Sandwich",
+    "category": "wraps",
+    "hint": "Club Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "honey-chilli-potato",
-    "file": "honey-chilli-potato.png"
+    "slug": "club-sandwich",
+    "file": "club-sandwich.png"
   },
   {
-    "name": "Chilli Potato",
-    "category": "chinese",
-    "hint": "Chilli Potato, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Paneer Sandwich",
+    "category": "wraps",
+    "hint": "Paneer Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "chilli-potato",
-    "file": "chilli-potato.png"
+    "slug": "paneer-sandwich",
+    "file": "paneer-sandwich.png"
   },
   {
-    "name": "Veg Spring Roll",
-    "category": "chinese",
-    "hint": "Veg Spring Roll, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Corn Cheese Sandwich",
+    "category": "wraps",
+    "hint": "Corn Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-spring-roll",
-    "file": "veg-spring-roll.png"
+    "slug": "corn-cheese-sandwich",
+    "file": "corn-cheese-sandwich.png"
   },
   {
-    "name": "Veg Momos",
-    "category": "chinese",
-    "hint": "Veg Momos, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Bombay Sandwich",
+    "category": "wraps",
+    "hint": "Bombay Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "west-indian",
     "isVeg": true,
-    "slug": "veg-momos",
-    "file": "veg-momos.png"
+    "slug": "bombay-sandwich",
+    "file": "bombay-sandwich.png"
   },
   {
-    "name": "Fried Momos",
-    "category": "chinese",
-    "hint": "Fried Momos, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Bread Butter",
+    "category": "wraps",
+    "hint": "Bread Butter, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "fried-momos",
-    "file": "fried-momos.png"
+    "slug": "bread-butter",
+    "file": "bread-butter.png"
   },
   {
-    "name": "Tandoori Momos",
-    "category": "chinese",
-    "hint": "Tandoori Momos, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Bread Jam",
+    "category": "wraps",
+    "hint": "Bread Jam, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "tandoori-momos",
-    "file": "tandoori-momos.png"
+    "slug": "bread-jam",
+    "file": "bread-jam.png"
   },
   {
-    "name": "Schezwan Momos",
-    "category": "chinese",
-    "hint": "Schezwan Momos, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Margherita Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Margherita Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "schezwan-momos",
-    "file": "schezwan-momos.png"
+    "slug": "margherita-pizza",
+    "file": "margherita-pizza.png"
   },
   {
-    "name": "Veg Manchow Soup",
-    "category": "chinese",
-    "hint": "Veg Manchow Soup, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Cheese Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Cheese Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "veg-manchow-soup",
-    "file": "veg-manchow-soup.png"
+    "slug": "cheese-pizza",
+    "file": "cheese-pizza.png"
   },
   {
-    "name": "Lemon Coriander Soup",
-    "category": "chinese",
-    "hint": "Lemon Coriander Soup, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Veg Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Veg Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "lemon-coriander-soup",
-    "file": "lemon-coriander-soup.png"
+    "slug": "veg-pizza",
+    "file": "veg-pizza.png"
   },
   {
-    "name": "Tomato Soup",
-    "category": "chinese",
-    "hint": "Tomato Soup, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Paneer Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Paneer Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "tomato-soup",
-    "file": "tomato-soup.png"
+    "slug": "paneer-pizza",
+    "file": "paneer-pizza.png"
   },
   {
-    "name": "Clear Soup",
-    "category": "chinese",
-    "hint": "Clear Soup, restaurant style, garnished beautifully",
-    "cuisine": "indo-chinese",
+    "name": "Corn Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Corn Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
     "isVeg": true,
-    "slug": "clear-soup",
-    "file": "clear-soup.png"
+    "slug": "corn-pizza",
+    "file": "corn-pizza.png"
   },
   {
-    "name": "Malai Paneer Tikka",
-    "category": "starters",
-    "hint": "Malai Paneer Tikka, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Onion Capsicum Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Onion Capsicum Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "onion-capsicum-pizza",
+    "file": "onion-capsicum-pizza.png"
+  },
+  {
+    "name": "Farmhouse Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Farmhouse Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "farmhouse-pizza",
+    "file": "farmhouse-pizza.png"
+  },
+  {
+    "name": "Tandoori Paneer Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Tandoori Paneer Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "tandoori-paneer-pizza",
+    "file": "tandoori-paneer-pizza.png"
+  },
+  {
+    "name": "Mushroom Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Mushroom Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mushroom-pizza",
+    "file": "mushroom-pizza.png"
+  },
+  {
+    "name": "Chicken Tikka Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Chicken Tikka Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-tikka-pizza",
+    "file": "chicken-tikka-pizza.png"
+  },
+  {
+    "name": "Peri Peri Chicken Pizza",
+    "category": "pizza-burger-pasta",
+    "hint": "Peri Peri Chicken Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "peri-peri-chicken-pizza",
+    "file": "peri-peri-chicken-pizza.png"
+  },
+  {
+    "name": "Veg Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Veg Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "veg-burger",
+    "file": "veg-burger.png"
+  },
+  {
+    "name": "Cheese Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Cheese Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-burger",
+    "file": "cheese-burger.png"
+  },
+  {
+    "name": "Aloo Tikki Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Aloo Tikki Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "aloo-tikki-burger",
+    "file": "aloo-tikki-burger.png"
+  },
+  {
+    "name": "Paneer Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Paneer Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "paneer-burger",
+    "file": "paneer-burger.png"
+  },
+  {
+    "name": "Maharaja Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Maharaja Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "maharaja-burger",
+    "file": "maharaja-burger.png"
+  },
+  {
+    "name": "Crispy Chicken Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Crispy Chicken Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "crispy-chicken-burger",
+    "file": "crispy-chicken-burger.png"
+  },
+  {
+    "name": "Egg Burger",
+    "category": "pizza-burger-pasta",
+    "hint": "Egg Burger, restaurant style, stacked burger with fries on the side",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "egg-burger",
+    "file": "egg-burger.png"
+  },
+  {
+    "name": "White Sauce Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "White Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "white-sauce-pasta",
+    "file": "white-sauce-pasta.png"
+  },
+  {
+    "name": "Red Sauce Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Red Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "red-sauce-pasta",
+    "file": "red-sauce-pasta.png"
+  },
+  {
+    "name": "Pink Sauce Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Pink Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pink-sauce-pasta",
+    "file": "pink-sauce-pasta.png"
+  },
+  {
+    "name": "Arrabiata Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Arrabiata Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "arrabiata-pasta",
+    "file": "arrabiata-pasta.png"
+  },
+  {
+    "name": "Alfredo Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Alfredo Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "alfredo-pasta",
+    "file": "alfredo-pasta.png"
+  },
+  {
+    "name": "Mac and Cheese",
+    "category": "pizza-burger-pasta",
+    "hint": "Mac and Cheese, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "mac-and-cheese",
+    "file": "mac-and-cheese.png"
+  },
+  {
+    "name": "Veg Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Veg Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "veg-pasta",
+    "file": "veg-pasta.png"
+  },
+  {
+    "name": "Chicken Pasta",
+    "category": "pizza-burger-pasta",
+    "hint": "Chicken Pasta, restaurant style, plated pasta in a deep bowl with garnish",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-pasta",
+    "file": "chicken-pasta.png"
+  },
+  {
+    "name": "Garlic Bread",
+    "category": "pizza-burger-pasta",
+    "hint": "Garlic Bread, restaurant style, garlic bread slices on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "garlic-bread",
+    "file": "garlic-bread.png"
+  },
+  {
+    "name": "Cheese Garlic Bread",
+    "category": "pizza-burger-pasta",
+    "hint": "Cheese Garlic Bread, restaurant style, garlic bread slices on a wooden board",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-garlic-bread",
+    "file": "cheese-garlic-bread.png"
+  },
+  {
+    "name": "French Fries",
+    "category": "snacks",
+    "hint": "French Fries, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "french-fries",
+    "file": "french-fries.png"
+  },
+  {
+    "name": "Masala Fries",
+    "category": "snacks",
+    "hint": "Masala Fries, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "masala-fries",
+    "file": "masala-fries.png"
+  },
+  {
+    "name": "Peri Peri Fries",
+    "category": "snacks",
+    "hint": "Peri Peri Fries, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "peri-peri-fries",
+    "file": "peri-peri-fries.png"
+  },
+  {
+    "name": "Cheese Fries",
+    "category": "snacks",
+    "hint": "Cheese Fries, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-fries",
+    "file": "cheese-fries.png"
+  },
+  {
+    "name": "Potato Wedges",
+    "category": "snacks",
+    "hint": "Potato Wedges, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "potato-wedges",
+    "file": "potato-wedges.png"
+  },
+  {
+    "name": "Nachos",
+    "category": "snacks",
+    "hint": "Nachos, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "nachos",
+    "file": "nachos.png"
+  },
+  {
+    "name": "Cheese Nachos",
+    "category": "snacks",
+    "hint": "Cheese Nachos, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-nachos",
+    "file": "cheese-nachos.png"
+  },
+  {
+    "name": "Loaded Nachos",
+    "category": "snacks",
+    "hint": "Loaded Nachos, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "loaded-nachos",
+    "file": "loaded-nachos.png"
+  },
+  {
+    "name": "Maggi",
+    "category": "snacks",
+    "hint": "Maggi, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "maggi",
+    "file": "maggi.png"
+  },
+  {
+    "name": "Masala Maggi",
+    "category": "snacks",
+    "hint": "Masala Maggi, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "malai-paneer-tikka",
-    "file": "malai-paneer-tikka.png"
+    "slug": "masala-maggi",
+    "file": "masala-maggi.png"
   },
   {
-    "name": "Achari Paneer Tikka",
-    "category": "starters",
-    "hint": "Achari Paneer Tikka, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Cheese Maggi",
+    "category": "snacks",
+    "hint": "Cheese Maggi, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-maggi",
+    "file": "cheese-maggi.png"
+  },
+  {
+    "name": "Veg Maggi",
+    "category": "snacks",
+    "hint": "Veg Maggi, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "veg-maggi",
+    "file": "veg-maggi.png"
+  },
+  {
+    "name": "Chicken Maggi",
+    "category": "snacks",
+    "hint": "Chicken Maggi, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": false,
+    "slug": "chicken-maggi",
+    "file": "chicken-maggi.png"
+  },
+  {
+    "name": "Poha",
+    "category": "snacks",
+    "hint": "Poha, Indian fast food / snack, plated invitingly",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "poha",
+    "file": "poha.png"
+  },
+  {
+    "name": "Kanda Poha",
+    "category": "snacks",
+    "hint": "Kanda Poha, Indian fast food / snack, plated invitingly",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "kanda-poha",
+    "file": "kanda-poha.png"
+  },
+  {
+    "name": "Sabudana Khichdi",
+    "category": "snacks",
+    "hint": "Sabudana Khichdi, Indian fast food / snack, plated invitingly",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "sabudana-khichdi",
+    "file": "sabudana-khichdi.png"
+  },
+  {
+    "name": "Sabudana Vada",
+    "category": "snacks",
+    "hint": "Sabudana Vada, Indian fast food / snack, plated invitingly",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "sabudana-vada",
+    "file": "sabudana-vada.png"
+  },
+  {
+    "name": "Cutlet",
+    "category": "snacks",
+    "hint": "Cutlet, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "achari-paneer-tikka",
-    "file": "achari-paneer-tikka.png"
+    "slug": "cutlet",
+    "file": "cutlet.png"
   },
   {
-    "name": "Hariyali Paneer Tikka",
-    "category": "starters",
-    "hint": "Hariyali Paneer Tikka, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Aloo Bonda",
+    "category": "snacks",
+    "hint": "Aloo Bonda, Indian fast food / snack, plated invitingly",
+    "cuisine": "south-indian",
+    "isVeg": true,
+    "slug": "aloo-bonda",
+    "file": "aloo-bonda.png"
+  },
+  {
+    "name": "Corn Cheese Balls",
+    "category": "snacks",
+    "hint": "Corn Cheese Balls, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "corn-cheese-balls",
+    "file": "corn-cheese-balls.png"
+  },
+  {
+    "name": "Toast",
+    "category": "snacks",
+    "hint": "Toast, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "toast",
+    "file": "toast.png"
+  },
+  {
+    "name": "Cheese Toast",
+    "category": "snacks",
+    "hint": "Cheese Toast, Indian fast food / snack, plated invitingly",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheese-toast",
+    "file": "cheese-toast.png"
+  },
+  {
+    "name": "Peanut Masala",
+    "category": "snacks",
+    "hint": "Peanut Masala, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "hariyali-paneer-tikka",
-    "file": "hariyali-paneer-tikka.png"
+    "slug": "peanut-masala",
+    "file": "peanut-masala.png"
   },
   {
-    "name": "Tandoori Paneer",
-    "category": "starters",
-    "hint": "Tandoori Paneer, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Roasted Papad",
+    "category": "snacks",
+    "hint": "Roasted Papad, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "tandoori-paneer",
-    "file": "tandoori-paneer.png"
+    "slug": "roasted-papad",
+    "file": "roasted-papad.png"
   },
   {
-    "name": "Paneer Seekh Kebab",
-    "category": "starters",
-    "hint": "Paneer Seekh Kebab, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Masala Papad",
+    "category": "snacks",
+    "hint": "Masala Papad, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "paneer-seekh-kebab",
-    "file": "paneer-seekh-kebab.png"
+    "slug": "masala-papad",
+    "file": "masala-papad.png"
   },
   {
-    "name": "Veg Seekh Kebab",
-    "category": "starters",
-    "hint": "Veg Seekh Kebab, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Fry Papad",
+    "category": "snacks",
+    "hint": "Fry Papad, Indian fast food / snack, plated invitingly",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "veg-seekh-kebab",
-    "file": "veg-seekh-kebab.png"
+    "slug": "fry-papad",
+    "file": "fry-papad.png"
   },
   {
-    "name": "Hara Bhara Kebab",
-    "category": "starters",
-    "hint": "Hara Bhara Kebab, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Aloo Paratha Breakfast",
+    "category": "breakfast",
+    "hint": "Aloo Paratha Breakfast, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "hara-bhara-kebab",
-    "file": "hara-bhara-kebab.png"
+    "slug": "aloo-paratha-breakfast",
+    "file": "aloo-paratha-breakfast.png"
   },
   {
-    "name": "Dahi Ke Kebab",
-    "category": "starters",
-    "hint": "Dahi Ke Kebab, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Paneer Paratha Breakfast",
+    "category": "breakfast",
+    "hint": "Paneer Paratha Breakfast, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "dahi-ke-kebab",
-    "file": "dahi-ke-kebab.png"
+    "slug": "paneer-paratha-breakfast",
+    "file": "paneer-paratha-breakfast.png"
   },
   {
-    "name": "Mushroom Tikka",
-    "category": "starters",
-    "hint": "Mushroom Tikka, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Dosa",
+    "category": "breakfast",
+    "hint": "Dosa, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "south-indian",
+    "isVeg": true,
+    "slug": "dosa",
+    "file": "dosa.png"
+  },
+  {
+    "name": "Poori Bhaji",
+    "category": "breakfast",
+    "hint": "Poori Bhaji, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "mushroom-tikka",
-    "file": "mushroom-tikka.png"
+    "slug": "poori-bhaji",
+    "file": "poori-bhaji.png"
   },
   {
-    "name": "Tandoori Mushroom",
-    "category": "starters",
-    "hint": "Tandoori Mushroom, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
+    "name": "Toast Butter",
+    "category": "breakfast",
+    "hint": "Toast Butter, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "toast-butter",
+    "file": "toast-butter.png"
+  },
+  {
+    "name": "Sandwich",
+    "category": "breakfast",
+    "hint": "Sandwich, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "sandwich",
+    "file": "sandwich.png"
+  },
+  {
+    "name": "Kachori Sabzi",
+    "category": "breakfast",
+    "hint": "Kachori Sabzi, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "tandoori-mushroom",
-    "file": "tandoori-mushroom.png"
+    "slug": "kachori-sabzi",
+    "file": "kachori-sabzi.png"
   },
   {
-    "name": "Stuffed Mushroom",
-    "category": "starters",
-    "hint": "Stuffed Mushroom, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
+    "name": "Fafda",
+    "category": "breakfast",
+    "hint": "Fafda, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "west-indian",
     "isVeg": true,
-    "slug": "stuffed-mushroom",
-    "file": "stuffed-mushroom.png"
+    "slug": "fafda",
+    "file": "fafda.png"
   },
   {
-    "name": "Tandoori Aloo",
-    "category": "starters",
-    "hint": "Tandoori Aloo, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
+    "name": "Handvo",
+    "category": "breakfast",
+    "hint": "Handvo, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "west-indian",
     "isVeg": true,
-    "slug": "tandoori-aloo",
-    "file": "tandoori-aloo.png"
+    "slug": "handvo",
+    "file": "handvo.png"
   },
   {
-    "name": "Veg Platter",
-    "category": "starters",
-    "hint": "Veg Platter, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
+    "name": "Appam Stew",
+    "category": "breakfast",
+    "hint": "Appam Stew, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "veg-platter",
-    "file": "veg-platter.png"
+    "slug": "appam-stew",
+    "file": "appam-stew.png"
   },
   {
-    "name": "Tandoori Broccoli",
-    "category": "starters",
-    "hint": "Tandoori Broccoli, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
+    "name": "Puttu Kadala",
+    "category": "breakfast",
+    "hint": "Puttu Kadala, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "tandoori-broccoli",
-    "file": "tandoori-broccoli.png"
-  },
-  {
-    "name": "Soya Chaap Tikka",
-    "category": "starters",
-    "hint": "Soya Chaap Tikka, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "soya-chaap-tikka",
-    "file": "soya-chaap-tikka.png"
-  },
-  {
-    "name": "Malai Chaap",
-    "category": "starters",
-    "hint": "Malai Chaap, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "malai-chaap",
-    "file": "malai-chaap.png"
-  },
-  {
-    "name": "Achari Chaap",
-    "category": "starters",
-    "hint": "Achari Chaap, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "achari-chaap",
-    "file": "achari-chaap.png"
-  },
-  {
-    "name": "Afghani Chaap",
-    "category": "starters",
-    "hint": "Afghani Chaap, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "afghani-chaap",
-    "file": "afghani-chaap.png"
-  },
-  {
-    "name": "Veg Cutlet",
-    "category": "starters",
-    "hint": "Veg Cutlet, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "veg-cutlet",
-    "file": "veg-cutlet.png"
-  },
-  {
-    "name": "Cheese Corn Balls",
-    "category": "starters",
-    "hint": "Cheese Corn Balls, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "cheese-corn-balls",
-    "file": "cheese-corn-balls.png"
-  },
-  {
-    "name": "Crispy Veg",
-    "category": "starters",
-    "hint": "Crispy Veg, tandoor or fried Indian veg starter, beautifully plated with mint chutney and onion rings",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "crispy-veg",
-    "file": "crispy-veg.png"
-  },
-  {
-    "name": "Chicken Curry",
-    "category": "chicken",
-    "hint": "Chicken Curry, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-curry",
-    "file": "chicken-curry.png"
-  },
-  {
-    "name": "Chicken Masala",
-    "category": "chicken",
-    "hint": "Chicken Masala, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-masala",
-    "file": "chicken-masala.png"
-  },
-  {
-    "name": "Kadai Chicken",
-    "category": "chicken",
-    "hint": "Kadai Chicken, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "kadai-chicken",
-    "file": "kadai-chicken.png"
-  },
-  {
-    "name": "Chicken Do Pyaza",
-    "category": "chicken",
-    "hint": "Chicken Do Pyaza, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-do-pyaza",
-    "file": "chicken-do-pyaza.png"
-  },
-  {
-    "name": "Chicken Lababdar",
-    "category": "chicken",
-    "hint": "Chicken Lababdar, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-lababdar",
-    "file": "chicken-lababdar.png"
-  },
-  {
-    "name": "Chicken Changezi",
-    "category": "chicken",
-    "hint": "Chicken Changezi, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-changezi",
-    "file": "chicken-changezi.png"
-  },
-  {
-    "name": "Chicken Handi",
-    "category": "chicken",
-    "hint": "Chicken Handi, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-handi",
-    "file": "chicken-handi.png"
-  },
-  {
-    "name": "Chicken Kolhapuri",
-    "category": "chicken",
-    "hint": "Chicken Kolhapuri, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-kolhapuri",
-    "file": "chicken-kolhapuri.png"
-  },
-  {
-    "name": "Chicken Sukka",
-    "category": "chicken",
-    "hint": "Chicken Sukka, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-sukka",
-    "file": "chicken-sukka.png"
-  },
-  {
-    "name": "Chicken Ghee Roast",
-    "category": "chicken",
-    "hint": "Chicken Ghee Roast, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-ghee-roast",
-    "file": "chicken-ghee-roast.png"
-  },
-  {
-    "name": "Chicken Manchurian",
-    "category": "chicken",
-    "hint": "Chicken Manchurian, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-manchurian",
-    "file": "chicken-manchurian.png"
-  },
-  {
-    "name": "Chicken Fry",
-    "category": "chicken",
-    "hint": "Chicken Fry, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-fry",
-    "file": "chicken-fry.png"
-  },
-  {
-    "name": "Chicken Pakora",
-    "category": "chicken",
-    "hint": "Chicken Pakora, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-pakora",
-    "file": "chicken-pakora.png"
-  },
-  {
-    "name": "Malai Chicken Tikka",
-    "category": "chicken",
-    "hint": "Malai Chicken Tikka, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "malai-chicken-tikka",
-    "file": "malai-chicken-tikka.png"
-  },
-  {
-    "name": "Achari Chicken Tikka",
-    "category": "chicken",
-    "hint": "Achari Chicken Tikka, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "achari-chicken-tikka",
-    "file": "achari-chicken-tikka.png"
-  },
-  {
-    "name": "Hariyali Chicken Tikka",
-    "category": "chicken",
-    "hint": "Hariyali Chicken Tikka, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "hariyali-chicken-tikka",
-    "file": "hariyali-chicken-tikka.png"
-  },
-  {
-    "name": "Afghani Chicken",
-    "category": "chicken",
-    "hint": "Afghani Chicken, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "afghani-chicken",
-    "file": "afghani-chicken.png"
-  },
-  {
-    "name": "Chicken Seekh Kebab",
-    "category": "chicken",
-    "hint": "Chicken Seekh Kebab, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-seekh-kebab",
-    "file": "chicken-seekh-kebab.png"
-  },
-  {
-    "name": "Chicken Reshmi Kebab",
-    "category": "chicken",
-    "hint": "Chicken Reshmi Kebab, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-reshmi-kebab",
-    "file": "chicken-reshmi-kebab.png"
-  },
-  {
-    "name": "Chicken Tangdi Kebab",
-    "category": "chicken",
-    "hint": "Chicken Tangdi Kebab, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-tangdi-kebab",
-    "file": "chicken-tangdi-kebab.png"
-  },
-  {
-    "name": "Hyderabadi Chicken Biryani",
-    "category": "chicken",
-    "hint": "Hyderabadi Chicken Biryani, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "hyderabadi-chicken-biryani",
-    "file": "hyderabadi-chicken-biryani.png"
-  },
-  {
-    "name": "Lucknowi Chicken Biryani",
-    "category": "chicken",
-    "hint": "Lucknowi Chicken Biryani, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "lucknowi-chicken-biryani",
-    "file": "lucknowi-chicken-biryani.png"
-  },
-  {
-    "name": "Kolkata Chicken Biryani",
-    "category": "chicken",
-    "hint": "Kolkata Chicken Biryani, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "kolkata-chicken-biryani",
-    "file": "kolkata-chicken-biryani.png"
-  },
-  {
-    "name": "Chicken Pulao",
-    "category": "chicken",
-    "hint": "Chicken Pulao, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-pulao",
-    "file": "chicken-pulao.png"
-  },
-  {
-    "name": "Chicken Roll",
-    "category": "chicken",
-    "hint": "Chicken Roll, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-roll",
-    "file": "chicken-roll.png"
-  },
-  {
-    "name": "Chicken Shawarma",
-    "category": "chicken",
-    "hint": "Chicken Shawarma, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-shawarma",
-    "file": "chicken-shawarma.png"
-  },
-  {
-    "name": "Chicken Momos",
-    "category": "chicken",
-    "hint": "Chicken Momos, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-momos",
-    "file": "chicken-momos.png"
-  },
-  {
-    "name": "Chicken Fried Rice",
-    "category": "chicken",
-    "hint": "Chicken Fried Rice, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-fried-rice",
-    "file": "chicken-fried-rice.png"
-  },
-  {
-    "name": "Chicken Noodles",
-    "category": "chicken",
-    "hint": "Chicken Noodles, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-noodles",
-    "file": "chicken-noodles.png"
-  },
-  {
-    "name": "Chicken Soup",
-    "category": "chicken",
-    "hint": "Chicken Soup, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-soup",
-    "file": "chicken-soup.png"
-  },
-  {
-    "name": "Chicken Burger",
-    "category": "chicken",
-    "hint": "Chicken Burger, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-burger",
-    "file": "chicken-burger.png"
-  },
-  {
-    "name": "Chicken Sandwich",
-    "category": "chicken",
-    "hint": "Chicken Sandwich, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-sandwich",
-    "file": "chicken-sandwich.png"
-  },
-  {
-    "name": "Chicken Pizza",
-    "category": "chicken",
-    "hint": "Chicken Pizza, Indian non-veg chicken dish, restaurant menu style, plated with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "chicken-pizza",
-    "file": "chicken-pizza.png"
-  },
-  {
-    "name": "Mutton Curry",
-    "category": "mutton",
-    "hint": "Mutton Curry, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-curry",
-    "file": "mutton-curry.png"
-  },
-  {
-    "name": "Mutton Masala",
-    "category": "mutton",
-    "hint": "Mutton Masala, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-masala",
-    "file": "mutton-masala.png"
-  },
-  {
-    "name": "Mutton Korma",
-    "category": "mutton",
-    "hint": "Mutton Korma, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-korma",
-    "file": "mutton-korma.png"
-  },
-  {
-    "name": "Mutton Handi",
-    "category": "mutton",
-    "hint": "Mutton Handi, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-handi",
-    "file": "mutton-handi.png"
-  },
-  {
-    "name": "Mutton Rara",
-    "category": "mutton",
-    "hint": "Mutton Rara, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-rara",
-    "file": "mutton-rara.png"
-  },
-  {
-    "name": "Mutton Do Pyaza",
-    "category": "mutton",
-    "hint": "Mutton Do Pyaza, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-do-pyaza",
-    "file": "mutton-do-pyaza.png"
-  },
-  {
-    "name": "Mutton Keema",
-    "category": "mutton",
-    "hint": "Mutton Keema, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-keema",
-    "file": "mutton-keema.png"
-  },
-  {
-    "name": "Mutton Seekh Kebab",
-    "category": "mutton",
-    "hint": "Mutton Seekh Kebab, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-seekh-kebab",
-    "file": "mutton-seekh-kebab.png"
-  },
-  {
-    "name": "Mutton Galouti Kebab",
-    "category": "mutton",
-    "hint": "Mutton Galouti Kebab, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-galouti-kebab",
-    "file": "mutton-galouti-kebab.png"
-  },
-  {
-    "name": "Mutton Shami Kebab",
-    "category": "mutton",
-    "hint": "Mutton Shami Kebab, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-shami-kebab",
-    "file": "mutton-shami-kebab.png"
-  },
-  {
-    "name": "Mutton Boti Kebab",
-    "category": "mutton",
-    "hint": "Mutton Boti Kebab, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-boti-kebab",
-    "file": "mutton-boti-kebab.png"
-  },
-  {
-    "name": "Mutton Chaap",
-    "category": "mutton",
-    "hint": "Mutton Chaap, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-chaap",
-    "file": "mutton-chaap.png"
-  },
-  {
-    "name": "Mutton Fry",
-    "category": "mutton",
-    "hint": "Mutton Fry, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-fry",
-    "file": "mutton-fry.png"
-  },
-  {
-    "name": "Mutton Sukka",
-    "category": "mutton",
-    "hint": "Mutton Sukka, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-sukka",
-    "file": "mutton-sukka.png"
-  },
-  {
-    "name": "Mutton Ghee Roast",
-    "category": "mutton",
-    "hint": "Mutton Ghee Roast, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-ghee-roast",
-    "file": "mutton-ghee-roast.png"
-  },
-  {
-    "name": "Hyderabadi Mutton Biryani",
-    "category": "mutton",
-    "hint": "Hyderabadi Mutton Biryani, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "hyderabadi-mutton-biryani",
-    "file": "hyderabadi-mutton-biryani.png"
-  },
-  {
-    "name": "Lucknowi Mutton Biryani",
-    "category": "mutton",
-    "hint": "Lucknowi Mutton Biryani, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "lucknowi-mutton-biryani",
-    "file": "lucknowi-mutton-biryani.png"
-  },
-  {
-    "name": "Kolkata Mutton Biryani",
-    "category": "mutton",
-    "hint": "Kolkata Mutton Biryani, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "kolkata-mutton-biryani",
-    "file": "kolkata-mutton-biryani.png"
-  },
-  {
-    "name": "Mutton Pulao",
-    "category": "mutton",
-    "hint": "Mutton Pulao, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-pulao",
-    "file": "mutton-pulao.png"
-  },
-  {
-    "name": "Mutton Roll",
-    "category": "mutton",
-    "hint": "Mutton Roll, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-roll",
-    "file": "mutton-roll.png"
-  },
-  {
-    "name": "Mutton Soup",
-    "category": "mutton",
-    "hint": "Mutton Soup, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-soup",
-    "file": "mutton-soup.png"
-  },
-  {
-    "name": "Paya Soup",
-    "category": "mutton",
-    "hint": "Paya Soup, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "paya-soup",
-    "file": "paya-soup.png"
-  },
-  {
-    "name": "Nihari",
-    "category": "mutton",
-    "hint": "Nihari, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "nihari",
-    "file": "nihari.png"
-  },
-  {
-    "name": "Mutton Stew",
-    "category": "mutton",
-    "hint": "Mutton Stew, Indian non-veg mutton/lamb dish, rich gravy or grilled, restaurant style with garnish",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "mutton-stew",
-    "file": "mutton-stew.png"
-  },
-  {
-    "name": "Boiled Egg",
-    "category": "egg",
-    "hint": "Boiled Egg, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "boiled-egg",
-    "file": "boiled-egg.png"
-  },
-  {
-    "name": "Half Fry Egg",
-    "category": "egg",
-    "hint": "Half Fry Egg, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "half-fry-egg",
-    "file": "half-fry-egg.png"
-  },
-  {
-    "name": "Omelette",
-    "category": "egg",
-    "hint": "Omelette, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "omelette",
-    "file": "omelette.png"
-  },
-  {
-    "name": "Masala Omelette",
-    "category": "egg",
-    "hint": "Masala Omelette, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "masala-omelette",
-    "file": "masala-omelette.png"
-  },
-  {
-    "name": "Cheese Omelette",
-    "category": "egg",
-    "hint": "Cheese Omelette, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "cheese-omelette",
-    "file": "cheese-omelette.png"
-  },
-  {
-    "name": "Bread Omelette",
-    "category": "egg",
-    "hint": "Bread Omelette, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "bread-omelette",
-    "file": "bread-omelette.png"
-  },
-  {
-    "name": "Egg Bhurji",
-    "category": "egg",
-    "hint": "Egg Bhurji, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-bhurji",
-    "file": "egg-bhurji.png"
-  },
-  {
-    "name": "Egg Masala",
-    "category": "egg",
-    "hint": "Egg Masala, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-masala",
-    "file": "egg-masala.png"
-  },
-  {
-    "name": "Egg Keema",
-    "category": "egg",
-    "hint": "Egg Keema, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-keema",
-    "file": "egg-keema.png"
-  },
-  {
-    "name": "Egg Roll",
-    "category": "egg",
-    "hint": "Egg Roll, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-roll",
-    "file": "egg-roll.png"
-  },
-  {
-    "name": "Egg Fried Rice",
-    "category": "egg",
-    "hint": "Egg Fried Rice, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-fried-rice",
-    "file": "egg-fried-rice.png"
-  },
-  {
-    "name": "Egg Noodles",
-    "category": "egg",
-    "hint": "Egg Noodles, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-noodles",
-    "file": "egg-noodles.png"
-  },
-  {
-    "name": "Egg Sandwich",
-    "category": "egg",
-    "hint": "Egg Sandwich, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-sandwich",
-    "file": "egg-sandwich.png"
-  },
-  {
-    "name": "Egg Paratha",
-    "category": "egg",
-    "hint": "Egg Paratha, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-paratha",
-    "file": "egg-paratha.png"
-  },
-  {
-    "name": "Egg Dosa",
-    "category": "egg",
-    "hint": "Egg Dosa, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-dosa",
-    "file": "egg-dosa.png"
-  },
-  {
-    "name": "Egg Pakora",
-    "category": "egg",
-    "hint": "Egg Pakora, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-pakora",
-    "file": "egg-pakora.png"
-  },
-  {
-    "name": "Egg Maggi",
-    "category": "egg",
-    "hint": "Egg Maggi, Indian egg-based dish, plated, garnished",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "egg-maggi",
-    "file": "egg-maggi.png"
+    "slug": "puttu-kadala",
+    "file": "puttu-kadala.png"
   }
 ]
