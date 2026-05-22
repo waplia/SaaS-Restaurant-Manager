@@ -1,261 +1,142 @@
 [
   {
-    "name": "Paneer Lababdar",
-    "category": "curry",
-    "hint": "rich silky tomato-cream gravy with paneer cubes, garnished with cream swirl and coriander",
-    "slug": "paneer-lababdar",
-    "file": "paneer-lababdar.png"
-  },
-  {
-    "name": "Paneer Tikka Masala",
-    "category": "curry",
-    "hint": "charred grilled paneer cubes in spicy onion-tomato masala with capsicum and onion chunks",
-    "slug": "paneer-tikka-masala",
-    "file": "paneer-tikka-masala.png"
-  },
-  {
-    "name": "Paneer Do Pyaza",
-    "category": "curry",
-    "hint": "paneer cubes with large onion petals in semi-dry brown masala",
-    "slug": "paneer-do-pyaza",
-    "file": "paneer-do-pyaza.png"
-  },
-  {
-    "name": "Aloo Tamatar",
-    "category": "sabzi",
-    "hint": "potato cubes in light tangy tomato gravy, simple home-style north Indian, served in a kadai",
-    "slug": "aloo-tamatar",
-    "file": "aloo-tamatar.png"
-  },
-  {
-    "name": "Aloo Palak",
-    "category": "sabzi",
-    "hint": "diced potatoes simmered in vibrant green spinach puree, ghee glaze",
-    "slug": "aloo-palak",
-    "file": "aloo-palak.png"
-  },
-  {
-    "name": "Mix Veg",
-    "category": "sabzi",
-    "hint": "mixed vegetable curry with carrot beans cauliflower peas in light masala gravy",
-    "slug": "mix-veg",
-    "file": "mix-veg.png"
-  },
-  {
-    "name": "Veg Korma",
-    "category": "curry",
-    "hint": "mixed vegetables in pale creamy white cashew-coconut korma gravy, garnished with raisins",
-    "slug": "veg-korma",
-    "file": "veg-korma.png"
-  },
-  {
-    "name": "Veg Handi",
-    "category": "curry",
-    "hint": "mixed vegetables and paneer in rich brown handi gravy, served in a copper kadhai",
-    "slug": "veg-handi",
-    "file": "veg-handi.png"
-  },
-  {
-    "name": "Veg Jalfrezi",
-    "category": "curry",
-    "hint": "stir-fried mixed vegetables and paneer with bell peppers in spicy semi-dry tomato sauce",
-    "slug": "veg-jalfrezi",
-    "file": "veg-jalfrezi.png"
-  },
-  {
-    "name": "Veg Tawa Masala",
-    "category": "curry",
-    "hint": "mixed vegetables in thick onion-tomato masala cooked on a flat iron tawa",
-    "slug": "veg-tawa-masala",
-    "file": "veg-tawa-masala.png"
-  },
-  {
-    "name": "Veg Makhanwala",
-    "category": "curry",
-    "hint": "mixed vegetables in glossy butter-tomato makhani gravy with cream swirl",
-    "slug": "veg-makhanwala",
-    "file": "veg-makhanwala.png"
-  },
-  {
-    "name": "Mushroom Matar",
-    "category": "curry",
-    "hint": "sliced mushrooms and green peas in onion-tomato gravy",
-    "slug": "mushroom-matar",
-    "file": "mushroom-matar.png"
-  },
-  {
-    "name": "Mushroom Do Pyaza",
-    "category": "curry",
-    "hint": "mushrooms with large onion petals in semi-dry brown masala",
-    "slug": "mushroom-do-pyaza",
-    "file": "mushroom-do-pyaza.png"
-  },
-  {
-    "name": "Mushroom Tikka Masala",
-    "category": "curry",
-    "hint": "grilled mushroom cubes in spicy onion-tomato masala with capsicum",
-    "slug": "mushroom-tikka-masala",
-    "file": "mushroom-tikka-masala.png"
-  },
-  {
-    "name": "Bhindi Fry",
-    "category": "sabzi",
-    "hint": "crispy okra fingers stir-fried with sliced onions and spices, dry preparation",
-    "slug": "bhindi-fry",
-    "file": "bhindi-fry.png"
-  },
-  {
-    "name": "Bhindi Do Pyaza",
-    "category": "sabzi",
-    "hint": "okra and large onion petals stir-fried with dry masala",
-    "slug": "bhindi-do-pyaza",
-    "file": "bhindi-do-pyaza.png"
-  },
-  {
-    "name": "Baingan Masala",
-    "category": "sabzi",
-    "hint": "baby eggplants stuffed and simmered in thick spicy peanut-tomato masala",
-    "slug": "baingan-masala",
-    "file": "baingan-masala.png"
-  },
-  {
-    "name": "Gobi Masala",
-    "category": "sabzi",
-    "hint": "cauliflower florets in spicy onion-tomato masala, dry preparation",
-    "slug": "gobi-masala",
-    "file": "gobi-masala.png"
-  },
-  {
-    "name": "Gobi Matar",
-    "category": "sabzi",
-    "hint": "cauliflower florets and green peas in tomato gravy",
-    "slug": "gobi-matar",
-    "file": "gobi-matar.png"
-  },
-  {
-    "name": "Chole",
-    "category": "curry",
-    "hint": "Punjabi chickpea curry in dark brown spicy gravy, garnished with ginger juliennes and coriander",
-    "slug": "chole",
-    "file": "chole.png"
-  },
-  {
-    "name": "Rajma Masala",
-    "category": "curry",
-    "hint": "red kidney beans in thick onion-tomato gravy, served in a brass bowl with rice on the side",
-    "slug": "rajma-masala",
-    "file": "rajma-masala.png"
-  },
-  {
-    "name": "Dal Fry",
-    "category": "dal",
-    "hint": "yellow toor dal tempered with cumin, ginger, garlic, tomato and green chillies in a bowl",
-    "slug": "dal-fry",
-    "file": "dal-fry.png"
-  },
-  {
-    "name": "Yellow Dal",
-    "category": "dal",
-    "hint": "simple yellow moong toor dal with cumin tempering, ghee swirl, coriander garnish",
-    "slug": "yellow-dal",
-    "file": "yellow-dal.png"
-  },
-  {
-    "name": "Panchmel Dal",
-    "category": "dal",
-    "hint": "Rajasthani five-lentil dal in earthen kadhai with ghee and red chilli tempering",
-    "slug": "panchmel-dal",
-    "file": "panchmel-dal.png"
-  },
-  {
-    "name": "Punjabi Kadhi",
-    "category": "curry",
-    "hint": "Punjabi yogurt-besan kadhi gravy with golden pakoras, red chilli tempering on top",
-    "slug": "punjabi-kadhi",
-    "file": "punjabi-kadhi.png"
-  },
-  {
-    "name": "Sarson Ka Saag",
-    "category": "saag",
-    "hint": "Punjabi mustard greens saag, dark green puree, ghee dollop, served with makki di roti",
-    "slug": "sarson-ka-saag",
-    "file": "sarson-ka-saag.png"
-  },
-  {
-    "name": "Makki Ki Roti",
+    "name": "Butter Roti",
+    "hint": "tandoori roti glistening with melted butter brushed on top",
+    "slug": "butter-roti",
     "category": "bread",
-    "hint": "Punjabi cornmeal flatbread, yellow golden roti with ghee, on a plate",
-    "slug": "makki-ki-roti",
-    "file": "makki-ki-roti.png"
+    "file": "butter-roti.png"
   },
   {
-    "name": "Sev Tamatar",
-    "category": "curry",
-    "hint": "Gujarati tangy tomato curry topped with crispy gram-flour sev",
-    "slug": "sev-tamatar",
-    "file": "sev-tamatar.png"
+    "name": "Plain Naan",
+    "hint": "leavened white-flour naan, teardrop-shaped, soft with bubble char marks",
+    "slug": "plain-naan",
+    "category": "bread",
+    "file": "plain-naan.png"
   },
   {
-    "name": "Ker Sangri",
-    "category": "sabzi",
-    "hint": "Rajasthani dry ker-sangri sabzi with dried berries and beans, dark brown dry preparation",
-    "slug": "ker-sangri",
-    "file": "ker-sangri.png"
+    "name": "Cheese Naan",
+    "hint": "naan stuffed with melted mozzarella cheese oozing out, golden crust",
+    "slug": "cheese-naan",
+    "category": "bread",
+    "file": "cheese-naan.png"
   },
   {
-    "name": "Papad Ki Sabzi",
-    "category": "sabzi",
-    "hint": "Rajasthani papad curry, papad pieces in tangy yellow yogurt-besan gravy",
-    "slug": "papad-ki-sabzi",
-    "file": "papad-ki-sabzi.png"
+    "name": "Chur Chur Naan",
+    "hint": "Amritsari chur chur naan crumbled and tossed with butter, flaky layers",
+    "slug": "chur-chur-naan",
+    "category": "bread",
+    "file": "chur-chur-naan.png"
   },
   {
-    "name": "Methi Malai Matar",
-    "category": "curry",
-    "hint": "fenugreek leaves and green peas in creamy white cashew-malai gravy",
-    "slug": "methi-malai-matar",
-    "file": "methi-malai-matar.png"
+    "name": "Pudina Paratha",
+    "hint": "layered paratha flecked with dried mint leaves",
+    "slug": "pudina-paratha",
+    "category": "bread",
+    "file": "pudina-paratha.png"
   },
   {
-    "name": "Corn Palak",
-    "category": "curry",
-    "hint": "sweet corn kernels in vibrant green spinach gravy with cream swirl",
-    "slug": "corn-palak",
-    "file": "corn-palak.png"
+    "name": "Onion Paratha",
+    "hint": "paratha stuffed with spiced onion filling, golden crisp surface",
+    "slug": "onion-paratha",
+    "category": "bread",
+    "file": "onion-paratha.png"
   },
   {
-    "name": "Corn Capsicum Masala",
-    "category": "curry",
-    "hint": "sweet corn and diced capsicum in onion-tomato masala gravy",
-    "slug": "corn-capsicum-masala",
-    "file": "corn-capsicum-masala.png"
+    "name": "Methi Paratha",
+    "hint": "green-flecked fenugreek leaf paratha, golden brown with ghee",
+    "slug": "methi-paratha",
+    "category": "bread",
+    "file": "methi-paratha.png"
   },
   {
-    "name": "Soya Chaap Masala",
-    "category": "curry",
-    "hint": "soya chaap chunks in rich spicy onion-tomato masala gravy",
-    "slug": "soya-chaap-masala",
-    "file": "soya-chaap-masala.png"
+    "name": "Mix Paratha",
+    "hint": "stuffed mixed-vegetable paratha cut showing colorful filling",
+    "slug": "mix-paratha",
+    "category": "bread",
+    "file": "mix-paratha.png"
   },
   {
-    "name": "Malai Soya Chaap",
-    "category": "curry",
-    "hint": "soya chaap in creamy white cashew-malai gravy, garnished with cream",
-    "slug": "malai-soya-chaap",
-    "file": "malai-soya-chaap.png"
+    "name": "Plain Paratha",
+    "hint": "simple triangular plain whole wheat paratha, golden ghee-roasted layers",
+    "slug": "plain-paratha",
+    "category": "bread",
+    "file": "plain-paratha.png"
   },
   {
-    "name": "Tandoori Soya Chaap",
-    "category": "starter",
-    "hint": "skewered marinated soya chaap pieces grilled in tandoor, charred edges, served with mint chutney and lemon",
-    "slug": "tandoori-soya-chaap",
-    "file": "tandoori-soya-chaap.png"
+    "name": "Tawa Roti",
+    "hint": "whole wheat roti cooked on iron tawa with light brown spots",
+    "slug": "tawa-roti",
+    "category": "bread",
+    "file": "tawa-roti.png"
   },
   {
-    "name": "Achari Soya Chaap",
-    "category": "curry",
-    "hint": "soya chaap in tangy yellow pickle-spiced (achari) gravy with mustard and fennel",
-    "slug": "achari-soya-chaap",
-    "file": "achari-soya-chaap.png"
+    "name": "Phulka",
+    "hint": "puffed thin whole-wheat phulka roti, perfectly round",
+    "slug": "phulka",
+    "category": "bread",
+    "file": "phulka.png"
+  },
+  {
+    "name": "Rumali Roti",
+    "hint": "paper-thin handkerchief rumali roti folded loosely on a plate",
+    "slug": "rumali-roti",
+    "category": "bread",
+    "file": "rumali-roti.png"
+  },
+  {
+    "name": "Missi Roti",
+    "hint": "Punjabi besan-and-wheat missi roti with onions and spices, yellow-brown",
+    "slug": "missi-roti",
+    "category": "bread",
+    "file": "missi-roti.png"
+  },
+  {
+    "name": "Makki Roti",
+    "hint": "Punjabi golden yellow cornmeal makki di roti with butter dollop",
+    "slug": "makki-roti",
+    "category": "bread",
+    "file": "makki-roti.png"
+  },
+  {
+    "name": "Bajra Roti",
+    "hint": "rustic dark grey bajra millet flatbread served with white butter",
+    "slug": "bajra-roti",
+    "category": "bread",
+    "file": "bajra-roti.png"
+  },
+  {
+    "name": "Jowar Roti",
+    "hint": "round white sorghum jowar bhakri roti, rustic farmhouse style",
+    "slug": "jowar-roti",
+    "category": "bread",
+    "file": "jowar-roti.png"
+  },
+  {
+    "name": "Aloo Kulcha",
+    "hint": "stuffed potato kulcha torn open showing aloo filling, golden crust",
+    "slug": "aloo-kulcha",
+    "category": "bread",
+    "file": "aloo-kulcha.png"
+  },
+  {
+    "name": "Amritsari Kulcha",
+    "hint": "crispy Amritsari kulcha with chole on the side, butter glaze",
+    "slug": "amritsari-kulcha",
+    "category": "bread",
+    "file": "amritsari-kulcha.png"
+  },
+  {
+    "name": "Poori",
+    "hint": "round puffed golden deep-fried poori on a plate",
+    "slug": "poori",
+    "category": "bread",
+    "file": "poori.png"
+  },
+  {
+    "name": "Bedmi Poori",
+    "hint": "Uttar Pradesh urad-dal stuffed bedmi poori, puffed golden, served with aloo sabzi",
+    "slug": "bedmi-poori",
+    "category": "bread",
+    "file": "bedmi-poori.png"
   }
 ]
