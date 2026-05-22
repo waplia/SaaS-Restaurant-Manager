@@ -1,983 +1,938 @@
 [
   {
-    "name": "Fish Masala",
-    "category": "seafood",
-    "hint": "Fish Masala, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "fish-masala",
-    "file": "fish-masala.png"
-  },
-  {
-    "name": "Fish Fry",
-    "category": "seafood",
-    "hint": "Fish Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "fish-fry",
-    "file": "fish-fry.png"
-  },
-  {
-    "name": "Tawa Fish",
-    "category": "seafood",
-    "hint": "Tawa Fish, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "tawa-fish",
-    "file": "tawa-fish.png"
-  },
-  {
-    "name": "Fish Tikka",
-    "category": "seafood",
-    "hint": "Fish Tikka, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "fish-tikka",
-    "file": "fish-tikka.png"
-  },
-  {
-    "name": "Amritsari Fish",
-    "category": "seafood",
-    "hint": "Amritsari Fish, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "amritsari-fish",
-    "file": "amritsari-fish.png"
-  },
-  {
-    "name": "Fish Pakora",
-    "category": "seafood",
-    "hint": "Fish Pakora, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "north-indian",
-    "isVeg": false,
-    "slug": "fish-pakora",
-    "file": "fish-pakora.png"
-  },
-  {
-    "name": "Fish Koliwada",
-    "category": "seafood",
-    "hint": "Fish Koliwada, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Khaman",
+    "category": "regional-west",
+    "hint": "Khaman, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
     "cuisine": "west-indian",
-    "isVeg": false,
-    "slug": "fish-koliwada",
-    "file": "fish-koliwada.png"
+    "isVeg": true,
+    "slug": "khaman",
+    "file": "khaman.png"
   },
   {
-    "name": "Fish Moilee",
-    "category": "seafood",
-    "hint": "Fish Moilee, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "fish-moilee",
-    "file": "fish-moilee.png"
+    "name": "Jalebi Fafda",
+    "category": "regional-west",
+    "hint": "Jalebi Fafda, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "jalebi-fafda",
+    "file": "jalebi-fafda.png"
   },
   {
-    "name": "Malabar Fish Curry",
-    "category": "seafood",
-    "hint": "Malabar Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "malabar-fish-curry",
-    "file": "malabar-fish-curry.png"
+    "name": "Methi Thepla",
+    "category": "regional-west",
+    "hint": "Methi Thepla, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "methi-thepla",
+    "file": "methi-thepla.png"
   },
   {
-    "name": "Bengali Fish Curry",
-    "category": "seafood",
-    "hint": "Bengali Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Undhiyu",
+    "category": "regional-west",
+    "hint": "Undhiyu, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "undhiyu",
+    "file": "undhiyu.png"
+  },
+  {
+    "name": "Dal Dhokli",
+    "category": "regional-west",
+    "hint": "Dal Dhokli, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "dal-dhokli",
+    "file": "dal-dhokli.png"
+  },
+  {
+    "name": "Khakhra",
+    "category": "regional-west",
+    "hint": "Khakhra, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "khakhra",
+    "file": "khakhra.png"
+  },
+  {
+    "name": "Gujarati Kadhi",
+    "category": "regional-west",
+    "hint": "Gujarati Kadhi, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "gujarati-kadhi",
+    "file": "gujarati-kadhi.png"
+  },
+  {
+    "name": "Gujarati Thali",
+    "category": "regional-west",
+    "hint": "Gujarati Thali, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "gujarati-thali",
+    "file": "gujarati-thali.png"
+  },
+  {
+    "name": "Mawa Kachori",
+    "category": "regional-west",
+    "hint": "Mawa Kachori, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "mawa-kachori",
+    "file": "mawa-kachori.png"
+  },
+  {
+    "name": "Pithla Bhakri",
+    "category": "regional-west",
+    "hint": "Pithla Bhakri, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "pithla-bhakri",
+    "file": "pithla-bhakri.png"
+  },
+  {
+    "name": "Thalipeeth",
+    "category": "regional-west",
+    "hint": "Thalipeeth, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "thalipeeth",
+    "file": "thalipeeth.png"
+  },
+  {
+    "name": "Kothimbir Vadi",
+    "category": "regional-west",
+    "hint": "Kothimbir Vadi, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "kothimbir-vadi",
+    "file": "kothimbir-vadi.png"
+  },
+  {
+    "name": "Puran Poli",
+    "category": "regional-west",
+    "hint": "Puran Poli, Gujarati/Rajasthani/Maharashtrian regional dish, plated traditionally on brass thali or banana leaf",
+    "cuisine": "west-indian",
+    "isVeg": true,
+    "slug": "puran-poli",
+    "file": "puran-poli.png"
+  },
+  {
+    "name": "Luchi",
+    "category": "regional-east",
+    "hint": "Luchi, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "luchi",
+    "file": "luchi.png"
+  },
+  {
+    "name": "Aloo Dum",
+    "category": "regional-east",
+    "hint": "Aloo Dum, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "aloo-dum",
+    "file": "aloo-dum.png"
+  },
+  {
+    "name": "Kosha Mangsho",
+    "category": "regional-east",
+    "hint": "Kosha Mangsho, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
     "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "bengali-fish-curry",
-    "file": "bengali-fish-curry.png"
+    "slug": "kosha-mangsho",
+    "file": "kosha-mangsho.png"
   },
   {
-    "name": "Rohu Fish Curry",
-    "category": "seafood",
-    "hint": "Rohu Fish Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Rohu Curry",
+    "category": "regional-east",
+    "hint": "Rohu Curry, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
     "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "rohu-fish-curry",
-    "file": "rohu-fish-curry.png"
+    "slug": "rohu-curry",
+    "file": "rohu-curry.png"
   },
   {
-    "name": "Pomfret Fry",
-    "category": "seafood",
-    "hint": "Pomfret Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "west-indian",
+    "name": "Chingri Malai Curry",
+    "category": "regional-east",
+    "hint": "Chingri Malai Curry, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "pomfret-fry",
-    "file": "pomfret-fry.png"
+    "slug": "chingri-malai-curry",
+    "file": "chingri-malai-curry.png"
   },
   {
-    "name": "Pomfret Curry",
-    "category": "seafood",
-    "hint": "Pomfret Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "west-indian",
+    "name": "Kolkata Biryani",
+    "category": "regional-east",
+    "hint": "Kolkata Biryani, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "pomfret-curry",
-    "file": "pomfret-curry.png"
+    "slug": "kolkata-biryani",
+    "file": "kolkata-biryani.png"
   },
   {
-    "name": "Surmai Fry",
-    "category": "seafood",
-    "hint": "Surmai Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "west-indian",
+    "name": "Egg Roll Kolkata",
+    "category": "regional-east",
+    "hint": "Egg Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "surmai-fry",
-    "file": "surmai-fry.png"
+    "slug": "egg-roll-kolkata",
+    "file": "egg-roll-kolkata.png"
   },
   {
-    "name": "Surmai Curry",
-    "category": "seafood",
-    "hint": "Surmai Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "west-indian",
+    "name": "Chicken Roll Kolkata",
+    "category": "regional-east",
+    "hint": "Chicken Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "surmai-curry",
-    "file": "surmai-curry.png"
+    "slug": "chicken-roll-kolkata",
+    "file": "chicken-roll-kolkata.png"
   },
   {
-    "name": "Prawn Curry",
-    "category": "seafood",
-    "hint": "Prawn Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
+    "name": "Mutton Roll Kolkata",
+    "category": "regional-east",
+    "hint": "Mutton Roll Kolkata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "prawn-curry",
-    "file": "prawn-curry.png"
+    "slug": "mutton-roll-kolkata",
+    "file": "mutton-roll-kolkata.png"
   },
   {
-    "name": "Prawn Fry",
-    "category": "seafood",
-    "hint": "Prawn Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
+    "name": "Mughlai Paratha",
+    "category": "regional-east",
+    "hint": "Mughlai Paratha, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
     "isVeg": false,
-    "slug": "prawn-fry",
-    "file": "prawn-fry.png"
+    "slug": "mughlai-paratha",
+    "file": "mughlai-paratha.png"
   },
   {
-    "name": "Prawn Biryani",
-    "category": "seafood",
-    "hint": "Prawn Biryani, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "prawn-biryani",
-    "file": "prawn-biryani.png"
+    "name": "Ghugni",
+    "category": "regional-east",
+    "hint": "Ghugni, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "ghugni",
+    "file": "ghugni.png"
   },
   {
-    "name": "Prawn Ghee Roast",
-    "category": "seafood",
-    "hint": "Prawn Ghee Roast, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "south-indian",
-    "isVeg": false,
-    "slug": "prawn-ghee-roast",
-    "file": "prawn-ghee-roast.png"
-  },
-  {
-    "name": "Prawn Koliwada",
-    "category": "seafood",
-    "hint": "Prawn Koliwada, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "west-indian",
-    "isVeg": false,
-    "slug": "prawn-koliwada",
-    "file": "prawn-koliwada.png"
-  },
-  {
-    "name": "Chilli Prawn",
-    "category": "seafood",
-    "hint": "Chilli Prawn, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Momo",
+    "category": "regional-east",
+    "hint": "Momo, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
     "cuisine": "indo-chinese",
-    "isVeg": false,
-    "slug": "chilli-prawn",
-    "file": "chilli-prawn.png"
+    "isVeg": true,
+    "slug": "momo",
+    "file": "momo.png"
   },
   {
-    "name": "Crab Curry",
-    "category": "seafood",
-    "hint": "Crab Curry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Thukpa",
+    "category": "regional-east",
+    "hint": "Thukpa, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "indo-chinese",
+    "isVeg": true,
+    "slug": "thukpa",
+    "file": "thukpa.png"
+  },
+  {
+    "name": "Shukto",
+    "category": "regional-east",
+    "hint": "Shukto, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "shukto",
+    "file": "shukto.png"
+  },
+  {
+    "name": "Begun Bhaja",
+    "category": "regional-east",
+    "hint": "Begun Bhaja, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "begun-bhaja",
+    "file": "begun-bhaja.png"
+  },
+  {
+    "name": "Cholar Dal",
+    "category": "regional-east",
+    "hint": "Cholar Dal, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "cholar-dal",
+    "file": "cholar-dal.png"
+  },
+  {
+    "name": "Mishti Doi",
+    "category": "regional-east",
+    "hint": "Mishti Doi, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "mishti-doi",
+    "file": "mishti-doi.png"
+  },
+  {
+    "name": "Cham Cham",
+    "category": "regional-east",
+    "hint": "Cham Cham, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "cham-cham",
+    "file": "cham-cham.png"
+  },
+  {
+    "name": "Pitha",
+    "category": "regional-east",
+    "hint": "Pitha, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "pitha",
+    "file": "pitha.png"
+  },
+  {
+    "name": "Dalma",
+    "category": "regional-east",
+    "hint": "Dalma, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "dalma",
+    "file": "dalma.png"
+  },
+  {
+    "name": "Pakhala Bhata",
+    "category": "regional-east",
+    "hint": "Pakhala Bhata, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": true,
+    "slug": "pakhala-bhata",
+    "file": "pakhala-bhata.png"
+  },
+  {
+    "name": "Assamese Fish Tenga",
+    "category": "regional-east",
+    "hint": "Assamese Fish Tenga, Bengali/Odia/Assamese regional dish, traditional plating with rice or roti",
+    "cuisine": "east-indian",
+    "isVeg": false,
+    "slug": "assamese-fish-tenga",
+    "file": "assamese-fish-tenga.png"
+  },
+  {
+    "name": "Hyderabadi Biryani",
+    "category": "regional-south",
+    "hint": "Hyderabadi Biryani, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
     "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "crab-curry",
-    "file": "crab-curry.png"
+    "slug": "hyderabadi-biryani",
+    "file": "hyderabadi-biryani.png"
   },
   {
-    "name": "Crab Masala",
-    "category": "seafood",
-    "hint": "Crab Masala, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Andhra Chicken Curry",
+    "category": "regional-south",
+    "hint": "Andhra Chicken Curry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
     "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "crab-masala",
-    "file": "crab-masala.png"
+    "slug": "andhra-chicken-curry",
+    "file": "andhra-chicken-curry.png"
   },
   {
-    "name": "Crab Fry",
-    "category": "seafood",
-    "hint": "Crab Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Andhra Meals",
+    "category": "regional-south",
+    "hint": "Andhra Meals, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
+    "isVeg": true,
+    "slug": "andhra-meals",
+    "file": "andhra-meals.png"
+  },
+  {
+    "name": "Gongura Chicken",
+    "category": "regional-south",
+    "hint": "Gongura Chicken, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
     "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "crab-fry",
-    "file": "crab-fry.png"
+    "slug": "gongura-chicken",
+    "file": "gongura-chicken.png"
   },
   {
-    "name": "Squid Fry",
-    "category": "seafood",
-    "hint": "Squid Fry, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
+    "name": "Gongura Mutton",
+    "category": "regional-south",
+    "hint": "Gongura Mutton, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
     "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "squid-fry",
-    "file": "squid-fry.png"
+    "slug": "gongura-mutton",
+    "file": "gongura-mutton.png"
   },
   {
-    "name": "Seafood Platter",
-    "category": "seafood",
-    "hint": "Seafood Platter, Indian seafood dish, fresh and beautifully plated with lemon and herbs",
-    "cuisine": "continental",
+    "name": "Punugulu",
+    "category": "regional-south",
+    "hint": "Punugulu, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
+    "isVeg": true,
+    "slug": "punugulu",
+    "file": "punugulu.png"
+  },
+  {
+    "name": "Mirchi Bajji",
+    "category": "regional-south",
+    "hint": "Mirchi Bajji, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
+    "isVeg": true,
+    "slug": "mirchi-bajji",
+    "file": "mirchi-bajji.png"
+  },
+  {
+    "name": "Chettinad Chicken",
+    "category": "regional-south",
+    "hint": "Chettinad Chicken, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "seafood-platter",
-    "file": "seafood-platter.png"
+    "slug": "chettinad-chicken",
+    "file": "chettinad-chicken.png"
   },
   {
-    "name": "Veg Roll",
-    "category": "wraps",
-    "hint": "Veg Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-roll",
-    "file": "veg-roll.png"
-  },
-  {
-    "name": "Soya Chaap Roll",
-    "category": "wraps",
-    "hint": "Soya Chaap Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "soya-chaap-roll",
-    "file": "soya-chaap-roll.png"
-  },
-  {
-    "name": "Cheese Roll",
-    "category": "wraps",
-    "hint": "Cheese Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-roll",
-    "file": "cheese-roll.png"
-  },
-  {
-    "name": "Kathi Roll",
-    "category": "wraps",
-    "hint": "Kathi Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "kathi-roll",
-    "file": "kathi-roll.png"
-  },
-  {
-    "name": "Frankie Roll",
-    "category": "wraps",
-    "hint": "Frankie Roll, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "frankie-roll",
-    "file": "frankie-roll.png"
-  },
-  {
-    "name": "Veg Wrap",
-    "category": "wraps",
-    "hint": "Veg Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-wrap",
-    "file": "veg-wrap.png"
-  },
-  {
-    "name": "Paneer Wrap",
-    "category": "wraps",
-    "hint": "Paneer Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "paneer-wrap",
-    "file": "paneer-wrap.png"
-  },
-  {
-    "name": "Chicken Wrap",
-    "category": "wraps",
-    "hint": "Chicken Wrap, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Kothu Parotta",
+    "category": "regional-south",
+    "hint": "Kothu Parotta, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": false,
-    "slug": "chicken-wrap",
-    "file": "chicken-wrap.png"
+    "slug": "kothu-parotta",
+    "file": "kothu-parotta.png"
   },
   {
-    "name": "Veg Sandwich",
-    "category": "wraps",
-    "hint": "Veg Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Parotta Salna",
+    "category": "regional-south",
+    "hint": "Parotta Salna, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "veg-sandwich",
-    "file": "veg-sandwich.png"
+    "slug": "parotta-salna",
+    "file": "parotta-salna.png"
   },
   {
-    "name": "Grilled Sandwich",
-    "category": "wraps",
-    "hint": "Grilled Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Kerala Sadya",
+    "category": "regional-south",
+    "hint": "Kerala Sadya, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "grilled-sandwich",
-    "file": "grilled-sandwich.png"
+    "slug": "kerala-sadya",
+    "file": "kerala-sadya.png"
   },
   {
-    "name": "Cheese Sandwich",
-    "category": "wraps",
-    "hint": "Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Kerala Beef Fry",
+    "category": "regional-south",
+    "hint": "Kerala Beef Fry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "kerala-beef-fry",
+    "file": "kerala-beef-fry.png"
+  },
+  {
+    "name": "Kerala Chicken Curry",
+    "category": "regional-south",
+    "hint": "Kerala Chicken Curry, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
+    "isVeg": false,
+    "slug": "kerala-chicken-curry",
+    "file": "kerala-chicken-curry.png"
+  },
+  {
+    "name": "Mangalore Buns",
+    "category": "regional-south",
+    "hint": "Mangalore Buns, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "cheese-sandwich",
-    "file": "cheese-sandwich.png"
+    "slug": "mangalore-buns",
+    "file": "mangalore-buns.png"
   },
   {
-    "name": "Veg Cheese Sandwich",
-    "category": "wraps",
-    "hint": "Veg Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Goli Baje",
+    "category": "regional-south",
+    "hint": "Goli Baje, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "veg-cheese-sandwich",
-    "file": "veg-cheese-sandwich.png"
+    "slug": "goli-baje",
+    "file": "goli-baje.png"
   },
   {
-    "name": "Club Sandwich",
-    "category": "wraps",
-    "hint": "Club Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Akki Roti",
+    "category": "regional-south",
+    "hint": "Akki Roti, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "club-sandwich",
-    "file": "club-sandwich.png"
+    "slug": "akki-roti",
+    "file": "akki-roti.png"
   },
   {
-    "name": "Paneer Sandwich",
-    "category": "wraps",
-    "hint": "Paneer Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Ragi Mudde",
+    "category": "regional-south",
+    "hint": "Ragi Mudde, South Indian regional speciality, served on banana leaf or steel thali with traditional accompaniments",
+    "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "paneer-sandwich",
-    "file": "paneer-sandwich.png"
+    "slug": "ragi-mudde",
+    "file": "ragi-mudde.png"
   },
   {
-    "name": "Corn Cheese Sandwich",
-    "category": "wraps",
-    "hint": "Corn Cheese Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Veg Thali",
+    "category": "thali",
+    "hint": "Veg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "corn-cheese-sandwich",
-    "file": "corn-cheese-sandwich.png"
+    "slug": "veg-thali",
+    "file": "veg-thali.png"
   },
   {
-    "name": "Bombay Sandwich",
-    "category": "wraps",
-    "hint": "Bombay Sandwich, served on a wooden board or plate with chips or salad garnish, restaurant style",
+    "name": "Special Veg Thali",
+    "category": "thali",
+    "hint": "Special Veg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "special-veg-thali",
+    "file": "special-veg-thali.png"
+  },
+  {
+    "name": "Punjabi Thali",
+    "category": "thali",
+    "hint": "Punjabi Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "punjabi-thali",
+    "file": "punjabi-thali.png"
+  },
+  {
+    "name": "Rajasthani Thali",
+    "category": "thali",
+    "hint": "Rajasthani Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "rajasthani-thali",
+    "file": "rajasthani-thali.png"
+  },
+  {
+    "name": "South Indian Thali",
+    "category": "thali",
+    "hint": "South Indian Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "south-indian-thali",
+    "file": "south-indian-thali.png"
+  },
+  {
+    "name": "North Indian Thali",
+    "category": "thali",
+    "hint": "North Indian Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "north-indian-thali",
+    "file": "north-indian-thali.png"
+  },
+  {
+    "name": "Mini Thali",
+    "category": "thali",
+    "hint": "Mini Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "mini-thali",
+    "file": "mini-thali.png"
+  },
+  {
+    "name": "Deluxe Thali",
+    "category": "thali",
+    "hint": "Deluxe Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "deluxe-thali",
+    "file": "deluxe-thali.png"
+  },
+  {
+    "name": "Executive Thali",
+    "category": "thali",
+    "hint": "Executive Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "executive-thali",
+    "file": "executive-thali.png"
+  },
+  {
+    "name": "Dal Rice Combo",
+    "category": "thali",
+    "hint": "Dal Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "dal-rice-combo",
+    "file": "dal-rice-combo.png"
+  },
+  {
+    "name": "Rajma Rice Combo",
+    "category": "thali",
+    "hint": "Rajma Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "rajma-rice-combo",
+    "file": "rajma-rice-combo.png"
+  },
+  {
+    "name": "Chole Rice Combo",
+    "category": "thali",
+    "hint": "Chole Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "chole-rice-combo",
+    "file": "chole-rice-combo.png"
+  },
+  {
+    "name": "Kadhi Rice Combo",
+    "category": "thali",
+    "hint": "Kadhi Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kadhi-rice-combo",
+    "file": "kadhi-rice-combo.png"
+  },
+  {
+    "name": "Paneer Rice Combo",
+    "category": "thali",
+    "hint": "Paneer Rice Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "paneer-rice-combo",
+    "file": "paneer-rice-combo.png"
+  },
+  {
+    "name": "Chicken Thali",
+    "category": "thali",
+    "hint": "Chicken Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "chicken-thali",
+    "file": "chicken-thali.png"
+  },
+  {
+    "name": "Mutton Thali",
+    "category": "thali",
+    "hint": "Mutton Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "mutton-thali",
+    "file": "mutton-thali.png"
+  },
+  {
+    "name": "Fish Thali",
+    "category": "thali",
+    "hint": "Fish Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "fish-thali",
+    "file": "fish-thali.png"
+  },
+  {
+    "name": "Egg Thali",
+    "category": "thali",
+    "hint": "Egg Thali, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "egg-thali",
+    "file": "egg-thali.png"
+  },
+  {
+    "name": "Biryani Combo",
+    "category": "thali",
+    "hint": "Biryani Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": false,
+    "slug": "biryani-combo",
+    "file": "biryani-combo.png"
+  },
+  {
+    "name": "Paratha Combo",
+    "category": "thali",
+    "hint": "Paratha Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "paratha-combo",
+    "file": "paratha-combo.png"
+  },
+  {
+    "name": "Chole Bhature Combo",
+    "category": "thali",
+    "hint": "Chole Bhature Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "chole-bhature-combo",
+    "file": "chole-bhature-combo.png"
+  },
+  {
+    "name": "Poori Sabzi Combo",
+    "category": "thali",
+    "hint": "Poori Sabzi Combo, complete Indian meal served on a large round steel or brass thali with multiple small bowls of curries, rice, bread, salad, pickle, papad and sweet, overhead view",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "poori-sabzi-combo",
+    "file": "poori-sabzi-combo.png"
+  },
+  {
+    "name": "Kala Jamun",
+    "category": "dessert",
+    "hint": "Kala Jamun, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kala-jamun",
+    "file": "kala-jamun.png"
+  },
+  {
+    "name": "Rabri",
+    "category": "dessert",
+    "hint": "Rabri, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "rabri",
+    "file": "rabri.png"
+  },
+  {
+    "name": "Phirni",
+    "category": "dessert",
+    "hint": "Phirni, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "phirni",
+    "file": "phirni.png"
+  },
+  {
+    "name": "Sooji Halwa",
+    "category": "dessert",
+    "hint": "Sooji Halwa, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "sooji-halwa",
+    "file": "sooji-halwa.png"
+  },
+  {
+    "name": "Badam Halwa",
+    "category": "dessert",
+    "hint": "Badam Halwa, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "badam-halwa",
+    "file": "badam-halwa.png"
+  },
+  {
+    "name": "Ladoo",
+    "category": "dessert",
+    "hint": "Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "ladoo",
+    "file": "ladoo.png"
+  },
+  {
+    "name": "Besan Ladoo",
+    "category": "dessert",
+    "hint": "Besan Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "besan-ladoo",
+    "file": "besan-ladoo.png"
+  },
+  {
+    "name": "Motichoor Ladoo",
+    "category": "dessert",
+    "hint": "Motichoor Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "motichoor-ladoo",
+    "file": "motichoor-ladoo.png"
+  },
+  {
+    "name": "Boondi Ladoo",
+    "category": "dessert",
+    "hint": "Boondi Ladoo, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "boondi-ladoo",
+    "file": "boondi-ladoo.png"
+  },
+  {
+    "name": "Kaju Katli",
+    "category": "dessert",
+    "hint": "Kaju Katli, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "kaju-katli",
+    "file": "kaju-katli.png"
+  },
+  {
+    "name": "Barfi",
+    "category": "dessert",
+    "hint": "Barfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "barfi",
+    "file": "barfi.png"
+  },
+  {
+    "name": "Milk Cake",
+    "category": "dessert",
+    "hint": "Milk Cake, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "milk-cake",
+    "file": "milk-cake.png"
+  },
+  {
+    "name": "Peda",
+    "category": "dessert",
+    "hint": "Peda, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "peda",
+    "file": "peda.png"
+  },
+  {
+    "name": "Malpua",
+    "category": "dessert",
+    "hint": "Malpua, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "malpua",
+    "file": "malpua.png"
+  },
+  {
+    "name": "Balushahi",
+    "category": "dessert",
+    "hint": "Balushahi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "north-indian",
+    "isVeg": true,
+    "slug": "balushahi",
+    "file": "balushahi.png"
+  },
+  {
+    "name": "Shrikhand",
+    "category": "dessert",
+    "hint": "Shrikhand, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
     "cuisine": "west-indian",
     "isVeg": true,
-    "slug": "bombay-sandwich",
-    "file": "bombay-sandwich.png"
+    "slug": "shrikhand",
+    "file": "shrikhand.png"
   },
   {
-    "name": "Bread Butter",
-    "category": "wraps",
-    "hint": "Bread Butter, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
+    "name": "Aamras",
+    "category": "dessert",
+    "hint": "Aamras, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "west-indian",
     "isVeg": true,
-    "slug": "bread-butter",
-    "file": "bread-butter.png"
+    "slug": "aamras",
+    "file": "aamras.png"
   },
   {
-    "name": "Bread Jam",
-    "category": "wraps",
-    "hint": "Bread Jam, served on a wooden board or plate with chips or salad garnish, restaurant style",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "bread-jam",
-    "file": "bread-jam.png"
-  },
-  {
-    "name": "Margherita Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Margherita Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "margherita-pizza",
-    "file": "margherita-pizza.png"
-  },
-  {
-    "name": "Cheese Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Cheese Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-pizza",
-    "file": "cheese-pizza.png"
-  },
-  {
-    "name": "Veg Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Veg Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-pizza",
-    "file": "veg-pizza.png"
-  },
-  {
-    "name": "Paneer Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Paneer Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "paneer-pizza",
-    "file": "paneer-pizza.png"
-  },
-  {
-    "name": "Corn Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Corn Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "corn-pizza",
-    "file": "corn-pizza.png"
-  },
-  {
-    "name": "Onion Capsicum Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Onion Capsicum Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "onion-capsicum-pizza",
-    "file": "onion-capsicum-pizza.png"
-  },
-  {
-    "name": "Farmhouse Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Farmhouse Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "farmhouse-pizza",
-    "file": "farmhouse-pizza.png"
-  },
-  {
-    "name": "Tandoori Paneer Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Tandoori Paneer Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "tandoori-paneer-pizza",
-    "file": "tandoori-paneer-pizza.png"
-  },
-  {
-    "name": "Mushroom Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Mushroom Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "mushroom-pizza",
-    "file": "mushroom-pizza.png"
-  },
-  {
-    "name": "Chicken Tikka Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Chicken Tikka Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "chicken-tikka-pizza",
-    "file": "chicken-tikka-pizza.png"
-  },
-  {
-    "name": "Peri Peri Chicken Pizza",
-    "category": "pizza-burger-pasta",
-    "hint": "Peri Peri Chicken Pizza, restaurant style, sliced wood-fired pizza on a wooden board",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "peri-peri-chicken-pizza",
-    "file": "peri-peri-chicken-pizza.png"
-  },
-  {
-    "name": "Veg Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Veg Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-burger",
-    "file": "veg-burger.png"
-  },
-  {
-    "name": "Cheese Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Cheese Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-burger",
-    "file": "cheese-burger.png"
-  },
-  {
-    "name": "Aloo Tikki Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Aloo Tikki Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "aloo-tikki-burger",
-    "file": "aloo-tikki-burger.png"
-  },
-  {
-    "name": "Paneer Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Paneer Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "paneer-burger",
-    "file": "paneer-burger.png"
-  },
-  {
-    "name": "Maharaja Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Maharaja Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "maharaja-burger",
-    "file": "maharaja-burger.png"
-  },
-  {
-    "name": "Crispy Chicken Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Crispy Chicken Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "crispy-chicken-burger",
-    "file": "crispy-chicken-burger.png"
-  },
-  {
-    "name": "Egg Burger",
-    "category": "pizza-burger-pasta",
-    "hint": "Egg Burger, restaurant style, stacked burger with fries on the side",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "egg-burger",
-    "file": "egg-burger.png"
-  },
-  {
-    "name": "White Sauce Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "White Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "white-sauce-pasta",
-    "file": "white-sauce-pasta.png"
-  },
-  {
-    "name": "Red Sauce Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Red Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "red-sauce-pasta",
-    "file": "red-sauce-pasta.png"
-  },
-  {
-    "name": "Pink Sauce Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Pink Sauce Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "pink-sauce-pasta",
-    "file": "pink-sauce-pasta.png"
-  },
-  {
-    "name": "Arrabiata Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Arrabiata Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "arrabiata-pasta",
-    "file": "arrabiata-pasta.png"
-  },
-  {
-    "name": "Alfredo Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Alfredo Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "alfredo-pasta",
-    "file": "alfredo-pasta.png"
-  },
-  {
-    "name": "Mac and Cheese",
-    "category": "pizza-burger-pasta",
-    "hint": "Mac and Cheese, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "mac-and-cheese",
-    "file": "mac-and-cheese.png"
-  },
-  {
-    "name": "Veg Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Veg Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-pasta",
-    "file": "veg-pasta.png"
-  },
-  {
-    "name": "Chicken Pasta",
-    "category": "pizza-burger-pasta",
-    "hint": "Chicken Pasta, restaurant style, plated pasta in a deep bowl with garnish",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "chicken-pasta",
-    "file": "chicken-pasta.png"
-  },
-  {
-    "name": "Garlic Bread",
-    "category": "pizza-burger-pasta",
-    "hint": "Garlic Bread, restaurant style, garlic bread slices on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "garlic-bread",
-    "file": "garlic-bread.png"
-  },
-  {
-    "name": "Cheese Garlic Bread",
-    "category": "pizza-burger-pasta",
-    "hint": "Cheese Garlic Bread, restaurant style, garlic bread slices on a wooden board",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-garlic-bread",
-    "file": "cheese-garlic-bread.png"
-  },
-  {
-    "name": "French Fries",
-    "category": "snacks",
-    "hint": "French Fries, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "french-fries",
-    "file": "french-fries.png"
-  },
-  {
-    "name": "Masala Fries",
-    "category": "snacks",
-    "hint": "Masala Fries, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "masala-fries",
-    "file": "masala-fries.png"
-  },
-  {
-    "name": "Peri Peri Fries",
-    "category": "snacks",
-    "hint": "Peri Peri Fries, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "peri-peri-fries",
-    "file": "peri-peri-fries.png"
-  },
-  {
-    "name": "Cheese Fries",
-    "category": "snacks",
-    "hint": "Cheese Fries, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-fries",
-    "file": "cheese-fries.png"
-  },
-  {
-    "name": "Potato Wedges",
-    "category": "snacks",
-    "hint": "Potato Wedges, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "potato-wedges",
-    "file": "potato-wedges.png"
-  },
-  {
-    "name": "Nachos",
-    "category": "snacks",
-    "hint": "Nachos, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "nachos",
-    "file": "nachos.png"
-  },
-  {
-    "name": "Cheese Nachos",
-    "category": "snacks",
-    "hint": "Cheese Nachos, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-nachos",
-    "file": "cheese-nachos.png"
-  },
-  {
-    "name": "Loaded Nachos",
-    "category": "snacks",
-    "hint": "Loaded Nachos, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "loaded-nachos",
-    "file": "loaded-nachos.png"
-  },
-  {
-    "name": "Maggi",
-    "category": "snacks",
-    "hint": "Maggi, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "maggi",
-    "file": "maggi.png"
-  },
-  {
-    "name": "Masala Maggi",
-    "category": "snacks",
-    "hint": "Masala Maggi, Indian fast food / snack, plated invitingly",
+    "name": "Malai Kulfi",
+    "category": "dessert",
+    "hint": "Malai Kulfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "masala-maggi",
-    "file": "masala-maggi.png"
+    "slug": "malai-kulfi",
+    "file": "malai-kulfi.png"
   },
   {
-    "name": "Cheese Maggi",
-    "category": "snacks",
-    "hint": "Cheese Maggi, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-maggi",
-    "file": "cheese-maggi.png"
-  },
-  {
-    "name": "Veg Maggi",
-    "category": "snacks",
-    "hint": "Veg Maggi, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "veg-maggi",
-    "file": "veg-maggi.png"
-  },
-  {
-    "name": "Chicken Maggi",
-    "category": "snacks",
-    "hint": "Chicken Maggi, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": false,
-    "slug": "chicken-maggi",
-    "file": "chicken-maggi.png"
-  },
-  {
-    "name": "Poha",
-    "category": "snacks",
-    "hint": "Poha, Indian fast food / snack, plated invitingly",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "poha",
-    "file": "poha.png"
-  },
-  {
-    "name": "Kanda Poha",
-    "category": "snacks",
-    "hint": "Kanda Poha, Indian fast food / snack, plated invitingly",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "kanda-poha",
-    "file": "kanda-poha.png"
-  },
-  {
-    "name": "Sabudana Khichdi",
-    "category": "snacks",
-    "hint": "Sabudana Khichdi, Indian fast food / snack, plated invitingly",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "sabudana-khichdi",
-    "file": "sabudana-khichdi.png"
-  },
-  {
-    "name": "Sabudana Vada",
-    "category": "snacks",
-    "hint": "Sabudana Vada, Indian fast food / snack, plated invitingly",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "sabudana-vada",
-    "file": "sabudana-vada.png"
-  },
-  {
-    "name": "Cutlet",
-    "category": "snacks",
-    "hint": "Cutlet, Indian fast food / snack, plated invitingly",
+    "name": "Pista Kulfi",
+    "category": "dessert",
+    "hint": "Pista Kulfi, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
     "cuisine": "north-indian",
     "isVeg": true,
-    "slug": "cutlet",
-    "file": "cutlet.png"
+    "slug": "pista-kulfi",
+    "file": "pista-kulfi.png"
   },
   {
-    "name": "Aloo Bonda",
-    "category": "snacks",
-    "hint": "Aloo Bonda, Indian fast food / snack, plated invitingly",
+    "name": "Ice Cream",
+    "category": "dessert",
+    "hint": "Ice Cream, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "ice-cream",
+    "file": "ice-cream.png"
+  },
+  {
+    "name": "Brownie",
+    "category": "dessert",
+    "hint": "Brownie, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "brownie",
+    "file": "brownie.png"
+  },
+  {
+    "name": "Brownie with Ice Cream",
+    "category": "dessert",
+    "hint": "Brownie with Ice Cream, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "brownie-with-ice-cream",
+    "file": "brownie-with-ice-cream.png"
+  },
+  {
+    "name": "Cake Slice",
+    "category": "dessert",
+    "hint": "Cake Slice, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cake-slice",
+    "file": "cake-slice.png"
+  },
+  {
+    "name": "Pastry",
+    "category": "dessert",
+    "hint": "Pastry, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "pastry",
+    "file": "pastry.png"
+  },
+  {
+    "name": "Cheesecake",
+    "category": "dessert",
+    "hint": "Cheesecake, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "cheesecake",
+    "file": "cheesecake.png"
+  },
+  {
+    "name": "Chocolate Mousse",
+    "category": "dessert",
+    "hint": "Chocolate Mousse, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "chocolate-mousse",
+    "file": "chocolate-mousse.png"
+  },
+  {
+    "name": "Fruit Custard",
+    "category": "dessert",
+    "hint": "Fruit Custard, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "fruit-custard",
+    "file": "fruit-custard.png"
+  },
+  {
+    "name": "Caramel Custard",
+    "category": "dessert",
+    "hint": "Caramel Custard, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
+    "cuisine": "continental",
+    "isVeg": true,
+    "slug": "caramel-custard",
+    "file": "caramel-custard.png"
+  },
+  {
+    "name": "Payasam",
+    "category": "dessert",
+    "hint": "Payasam, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
     "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "aloo-bonda",
-    "file": "aloo-bonda.png"
+    "slug": "payasam",
+    "file": "payasam.png"
   },
   {
-    "name": "Corn Cheese Balls",
-    "category": "snacks",
-    "hint": "Corn Cheese Balls, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "corn-cheese-balls",
-    "file": "corn-cheese-balls.png"
-  },
-  {
-    "name": "Toast",
-    "category": "snacks",
-    "hint": "Toast, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "toast",
-    "file": "toast.png"
-  },
-  {
-    "name": "Cheese Toast",
-    "category": "snacks",
-    "hint": "Cheese Toast, Indian fast food / snack, plated invitingly",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "cheese-toast",
-    "file": "cheese-toast.png"
-  },
-  {
-    "name": "Peanut Masala",
-    "category": "snacks",
-    "hint": "Peanut Masala, Indian fast food / snack, plated invitingly",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "peanut-masala",
-    "file": "peanut-masala.png"
-  },
-  {
-    "name": "Roasted Papad",
-    "category": "snacks",
-    "hint": "Roasted Papad, Indian fast food / snack, plated invitingly",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "roasted-papad",
-    "file": "roasted-papad.png"
-  },
-  {
-    "name": "Masala Papad",
-    "category": "snacks",
-    "hint": "Masala Papad, Indian fast food / snack, plated invitingly",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "masala-papad",
-    "file": "masala-papad.png"
-  },
-  {
-    "name": "Fry Papad",
-    "category": "snacks",
-    "hint": "Fry Papad, Indian fast food / snack, plated invitingly",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "fry-papad",
-    "file": "fry-papad.png"
-  },
-  {
-    "name": "Aloo Paratha Breakfast",
-    "category": "breakfast",
-    "hint": "Aloo Paratha Breakfast, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "aloo-paratha-breakfast",
-    "file": "aloo-paratha-breakfast.png"
-  },
-  {
-    "name": "Paneer Paratha Breakfast",
-    "category": "breakfast",
-    "hint": "Paneer Paratha Breakfast, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "paneer-paratha-breakfast",
-    "file": "paneer-paratha-breakfast.png"
-  },
-  {
-    "name": "Dosa",
-    "category": "breakfast",
-    "hint": "Dosa, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
+    "name": "Ada Pradhaman",
+    "category": "dessert",
+    "hint": "Ada Pradhaman, Indian sweet / dessert, beautifully plated with garnish like silver leaf, pistachio or rose petals",
     "cuisine": "south-indian",
     "isVeg": true,
-    "slug": "dosa",
-    "file": "dosa.png"
-  },
-  {
-    "name": "Poori Bhaji",
-    "category": "breakfast",
-    "hint": "Poori Bhaji, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "poori-bhaji",
-    "file": "poori-bhaji.png"
-  },
-  {
-    "name": "Toast Butter",
-    "category": "breakfast",
-    "hint": "Toast Butter, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "toast-butter",
-    "file": "toast-butter.png"
-  },
-  {
-    "name": "Sandwich",
-    "category": "breakfast",
-    "hint": "Sandwich, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "continental",
-    "isVeg": true,
-    "slug": "sandwich",
-    "file": "sandwich.png"
-  },
-  {
-    "name": "Kachori Sabzi",
-    "category": "breakfast",
-    "hint": "Kachori Sabzi, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "north-indian",
-    "isVeg": true,
-    "slug": "kachori-sabzi",
-    "file": "kachori-sabzi.png"
-  },
-  {
-    "name": "Fafda",
-    "category": "breakfast",
-    "hint": "Fafda, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "fafda",
-    "file": "fafda.png"
-  },
-  {
-    "name": "Handvo",
-    "category": "breakfast",
-    "hint": "Handvo, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "west-indian",
-    "isVeg": true,
-    "slug": "handvo",
-    "file": "handvo.png"
-  },
-  {
-    "name": "Appam Stew",
-    "category": "breakfast",
-    "hint": "Appam Stew, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "appam-stew",
-    "file": "appam-stew.png"
-  },
-  {
-    "name": "Puttu Kadala",
-    "category": "breakfast",
-    "hint": "Puttu Kadala, traditional Indian breakfast dish, served on a thali plate or wooden board with sides",
-    "cuisine": "south-indian",
-    "isVeg": true,
-    "slug": "puttu-kadala",
-    "file": "puttu-kadala.png"
+    "slug": "ada-pradhaman",
+    "file": "ada-pradhaman.png"
   }
 ]
