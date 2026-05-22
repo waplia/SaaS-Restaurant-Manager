@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { PhoneInput } from "@/components/PhoneInput";
 
 /**
  * Owner profile screen — mobile parity with the web Settings → General +
@@ -139,19 +140,19 @@ export default function OwnerProfileScreen() {
       ) : (
         <>
           <SectionHeader colors={colors} title="Restaurant profile" subtitle="Shown on bills, customer site & receipts." />
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={{ gap: 10 }}>
             <EditRow colors={colors} label="Name" value={draft.name ?? ""} onChange={v => setField("name", v)} editable={canEdit} />
-            <EditRow colors={colors} label="Phone" value={draft.phone ?? ""} onChange={v => setField("phone", v)} editable={canEdit} keyboardType="phone-pad" />
+            <PhoneField colors={colors} label="Phone" value={draft.phone ?? ""} onChange={v => setField("phone", v)} editable={canEdit} />
             <EditRow colors={colors} label="Email" value={draft.email ?? ""} onChange={v => setField("email", v)} editable={canEdit} keyboardType="email-address" />
             <EditRow colors={colors} label="Address" value={draft.address ?? ""} onChange={v => setField("address", v)} editable={canEdit} multiline />
             <EditRow colors={colors} label="City" value={draft.city ?? ""} onChange={v => setField("city", v)} editable={canEdit} />
             <EditRow colors={colors} label="Website" value={draft.website ?? ""} onChange={v => setField("website", v)} editable={canEdit} keyboardType="url" />
             <EditRow colors={colors} label="GSTIN" value={draft.gstin ?? ""} onChange={v => setField("gstin", v)} editable={canEdit} />
-            <EditRow colors={colors} label="FSSAI Lic" value={draft.fssaiLicense ?? ""} onChange={v => setField("fssaiLicense", v)} editable={canEdit} isLast />
+            <EditRow colors={colors} label="FSSAI Lic" value={draft.fssaiLicense ?? ""} onChange={v => setField("fssaiLicense", v)} editable={canEdit} />
           </View>
 
           <SectionHeader colors={colors} title="UPI QR on bills" subtitle="Show a Scan-to-Pay QR on printed customer bills. Never printed on KOTs." />
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={{ gap: 10 }}>
             <ToggleRow
               colors={colors}
               label="Enable UPI QR on bills"
@@ -170,33 +171,33 @@ export default function OwnerProfileScreen() {
               onChange={v => setField("showUpiIdOnBill", v)}
               disabled={!canEdit}
             />
-            <View style={[styles.menuItem, { borderBottomWidth: 0 }]}>
-              <Text style={[styles.menuLabel, { color: colors.foreground }]}>When to print</Text>
-              <Text style={[styles.menuValue, { color: colors.mutedForeground, textAlign: "right", flex: 1 }]} numberOfLines={2}>
+            <View style={[styles.fieldBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>When to print</Text>
+              <Text style={{ fontSize: 14, fontFamily: "Inter_500Medium", color: colors.foreground, marginTop: 2 }}>
                 {QR_MODE_LABEL[String(draft.upiPrintQrMode ?? "all")] ?? "Always print"}
               </Text>
+              {canEdit && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                  {Object.entries(QR_MODE_LABEL).map(([k, label]) => {
+                    const active = (draft.upiPrintQrMode ?? "all") === k;
+                    return (
+                      <Pressable
+                        key={k}
+                        onPress={() => setField("upiPrintQrMode", k)}
+                        style={{
+                          paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: active ? colors.primary : colors.border,
+                          backgroundColor: active ? colors.primary + "1A" : "transparent",
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: active ? colors.primary : colors.mutedForeground, fontFamily: "Inter_500Medium" }}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
-            {canEdit && (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, padding: 12, paddingTop: 0 }}>
-                {Object.entries(QR_MODE_LABEL).map(([k, label]) => {
-                  const active = (draft.upiPrintQrMode ?? "all") === k;
-                  return (
-                    <Pressable
-                      key={k}
-                      onPress={() => setField("upiPrintQrMode", k)}
-                      style={{
-                        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: active ? colors.primary : colors.border,
-                        backgroundColor: active ? colors.primary + "1A" : "transparent",
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, color: active ? colors.primary : colors.mutedForeground, fontFamily: "Inter_500Medium" }}>{label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
           </View>
 
           {canEdit && (
@@ -251,15 +252,15 @@ function SectionHeader({ colors, title, subtitle }: { colors: Colors; title: str
 }
 
 function EditRow({
-  colors, label, value, onChange, editable, keyboardType, placeholder, multiline, isLast,
+  colors, label, value, onChange, editable, keyboardType, placeholder, multiline,
 }: {
   colors: Colors; label: string; value: string; onChange: (v: string) => void;
   editable?: boolean; keyboardType?: "default" | "email-address" | "phone-pad" | "url";
-  placeholder?: string; multiline?: boolean; isLast?: boolean;
+  placeholder?: string; multiline?: boolean;
 }) {
   return (
-    <View style={[styles.menuItem, { borderBottomColor: colors.border, borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth, flexDirection: "column", alignItems: "stretch", gap: 4 }]}>
-      <Text style={[styles.menuLabel, { color: colors.mutedForeground, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }]}>{label}</Text>
+    <View style={[styles.fieldBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -272,7 +273,8 @@ function EditRow({
           color: colors.foreground,
           fontSize: 15,
           fontFamily: "Inter_500Medium",
-          paddingVertical: 4,
+          paddingVertical: 2,
+          marginTop: 2,
           minHeight: multiline ? 44 : undefined,
         }}
       />
@@ -280,10 +282,23 @@ function EditRow({
   );
 }
 
+function PhoneField({
+  colors, label, value, onChange, editable,
+}: {
+  colors: Colors; label: string; value: string; onChange: (v: string) => void; editable?: boolean;
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground, paddingHorizontal: 2 }]}>{label}</Text>
+      <PhoneInput value={value} onChange={onChange} editable={editable} defaultCountry="IN" />
+    </View>
+  );
+}
+
 function ToggleRow({ colors, label, value, onChange, disabled }: { colors: Colors; label: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <View style={[styles.menuItem, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.menuLabel, { color: colors.foreground }]}>{label}</Text>
+    <View style={[styles.fieldBox, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 12 }]}>
+      <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", color: colors.foreground }}>{label}</Text>
       <Switch value={value} onValueChange={onChange} disabled={disabled} />
     </View>
   );
@@ -303,6 +318,8 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1 },
   menuLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
   menuValue: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  fieldBox: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  fieldLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",

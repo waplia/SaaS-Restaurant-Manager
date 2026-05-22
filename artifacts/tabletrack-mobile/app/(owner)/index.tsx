@@ -785,10 +785,12 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "uppercase", letterSpacing: 0.4 },
 });
 
-/** Restaurant + outlet top card for the owner home. Shows the restaurant
- *  name & logo with the active outlet underneath, opens the Profile screen
- *  on tap, and (for multi-outlet owners) reveals a quick-pick bottom sheet
- *  for switching outlet without scrolling down to the scope pills. */
+/** Outlet-switcher top card for the owner home. Shows the restaurant
+ *  name & logo plus the active outlet, and tapping anywhere on the card
+ *  opens a bottom-sheet picker for switching outlet without scrolling
+ *  down to the scope pills. Restaurant profile lives under More now,
+ *  so this card is hidden entirely for single-outlet users / roles
+ *  that can't switch scope. */
 function RestaurantTopCard({
   scopeOutletId, canSwitch, outlets, onSelectOutlet,
 }: {
@@ -815,44 +817,40 @@ function RestaurantTopCard({
     ? (r?.city || "")
     : activeOutlet ? activeOutlet.name : `All outlets · ${outlets.length}`;
 
+  // Restaurant Profile lives under More now — the home top card is purely
+  // an outlet switcher. If the user can't switch outlets (single outlet
+  // or not an owner), hide the card entirely.
+  if (!canSwitch) return null;
+
   return (
-    <View style={[
-      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 },
-    ]}>
-      <Pressable
-        onPress={() => router.push("/(owner)/profile" as never)}
-        style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, opacity: pressed ? 0.7 : 1 })}
-      >
-        {r?.logoUrl
-          ? <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.muted, overflow: "hidden" }}>
-              {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
-              <Image source={{ uri: r.logoUrl }} style={{ width: "100%", height: "100%" }} />
-            </View>
-          : <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>{(r?.name ?? "R")[0]?.toUpperCase()}</Text>
-            </View>
-        }
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: colors.foreground }}>
-            {r?.name ?? "Restaurant"}
-          </Text>
-          <Text numberOfLines={1} style={{ fontFamily: "Inter_500Medium", fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-            {outletLabel || "Tap to edit profile"}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-      </Pressable>
-      {canSwitch && (
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          hitSlop={8}
-          style={({ pressed }) => ({ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 4 })}
-          accessibilityLabel="Switch outlet"
-        >
-          <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
-          <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: colors.primary }}>Switch</Text>
-        </Pressable>
-      )}
+    <Pressable
+      onPress={() => setPickerOpen(true)}
+      accessibilityLabel="Switch outlet"
+      style={({ pressed }) => ([
+        { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12, opacity: pressed ? 0.7 : 1 },
+      ])}
+    >
+      {r?.logoUrl
+        ? <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.muted, overflow: "hidden" }}>
+            {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
+            <Image source={{ uri: r.logoUrl }} style={{ width: "100%", height: "100%" }} />
+          </View>
+        : <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>{(r?.name ?? "R")[0]?.toUpperCase()}</Text>
+          </View>
+      }
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={{ fontFamily: "Inter_500Medium", fontSize: 11, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Active outlet
+        </Text>
+        <Text numberOfLines={1} style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: colors.foreground, marginTop: 1 }}>
+          {outletLabel || r?.name || "Switch outlet"}
+        </Text>
+      </View>
+      <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
+        <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: colors.primary }}>Switch</Text>
+      </View>
 
       {pickerOpen && (
         <Modal transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
@@ -886,6 +884,6 @@ function RestaurantTopCard({
           </Pressable>
         </Modal>
       )}
-    </View>
+    </Pressable>
   );
 }

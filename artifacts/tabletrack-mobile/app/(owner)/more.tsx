@@ -133,6 +133,30 @@ export default function MoreScreen() {
           <AICreditChip />
         </View>
 
+        {(user?.role === "owner" || user?.role === "super_admin" || user?.role === "manager") && (
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.section, { color: colors.mutedForeground }]}>Profile</Text>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Pressable
+                onPress={() => router.push("/(owner)/profile" as never)}
+                style={({ pressed }) => [
+                  styles.row,
+                  { borderBottomWidth: 0, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <CircleIcon name="storefront-outline" size={18} diameter={34} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.label, { color: colors.foreground }]}>Restaurant Profile</Text>
+                  <Text style={[styles.desc, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    Name, address, phone, GSTIN, UPI on bills
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {Object.entries(grouped).map(([group, items]) => (
           <View key={group} style={{ gap: 8 }}>
             <Text style={[styles.section, { color: colors.mutedForeground }]}>{GROUP_LABEL[group as ModuleDef["group"]]}</Text>
