@@ -79,13 +79,13 @@ export default function ApprovalsScreen() {
   const approve = useMutation({
     mutationFn: async ({ kind, id }: { kind: ApprovalKind; id: number }) => {
       const map: Record<string, string> = {
-        expense: `/restaurants/${restaurantId}/expenses/${id}/approve`,
-        leave: `/restaurants/${restaurantId}/leave-requests/${id}/approve`,
-        purchase_order: `/restaurants/${restaurantId}/purchase-orders/${id}/approve`,
+        expense: `/api/restaurants/${restaurantId}/expenses/${id}/approve`,
+        leave: `/api/restaurants/${restaurantId}/leave-requests/${id}/approve`,
+        purchase_order: `/api/restaurants/${restaurantId}/purchase-orders/${id}/approve`,
       };
       const url = map[kind];
       if (!url) throw new Error("Unsupported");
-      return customFetch(url, { method: "POST" });
+      return customFetch(url, { method: "POST", body: JSON.stringify({}) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pending-expenses"] });
@@ -98,13 +98,14 @@ export default function ApprovalsScreen() {
   const reject = useMutation({
     mutationFn: async ({ kind, id }: { kind: ApprovalKind; id: number }) => {
       const map: Record<string, string> = {
-        expense: `/restaurants/${restaurantId}/expenses/${id}/reject`,
-        leave: `/restaurants/${restaurantId}/leave-requests/${id}/reject`,
-        purchase_order: `/restaurants/${restaurantId}/purchase-orders/${id}/reject`,
+        expense: `/api/restaurants/${restaurantId}/expenses/${id}/reject`,
+        leave: `/api/restaurants/${restaurantId}/leave-requests/${id}/reject`,
+        purchase_order: `/api/restaurants/${restaurantId}/purchase-orders/${id}/reject`,
       };
       const url = map[kind];
       if (!url) throw new Error("Unsupported");
-      return customFetch(url, { method: "POST" });
+      const reason = kind === "expense" ? "Rejected from mobile" : undefined;
+      return customFetch(url, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pending-expenses"] });
