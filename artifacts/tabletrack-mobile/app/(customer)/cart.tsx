@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform,
+  TextInput,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useCreatePublicOrder } from "@workspace/api-client-react";
+import { parsePhone, expectedNationalLength } from "@workspace/phone-utils";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
 import { useNetworkStatus } from "@/hooks/useOfflineCache";
 import { EmptyState } from "@/components/EmptyState";
+import { PhoneInput } from "@/components/PhoneInput";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 interface PublicOrderFull {
@@ -29,6 +32,9 @@ export default function CartScreen() {
   const [paymentStep, setPaymentStep] = useState<"cart" | "pay">("cart");
   const [orderResult, setOrderResult] = useState<PublicOrderFull | null>(null);
   const [payingStripe, setPayingStripe] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const isWeb = Platform.OS === "web";
   const isOnline = useNetworkStatus();
 
@@ -51,12 +57,32 @@ export default function CartScreen() {
     );
   }
 
+  // Validate phone if entered. Empty is OK (it's optional), but a partial /
+  // wrong-length number should block submission so we don't store junk.
+  const validatePhone = (): string | null => {
+    const trimmed = customerPhone.trim();
+    if (!trimmed) return null;
+    const parsed = parsePhone(trimmed, "IN");
+    const digits = parsed.national.replace(/\D+/g, "");
+    if (digits.length === 0) return "Enter a phone number or leave it blank.";
+    const expected = expectedNationalLength(parsed.country.iso);
+    if (digits.length !== expected) {
+      return `Phone number must be ${expected} digits for ${parsed.country.name}.`;
+    }
+    return null;
+  };
+
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) return;
     if (!isOnline) {
       Alert.alert("No Connection", "You appear to be offline. Please check your internet connection and try again.");
       return;
     }
+    const err = validatePhone();
+    if (err) { setPhoneError(err); return; }
+    setPhoneError(null);
+    const trimmedName = customerName.trim();
+    const trimmedPhone = customerPhone.trim();
     setPlacing(true);
     try {
       const result = (await createPublicOrder.mutateAsync({
@@ -64,6 +90,8 @@ export default function CartScreen() {
           restaurantId,
           tableId,
           items: cart.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+          ...(trimmedName ? { customerName: trimmedName } : {}),
+          ...(trimmedPhone ? { customerPhone: trimmedPhone } : {}),
         },
       })) as PublicOrderFull;
 
@@ -247,6 +275,29 @@ export default function CartScreen() {
       />
 
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: isWeb ? 34 : insets.bottom }]}>
+        <View style={styles.customerBox}>
+          <Text style={[styles.customerLabel, { color: colors.mutedForeground }]}>
+            Your details (optional — earn loyalty points)
+          </Text>
+          <TextInput
+            value={customerName}
+            onChangeText={setCustomerName}
+            placeholder="Full name"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="words"
+            maxLength={80}
+            style={[styles.nameInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+          />
+          <PhoneInput
+            value={customerPhone}
+            onChange={(next) => { setCustomerPhone(next); if (phoneError) setPhoneError(null); }}
+            placeholder="Phone number"
+          />
+          {phoneError ? (
+            <Text style={styles.phoneError}>{phoneError}</Text>
+          ) : null}
+        </View>
+
         <View style={styles.totalRow}>
           <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>{itemCount} items</Text>
           <Text style={[styles.totalAmount, { color: colors.foreground }]}>₹{total.toLocaleString()}</Text>
@@ -286,6 +337,10 @@ const styles = StyleSheet.create({
   qtyText: { fontSize: 15, fontFamily: "Inter_700Bold", minWidth: 20, textAlign: "center" },
   subTotal: { fontSize: 14, fontFamily: "Inter_700Bold", minWidth: 56, textAlign: "right" },
   footer: { borderTopWidth: 1, padding: 16, paddingTop: 12, gap: 10 },
+  customerBox: { gap: 8 },
+  customerLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  nameInput: { height: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, fontSize: 15 },
+  phoneError: { color: "#ef4444", fontSize: 12, fontFamily: "Inter_500Medium" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
   totalAmount: { fontSize: 20, fontFamily: "Inter_700Bold" },
