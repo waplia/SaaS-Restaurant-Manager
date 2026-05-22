@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
+import { parsePhone } from "@workspace/phone-utils";
 import { useAuth, type AuthUser } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
 import { GoogleSignInButton, OrDivider } from "@/components/GoogleSignInButton";
@@ -69,10 +70,11 @@ export default function RegisterPage() {
     setErr(""); setLoading(true);
     try {
       const trimmed = phone.trim();
-      if (!trimmed.startsWith("+")) throw new Error("Phone must include country code, e.g. +91 9876543210");
-      const m = trimmed.match(/^(\+\d{1,4})(.*)$/);
-      const countryCode = m?.[1] ?? "+91";
-      const local = (m?.[2] ?? "").replace(/[^\d]/g, "");
+      if (!trimmed) throw new Error("Enter your mobile number");
+      const { country, national } = parsePhone(trimmed, "IN");
+      const local = national.replace(/\D+/g, "");
+      if (local.length < 6) throw new Error("Enter a valid mobile number");
+      const countryCode = `+${country.code}`;
       const r = await postJSON<{ registrationToken: string; devCode?: string }>("/auth/register/start", { countryCode, phone: local, channel });
       setToken(r.registrationToken);
       setDevCode(r.devCode ?? null);

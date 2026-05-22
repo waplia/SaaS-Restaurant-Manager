@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
+import { PhoneInput } from "@/components/PhoneInput";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 
 type Branch = {
@@ -219,8 +220,7 @@ function OutletForm({
           placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
       </FormField>
       <FormField label="Phone">
-        <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 …"
-          placeholderTextColor={colors.mutedForeground} style={formInputStyle(colors)} />
+        <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
       </FormField>
       <View style={styles.switchRow}>
         <Text style={{ color: colors.foreground, fontSize: 14, fontFamily: "Inter_500Medium" }}>Main outlet</Text>

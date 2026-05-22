@@ -10,6 +10,7 @@ import {
   parsePhone,
   resolveCountry,
   formatPhone,
+  expectedNationalLength,
   type CountryCode,
 } from "@workspace/phone-utils";
 import { useRestaurantInfo } from "@/lib/hooks";
@@ -63,7 +64,9 @@ export function PhoneInput({
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   function emit(country: CountryCode, national: string) {
-    onChange(formatPhone(country, national));
+    const cap = expectedNationalLength(country.iso);
+    const digits = national.replace(/\D+/g, "").slice(0, cap);
+    onChange(formatPhone(country, digits));
   }
 
   useEffect(() => {
@@ -131,6 +134,7 @@ export function PhoneInput({
         value={parsed.national}
         onChange={e => emit(displayCountry, e.target.value)}
         placeholder={placeholder}
+        maxLength={expectedNationalLength(displayCountry.iso)}
         className="flex-1"
       />
 

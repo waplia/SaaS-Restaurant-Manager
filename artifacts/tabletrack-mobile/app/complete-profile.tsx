@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { PhoneInput } from "@/components/PhoneInput";
 
 type AuthUser = { id: number; name: string | null; email: string; role: string;
   tenantId: number | null; restaurantId: number | null; isSuperAdmin: boolean; phone?: string | null };
@@ -103,12 +104,7 @@ export default function CompleteProfileScreen() {
               )}
               <View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>
-                  <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput style={[styles.input, { color: colors.foreground }]}
-                    value={phone} onChangeText={setPhone} keyboardType="phone-pad"
-                    placeholder="+91 9876543210" placeholderTextColor={colors.mutedForeground} />
-                </View>
+                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
               </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {(["sms", "whatsapp"] as const).map(c => (

@@ -31,7 +31,9 @@ const ASSET_URL_OPTIONAL = z
     z.literal(""),
   ])
   .nullish();
-const PHONE_RE = /^\+[1-9]\d{6,14}(?:[\s-]?\d{1,6})?$/; // E.164-ish, allows one space/dash group
+// Accepts both legacy "+91 9876543210" and the new canonical "91 9876543210"
+// storage form emitted by the shared PhoneInput components.
+const PHONE_RE = /^\+?[1-9]\d{0,3}[\s-]?\d{6,14}$/;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
 // Only raster images that the server can fully decode + re-encode. SVG and
 // ICO are intentionally rejected because they cannot be safely re-encoded —
@@ -41,7 +43,7 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_UPLOAD_MIME = new Set([
   "image/png", "image/jpeg", "image/webp",
 ]);
-const phoneSchema = z.string().trim().regex(PHONE_RE, "Phone must include country code, e.g. +91 9876543210").max(40);
+const phoneSchema = z.string().trim().regex(PHONE_RE, "Enter a valid mobile number with country code.").max(40);
 
 const SOCIAL_KEYS = ["facebook", "instagram", "twitter", "linkedin", "youtube", "tiktok"] as const;
 

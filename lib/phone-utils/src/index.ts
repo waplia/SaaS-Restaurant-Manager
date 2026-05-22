@@ -204,6 +204,26 @@ export function normalizePhone(
   return `${country.code} ${digits}`;
 }
 
+/**
+ * Per-ISO max length of the *national* (without dial) part. Used to cap
+ * user input in phone fields so e.g. an Indian number can't be more than
+ * 10 digits. Falls back to 15 (E.164 hard cap minus shortest dial code)
+ * for any country we don't list explicitly.
+ */
+const NATIONAL_LEN_BY_ISO: Record<string, number> = {
+  IN: 10, US: 10, CA: 10, GB: 10, AU: 9, NZ: 9, AE: 9, SA: 9, QA: 8,
+  KW: 8, OM: 8, BH: 8, SG: 8, HK: 8, MY: 9, ID: 11, PH: 10, TH: 9,
+  VN: 9, BD: 10, PK: 10, LK: 9, NP: 10, CN: 11, JP: 10, KR: 10,
+  DE: 11, FR: 9, IT: 10, ES: 9, NL: 9, BE: 9, CH: 9, AT: 11, SE: 9,
+  NO: 8, DK: 8, FI: 9, PL: 9, RU: 10, TR: 10, EG: 10, ZA: 9, NG: 10,
+  KE: 9, BR: 11, MX: 10, AR: 10, CL: 9, CO: 10,
+};
+
+export function expectedNationalLength(iso: string | null | undefined): number {
+  if (!iso) return 15;
+  return NATIONAL_LEN_BY_ISO[iso.toUpperCase()] ?? 15;
+}
+
 /** Returns true if the value parses to a plausible international phone. */
 export function isValidPhone(
   raw: string | null | undefined,

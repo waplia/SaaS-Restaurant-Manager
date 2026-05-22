@@ -9,6 +9,7 @@ import {
   parsePhone,
   resolveCountry,
   formatPhone,
+  expectedNationalLength,
   type CountryCode,
 } from "@workspace/phone-utils";
 import { useColors } from "@/hooks/useColors";
@@ -59,7 +60,9 @@ export function PhoneInput({
   }, [search]);
 
   function emit(next: CountryCode, national: string) {
-    onChange(formatPhone(next, national));
+    const cap = expectedNationalLength(next.iso);
+    const digits = national.replace(/\D+/g, "").slice(0, cap);
+    onChange(formatPhone(next, digits));
   }
 
   return (
@@ -87,6 +90,7 @@ export function PhoneInput({
         placeholderTextColor={colors.mutedForeground}
         keyboardType="phone-pad"
         editable={editable}
+        maxLength={expectedNationalLength(country.iso)}
         testID={testID}
         style={[
           styles.input,

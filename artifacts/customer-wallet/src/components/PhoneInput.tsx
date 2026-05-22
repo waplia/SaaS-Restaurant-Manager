@@ -6,6 +6,7 @@ import {
   parsePhone,
   resolveCountry,
   formatPhone,
+  expectedNationalLength,
   type CountryCode,
 } from "@workspace/phone-utils";
 
@@ -60,7 +61,9 @@ export function PhoneInput({
     parsed.country.iso ? parsed.country : resolveCountry(defaultCountry);
 
   function emit(country: CountryCode, national: string) {
-    onChange(formatPhone(country, national));
+    const cap = expectedNationalLength(country.iso);
+    const digits = national.replace(/\D+/g, "").slice(0, cap);
+    onChange(formatPhone(country, digits));
   }
 
   useEffect(() => {
@@ -125,6 +128,7 @@ export function PhoneInput({
         value={parsed.national}
         onChange={e => emit(displayCountry, e.target.value)}
         placeholder={placeholder}
+        maxLength={expectedNationalLength(displayCountry.iso)}
         data-testid={inputTestId}
         className="input flex-1"
       />

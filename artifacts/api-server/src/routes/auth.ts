@@ -34,6 +34,7 @@ import { recordAuditLog } from "../lib/audit";
 import { logger } from "../lib/logger";
 import bcrypt from "bcryptjs";
 import { normalizePhone, normalizeEmail } from "../lib/staffOtp";
+import { normalizePhone as normalizePhoneIntl } from "@workspace/phone-utils";
 
 const router = Router();
 
@@ -121,11 +122,14 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
     phone?: string;
   };
 
-  // Phone is optional but, if provided, must include the country code.
-  // Stored as e.g. "+91 9876543210" — server stays format-agnostic, just ensures '+'.
-  const normalisedPhone = phone?.trim() ? phone.trim() : null;
-  if (normalisedPhone && !normalisedPhone.startsWith("+")) {
-    res.status(400).json({ error: "Phone must include a country code, e.g. +91 9876543210" });
+  // Phone is optional. When supplied we normalise via the shared
+  // phone-utils helper which accepts "+91 …", "91 …", or a bare
+  // national number (assumed India) and emits the canonical
+  // "<dial> <national>" storage form.
+  const rawPhone = phone?.trim();
+  const normalisedPhone = rawPhone ? normalizePhoneIntl(rawPhone, "IN") : null;
+  if (rawPhone && !normalisedPhone) {
+    res.status(400).json({ error: "Enter a valid mobile number with country code." });
     return;
   }
 
