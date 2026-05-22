@@ -13,11 +13,11 @@ import {
   listMenuCategories, getListMenuCategoriesQueryKey,
   listMenuItems, getListMenuItemsQueryKey,
   listOrders, getListOrdersQueryKey,
-  useCreateOrder,
+  createOrder,
   getRestaurant, getGetRestaurantQueryKey,
 } from "@workspace/api-client-react";
-import { useMutation } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { withTimeout } from "@/lib/withTimeout";
 import type { MenuCategory, MenuItem, Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
@@ -174,33 +174,14 @@ export default function WaiterOrderScreen() {
     wasOnlineRef.current = isOnline;
   }, [isOnline]);
 
-  const createOrder = useCreateOrder();
-  const addItemMutation = useMutation({
-    // Use the shared customFetch wrapper so the request automatically picks up
-    // the base URL, current auth token, and global 401 handling — matching
-    // the rest of the app and avoiding silent stale-token failures.
-    // Accepts an optional idempotency key so queued retries can dedupe
-    // safely on the server when a previous attempt succeeded mid-flight.
-    // Server expects `modifiers: [{ modifierId, quantity }]` (see
-    // /restaurants/:rid/orders/:id/items in api-server) — `modifierIds` is
-    // silently ignored, which is what was causing required-modifier validation
-    // to fail with HTTP 400 on Send to Kitchen.
-    mutationFn: ({ rid, id, data, idempotencyKey }: {
-      rid: number; id: number;
-      data: {
-        menuItemId: number;
-        quantity: number;
-        modifiers?: Array<{ modifierId: number; quantity: number }>;
-        notes?: string;
-      };
-      idempotencyKey?: string;
-    }) =>
-      customFetch(`/api/restaurants/${rid}/orders/${id}/items`, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : undefined,
-      }),
-  });
+  // submitOrderItems below calls `createOrder()` and `customFetch()` directly
+  // (wrapped in withTimeout) instead of going through useMutation, so each
+  // request gets a real AbortSignal and the Send to Kitchen spinner is
+  // guaranteed to clear instead of hanging on a stuck network call.
+  // Server expects `modifiers: [{ modifierId, quantity }]` (see
+  // /restaurants/:rid/orders/:id/items in api-server) — `modifierIds` is
+  // silently ignored, which is what was causing required-modifier validation
+  // to fail with HTTP 400 on Send to Kitchen.
 
   const categoryList = (isOnline
     ? (Array.isArray(categories) ? categories : [])
@@ -332,35 +313,44 @@ export default function WaiterOrderScreen() {
       // generated mutations from api-client-react don't expose header
       // overrides. The server can then dedupe if a previous attempt had
       // actually reached the DB but its response was lost mid-flight.
+      //
+      // Either path is wrapped in withTimeout so a hung network call is
+      // aborted and the caller's spinner is guaranteed to clear instead of
+      // spinning indefinitely.
       if (orderIdempotencyKey) {
-        const created = await customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
-          method: "POST",
-          body: JSON.stringify({ tableId: targetTableId, orderType: "dine_in", items: [] }),
-          headers: { "X-Idempotency-Key": orderIdempotencyKey },
-        });
+        const created = await withTimeout((signal) =>
+          customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
+            method: "POST",
+            body: JSON.stringify({ tableId: targetTableId, orderType: "dine_in", items: [] }),
+            headers: { "X-Idempotency-Key": orderIdempotencyKey },
+            signal,
+          }),
+        );
         orderId = created.id;
       } else {
-        const newOrder = await createOrder.mutateAsync({
-          restaurantId,
-          data: { tableId: targetTableId, orderType: "dine_in", items: [] },
-        });
+        const newOrder = await withTimeout((signal) =>
+          createOrder(restaurantId, { tableId: targetTableId, orderType: "dine_in", items: [] }, { signal }),
+        );
         orderId = newOrder.id;
       }
     }
     for (let i = 0; i < cartItems.length; i++) {
       const item = cartItems[i];
       const mods = (item.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
-      await addItemMutation.mutateAsync({
-        rid: restaurantId,
-        id: orderId!,
-        data: {
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          modifiers: mods.length ? mods : undefined,
-          notes: item.note ?? undefined,
-        },
-        idempotencyKey: itemKeys?.[i],
-      });
+      const key = itemKeys?.[i];
+      await withTimeout((signal) =>
+        customFetch(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, {
+          method: "POST",
+          body: JSON.stringify({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            modifiers: mods.length ? mods : undefined,
+            notes: item.note ?? undefined,
+          }),
+          headers: key ? { "X-Idempotency-Key": key } : undefined,
+          signal,
+        }),
+      );
     }
     qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
   };

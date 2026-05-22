@@ -3,17 +3,18 @@ import {
   View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   customFetch,
   listMenuCategories, getListMenuCategoriesQueryKey,
   listMenuItems, getListMenuItemsQueryKey,
-  useCreateOrder,
+  createOrder,
   getListOrdersQueryKey,
   getRestaurant, getGetRestaurantQueryKey,
 } from "@workspace/api-client-react";
+import { withTimeout, RequestTimeoutError } from "@/lib/withTimeout";
 import type { MenuCategory, MenuItem } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -26,6 +27,10 @@ import { EmptyState } from "@/components/EmptyState";
 import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
 
 type Filter = "all" | "veg" | "nonveg" | "bestseller";
+
+function mobileUid(): string {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 interface ExtendedMenuItem extends MenuItem {
   isVeg?: boolean;
@@ -43,7 +48,23 @@ export default function NewOrderMenuScreen() {
   const isWeb = Platform.OS === "web";
   const qc = useQueryClient();
   const { restaurantId } = useAuth();
-  const { cart, addLine, itemCount, total, clearCart, updateQuantity, removeLine } = useCart();
+  const { cart, addLine, itemCount, total, clearCart, updateQuantity, removeLine, attachTable } = useCart();
+
+  // Trust the route params as the source of truth for table identity when
+  // the menu was opened from the home/tables screen. Reconcile the cart
+  // context so a stale `cart.tableId` from a previous session can never
+  // win at send time.
+  const params = useLocalSearchParams<{ tableId?: string; tableLabel?: string }>();
+  const routeTableId = params.tableId != null ? Number(params.tableId) : NaN;
+  const routeTableLabel = typeof params.tableLabel === "string" ? params.tableLabel : null;
+  useEffect(() => {
+    if (Number.isFinite(routeTableId) && routeTableId > 0) {
+      if (cart.tableId !== routeTableId || (routeTableLabel && cart.tableLabel !== routeTableLabel)) {
+        attachTable(restaurantId, routeTableId, routeTableLabel ?? cart.tableLabel ?? null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeTableId, routeTableLabel, restaurantId]);
 
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -53,6 +74,12 @@ export default function NewOrderMenuScreen() {
   const [modifierItem, setModifierItem] = useState<ExtendedMenuItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // When the parent order create succeeds but some item POSTs fail, we
+  // remember the orderId + the idempotency key we used to create it. Retry
+  // reuses both so we never create a duplicate parent order, and only the
+  // still-failing items are re-sent (with per-line idempotency keys, so
+  // even an already-applied item POST won't double-bill the order).
+  const [pendingOrder, setPendingOrder] = useState<{ orderId: number; createKey: string } | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -124,60 +151,139 @@ export default function NewOrderMenuScreen() {
     else removeLine(last.lineId);
   };
 
-  // Send order to kitchen using existing endpoints.
-  const createOrder = useCreateOrder();
-  const addItemMutation = useMutation({
-    // Server expects `modifiers: [{ modifierId, quantity }]` — sending
-    // `modifierIds: number[]` was silently dropped, leading to 400s when an
-    // item had a required modifier group (e.g. spice_level).
-    mutationFn: ({ rid, id, data }: { rid: number; id: number; data: { menuItemId: number; quantity: number; modifiers?: Array<{ modifierId: number; quantity: number }>; notes?: string } }) =>
-      customFetch(`/api/restaurants/${rid}/orders/${id}/items`, { method: "POST", body: JSON.stringify(data) }),
-  });
+  // Send order to kitchen using existing endpoints. We call customFetch
+  // directly (instead of useMutation) so each request can be wrapped in
+  // withTimeout — a stuck network call is aborted and the spinner is
+  // guaranteed to clear within a few seconds.
 
   const handleSend = async () => {
     if (cart.items.length === 0) {
       Alert.alert("Empty Cart", "Add items first.");
       return;
     }
-    if (cart.orderType === "dine_in" && !cart.tableId) {
+
+    // Resolve the table from route params first (the table the waiter
+    // just tapped on the home screen), falling back to the cart context.
+    // This prevents a stale cart.tableId from a previous session being
+    // used silently.
+    const resolvedTableId = Number.isFinite(routeTableId) && routeTableId > 0
+      ? routeTableId
+      : (cart.tableId ?? null);
+    const resolvedTableLabel = routeTableLabel ?? cart.tableLabel ?? null;
+
+    const orderTypeForApi =
+      cart.orderType === "qr" ? "dine_in"
+      : cart.orderType === "curbside" ? "takeaway"
+      : cart.orderType === "pre_order" ? "takeaway"
+      : (cart.orderType ?? "dine_in");
+    const isDineIn = orderTypeForApi === "dine_in";
+
+    if (isDineIn && !resolvedTableId) {
       Alert.alert("Pick a table", "Dine-in orders need a table.");
       return;
     }
+
     setBusy(true);
     try {
-      const orderTypeForApi =
-        cart.orderType === "qr" ? "dine_in"
-        : cart.orderType === "curbside" ? "takeaway"
-        : cart.orderType === "pre_order" ? "takeaway"
-        : (cart.orderType ?? "dine_in");
+      // Reuse the existing parent order on retry instead of creating a new
+      // one. The createKey is also kept stable across retries so even the
+      // create-order call itself is dedupable on the server side if the
+      // previous attempt reached the DB but the response was lost.
+      let orderId = pendingOrder?.orderId ?? null;
+      const createKey = pendingOrder?.createKey ?? mobileUid();
 
-      const body: Record<string, unknown> = { orderType: orderTypeForApi, items: [] };
-      if (cart.tableId) body.tableId = cart.tableId;
-      if (cart.customer?.name) body.customerName = cart.customer.name;
-      if (cart.customer?.phone) body.customerPhone = cart.customer.phone;
-      if (cart.customer?.address) body.deliveryAddress = cart.customer.address;
+      if (orderId == null) {
+        const body: Record<string, unknown> = { orderType: orderTypeForApi, items: [] };
+        if (resolvedTableId) body.tableId = resolvedTableId;
+        if (cart.customer?.name) body.customerName = cart.customer.name;
+        if (cart.customer?.phone) body.customerPhone = cart.customer.phone;
+        if (cart.customer?.address) body.deliveryAddress = cart.customer.address;
 
-      const created = await createOrder.mutateAsync({ restaurantId, data: body as never });
-      const orderId = created.id;
+        const created = await withTimeout((signal) =>
+          customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
+            method: "POST",
+            body: JSON.stringify(body),
+            headers: { "X-Idempotency-Key": createKey },
+            signal,
+          }),
+        );
+        orderId = created.id;
+        // Persist immediately so a crash/abort between item POSTs still
+        // gives the user a recoverable, non-duplicating retry path.
+        setPendingOrder({ orderId, createKey });
+      }
+
+      // Per-line outcomes. Each item POST carries a stable per-line
+      // idempotency key (derived from lineId), so retrying a line that
+      // actually landed on the server last time will return the cached
+      // response instead of double-billing the order.
+      const succeededLineIds: string[] = [];
+      const failed: Array<{ name: string; reason: string }> = [];
       for (const line of cart.items) {
         const mods = (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
-        await addItemMutation.mutateAsync({
-          rid: restaurantId, id: orderId,
-          data: {
-            menuItemId: line.menuItemId,
-            quantity: line.quantity,
-            modifiers: mods.length ? mods : undefined,
-            notes: line.note ?? undefined,
-          },
-        });
+        const itemKey = `item_${orderId}_${line.lineId}`;
+        try {
+          await withTimeout((signal) =>
+            customFetch(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, {
+              method: "POST",
+              body: JSON.stringify({
+                menuItemId: line.menuItemId,
+                quantity: line.quantity,
+                modifiers: mods.length ? mods : undefined,
+                notes: line.note ?? undefined,
+              }),
+              headers: { "X-Idempotency-Key": itemKey },
+              signal,
+            }),
+          );
+          succeededLineIds.push(line.lineId);
+        } catch (itemErr) {
+          const e = itemErr as { data?: { error?: string } | null; message?: string };
+          const serverMsg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
+            ? e.data.error
+            : (itemErr instanceof RequestTimeoutError ? "Timed out" : (e?.message ?? "Failed"));
+          failed.push({ name: line.name, reason: serverMsg });
+        }
       }
+
       qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
+
+      // Prune successfully-sent lines from the cart so a retry only re-sends
+      // the failures. This keeps the alert copy honest ("retry won't
+      // duplicate") and matches what the user sees in the cart sheet.
+      for (const id of succeededLineIds) removeLine(id);
+
+      if (failed.length > 0) {
+        const lines = failed.map((f) => `• ${f.name} — ${f.reason}`).join("\n");
+        Alert.alert(
+          "Some items didn't go through",
+          `The order was created${resolvedTableLabel ? ` for ${resolvedTableLabel}` : ""}, but these items failed:\n\n${lines}\n\nTap Send to Kitchen again to retry — already-sent items have been removed from your cart and won't be duplicated.`,
+        );
+        // Keep the cart open and the pendingOrder reference so the next
+        // tap retries against the SAME order instead of creating a new one.
+        return;
+      }
+
+      // Full success — clear the resumable handle so the next order starts
+      // from scratch.
+      setPendingOrder(null);
       clearCart();
       setCartOpen(false);
       router.replace("/(owner)/orders" as never);
-    } catch (e) {
-      Alert.alert("Couldn't send", "Please try again.");
+    } catch (err) {
+      const e = err as { data?: { error?: string } | null; message?: string };
+      const serverMsg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
+        ? e.data.error
+        : null;
+      Alert.alert(
+        "Couldn't send",
+        err instanceof RequestTimeoutError
+          ? "The request took too long. Please check your connection and try again."
+          : (serverMsg ?? "Please try again."),
+      );
     } finally {
+      // Always clear the spinner — even on timeout/abort or unexpected
+      // errors above, the user must never see a stuck button.
       setBusy(false);
     }
   };
