@@ -33,6 +33,11 @@ export const restaurantsTable = pgTable("restaurants", {
   bakeryExpiryAlertHours: integer("bakery_expiry_alert_hours").notNull().default(6),
   bakeryBookingAlertHours: integer("bakery_booking_alert_hours").notNull().default(24),
   acceptedPaymentMethods: text("accepted_payment_methods").array().notNull().default(["cash", "upi", "card"]),
+  // Online payment (Stripe / Razorpay card checkout) on the QR / online menu.
+  // OFF by default — owners must explicitly turn it on in Settings → Payment.
+  // When false, customer-menu.tsx hides the "Pay by Card Online" option and
+  // only "Pay at Counter" is shown.
+  enableOnlinePayment: boolean("enable_online_payment").notNull().default(false),
   whatsappMonthlyLimitOverride: integer("whatsapp_monthly_limit_override"),
   googleReviewLink: text("google_review_link"),
   // When true, this outlet runs in "Hotel Restaurant Mode" — POS exposes

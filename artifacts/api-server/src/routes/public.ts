@@ -106,7 +106,7 @@ router.get("/public/menu/:slug", async (req, res) => {
     };
   };
 
-  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, showNutritionOnQrMenu, categories: [] });
+  if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, showNutritionOnQrMenu, categories: [], enableOnlinePayment: !!restaurant.enableOnlinePayment });
 
   const categories = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
   const enriched = await Promise.all(categories.map(async (cat) => {
@@ -175,6 +175,9 @@ router.get("/public/menu/:slug", async (req, res) => {
     menuBannerUrl: menu.imageUrl ?? null,
     categories: enriched,
     directOrdering,
+    // QR / online menu payment toggle. Owners enable in Settings → Payment.
+    // Off by default — only "Pay at Counter" is shown to the diner unless on.
+    enableOnlinePayment: !!restaurant.enableOnlinePayment,
   });
 });
 
@@ -967,7 +970,13 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.paymentStatus === "paid") return void res.json({ success: true, alreadyPaid: true, totalAmount: order.totalAmount });
 
-  const [restaurant] = await db.select({ currency: restaurantsTable.currency, slug: restaurantsTable.slug }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+  const [restaurant] = await db.select({ currency: restaurantsTable.currency, slug: restaurantsTable.slug, enableOnlinePayment: restaurantsTable.enableOnlinePayment }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+  // Server-side enforcement of the QR/online-menu online-payment toggle.
+  // Hiding the radio in the UI is not enough — a hostile diner could still
+  // POST to this endpoint directly. Reject when the owner has disabled it.
+  if (!restaurant?.enableOnlinePayment) {
+    return void res.status(403).json({ error: "Online payment is disabled for this restaurant" });
+  }
   const currency = (restaurant?.currency ?? "INR").toLowerCase();
   const amountSmallestUnit = Math.round(Number(order.totalAmount) * 100);
   const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -1008,6 +1017,13 @@ router.post("/public/orders/:id/pay", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.paymentStatus === "paid") return void res.json({ success: true, alreadyPaid: true, totalAmount: order.totalAmount });
+
+  // Server-side enforcement: refuse to confirm a card payment for a
+  // restaurant whose owner has disabled online payment on the QR menu.
+  const [payRestaurant] = await db.select({ enableOnlinePayment: restaurantsTable.enableOnlinePayment }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
+  if (!payRestaurant?.enableOnlinePayment) {
+    return void res.status(403).json({ error: "Online payment is disabled for this restaurant" });
+  }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (stripeKey && !intentId.startsWith("demo_")) {

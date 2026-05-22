@@ -1460,6 +1460,9 @@ export interface RestaurantInfo {
   phone?: string | null;
   email?: string | null;
   enableVoiceOrdering?: boolean;
+  // QR / online menu online-payment toggle (Settings → Payment). When false
+  // (default) the customer menu only shows "Pay at Counter".
+  enableOnlinePayment?: boolean;
   isHotelMode?: boolean;
   tenantId?: number | null;
 }

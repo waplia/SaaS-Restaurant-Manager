@@ -741,11 +741,26 @@ function PaymentSection() {
     rounding: "nearest", roundingPrecision: 1,
     mandatoryTendered: true, showChangeDue: true,
   };
+  // QR-menu online payment toggle is a real DB column on `restaurants` so the
+  // public menu endpoint and the diner-facing checkout can gate the "Pay by
+  // Card Online" radio on it. Lives next to the cosmetic Methods list so
+  // owners find both knobs in one place.
+  const { data: restaurant } = useRestaurantInfo();
+  const updateRestaurant = useUpdateRestaurant();
+  const onlinePayEnabled = !!restaurant?.enableOnlinePayment;
   return (
     <SettingForm section="payment" defaults={defaults}
       description="Accepted methods and checkout behavior. Live keys for online gateways stay in Replit Secrets.">
       {(s, set) => (
         <>
+          <div className="border border-border rounded-lg p-3 bg-muted/30">
+            <Toggle
+              label="Accept online payment on QR / online menu"
+              hint="When ON, diners scanning a table QR or visiting your public menu can choose 'Pay by Card Online' (Stripe / Razorpay) at checkout. When OFF, only 'Pay at Counter' is shown. OFF by default."
+              checked={onlinePayEnabled}
+              onChange={(v) => updateRestaurant.mutate({ enableOnlinePayment: v })}
+            />
+          </div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Methods</p>
           <div className="space-y-2">
             {s.methods.map((m, i) => (

@@ -202,7 +202,7 @@ export function useRestaurantInfo() {
   const RESTAURANT_ID = useRestaurantId();
   return useQuery({
     queryKey: ["restaurant", RESTAURANT_ID],
-    queryFn: () => apiGet<import("./types").RestaurantInfo & { autoReorderEnabled?: boolean; autoReorderCron?: string | null; enableVoiceOrdering?: boolean }>(`/restaurants/${RESTAURANT_ID}`),
+    queryFn: () => apiGet<import("./types").RestaurantInfo & { autoReorderEnabled?: boolean; autoReorderCron?: string | null; enableVoiceOrdering?: boolean; enableOnlinePayment?: boolean }>(`/restaurants/${RESTAURANT_ID}`),
     staleTime: 60000,
   });
 }

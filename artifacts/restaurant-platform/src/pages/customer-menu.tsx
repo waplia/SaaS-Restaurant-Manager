@@ -120,6 +120,9 @@ interface PublicMenu {
   menuBannerUrl?: string | null;
   menuImageConfig?: MenuImageConfig;
   showNutritionOnQrMenu?: boolean;
+  // QR / online menu online-payment toggle. When false (default) we hide the
+  // "Pay by Card Online" radio in the checkout and force "Pay at Counter".
+  enableOnlinePayment?: boolean;
   categories: PublicMenuCategory[];
   // Direct online ordering (Task #432) — present whenever the customer hits
   // /menu/:slug (no tableId). The API always populates it with defaults.
@@ -1601,14 +1604,16 @@ export default function CustomerMenuPage() {
                   <p className="text-xs text-gray-500">Cash or card when served</p>
                 </div>
               </label>
-              <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "card" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
-                <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-orange-500" />
-                <CreditCard className="w-5 h-5 text-gray-500" />
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">Pay by Card Online</p>
-                  <p className="text-xs text-gray-500">Secure card payment now</p>
-                </div>
-              </label>
+              {menu?.enableOnlinePayment ? (
+                <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "card" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
+                  <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-orange-500" />
+                  <CreditCard className="w-5 h-5 text-gray-500" />
+                  <div>
+                    <p className="font-medium text-gray-800 text-sm">Pay by Card Online</p>
+                    <p className="text-xs text-gray-500">Secure card payment now</p>
+                  </div>
+                </label>
+              ) : null}
             </div>
           </div>
 
