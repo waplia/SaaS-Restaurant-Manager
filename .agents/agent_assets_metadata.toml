@@ -234,3 +234,201 @@ id = "pM3rMcGDrBEBvzgWBvs5I"
 uri = "file://attached_assets/menu_seed/addon_chocolate_sauce.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "giB-4900icoyOczZ1A9uE"
+uri = "file://attached_assets/generated_images/stock-food/rajma-masala.png"
+type = "image"
+title = "Rajma Masala"
+
+[[generated]]
+id = "N8Iy1-onlx9BKGSol2SpJ"
+uri = "file://attached_assets/generated_images/stock-food/veg-makhanwala.png"
+type = "image"
+title = "Veg Makhanwala"
+
+[[generated]]
+id = "kh_bzYyhJ2uO7tmE5qCc3"
+uri = "file://attached_assets/generated_images/stock-food/dal-fry.png"
+type = "image"
+title = "Dal Fry"
+
+[[generated]]
+id = "SEDs1lrR3NY9C0T09O1C9"
+uri = "file://attached_assets/generated_images/stock-food/mushroom-matar.png"
+type = "image"
+title = "Mushroom Matar"
+
+[[generated]]
+id = "aqLtVOvuO7_PmRaMYTYU4"
+uri = "file://attached_assets/generated_images/stock-food/yellow-dal.png"
+type = "image"
+title = "Yellow Dal"
+
+[[generated]]
+id = "-rfc626MJJPehVC0Wj5tJ"
+uri = "file://attached_assets/generated_images/stock-food/mushroom-do-pyaza.png"
+type = "image"
+title = "Mushroom Do Pyaza"
+
+[[generated]]
+id = "RzD1sHJkXabEBQc2d8J9-"
+uri = "file://attached_assets/generated_images/stock-food/mushroom-tikka-masala.png"
+type = "image"
+title = "Mushroom Tikka Masala"
+
+[[generated]]
+id = "pViZpfu8bk9ZNo_hJBQFO"
+uri = "file://attached_assets/generated_images/stock-food/bhindi-fry.png"
+type = "image"
+title = "Bhindi Fry"
+
+[[generated]]
+id = "UwTTaSDnfdCa4Gq8sByCc"
+uri = "file://attached_assets/generated_images/stock-food/paneer-lababdar.png"
+type = "image"
+title = "Paneer Lababdar"
+
+[[generated]]
+id = "IQn0blDHpTl4dOfjz2mWh"
+uri = "file://attached_assets/generated_images/stock-food/methi-malai-matar.png"
+type = "image"
+title = "Methi Malai Matar"
+
+[[generated]]
+id = "qrJhm1rdqN_qFrvrYeU5z"
+uri = "file://attached_assets/generated_images/stock-food/sarson-ka-saag.png"
+type = "image"
+title = "Sarson Ka Saag"
+
+[[generated]]
+id = "mM59UrxHTKiTLEVCoEEFv"
+uri = "file://attached_assets/generated_images/stock-food/corn-palak.png"
+type = "image"
+title = "Corn Palak"
+
+[[generated]]
+id = "ERtx04M-KtnyPvZMvqYJD"
+uri = "file://attached_assets/generated_images/stock-food/paneer-tikka-masala.png"
+type = "image"
+title = "Paneer Tikka Masala"
+
+[[generated]]
+id = "n--Wlu6K009V-EpqzfKb3"
+uri = "file://attached_assets/generated_images/stock-food/makki-ki-roti.png"
+type = "image"
+title = "Makki Ki Roti"
+
+[[generated]]
+id = "V3rr4hK815f_LAh_kY-kr"
+uri = "file://attached_assets/generated_images/stock-food/corn-capsicum-masala.png"
+type = "image"
+title = "Corn Capsicum Masala"
+
+[[generated]]
+id = "9K68uPgdbJmRfaIEWkw0P"
+uri = "file://attached_assets/generated_images/stock-food/paneer-do-pyaza.png"
+type = "image"
+title = "Paneer Do Pyaza"
+
+[[generated]]
+id = "DMk-9XARCnSQotqMzFbgS"
+uri = "file://attached_assets/generated_images/stock-food/sev-tamatar.png"
+type = "image"
+title = "Sev Tamatar"
+
+[[generated]]
+id = "3CBMTa5SPRtm5U2LIY7IU"
+uri = "file://attached_assets/generated_images/stock-food/soya-chaap-masala.png"
+type = "image"
+title = "Soya Chaap Masala"
+
+[[generated]]
+id = "xVcZzL6rtQh3GGbKb-yxY"
+uri = "file://attached_assets/generated_images/stock-food/aloo-tamatar.png"
+type = "image"
+title = "Aloo Tamatar"
+
+[[generated]]
+id = "Yq0SBDXU9Um2Rp0boyDz2"
+uri = "file://attached_assets/generated_images/stock-food/gobi-masala.png"
+type = "image"
+title = "Gobi Masala"
+
+[[generated]]
+id = "U_hws9uJ6zColad5kr_Lv"
+uri = "file://attached_assets/generated_images/stock-food/ker-sangri.png"
+type = "image"
+title = "Ker Sangri"
+
+[[generated]]
+id = "qxkv0J4l3175BqVgffAew"
+uri = "file://attached_assets/generated_images/stock-food/malai-soya-chaap.png"
+type = "image"
+title = "Malai Soya Chaap"
+
+[[generated]]
+id = "M6iAMJ_5pVEOSbloXItVw"
+uri = "file://attached_assets/generated_images/stock-food/aloo-palak.png"
+type = "image"
+title = "Aloo Palak"
+
+[[generated]]
+id = "cp8wD1WE0OA1Tje8uRnYK"
+uri = "file://attached_assets/generated_images/stock-food/gobi-matar.png"
+type = "image"
+title = "Gobi Matar"
+
+[[generated]]
+id = "RZD4J6w_-R1zhUiLilsJ-"
+uri = "file://attached_assets/generated_images/stock-food/papad-ki-sabzi.png"
+type = "image"
+title = "Papad Ki Sabzi"
+
+[[generated]]
+id = "lQ1E1PbsCS1s1UWsWQoFP"
+uri = "file://attached_assets/generated_images/stock-food/tandoori-soya-chaap.png"
+type = "image"
+title = "Tandoori Soya Chaap"
+
+[[generated]]
+id = "-I0Ish9ky5M40_sVb-fSp"
+uri = "file://attached_assets/generated_images/stock-food/mix-veg.png"
+type = "image"
+title = "Mix Veg"
+
+[[generated]]
+id = "OCz-IUJTm2_nAJX_6OdGS"
+uri = "file://attached_assets/generated_images/stock-food/chole.png"
+type = "image"
+title = "Chole"
+
+[[generated]]
+id = "7ZlPYjGQB9xeakYGE9Nvu"
+uri = "file://attached_assets/generated_images/stock-food/achari-soya-chaap.png"
+type = "image"
+title = "Achari Soya Chaap"
+
+[[generated]]
+id = "m-OSNtBzBgsokqRrpJ87T"
+uri = "file://attached_assets/generated_images/stock-food/veg-korma.png"
+type = "image"
+title = "Veg Korma"
+
+[[generated]]
+id = "Do9MWCNwURDq-ZM2g-f2i"
+uri = "file://attached_assets/generated_images/stock-food/veg-handi.png"
+type = "image"
+title = "Veg Handi"
+
+[[generated]]
+id = "shmtijWny5efZUlZi6F5-"
+uri = "file://attached_assets/generated_images/stock-food/veg-jalfrezi.png"
+type = "image"
+title = "Veg Jalfrezi"
+
+[[generated]]
+id = "D--aLdr7JS4c7r63sLtV8"
+uri = "file://attached_assets/generated_images/stock-food/veg-tawa-masala.png"
+type = "image"
+title = "Veg Tawa Masala"
