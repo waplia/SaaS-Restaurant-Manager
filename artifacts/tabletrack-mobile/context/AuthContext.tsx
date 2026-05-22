@@ -33,6 +33,19 @@ interface AuthContextType {
   isLoading: boolean;
   restaurantId: number;
   tenantId: number | null;
+  /**
+   * Outlet scope selected from the home dashboard's outlet switcher.
+   * - `null` → all outlets (tenant-wide aggregate where supported, otherwise
+   *   falls back to the user's own restaurantId for restaurant-scoped APIs).
+   * - `number` → a specific branch restaurantId. All sales, dashboards and
+   *   reports should be counted against this restaurant only.
+   * Owners can change this; managers / non-owners are implicitly pinned to
+   * their own restaurantId by the consumer.
+   */
+  outletScopeId: number | null;
+  setOutletScopeId: (id: number | null) => void;
+  /** Convenience: the effective restaurantId reports/sales should use. */
+  effectiveRestaurantId: number;
   login: (token: string, refreshToken: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
   updateTokens: (accessToken: string, refreshToken: string) => Promise<void>;
@@ -113,6 +126,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Session-only outlet scope: cleared on logout so a new user can't inherit
+  // the previous owner's outlet selection. Not persisted to SecureStorage on
+  // purpose — switching apps / restarting should reset to "all outlets".
+  const [outletScopeId, setOutletScopeIdState] = useState<number | null>(null);
   const userRef = useRef<AuthUser | null>(null);
   const tokenRef = useRef<string | null>(null);
 
@@ -133,6 +150,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userRef.current = null;
       setAccessToken(null);
       setUser(null);
+      // Drop the outlet scope too so the next login can't inherit the
+      // previous owner's selection and accidentally show their numbers.
+      setOutletScopeIdState(null);
       SecureStorage.deleteItem("accessToken").catch(() => {});
       SecureStorage.deleteItem("refreshToken").catch(() => {});
       SecureStorage.deleteItem("authUser").catch(() => {});
@@ -188,6 +208,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userRef.current = userData;
     setAccessToken(token);
     setUser(userData);
+    // Always start a fresh login with "all outlets" — never inherit a stale
+    // scope from a previous session (especially relevant on shared devices).
+    setOutletScopeIdState(null);
 
     registerPushToken(userData.id, token);
   }, []);
@@ -216,13 +239,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userRef.current = null;
     setAccessToken(null);
     setUser(null);
+    setOutletScopeIdState(null);
   }, [accessToken]);
 
   const restaurantId = user?.restaurantId ?? 1;
   const tenantId = user?.tenantId ?? null;
+  // Match the dashboard's `canSwitchScope` predicate exactly: only role==="owner"
+  // may set the outlet scope, so only owners' scope selection should affect
+  // downstream report queries. Anything else (manager / admin / superadmin)
+  // is pinned to their own restaurant to avoid cross-outlet data leakage.
+  const isScopeOwner = user?.role === "owner";
+  const effectiveRestaurantId = isScopeOwner && outletScopeId != null ? outletScopeId : restaurantId;
+  const setOutletScopeId = useCallback((id: number | null) => {
+    setOutletScopeIdState(id);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, login, logout, updateTokens }}>
+    <AuthContext.Provider value={{ user, accessToken, isLoading, restaurantId, tenantId, outletScopeId, setOutletScopeId, effectiveRestaurantId, login, logout, updateTokens }}>
       {children}
     </AuthContext.Provider>
   );

@@ -54,7 +54,7 @@ export default function OwnerDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const { user, restaurantId, tenantId } = useAuth();
+  const { user, restaurantId, tenantId, outletScopeId, setOutletScopeId } = useAuth();
 
   const isOwner = user?.role === "owner";
   // Owners can switch between "all outlets" and a specific outlet; managers
@@ -73,7 +73,11 @@ export default function OwnerDashboard() {
   const hasMultipleOutlets = tenantBranches.length > 1;
 
   // Scope: null = all outlets (tenant-wide), number = specific restaurant id.
-  const [scopeOutletId, setScopeOutletId] = useState<number | null>(null);
+  // Lifted into AuthContext so every report / sales screen honours the same
+  // selection — picking an outlet here counts sales against that outlet only
+  // across the whole app (dashboard, reports, etc.).
+  const scopeOutletId = outletScopeId;
+  const setScopeOutletId = setOutletScopeId;
   const [outletSort, setOutletSort] = useState<SortKey>("revenue");
 
   // For non-owners we always pin scope to the user's own restaurant.

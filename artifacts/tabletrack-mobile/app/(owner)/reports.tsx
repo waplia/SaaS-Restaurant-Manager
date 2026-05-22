@@ -14,17 +14,32 @@ type Popular = { itemName: string; quantity: number; revenue?: number };
 
 function ReportsScreen() {
   const colors = useColors();
-  const { restaurantId } = useAuth();
+  // `effectiveRestaurantId` honours the outlet picked on the home dashboard,
+  // so reports always reflect the selected outlet's sales only. For owners
+  // who haven't picked one it falls back to their own restaurant id.
+  const { effectiveRestaurantId: restaurantId, outletScopeId } = useAuth();
   const isWeb = Platform.OS === "web";
 
   const trendQ = useQuery({
-    queryKey: ["revenue-trend-7d", restaurantId],
+    queryKey: ["revenue-trend-7d", restaurantId, outletScopeId],
     queryFn: () => customFetch<Trend[]>(`/api/restaurants/${restaurantId}/dashboard/revenue-trend?days=7`).catch(() => []),
   });
   const popularQ = useQuery({
-    queryKey: ["popular-items-7d", restaurantId],
+    queryKey: ["popular-items-7d", restaurantId, outletScopeId],
     queryFn: () => customFetch<Popular[]>(`/api/restaurants/${restaurantId}/dashboard/popular-items?days=7`).catch(() => []),
   });
+  // Resolve the active outlet's display name so the report header can tell
+  // the owner exactly whose sales these numbers represent. The numbers are
+  // always single-restaurant scoped on this screen (the API is per-restaurant),
+  // so even when no outlet was explicitly picked we still surface the actual
+  // outlet name instead of falsely claiming "All outlets".
+  const outletNameQ = useQuery({
+    queryKey: ["report-outlet-name", restaurantId],
+    queryFn: () => customFetch<{ name?: string }>(`/api/restaurants/${restaurantId}`).catch(() => ({})),
+    enabled: restaurantId != null,
+  });
+  const outletLabel = outletNameQ.data?.name
+    ?? (outletScopeId == null ? "Your outlet" : `Outlet #${outletScopeId}`);
   const trend = Array.isArray(trendQ.data) ? trendQ.data : [];
   const popular = Array.isArray(popularQ.data) ? popularQ.data : [];
   const toNum = (v: unknown) => {
@@ -47,6 +62,15 @@ function ReportsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionHeader title="Reports" showBack />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: isWeb ? 100 : 100 }}>
+        <View style={[styles.scopePill, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
+          <Ionicons name="business-outline" size={14} color={colors.primary} />
+          <Text style={[styles.scopePillText, { color: colors.primary }]} numberOfLines={1}>
+            Showing: {outletLabel}
+          </Text>
+          <Text style={[styles.scopePillHint, { color: colors.mutedForeground }]} numberOfLines={1}>
+            Change from Home
+          </Text>
+        </View>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.headerRow}>
             <View>
@@ -115,6 +139,9 @@ const styles = StyleSheet.create({
   reportTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   reportDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   note: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 8, lineHeight: 18 },
+  scopePill: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  scopePillText: { flex: 1, fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  scopePillHint: { fontSize: 11, fontFamily: "Inter_500Medium" },
 });
 
 import { withPlanGate } from "@/components/PlanGate";
