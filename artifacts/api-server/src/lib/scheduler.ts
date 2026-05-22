@@ -1058,6 +1058,18 @@ async function runEventPaymentReminders(): Promise<{ overdueMarked: number; remi
       }
       if (booking.customerPhone) {
         await sendWhatsApp({ to: booking.customerPhone, body });
+        const [tRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, booking.restaurantId));
+        if (tRow?.tenantId) {
+          void sendLifecycleSms({
+            tenantId: tRow.tenantId, restaurantId: booking.restaurantId, to: booking.customerPhone,
+            eventKey: "event_payment_reminder",
+            variables: {
+              name: booking.customerName, eventName: booking.title, milestone: m.label,
+              amount: Number(m.amount).toFixed(2), currency: "INR", dueLabel,
+              payUrl: `${process.env.APP_URL ?? ""}/wallet/events/${booking.bookingNumber}`,
+            },
+          });
+        }
       }
       await db.update(eventPaymentScheduleTable).set({ remindersSentAt: now }).where(eq(eventPaymentScheduleTable.id, m.id));
       remindersSent++;
@@ -1090,7 +1102,21 @@ async function runEventPaymentReminders(): Promise<{ overdueMarked: number; remi
           restaurant: b.venue ?? "our venue",
         }, { restaurantId: b.restaurantId, recipientType: "customer" });
       }
-      if (b.customerPhone) await sendWhatsApp({ to: b.customerPhone, body });
+      if (b.customerPhone) {
+        await sendWhatsApp({ to: b.customerPhone, body });
+        const [tRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, b.restaurantId));
+        if (tRow?.tenantId) {
+          void sendLifecycleSms({
+            tenantId: tRow.tenantId, restaurantId: b.restaurantId, to: b.customerPhone,
+            eventKey: "event_booking_confirmed",
+            variables: {
+              name: b.customerName, eventName: b.title,
+              eventDate: new Date(b.eventDate).toLocaleString("en-IN"),
+              restaurant: b.venue ?? "our venue",
+            },
+          });
+        }
+      }
       eventReminders++;
     } catch (err) {
       logger.warn({ err, bookingId: b.id }, "[events] event reminder send failed");
@@ -1230,6 +1256,14 @@ async function runReservationSweep(now: Date): Promise<void> {
       }
       if (r.guestPhone) {
         await sendWhatsApp({ to: r.guestPhone, body: reminderText }).catch(() => {});
+        const [tRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, r.restaurantId));
+        if (tRow?.tenantId) {
+          void sendLifecycleSms({
+            tenantId: tRow.tenantId, restaurantId: r.restaurantId, to: r.guestPhone,
+            eventKey: "reservation_reminder",
+            variables: { name: r.guestName, restaurant: restaurant?.name ?? "our restaurant", date, time, guests: r.partySize },
+          });
+        }
       }
       await db.update(reservationsTable).set({ reminderSentAt: new Date(), updatedAt: new Date() }).where(eq(reservationsTable.id, r.id));
     } catch (err) {

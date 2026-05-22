@@ -387,13 +387,13 @@ router.post("/restaurants/:restaurantId/ops/handovers",
     // handover is delivered, not just stored.
     void (async () => {
       try {
-        const owners = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable)
+        const owners = await db.select({ id: usersTable.id, email: usersTable.email, phone: usersTable.phone, name: usersTable.name }).from(usersTable)
           .where(and(eq(usersTable.restaurantId, restaurantId), eq(usersTable.isActive, true), inArray(usersTable.role, ["owner"])));
         // Defence-in-depth: re-check the tenant scope here too, so a
         // race between write and dispatch cannot leak email content to a
         // user that has since been moved between restaurants.
         const toUser = row.toUserId
-          ? await db.select({ email: usersTable.email }).from(usersTable)
+          ? await db.select({ email: usersTable.email, phone: usersTable.phone, name: usersTable.name }).from(usersTable)
               .where(and(eq(usersTable.id, row.toUserId), eq(usersTable.restaurantId, restaurantId), eq(usersTable.isActive, true)))
           : [];
         const emails = [
@@ -401,6 +401,10 @@ router.post("/restaurants/:restaurantId/ops/handovers",
           ...toUser.map(u => u.email),
         ].filter((e): e is string => !!e);
         const uniqueEmails = [...new Set(emails)];
+        const phoneRecipients = [
+          ...owners.map(o => ({ phone: o.phone, name: o.name })),
+          ...toUser.map(u => ({ phone: u.phone, name: u.name })),
+        ].filter((r): r is { phone: string; name: string | null } => !!r.phone);
         const summaryHtml = `<ul>
   <li><b>Cash:</b> ${row.cashIssue ?? "—"}</li>
   <li><b>Stock:</b> ${row.stockIssue ?? "—"}</li>
@@ -418,6 +422,18 @@ router.post("/restaurants/:restaurantId/ops/handovers",
             summaryHtml,
           }, { restaurantId, recipientType: "user" })
             .catch(err => logger.warn({ err, to }, "handover email failed"));
+        }
+        if (phoneRecipients.length) {
+          const [tRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+          const { sendLifecycleSms } = await import("../lib/smsSender");
+          const date = new Date(row.shiftDate ?? Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+          for (const r of phoneRecipients) {
+            if (!tRow?.tenantId) break;
+            void sendLifecycleSms({
+              tenantId: tRow.tenantId, restaurantId, to: r.phone, eventKey: "staff_shift_handover",
+              variables: { name: r.name ?? "team", restaurant: restaurant?.name ?? "Restaurant", date },
+            });
+          }
         }
       } catch (err) {
         logger.error({ err, restaurantId }, "handover dispatch failed");

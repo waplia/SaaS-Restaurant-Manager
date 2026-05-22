@@ -241,6 +241,15 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
     const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
     sendWhatsApp({ to, body: msg, restaurantId, meta: { event: "order.confirmed", orderId: paidOrder.id } }).catch(console.error);
+    const [tenantRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+    if (tenantRow?.tenantId) {
+      const { sendLifecycleSms } = await import("../lib/smsSender");
+      void sendLifecycleSms({
+        tenantId: tenantRow.tenantId, restaurantId, to,
+        eventKey: "customer_order_confirmation",
+        variables: { name: safeName, orderNumber: paidOrder.orderNumber, restaurant: restName, amount: total, currency: "INR" },
+      });
+    }
   }
 }
 
@@ -2511,12 +2520,12 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
       }).catch(console.error);
     }
 
-    if (status === "ready" && order?.customerId) {
-      if (custEmail) {
+    if (status === "ready") {
+      const [restaurant] = await db.select({ name: restaurantsTable.name, country: restaurantsTable.country, tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
+      if (custEmail && order?.customerId) {
         // Email the customer through the Super Admin–editable
         // `order_ready` template so the send lands in `email_logs`
         // and respects the restaurant's premium layout / branding.
-        const [restaurant] = await db.select({ name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
         const { sendByTemplateKey } = await import("../lib/emailSender");
         sendByTemplateKey("order_ready", custEmail, {
           name: custName,
@@ -2524,6 +2533,19 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
           restaurant: restaurant?.name ?? "Restaurant",
           pickupNote: " for pickup",
         }, { restaurantId, recipientType: "customer" }).catch(console.error);
+      }
+      // Send the matching `order_ready` SMS to the same recipient the
+      // WhatsApp branch uses (custPhone is the already-resolved phone with
+      // customer-row→order fallback, normalized below to E.164 the same way
+      // sendWhatsApp does). The lifecycle helper noops if no template/phone.
+      if (custPhone && restaurant?.tenantId) {
+        const toSms = toE164(custPhone, restaurant.country ?? null) ?? custPhone;
+        const { sendLifecycleSms } = await import("../lib/smsSender");
+        void sendLifecycleSms({
+          tenantId: restaurant.tenantId, restaurantId, to: toSms,
+          eventKey: "order_ready",
+          variables: { name: custName ?? "there", orderNumber: String(order?.orderNumber ?? updated.orderId), restaurant: restaurant?.name ?? "Restaurant", pickupNote: " for pickup" },
+        });
       }
       // Browser/web-push notification — runs in parallel with WhatsApp and is
       // best-effort: opt-in, quiet hours, and caps are enforced inside

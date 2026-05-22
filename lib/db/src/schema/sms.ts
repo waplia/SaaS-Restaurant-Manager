@@ -12,20 +12,42 @@ export type SmsPurpose =
   | "marketing" | "lifecycle" | "custom";
 
 export const SMS_TEMPLATE_EVENT_KEYS = [
+  // Onboarding / auth
   "welcome",
   "otp",
+  "password_reset_otp",
+  "demo_booked",
+  // Subscription / billing lifecycle (owner-facing)
   "trial_ending",
   "subscription_activated",
   "subscription_expired",
   "payment_reminder",
   "payment_received",
+  "payment_failed",
+  "payment_successful",
+  "invoice_generated",
+  "plan_activated",
   "restaurant_suspended",
-  "demo_booked",
-  // Mobile-number-driven notifications wired from /staff and
-  // /auth/forgot-password so the recipient gets the message even when
-  // email isn't usable. Mirrors the WhatsApp templates of the same names.
+  // Customer-facing order lifecycle
+  "customer_order_confirmation",
+  "order_ready",
+  "order_cancelled",
+  // Reservations & events (customer-facing)
+  "reservation_reminder",
+  "event_booking_confirmed",
+  "event_payment_reminder",
+  // Loyalty & marketing (customer-facing)
+  "loyalty_points_earned",
+  "customer_winback",
+  // Staff & ops (internal)
   "staff_invite",
-  "password_reset_otp",
+  "staff_shift_handover",
+  // Support (internal)
+  "support_ticket_created",
+  "support_ticket_replied",
+  "sla_breach",
+  // System (owner-facing)
+  "ai_credits_low",
 ] as const;
 export type SmsTemplateEventKey = (typeof SMS_TEMPLATE_EVENT_KEYS)[number];
 

@@ -481,19 +481,28 @@ export function createRazorpayWebhookRouter(): Router {
           const m = /^kl_(\d+)_(\d+)(?:_[my])?_/.exec(order.receipt ?? "");
           if (m) {
             const tenantId = Number(m[1]);
-            const owners = await db.select({ email: usersTable.email, name: usersTable.name })
+            const owners = await db.select({ email: usersTable.email, name: usersTable.name, phone: usersTable.phone })
               .from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
             const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "")}/settings/subscription`;
+            const amountStr = typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : "";
+            const currencyStr = typeof order.currency === "string" ? order.currency : "INR";
             for (const o of owners) {
-              if (!o.email) continue;
-              await sendByTemplateKey("payment_failed", o.email, {
-                name: o.name ?? "there",
-                amount: typeof order.amount === "number" ? (order.amount / 100).toFixed(2) : "",
-                currency: typeof order.currency === "string" ? order.currency : "INR",
-                reason: "Payment was declined by the gateway",
-                retryUrl,
-                appName: "Khana Lagao",
-              }, { tenantId });
+              if (o.email) {
+                await sendByTemplateKey("payment_failed", o.email, {
+                  name: o.name ?? "there",
+                  amount: amountStr,
+                  currency: currencyStr,
+                  reason: "Payment was declined by the gateway",
+                  retryUrl,
+                  appName: "Khana Lagao",
+                }, { tenantId });
+              }
+              if (o.phone) {
+                void sendLifecycleSms({
+                  tenantId, to: o.phone, eventKey: "payment_failed",
+                  variables: { name: o.name ?? "there", amount: amountStr, currency: currencyStr, plan: "your plan", reason: "Payment was declined by the gateway", retryUrl },
+                });
+              }
             }
           }
         } catch (err) { logger.error({ err }, "Razorpay payment_failed email failed"); }
@@ -772,35 +781,41 @@ router.post("/admin/manual-payments/:id/approve", requireSuperAdmin, async (req,
     id,
   );
 
-  const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+  const [owner] = await db.select({ name: usersTable.name, email: usersTable.email, phone: usersTable.phone })
     .from(usersTable)
     .where(and(eq(usersTable.tenantId, reqRow.tenantId), eq(usersTable.role, "owner")))
     .limit(1);
   const [plan] = await db.select({ name: subscriptionPlansTable.name })
     .from(subscriptionPlansTable)
     .where(eq(subscriptionPlansTable.id, reqRow.planId));
+  const planName = plan?.name ?? "your plan";
+  const invoiceNumber = `MP-${reqRow.id}`;
   if (owner?.email) {
-    const invoiceNumber = `MP-${reqRow.id}`;
     void sendByTemplateKey("payment_successful", owner.email, {
-      name: owner.name,
-      amount: String(reqRow.amount),
-      currency: reqRow.currency,
-      plan: plan?.name ?? "your plan",
-      invoiceUrl: "",
+      name: owner.name, amount: String(reqRow.amount), currency: reqRow.currency,
+      plan: planName, invoiceUrl: "",
     }, { tenantId: reqRow.tenantId });
     void sendByTemplateKey("invoice_generated", owner.email, {
-      name: owner.name,
-      invoiceNumber,
-      amount: String(reqRow.amount),
-      currency: reqRow.currency,
-      invoiceUrl: "",
+      name: owner.name, invoiceNumber, amount: String(reqRow.amount),
+      currency: reqRow.currency, invoiceUrl: "",
     }, { tenantId: reqRow.tenantId });
     void sendByTemplateKey("plan_activated", owner.email, {
-      name: owner.name,
-      plan: plan?.name ?? "your plan",
-      renewsAt: "",
-      appName: "Khana Lagao",
+      name: owner.name, plan: planName, renewsAt: "", appName: "Khana Lagao",
     }, { tenantId: reqRow.tenantId });
+  }
+  if (owner?.phone) {
+    void sendLifecycleSms({
+      tenantId: reqRow.tenantId, to: owner.phone, eventKey: "payment_successful",
+      variables: { name: owner.name ?? "there", amount: String(reqRow.amount), currency: reqRow.currency, plan: planName, invoiceNumber },
+    });
+    void sendLifecycleSms({
+      tenantId: reqRow.tenantId, to: owner.phone, eventKey: "invoice_generated",
+      variables: { name: owner.name ?? "there", invoiceNumber, amount: String(reqRow.amount), currency: reqRow.currency, invoiceUrl: "" },
+    });
+    void sendLifecycleSms({
+      tenantId: reqRow.tenantId, to: owner.phone, eventKey: "plan_activated",
+      variables: { name: owner.name ?? "there", plan: planName, renewsAt: "" },
+    });
   }
   res.json({ ok: true });
 });
@@ -837,24 +852,31 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
   // a branded record of the rejection in their inbox (in addition to the
   // in-app notification above).
   try {
-    const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+    const [owner] = await db.select({ name: usersTable.name, email: usersTable.email, phone: usersTable.phone })
       .from(usersTable)
       .where(and(eq(usersTable.tenantId, reqRow.tenantId), eq(usersTable.role, "owner")))
       .limit(1);
+    const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "")}/settings/subscription`;
+    const [planRow] = reqRow.planId
+      ? await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, reqRow.planId))
+      : [undefined];
+    const planName = planRow?.name ?? "your plan";
     if (owner?.email) {
-      const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "")}/settings/subscription`;
-      const [planRow] = reqRow.planId
-        ? await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, reqRow.planId))
-        : [undefined];
       void sendByTemplateKey("payment_failed", owner.email, {
         name: owner.name ?? "there",
         amount: String(reqRow.amount),
         currency: reqRow.currency,
-        plan: planRow?.name ?? "your plan",
+        plan: planName,
         reason,
         retryUrl,
         appName: "Khana Lagao",
       }, { tenantId: reqRow.tenantId });
+    }
+    if (owner?.phone) {
+      void sendLifecycleSms({
+        tenantId: reqRow.tenantId, to: owner.phone, eventKey: "payment_failed",
+        variables: { name: owner.name ?? "there", amount: String(reqRow.amount), currency: reqRow.currency, plan: planName, reason, retryUrl },
+      });
     }
   } catch { /* non-fatal */ }
   res.json({ ok: true });

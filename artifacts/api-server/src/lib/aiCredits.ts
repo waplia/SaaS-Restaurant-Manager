@@ -291,17 +291,22 @@ export async function commitReservation(opts: CommitOptions): Promise<void> {
       if (after <= threshold && before > threshold) {
         const { usersTable } = await import("./db");
         const { sendByTemplateKey } = await import("./emailSender");
-        const [owner] = await db.select({ name: usersTable.name, email: usersTable.email })
+        const { sendLifecycleSms } = await import("./smsSender");
+        const [owner] = await db.select({ name: usersTable.name, email: usersTable.email, phone: usersTable.phone })
           .from(usersTable)
           .where(and(eq(usersTable.tenantId, reservation.tenantId), eq(usersTable.role, "owner")))
           .limit(1);
+        const rechargeUrl = `${(process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "")}/settings/ai-credits`;
         if (owner?.email) {
           void sendByTemplateKey("ai_credits_low", owner.email, {
-            name: owner.name ?? "there",
-            balance: String(after),
-            restaurant: "",
-            rechargeUrl: `${(process.env.PUBLIC_APP_URL ?? "").replace(/\/$/, "")}/settings/ai-credits`,
+            name: owner.name ?? "there", balance: String(after), restaurant: "", rechargeUrl,
           }, { tenantId: reservation.tenantId });
+        }
+        if (owner?.phone) {
+          void sendLifecycleSms({
+            tenantId: reservation.tenantId, to: owner.phone, eventKey: "ai_credits_low",
+            variables: { name: owner.name ?? "there", balance: String(after), restaurant: "", rechargeUrl },
+          });
         }
       }
     }
