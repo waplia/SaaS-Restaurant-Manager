@@ -218,9 +218,9 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
 
         <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
           <Pressable
-            disabled={busy || cart.items.length === 0 || (isDelivery && !deliveryReady)}
+            disabled={busy || cart.items.length === 0}
             onPress={handleSend}
-            style={[styles.cta, { backgroundColor: (cart.items.length === 0 || (isDelivery && !deliveryReady)) ? colors.muted : colors.primary, opacity: busy ? 0.7 : 1 }]}
+            style={[styles.cta, { backgroundColor: cart.items.length === 0 ? colors.muted : colors.primary, opacity: busy ? 0.7 : 1 }]}
           >
             {busy ? <ActivityIndicator color="#fff" /> : (
               <>

@@ -475,7 +475,7 @@ export default function NewOrderMenuScreen() {
         taxRate={taxRate}
         serviceCharge={serviceCharge}
         busy={busy}
-        primaryLabel={cart.orderType === "delivery" ? "Save Delivery Order" : cart.orderType === "takeaway" ? "Save Takeaway" : "Send to Kitchen"}
+        primaryLabel="Send to Kitchen"
       />
     </View>
   );
