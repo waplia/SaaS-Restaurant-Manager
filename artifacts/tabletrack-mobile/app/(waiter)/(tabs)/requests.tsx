@@ -105,7 +105,7 @@ export default function WaiterRequestsTab() {
                   {r.note ? <Text style={[styles.notes, { color: colors.mutedForeground }]}>{r.note}</Text> : null}
                   <Text style={[styles.time, { color: colors.mutedForeground }]}>
                     {new Date(r.createdAt).toLocaleTimeString()}
-                    {r.status === "acknowledged" ? " · Acknowledged" : ""}
+                    {r.status === "acknowledged" ? " · Waiter on the way" : ""}
                   </Text>
                 </View>
               </View>
@@ -132,7 +132,7 @@ export default function WaiterRequestsTab() {
                     color={colors.foreground}
                   />
                   <Text style={[styles.btnText, { color: colors.foreground }]}>
-                    {r.status === "acknowledged" ? "Acknowledged" : "Acknowledge"}
+                    {r.status === "acknowledged" ? "On my way" : "I'm coming"}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -145,7 +145,7 @@ export default function WaiterRequestsTab() {
                   ]}
                 >
                   <Ionicons name="checkmark-done" size={20} color="#fff" />
-                  <Text style={[styles.btnText, { color: "#fff" }]}>Done</Text>
+                  <Text style={[styles.btnText, { color: "#fff" }]}>Finished</Text>
                 </Pressable>
               </View>
             </View>
