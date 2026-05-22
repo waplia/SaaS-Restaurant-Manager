@@ -122,6 +122,25 @@ function UpgradeScreen() {
               />
             ) : null}
 
+            {showContact && appSettings?.supportWhatsapp ? (
+              <ActionRow
+                colors={colors}
+                icon="logo-whatsapp"
+                iconBg="#25D366"
+                title="Chat on WhatsApp"
+                subtitle={appSettings.supportWhatsapp}
+                onPress={() => {
+                  const num = (appSettings.supportWhatsapp ?? "").replace(/[^\d+]/g, "").replace(/^\+/, "");
+                  const text = encodeURIComponent(
+                    `Hi, I'd like to upgrade my plan${targetPlanId ? ` (plan #${targetPlanId}, ${billingPeriod})` : ""}.${note.trim() ? `\n\nNote: ${note.trim()}` : ""}`,
+                  );
+                  void Linking.openURL(`https://wa.me/${num}?text=${text}`);
+                  submit.mutate("whatsapp");
+                }}
+                disabled={submit.isPending}
+              />
+            ) : null}
+
             {showContact ? (
               <ActionRow
                 colors={colors}

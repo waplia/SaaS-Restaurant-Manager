@@ -482,7 +482,7 @@ export function createRazorpayWebhookRouter(): Router {
             const tenantId = Number(m[1]);
             const owners = await db.select({ email: usersTable.email, name: usersTable.name })
               .from(usersTable).where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.role, "owner"), eq(usersTable.isActive, true)));
-            const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
+            const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "")}/settings/subscription`;
             for (const o of owners) {
               if (!o.email) continue;
               await sendByTemplateKey("payment_failed", o.email, {
@@ -841,7 +841,7 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
       .where(and(eq(usersTable.tenantId, reqRow.tenantId), eq(usersTable.role, "owner")))
       .limit(1);
     if (owner?.email) {
-      const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "")}/settings/subscription`;
+      const retryUrl = `${(process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "")}/settings/subscription`;
       const [planRow] = reqRow.planId
         ? await db.select({ name: subscriptionPlansTable.name }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, reqRow.planId))
         : [undefined];
@@ -865,7 +865,7 @@ router.post("/admin/manual-payments/:id/reject", requireSuperAdmin, async (req, 
 // manager-, and super-admin only; gated additionally by validateRestaurantAccess.
 
 function webBillingPortalUrl(): string {
-  const base = (process.env.PUBLIC_APP_URL ?? "https://khanalagao.app").replace(/\/$/, "");
+  const base = (process.env.PUBLIC_APP_URL ?? "https://khanalagao.com").replace(/\/$/, "");
   return `${base}/app/settings/subscription`;
 }
 
