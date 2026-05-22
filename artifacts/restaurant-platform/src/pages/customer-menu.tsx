@@ -409,6 +409,13 @@ export default function CustomerMenuPage() {
 
   const [placing, setPlacing] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
+  // Customer-facing coupon application (Task #574). Code is previewed
+  // client-side via /public/restaurants/:id/coupons/validate, then re-applied
+  // server-side after the order is created so the discount lands on the bill.
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: string; discountType: string; discountValue: string } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const upi = paymentIntent?.upiId;
@@ -947,9 +954,23 @@ export default function CustomerMenuPage() {
       });
       setOrderResult(result);
       bindPushSubscriptionToOrder(result.orderId, result.guestToken);
+      // Apply coupon (if any) to the freshly created order so the discount
+      // shows on the bill the diner pays. Failure here is non-fatal — we let
+      // the order proceed and surface a toast so they can re-try at the
+      // counter.
+      if (appliedCoupon) {
+        try {
+          await apiPublicPost(`/public/orders/${result.orderId}/apply-coupon`, { code: appliedCoupon.code }, result.guestToken);
+        } catch (err) {
+          console.warn("[coupon] post-order apply failed:", err);
+          setCouponError(err instanceof Error ? err.message : "Coupon could not be applied");
+        }
+      }
       const status = await apiPublicGet<OrderStatus>(`/public/orders/${result.orderId}`, result.guestToken);
       setOrderStatus(status);
       setCart([]);
+      setAppliedCoupon(null);
+      setCouponCode("");
 
       if (payMethod === "pay_online") {
         // Task #587 — selectedOnlineMethod is encoded as "type:gatewayCode"
@@ -1914,13 +1935,68 @@ export default function CustomerMenuPage() {
             </div>
           </div>
 
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <p className="font-semibold text-gray-800 mb-2 text-sm">Have a coupon code?</p>
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                <div className="text-sm">
+                  <p className="font-semibold text-emerald-700 font-mono">{appliedCoupon.code}</p>
+                  <p className="text-xs text-emerald-600">
+                    {appliedCoupon.discountType === "percentage" ? `${appliedCoupon.discountValue}% off` : `${currSymbol}${Number(appliedCoupon.discountValue).toFixed(2)} off`}
+                    {` · save ${currSymbol}${Number(appliedCoupon.discountAmount).toFixed(2)}`}
+                  </p>
+                </div>
+                <button type="button" onClick={() => { setAppliedCoupon(null); setCouponCode(""); setCouponError(null); }} className="text-xs font-medium text-gray-500 hover:text-gray-700">Remove</button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); }}
+                  placeholder="Enter code"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  data-testid="input-coupon-code"
+                />
+                <button
+                  type="button"
+                  disabled={!couponCode.trim() || couponBusy}
+                  onClick={async () => {
+                    if (!menu) return;
+                    setCouponBusy(true); setCouponError(null);
+                    try {
+                      const r = await apiPublicPost<{ valid: boolean; code: string; discountType: string; discountValue: string; discountAmount: string }>(
+                        `/public/restaurants/${menu.restaurantId}/coupons/validate`,
+                        { code: couponCode.trim(), subtotal: cartTotal },
+                      );
+                      setAppliedCoupon({ code: r.code, discountAmount: r.discountAmount, discountType: r.discountType, discountValue: r.discountValue });
+                    } catch (err) {
+                      setCouponError(err instanceof Error ? err.message : "Invalid coupon");
+                    } finally {
+                      setCouponBusy(false);
+                    }
+                  }}
+                  className="bg-gray-900 text-white text-sm font-semibold rounded-xl px-4 disabled:opacity-50"
+                  data-testid="button-apply-coupon"
+                >
+                  {couponBusy ? "…" : "Apply"}
+                </button>
+              </div>
+            )}
+            {couponError && <p className="text-xs text-red-600 mt-2">{couponError}</p>}
+          </div>
+
           <button
             onClick={placeOrder}
             disabled={placing || cart.length === 0}
             className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
           >
             {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-            {placing ? "Placing Order…" : payMethod === "pay_online" ? `Continue to Payment · ${currSymbol}${cartTotal.toFixed(2)}` : `Place Order · ${currSymbol}${cartTotal.toFixed(2)}`}
+            {(() => {
+              const finalAmt = appliedCoupon ? Math.max(0, cartTotal - Number(appliedCoupon.discountAmount)) : cartTotal;
+              const label = `${currSymbol}${finalAmt.toFixed(2)}`;
+              return placing ? "Placing Order…" : payMethod === "pay_online" ? `Continue to Payment · ${label}` : `Place Order · ${label}`;
+            })()}
           </button>
         </div>
       </div>

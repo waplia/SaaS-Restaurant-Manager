@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { eq, and, inArray, desc, gte, lte, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable, surveysTable, surveyQuestionsTable, surveyResponsesTable, cartSessionsTable, moodResponsesTable, vipAlertsTable } from "../lib/db";
+import { db, restaurantsTable, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, floorTablesTable, notificationsTable, reservationsTable, customersTable, restaurantSettingsTable, tenantsTable, subscriptionPlansTable, isFeatureEnabled, PLAN_BOOLEAN_FEATURES, reviewQrsTable, reviewQrScansTable, customerFeedbackTable, feedbackRecoveryTasksTable, feedbackWallItemsTable, externalReviewsTable, branchesTable, surveysTable, surveyQuestionsTable, surveyResponsesTable, cartSessionsTable, moodResponsesTable, vipAlertsTable, couponsTable, orderDiscountsTable } from "../lib/db";
+import { sumOrderDiscounts, listOrderDiscounts, deleteOrderDiscountsByType } from "../lib/discounts";
+import { recalculateOrderTotals } from "./orders";
 import { reserveCredits, commitReservation, refundReservation, resolveCreditRule, priceCredits, gatePublicAiCall, type AiCreditReservation } from "../lib/aiCredits";
 import { AIProviderService } from "../lib/aiProviderService";
 import { logger } from "../lib/logger";
@@ -932,6 +934,115 @@ router.get("/public/orders/verify-session", async (req, res) => {
     }
   }
   return void res.json({ verified: false, paymentStatus: order.paymentStatus });
+});
+
+router.post("/public/restaurants/:restaurantId/coupons/validate", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const { code, subtotal } = req.body as { code?: string; subtotal?: number };
+  if (!restaurantId || !code) return void res.status(400).json({ error: "Restaurant and code are required" });
+
+  const feat = await checkRestaurantFeature(restaurantId, "discounts_promotions");
+  if (!feat.ok) return void res.status(feat.status).json({ error: feat.error });
+
+  const [coupon] = await db.select().from(couponsTable).where(and(
+    eq(couponsTable.restaurantId, restaurantId),
+    eq(couponsTable.code, String(code).toUpperCase().trim()),
+    eq(couponsTable.isActive, true),
+  ));
+  if (!coupon) return void res.status(400).json({ error: "Invalid coupon code" });
+  const now = new Date();
+  if (coupon.validFrom && new Date(coupon.validFrom) > now) return void res.status(400).json({ error: "Coupon is not yet active" });
+  if (coupon.validTo && new Date(coupon.validTo) < now) return void res.status(400).json({ error: "Coupon has expired" });
+  if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) return void res.status(400).json({ error: "Coupon usage limit reached" });
+
+  const subAmt = Number(subtotal ?? 0);
+  if (coupon.minOrderAmount && subAmt > 0 && subAmt < Number(coupon.minOrderAmount)) {
+    return void res.status(400).json({ error: `Minimum order amount is ${coupon.minOrderAmount}`, minOrderAmount: coupon.minOrderAmount });
+  }
+
+  let discount = coupon.discountType === "percentage"
+    ? (subAmt * Number(coupon.discountValue)) / 100
+    : Number(coupon.discountValue);
+  if (coupon.maxDiscountAmount) discount = Math.min(discount, Number(coupon.maxDiscountAmount));
+  if (subAmt > 0) discount = Math.min(discount, subAmt);
+
+  res.json({
+    valid: true,
+    code: coupon.code,
+    discountType: coupon.discountType,
+    discountValue: coupon.discountValue,
+    discountAmount: discount.toFixed(2),
+    minOrderAmount: coupon.minOrderAmount ?? null,
+    maxDiscountAmount: coupon.maxDiscountAmount ?? null,
+  });
+});
+
+router.post("/public/orders/:id/apply-coupon", async (req, res) => {
+  const orderId = Number(req.params.id);
+  const { token } = req.query as { token?: string };
+  if (!validateGuestToken(orderId, token)) {
+    return void res.status(403).json({ error: "Invalid or missing order token" });
+  }
+  const { code } = req.body as { code?: string };
+  if (!code) return void res.status(400).json({ error: "Code is required" });
+
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled") {
+    return void res.status(400).json({ error: "Cannot apply coupon to a completed or cancelled order" });
+  }
+  if (order.paymentStatus === "paid") {
+    return void res.status(400).json({ error: "Order is already paid" });
+  }
+
+  const feat = await checkRestaurantFeature(order.restaurantId, "discounts_promotions");
+  if (!feat.ok) return void res.status(feat.status).json({ error: feat.error });
+
+  const now = new Date();
+  const [coupon] = await db.select().from(couponsTable).where(and(
+    eq(couponsTable.restaurantId, order.restaurantId),
+    eq(couponsTable.code, String(code).toUpperCase().trim()),
+    eq(couponsTable.isActive, true),
+  ));
+  if (!coupon) return void res.status(400).json({ error: "Invalid coupon code" });
+  if (coupon.validFrom && new Date(coupon.validFrom) > now) return void res.status(400).json({ error: "Coupon is not yet active" });
+  if (coupon.validTo && new Date(coupon.validTo) < now) return void res.status(400).json({ error: "Coupon has expired" });
+  if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) return void res.status(400).json({ error: "Coupon usage limit reached" });
+
+  const subtotal = Number(order.subtotal);
+  if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {
+    return void res.status(400).json({ error: `Minimum order amount is ${coupon.minOrderAmount}` });
+  }
+
+  let couponDiscount = coupon.discountType === "percentage"
+    ? (subtotal * Number(coupon.discountValue)) / 100
+    : Number(coupon.discountValue);
+  if (coupon.maxDiscountAmount) couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscountAmount));
+
+  await deleteOrderDiscountsByType(orderId, "coupon");
+  const otherDiscountTotal = await sumOrderDiscounts(orderId);
+  const headroom = Math.max(0, subtotal - otherDiscountTotal);
+  const couponAmount = Math.min(couponDiscount, headroom);
+  if (couponAmount <= 0) {
+    return void res.status(409).json({ error: "Order is already fully discounted; coupon would have no effect" });
+  }
+  await db.insert(orderDiscountsTable).values({
+    orderId, restaurantId: order.restaurantId,
+    type: "coupon",
+    scope: "order",
+    value: Number(coupon.discountValue).toFixed(2),
+    amount: couponAmount.toFixed(2),
+    reason: `Coupon: ${coupon.code}`,
+    couponCode: coupon.code,
+    recordedByUserId: null,
+  });
+  await db.update(ordersTable).set({ couponCode: coupon.code, updatedAt: new Date() }).where(eq(ordersTable.id, orderId));
+  await recalculateOrderTotals(orderId, order.restaurantId);
+
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  const discounts = await listOrderDiscounts(orderId);
+  res.json({ ...updatedOrder, items, discounts, couponApplied: { code: coupon.code, discountAmount: couponAmount.toFixed(2), discountType: coupon.discountType } });
 });
 
 router.get("/public/orders/:id", async (req, res) => {

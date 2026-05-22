@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowRight, Coins, Wallet, Gift, Ticket } from "lucide-react";
+import { ArrowRight, Coins, Wallet, Gift, Ticket, Tag } from "lucide-react";
+import { useState } from "react";
 import { api, fmtMoney } from "@/lib/api";
 import { Header } from "@/components/Layout";
 import { useAuth } from "@/lib/auth";
@@ -45,6 +46,10 @@ export default function Dashboard() {
             <Stat icon={<Ticket size={16} />} label="Rewards" value={String(totals.rewardsAvailable)} testid="text-total-rewards" />
           </div>
         </div>
+      </section>
+
+      <section className="container-app mt-6">
+        <CouponApplyCard restaurants={perRestaurant.map(r => ({ id: r.restaurantId, name: r.name, currency: r.currency }))} />
       </section>
 
       <section className="container-app mt-8">
@@ -110,6 +115,113 @@ function RestaurantAvatar({ logoUrl, name }: { logoUrl: string | null; name: str
   return (
     <div className="w-12 h-12 rounded-xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))] flex items-center justify-center font-semibold">
       {initial}
+    </div>
+  );
+}
+
+function CouponApplyCard({ restaurants }: { restaurants: Array<{ id: number; name: string; currency: string }> }) {
+  const [code, setCode] = useState("");
+  const [restaurantId, setRestaurantId] = useState<number | "">(restaurants[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ code: string; discountType: string; discountValue: string; restaurantName: string; currency: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  if (restaurants.length === 0) {
+    return (
+      <div className="card p-4">
+        <p className="text-sm font-medium flex items-center gap-2"><Tag size={16} className="text-[rgb(var(--primary))]" />Got a coupon code?</p>
+        <p className="text-xs text-zinc-500 mt-1">Once you visit a participating restaurant, you can check and save coupon codes here.</p>
+      </div>
+    );
+  }
+
+  async function onCheck() {
+    if (!code.trim() || !restaurantId) return;
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const rest = restaurants.find(r => r.id === restaurantId);
+      const body = await api<{ valid: boolean; code: string; discountType: string; discountValue: string }>(
+        `/public/restaurants/${restaurantId}/coupons/validate`,
+        { method: "POST", body: JSON.stringify({ code: code.trim() }) },
+      );
+      setResult({ code: body.code, discountType: body.discountType, discountValue: body.discountValue, restaurantName: rest?.name ?? "", currency: rest?.currency ?? "INR" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid coupon";
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-4">
+      <p className="text-sm font-medium flex items-center gap-2 mb-3"><Tag size={16} className="text-[rgb(var(--primary))]" />Got a coupon code?</p>
+      {result ? (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="font-mono text-sm font-semibold text-emerald-700">{result.code}</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                {result.discountType === "percentage" ? `${result.discountValue}% off` : `${fmtMoney(result.discountValue, result.currency)} off`} at {result.restaurantName}
+              </p>
+              <p className="text-[11px] text-emerald-600 mt-1">Use this code at checkout on the menu.</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(result.code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-md bg-white border border-emerald-300 text-emerald-700"
+                data-testid="button-copy-coupon"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setResult(null); setCode(""); }}
+                className="text-[11px] text-zinc-500 hover:text-zinc-700"
+              >
+                Try another
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {restaurants.length > 1 && (
+            <select
+              value={restaurantId}
+              onChange={e => setRestaurantId(Number(e.target.value))}
+              className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-white"
+              data-testid="select-coupon-restaurant"
+            >
+              {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={code}
+              onChange={e => { setCode(e.target.value.toUpperCase()); setError(null); }}
+              placeholder="Enter code"
+              className="flex-1 border border-zinc-200 rounded-lg px-3 py-2 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))]"
+              data-testid="input-coupon-code"
+            />
+            <button
+              type="button"
+              disabled={!code.trim() || busy}
+              onClick={onCheck}
+              className="btn-primary text-sm px-4 disabled:opacity-50"
+              data-testid="button-apply-coupon"
+            >
+              {busy ? "…" : "Check"}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 }

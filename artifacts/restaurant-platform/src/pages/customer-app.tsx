@@ -211,10 +211,10 @@ function CustomerApp({ data }: { data: PublicCustomerApp }) {
         </section>
       )}
 
-      {/* App-exclusive coupons */}
-      {coupons.length > 0 && (
-        <section className="px-4 mt-8 max-w-3xl mx-auto">
-          <SectionHeading icon={Tag} accentColor={branding.accentColor}>App-only deals</SectionHeading>
+      {/* App-exclusive coupons + apply-code */}
+      <section className="px-4 mt-8 max-w-3xl mx-auto">
+        <SectionHeading icon={Tag} accentColor={branding.accentColor}>App-only deals</SectionHeading>
+        {coupons.length > 0 && (
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             {coupons.map(c => (
               <div key={c.code} className="rounded-xl border border-dashed border-border bg-card p-4" data-testid={`card-coupon-${c.code}`}>
@@ -228,8 +228,14 @@ function CustomerApp({ data }: { data: PublicCustomerApp }) {
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+        <CouponApplyCard
+          restaurantId={restaurant.id}
+          symbol={symbol}
+          primaryColor={branding.primaryColor}
+          orderingHref={orderingHref}
+        />
+      </section>
 
       {/* Menu */}
       {menu.categories.length > 0 && (
@@ -391,6 +397,89 @@ function setOg(property: string, content: string) {
     document.head.appendChild(el);
   }
   el.setAttribute("content", content);
+}
+
+function CouponApplyCard({ restaurantId, symbol, primaryColor, orderingHref }: { restaurantId: number; symbol: string; primaryColor: string; orderingHref: string }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [valid, setValid] = useState<{ code: string; discountType: string; discountValue: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function onCheck() {
+    if (!code.trim()) return;
+    setBusy(true); setError(null); setValid(null);
+    try {
+      const res = await fetch(`${API_BASE}/public/restaurants/${restaurantId}/coupons/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error ?? "Invalid coupon");
+      setValid({ code: body.code, discountType: body.discountType, discountValue: body.discountValue });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid coupon");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-card p-4">
+      <p className="text-sm font-medium mb-2">Have a coupon code?</p>
+      {valid ? (
+        <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+          <div>
+            <p className="font-mono text-sm font-semibold text-emerald-700">{valid.code}</p>
+            <p className="text-xs text-emerald-600">
+              {valid.discountType === "percentage" ? `${valid.discountValue}% off` : `${symbol}${Number(valid.discountValue).toFixed(2)} off`}
+              {` — apply at checkout`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try { await navigator.clipboard.writeText(valid.code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+              }}
+              className="text-xs font-medium px-2 py-1 rounded-md bg-white border border-emerald-300 text-emerald-700"
+              data-testid="button-copy-coupon"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <Link href={orderingHref}>
+              <button type="button" className="text-xs font-semibold px-3 py-1.5 rounded-md text-white" style={{ background: primaryColor }} data-testid="button-use-coupon">
+                Order now
+              </button>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={code}
+            onChange={e => { setCode(e.target.value.toUpperCase()); setError(null); }}
+            placeholder="Enter code"
+            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm uppercase tracking-wide bg-background focus:outline-none focus:ring-2"
+            data-testid="input-coupon-code"
+          />
+          <button
+            type="button"
+            disabled={!code.trim() || busy}
+            onClick={onCheck}
+            className="text-sm font-semibold px-4 rounded-lg text-white disabled:opacity-50"
+            style={{ background: primaryColor }}
+            data-testid="button-apply-coupon"
+          >
+            {busy ? "…" : "Apply"}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+    </div>
+  );
 }
 
 function setJsonLd(obj: unknown) {

@@ -296,7 +296,7 @@ async function getRestaurantRates(restaurantId: number) {
   };
 }
 
-async function recalculateOrderTotals(orderId: number, restaurantId: number) {
+export async function recalculateOrderTotals(orderId: number, restaurantId: number) {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
   const subtotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
