@@ -782,6 +782,12 @@ function normalizePhoneRaw(raw: string): string {
   return String(raw ?? "").trim().replace(/[^\d+]/g, "");
 }
 
+// Match users whose stored phone may include spaces / dashes / parens
+// (e.g. "+91 90000 11111"). We compare the normalized form of both sides.
+function phoneMatches(normalized: string) {
+  return sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`;
+}
+
 const PhoneForgotBody = z.object({
   phone: z.string().trim().min(7, "Enter a valid phone number"),
 });
@@ -800,7 +806,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
       isActive: usersTable.isActive,
     })
     .from(usersTable)
-    .where(eq(usersTable.phone, phone));
+    .where(phoneMatches(phone));
 
   // Surfaced to the client only in dev. Lets local testers reset their
   // password without an SMS provider configured. Hardened: skipped entirely
@@ -901,7 +907,7 @@ router.post("/auth/reset-password-phone", resetLimitByIp, resetLimitByPhone, val
         attempts: usersTable.passwordResetAttempts,
       })
       .from(usersTable)
-      .where(eq(usersTable.phone, phone))
+      .where(phoneMatches(phone))
       .for("update");
 
     if (!user || !user.isActive || !user.codeHash || !user.codeExpiresAt) {
