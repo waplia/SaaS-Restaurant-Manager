@@ -354,7 +354,17 @@ router.post("/auth/register/start", regStartLimit, validate({ body: RegisterStar
     return;
   }
   const { countryCode, phone, channel } = req.body as z.infer<typeof RegisterStartBody>;
-  const fullPhone = normalizePhone(`${countryCode}${phone}`);
+  // Defensive: if the user already typed the country code in the phone
+  // input (e.g. "+91 8306020200" or "918306020200" with +91 selector),
+  // strip it so we don't end up with "+91918306020200".
+  const ccDigits = countryCode.replace(/\D/g, "");
+  let localDigits = phone.replace(/\D/g, "");
+  if (ccDigits && localDigits.startsWith(ccDigits)) {
+    localDigits = localDigits.slice(ccDigits.length);
+  }
+  // Also strip a single leading 0 (national trunk prefix, e.g. "08306…")
+  localDigits = localDigits.replace(/^0+/, "");
+  const fullPhone = normalizePhone(`+${ccDigits}${localDigits}`);
   if (fullPhone.length < 8) {
     res.status(400).json({ error: "Enter a valid phone number." });
     return;
