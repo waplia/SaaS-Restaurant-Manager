@@ -1197,9 +1197,32 @@ export default function CustomerMenuPage() {
     // admin Manual UPI queue (#588); customer side never auto-marks paid.
     const amount = Number(paymentIntent.totalAmount).toFixed(2);
     const upi = paymentIntent.upiId ?? "";
-    const intentUrl = upi
-      ? `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order #${orderResult.orderNumber}`)}`
-      : null;
+    const upiParams = upi
+      ? `pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order #${orderResult.orderNumber}`)}`
+      : "";
+    const intentUrl = upi ? `upi://pay?${upiParams}` : null;
+    // Per-app deep links. On Android, intent:// with `package=` opens that
+    // specific app directly; on iOS, the app's custom URL scheme is used
+    // (phonepe://, paytmmp://, tez://, credpay://). When the targeted app
+    // is missing the OS falls back to the system chooser via the generic
+    // upi:// link, so the customer is never stuck.
+    const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+    const buildAppLink = (pkg: string, iosScheme: string | null): string | null => {
+      if (!upi) return null;
+      if (isAndroid) {
+        return `intent://pay?${upiParams}#Intent;scheme=upi;package=${pkg};S.browser_fallback_url=${encodeURIComponent(intentUrl ?? "")};end`;
+      }
+      if (iosScheme) return `${iosScheme}://pay?${upiParams}`;
+      return intentUrl;
+    };
+    const upiApps: Array<{ name: string; color: string; href: string | null }> = [
+      { name: "PhonePe",     color: "bg-[#5f259f]", href: buildAppLink("com.phonepe.app", "phonepe") },
+      { name: "Google Pay",  color: "bg-[#1a73e8]", href: buildAppLink("com.google.android.apps.nbu.paisa.user", "tez") },
+      { name: "Paytm",       color: "bg-[#00baf2]", href: buildAppLink("net.one97.paytm", "paytmmp") },
+      { name: "BHIM",        color: "bg-[#00b9f1]", href: buildAppLink("in.org.npci.upiapp", "upi") },
+      { name: "Amazon Pay",  color: "bg-[#ff9900]", href: buildAppLink("in.amazon.mShop.android.shopping", null) },
+      { name: "CRED",        color: "bg-black",     href: buildAppLink("com.dreamplug.androidapp", "credpay") },
+    ];
     return (
       <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
         <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -1240,9 +1263,24 @@ export default function CustomerMenuPage() {
             )}
 
             {(paymentIntent.enableIntentLink ?? true) && intentUrl && (
-              <a href={intentUrl} className="block w-full bg-orange-500 text-white text-center font-semibold rounded-xl py-3 hover:bg-orange-600">
-                Open UPI app to pay
-              </a>
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <p className="text-xs text-gray-500">Open UPI app to pay {currSymbol}{amount}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {upiApps.map(app => app.href ? (
+                    <a
+                      key={app.name}
+                      href={app.href}
+                      className={`${app.color} text-white text-xs font-semibold text-center rounded-xl py-3 px-1 hover:opacity-90 active:opacity-80`}
+                    >
+                      {app.name}
+                    </a>
+                  ) : null)}
+                </div>
+                <a href={intentUrl} className="block w-full bg-orange-500 text-white text-center font-semibold rounded-xl py-3 mt-2 hover:bg-orange-600">
+                  Any other UPI app
+                </a>
+                <p className="text-[11px] text-gray-400 text-center">If your app isn't installed, the system chooser will open the apps you have.</p>
+              </div>
             )}
 
             <div className="border-t border-gray-100 pt-3 space-y-2">
