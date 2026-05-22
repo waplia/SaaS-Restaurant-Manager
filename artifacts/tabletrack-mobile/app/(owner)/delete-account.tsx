@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Alert,
@@ -9,11 +9,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
-import { PhoneInput } from "@/components/PhoneInput";
-import { parsePhone, expectedNationalLength } from "@workspace/phone-utils";
 
 // Two-step "delete my account" flow:
-//   step "password" → password + channel (+ phone) → server sends OTP
+//   step "password" → password + channel → server sends OTP to the
+//                     phone/email already on the user's profile
 //   step "verify"   → enter 6-digit OTP → account soft-deleted, sign out
 //   step "done"     → confirmation, bounce back to /login
 type Step = "password" | "verify" | "done";
@@ -26,50 +25,55 @@ export default function DeleteAccountScreen() {
   const [step, setStep] = useState<Step>("password");
   const [channel, setChannel] = useState<Channel>("sms");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [profilePhone, setProfilePhone] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [code, setCode] = useState("");
   const [reason, setReason] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [ttl, setTtl] = useState(5);
   const [loading, setLoading] = useState(false);
 
-  function toE164(raw: string): string {
-    const p = parsePhone(raw, "IN");
-    const digits = p.national.replace(/\D+/g, "");
-    if (!digits) return raw.trim();
-    return `+${p.country.code.replace(/^\+/, "")}${digits}`;
-  }
-  function validatePhone(): string | null {
-    const parsed = parsePhone(phone, "IN");
-    const digits = parsed.national.replace(/\D+/g, "");
-    if (!parsed.country.iso || !digits) return "Enter your mobile number.";
-    const expected = expectedNationalLength(parsed.country.iso);
-    if (expected > 0 && expected < 15 && digits.length !== expected) {
-      return `Enter a ${expected}-digit mobile number for ${parsed.country.name}.`;
-    }
-    if (digits.length < 6) return "Enter a valid mobile number.";
-    return null;
-  }
+  // Pull the phone straight from the server-stored profile so it can't
+  // be tampered with. AuthUser in context doesn't carry phone, so we
+  // hit /api/auth/me once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${accessToken ?? ""}` },
+        });
+        const data = (await r.json().catch(() => ({}))) as { phone?: string | null };
+        if (!cancelled) setProfilePhone((data.phone ?? "").trim() || null);
+      } catch {
+        if (!cancelled) setProfilePhone(null);
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
   async function requestOtp() {
     if (password.length < 1) { Alert.alert("Required", "Enter your password."); return; }
-    let phoneE164: string | undefined;
-    if (channel === "sms") {
-      const err = validatePhone();
-      if (err) { Alert.alert("Check your number", err); return; }
-      phoneE164 = toE164(phone);
+    if (channel === "sms" && !profilePhone) {
+      Alert.alert("No mobile number on file", "Add a mobile number to your profile before using SMS verification.");
+      return;
     }
     setLoading(true);
     try {
+      // Intentionally do NOT send a phone from the client. The server
+      // uses the phone on the authenticated user's profile so the OTP
+      // identifier can't be swapped from the device.
       const r = await fetch(`${getApiBaseUrl()}/api/account/delete/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken ?? ""}` },
-        body: JSON.stringify({ password, channel, phone: phoneE164 }),
+        body: JSON.stringify({ password, channel }),
       });
       const data = (await r.json().catch(() => ({}))) as { ttlMinutes?: number; identifier?: string; error?: string };
       if (!r.ok) throw new Error(data.error ?? "Could not send code.");
       if (typeof data.ttlMinutes === "number") setTtl(data.ttlMinutes);
-      setIdentifier(data.identifier ?? (channel === "sms" ? phoneE164 ?? "" : user?.email ?? ""));
+      setIdentifier(data.identifier ?? (channel === "sms" ? profilePhone ?? "" : user?.email ?? ""));
       setStep("verify");
     } catch (e) {
       Alert.alert("Couldn't send code", e instanceof Error ? e.message : "Please try again.");
@@ -161,10 +165,26 @@ export default function DeleteAccountScreen() {
 
               {channel === "sms" ? (
                 <View style={{ gap: 6 }}>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                  <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" testID="delete-phone" />
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number on file</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.muted + "40" }]}>
+                    <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
+                    {profileLoading ? (
+                      <ActivityIndicator size="small" color={colors.mutedForeground} />
+                    ) : profilePhone ? (
+                      <Text style={[styles.input, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} testID="delete-phone-locked">
+                        {profilePhone}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.input, { color: colors.destructive }]}>
+                        No mobile number on your profile
+                      </Text>
+                    )}
+                    <Ionicons name="lock-closed" size={14} color={colors.mutedForeground} />
+                  </View>
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
-                    We'll send the code by SMS.
+                    {profilePhone
+                      ? "We'll send the code by SMS to this number. To change it, update your profile first."
+                      : "Add a mobile number to your profile, or choose Email below."}
                   </Text>
                 </View>
               ) : (

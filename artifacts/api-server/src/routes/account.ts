@@ -27,15 +27,17 @@ const router = Router();
 // Every endpoint here requires a valid logged-in session.
 router.use(authenticate);
 
-// ── Request: { password, channel, phone? }
+// ── Request: { password, channel }
 //   - password: the user's current password (validated against passwordHash)
 //   - channel: "sms" | "email" — where to deliver the 6-digit code
-//   - phone: required when channel="sms"; must be E.164. If omitted, we
-//     fall back to the user's stored phone.
+//
+// The OTP destination is always derived from the authenticated user's
+// stored email/phone on the server. We deliberately do NOT accept a
+// phone or email from the client so a custom client can't redirect the
+// deletion OTP to an arbitrary number.
 const RequestBody = z.object({
   password: z.string().min(1, "Enter your password."),
   channel: z.enum(["sms", "email"]),
-  phone: z.string().trim().optional(),
 });
 
 router.post(
@@ -45,7 +47,7 @@ router.post(
   async (req, res) => {
     const userId = (req as any).user?.id as number | undefined;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-    const { password, channel, phone } = req.body as z.infer<typeof RequestBody>;
+    const { password, channel } = req.body as z.infer<typeof RequestBody>;
 
     const [user] = await db.select({
       id: usersTable.id, email: usersTable.email, phone: usersTable.phone,
@@ -60,20 +62,18 @@ router.post(
     const ok = user.passwordHash ? await bcrypt.compare(password, user.passwordHash).catch(() => false) : false;
     if (!ok) { res.status(400).json({ error: "Incorrect password." }); return; }
 
+    // OTP destination comes strictly from the user's stored profile so
+    // a custom client can't redirect the deletion code to an attacker
+    // number/email. If the profile is missing the relevant field, ask
+    // the user to add it first instead of silently writing one here.
     let identifier: string;
     if (channel === "sms") {
-      const raw = (phone ?? user.phone ?? "").trim();
-      const norm = normalizePhone(raw);
-      if (norm.length < 7) { res.status(400).json({ error: "Enter a valid mobile number." }); return; }
-      identifier = norm;
-      // Persist the chosen phone so /verify can bind the OTP to a
-      // stored identifier on the user row (defence-in-depth check).
-      if (!user.phone || normalizePhone(user.phone) !== norm) {
-        await db.update(usersTable)
-          .set({ phone: norm, updatedAt: new Date() })
-          .where(eq(usersTable.id, user.id))
-          .catch(err => logger.warn({ err, userId: user.id }, "account-delete: persist phone failed"));
+      const norm = normalizePhone(user.phone ?? "");
+      if (norm.length < 7) {
+        res.status(400).json({ error: "No mobile number on your profile. Add one in your profile, or choose email." });
+        return;
       }
+      identifier = norm;
     } else {
       identifier = normalizeEmail(user.email);
     }
