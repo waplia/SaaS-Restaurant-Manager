@@ -145,11 +145,12 @@ export default function RegisterScreen() {
         password,
       });
       await login(auth.accessToken, auth.refreshToken, auth.user);
-      // After registration, owners go to onboarding; non-owner roles wouldn't
-      // be created via signup (backend creates the user as owner), but we
-      // still respect role-based home in case that ever changes.
+      // After registration, owners see the one-time animated intro that
+      // pitches the snap-menu → AI → start-orders flow, then continue to
+      // the onboarding checklist. Non-owner roles (shouldn't happen via
+      // signup today) go straight to their role home.
       const owner = auth.user.role === "owner" || auth.user.role === "manager" || auth.user.role === "super_admin";
-      router.replace((owner ? "/onboarding" : roleHomePath(auth.user.role)) as Parameters<typeof router.replace>[0]);
+      router.replace((owner ? "/intro" : roleHomePath(auth.user.role)) as Parameters<typeof router.replace>[0]);
     } catch (e) {
       Alert.alert("Verification failed", e instanceof Error ? e.message : "Try again");
     } finally { setLoading(false); }

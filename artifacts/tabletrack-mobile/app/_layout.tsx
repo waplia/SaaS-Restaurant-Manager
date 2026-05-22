@@ -120,6 +120,7 @@ function RootLayoutNav() {
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="register" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="intro" options={{ headerShown: false, gestureEnabled: false, animation: "fade" }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(owner)" options={{ headerShown: false }} />
       <Stack.Screen name="(waiter)" options={{ headerShown: false }} />
