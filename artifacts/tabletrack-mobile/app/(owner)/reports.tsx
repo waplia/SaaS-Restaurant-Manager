@@ -27,7 +27,12 @@ export default function ReportsScreen() {
   });
   const trend = Array.isArray(trendQ.data) ? trendQ.data : [];
   const popular = Array.isArray(popularQ.data) ? popularQ.data : [];
-  const total = trend.reduce((s, t) => s + (t.revenue ?? 0), 0);
+  const toNum = (v: unknown) => {
+    const n = typeof v === "number" ? v : Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const trendValues = trend.map(t => ({ date: t.date, value: toNum(t.revenue) }));
+  const total = trendValues.reduce((s, t) => s + t.value, 0);
 
   const reports: Array<{ key: string; label: string; desc: string; icon: keyof typeof Ionicons.glyphMap; tone: string }> = [
     { key: "sales", label: "Sales summary", desc: "By day, hour, channel", icon: "trending-up", tone: BRAND.success },
@@ -52,7 +57,7 @@ export default function ReportsScreen() {
           </View>
           {trend.length > 0 ? (
             <View style={{ marginTop: 8 }}>
-              <MiniBarChart data={trend.map(t => ({ label: t.date.slice(5), value: t.revenue ?? 0 }))} />
+              <MiniBarChart data={trendValues.map(t => ({ label: (t.date ?? "").slice(5), value: t.value }))} />
             </View>
           ) : null}
         </View>
