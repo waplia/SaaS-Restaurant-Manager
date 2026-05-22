@@ -29,16 +29,14 @@ export default function Login() {
   const [stage, setStage] = useState<Stage>("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
 
   async function requestOtp(e: React.FormEvent) {
     e.preventDefault();
     setError(null); setLoading(true);
     try {
-      const r = await api<{ ok: boolean; devCode?: string }>("/wallet/auth/request-otp", {
+      await api<{ ok: boolean }>("/wallet/auth/request-otp", {
         method: "POST", body: JSON.stringify({ phone }),
       });
-      setDevCode(r.devCode ?? null);
       setStage("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send code");
@@ -134,11 +132,6 @@ export default function Login() {
               value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
               data-testid="input-otp" autoFocus
             />
-            {devCode && (
-              <p className="text-xs bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg px-3 py-2">
-                Dev mode code: <span className="font-mono font-bold">{devCode}</span>
-              </p>
-            )}
             {error && <p className="text-sm text-red-600" data-testid="text-error">{error}</p>}
             <button className="btn-primary w-full" disabled={loading || code.length < 4} data-testid="button-verify-otp">
               {loading ? "Verifying…" : "Verify & sign in"}

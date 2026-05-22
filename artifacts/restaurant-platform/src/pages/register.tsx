@@ -43,7 +43,6 @@ export default function RegisterPage() {
   const [channel, setChannel] = useState<"sms" | "whatsapp">(settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
   const [code, setCode] = useState("");
   const [token, setToken] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
 
   const [details, setDetails] = useState({ restaurantName: "", ownerName: "", email: "", password: "" });
 
@@ -75,9 +74,8 @@ export default function RegisterPage() {
       const local = national.replace(/\D+/g, "");
       if (local.length < 6) throw new Error("Enter a valid mobile number");
       const countryCode = `+${country.code}`;
-      const r = await postJSON<{ registrationToken: string; devCode?: string }>("/auth/register/start", { countryCode, phone: local, channel });
+      const r = await postJSON<{ registrationToken: string }>("/auth/register/start", { countryCode, phone: local, channel });
       setToken(r.registrationToken);
-      setDevCode(r.devCode ?? null);
       setStep("otp");
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Could not send code"); }
     finally { setLoading(false); }
@@ -233,7 +231,6 @@ export default function RegisterPage() {
 
           {step === "otp" && (
             <form onSubmit={verifyOtp} className="space-y-4">
-              {devCode && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded px-2 py-1">Dev code: <b>{devCode}</b></div>}
               <div className="space-y-1.5">
                 <Label>Verification code</Label>
                 <Input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />

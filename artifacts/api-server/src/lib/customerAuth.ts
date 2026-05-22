@@ -47,8 +47,6 @@ export interface OtpRequestResult {
   ok: boolean;
   otpId?: number;
   error?: string;
-  /** Only populated in development for easier local testing. */
-  devCode?: string;
 }
 
 export async function requestCustomerOtp(rawPhone: string): Promise<OtpRequestResult> {
@@ -65,26 +63,24 @@ export async function requestCustomerOtp(rawPhone: string): Promise<OtpRequestRe
     expiresAt,
   }).returning();
 
-  const body = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
+  const body = `${code} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.`;
   try {
     const send = await sendSmsMessage({
       to: phone,
       body,
       eventKey: "otp",
-      variables: { code },
+      variables: { otp: code, code },
     });
     if (!send.ok) {
-      logger.warn({ err: send.error, phone: phone.slice(-4) }, "Wallet OTP SMS failed; returning ok in dev");
-      if (!isDev) {
-        return { ok: false, otpId: otp.id, error: "Could not send SMS. Please try again." };
-      }
+      logger.warn({ err: send.error, phone: phone.slice(-4) }, "Wallet OTP SMS failed");
+      return { ok: false, otpId: otp.id, error: "Could not send SMS. Please try again." };
     }
   } catch (err) {
     logger.warn({ err }, "Wallet OTP send threw");
-    if (!isDev) return { ok: false, otpId: otp.id, error: "Could not send SMS. Please try again." };
+    return { ok: false, otpId: otp.id, error: "Could not send SMS. Please try again." };
   }
 
-  return { ok: true, otpId: otp.id, devCode: isDev ? code : undefined };
+  return { ok: true, otpId: otp.id };
 }
 
 export interface VerifyOtpResult {

@@ -84,17 +84,10 @@ export default function ForgotPasswordScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await r.json().catch(() => ({}))) as { ttlMinutes?: number; error?: string; devCode?: string };
+      const data = (await r.json().catch(() => ({}))) as { ttlMinutes?: number; error?: string };
       if (!r.ok) throw new Error(data.error ?? "Couldn't send code.");
       if (typeof data.ttlMinutes === "number") setTtl(data.ttlMinutes);
-      // Dev convenience: when the server is running in development mode
-      // (no real SMS/email provider needed) it echoes the OTP back. Show it
-      // in the alert AND pre-fill the code field so testers can just tap
-      // "Reset password".
-      if (data.devCode) {
-        setCode(data.devCode);
-        Alert.alert("Dev code", `Server is in dev mode — your code is ${data.devCode}. It has been filled in for you.`);
-      } else if (isResend) {
+      if (isResend) {
         Alert.alert("Code sent", method === "phone"
           ? "A new code has been sent via SMS."
           : "A new code has been sent to your email.");

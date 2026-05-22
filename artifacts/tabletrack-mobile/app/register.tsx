@@ -20,7 +20,7 @@ interface AuthResp {
   refreshToken: string;
   user: AuthUser;
 }
-interface OtpStartResp { registrationToken: string; devCode?: string }
+interface OtpStartResp { registrationToken: string }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}/api${path}`, {
@@ -62,7 +62,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [token, setToken] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [resendIn, setResendIn] = useState(0);
 
@@ -109,7 +108,6 @@ export default function RegisterScreen() {
         countryCode, phone: local, channel, referralCode: referral.trim() || undefined,
       });
       setToken(r.registrationToken);
-      setDevCode(r.devCode ?? null);
       setResendIn(30);
       setStep("otp");
     } catch (e) {
@@ -126,7 +124,6 @@ export default function RegisterScreen() {
         countryCode, phone: local, channel, referralCode: referral.trim() || undefined,
       });
       setToken(r.registrationToken);
-      setDevCode(r.devCode ?? null);
       setResendIn(30);
     } catch (e) {
       Alert.alert("Couldn't resend", e instanceof Error ? e.message : "Try again");
@@ -294,12 +291,6 @@ export default function RegisterScreen() {
               {" "}via {channel === "whatsapp" ? "WhatsApp" : "SMS"}.{" "}
               <Text style={{ color: colors.primary }} onPress={() => setStep("details")}>Change</Text>
             </Text>
-            {devCode ? (
-              <Text style={{ color: "#92400e", backgroundColor: "#fef3c7", padding: 6, borderRadius: 6, fontSize: 12 }}>
-                Dev code: {devCode}
-              </Text>
-            ) : null}
-
             <Field label="Verification code" colors={colors}>
               <View style={[styles.inputWrap, { borderColor: colors.border }]}>
                 <Ionicons name="key-outline" size={18} color={colors.mutedForeground} />

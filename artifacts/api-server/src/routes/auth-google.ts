@@ -355,7 +355,7 @@ router.post("/auth/google/pending/request-otp", googleLimit, validate({ body: Pe
   if (normalised.length < 8) { res.status(400).json({ error: "Enter a valid phone number." }); return; }
   const r = await sendStaffOtp({ channel, identifier: normalised, purpose: "register" });
   if (!r.ok) { res.status(400).json({ error: r.error ?? "Could not send code." }); return; }
-  res.json({ ok: true, channel, devCode: r.devCode, pendingUserId: pending.sub });
+  res.json({ ok: true, channel, pendingUserId: pending.sub });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

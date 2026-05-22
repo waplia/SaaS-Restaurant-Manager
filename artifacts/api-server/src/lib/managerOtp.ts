@@ -62,7 +62,7 @@ export async function requestManagerDiscountOtp(opts: {
     expiresAt,
   }).returning();
 
-  const body = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
+  const body = `${code} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.`;
 
   let smsLogId: number | undefined;
   try {
@@ -70,7 +70,7 @@ export async function requestManagerDiscountOtp(opts: {
       to: recipient.phone,
       body,
       eventKey: "otp",
-      variables: { code, restaurant: restaurant?.name ?? "KhanaLagao" },
+      variables: { otp: code, code, restaurant: restaurant?.name ?? "KhanaLagao" },
       tenantId: restaurant?.tenantId ?? null,
       restaurantId,
     });

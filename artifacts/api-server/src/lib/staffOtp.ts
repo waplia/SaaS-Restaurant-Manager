@@ -8,7 +8,6 @@ import { sendWhatsAppMessage } from "./whatsapp";
 import { getAppSettings } from "./appSettings";
 import { logger } from "./logger";
 
-const isDev = process.env.NODE_ENV === "development";
 const OTP_TTL_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 5;
 const SALT_ROUNDS = 10;
@@ -39,7 +38,6 @@ export interface StaffOtpSendResult {
   ok: boolean;
   otpId?: number;
   error?: string;
-  devCode?: string;
   channel: StaffOtpChannel;
 }
 
@@ -78,8 +76,8 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
   }).returning();
 
   const appName = settings.appName || "KhanaLagao";
-  const variables = { code, name: input.name ?? "there", appName, minutes: 5 };
-  const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
+  const variables = { otp: code, code, name: input.name ?? "there", appName, minutes: 5 };
+  const fallbackBody = `${code} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.`;
 
   try {
     if (channel === "sms") {
@@ -91,7 +89,7 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
         tenantId: input.tenantId ?? null,
         restaurantId: input.restaurantId ?? null,
       });
-      if (!r.ok && !isDev) {
+      if (!r.ok) {
         return { ok: false, otpId: otp.id, error: "Could not send SMS. Please try again.", channel };
       }
     } else if (channel === "whatsapp") {
@@ -103,7 +101,7 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
         category: "transactional",
         skipQuota: true,
       });
-      if (r.status !== "sent" && !isDev) {
+      if (r.status !== "sent") {
         return { ok: false, otpId: otp.id, error: r.error ?? "Could not send WhatsApp message.", channel };
       }
     } else if (channel === "email") {
@@ -139,16 +137,16 @@ export async function sendStaffOtp(input: StaffOtpSendInput): Promise<StaffOtpSe
       // the provider isn't configured, `sendByTemplateKey` already wrote a
       // failed `email_logs` row, so we just surface a loud error to the
       // caller. This keeps every OTP send centrally managed by Super Admin.
-      if ((!r || !r.ok) && !isDev) {
+      if (!r || !r.ok) {
         return { ok: false, otpId: otp.id, error: "Could not send email. Please try again.", channel };
       }
     }
   } catch (err) {
     logger.warn({ err }, "Staff OTP send threw");
-    if (!isDev) return { ok: false, otpId: otp.id, error: "Could not send code. Please try again.", channel };
+    return { ok: false, otpId: otp.id, error: "Could not send code. Please try again.", channel };
   }
 
-  return { ok: true, otpId: otp.id, devCode: isDev ? code : undefined, channel };
+  return { ok: true, otpId: otp.id, channel };
 }
 
 export interface VerifyStaffOtpResult {

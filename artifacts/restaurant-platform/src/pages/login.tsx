@@ -241,14 +241,12 @@ function OtpTab({
   const [step, setStep] = useState<"request" | "verify">("request");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
     try {
-      const r = await postJSON<{ ok: boolean; devCode?: string }>("/auth/request-otp", { channel, identifier });
-      setDevCode(r.devCode ?? null);
+      await postJSON<{ ok: boolean }>("/auth/request-otp", { channel, identifier });
       setStep("verify");
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Could not send code");
@@ -284,7 +282,6 @@ function OtpTab({
             Change
           </button>
         </div>
-        {devCode && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded px-2 py-1">Dev code: <b>{devCode}</b></div>}
         <div className="space-y-1.5">
           <Label htmlFor="code">Verification code</Label>
           <Input id="code" inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" />

@@ -24,7 +24,6 @@ export default function CompleteProfilePage() {
   const [channel, setChannel] = useState<"sms" | "whatsapp">("sms");
   const [code, setCode] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +43,6 @@ export default function CompleteProfilePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Could not send code");
-      setDevCode((data as { devCode?: string }).devCode ?? null);
       setStep("code");
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : "Could not send code"); }
     finally { setLoading(false); }
@@ -113,7 +111,6 @@ export default function CompleteProfilePage() {
 
         {step === "code" && (
           <form onSubmit={verifyOtp} className="space-y-4">
-            {devCode && <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded px-2 py-1">Dev code: <b>{devCode}</b></div>}
             <div className="space-y-1.5">
               <Label>Verification code</Label>
               <Input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />

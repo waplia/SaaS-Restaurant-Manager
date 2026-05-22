@@ -52,7 +52,7 @@ router.post("/wallet/auth/request-otp", async (req, res) => {
   if (!phone) return void res.status(400).json({ error: "Phone is required" });
   const result = await requestCustomerOtp(phone);
   if (!result.ok) return void res.status(400).json({ error: result.error });
-  res.json({ ok: true, devCode: result.devCode ?? undefined });
+  res.json({ ok: true });
 });
 
 // Login: verify OTP for an existing customer wallet account. Will NOT create

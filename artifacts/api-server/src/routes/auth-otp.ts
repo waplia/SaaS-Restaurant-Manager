@@ -76,7 +76,7 @@ router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBod
       restaurantId: user.restaurantId,
       name: user.name,
     });
-    res.json({ ok: true, devCode: r.devCode, channel });
+    res.json({ ok: true, channel });
     return;
   }
   // Unknown user — still pretend a code was sent.
@@ -286,7 +286,7 @@ router.post("/auth/2fa/enable/start", authenticate, validate({ body: Enable2faSt
     res.status(400).json({ error: r.error });
     return;
   }
-  res.json({ ok: true, channel, devCode: r.devCode });
+  res.json({ ok: true, channel });
 });
 
 const Enable2faConfirmBody = z.object({
@@ -382,7 +382,7 @@ router.post("/auth/register/start", regStartLimit, validate({ body: RegisterStar
     res.status(400).json({ error: r.error });
     return;
   }
-  res.json({ ok: true, registrationToken: token, channel, devCode: r.devCode });
+  res.json({ ok: true, registrationToken: token, channel });
 });
 
 // Step 2: verify the phone OTP, mark session as mobile_verified

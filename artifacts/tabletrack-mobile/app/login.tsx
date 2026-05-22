@@ -155,7 +155,6 @@ export default function LoginScreen() {
   const [otpChannel, setOtpChannel] = useState<Channel>("sms");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
-  const [devCode, setDevCode] = useState<string | null>(null);
 
   // 2fa
   const [twoFa, setTwoFa] = useState<{ userId: number; channel: Channel; hint?: string } | null>(null);
@@ -251,11 +250,10 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      const r = await postJSON<{ ok: boolean; devCode?: string }>("/auth/request-otp", {
+      await postJSON<{ ok: boolean }>("/auth/request-otp", {
         channel: tab === "email" ? "email" : otpChannel,
         identifier: otpIdentifier.trim(),
       });
-      setDevCode(r.devCode ?? null);
       setOtpStep("verify");
     } catch (err) {
       Alert.alert("Could not send code", err instanceof Error ? err.message : "Try again");
@@ -526,11 +524,6 @@ export default function LoginScreen() {
                     Code sent to <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>{otpIdentifier}</Text>.{" "}
                     <Text style={{ color: colors.primary }} onPress={() => { setOtpStep("request"); setOtpCode(""); }}>Change</Text>
                   </Text>
-                  {devCode ? (
-                    <Text style={{ color: "#92400e", backgroundColor: "#fef3c7", padding: 6, borderRadius: 6, fontSize: 12 }}>
-                      Dev code: {devCode}
-                    </Text>
-                  ) : null}
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Code</Text>
                     <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: "transparent" }]}>

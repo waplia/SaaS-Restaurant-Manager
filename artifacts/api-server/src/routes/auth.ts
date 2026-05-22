@@ -640,10 +640,6 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
 
-  // Dev-only echo of the code so testers without a configured email/SMS
-  // provider can complete the flow. Stripped outside development.
-  let devCode: string | undefined;
-
   if (user && user.isActive) {
     // 6-digit numeric code, zero-padded. Generated from crypto-strong
     // randomness rather than Math.random.
@@ -658,23 +654,6 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
         passwordResetAttempts: 0,
       })
       .where(eq(usersTable.id, user.id));
-    // Surface the code to the client when the server is in dev mode OR
-    // when neither an email provider nor an SMS provider is configured
-    // — otherwise admins can't sign in / reset before the first gateway
-    // is wired up. Real provider → real send, no echo.
-    try {
-      const [{ getActiveProvider: getEmail }, { getActiveProvider: getSms }] = await Promise.all([
-        import("../lib/emailSender"),
-        import("../lib/smsSender"),
-      ]);
-      const [emailProvider, smsProvider] = await Promise.all([getEmail(), getSms()]);
-      if (process.env.NODE_ENV === "development" || (!emailProvider && !smsProvider)) {
-        devCode = code;
-        console.info(`[no-provider] password-reset OTP for user id=${user.id}: ${code}`);
-      }
-    } catch {
-      devCode = code;
-    }
     void sendByTemplateKey("password_reset_otp", user.email, {
       name: user.name ?? user.email,
       otp: code,
@@ -689,7 +668,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     // response (still constant-time / anti-enumeration friendly because
     // the email send was already fire-and-forget too).
     if (user.phone) {
-      const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
+      const fallbackBody = `${code} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.`;
       void (async () => {
         try {
           const { sendSmsMessage } = await import("../lib/smsSender");
@@ -697,7 +676,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
             to: user.phone!,
             body: fallbackBody,
             eventKey: "password_reset_otp",
-            variables: { code, otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+            variables: { otp: code, code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
             tenantId: user.tenantId,
             purpose: "password_reset",
             messageType: "otp",
@@ -741,7 +720,6 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     success: true,
     message: "If an account with that email exists, a 6-digit reset code has been sent.",
     ttlMinutes: RESET_OTP_TTL_MINUTES,
-    ...(devCode ? { devCode } : {}),
   });
 });
 
@@ -808,11 +786,6 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
     .from(usersTable)
     .where(phoneMatches(phone));
 
-  // Surfaced to the client only in dev. Lets local testers reset their
-  // password without an SMS provider configured. Hardened: skipped entirely
-  // outside development.
-  let devCode: string | undefined;
-
   if (user && user.isActive && user.phone) {
     const code = String(Math.floor(crypto.randomInt(0, 1_000_000))).padStart(6, "0");
     const codeHash = await bcrypt.hash(code, 10);
@@ -825,25 +798,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
         passwordResetAttempts: 0,
       })
       .where(eq(usersTable.id, user.id));
-    // Surface the code to the client when:
-    //   (a) the server is in development mode (local testing), OR
-    //   (b) no SMS provider is configured yet — so the admin can sign
-    //       in / reset before the first gateway has been wired up.
-    // Once an SMS provider exists, the real OTP goes via SMS and we
-    // stop echoing it.
-    try {
-      const { getActiveProvider } = await import("../lib/smsSender");
-      const provider = await getActiveProvider();
-      if (!provider || process.env.NODE_ENV === "development") {
-        devCode = code;
-        console.info(`[no-sms-provider] password-reset OTP (phone) for user id=${user.id}: ${code}`);
-      }
-    } catch {
-      // Defensive: if the provider lookup itself fails, echo the code
-      // so the user can still complete the flow.
-      devCode = code;
-    }
-    const fallbackBody = `${code} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.`;
+    const fallbackBody = `${code} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.`;
     void (async () => {
       try {
         const { sendSmsMessage } = await import("../lib/smsSender");
@@ -851,7 +806,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
           to: user.phone!,
           body: fallbackBody,
           eventKey: "password_reset_otp",
-          variables: { code, otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+          variables: { otp: code, code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
           tenantId: user.tenantId,
           purpose: "password_reset",
           messageType: "otp",
@@ -887,7 +842,6 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
     success: true,
     message: "If an account with that phone exists, a 6-digit reset code has been sent.",
     ttlMinutes: RESET_OTP_TTL_MINUTES,
-    ...(devCode ? { devCode } : {}),
   });
 });
 

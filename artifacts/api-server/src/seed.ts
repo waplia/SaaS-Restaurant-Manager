@@ -70,8 +70,8 @@ export async function seed(): Promise<void> {
       body: "Welcome to Khana Lagao, {{name}}! Your {{trialDays}}-day free trial for {{restaurant}} is now active.",
       variables: ["name", "restaurant", "trialDays"] },
     { eventKey: "otp" as const, name: "OTP verification",
-      body: "{{code}} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.",
-      variables: ["code"] },
+      body: "{{otp}} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.",
+      variables: ["otp"] },
     { eventKey: "trial_ending" as const, name: "Trial ending soon",
       body: "Hi {{tenant}}, your Khana Lagao trial ends in {{daysLeft}} day(s). Upgrade to keep going.",
       variables: ["tenant", "daysLeft"] },
@@ -101,8 +101,8 @@ export async function seed(): Promise<void> {
     // Mirrors khanalagao_password_reset_otp WhatsApp template. Sent when
     // the user requesting a reset also has a phone number on file.
     { eventKey: "password_reset_otp" as const, name: "Password reset OTP",
-      body: "{{code}} is your verification code for Khana Lagao. Valid for 5 minutes. Do not share this code with anyone.",
-      variables: ["code"] },
+      body: "{{otp}} is your verification code for KhanaLagao. Valid for 5 minutes. Do not share this code with anyone.",
+      variables: ["otp"] },
   ];
   for (const tpl of smsTemplates) {
     await db.insert(smsTemplatesTable).values(tpl).onConflictDoNothing();
