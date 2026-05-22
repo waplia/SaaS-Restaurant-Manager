@@ -744,6 +744,185 @@ const ResetPasswordBodyStrict = ResetPasswordBody.extend({
 // returns false but takes the same wall time as a real check.
 const DUMMY_RESET_HASH = bcrypt.hashSync("000000", 10);
 
+// ── Phone-based forgot/reset password ────────────────────────────────────
+// Mirrors the email flow above but looks the account up by `usersTable.phone`
+// and delivers the OTP exclusively over SMS (with a WhatsApp dispatch as a
+// best-effort fallback). Used by the mobile app's "Phone" reset option for
+// users who don't have access to their email inbox. Reuses the same
+// passwordResetCodeHash / passwordResetCodeExpiresAt / passwordResetAttempts
+// columns + transactional verify path as the email reset so an attacker
+// can't request via phone and burn through attempts via email or vice versa.
+const phoneKey = (req: { body?: { phone?: string } }) => {
+  const raw = (req.body?.phone ?? "").toLowerCase().trim();
+  if (!raw) return null;
+  return raw.replace(/[^\d+]/g, "").slice(0, 200) || null;
+};
+const forgotLimitByPhone = rateLimit({ name: "auth.forgot.phone", windowMs: 60 * 60 * 1000, max: 5, ignoreIp: true, keyExtra: phoneKey });
+const resetLimitByPhone = rateLimit({ name: "auth.reset.phone", windowMs: 15 * 60 * 1000, max: 10, ignoreIp: true, keyExtra: phoneKey });
+
+function normalizePhoneRaw(raw: string): string {
+  return String(raw ?? "").trim().replace(/[^\d+]/g, "");
+}
+
+const PhoneForgotBody = z.object({
+  phone: z.string().trim().min(7, "Enter a valid phone number"),
+});
+const PhoneResetBody = z.object({
+  phone: z.string().trim().min(7, "Enter a valid phone number"),
+  code: z.string().trim().regex(/^\d{6}$/, "Code must be 6 digits"),
+  newPassword: z.string().min(8),
+});
+
+router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, validate({ body: PhoneForgotBody }), async (req, res) => {
+  const phone = normalizePhoneRaw((req.body as { phone: string }).phone);
+  const [user] = await db
+    .select({
+      id: usersTable.id, email: usersTable.email, name: usersTable.name,
+      phone: usersTable.phone, tenantId: usersTable.tenantId,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.phone, phone));
+
+  if (user && user.isActive && user.phone) {
+    const code = String(Math.floor(crypto.randomInt(0, 1_000_000))).padStart(6, "0");
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60_000);
+    await db
+      .update(usersTable)
+      .set({
+        passwordResetCodeHash: codeHash,
+        passwordResetCodeExpiresAt: expiresAt,
+        passwordResetAttempts: 0,
+      })
+      .where(eq(usersTable.id, user.id));
+    if (process.env.NODE_ENV === "development") {
+      console.info(`[dev-only] password-reset OTP (phone) for user id=${user.id}: ${code}`);
+    }
+    const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
+    void (async () => {
+      try {
+        const { sendSmsMessage } = await import("../lib/smsSender");
+        const r = await sendSmsMessage({
+          to: user.phone!,
+          body: fallbackBody,
+          eventKey: "password_reset_otp",
+          variables: { otp: code, ttlMinutes: String(RESET_OTP_TTL_MINUTES) },
+          tenantId: user.tenantId,
+          purpose: "password_reset",
+          messageType: "otp",
+        });
+        if (!r.ok) {
+          console.info(`[forgot-password-phone] SMS not sent for user ${user.id}: ${r.error}`);
+        }
+      } catch (err) {
+        console.warn(`[forgot-password-phone] SMS error for user ${user.id}:`, err);
+      }
+    })();
+    void (async () => {
+      try {
+        const { sendWhatsAppMessage } = await import("../lib/whatsapp");
+        await sendWhatsAppMessage({
+          restaurantId: null,
+          tenantId: user.tenantId ?? undefined,
+          to: user.phone!,
+          templateName: "khanalagao_password_reset_otp",
+          templateVariables: [code, String(RESET_OTP_TTL_MINUTES)],
+          body: fallbackBody,
+          category: "transactional",
+          purpose: "otp",
+          skipQuota: true,
+          meta: { event: "auth.password_reset.phone", userId: user.id },
+        });
+      } catch (err) {
+        console.warn(`[forgot-password-phone] WhatsApp error for user ${user.id}:`, err);
+      }
+    })();
+  }
+  res.json({
+    success: true,
+    message: "If an account with that phone exists, a 6-digit reset code has been sent.",
+    ttlMinutes: RESET_OTP_TTL_MINUTES,
+  });
+});
+
+router.post("/auth/reset-password-phone", resetLimitByIp, resetLimitByPhone, validate({ body: PhoneResetBody }), async (req, res) => {
+  const phone = normalizePhoneRaw((req.body as { phone: string }).phone);
+  const { code, newPassword } = req.body as { code: string; newPassword: string };
+  const genericError = "The code is invalid or has expired. Please request a new one.";
+
+  const verdict: "ok" | "fail" = await db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({
+        id: usersTable.id, email: usersTable.email, name: usersTable.name,
+        isActive: usersTable.isActive, tenantId: usersTable.tenantId,
+        restaurantId: usersTable.restaurantId,
+        codeHash: usersTable.passwordResetCodeHash,
+        codeExpiresAt: usersTable.passwordResetCodeExpiresAt,
+        attempts: usersTable.passwordResetAttempts,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.phone, phone))
+      .for("update");
+
+    if (!user || !user.isActive || !user.codeHash || !user.codeExpiresAt) {
+      await bcrypt.compare(code, DUMMY_RESET_HASH);
+      return "fail";
+    }
+    if (user.codeExpiresAt.getTime() < Date.now() || (user.attempts ?? 0) >= RESET_OTP_MAX_ATTEMPTS) {
+      await bcrypt.compare(code, DUMMY_RESET_HASH);
+      await tx.update(usersTable)
+        .set({ passwordResetCodeHash: null, passwordResetCodeExpiresAt: null, passwordResetAttempts: 0 })
+        .where(eq(usersTable.id, user.id));
+      return "fail";
+    }
+    const ok = await bcrypt.compare(code, user.codeHash);
+    if (!ok) {
+      await tx.update(usersTable)
+        .set({ passwordResetAttempts: sql`${usersTable.passwordResetAttempts} + 1` })
+        .where(eq(usersTable.id, user.id));
+      return "fail";
+    }
+    const passwordHash = await hashPassword(newPassword);
+    await tx
+      .update(usersTable)
+      .set({
+        passwordHash,
+        passwordResetCodeHash: null,
+        passwordResetCodeExpiresAt: null,
+        passwordResetAttempts: 0,
+        tokenVersion: sql`${usersTable.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+    (req as unknown as { _resetUser?: typeof user })._resetUser = user;
+    return "ok";
+  });
+
+  if (verdict === "fail") {
+    res.status(400).json({ error: genericError });
+    return;
+  }
+  const user = (req as unknown as { _resetUser: {
+    id: number; email: string; name: string | null;
+    tenantId: number | null; restaurantId: number | null;
+  } })._resetUser;
+  invalidateTokenVersionCache(user.id);
+  await recordAuditLog({
+    req, module: "auth", action: "password.reset.phone", entity: "auth",
+    userId: user.id, userDisplay: user.email, role: null,
+  });
+  const changedAt = new Date().toUTCString();
+  const changeIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const changeUa = String(req.headers["user-agent"] ?? "unknown");
+  void sendByTemplateKey("security_password_changed", user.email, {
+    name: user.name ?? user.email,
+    changedAt, ip: changeIp, userAgent: changeUa, when: changedAt,
+    appName: "Khana Lagao",
+  }, { tenantId: user.tenantId, restaurantId: user.restaurantId ?? null, recipientType: "user" });
+  res.json({ success: true });
+});
+
 router.post("/auth/reset-password", resetLimitByIp, resetLimitByEmail, validate({ body: ResetPasswordBodyStrict }), async (req, res) => {
   const { email, code, newPassword } = req.body as { email: string; code: string; newPassword: string };
 

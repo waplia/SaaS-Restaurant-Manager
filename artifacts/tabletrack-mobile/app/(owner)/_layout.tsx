@@ -52,6 +52,7 @@ export default function OwnerLayout() {
           <Tabs.Screen name="customers" options={{ href: null }} />
           <Tabs.Screen name="feedback" options={{ href: null }} />
           <Tabs.Screen name="growth" options={{ href: null }} />
+          <Tabs.Screen name="coupons" options={{ href: null }} />
           <Tabs.Screen name="khana-ai" options={{ href: null }} />
           {/* Chat needs the tab bar hidden so its bottom input row (text +
               mic + send) isn't covered by the 5-slot bar on screens with

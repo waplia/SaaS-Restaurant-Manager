@@ -14,34 +14,57 @@ import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 //   step "verify"  → enter the code + new password on the same screen
 //   step "done"    → confirmation, bounce back to /login
 type Step = "email" | "verify" | "done";
+type Method = "email" | "phone";
 
 export default function ForgotPasswordScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [method, setMethod] = useState<Method>("email");
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [ttl, setTtl] = useState(15);
   const [loading, setLoading] = useState(false);
 
+  const identifierLabel = method === "phone" ? phone : email;
+
   async function requestCode(isResend = false) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      Alert.alert("Required", "Enter a valid email.");
-      return;
+    if (method === "email") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        Alert.alert("Required", "Enter a valid email.");
+        return;
+      }
+    } else {
+      const cleaned = phone.replace(/[^\d+]/g, "");
+      if (cleaned.length < 7) {
+        Alert.alert("Required", "Enter a valid phone number (with country code).");
+        return;
+      }
     }
     setLoading(true);
     try {
-      const r = await fetch(`${getApiBaseUrl()}/api/auth/forgot-password`, {
+      const url = method === "phone"
+        ? `${getApiBaseUrl()}/api/auth/forgot-password-phone`
+        : `${getApiBaseUrl()}/api/auth/forgot-password`;
+      const body = method === "phone"
+        ? { phone: phone.trim() }
+        : { email: email.trim() };
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify(body),
       });
       const data = (await r.json().catch(() => ({}))) as { ttlMinutes?: number; error?: string };
       if (!r.ok) throw new Error(data.error ?? "Couldn't send code.");
       if (typeof data.ttlMinutes === "number") setTtl(data.ttlMinutes);
-      if (isResend) Alert.alert("Code sent", "A new code has been sent to your email.");
+      if (isResend) {
+        Alert.alert("Code sent", method === "phone"
+          ? "A new code has been sent via SMS."
+          : "A new code has been sent to your email.");
+      }
       setStep("verify");
     } catch (e) {
       Alert.alert("Something went wrong", e instanceof Error ? e.message : "Please try again.");
@@ -51,19 +74,26 @@ export default function ForgotPasswordScreen() {
   }
 
   async function submitReset() {
-    if (!/^\d{6}$/.test(code.trim())) { Alert.alert("Required", "Enter the 6-digit code from your email."); return; }
+    if (!/^\d{6}$/.test(code.trim())) {
+      Alert.alert("Required", method === "phone"
+        ? "Enter the 6-digit code from the SMS."
+        : "Enter the 6-digit code from your email.");
+      return;
+    }
     if (password.length < 8)          { Alert.alert("Too short", "Password must be at least 8 characters."); return; }
     if (password !== confirm)         { Alert.alert("Mismatch", "Passwords do not match."); return; }
     setLoading(true);
     try {
-      const r = await fetch(`${getApiBaseUrl()}/api/auth/reset-password`, {
+      const url = method === "phone"
+        ? `${getApiBaseUrl()}/api/auth/reset-password-phone`
+        : `${getApiBaseUrl()}/api/auth/reset-password`;
+      const body = method === "phone"
+        ? { phone: phone.trim(), code: code.trim(), newPassword: password }
+        : { email: email.trim().toLowerCase(), code: code.trim(), newPassword: password };
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          code: code.trim(),
-          newPassword: password,
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(data.error ?? "Reset failed.");
@@ -93,21 +123,65 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={[styles.title, { color: colors.foreground }]}>Forgot your password?</Text>
               <Text style={{ color: colors.mutedForeground, fontSize: 14, lineHeight: 20 }}>
-                Enter the email you used to sign up. We'll send a 6-digit code you can use to set a new password.
+                Choose how you'd like to receive a 6-digit reset code.
               </Text>
 
-              <View style={{ gap: 6 }}>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Email</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-                  <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.input, { color: colors.foreground }]}
-                    value={email} onChangeText={setEmail}
-                    placeholder="you@restaurant.com" placeholderTextColor={colors.mutedForeground}
-                    keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
-                  />
-                </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {(["email", "phone"] as const).map(m => (
+                  <Pressable
+                    key={m}
+                    onPress={() => setMethod(m)}
+                    style={({ pressed }) => [{
+                      flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+                      borderColor: method === m ? colors.primary : colors.border,
+                      backgroundColor: method === m ? colors.primary + "18" : "transparent",
+                      alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6,
+                      opacity: pressed ? 0.85 : 1,
+                    }]}
+                  >
+                    <Ionicons
+                      name={m === "email" ? "mail-outline" : "call-outline"}
+                      size={16}
+                      color={method === m ? colors.primary : colors.mutedForeground}
+                    />
+                    <Text style={{
+                      color: method === m ? colors.primary : colors.foreground,
+                      fontFamily: "Inter_600SemiBold", fontSize: 13,
+                    }}>{m === "email" ? "Email" : "Phone"}</Text>
+                  </Pressable>
+                ))}
               </View>
+
+              {method === "email" ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Email</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border }]}>
+                    <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground }]}
+                      value={email} onChangeText={setEmail}
+                      placeholder="you@restaurant.com" placeholderTextColor={colors.mutedForeground}
+                      keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border }]}>
+                    <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground }]}
+                      value={phone} onChangeText={setPhone}
+                      placeholder="+91 98765 43210" placeholderTextColor={colors.mutedForeground}
+                      keyboardType="phone-pad" autoCapitalize="none" autoCorrect={false}
+                    />
+                  </View>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                    Use the phone number on your account. Include the country code.
+                  </Text>
+                </View>
+              )}
 
               <Pressable
                 onPress={() => requestCode(false)} disabled={loading}
@@ -128,10 +202,10 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={[styles.title, { color: colors.foreground }]}>Enter code &amp; new password</Text>
               <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: colors.primary + "12", borderColor: colors.primary + "30", borderWidth: 1, borderRadius: 10, padding: 10 }}>
-                <Ionicons name="mail-outline" size={16} color={colors.primary} style={{ marginTop: 2 }} />
+                <Ionicons name={method === "phone" ? "chatbox-ellipses-outline" : "mail-outline"} size={16} color={colors.primary} style={{ marginTop: 2 }} />
                 <Text style={{ flex: 1, color: colors.mutedForeground, fontSize: 13, lineHeight: 18 }}>
-                  We sent a 6-digit code to{" "}
-                  <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>{email}</Text>.
+                  We sent a 6-digit code {method === "phone" ? "via SMS to" : "to"}{" "}
+                  <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>{identifierLabel}</Text>.
                   It expires in {ttl} minutes.
                 </Text>
               </View>
@@ -184,7 +258,9 @@ export default function ForgotPasswordScreen() {
 
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Pressable onPress={() => { setStep("email"); setCode(""); setPassword(""); setConfirm(""); }}>
-                  <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>← Change email</Text>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                    ← Change {method === "phone" ? "phone" : "email"}
+                  </Text>
                 </Pressable>
                 <Pressable onPress={() => requestCode(true)} disabled={loading}>
                   <Text style={{ color: colors.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Resend code</Text>
