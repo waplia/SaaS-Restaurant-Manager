@@ -70,6 +70,21 @@ router.use("/restaurants/:restaurantId/waiter-requests",
 router.get("/restaurants/:restaurantId/waiter-requests", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const sinceMs = Date.now() - 24 * 60 * 60 * 1000;
+
+  // Honor ?status=pending,acknowledged so the mobile waiter tab and the
+  // owner-side Waiter Requests screen only see active items. Without this,
+  // resolved rows from the last 24h kept showing in the "active" list and
+  // tapping Done returned 409 ("already resolved"). Accept a comma-separated
+  // list and drop anything that isn't a known status; if no valid filter is
+  // provided, return all statuses (back-compat for any caller that doesn't
+  // pass the param).
+  const ALLOWED = new Set(["pending", "acknowledged", "resolved"]);
+  const statusParam = typeof req.query.status === "string" ? req.query.status : "";
+  const requestedStatuses = statusParam
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => ALLOWED.has(s));
+
   const rows = await db.select({
     id: waiterRequestsTable.id,
     restaurantId: waiterRequestsTable.restaurantId,
@@ -94,6 +109,9 @@ router.get("/restaurants/:restaurantId/waiter-requests", async (req, res) => {
     .where(and(
       eq(waiterRequestsTable.restaurantId, restaurantId),
       gte(waiterRequestsTable.createdAt, new Date(sinceMs)),
+      requestedStatuses.length > 0
+        ? inArray(waiterRequestsTable.status, requestedStatuses)
+        : undefined,
     ))
     .orderBy(desc(waiterRequestsTable.createdAt));
   res.json(rows);
