@@ -325,16 +325,46 @@ export async function recalculateOrderTotals(orderId: number, restaurantId: numb
 }
 
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
-  const { status, tableId, customerId, page, limit } = req.query;
+  const { status, tableId, customerId, page, limit, search, branchId } = req.query;
   const pg = Number(page) || 1;
   const lim = Number(limit) || 50;
   const offset = (pg - 1) * lim;
   const restaurantId = Number(req.params.restaurantId);
 
-  const conditions: ReturnType<typeof eq>[] = [eq(ordersTable.restaurantId, restaurantId)];
+  const conditions: Array<ReturnType<typeof eq> | ReturnType<typeof sql> | undefined> = [eq(ordersTable.restaurantId, restaurantId)];
   if (status) conditions.push(eq(ordersTable.status, String(status)));
   if (tableId) conditions.push(eq(ordersTable.tableId, Number(tableId)));
   if (customerId) conditions.push(eq(ordersTable.customerId, Number(customerId)));
+  if (branchId != null && branchId !== "") {
+    const bn = Number(branchId);
+    if (!Number.isFinite(bn)) {
+      return void res.status(400).json({ error: "Invalid branchId" });
+    }
+    const { branchesTable } = await import("../lib/db");
+    const [b] = await db
+      .select({ id: branchesTable.id, isMain: branchesTable.isMain })
+      .from(branchesTable)
+      .where(and(eq(branchesTable.id, bn), eq(branchesTable.restaurantId, restaurantId)));
+    if (!b) {
+      // Reject rather than silently broadening to all branches — a stale
+      // outlet selection on the client must not leak cross-branch data.
+      return void res.status(404).json({ error: "Branch not found for this restaurant" });
+    }
+    conditions.push(b.isMain
+      ? sql`(${ordersTable.branchId} = ${bn} OR ${ordersTable.branchId} IS NULL)`
+      : eq(ordersTable.branchId, bn));
+  }
+  // Free-text search: order number, customer name, customer phone. Case-
+  // insensitive prefix/contains via ILIKE. Empty / whitespace strings are
+  // ignored so a cleared search bar behaves like no filter.
+  if (typeof search === "string" && search.trim().length > 0) {
+    const q = `%${search.trim().replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    conditions.push(sql`(
+      ${ordersTable.orderNumber} ILIKE ${q}
+      OR coalesce(${ordersTable.customerName}, '') ILIKE ${q}
+      OR coalesce(${ordersTable.customerPhone}, '') ILIKE ${q}
+    )`);
+  }
 
   const [rows, totalRows] = await Promise.all([
     db.select().from(ordersTable).where(and(...conditions)).orderBy(desc(ordersTable.createdAt)).limit(lim).offset(offset),

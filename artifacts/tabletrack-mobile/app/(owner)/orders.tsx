@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, Alert, ScrollView,
+  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, Alert, ScrollView, TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import {
-  customFetch, listOrders, getListOrdersQueryKey,
+  customFetch, getListOrdersQueryKey,
 } from "@workspace/api-client-react";
 import type { Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -39,19 +39,41 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const qc = useQueryClient();
-  const { restaurantId } = useAuth();
+  const { restaurantId, effectiveBranchId } = useAuth();
   const [status, setStatus] = useState<StatusFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
+  // Free-text search box. Debounced so we don't hammer the server on every
+  // keystroke, and trimmed/lower-bounded so a single character doesn't run
+  // a near-unbounded ILIKE on the orders table.
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      const trimmed = searchInput.trim();
+      setSearch(trimmed.length >= 2 ? trimmed : "");
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Map "new" filter to pending API status.
   const apiStatus = status === "new" ? "pending" : status === "preparing" ? "in_progress" : status;
   const params: Record<string, unknown> = { limit: 50 };
   if (apiStatus !== "all") params.status = apiStatus;
+  if (search) params.search = search;
+  if (effectiveBranchId != null) params.branchId = effectiveBranchId;
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: getListOrdersQueryKey(restaurantId, params),
-    queryFn: () => listOrders(restaurantId, params),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v != null && v !== "") qs.set(k, String(v));
+      });
+      return customFetch<{ data?: Order[]; total?: number }>(
+        `/api/restaurants/${restaurantId}/orders?${qs.toString()}`,
+      );
+    },
     refetchInterval: 20_000,
   });
 
@@ -94,6 +116,26 @@ export default function OrdersScreen() {
             <Ionicons name="add" size={16} color="#fff" />
             <Text style={styles.headerCtaText}>New</Text>
           </Pressable>
+        </View>
+
+        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder="Search order #, customer name or phone"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Search orders"
+          />
+          {searchInput.length > 0 ? (
+            <Pressable onPress={() => setSearchInput("")} accessibilityLabel="Clear search" hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
@@ -187,6 +229,8 @@ const styles = StyleSheet.create({
   sub: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 2 },
   headerCta: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   headerCtaText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 38, borderRadius: 10, borderWidth: 1 },
+  searchInput: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium", paddingVertical: 0 },
   pills: { gap: 8, paddingVertical: 2, paddingRight: 8 },
   pill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   pillText: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
