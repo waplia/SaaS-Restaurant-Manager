@@ -11,7 +11,13 @@ import { validate } from "../middleware/validate";
 import { logger } from "../lib/logger";
 
 const router = Router();
-router.use(authenticate, requireSuperAdmin);
+// Scope the auth gate to /admin/users/* — using `router.use(mw)` without a
+// path would run requireSuperAdmin for EVERY request flowing through this
+// router (Express runs router-level middleware before checking whether any
+// route on it matches), which 403s the entire API for non-super-admins
+// because Express then short-circuits and never reaches the downstream
+// routers mounted after this one in routes/index.ts.
+router.use("/admin/users", authenticate, requireSuperAdmin);
 
 router.get("/admin/users/deleted", async (_req, res) => {
   const rows = await db
