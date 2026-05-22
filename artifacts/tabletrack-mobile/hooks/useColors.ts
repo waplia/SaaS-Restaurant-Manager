@@ -15,11 +15,10 @@ import colors from "@/constants/colors";
  * device's appearance setting.
  */
 export function useColors() {
-  const scheme = useColorScheme();
-  const colorMap = colors as unknown as Record<string, typeof colors.light>;
-  const palette =
-    scheme === "dark" && "dark" in colors
-      ? colorMap.dark
-      : colors.light;
-  return { ...palette, radius: colors.radius };
+  // App-wide theme is locked to light so iOS and Android look the same
+  // regardless of the device's system appearance setting. Keep the
+  // useColorScheme() call (no-op) so future re-enablement of system
+  // theming is a one-line change.
+  void useColorScheme();
+  return { ...colors.light, radius: colors.radius };
 }

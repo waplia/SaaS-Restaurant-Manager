@@ -23,9 +23,16 @@ export interface Theme {
   shadow: (level: ShadowLevel) => ReturnType<typeof shadow>;
 }
 
-/** Resolve the active theme based on the device's appearance setting. */
+/**
+ * Resolve the active theme. We currently lock the app to the light
+ * palette on every device so iOS and Android look identical regardless
+ * of the system appearance setting. When a real in-app theme toggle
+ * lands, switch this back to `useColorScheme()` (still imported so
+ * future re-enablement is a one-line change).
+ */
 export function useTheme(): Theme {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  void useColorScheme();
+  const scheme: ColorScheme = "light";
   const colors = palette[scheme];
   return {
     scheme,
