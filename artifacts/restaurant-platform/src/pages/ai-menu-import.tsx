@@ -65,6 +65,9 @@ interface ImportItemRow {
   needsReview: boolean;
   duplicateMatchId: number | null;
   menuItemId: number | null;
+  libraryImageUrl?: string | null;
+  libraryImageName?: string | null;
+  savedImageUrl?: string | null;
 }
 
 interface ImportDetail { import: ImportRow; items: ImportItemRow[] }
@@ -422,6 +425,16 @@ export default function AiMenuImportPage() {
                       {" "}<strong className="text-foreground">{detail.import.needsReviewCount}</strong> need review ·
                       {" "}<strong className="text-foreground">{detail.import.savedItemCount}</strong> already saved
                     </div>
+                    {(() => {
+                      const drafts = detail.items.filter(i => i.status === "draft");
+                      const withLib = drafts.filter(i => !!i.libraryImageUrl).length;
+                      if (drafts.length === 0 || withLib === 0) return null;
+                      return (
+                        <div className="text-xs px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
+                          <strong>{withLib}</strong> of {drafts.length} draft item{drafts.length === 1 ? "" : "s"} matched a photo from the admin image library — those photos auto-attach on save.
+                        </div>
+                      );
+                    })()}
                     <div className="ml-auto flex items-center gap-2">
                       <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter…" className="h-8 w-48" />
                       <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="h-8 text-xs rounded-md border border-input bg-background px-2">
@@ -461,6 +474,7 @@ export default function AiMenuImportPage() {
                         <tr>
                           <th className="px-2 py-2 w-8"></th>
                           <th className="px-2 py-2 w-6"></th>
+                          <th className="px-2 py-2 w-12 text-left">Photo</th>
                           <th className="px-2 py-2 text-left">Category</th>
                           <th className="px-2 py-2 text-left">Item</th>
                           <th className="px-2 py-2 text-right">Price</th>
@@ -471,7 +485,7 @@ export default function AiMenuImportPage() {
                       </thead>
                       <tbody>
                         {filteredRows.length === 0 && (
-                          <tr><td colSpan={8} className="text-center text-xs text-muted-foreground py-6">No rows match.</td></tr>
+                          <tr><td colSpan={9} className="text-center text-xs text-muted-foreground py-6">No rows match.</td></tr>
                         )}
                         {filteredRows.map(row => {
                           const merged = { ...row.structured, ...(edits[row.id] ?? {}) };
@@ -491,6 +505,21 @@ export default function AiMenuImportPage() {
                                 <button onClick={() => toggleExpand(row.id)} className="p-1 hover:bg-muted rounded" title="Edit more fields">
                                   {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                                 </button>
+                              </td>
+                              <td className="px-2 py-1.5 align-top">
+                                {(() => {
+                                  const url = row.savedImageUrl ?? row.libraryImageUrl ?? null;
+                                  if (!url) return <div className="w-10 h-10 rounded bg-muted border border-border" title="No image yet — AI will generate one after save" />;
+                                  return (
+                                    <img
+                                      src={url}
+                                      alt={row.libraryImageName ?? merged.name ?? ""}
+                                      title={row.savedImageUrl ? "Current photo on this item" : `Library match: ${row.libraryImageName ?? "matched"} — will be attached on save`}
+                                      className="w-10 h-10 rounded object-cover border border-border"
+                                      loading="lazy"
+                                    />
+                                  );
+                                })()}
                               </td>
                               <td className="px-2 py-1.5 align-top">
                                 <Input
@@ -549,7 +578,7 @@ export default function AiMenuImportPage() {
                             </tr>
                             {isOpen && (
                               <tr className="border-t border-border bg-muted/20">
-                                <td colSpan={8} className="px-3 py-3">
+                                <td colSpan={9} className="px-3 py-3">
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div className="md:col-span-2">
                                       <Label className="text-[11px]">Description</Label>

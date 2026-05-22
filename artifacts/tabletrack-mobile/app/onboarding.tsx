@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from "react-native";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -727,6 +727,9 @@ interface ImportItemRow {
   needsReview: boolean;
   duplicateMatchId: number | null;
   structured: { name: string; price?: number | string | null; categoryName?: string | null };
+  libraryImageUrl?: string | null;
+  libraryImageName?: string | null;
+  savedImageUrl?: string | null;
 }
 interface ImportDetail {
   import: {
@@ -1114,6 +1117,26 @@ function MenuImportPanel({ restaurantId, api, colors, onSaved, onBusyChange }: M
             <StatusRow icon="sync" label={`AI is reading your menu — usually 30–90 seconds${detail ? ` · ${detail.import.totalRows} item${detail.import.totalRows === 1 ? "" : "s"} so far` : ""}.`} colors={colors} spinning />
           )}
           {status === "saving" && <StatusRow icon="save-outline" label="Saving items to your menu…" colors={colors} spinning />}
+          {detail && (status === "processing" || status === "saving" || status === "done") && (() => {
+            const withPhotos = detail.items.filter(i => !!(i.savedImageUrl || i.libraryImageUrl));
+            if (withPhotos.length === 0) return null;
+            return (
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
+                  {withPhotos.length} of {detail.items.length} item{detail.items.length === 1 ? "" : "s"} matched a photo from the admin image library
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {withPhotos.slice(0, 24).map(it => (
+                    <Image
+                      key={it.id}
+                      source={{ uri: (it.savedImageUrl ?? it.libraryImageUrl) as string }}
+                      style={{ width: 44, height: 44, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            );
+          })()}
           {status === "done" && (
             <View style={{ flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0" }}>
               <Ionicons name="checkmark-circle" size={18} color="#059669" />

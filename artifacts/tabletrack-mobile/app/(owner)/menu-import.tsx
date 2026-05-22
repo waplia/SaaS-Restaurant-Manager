@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
-  Alert, TextInput, Platform,
+  Alert, TextInput, Platform, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -21,7 +21,14 @@ type Source = "image" | "pdf" | "text";
 type Status = "idle" | "uploading" | "starting" | "processing" | "saving" | "done" | "error";
 type Picked = { uri: string; name: string; mime: string; size: number };
 
-type ImportRow = { id: number; status: string; needsReview?: boolean; duplicateMatchId?: number | null };
+type ImportRow = {
+  id: number;
+  status: string;
+  needsReview?: boolean;
+  duplicateMatchId?: number | null;
+  libraryImageUrl?: string | null;
+  savedImageUrl?: string | null;
+};
 type ImportDetail = {
   import: { id: number; status: string; totalRows: number; errorMessage?: string | null };
   items: ImportRow[];
@@ -40,6 +47,7 @@ export default function MenuImportScreen() {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ImportDetail | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
 
@@ -105,6 +113,7 @@ export default function MenuImportScreen() {
     try {
       const d = await api.call<ImportDetail>("GET", `/restaurants/${restaurantId}/ai/menu-import/imports/${id}`);
       if (cancelledRef.current) return;
+      setDetail(d);
       const s = d.import.status;
       if (s === "pending" || s === "processing") {
         setStatus("processing");
@@ -176,7 +185,7 @@ export default function MenuImportScreen() {
   function reset() {
     cancelledRef.current = false;
     if (pollRef.current) clearTimeout(pollRef.current);
-    setPicked(null); setText(""); setStatus("idle"); setError(null); setSummary(null);
+    setPicked(null); setText(""); setStatus("idle"); setError(null); setSummary(null); setDetail(null);
   }
 
   const isBusy = status === "uploading" || status === "starting" || status === "processing" || status === "saving";
@@ -267,6 +276,27 @@ export default function MenuImportScreen() {
             <Text style={[styles.statusText, { color: colors.foreground }]}>{statusLabel[status]}</Text>
           </View>
         ) : null}
+
+        {detail && (status === "processing" || status === "saving" || status === "done") ? (() => {
+          const withPhotos = detail.items.filter(i => !!(i.savedImageUrl || i.libraryImageUrl));
+          if (withPhotos.length === 0) return null;
+          return (
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium" }}>
+                {withPhotos.length} of {detail.items.length} item{detail.items.length === 1 ? "" : "s"} matched a photo from the admin image library
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {withPhotos.slice(0, 30).map(it => (
+                  <Image
+                    key={it.id}
+                    source={{ uri: (it.savedImageUrl ?? it.libraryImageUrl) as string }}
+                    style={{ width: 48, height: 48, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          );
+        })() : null}
 
         {status === "done" ? (
           <View style={[styles.statusCard, { backgroundColor: "#dcfce7", borderColor: "#22c55e" }]}>

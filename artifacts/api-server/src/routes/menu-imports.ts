@@ -634,7 +634,84 @@ router.get("/restaurants/:restaurantId/ai/menu-import/imports/:id", async (req: 
   const items = await db.select().from(aiMenuImportItemsTable)
     .where(eq(aiMenuImportItemsTable.importId, id))
     .orderBy(aiMenuImportItemsTable.rowIndex);
-  res.json({ import: row, items });
+  // Library preview: for every draft row, run the same matcher the /save
+  // handler will use, so the review UI can show the actual photo that will
+  // be attached. Already-saved rows return the live menu_items.imageUrl so
+  // the same column doubles as a "current image" indicator.
+  const savedItemIds = items.map(i => i.menuItemId).filter((x): x is number => !!x);
+  const savedImagesById = new Map<number, string | null>();
+  if (savedItemIds.length > 0) {
+    const rows = await db.select({ id: menuItemsTable.id, imageUrl: menuItemsTable.imageUrl })
+      .from(menuItemsTable).where(inArray(menuItemsTable.id, savedItemIds));
+    for (const r of rows) savedImagesById.set(r.id, r.imageUrl);
+  }
+  const enriched = await Promise.all(items.map(async (it) => {
+    const structured = it.structured as { name?: string; dietTag?: string | null } | null;
+    let libraryImageUrl: string | null = null;
+    let libraryImageName: string | null = null;
+    let savedImageUrl: string | null = null;
+    if (it.menuItemId != null) savedImageUrl = savedImagesById.get(it.menuItemId) ?? null;
+    if (!savedImageUrl && structured?.name) {
+      try {
+        const match = await findBestStockImageMatch({
+          name: structured.name,
+          isVeg: structured.dietTag === "veg" ? true : structured.dietTag === "non-veg" ? false : null,
+        });
+        if (match) { libraryImageUrl = match.row.imageUrl; libraryImageName = match.row.name; }
+      } catch { /* preview is best-effort */ }
+    }
+    return { ...it, libraryImageUrl, libraryImageName, savedImageUrl };
+  }));
+  res.json({ import: row, items: enriched });
+});
+
+/**
+ * Backfill the curated stock-image library onto every menu item in the
+ * restaurant that doesn't already have an imageUrl. Idempotent — items
+ * with a picture are skipped, items without one get the best veg-safe
+ * library match (>= 0.6 confidence). Returns counts so the UI can show
+ * "Matched 18 of 47 items from the library".
+ *
+ * This is what the user clicks once after an import (or any time later)
+ * to make sure the menu visually fills out without burning AI credits.
+ */
+router.post("/restaurants/:restaurantId/menu-items/backfill-library-images", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const rows = await db.select({
+    id: menuItemsTable.id,
+    name: menuItemsTable.name,
+    imageUrl: menuItemsTable.imageUrl,
+    isVeg: menuItemsTable.isVeg,
+  }).from(menuItemsTable).where(eq(menuItemsTable.restaurantId, restaurantId));
+  let scanned = 0, matched = 0, skipped = 0;
+  for (const row of rows) {
+    if (row.imageUrl && row.imageUrl.length > 0) { skipped++; continue; }
+    scanned++;
+    try {
+      const match = await findBestStockImageMatch({ name: row.name, isVeg: row.isVeg });
+      if (!match) continue;
+      await db.update(menuItemsTable)
+        .set({ imageUrl: match.row.imageUrl, updatedAt: new Date() })
+        .where(eq(menuItemsTable.id, row.id));
+      await recordLibraryImageUsage({
+        restaurantId,
+        menuItemId: row.id,
+        libraryImageId: match.row.id,
+        imageUrl: match.row.imageUrl,
+        source: "library",
+        attachedBy: req.user?.sub ?? null,
+      });
+      matched++;
+    } catch (err) {
+      req.log.warn({ err, itemId: row.id }, "backfill-library-images: match failed");
+    }
+  }
+  await recordAuditLog({
+    req, module: "khana_ai", action: "backfill_library_images",
+    entity: "restaurant", entityId: restaurantId,
+    newValue: { scanned, matched, skipped },
+  });
+  res.json({ scanned, matched, skipped, totalItems: rows.length });
 });
 
 interface SaveBody {

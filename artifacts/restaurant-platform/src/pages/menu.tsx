@@ -650,6 +650,7 @@ export default function MenuPage() {
 
   const csvInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const [backfillBusy, setBackfillBusy] = useState(false);
 
   const filteredItems = items.filter((item: MenuItem) => {
     if (activeMenuId) {
@@ -1032,6 +1033,33 @@ export default function MenuPage() {
               <Upload className="w-3.5 h-3.5 mr-1.5" /> Import CSV
             </Button>
             <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={backfillBusy}
+              onClick={async () => {
+                if (!RESTAURANT_ID) return;
+                if (!confirm("Match every menu item without a photo against the admin image library and attach the best match? Items that already have a photo are skipped.")) return;
+                setBackfillBusy(true);
+                try {
+                  const res = await apiPost<{ scanned: number; matched: number; skipped: number; totalItems: number }>(
+                    `/restaurants/${RESTAURANT_ID}/menu-items/backfill-library-images`, {},
+                  );
+                  toast({
+                    title: `Matched ${res.matched} of ${res.scanned} item${res.scanned === 1 ? "" : "s"}`,
+                    description: res.skipped > 0 ? `${res.skipped} item${res.skipped === 1 ? "" : "s"} already had a photo and were skipped.` : undefined,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["menu-items", RESTAURANT_ID] });
+                } catch (e) {
+                  toast({ title: "Backfill failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+                } finally {
+                  setBackfillBusy(false);
+                }
+              }}
+            >
+              {backfillBusy ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+              Match library photos
+            </Button>
             <Link href="/settings/direct-ordering">
               <Button size="sm" variant="outline">
                 <Globe className="w-3.5 h-3.5 mr-1.5" /> Online Ordering
