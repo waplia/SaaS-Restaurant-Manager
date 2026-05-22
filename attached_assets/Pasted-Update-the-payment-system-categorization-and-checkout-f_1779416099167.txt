@@ -1,0 +1,553 @@
+Update the payment system categorization and checkout flow.
+
+The customer checkout should show only two main payment choices:
+
+1. Pay at Counter / Offline Payment
+2. Pay Online
+
+Do not mix offline payment methods with online gateway methods.
+
+==================================================
+1. PAYMENT CATEGORY STRUCTURE
+==================================================
+
+Create payment categories like this:
+
+A. OFFLINE PAYMENT MODES
+These are restaurant/counter-controlled payment modes.
+
+- Pay at Counter
+- Cash
+- Card Machine / POS Swipe at Counter
+- UPI at Counter
+- Bank Transfer
+- Pay Later / Credit customer
+- Room charge / hotel charge if applicable
+- Manual staff-collected payment
+- Cash on Delivery if delivery is enabled
+
+Offline payment does not use online gateway checkout.
+Offline payment should not auto-confirm as online paid unless staff marks it collected.
+
+B. ONLINE PAYMENT MODES
+These are customer self-payment methods from app/web checkout.
+
+Online payment should include:
+
+Platform Gateway:
+- Razorpay
+- Cashfree
+- PhonePe
+- PayU
+- Paytm
+- CCAvenue
+- BillDesk
+- Instamojo
+- Easebuzz
+- Pine Labs / Plural
+- Juspay Orchestration
+
+Restaurant Own Gateway:
+- Restaurant's own Razorpay
+- Restaurant's own Cashfree
+- Restaurant's own PhonePe
+- Restaurant's own PayU
+- Restaurant's own Paytm
+- Restaurant's own CCAvenue
+- Restaurant's own BillDesk
+- Restaurant's own Instamojo
+- Restaurant's own Easebuzz
+- Restaurant's own Pine Labs / Plural
+- Restaurant's own Juspay setup
+
+Restaurant Own Manual UPI:
+- Manual UPI ID / VPA
+- UPI Intent
+- Dynamic UPI QR
+- Static UPI QR
+- Copy UPI ID
+- Enter UTR
+- Upload screenshot optional
+- Manual verification by restaurant/admin
+
+Manual UPI should be under Online Payment, but inside Own Payment Method, not platform gateway.
+
+==================================================
+2. CUSTOMER CHECKOUT UI FLOW
+==================================================
+
+At checkout, customer should first see:
+
+Payment Method:
+- Pay at Counter
+- Pay Online
+
+If customer selects Pay at Counter:
+Show offline options enabled by restaurant:
+- Cash at Counter
+- Card Machine at Counter
+- UPI at Counter
+- Cash on Delivery
+- Bank Transfer
+- Pay Later if allowed
+
+Order payment status should become:
+- cash_pending
+- counter_payment_pending
+- cod_pending
+- offline_payment_pending
+
+Order should not be marked paid until staff confirms payment.
+
+If customer selects Pay Online:
+Show online methods enabled by restaurant:
+- UPI
+- Cards
+- Net Banking
+- Wallet
+- QR
+- Payment Link
+- Manual UPI Intent / QR if enabled
+
+Then system should decide payment source:
+- Platform Gateway
+- Restaurant Own Gateway
+- Restaurant Own Manual UPI
+
+==================================================
+3. RESTAURANT PAYMENT SETTINGS
+==================================================
+
+Create restaurant payment settings with clear sections:
+
+A. Offline Payment Settings
+Restaurant can enable/disable:
+- Pay at Counter
+- Cash
+- Card Machine
+- UPI at Counter
+- Cash on Delivery
+- Bank Transfer
+- Pay Later / Credit
+
+Offline settings fields:
+- Enable pay at counter
+- Enable cash
+- Enable counter card machine
+- Enable counter UPI
+- Enable COD
+- Enable bank transfer
+- Enable pay later
+- Require staff confirmation
+- Allow unpaid order to go to kitchen
+- Hold order until payment collected
+- Show payment instructions
+- Receipt note
+
+B. Online Payment Settings
+Restaurant can choose online payment source:
+
+Option 1: Use Platform Gateway
+Customer online payments go through platform gateway.
+
+Option 2: Use Own Gateway
+Restaurant enters own payment gateway credentials.
+
+Option 3: Use Own Manual UPI
+Restaurant enters own UPI ID/VPA and uses UPI intent/QR.
+
+Option 4: Mixed Online Payments
+Restaurant can enable platform gateway, own gateway, and own manual UPI together if allowed.
+
+==================================================
+4. ONLINE PAYMENT OWNERSHIP LOGIC
+==================================================
+
+If restaurant selects Platform Gateway:
+- Payment goes to platform gateway account.
+- Webhook verifies payment.
+- Platform records gateway fee, platform fee, settlement amount.
+- Restaurant receives settlement based on settlement rules.
+
+If restaurant selects Own Gateway:
+- Payment goes directly to restaurant gateway account.
+- Restaurant credentials are stored encrypted.
+- Webhook still updates order status in platform.
+- Super Admin can see transaction metadata but cannot see secret keys.
+
+If restaurant selects Own Manual UPI:
+- Restaurant adds UPI ID/VPA and merchant name.
+- System generates UPI intent link and QR dynamically.
+- Customer can open PhonePe, Google Pay, Paytm, BHIM, etc.
+- Customer can copy UPI ID.
+- Customer can enter UTR/reference number.
+- Customer can upload screenshot optional.
+- Order status becomes manual_verification_pending.
+- Restaurant/admin must verify and mark payment as manually_verified.
+- Do not auto-mark manual UPI as paid only from app callback.
+
+Manual UPI is online customer self-payment, but it is not gateway-verified. It requires manual verification unless bank statement reconciliation is added later.
+
+==================================================
+5. ADMIN PAYMENT SETTINGS STRUCTURE
+==================================================
+
+Super Admin should have:
+
+Payment Settings
+- Platform Gateways
+- Online Gateway Routing
+- Offline Payment Modes
+- Manual UPI Rules
+- Settlement Settings
+- Gateway Webhooks
+- Payment Logs
+- Refunds
+- Invoices
+- Subscription Billing
+
+Restaurant Admin should have:
+
+Payment Settings
+- Offline Payment Modes
+- Online Payment Methods
+- Platform Gateway / Own Gateway Selection
+- Manual UPI Setup
+- Checkout Rules
+- Payment Verification
+- Refunds
+- Payment History
+
+==================================================
+6. PAYMENT STATUS FLOW
+==================================================
+
+Use separate statuses for online and offline.
+
+Online gateway statuses:
+- created
+- pending
+- initiated
+- authorized
+- paid
+- failed
+- cancelled
+- expired
+- refunded
+- partially_refunded
+
+Manual UPI statuses:
+- upi_pending
+- utr_submitted
+- screenshot_submitted
+- manual_verification_pending
+- manually_verified
+- manual_rejected
+
+Offline statuses:
+- counter_payment_pending
+- cash_pending
+- card_machine_pending
+- cod_pending
+- bank_transfer_pending
+- pay_later_pending
+- cash_collected
+- offline_paid
+- offline_cancelled
+
+Order payment statuses:
+- unpaid
+- online_payment_pending
+- paid
+- failed
+- refunded
+- partially_paid
+- offline_payment_pending
+- manual_verification_pending
+- manually_verified
+- cash_collected
+
+==================================================
+7. CHECKOUT RULES
+==================================================
+
+Restaurant should configure:
+
+- Allow Pay at Counter
+- Allow Online Payment
+- Require online payment before kitchen accepts order
+- Allow kitchen order before payment
+- Auto-confirm gateway-paid orders
+- Hold manual UPI orders until verified
+- Hold offline orders until staff accepts
+- Minimum order amount for online payment
+- Payment expiry timer
+- Allow partial payment
+- Allow advance payment
+- Allow tip
+- Allow split payment
+- Allow online + cash balance payment
+
+For QR table orders:
+- Restaurant can allow Pay at Counter or Online Payment.
+
+For takeaway/delivery:
+- Restaurant can allow Online Payment, Cash on Delivery, or Pay at Counter based on settings.
+
+For POS counter order:
+- Staff can choose Cash, Card Machine, UPI at Counter, Online Link, or Manual UPI.
+
+==================================================
+8. MANUAL UPI INTENT / QR REQUIREMENTS
+==================================================
+
+Manual UPI should work properly as restaurant's own online payment method.
+
+Restaurant manual UPI setup:
+- UPI ID / VPA
+- Merchant name
+- QR display name
+- Payment note format
+- Enable dynamic QR
+- Enable static QR
+- Enable UPI intent
+- Enable copy UPI ID
+- Require UTR
+- Allow screenshot upload
+- Payment expiry minutes
+- Verification instructions
+- Success message
+- Pending verification message
+
+Generate UPI intent format:
+
+upi://pay?pa={upi_id}&pn={merchant_name}&am={amount}&cu=INR&tn={order_note}&tr={order_reference}
+
+Customer flow:
+1. Customer chooses Pay Online.
+2. Customer selects Manual UPI / UPI QR.
+3. App shows QR and button "Pay with UPI App".
+4. Customer pays using any UPI app.
+5. Customer enters UTR/reference number.
+6. Customer uploads screenshot optional.
+7. Order moves to manual_verification_pending.
+8. Restaurant verifies payment.
+9. Order becomes manually_verified/paid.
+
+Do not mark manual UPI as paid only because user clicked "I have paid".
+
+==================================================
+9. DATABASE UPDATE
+==================================================
+
+Update database to separate payment categories.
+
+payment_methods:
+- id
+- restaurant_id
+- category: offline/online
+- type: cash/card_machine/upi_counter/cod/bank_transfer/pay_later/platform_gateway/own_gateway/manual_upi
+- gateway_code nullable
+- is_enabled
+- config_json
+- created_at
+- updated_at
+
+restaurant_payment_settings:
+- id
+- restaurant_id
+- allow_pay_at_counter
+- allow_online_payment
+- online_payment_source: platform_gateway/own_gateway/manual_upi/mixed
+- offline_payment_required_confirmation
+- manual_upi_requires_verification
+- hold_order_until_paid
+- payment_expiry_minutes
+- created_at
+- updated_at
+
+manual_upi_settings:
+- id
+- restaurant_id
+- upi_id_encrypted
+- merchant_name
+- enable_dynamic_qr
+- enable_static_qr
+- enable_intent
+- require_utr
+- allow_screenshot
+- instructions
+- is_enabled
+- created_at
+- updated_at
+
+payments:
+- id
+- restaurant_id
+- order_id
+- payment_category: online/offline
+- payment_type
+- payment_source: platform_gateway/own_gateway/manual_upi/offline
+- gateway_code nullable
+- gateway_order_id nullable
+- gateway_payment_id nullable
+- amount
+- currency
+- status
+- utr_number nullable
+- screenshot_url nullable
+- verified_by nullable
+- verified_at nullable
+- raw_response_json
+- created_at
+- updated_at
+
+offline_payment_collections:
+- id
+- restaurant_id
+- order_id
+- payment_id
+- collected_by_staff_id
+- collection_method
+- amount
+- note
+- collected_at
+
+manual_payment_verifications:
+- id
+- restaurant_id
+- order_id
+- payment_id
+- utr_number
+- screenshot_url
+- status: pending/approved/rejected
+- reviewed_by
+- review_note
+- submitted_at
+- reviewed_at
+
+==================================================
+10. ROLE PERMISSIONS
+==================================================
+
+Permissions:
+
+Super Admin:
+- Manage platform gateways
+- Manage global online gateway routing
+- View all transactions
+- Manage settlement
+- Manage platform subscription billing
+
+Restaurant Owner/Admin:
+- Manage own gateway
+- Manage manual UPI
+- Manage offline payment modes
+- Verify manual UPI payments
+- View restaurant payments
+- Process allowed refunds
+
+Manager:
+- Verify manual UPI if permission enabled
+- Mark offline payment collected
+- View payment reports
+
+Cashier/POS Staff:
+- Mark cash collected
+- Mark card machine collected
+- Mark UPI at counter collected
+- Generate payment link if allowed
+
+Kitchen Staff:
+- Should not manage payments unless allowed
+- Can see paid/unpaid badge only
+
+==================================================
+11. UI REQUIREMENTS
+==================================================
+
+Use a clean guided setup.
+
+Restaurant Payment Setup Wizard:
+
+Step 1: Choose accepted payment types
+- Pay at Counter
+- Pay Online
+
+Step 2: Configure Offline Modes
+- Cash
+- Counter UPI
+- Card Machine
+- COD
+- Bank Transfer
+- Pay Later
+
+Step 3: Configure Online Source
+- Use Platform Gateway
+- Use Own Gateway
+- Use Own Manual UPI
+- Mixed
+
+Step 4: Configure Gateway or UPI
+- If Platform Gateway: select enabled platform gateway methods
+- If Own Gateway: select gateway and enter credentials
+- If Own Manual UPI: enter UPI ID, merchant name, QR/intent settings
+
+Step 5: Checkout Rules
+- Hold orders until paid
+- Allow unpaid kitchen orders
+- Payment expiry
+- Manual verification required
+- Staff confirmation required
+
+Step 6: Test
+- Test online gateway
+- Generate test UPI QR
+- Test UPI intent
+- Test offline payment marking
+
+No raw ID inputs.
+Use toggles, cards, dropdowns, searchable pickers, and guided setup.
+Show clear badges:
+- Offline
+- Online
+- Platform Gateway
+- Own Gateway
+- Manual UPI
+- Requires Verification
+- Auto Verified
+- Staff Confirmation Required
+
+==================================================
+12. FINAL BEHAVIOR
+==================================================
+
+Final customer checkout must be simple:
+
+Customer sees:
+- Pay at Counter
+- Pay Online
+
+If Pay at Counter:
+Show offline methods only.
+
+If Pay Online:
+Show online methods only:
+- Platform gateway methods
+- Own gateway methods
+- Manual UPI QR/Intent
+
+Manual UPI intent and QR must work under restaurant own payment setup.
+Offline payment modes must be separate from online gateway methods.
+Gateway payments must be verified by webhook.
+Manual UPI must be verified manually through UTR/screenshot/admin approval.
+Offline payments must be marked collected by staff.
+
+Do not mix offline and online payment settings.
+Do not show payment gateway names directly to customers unless needed.
+Customer should see simple labels like UPI, Card, Net Banking, Wallet, QR, Pay at Counter.
+Admin should see gateway-level configuration.
+No mock data.
+No fake success.
+No broken routes.
+No Coming Soon.

@@ -269,7 +269,18 @@ export default function NewOrderMenuScreen() {
       setPendingOrder(null);
       clearCart();
       setCartOpen(false);
-      router.replace("/(owner)/orders" as never);
+      // Dismiss the new-order modal back to whatever screen launched it
+      // (waiter Tables, owner Home, etc.). Hard-navigating to a fixed
+      // "/(owner)/orders" route caused an infinite redirect loop for
+      // non-owner roles (waiter/captain/delivery) because that route is
+      // gated by the owner AuthGate, which Redirects to "/", which
+      // Redirects back via roleHomePath, blowing the React update depth.
+      try {
+        if (router.canDismiss()) router.dismissAll();
+        else router.back();
+      } catch {
+        router.back();
+      }
     } catch (err) {
       const e = err as { data?: { error?: string } | null; message?: string };
       const serverMsg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
