@@ -159,13 +159,17 @@ async function markPaidFromTransaction(args: {
     restaurantId: args.restaurantId,
     direction: "in",
     method: args.method,
+    // Task #587 — categorize this as an online payment routed through PhonePe.
+    paymentCategory: "online",
+    paymentSource: "platform_gateway",
+    gatewayCode: "phonepe",
     amount: (args.amountPaise / 100).toFixed(2),
     referenceType: "order",
     referenceId: args.orderId,
     partyType: "other",
     terminalProvider: "phonepe",
     terminalRefId: String(args.txnRowId),
-  }).returning({ id: paymentsTable.id });
+  } as never).returning({ id: paymentsTable.id });
 
   await db.update(phonepeTransactionsTable)
     .set({ paymentId: pay.id, updatedAt: new Date() })

@@ -11,6 +11,34 @@ import { z } from "zod";
 
 const router = Router();
 
+/** Task #587 — Map a free-text payment method ("cash", "card", "razorpay", …)
+ *  into the new payments.payment_category / payment_source / gateway_code
+ *  triple. Used by every manual-entry / settle code path so historical
+ *  reports can filter on the new columns. Conservative: anything we don't
+ *  recognise gets `null` rather than guessing wrong. */
+function inferPaymentCategory(method: string): {
+  category: "offline" | "online" | null;
+  source: "platform_gateway" | "own_gateway" | "manual_upi" | null;
+  gatewayCode: string | null;
+} {
+  const m = method.toLowerCase();
+  if (m === "cash" || m === "bank" || m === "room_charge" || m === "package_comp") {
+    return { category: "offline", source: null, gatewayCode: null };
+  }
+  if (m === "card" || m === "upi") {
+    // Counter-tendered card or UPI is offline; gateway-routed card/UPI flows
+    // arrive through stripe/razorpay/phonepe/cashfree below, not as bare "card"/"upi".
+    return { category: "offline", source: null, gatewayCode: null };
+  }
+  if (m === "stripe" || m === "razorpay" || m === "cashfree" || m === "phonepe" || m === "payu") {
+    return { category: "online", source: "platform_gateway", gatewayCode: m };
+  }
+  if (m === "manual_upi") {
+    return { category: "online", source: "manual_upi", gatewayCode: null };
+  }
+  return { category: null, source: null, gatewayCode: null };
+}
+
 const PaymentMethods = z.enum(["cash", "card", "upi", "stripe", "razorpay", "bank", "room_charge", "package_comp", "other"]);
 const SettleMethods = z.enum(["cash", "card", "upi", "stripe", "razorpay", "bank", "other"]);
 
@@ -254,10 +282,14 @@ router.post(
       }
     }
 
+    const cat = inferPaymentCategory(method);
     const [row] = await db.insert(paymentsTable).values({
       restaurantId,
       direction,
       method,
+      paymentCategory: cat.category,
+      paymentSource: cat.source,
+      gatewayCode: cat.gatewayCode,
       amount: amountNum.toFixed(2),
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       partyType: partyType ?? "other",
@@ -267,7 +299,7 @@ router.post(
       referenceId: referenceId ?? null,
       notes: notes ?? null,
       recordedBy: req.user?.sub ?? null,
-    }).returning();
+    } as never).returning();
 
     res.status(201).json(row);
   },
@@ -309,10 +341,14 @@ router.post(
         const remainingDue = Math.max(0, Number(order.totalAmount) - previouslyPaid);
         if (amountNum > remainingDue + 0.01) throw new Error("OVERPAYMENT_ORDER");
 
+        const catO = inferPaymentCategory(method);
         const [payment] = await tx.insert(paymentsTable).values({
           restaurantId,
           direction: "in",
           method,
+          paymentCategory: catO.category,
+          paymentSource: catO.source,
+          gatewayCode: catO.gatewayCode,
           amount: amountNum.toFixed(2),
           paymentDate: new Date(),
           partyType: order.customerId ? "customer" : "other",
@@ -322,7 +358,7 @@ router.post(
           referenceId: order.id,
           notes: notes ?? null,
           recordedBy: req.user?.sub ?? null,
-        }).returning();
+        } as never).returning();
 
         const total = Number(order.totalAmount);
         const cumulativePaid = previouslyPaid + amountNum;
@@ -343,10 +379,14 @@ router.post(
         const remainingDue = Math.max(0, Number(po.totalAmount) - Number(po.paidAmount));
         if (amountNum > remainingDue + 0.01) throw new Error("OVERPAYMENT_PO");
 
+        const catP = inferPaymentCategory(method);
         const [payment] = await tx.insert(paymentsTable).values({
           restaurantId,
           direction: "out",
           method,
+          paymentCategory: catP.category,
+          paymentSource: catP.source,
+          gatewayCode: catP.gatewayCode,
           amount: amountNum.toFixed(2),
           paymentDate: new Date(),
           partyType: po.supplierId ? "supplier" : "other",
@@ -356,7 +396,7 @@ router.post(
           referenceId: po.id,
           notes: notes ?? null,
           recordedBy: req.user?.sub ?? null,
-        }).returning();
+        } as never).returning();
 
         const newPaid = Number(po.paidAmount) + amountNum;
         await tx.update(purchaseOrdersTable).set({

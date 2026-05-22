@@ -84,7 +84,16 @@ export default function CartScreen() {
       const baseUrl = `${getApiBaseUrl()}`;
       const resp = await fetch(
         `${baseUrl}/api/public/orders/${orderResult.orderId}/payment-intent?token=${orderResult.guestToken}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Task #587 — Leave paymentSource unspecified so the server picks
+          // the first enabled online method for this restaurant. Mobile
+          // doesn't yet expose the sub-list (follow-up #589); hardcoding
+          // platform_gateway would 403 restaurants configured as
+          // manual_upi or own_gateway.
+          body: "{}",
+        }
       );
       const data = (await resp.json()) as { mode: string; checkoutUrl?: string | null; totalAmount: string; clientSecret?: string | null; intentId?: string };
 

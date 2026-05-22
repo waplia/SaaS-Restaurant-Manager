@@ -32,6 +32,13 @@ export const ordersTable = pgTable("orders", {
   customerId: integer("customer_id"),
   isPriority: boolean("is_priority").notNull().default(false),
   stripePaymentId: text("stripe_payment_id"),
+  // Task #587 — When the customer chose "Pay Online", these stash the
+  // resolved online sub-method (platform_gateway / own_gateway / manual_upi
+  // and the gateway code) so the downstream `/pay` confirmation can write
+  // the payments ledger row with the correct payment_source/gateway_code
+  // without re-resolving against admin settings.
+  paymentSource: text("payment_source"),
+  paymentGatewayCode: text("payment_gateway_code"),
   couponCode: text("coupon_code"),
   loyaltyPointsRedeemed: integer("loyalty_points_redeemed").notNull().default(0),
   // Delivery aggregator tagging (Task #148): which aggregator the order

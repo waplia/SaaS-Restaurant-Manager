@@ -28,6 +28,19 @@ export const paymentsTable = pgTable("payments", {
   deviceId: integer("device_id").references(() => devicesTable.id, { onDelete: "set null" }),
   terminalProvider: text("terminal_provider"),
   terminalRefId: text("terminal_ref_id"),
+  // Task #587 — payment categorisation. These mirror the `payment_methods`
+  // taxonomy so reports/exports can pivot the ledger by Offline vs Online or
+  // by source (counter cash vs. own gateway vs. manual UPI) without parsing
+  // free-text `method`. Nullable for legacy rows; the data migration backfills
+  // them from `method` on a best-effort basis.
+  //   paymentCategory: "offline" | "online"
+  //   paymentSource:   one of PaymentMethodType (cash, counter_card,
+  //                    counter_upi, platform_gateway, own_gateway, manual_upi, …)
+  //   gatewayCode:     when the source is platform_gateway / own_gateway,
+  //                    the named gateway (razorpay | cashfree | stripe | …)
+  paymentCategory: text("payment_category"),
+  paymentSource: text("payment_source"),
+  gatewayCode: text("gateway_code"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

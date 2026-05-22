@@ -421,7 +421,7 @@ function BranchSection() {
 
 /* Inline branch CRUD using existing /restaurants/:id/branches endpoints */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
 
@@ -718,77 +718,227 @@ function TaxesSection() {
   );
 }
 
-/* ---------------- 9. Payment ---------------- */
-interface PaymentMethodCfg { id: string; label: string; enabled: boolean; surchargePct: number; }
-interface PaymentCfg {
-  methods: PaymentMethodCfg[];
-  tipPresets: number[]; // %
-  rounding: "none" | "nearest" | "up" | "down";
-  roundingPrecision: number;
-  mandatoryTendered: boolean; showChangeDue: boolean;
+/* ---------------- 9. Payment ----------------
+ * Task #587 — Restructured into two explicit groups:
+ *   • Offline (counter) — Pay at Counter, Cash, Card on counter, UPI on counter,
+ *     COD, Bank Transfer, Pay Later. Only ever shown to staff in the POS flow.
+ *   • Online — Platform gateways, Restaurant Own Payment Method (own gateway
+ *     keys), and Manual UPI. This is the ONLY pool the customer sees at
+ *     QR / online checkout.
+ * POS flow is unchanged — it continues to read `restaurants.acceptedPaymentMethods`. */
+interface PaymentMethodRow { id: number; category: "offline" | "online"; type: string; label: string | null; isEnabled: boolean; gatewayCode: string | null; sortOrder: number; config: Record<string, unknown>; }
+interface PaymentConfigDTO {
+  settings: { restaurantId: number; offlineEnabled: boolean; onlineEnabled: boolean; onlinePaymentSource: "platform_gateway" | "own_gateway" | "manual_upi" | "mixed"; defaultCustomerChoice: "pay_at_counter" | "pay_online" };
+  offlineMethods: PaymentMethodRow[];
+  onlineMethods: PaymentMethodRow[];
+  manualUpi: null | { restaurantId: number; upiId: string | null; merchantName: string | null; enableDynamicQr: boolean; enableStaticQr: boolean; staticQrUrl: string | null; enableIntentLink: boolean; enableCopyUpiId: boolean; requireUtr: boolean; allowScreenshotUpload: boolean; autoConfirmUnderAmount: number | null; notes: string | null };
 }
+
+const OFFLINE_CATALOG: Array<{ type: string; label: string; hint: string }> = [
+  { type: "pay_at_counter", label: "Pay at Counter", hint: "Generic option diners pick when they want to pay at the counter on serve. Always available." },
+  { type: "cash", label: "Cash", hint: "Counter tender for physical cash." },
+  { type: "counter_card", label: "Card at counter", hint: "Card swipe / dip on a POS terminal." },
+  { type: "counter_upi", label: "UPI at counter", hint: "Static QR or scan-to-pay UPI at the counter." },
+  { type: "cod", label: "Cash on Delivery", hint: "Pay the rider on delivery." },
+  { type: "bank_transfer", label: "Bank transfer", hint: "Customer transfers offline; settle in person." },
+  { type: "pay_later", label: "Pay later / Tab", hint: "Open tab — settled at end of visit." },
+];
+
 function PaymentSection() {
-  const defaults: PaymentCfg = {
-    methods: [
-      { id: "cash", label: "Cash", enabled: true, surchargePct: 0 },
-      { id: "card", label: "Card", enabled: true, surchargePct: 0 },
-      { id: "upi", label: "UPI", enabled: true, surchargePct: 0 },
-      { id: "wallet", label: "Wallet", enabled: false, surchargePct: 0 },
-      { id: "bank", label: "Bank transfer", enabled: false, surchargePct: 0 },
-      { id: "online", label: "Online (Stripe / Razorpay)", enabled: true, surchargePct: 0 },
-    ],
-    tipPresets: [0, 5, 10, 15, 20],
-    rounding: "nearest", roundingPrecision: 1,
-    mandatoryTendered: true, showChangeDue: true,
-  };
-  // QR-menu online payment toggle is a real DB column on `restaurants` so the
-  // public menu endpoint and the diner-facing checkout can gate the "Pay by
-  // Card Online" radio on it. Lives next to the cosmetic Methods list so
-  // owners find both knobs in one place.
-  const { data: restaurant } = useRestaurantInfo();
-  const updateRestaurant = useUpdateRestaurant();
-  const onlinePayEnabled = !!restaurant?.enableOnlinePayment;
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<PaymentConfigDTO>({
+    queryKey: ["payment-config", RESTAURANT_ID],
+    queryFn: () => apiGet(`/restaurants/${RESTAURANT_ID}/payment-config`),
+  });
+  const updateSettings = useMutation({
+    mutationFn: (patch: Partial<PaymentConfigDTO["settings"]>) => apiPut(`/restaurants/${RESTAURANT_ID}/payment-config/settings`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-config", RESTAURANT_ID] }),
+  });
+  const upsertMethod = useMutation({
+    mutationFn: (body: { category: "offline" | "online"; type: string; isEnabled: boolean; gatewayCode?: string | null; label?: string | null }) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/payment-config/methods`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-config", RESTAURANT_ID] }),
+  });
+  const upsertManualUpi = useMutation({
+    mutationFn: (body: Partial<NonNullable<PaymentConfigDTO["manualUpi"]>>) =>
+      apiPut(`/restaurants/${RESTAURANT_ID}/payment-config/manual-upi`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-config", RESTAURANT_ID] }),
+  });
+
+  if (isLoading || !data) return <div className="text-sm text-muted-foreground p-4">Loading payment settings…</div>;
+
+  const settings = data.settings;
+  const offlineByType = new Map(data.offlineMethods.map(m => [m.type, m] as const));
+  // Online rows keyed by `type:gateway` so own_gateway (razorpay) ≠ own_gateway (cashfree).
+  const onlineKey = (type: string, gateway: string | null) => `${type}:${gateway ?? ""}`;
+  const onlineByKey = new Map(data.onlineMethods.map(m => [onlineKey(m.type, m.gatewayCode), m] as const));
+  const manualUpi = data.manualUpi;
+  const ownGateways = ["razorpay", "cashfree", "stripe", "phonepe", "payu"];
+
   return (
-    <SettingForm section="payment" defaults={defaults}
-      description="Accepted methods and checkout behavior. Live keys for online gateways stay in Replit Secrets.">
-      {(s, set) => (
-        <>
-          <div className="border border-border rounded-lg p-3 bg-muted/30">
-            <Toggle
-              label="Accept online payment on QR / online menu"
-              hint="When ON, diners scanning a table QR or visiting your public menu can choose 'Pay by Card Online' (Stripe / Razorpay) at checkout. When OFF, only 'Pay at Counter' is shown. OFF by default."
-              checked={onlinePayEnabled}
-              onChange={(v) => updateRestaurant.mutate({ enableOnlinePayment: v })}
-            />
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Choose what the customer sees at QR / online checkout (always collapsed to
+        <strong> Pay at Counter</strong> and <strong>Pay Online</strong>) and what
+        the POS counter accepts. Counter-only methods never leak to the diner.
+      </p>
+
+      {/* ─── OFFLINE ─── */}
+      <div className="border border-border rounded-xl bg-white">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-sm">Offline (Counter)</p>
+            <p className="text-xs text-muted-foreground">Tendered face-to-face by staff. Hidden from the customer-facing checkout.</p>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Methods</p>
-          <div className="space-y-2">
-            {s.methods.map((m, i) => (
-              <div key={m.id} className="flex items-center gap-3 border border-border rounded-lg p-3">
-                <input type="checkbox" checked={m.enabled} onChange={e => set(p => ({ ...p, methods: p.methods.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x) }))} />
-                <span className="font-medium text-sm flex-1">{m.label}</span>
-                <span className="text-xs text-muted-foreground">Surcharge %</span>
-                <Input className="w-20 h-8" type="number" step="0.1" value={m.surchargePct}
-                  onChange={e => set(p => ({ ...p, methods: p.methods.map((x, j) => j === i ? { ...x, surchargePct: Number(e.target.value) } : x) }))} />
+          <Toggle
+            label="Enabled"
+            checked={settings.offlineEnabled}
+            onChange={v => updateSettings.mutate({ offlineEnabled: v })}
+          />
+        </div>
+        <div className="p-4 space-y-2">
+          {OFFLINE_CATALOG.map(c => {
+            const row = offlineByType.get(c.type);
+            const enabled = row?.isEnabled ?? (c.type === "pay_at_counter");
+            return (
+              <div key={c.type} className="flex items-start gap-3 border border-border rounded-lg p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={enabled}
+                  onChange={e => upsertMethod.mutate({ category: "offline", type: c.type, isEnabled: e.target.checked })}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{c.label}</p>
+                  <p className="text-xs text-muted-foreground">{c.hint}</p>
+                </div>
               </div>
-            ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── ONLINE ─── */}
+      <div className="border border-border rounded-xl bg-white">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-sm">Online</p>
+            <p className="text-xs text-muted-foreground">Customer picks one of these under "Pay Online" at checkout.</p>
           </div>
-          <Field label="Tip presets (%)" hint="Comma-separated percentages shown at checkout">
-            <Input value={s.tipPresets.join(",")} onChange={e => set(p => ({ ...p, tipPresets: e.target.value.split(",").map(x => Number(x.trim())).filter(n => !isNaN(n)) }))} />
-          </Field>
-          <Row>
-            <Field label="Rounding rule">
-              <Select value={s.rounding} onChange={v => set(p => ({ ...p, rounding: v as PaymentCfg["rounding"] }))} options={[
-                { value: "none", label: "No rounding" }, { value: "nearest", label: "Nearest" }, { value: "up", label: "Always up" }, { value: "down", label: "Always down" },
-              ]} />
+          <Toggle
+            label="Accept online payments"
+            checked={settings.onlineEnabled}
+            onChange={v => updateSettings.mutate({ onlineEnabled: v })}
+          />
+        </div>
+
+        {settings.onlineEnabled && (
+          <div className="p-4 space-y-5">
+            {/* Routing source — controls which sub-list the customer sees. */}
+            <Field label="Online payment source" hint="What backs the customer's 'Pay Online' choice. Use 'Mixed' to expose multiple options.">
+              <Select
+                value={settings.onlinePaymentSource}
+                onChange={v => updateSettings.mutate({ onlinePaymentSource: v as typeof settings.onlinePaymentSource })}
+                options={[
+                  { value: "platform_gateway", label: "Platform-managed gateway (Stripe / Razorpay / Cashfree set up by the team)" },
+                  { value: "own_gateway", label: "Restaurant Own Payment Method — own gateway keys" },
+                  { value: "manual_upi", label: "Restaurant Own Payment Method — Manual UPI only" },
+                  { value: "mixed", label: "Mixed (show every enabled option)" },
+                ]}
+              />
             </Field>
-            <Field label="Rounding precision"><Input type="number" step="0.01" value={s.roundingPrecision} onChange={e => set(p => ({ ...p, roundingPrecision: Number(e.target.value) }))} /></Field>
-          </Row>
-          <Toggle label="Mandatory tendered-cash entry" checked={s.mandatoryTendered} onChange={v => set(p => ({ ...p, mandatoryTendered: v }))} />
-          <Toggle label="Show change due on screen and receipt" checked={s.showChangeDue} onChange={v => set(p => ({ ...p, showChangeDue: v }))} />
-        </>
-      )}
-    </SettingForm>
+            <Field label="Customer default" hint="Which top-level radio is preselected at checkout when both Counter and Online are available.">
+              <Select
+                value={settings.defaultCustomerChoice}
+                onChange={v => updateSettings.mutate({ defaultCustomerChoice: v as typeof settings.defaultCustomerChoice })}
+                options={[
+                  { value: "pay_at_counter", label: "Pay at Counter" },
+                  { value: "pay_online", label: "Pay Online" },
+                ]}
+              />
+            </Field>
+
+            {/* Platform-managed gateway */}
+            <div className="border border-border rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platform-managed gateway</p>
+              <p className="text-xs text-muted-foreground">Stripe / Razorpay / Cashfree configured by the platform team. Toggle here to surface them at checkout.</p>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={onlineByKey.get(onlineKey("platform_gateway", null))?.isEnabled ?? false}
+                  onChange={e => upsertMethod.mutate({ category: "online", type: "platform_gateway", isEnabled: e.target.checked })}
+                />
+                <span className="text-sm">Enable platform gateway at checkout</span>
+              </label>
+            </div>
+
+            {/* Restaurant Own Payment Method — Own gateway keys */}
+            <div className="border border-border rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Restaurant Own Payment Method</p>
+              <p className="text-xs text-muted-foreground">Hook up your own gateway keys per provider, or enable Manual UPI below.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {ownGateways.map(g => {
+                  const row = onlineByKey.get(onlineKey("own_gateway", g));
+                  return (
+                    <label key={g} className="flex items-center gap-3 border border-border rounded-lg p-2">
+                      <input
+                        type="checkbox"
+                        checked={row?.isEnabled ?? false}
+                        onChange={e => upsertMethod.mutate({ category: "online", type: "own_gateway", gatewayCode: g, isEnabled: e.target.checked, label: `Pay with ${g.charAt(0).toUpperCase() + g.slice(1)}` })}
+                      />
+                      <span className="text-sm capitalize">{g}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Manual UPI — lives under Online > Restaurant Own Payment Method */}
+            <div className="border border-border rounded-lg p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Manual UPI <span className="normal-case text-[10px] text-muted-foreground/80">(under Restaurant Own Payment Method)</span></p>
+                  <p className="text-xs text-muted-foreground">Diners pay to your VPA, then enter UTR / upload screenshot for confirmation.</p>
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={onlineByKey.get(onlineKey("manual_upi", null))?.isEnabled ?? false}
+                    onChange={e => upsertMethod.mutate({ category: "online", type: "manual_upi", isEnabled: e.target.checked, label: "UPI (Restaurant's own)" })}
+                  />
+                  <span>Enable</span>
+                </label>
+              </div>
+              <Row>
+                <Field label="UPI ID / VPA">
+                  <Input
+                    placeholder="merchant@okhdfcbank"
+                    defaultValue={manualUpi?.upiId ?? ""}
+                    onBlur={e => upsertManualUpi.mutate({ upiId: e.target.value || null })}
+                  />
+                </Field>
+                <Field label="Merchant name shown to customer">
+                  <Input
+                    placeholder="Your Restaurant Pvt Ltd"
+                    defaultValue={manualUpi?.merchantName ?? ""}
+                    onBlur={e => upsertManualUpi.mutate({ merchantName: e.target.value || null })}
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Toggle label="Show dynamic QR" checked={manualUpi?.enableDynamicQr ?? true} onChange={v => upsertManualUpi.mutate({ enableDynamicQr: v })} />
+                <Toggle label="Show intent link (mobile)" checked={manualUpi?.enableIntentLink ?? true} onChange={v => upsertManualUpi.mutate({ enableIntentLink: v })} />
+              </Row>
+              <Row>
+                <Toggle label="Require UTR / reference" checked={manualUpi?.requireUtr ?? true} onChange={v => upsertManualUpi.mutate({ requireUtr: v })} />
+                <Toggle label="Allow screenshot upload" checked={manualUpi?.allowScreenshotUpload ?? true} onChange={v => upsertManualUpi.mutate({ allowScreenshotUpload: v })} />
+              </Row>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

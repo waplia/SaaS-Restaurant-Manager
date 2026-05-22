@@ -15,6 +15,7 @@ export * from "./loyalty";
 export * from "./loyalty-network";
 export * from "./expenses";
 export * from "./payments";
+export * from "./payment-config";
 export * from "./delivery";
 export * from "./cash-register";
 export * from "./waiter-requests";

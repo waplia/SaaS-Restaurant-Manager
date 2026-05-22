@@ -971,12 +971,55 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
   if (order.paymentStatus === "paid") return void res.json({ success: true, alreadyPaid: true, totalAmount: order.totalAmount });
 
   const [restaurant] = await db.select({ currency: restaurantsTable.currency, slug: restaurantsTable.slug, enableOnlinePayment: restaurantsTable.enableOnlinePayment }).from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
-  // Server-side enforcement of the QR/online-menu online-payment toggle.
-  // Hiding the radio in the UI is not enough — a hostile diner could still
-  // POST to this endpoint directly. Reject when the owner has disabled it.
-  if (!restaurant?.enableOnlinePayment) {
-    return void res.status(403).json({ error: "Online payment is disabled for this restaurant" });
+  if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
+
+  // Task #587 — Resolve the customer-requested online method against the
+  // restaurant's configured Online options. This both enforces the admin's
+  // `onlinePaymentSource` routing choice and rejects sources the customer
+  // tried to spoof via direct POST. Falls back to the first enabled option
+  // when the client doesn't send a choice (older single-button clients).
+  const { resolveCustomerOnlineMethod } = await import("../lib/paymentConfig");
+  const requested = (req.body ?? {}) as { paymentSource?: string; gatewayCode?: string | null };
+  const resolved = await resolveCustomerOnlineMethod(order.restaurantId, requested);
+  if (!resolved) {
+    return void res.status(403).json({ error: "Selected online payment method is not available for this restaurant" });
   }
+  // Stash the resolved choice on the order so /pay can tag the ledger row
+  // with the correct payment_source/gateway_code even when the client only
+  // echoes back `intentId`. Mirrors the legacy `paymentMethod` column for
+  // free-text method labels.
+  await db.update(ordersTable).set({
+    paymentSource: resolved.type,
+    paymentGatewayCode: resolved.gatewayCode,
+  }).where(eq(ordersTable.id, order.id));
+
+  // Task #587 — Manual UPI flow: no live payment processor; surface the
+  // restaurant's UPI VPA + reference so the customer can pay outside the
+  // app and submit a UTR/screenshot. Staff confirm asynchronously
+  // (Manual UPI confirmation queue, follow-up #588). We return an
+  // intent-shaped object so the existing client UI keeps working.
+  if (resolved.type === "manual_upi") {
+    const { getPaymentConfig, decryptManualUpi } = await import("../lib/paymentConfig");
+    const cfg = await getPaymentConfig(order.restaurantId);
+    const vpa = decryptManualUpi(cfg.manualUpi);
+    return void res.json({
+      mode: "manual_upi",
+      paymentSource: "manual_upi",
+      upiId: vpa,
+      merchantName: cfg.manualUpi?.merchantName ?? null,
+      requireUtr: cfg.manualUpi?.requireUtr ?? true,
+      allowScreenshotUpload: cfg.manualUpi?.allowScreenshotUpload ?? true,
+      enableIntentLink: cfg.manualUpi?.enableIntentLink ?? true,
+      enableStaticQr: cfg.manualUpi?.enableStaticQr ?? false,
+      staticQrUrl: cfg.manualUpi?.staticQrUrl ?? null,
+      enableCopyUpiId: cfg.manualUpi?.enableCopyUpiId ?? true,
+      totalAmount: order.totalAmount,
+      orderId: order.id,
+    });
+  }
+  // Own-gateway: behaviour identical to platform_gateway today (PhonePe /
+  // Razorpay codepaths live behind the same Stripe-style intent contract);
+  // record the routing tag and continue through the Stripe block below.
   const currency = (restaurant?.currency ?? "INR").toLowerCase();
   const amountSmallestUnit = Math.round(Number(order.totalAmount) * 100);
   const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -1044,6 +1087,35 @@ router.post("/public/orders/:id/pay", async (req, res) => {
     .set({ paymentStatus: "paid", paymentMethod: paymentMethod ?? "card", stripePaymentId: intentId })
     .where(eq(ordersTable.id, orderId))
     .returning();
+
+  // Task #587 — Persist a row in the payments ledger tagged with the new
+  // category / source / gateway columns so reports (and the upcoming Manual
+  // UPI staff confirmation flow) can filter on payment_source. Use the
+  // resolved choice stashed on the order at intent time so manual UPI /
+  // own-gateway flows aren't misreported as platform_gateway/stripe.
+  try {
+    const orderSource = (order as { paymentSource?: string | null }).paymentSource ?? "platform_gateway";
+    const orderGateway = (order as { paymentGatewayCode?: string | null }).paymentGatewayCode
+      ?? (intentId.startsWith("demo_") ? "demo" : "stripe");
+    await db.insert(paymentsTable).values({
+      restaurantId: order.restaurantId,
+      direction: "in",
+      method: paymentMethod ?? "card",
+      paymentCategory: "online",
+      paymentSource: orderSource,
+      gatewayCode: orderGateway,
+      amount: String(order.totalAmount),
+      paymentDate: new Date(),
+      partyType: order.customerId ? "customer" : "other",
+      partyId: order.customerId ?? null,
+      partyName: order.customerName ?? null,
+      referenceType: "order",
+      referenceId: order.id,
+      notes: `Public checkout intent ${intentId}`,
+    } as never).onConflictDoNothing();
+  } catch (err) {
+    req.log?.error({ err }, "public/pay: payments ledger insert failed (continuing)");
+  }
 
   broadcastEvent(order.restaurantId, "order:update", { id: order.id, status: order.status, paymentStatus: "paid" });
   broadcastOrderUpdate(orderId, { id: order.id, status: order.status, paymentStatus: "paid" });

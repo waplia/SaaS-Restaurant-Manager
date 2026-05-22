@@ -221,11 +221,24 @@ interface RewardsLookup {
 }
 
 interface PaymentIntentResponse {
-  mode: "live" | "demo";
+  // Task #587 — `manual_upi` mode is returned when the restaurant's Online
+  // source resolves to a manual VPA; the UI renders UPI ID / merchant /
+  // UTR / screenshot fields instead of the demo card form, and the
+  // payment is *not* auto-confirmed via /pay (staff confirms async).
+  mode: "live" | "demo" | "manual_upi";
   clientSecret?: string | null;
   checkoutUrl?: string;
   intentId?: string;
   totalAmount: string;
+  paymentSource?: string;
+  upiId?: string | null;
+  merchantName?: string | null;
+  requireUtr?: boolean;
+  allowScreenshotUpload?: boolean;
+  enableIntentLink?: boolean;
+  enableStaticQr?: boolean;
+  staticQrUrl?: string | null;
+  enableCopyUpiId?: boolean;
 }
 
 const STATUS_STEPS = [
@@ -348,7 +361,19 @@ export default function CustomerMenuPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
-  const [payMethod, setPayMethod] = useState<"pay_at_counter" | "card">("pay_at_counter");
+  // Task #587 — Two top-level choices the diner sees. `pay_online` expands to
+  // a sub-list (gateway / restaurant's own manual UPI) fetched from
+  // /public/restaurants/:slug/checkout-options.
+  const [payMethod, setPayMethod] = useState<"pay_at_counter" | "pay_online">("pay_at_counter");
+  // Selected online sub-method when `payMethod === "pay_online"`. Defaults to
+  // the first available one as soon as the options endpoint resolves.
+  const [selectedOnlineMethod, setSelectedOnlineMethod] = useState<string>("");
+  const [checkoutOptions, setCheckoutOptions] = useState<{
+    payAtCounterEnabled: boolean;
+    onlineEnabled: boolean;
+    defaultChoice: "pay_at_counter" | "pay_online";
+    onlineMethods: Array<{ type: string; gatewayCode: string | null; label: string }>;
+  } | null>(null);
   const [orderMode, setOrderMode] = useState<"dine_in" | "curbside" | "pickup" | "delivery">(tableId ? "dine_in" : "pickup");
   // Direct online ordering (Task #432) – schedule + delivery address + reorder
   const [scheduledFor, setScheduledFor] = useState<string>("");
@@ -366,6 +391,9 @@ export default function CustomerMenuPage() {
 
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   const [cardNumber, setCardNumber] = useState("");
+  // Task #587 — manual UPI customer-side capture (UTR + optional screenshot).
+  const [upiUtr, setUpiUtr] = useState("");
+  const [upiScreenshot, setUpiScreenshot] = useState<File | null>(null);
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
   const [cardError, setCardError] = useState<string | null>(null);
@@ -590,6 +618,34 @@ export default function CustomerMenuPage() {
       setTimeout(() => alert(`Some items are no longer available and were skipped:\n• ${missing.join("\n• ")}`), 100);
     }
   }
+
+  // Task #587 — Load checkout options (Pay at Counter + online sub-list).
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    apiPublicGet<{
+      payAtCounterEnabled: boolean;
+      onlineEnabled: boolean;
+      defaultChoice: "pay_at_counter" | "pay_online";
+      onlineMethods: Array<{ type: string; gatewayCode: string | null; label: string }>;
+    }>(`/public/restaurants/${slug}/checkout-options`)
+      .then(opts => {
+        if (cancelled) return;
+        setCheckoutOptions(opts);
+        // Honor restaurant's default choice when both options exist.
+        if (opts.onlineEnabled && opts.defaultChoice === "pay_online") {
+          setPayMethod("pay_online");
+        } else if (!opts.payAtCounterEnabled && opts.onlineEnabled) {
+          setPayMethod("pay_online");
+        }
+        if (opts.onlineMethods.length > 0) {
+          const first = opts.onlineMethods[0];
+          setSelectedOnlineMethod(`${first.type}:${first.gatewayCode ?? ""}`);
+        }
+      })
+      .catch(() => { /* fall back to legacy menu.enableOnlinePayment behavior */ });
+    return () => { cancelled = true; };
+  }, [slug]);
 
   // Poll order availability (capacity / pause status) for "not accepting orders" banner.
   useEffect(() => {
@@ -858,8 +914,18 @@ export default function CustomerMenuPage() {
       setOrderStatus(status);
       setCart([]);
 
-      if (payMethod === "card") {
-        const pi = await apiPublicPost<PaymentIntentResponse>(`/public/orders/${result.orderId}/payment-intent`, {}, result.guestToken);
+      if (payMethod === "pay_online") {
+        // Task #587 — selectedOnlineMethod is encoded as "type:gatewayCode"
+        // (see the radio onChange in the Pay Online sub-list); split it back
+        // into structured fields so the server can validate the customer's
+        // choice against the restaurant's configured Online options and
+        // tag the payments ledger correctly.
+        let onlineBody: { paymentSource?: string; gatewayCode?: string | null } = {};
+        if (selectedOnlineMethod) {
+          const [t, g] = selectedOnlineMethod.split(":");
+          onlineBody = { paymentSource: t, gatewayCode: g ? g : null };
+        }
+        const pi = await apiPublicPost<PaymentIntentResponse>(`/public/orders/${result.orderId}/payment-intent`, onlineBody, result.guestToken);
         setPaymentIntent(pi);
         if (pi.mode === "live" && pi.checkoutUrl) {
           window.location.href = pi.checkoutUrl;
@@ -1120,6 +1186,114 @@ export default function CustomerMenuPage() {
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-800 mb-2">Menu Not Found</p>
           <p className="text-gray-500">{error ?? "This restaurant menu is unavailable."}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "payment" && orderResult && paymentIntent && paymentIntent.mode === "manual_upi") {
+    // Task #587 — Manual UPI customer flow: VPA + intent link + optional
+    // static QR + UTR / screenshot capture. Staff confirms async via the
+    // admin Manual UPI queue (#588); customer side never auto-marks paid.
+    const amount = Number(paymentIntent.totalAmount).toFixed(2);
+    const upi = paymentIntent.upiId ?? "";
+    const intentUrl = upi
+      ? `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(paymentIntent.merchantName ?? "Restaurant")}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order #${orderResult.orderNumber}`)}`
+      : null;
+    return (
+      <div className="min-h-screen bg-orange-50 max-w-md mx-auto">
+        <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => setView("checkout")} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <p className="font-bold text-gray-900">Pay via UPI</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Pay this amount</p>
+              <p className="text-2xl font-bold text-orange-500">{currSymbol}{amount}</p>
+            </div>
+
+            {paymentIntent.enableStaticQr && paymentIntent.staticQrUrl && (
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs text-gray-500 mb-2">Scan QR with any UPI app</p>
+                <img src={paymentIntent.staticQrUrl} alt="UPI QR" className="mx-auto w-48 h-48 rounded-lg border border-gray-200" />
+              </div>
+            )}
+
+            {(paymentIntent.enableCopyUpiId ?? true) && upi && (
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs text-gray-500 mb-1">UPI ID</p>
+                <div className="flex items-center justify-between gap-2 bg-orange-50 rounded-xl px-3 py-2">
+                  <p className="font-mono text-sm text-gray-900 break-all">{upi}</p>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(upi)}
+                    className="text-xs font-semibold text-orange-600 px-2 py-1 rounded-md hover:bg-orange-100"
+                  >Copy</button>
+                </div>
+                {paymentIntent.merchantName && (
+                  <p className="text-xs text-gray-500 mt-2">Payable to <span className="font-medium text-gray-700">{paymentIntent.merchantName}</span></p>
+                )}
+              </div>
+            )}
+
+            {(paymentIntent.enableIntentLink ?? true) && intentUrl && (
+              <a href={intentUrl} className="block w-full bg-orange-500 text-white text-center font-semibold rounded-xl py-3 hover:bg-orange-600">
+                Open UPI app to pay
+              </a>
+            )}
+
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              {paymentIntent.requireUtr && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">UTR / reference number <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={upiUtr}
+                    onChange={e => setUpiUtr(e.target.value)}
+                    placeholder="12-digit transaction ref from your UPI app"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+              )}
+              {paymentIntent.allowScreenshotUpload && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Payment screenshot <span className="text-gray-400">(optional)</span></label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setUpiScreenshot(e.target.files?.[0] ?? null)}
+                    className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-orange-50 file:text-orange-600"
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={async () => {
+                if (paymentIntent.requireUtr && !upiUtr.trim()) {
+                  alert("Please enter the UTR / reference number from your UPI app so staff can verify your payment.");
+                  return;
+                }
+                try {
+                  await apiPublicPost(`/public/orders/${orderResult.orderId}/pay-manual-upi`, {
+                    utr: upiUtr.trim() || null,
+                    screenshotName: upiScreenshot?.name ?? null,
+                  }, orderResult.guestToken).catch(() => {
+                    // Endpoint may not exist yet (#588) — non-fatal; the
+                    // order ledger row was already tagged at intent time
+                    // and staff will see it in the Manual UPI queue.
+                  });
+                } finally {
+                  setView("success");
+                }
+              }}
+              className="w-full bg-green-600 text-white font-semibold rounded-xl py-3 hover:bg-green-700"
+            >I've paid — notify staff</button>
+            <p className="text-[11px] text-gray-400 text-center">Staff will confirm your payment shortly. You can track your order on the next screen.</p>
+          </div>
         </div>
       </div>
     );
@@ -1593,26 +1767,49 @@ export default function CustomerMenuPage() {
             </div>
           </div>
 
+          {/* Task #587 — Two top-level choices: Pay at Counter vs Pay Online.
+              The expanded online sub-list (gateway / Restaurant Own UPI) is
+              fetched from /public/restaurants/:slug/checkout-options. We keep
+              `menu.enableOnlinePayment` as a legacy fallback when that
+              endpoint hasn't resolved yet. */}
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <p className="font-semibold text-gray-800 mb-3">Payment Method</p>
             <div className="space-y-2">
-              <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "pay_at_counter" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
-                <input type="radio" name="pay" value="pay_at_counter" checked={payMethod === "pay_at_counter"} onChange={() => setPayMethod("pay_at_counter")} className="accent-orange-500" />
-                <Banknote className="w-5 h-5 text-gray-500" />
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">Pay at Counter</p>
-                  <p className="text-xs text-gray-500">Cash or card when served</p>
-                </div>
-              </label>
-              {menu?.enableOnlinePayment ? (
-                <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "card" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
-                  <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-orange-500" />
-                  <CreditCard className="w-5 h-5 text-gray-500" />
+              {(checkoutOptions?.payAtCounterEnabled ?? true) && (
+                <label className={cn("flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition", payMethod === "pay_at_counter" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
+                  <input type="radio" name="pay" value="pay_at_counter" checked={payMethod === "pay_at_counter"} onChange={() => setPayMethod("pay_at_counter")} className="accent-orange-500" />
+                  <Banknote className="w-5 h-5 text-gray-500" />
                   <div>
-                    <p className="font-medium text-gray-800 text-sm">Pay by Card Online</p>
-                    <p className="text-xs text-gray-500">Secure card payment now</p>
+                    <p className="font-medium text-gray-800 text-sm">Pay at Counter</p>
+                    <p className="text-xs text-gray-500">Cash or card when served</p>
                   </div>
                 </label>
+              )}
+              {(checkoutOptions?.onlineEnabled ?? !!menu?.enableOnlinePayment) ? (
+                <div className={cn("border-2 rounded-xl transition", payMethod === "pay_online" ? "border-orange-400 bg-orange-50" : "border-gray-200")}>
+                  <label className="flex items-center gap-3 p-3 cursor-pointer">
+                    <input type="radio" name="pay" value="pay_online" checked={payMethod === "pay_online"} onChange={() => setPayMethod("pay_online")} className="accent-orange-500" />
+                    <CreditCard className="w-5 h-5 text-gray-500" />
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">Pay Online</p>
+                      <p className="text-xs text-gray-500">Card · UPI · Wallet — pay before food is served</p>
+                    </div>
+                  </label>
+                  {payMethod === "pay_online" && checkoutOptions && checkoutOptions.onlineMethods.length > 1 && (
+                    <div className="px-3 pb-3 space-y-1.5">
+                      {checkoutOptions.onlineMethods.map(m => {
+                        const key = `${m.type}:${m.gatewayCode ?? ""}`;
+                        const checked = selectedOnlineMethod === key;
+                        return (
+                          <label key={key} className={cn("flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs", checked ? "bg-white border border-orange-300" : "bg-orange-50/60 border border-transparent")}>
+                            <input type="radio" name="pay_online_sub" checked={checked} onChange={() => setSelectedOnlineMethod(key)} className="accent-orange-500" />
+                            <span className="text-gray-700">{m.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ) : null}
             </div>
           </div>
@@ -1623,7 +1820,7 @@ export default function CustomerMenuPage() {
             className="w-full bg-orange-500 text-white font-bold rounded-xl py-4 text-base disabled:opacity-50 hover:bg-orange-600 transition flex items-center justify-center gap-2"
           >
             {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-            {placing ? "Placing Order…" : payMethod === "card" ? `Continue to Payment · ${currSymbol}${cartTotal.toFixed(2)}` : `Place Order · ${currSymbol}${cartTotal.toFixed(2)}`}
+            {placing ? "Placing Order…" : payMethod === "pay_online" ? `Continue to Payment · ${currSymbol}${cartTotal.toFixed(2)}` : `Place Order · ${currSymbol}${cartTotal.toFixed(2)}`}
           </button>
         </div>
       </div>

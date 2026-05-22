@@ -18,6 +18,7 @@ import { backfillCustomerCrm } from "./lib/customerBackfill";
 import { getAppSettings } from "./lib/appSettings";
 import { ensureSearchIndexes } from "./lib/searchIndexes";
 import { runBootstrapPasswordReset } from "./lib/bootstrapReset";
+import { backfillAllRestaurants as backfillPaymentConfig } from "./lib/paymentConfig";
 
 const rawPort = process.env["PORT"];
 
@@ -81,6 +82,13 @@ httpServer.listen(port, () => {
 
   ensureSearchIndexes()
     .catch((e) => logger.error({ err: e }, "Failed to ensure tenant search indexes"));
+
+  // Task #587 — Eagerly seed payment-config rows for every restaurant so
+  // historical reporting + analytics queries can rely on the new tables
+  // being populated for all tenants (not just those who visit the admin UI).
+  backfillPaymentConfig()
+    .then((r) => logger.info(r, "Payment-config backfill complete"))
+    .catch((e) => logger.error({ err: e }, "Payment-config backfill failed"));
 });
 
 function shutdown(signal: string) {
