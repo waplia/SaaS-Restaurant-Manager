@@ -140,6 +140,12 @@ router.get("/public/menu/:slug", async (req, res) => {
     }));
     return { ...cat, items: itemsWithMods };
   }));
+  // Hide empty categories on the QR/diner-facing menu. An onboarding-
+  // created placeholder category with zero items just adds visual noise
+  // for the diner — owners can still see and manage it from the admin
+  // menu editor, but it shouldn't appear in the public QR view until
+  // there's at least one available item to show.
+  const enrichedNonEmpty = enriched.filter(c => c.items.length > 0);
 
   // Direct online ordering (Task #432): expose SEO + ordering config so the
   // public menu page can render correct meta tags, holiday closure banners,
@@ -184,7 +190,7 @@ router.get("/public/menu/:slug", async (req, res) => {
     menuImageConfig,
     showNutritionOnQrMenu,
     menuBannerUrl: menu.imageUrl ?? null,
-    categories: enriched,
+    categories: enrichedNonEmpty,
     directOrdering,
     // QR / online menu payment toggle. Owners enable in Settings → Payment.
     // Off by default — only "Pay at Counter" is shown to the diner unless on.
@@ -1505,11 +1511,14 @@ router.get("/public/site/:slug", async (req, res) => {
       containsGluten: menuItemsTable.containsGluten,
       tags: menuItemsTable.tags, allergens: menuItemsTable.allergens,
     } as const;
-    categories = await Promise.all(cats.map(async (c) => {
+    const allCats = await Promise.all(cats.map(async (c) => {
       const items = await db.select(itemCols).from(menuItemsTable)
         .where(and(eq(menuItemsTable.categoryId, c.id), eq(menuItemsTable.isAvailable, true)));
       return { id: c.id, name: c.name, items: items.map(normalizeMenuItem) };
     }));
+    // Hide empty categories on the diner-facing site (same rationale as
+    // /public/menu/:slug). Owners still see them in the admin editor.
+    categories = allCats.filter(c => c.items.length > 0);
     const featuredIds = Array.isArray(site.featuredItemIds) ? (site.featuredItemIds as unknown[]).map(Number).filter(n => Number.isFinite(n)) : [];
     if (featuredIds.length > 0) {
       const rows = await db.select(itemCols).from(menuItemsTable)
