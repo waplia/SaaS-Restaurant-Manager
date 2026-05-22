@@ -35,7 +35,7 @@ export default function Dashboard() {
       />
 
       <section className="container-app">
-        <div className="rounded-3xl p-6 bg-gradient-to-br from-[rgb(var(--primary))] to-[#7a0d0d] text-white shadow-lg">
+        <div className="rounded-3xl p-6 bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary-dark))] text-white shadow-lg">
           <p className="text-sm uppercase tracking-wider opacity-80">Total cashback</p>
           <p className="text-4xl font-semibold mt-2" data-testid="text-total-cashback">
             {fmtMoney(totals.cashback)}

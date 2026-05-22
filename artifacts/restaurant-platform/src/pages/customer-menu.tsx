@@ -1145,42 +1145,115 @@ export default function CustomerMenuPage() {
     try { localStorage.setItem(notifPromptKey, "dismissed"); } catch { /* ignore */ }
   }
 
+  // Remember the diner's last wallet identity per restaurant so reopening
+  // the wallet from another QR scan goes straight to their balance instead
+  // of forcing them to retype their phone/email every single time.
+  const walletStorageKey = slug ? `tt:wallet:${slug}` : "";
+  // Race-guard for the rewards lookup: any in-flight request is aborted
+  // and its response ignored as soon as a newer lookup starts OR the
+  // modal closes. Without this, a slow lookup that resolved after the
+  // user closed/reopened the drawer could clobber fresh UI state.
+  const rewardsAbortRef = useRef<AbortController | null>(null);
+  const rewardsRequestIdRef = useRef(0);
+
+  function cancelRewardsRequest() {
+    if (rewardsAbortRef.current) {
+      rewardsAbortRef.current.abort();
+      rewardsAbortRef.current = null;
+    }
+  }
+
+  function closeRewards() {
+    cancelRewardsRequest();
+    setRewardsLoading(false);
+    setRewardsOpen(false);
+  }
+
   function openRewards() {
     setRewardsError(null);
     setRewardsOpen(true);
+    if (!walletStorageKey) return;
+    try {
+      const raw = localStorage.getItem(walletStorageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { mode?: "phone" | "email"; phone?: string; email?: string };
+        if (saved.mode === "email" && saved.email) {
+          setRewardsMode("email");
+          setRewardsEmail(saved.email);
+          // Auto-lookup with the remembered identity so the modal shows
+          // the balance immediately on open.
+          setTimeout(() => fetchRewardsWith({ mode: "email", email: saved.email! }), 0);
+        } else if (saved.phone) {
+          setRewardsMode("phone");
+          setRewardsPhone(saved.phone);
+          setTimeout(() => fetchRewardsWith({ mode: "phone", phone: saved.phone! }), 0);
+        }
+      }
+    } catch { /* ignore corrupt storage */ }
   }
 
-  async function fetchRewards() {
+  async function fetchRewardsWith(args: { mode: "phone" | "email"; phone?: string; email?: string }) {
     if (!slug) return;
     const payload: { slug: string; phone?: string; email?: string } = { slug };
-    if (rewardsMode === "phone") {
-      const phone = rewardsPhone.trim();
+    if (args.mode === "phone") {
+      const phone = (args.phone ?? "").trim();
       if (phone.length < 6) { setRewardsError("Please enter a valid phone number."); return; }
       payload.phone = phone;
     } else {
-      const email = rewardsEmail.trim();
+      const email = (args.email ?? "").trim();
       if (email.length < 5 || !email.includes("@")) { setRewardsError("Please enter a valid email address."); return; }
       payload.email = email;
     }
+    // Cancel any in-flight lookup and tag this one with a monotonic id so
+    // late responses from superseded requests are dropped instead of
+    // overwriting the latest state.
+    cancelRewardsRequest();
+    const myId = ++rewardsRequestIdRef.current;
+    const controller = new AbortController();
+    rewardsAbortRef.current = controller;
     setRewardsLoading(true);
     setRewardsError(null);
     try {
       const res = await fetch(`${API_BASE}/public/loyalty/lookup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      if (myId !== rewardsRequestIdRef.current) return;
       const data = await res.json();
+      if (myId !== rewardsRequestIdRef.current) return;
       if (!res.ok) {
         setRewardsError(data?.error ?? "Could not look up rewards.");
         setRewardsData(null);
       } else {
         setRewardsData(data as RewardsLookup);
+        // Persist whatever the diner just used so the next visit auto-fills.
+        if (walletStorageKey) {
+          try {
+            localStorage.setItem(walletStorageKey, JSON.stringify({
+              mode: args.mode,
+              phone: args.mode === "phone" ? payload.phone : undefined,
+              email: args.mode === "email" ? payload.email : undefined,
+            }));
+          } catch { /* ignore quota errors */ }
+        }
       }
-    } catch {
+    } catch (e) {
+      // Ignore aborts triggered by close or by a newer request superseding
+      // this one — those are deliberate, not user-facing errors.
+      if ((e as { name?: string })?.name === "AbortError") return;
+      if (myId !== rewardsRequestIdRef.current) return;
       setRewardsError("Network error. Please try again.");
     } finally {
-      setRewardsLoading(false);
+      if (myId === rewardsRequestIdRef.current) {
+        setRewardsLoading(false);
+        rewardsAbortRef.current = null;
+      }
     }
+  }
+
+  async function fetchRewards() {
+    await fetchRewardsWith({ mode: rewardsMode, phone: rewardsPhone, email: rewardsEmail });
   }
 
   async function sendWaiterRequest() {
@@ -2671,11 +2744,11 @@ export default function CustomerMenuPage() {
 
       {rewardsOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !rewardsLoading && setRewardsOpen(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={closeRewards} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <p className="font-bold text-lg text-gray-900 flex items-center gap-2"><Gift className="w-5 h-5 text-orange-500" /> Your Rewards</p>
-              <button onClick={() => !rewardsLoading && setRewardsOpen(false)} className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button onClick={closeRewards} aria-label="Close rewards" className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-5 pb-5 space-y-4 overflow-y-auto">
               <div>
@@ -2691,6 +2764,7 @@ export default function CustomerMenuPage() {
                       onChange={setRewardsPhone}
                       placeholder="Enter the phone you used to order"
                       className="flex-1"
+                      onKeyDown={e => { if (e.key === "Enter" && !rewardsLoading && rewardsPhone.trim().length >= 6) fetchRewards(); }}
                     />
                   ) : (
                     <input
@@ -2699,6 +2773,7 @@ export default function CustomerMenuPage() {
                       autoComplete="email"
                       value={rewardsEmail}
                       onChange={e => setRewardsEmail(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !rewardsLoading && rewardsEmail.includes("@") && rewardsEmail.trim().length >= 5) fetchRewards(); }}
                       placeholder="you@example.com"
                       className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                     />
@@ -2726,6 +2801,9 @@ export default function CustomerMenuPage() {
 
               {rewardsData?.found && (
                 <>
+                  {rewardsData.customer?.firstName && (
+                    <p className="text-sm text-gray-700">Hi <span className="font-semibold text-gray-900">{rewardsData.customer.firstName}</span>, welcome back!</p>
+                  )}
                   <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl p-4">
                     <p className="text-xs uppercase tracking-wider opacity-80">Available balance</p>
                     <p className="text-3xl font-bold mt-1">{rewardsData.balance ?? 0} pts</p>

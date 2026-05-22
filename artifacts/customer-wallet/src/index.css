@@ -7,9 +7,10 @@
   --muted: 113 113 122;
   --border: 228 228 231;
   --card: 255 255 255;
-  --primary: 220 38 38;       /* KhanaLagao red */
+  --primary: 255 107 26;      /* KhanaLagao orange (#FF6B1A) — matches marketing & restaurant platform */
   --primary-fg: 255 255 255;
-  --accent: 250 233 232;
+  --primary-dark: 194 65 12;  /* #C2410C — darker shade for gradients */
+  --accent: 255 237 213;      /* warm orange-50 (#FFEDD5) */
   --success: 22 163 74;
 }
 

@@ -1,3 +1,4 @@
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ interface PhoneInputProps {
    * to "IN" when nothing is available (e.g. on pre-auth screens).
    */
   defaultCountry?: string;
+  /** Forwarded to the underlying tel input — e.g. Enter-to-submit handlers. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 export function PhoneInput({
@@ -45,6 +48,7 @@ export function PhoneInput({
   className,
   autoComplete = "tel",
   defaultCountry,
+  onKeyDown,
 }: PhoneInputProps) {
   // Pick up the restaurant's configured country when no explicit override
   // is given. The hook is always called (React rules of hooks) but its
@@ -150,6 +154,7 @@ export function PhoneInput({
         disabled={disabled}
         value={parsed.national}
         onChange={e => handleTyped(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         // No maxLength — the browser truncates pasted international numbers
         // ("+919602374514") before our onChange handler can detect the dial
