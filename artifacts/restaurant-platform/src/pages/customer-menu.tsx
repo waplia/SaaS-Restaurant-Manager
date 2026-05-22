@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { io, type Socket } from "socket.io-client";
-import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock, RotateCcw } from "lucide-react";
+import { X, Plus, Minus, Star, Bell, ArrowLeft, CheckCircle, ChefHat, Truck, Loader2, CreditCard, Banknote, ShoppingCart, Receipt, GlassWater, MessageSquare, Gift, Search, Award, UtensilsCrossed, Clock, RotateCcw, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhoneInput } from "@/components/PhoneInput";
 
@@ -2090,8 +2090,15 @@ export default function CustomerMenuPage() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button onClick={openRewards} className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full transition">
-              <Gift className="w-3.5 h-3.5" /> Rewards
+            {/* Wallet entry point is pinned in the upper hero so diners
+                can find their points balance / rewards without scrolling.
+                It opens the same modal the old "Rewards" button did. */}
+            <button
+              onClick={openRewards}
+              aria-label="Open wallet"
+              className="flex items-center gap-1 bg-white text-[#E85A0C] text-[11px] font-bold px-3 py-1.5 rounded-full shadow-sm hover:bg-orange-50 transition"
+            >
+              <Wallet className="w-3.5 h-3.5" /> Wallet
             </button>
             <button onClick={() => openWaiterModal()} className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-full transition">
               <Bell className="w-3.5 h-3.5" /> Waiter
