@@ -640,6 +640,10 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
 
+  // Dev-only echo of the code so testers without a configured email/SMS
+  // provider can complete the flow. Stripped outside development.
+  let devCode: string | undefined;
+
   if (user && user.isActive) {
     // 6-digit numeric code, zero-padded. Generated from crypto-strong
     // randomness rather than Math.random.
@@ -657,6 +661,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     if (process.env.NODE_ENV === "development") {
       // Helpful for local testing without checking a real inbox.
       console.info(`[dev-only] password-reset OTP for user id=${user.id}: ${code}`);
+      devCode = code;
     }
     void sendByTemplateKey("password_reset_otp", user.email, {
       name: user.name ?? user.email,
@@ -724,6 +729,7 @@ router.post("/auth/forgot-password", forgotLimitByIp, forgotLimitByEmail, valida
     success: true,
     message: "If an account with that email exists, a 6-digit reset code has been sent.",
     ttlMinutes: RESET_OTP_TTL_MINUTES,
+    ...(devCode ? { devCode } : {}),
   });
 });
 
@@ -784,6 +790,11 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
     .from(usersTable)
     .where(eq(usersTable.phone, phone));
 
+  // Surfaced to the client only in dev. Lets local testers reset their
+  // password without an SMS provider configured. Hardened: skipped entirely
+  // outside development.
+  let devCode: string | undefined;
+
   if (user && user.isActive && user.phone) {
     const code = String(Math.floor(crypto.randomInt(0, 1_000_000))).padStart(6, "0");
     const codeHash = await bcrypt.hash(code, 10);
@@ -798,6 +809,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
       .where(eq(usersTable.id, user.id));
     if (process.env.NODE_ENV === "development") {
       console.info(`[dev-only] password-reset OTP (phone) for user id=${user.id}: ${code}`);
+      devCode = code;
     }
     const fallbackBody = `${code} is your Khana Lagao password reset code. It expires in ${RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`;
     void (async () => {
@@ -843,6 +855,7 @@ router.post("/auth/forgot-password-phone", forgotLimitByIp, forgotLimitByPhone, 
     success: true,
     message: "If an account with that phone exists, a 6-digit reset code has been sent.",
     ttlMinutes: RESET_OTP_TTL_MINUTES,
+    ...(devCode ? { devCode } : {}),
   });
 });
 
