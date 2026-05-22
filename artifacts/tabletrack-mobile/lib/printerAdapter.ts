@@ -54,16 +54,30 @@ type NativeUsbModule = {
   printRaw?: (base64: string, vid: string, pid: string) => Promise<unknown>;
 };
 
-function tryRequire<T>(name: string): T | null {
+// Metro's static analyzer rejects `require(variable)` calls, so each optional
+// native module must be loaded with a literal string inside its own try/catch.
+// Missing optional native deps simply resolve to null instead of crashing the
+// JS bundle (lets the app run in Expo Go without the printer modules linked).
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
+function loadBtEscposPrinter(): NativeBtModule | null {
   try {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    // require lookup is wrapped in try/catch so missing optional native deps
-    // do not crash the JS bundle.
-    return require(name) as T;
-  } catch {
-    return null;
-  }
+    const m = require("react-native-bluetooth-escpos-printer") as any;
+    return (m?.default ?? m) as NativeBtModule;
+  } catch { return null; }
 }
+function loadBtThermalQr(): NativeBtModule | null {
+  try {
+    const m = require("react-native-thermal-receipt-printer-image-qr") as any;
+    return (m?.default ?? m) as NativeBtModule;
+  } catch { return null; }
+}
+function loadUsbPrinter(): NativeUsbModule | null {
+  try {
+    const m = require("react-native-usb-printer") as any;
+    return (m?.default ?? m) as NativeUsbModule;
+  } catch { return null; }
+}
+/* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 
 let _bt: NativeBtModule | null | undefined;
 let _usb: NativeUsbModule | null | undefined;
@@ -71,20 +85,13 @@ let _usb: NativeUsbModule | null | undefined;
 function getBt(): NativeBtModule | null {
   if (_bt !== undefined) return _bt;
   if (Platform.OS === "web") return (_bt = null);
-  _bt =
-    tryRequire<{ default?: NativeBtModule }>("react-native-bluetooth-escpos-printer")?.default ??
-    tryRequire<NativeBtModule>("react-native-bluetooth-escpos-printer") ??
-    tryRequire<NativeBtModule>("react-native-thermal-receipt-printer-image-qr") ??
-    null;
+  _bt = loadBtEscposPrinter() ?? loadBtThermalQr() ?? null;
   return _bt;
 }
 function getUsb(): NativeUsbModule | null {
   if (_usb !== undefined) return _usb;
   if (Platform.OS !== "android") return (_usb = null);
-  _usb =
-    tryRequire<{ default?: NativeUsbModule }>("react-native-usb-printer")?.default ??
-    tryRequire<NativeUsbModule>("react-native-usb-printer") ??
-    null;
+  _usb = loadUsbPrinter() ?? null;
   return _usb;
 }
 
