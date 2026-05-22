@@ -112,13 +112,6 @@ export default function DeleteAccountScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        <View style={[styles.warning, { backgroundColor: colors.destructive + "12", borderColor: colors.destructive + "40" }]}>
-          <Ionicons name="warning-outline" size={20} color={colors.destructive} style={{ marginTop: 1 }} />
-          <Text style={{ flex: 1, color: colors.destructive, fontSize: 13, lineHeight: 18, fontFamily: "Inter_500Medium" }}>
-            This will sign you out and disable your account. A platform admin can restore it later if you change your mind.
-          </Text>
-        </View>
-
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {step === "password" && (
             <>
@@ -267,7 +260,6 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, gap: 16 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  warning: { flexDirection: "row", gap: 10, padding: 12, borderRadius: 12, borderWidth: 1 },
   card: { borderRadius: 16, borderWidth: 1, padding: 20, gap: 14 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold" },
   label: { fontSize: 13, fontFamily: "Inter_500Medium" },
