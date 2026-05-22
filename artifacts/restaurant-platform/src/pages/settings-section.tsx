@@ -727,6 +727,69 @@ function TaxesSection() {
  *     QR / online checkout.
  * POS flow is unchanged — it continues to read `restaurants.acceptedPaymentMethods`. */
 interface PaymentMethodRow { id: number; category: "offline" | "online"; type: string; label: string | null; isEnabled: boolean; gatewayCode: string | null; sortOrder: number; config: Record<string, unknown>; }
+
+/** Per-gateway credential field catalog. Kept in sync with the
+ *  GATEWAY_CREDENTIAL_FIELDS map on the API; the secret-flagged fields
+ *  are encrypted server-side before being persisted, and only the masked
+ *  preview ("rzp…wxyz") is returned to this form on subsequent loads. */
+interface GatewayField { name: string; label: string; secret: boolean; placeholder?: string }
+const GATEWAY_FIELDS: Record<string, GatewayField[]> = {
+  razorpay: [
+    { name: "key_id", label: "Key ID", secret: false, placeholder: "rzp_live_xxxxxxxx" },
+    { name: "key_secret", label: "Key Secret", secret: true },
+    { name: "webhook_secret", label: "Webhook Secret (optional)", secret: true },
+  ],
+  cashfree: [
+    { name: "app_id", label: "App ID", secret: false },
+    { name: "secret_key", label: "Secret Key", secret: true },
+    { name: "webhook_secret", label: "Webhook Secret (optional)", secret: true },
+  ],
+  stripe: [
+    { name: "publishable_key", label: "Publishable Key", secret: false, placeholder: "pk_live_xxxxxxxx" },
+    { name: "secret_key", label: "Secret Key", secret: true, placeholder: "sk_live_xxxxxxxx" },
+    { name: "webhook_secret", label: "Webhook Signing Secret (optional)", secret: true },
+  ],
+  phonepe: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "salt_key", label: "Salt Key", secret: true },
+    { name: "salt_index", label: "Salt Index", secret: false, placeholder: "1" },
+  ],
+  payu: [
+    { name: "merchant_key", label: "Merchant Key", secret: false },
+    { name: "merchant_salt", label: "Merchant Salt", secret: true },
+  ],
+  paytm: [
+    { name: "mid", label: "Merchant ID (MID)", secret: false },
+    { name: "merchant_key", label: "Merchant Key", secret: true },
+  ],
+  ccavenue: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "access_code", label: "Access Code", secret: false },
+    { name: "working_key", label: "Working Key", secret: true },
+  ],
+  billdesk: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "security_id", label: "Security ID", secret: false },
+    { name: "checksum_key", label: "Checksum Key", secret: true },
+  ],
+  instamojo: [
+    { name: "api_key", label: "API Key", secret: false },
+    { name: "auth_token", label: "Auth Token", secret: true },
+  ],
+  easebuzz: [
+    { name: "key", label: "Key", secret: false },
+    { name: "salt", label: "Salt", secret: true },
+  ],
+  pinelabs: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "store_id", label: "Store ID", secret: false },
+    { name: "api_key", label: "API Key", secret: true },
+  ],
+  juspay: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "api_key", label: "API Key", secret: true },
+  ],
+};
 interface PaymentConfigDTO {
   settings: { restaurantId: number; offlineEnabled: boolean; onlineEnabled: boolean; onlinePaymentSource: "platform_gateway" | "own_gateway" | "manual_upi" | "mixed"; defaultCustomerChoice: "pay_at_counter" | "pay_online" };
   offlineMethods: PaymentMethodRow[];
@@ -756,7 +819,7 @@ function PaymentSection() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-config", RESTAURANT_ID] }),
   });
   const upsertMethod = useMutation({
-    mutationFn: (body: { category: "offline" | "online"; type: string; isEnabled: boolean; gatewayCode?: string | null; label?: string | null }) =>
+    mutationFn: (body: { category: "offline" | "online"; type: string; isEnabled: boolean; gatewayCode?: string | null; label?: string | null; config?: Record<string, unknown> }) =>
       apiPut(`/restaurants/${RESTAURANT_ID}/payment-config/methods`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-config", RESTAURANT_ID] }),
   });
@@ -877,21 +940,64 @@ function PaymentSection() {
             </div>
 
             {/* Restaurant Own Payment Method — Own gateway keys */}
-            <div className="border border-border rounded-lg p-3 space-y-2">
+            <div className="border border-border rounded-lg p-3 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Restaurant Own Payment Method</p>
-              <p className="text-xs text-muted-foreground">Hook up your own gateway keys per provider, or enable Manual UPI below.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <p className="text-xs text-muted-foreground">Hook up your own gateway keys per provider, or enable Manual UPI below. Secret fields are encrypted at rest — only a masked preview is shown back to you on reload.</p>
+              <div className="space-y-2">
                 {ownGateways.map(g => {
                   const row = onlineByKey.get(onlineKey("own_gateway", g));
+                  const enabled = row?.isEnabled ?? false;
+                  const fields = GATEWAY_FIELDS[g] ?? [];
                   return (
-                    <label key={g} className="flex items-center gap-3 border border-border rounded-lg p-2">
-                      <input
-                        type="checkbox"
-                        checked={row?.isEnabled ?? false}
-                        onChange={e => upsertMethod.mutate({ category: "online", type: "own_gateway", gatewayCode: g, isEnabled: e.target.checked, label: `Pay with ${g.charAt(0).toUpperCase() + g.slice(1)}` })}
-                      />
-                      <span className="text-sm capitalize">{g}</span>
-                    </label>
+                    <div key={g} className="border border-border rounded-lg overflow-hidden">
+                      <label className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={e => upsertMethod.mutate({ category: "online", type: "own_gateway", gatewayCode: g, isEnabled: e.target.checked, label: `Pay with ${g.charAt(0).toUpperCase() + g.slice(1)}` })}
+                        />
+                        <span className="text-sm capitalize font-medium flex-1">{g}</span>
+                        {enabled && fields.length > 0 && (
+                          (() => {
+                            const cfg = (row?.config ?? {}) as Record<string, unknown>;
+                            const hasAnyKey = fields.some(f => {
+                              const v = cfg[f.name];
+                              if (typeof v === "string" && v.length > 0) return true;
+                              if (v && typeof v === "object" && (v as { hasValue?: boolean }).hasValue) return true;
+                              return false;
+                            });
+                            return (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${hasAnyKey ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}`}>
+                                {hasAnyKey ? "Keys configured" : "Keys required"}
+                              </span>
+                            );
+                          })()
+                        )}
+                      </label>
+                      {enabled && fields.length > 0 && (
+                        <div className="border-t border-border bg-gray-50/50 p-3">
+                          <OwnGatewayCredentialsForm
+                            provider={g}
+                            fields={fields}
+                            existingConfig={(row?.config ?? {}) as Record<string, unknown>}
+                            saving={upsertMethod.isPending}
+                            onSave={(config) => upsertMethod.mutate({
+                              category: "online",
+                              type: "own_gateway",
+                              gatewayCode: g,
+                              isEnabled: true,
+                              label: `Pay with ${g.charAt(0).toUpperCase() + g.slice(1)}`,
+                              config,
+                            })}
+                          />
+                        </div>
+                      )}
+                      {enabled && fields.length === 0 && (
+                        <div className="border-t border-border bg-amber-50/50 p-3 text-xs text-amber-800">
+                          No credential template available for this provider yet — contact support to enable it.
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -934,6 +1040,102 @@ function PaymentSection() {
               </Row>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Per-provider credential editor. Each input is controlled with local state,
+ * secret fields render as password inputs pre-filled with the masked
+ * preview returned by the API ("rzp…wxyz" etc.). Typing into a secret
+ * field replaces it; leaving it untouched leaves the stored value alone
+ * (the backend ignores empty secret strings on update). Public fields
+ * (key_id, merchant_id, salt_index) are normal text inputs with the
+ * actual stored value. */
+function OwnGatewayCredentialsForm({
+  provider,
+  fields,
+  existingConfig,
+  saving,
+  onSave,
+}: {
+  provider: string;
+  fields: Array<{ name: string; label: string; secret: boolean; placeholder?: string }>;
+  existingConfig: Record<string, unknown>;
+  saving: boolean;
+  onSave: (config: Record<string, unknown>) => void;
+}) {
+  // Initial values: secrets default to "" (so an unchanged field sends ""
+  // and the backend keeps the stored cipher). Non-secret fields are
+  // populated with the stored plain value so the admin can see what's set.
+  const readInitial = (f: { name: string; secret: boolean }) => {
+    const v = existingConfig[f.name];
+    if (f.secret) return "";
+    return typeof v === "string" ? v : "";
+  };
+  const initial = useMemo(() => {
+    const o: Record<string, string> = {};
+    for (const f of fields) o[f.name] = readInitial(f);
+    return o;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, JSON.stringify(existingConfig)]);
+  const [values, setValues] = useState<Record<string, string>>(initial);
+  const [savedFlash, setSavedFlash] = useState(false);
+  useEffect(() => { setValues(initial); }, [initial]);
+  const previewFor = (name: string): string | null => {
+    const v = existingConfig[name];
+    if (v && typeof v === "object" && (v as { __secret?: boolean }).__secret) {
+      return (v as { preview?: string }).preview ?? null;
+    }
+    return null;
+  };
+  const dirty = fields.some(f => values[f.name] !== initial[f.name]);
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {fields.map(f => {
+          const preview = f.secret ? previewFor(f.name) : null;
+          return (
+            <Field
+              key={f.name}
+              label={f.label}
+              hint={preview ? `Currently stored: ${preview} — leave blank to keep, type to replace.` : undefined}
+            >
+              <Input
+                type={f.secret ? "password" : "text"}
+                autoComplete={f.secret ? "new-password" : "off"}
+                value={values[f.name] ?? ""}
+                placeholder={f.secret && preview ? "•••••••• (unchanged)" : (f.placeholder ?? "")}
+                onChange={e => setValues(v => ({ ...v, [f.name]: e.target.value }))}
+              />
+            </Field>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          disabled={!dirty || saving}
+          onClick={() => {
+            // Only send fields the admin actually touched, so unchanged
+            // secret fields aren't transmitted (and aren't logged) at all.
+            const patch: Record<string, unknown> = {};
+            for (const f of fields) {
+              if (values[f.name] !== initial[f.name]) patch[f.name] = values[f.name];
+            }
+            onSave(patch);
+            setSavedFlash(true);
+            setTimeout(() => setSavedFlash(false), 2000);
+          }}
+        >
+          {saving ? "Saving…" : dirty ? `Save ${provider} keys` : "Saved"}
+        </Button>
+        {savedFlash && !dirty && !saving && (
+          <span className="text-xs text-green-700 font-medium">✓ Saved</span>
+        )}
+        {dirty && !saving && (
+          <span className="text-xs text-amber-700 font-medium">Unsaved changes</span>
         )}
       </div>
     </div>

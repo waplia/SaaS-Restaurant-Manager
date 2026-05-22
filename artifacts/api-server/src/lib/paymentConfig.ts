@@ -32,7 +32,147 @@ import {
   getEffectiveRazorpayConfig,
   getEffectiveCashfreeConfig,
 } from "./paymentSettings";
-import { encryptSecret, decryptSecret } from "./aiEncryption";
+import { encryptSecret, decryptSecret, maskSecret } from "./aiEncryption";
+
+/**
+ * Catalog of credential fields the restaurant must supply for each
+ * own-gateway provider. `secret: true` fields are AES-256-GCM encrypted
+ * at rest (stored as `{cipher,iv,tag}` inside the method's `config` jsonb)
+ * and masked on read; non-secret fields (public key ids, salt indices)
+ * are stored as plain strings.
+ *
+ * The list is intentionally exhaustive across the gateways the platform
+ * supports so the settings UI doesn't have to special-case any provider.
+ */
+export const GATEWAY_CREDENTIAL_FIELDS: Record<string, Array<{ name: string; label: string; secret: boolean; placeholder?: string }>> = {
+  razorpay: [
+    { name: "key_id", label: "Key ID", secret: false, placeholder: "rzp_live_xxxxxxxx" },
+    { name: "key_secret", label: "Key Secret", secret: true },
+    { name: "webhook_secret", label: "Webhook Secret (optional)", secret: true },
+  ],
+  cashfree: [
+    { name: "app_id", label: "App ID", secret: false },
+    { name: "secret_key", label: "Secret Key", secret: true },
+    { name: "webhook_secret", label: "Webhook Secret (optional)", secret: true },
+  ],
+  stripe: [
+    { name: "publishable_key", label: "Publishable Key", secret: false, placeholder: "pk_live_xxxxxxxx" },
+    { name: "secret_key", label: "Secret Key", secret: true, placeholder: "sk_live_xxxxxxxx" },
+    { name: "webhook_secret", label: "Webhook Signing Secret (optional)", secret: true },
+  ],
+  phonepe: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "salt_key", label: "Salt Key", secret: true },
+    { name: "salt_index", label: "Salt Index", secret: false, placeholder: "1" },
+  ],
+  payu: [
+    { name: "merchant_key", label: "Merchant Key", secret: false },
+    { name: "merchant_salt", label: "Merchant Salt", secret: true },
+  ],
+  paytm: [
+    { name: "mid", label: "Merchant ID (MID)", secret: false },
+    { name: "merchant_key", label: "Merchant Key", secret: true },
+  ],
+  ccavenue: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "access_code", label: "Access Code", secret: false },
+    { name: "working_key", label: "Working Key", secret: true },
+  ],
+  billdesk: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "security_id", label: "Security ID", secret: false },
+    { name: "checksum_key", label: "Checksum Key", secret: true },
+  ],
+  instamojo: [
+    { name: "api_key", label: "API Key", secret: false },
+    { name: "auth_token", label: "Auth Token", secret: true },
+  ],
+  easebuzz: [
+    { name: "key", label: "Key", secret: false },
+    { name: "salt", label: "Salt", secret: true },
+  ],
+  pinelabs: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "store_id", label: "Store ID", secret: false },
+    { name: "api_key", label: "API Key", secret: true },
+  ],
+  juspay: [
+    { name: "merchant_id", label: "Merchant ID", secret: false },
+    { name: "api_key", label: "API Key", secret: true },
+  ],
+};
+
+/** Shape of an encrypted secret embedded inside a method's `config` jsonb. */
+function isEncryptedShape(v: unknown): v is { cipher: string; iv: string; tag: string } {
+  return !!v && typeof v === "object"
+    && typeof (v as { cipher?: unknown }).cipher === "string"
+    && typeof (v as { iv?: unknown }).iv === "string"
+    && typeof (v as { tag?: unknown }).tag === "string";
+}
+
+/**
+ * Encrypt any incoming credential fields flagged `secret: true` for this
+ * gateway before persisting. Values left as empty strings are dropped so
+ * an empty Save doesn't wipe an existing stored secret accidentally.
+ * Non-secret fields are stored as-is. Unknown keys are passed through
+ * untouched so future gateway fields don't require a backend change.
+ */
+function encryptGatewayConfig(gatewayCode: string | null, incoming: Record<string, unknown>, existing: Record<string, unknown>): Record<string, unknown> {
+  if (!gatewayCode) return { ...existing, ...incoming };
+  const spec = GATEWAY_CREDENTIAL_FIELDS[gatewayCode];
+  if (!spec) return { ...existing, ...incoming };
+  const out: Record<string, unknown> = { ...existing };
+  for (const f of spec) {
+    if (!(f.name in incoming)) continue;
+    const raw = incoming[f.name];
+    if (typeof raw !== "string") continue;
+    const trimmed = raw.trim();
+    if (trimmed === "") {
+      // Empty input — keep whatever was previously stored, don't clobber.
+      continue;
+    }
+    if (f.secret) {
+      out[f.name] = encryptSecret(trimmed);
+    } else {
+      out[f.name] = trimmed;
+    }
+  }
+  // Pass through unknown (non-spec) keys too in case the UI adds a new field.
+  for (const k of Object.keys(incoming)) {
+    if (spec.find(f => f.name === k)) continue;
+    out[k] = incoming[k];
+  }
+  return out;
+}
+
+/**
+ * Mask any encrypted secrets in a method's `config` before sending it to
+ * the admin UI. Each secret becomes `{ __secret: true, preview: "abc…wxyz",
+ * hasValue: true }` so the form can show that a key is stored without
+ * leaking it. Non-secret fields are returned verbatim.
+ */
+function maskGatewayConfig(gatewayCode: string | null, cfg: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cfg ?? {})) {
+    if (isEncryptedShape(v)) {
+      const plain = decryptSecret(v);
+      out[k] = { __secret: true, hasValue: !!plain, preview: plain ? maskSecret(plain) : "" };
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** Decrypt one secret field from a method's config jsonb (server-side use
+ *  only — never returned to the admin UI). */
+export function decryptGatewayField(cfg: Record<string, unknown> | null | undefined, field: string): string | null {
+  if (!cfg) return null;
+  const v = cfg[field];
+  if (isEncryptedShape(v)) return decryptSecret(v);
+  if (typeof v === "string") return v;
+  return null;
+}
 
 export interface PaymentConfigDTO {
   settings: RestaurantPaymentSettings;
@@ -130,10 +270,21 @@ export async function getPaymentConfig(restaurantId: number): Promise<PaymentCon
   const decryptedManualUpi = manualUpi
     ? { ...manualUpi, upiId: decryptManualUpi(manualUpi) }
     : null;
+  // Mask any encrypted credentials inside online-method `config` jsonb
+  // before returning to the admin UI. The raw cipher/iv/tag triplets stay
+  // in the database; the UI only sees `{__secret:true, preview, hasValue}`
+  // per secret field. Non-secret fields (key_id, merchant_id, etc.) are
+  // returned as-is so the admin can see what's configured.
+  const maskedMethods = methods.map(m => ({
+    ...m,
+    config: m.category === "online" && m.type === "own_gateway"
+      ? maskGatewayConfig(m.gatewayCode, (m.config ?? {}) as Record<string, unknown>)
+      : m.config,
+  }));
   return {
     settings: settings!,
-    offlineMethods: methods.filter(m => m.category === "offline").sort((a, b) => a.sortOrder - b.sortOrder),
-    onlineMethods: methods.filter(m => m.category === "online").sort((a, b) => a.sortOrder - b.sortOrder),
+    offlineMethods: maskedMethods.filter(m => m.category === "offline").sort((a, b) => a.sortOrder - b.sortOrder),
+    onlineMethods: maskedMethods.filter(m => m.category === "online").sort((a, b) => a.sortOrder - b.sortOrder),
     manualUpi: decryptedManualUpi,
   };
 }
@@ -272,6 +423,17 @@ export async function upsertMethod(restaurantId: number, input: UpsertMethodInpu
       ),
     );
   const match = existing.find(r => (r.gatewayCode ?? null) === gateway);
+  // For own_gateway rows, encrypt any incoming secret credential fields
+  // against the gateway's field catalog and merge with the existing
+  // stored config so a partial update (e.g. rotating only the secret)
+  // doesn't wipe the key_id. Other method types pass `config` through.
+  const mergedConfig = (() => {
+    if (!input.config) return match?.config ?? {};
+    if (input.category === "online" && input.type === "own_gateway") {
+      return encryptGatewayConfig(gateway, input.config, (match?.config ?? {}) as Record<string, unknown>);
+    }
+    return { ...(match?.config ?? {}), ...input.config };
+  })();
   if (match) {
     const [updated] = await db
       .update(paymentMethodsTable)
@@ -280,7 +442,7 @@ export async function upsertMethod(restaurantId: number, input: UpsertMethodInpu
         isEnabled: input.isEnabled,
         gatewayCode: gateway,
         sortOrder: input.sortOrder ?? match.sortOrder,
-        config: input.config ?? match.config,
+        config: mergedConfig,
         updatedAt: new Date(),
       })
       .where(eq(paymentMethodsTable.id, match.id))
@@ -297,7 +459,7 @@ export async function upsertMethod(restaurantId: number, input: UpsertMethodInpu
       isEnabled: input.isEnabled,
       gatewayCode: gateway,
       sortOrder: input.sortOrder ?? 0,
-      config: input.config ?? {},
+      config: mergedConfig,
     })
     .returning();
   await reconcileOnlineSource(restaurantId, input);
