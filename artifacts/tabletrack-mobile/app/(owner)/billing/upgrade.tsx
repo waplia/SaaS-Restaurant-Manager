@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert, Platform, Linking, TextInput } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ type AppSettings = {
 
 function UpgradeScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
   const params = useLocalSearchParams<{ targetPlanId?: string; billingPeriod?: string }>();
@@ -83,7 +85,7 @@ function UpgradeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionHeader title="Upgrade" showBack />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 100 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + (Platform.OS === "android" ? 140 : 110) }}>
         {cfgLoading ? (
           <View style={{ paddingTop: 40, alignItems: "center" }}>
             <ActivityIndicator color={colors.primary} />

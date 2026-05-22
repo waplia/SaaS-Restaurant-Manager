@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
@@ -48,6 +49,7 @@ function fmtDate(d: string | null) {
 
 function InvoicesScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { restaurantId } = useAuth();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["billing-invoices", restaurantId],
@@ -63,7 +65,7 @@ function InvoicesScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionHeader title="Invoices & payments" showBack />
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: Platform.OS === "web" ? 120 : 100 }}
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + (Platform.OS === "android" ? 140 : 110) }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
         {isLoading ? (

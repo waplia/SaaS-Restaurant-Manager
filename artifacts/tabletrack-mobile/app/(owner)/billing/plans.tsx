@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ function fmtMoney(amount: string | number | null, currency: string) {
 function PlansScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
+  const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
 
   const { data, isLoading } = useQuery({
@@ -44,7 +46,7 @@ function PlansScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionHeader title="Compare plans" showBack />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: Platform.OS === "web" ? 120 : 100 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + (Platform.OS === "android" ? 140 : 110) }}>
         <View style={[styles.toggle, { backgroundColor: colors.accent }]}>
           {(["monthly", "yearly"] as const).map(p => (
             <Pressable
