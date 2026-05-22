@@ -63,7 +63,13 @@ router.get("/public/menu/:slug", async (req, res) => {
   const [restaurant] = await db.select().from(restaurantsTable).where(eq(restaurantsTable.slug, req.params.slug));
   if (!restaurant) return void res.status(404).json({ error: "Restaurant not found" });
 
-  const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
+  // Load ALL active menus and merge their categories. Some restaurants
+  // end up with more than one active menu (e.g. an onboarding-created
+  // "Main Menu" plus a menu created by a CSV/PDF import named after the
+  // file). Picking just one would leave the other's categories invisible
+  // on the QR menu — exactly the "empty QR" bug owners report.
+  const activeMenus = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true))).orderBy(menusTable.id);
+  const menu = activeMenus[0];
 
   const [imageSettingRow] = await db.select().from(restaurantSettingsTable).where(and(eq(restaurantSettingsTable.restaurantId, restaurant.id), eq(restaurantSettingsTable.section, "menu-image")));
   const imageSettings = (imageSettingRow?.data as Record<string, unknown> | undefined) ?? {};
@@ -110,7 +116,10 @@ router.get("/public/menu/:slug", async (req, res) => {
 
   if (!menu) return void res.json({ restaurantId: restaurant.id, restaurantName: restaurant.name, restaurantSlug: restaurant.slug, logoUrl: restaurant.logoUrl, currency: restaurant.currency, menuImageConfig, showNutritionOnQrMenu, categories: [], enableOnlinePayment: !!restaurant.enableOnlinePayment });
 
-  const categories = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
+  const categories = await db.select().from(menuCategoriesTable).where(and(
+    inArray(menuCategoriesTable.menuId, activeMenus.map(m => m.id)),
+    eq(menuCategoriesTable.isActive, true),
+  ));
   const enriched = await Promise.all(categories.map(async (cat) => {
     const items = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.categoryId, cat.id), eq(menuItemsTable.isAvailable, true)));
     const itemsWithMods = await Promise.all(items.map(async (item) => {
@@ -1479,11 +1488,16 @@ router.get("/public/site/:slug", async (req, res) => {
       allergens: Array.isArray(row.allergens) ? row.allergens.filter(a => typeof a === "string") : [],
     };
   }
-  const [menu] = await db.select().from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true)));
+  // Merge all active menus (see /public/menu/:slug for rationale).
+  const activeMenusForSite = await db.select({ id: menusTable.id }).from(menusTable).where(and(eq(menusTable.restaurantId, restaurant.id), eq(menusTable.isActive, true))).orderBy(menusTable.id);
+  const menu = activeMenusForSite[0];
   let categories: Array<{ id: number; name: string; items: PublicMenuItem[] }> = [];
   let featured: PublicMenuItem[] = [];
   if (menu) {
-    const cats = await db.select().from(menuCategoriesTable).where(and(eq(menuCategoriesTable.menuId, menu.id), eq(menuCategoriesTable.isActive, true)));
+    const cats = await db.select().from(menuCategoriesTable).where(and(
+      inArray(menuCategoriesTable.menuId, activeMenusForSite.map(m => m.id)),
+      eq(menuCategoriesTable.isActive, true),
+    ));
     const itemCols = {
       id: menuItemsTable.id, name: menuItemsTable.name, description: menuItemsTable.description,
       price: menuItemsTable.price, imageUrl: menuItemsTable.imageUrl,

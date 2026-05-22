@@ -768,10 +768,24 @@ router.post("/restaurants/:restaurantId/ai/menu-import/imports/:id/save", async 
     if (locked.some(r => r.status !== "draft")) {
       throw new Error("Concurrent save detected — some rows are no longer draft");
     }
+    // Prefer the restaurant's existing active menu (typically "Main Menu"
+    // created by onboarding) instead of spawning a new one named after the
+    // import file. Creating a parallel menu leaves owners with two active
+    // menus — one empty placeholder and one with the imported items — and
+    // the QR menu would historically only show one of them, surfacing as
+    // an "empty QR" bug. Falling back to filename-named menu only when
+    // there's literally no menu yet keeps brand-new restaurants working.
     let [menu] = await tx.select().from(menusTable)
       .where(and(eq(menusTable.restaurantId, restaurantId), eq(menusTable.name, menuName)));
     if (!menu) {
-      [menu] = await tx.insert(menusTable).values({ restaurantId, name: menuName, description: `Imported from ${importRow.source}` }).returning();
+      const [existingActive] = await tx.select().from(menusTable)
+        .where(and(eq(menusTable.restaurantId, restaurantId), eq(menusTable.isActive, true)))
+        .orderBy(menusTable.id);
+      if (existingActive) {
+        menu = existingActive;
+      } else {
+        [menu] = await tx.insert(menusTable).values({ restaurantId, name: menuName, description: `Imported from ${importRow.source}` }).returning();
+      }
     }
 
     const catCache = new Map<string, number>();
