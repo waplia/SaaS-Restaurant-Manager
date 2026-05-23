@@ -87,12 +87,12 @@ export default function CompleteProfilePage() {
             {missingRestaurant && (
               <div className="space-y-1.5">
                 <Label>Restaurant name</Label>
-                <Input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} required placeholder="Spice Garden" />
+                <Input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} required placeholder="Enter your restaurant name" />
               </div>
             )}
             <div className="space-y-1.5">
               <Label>Mobile number</Label>
-              <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
+              <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="Enter your mobile number" />
             </div>
             {whatsappEnabled && (
               <div className="space-y-1.5">
@@ -118,7 +118,7 @@ export default function CompleteProfilePage() {
           <form onSubmit={verifyOtp} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Verification code</Label>
-              <Input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />
+              <Input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="Enter 6-digit code" autoComplete="one-time-code" autoFocus />
             </div>
             {err && <ErrorBox msg={err} />}
             <div className="flex gap-2">

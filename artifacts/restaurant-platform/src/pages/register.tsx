@@ -214,7 +214,7 @@ export default function RegisterPage() {
             <form onSubmit={startOtp} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Mobile number</Label>
-                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
+                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="Enter your mobile number" />
               </div>
               {whatsappEnabled && (
                 <div className="space-y-1.5">
@@ -238,7 +238,7 @@ export default function RegisterPage() {
             <form onSubmit={verifyOtp} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Verification code</Label>
-                <Input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />
+                <Input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="Enter 6-digit code" autoComplete="one-time-code" autoFocus />
               </div>
               {err && <ErrorBox msg={err} />}
               <div className="flex gap-2">
@@ -252,19 +252,19 @@ export default function RegisterPage() {
             <form onSubmit={completeEmail} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Restaurant name</Label>
-                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Spice Garden" />
+                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Enter your restaurant name" />
               </div>
               <div className="space-y-1.5">
                 <Label>Your name</Label>
-                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Priya Sharma" />
+                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Enter your full name" />
               </div>
               <div className="space-y-1.5">
                 <Label>Work email</Label>
-                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="priya@spicegarden.com" />
+                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="Enter your email" />
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="At least 8 characters" />
+                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="Enter at least 8 characters" />
               </div>
               {err && <ErrorBox msg={err} />}
               <div className="flex gap-2">
@@ -278,19 +278,19 @@ export default function RegisterPage() {
             <form onSubmit={complete} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Restaurant name</Label>
-                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Spice Garden" />
+                <Input value={details.restaurantName} onChange={e => setDetails(d => ({ ...d, restaurantName: e.target.value }))} required placeholder="Enter your restaurant name" />
               </div>
               <div className="space-y-1.5">
                 <Label>Your name</Label>
-                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Priya Sharma" />
+                <Input value={details.ownerName} onChange={e => setDetails(d => ({ ...d, ownerName: e.target.value }))} required placeholder="Enter your full name" />
               </div>
               <div className="space-y-1.5">
                 <Label>Work email</Label>
-                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="priya@spicegarden.com" />
+                <Input type="email" value={details.email} onChange={e => setDetails(d => ({ ...d, email: e.target.value }))} required autoComplete="email" placeholder="Enter your email" />
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="At least 8 characters" />
+                <Input type="password" value={details.password} onChange={e => setDetails(d => ({ ...d, password: e.target.value }))} required autoComplete="new-password" placeholder="Enter at least 8 characters" />
               </div>
               {err && <ErrorBox msg={err} />}
               <Button type="submit" className="w-full" disabled={loading}>{loading ? "Creating account…" : "Start free trial"}</Button>

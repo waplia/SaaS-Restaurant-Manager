@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -196,7 +196,7 @@ function PasswordTab({
             onChange={e => setIdentifier(e.target.value)}
             required
             autoComplete="username"
-            placeholder="you@restaurant.com"
+            placeholder="Enter your email"
           />
         ) : (
           <PhoneInput
@@ -204,7 +204,7 @@ function PasswordTab({
             value={identifier}
             onChange={setIdentifier}
             defaultCountry="IN"
-            placeholder="9876543210"
+            placeholder="Enter your mobile number"
             required
             autoComplete="username"
           />
@@ -216,7 +216,7 @@ function PasswordTab({
           <a href="/app/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</a>
         </div>
         <div className="relative">
-          <Input id="password" type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" className="pr-10" placeholder="••••••••" />
+          <Input id="password" type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" className="pr-10" placeholder="Enter your password" />
           <button type="button" onClick={() => setShow(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
             {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -243,16 +243,40 @@ function OtpTab({
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  // Countdown between resends. Set to 30 after each successful send so the
+  // server's per-identifier hourly cap (5/hour) is paired with a UX hint
+  // that prevents back-to-back taps.
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn(n => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    setErr(""); setLoading(true);
+    setErr(""); setInfo(""); setLoading(true);
     try {
       await postJSON<{ ok: boolean }>("/auth/request-otp", { channel, identifier });
       setStep("verify");
+      setResendIn(30);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Could not send code");
+    } finally { setLoading(false); }
+  }
+
+  async function resend() {
+    if (resendIn > 0 || loading) return;
+    setErr(""); setInfo(""); setLoading(true);
+    try {
+      await postJSON<{ ok: boolean }>("/auth/request-otp", { channel, identifier });
+      setResendIn(30);
+      setInfo("New code sent.");
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Could not resend code");
     } finally { setLoading(false); }
   }
 
@@ -287,10 +311,23 @@ function OtpTab({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="code">Verification code</Label>
-          <Input id="code" inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" />
+          <Input id="code" inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="Enter 6-digit code" autoComplete="one-time-code" />
         </div>
         {err && <ErrorBox msg={err} />}
+        {info && !err && (
+          <div className="text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-lg px-3 py-2">{info}</div>
+        )}
         <Button type="submit" className="w-full" disabled={loading || code.length !== 6}>{loading ? "Verifying…" : "Verify & sign in"}</Button>
+        <div className="text-center text-sm text-muted-foreground">
+          Didn't get it?{" "}
+          {resendIn > 0 ? (
+            <span>Resend in {resendIn}s</span>
+          ) : (
+            <button type="button" onClick={resend} disabled={loading} className="text-primary hover:underline font-medium disabled:opacity-50">
+              Resend code
+            </button>
+          )}
+        </div>
       </form>
     );
   }
@@ -301,7 +338,7 @@ function OtpTab({
         <>
           <div className="space-y-1.5">
             <Label>Mobile number</Label>
-            <PhoneInput value={identifier} onChange={setIdentifier} defaultCountry="IN" placeholder="9876543210" />
+            <PhoneInput value={identifier} onChange={setIdentifier} defaultCountry="IN" placeholder="Enter your mobile number" />
           </div>
           {whatsappEnabled && (
             <div className="space-y-1.5">
@@ -321,7 +358,7 @@ function OtpTab({
       ) : (
         <div className="space-y-1.5">
           <Label htmlFor="otp-email">Email</Label>
-          <Input id="otp-email" type="email" value={identifier} onChange={e => setIdentifier(e.target.value)} required placeholder="you@restaurant.com" autoComplete="email" />
+          <Input id="otp-email" type="email" value={identifier} onChange={e => setIdentifier(e.target.value)} required placeholder="Enter your email" autoComplete="email" />
         </div>
       )}
       {err && <ErrorBox msg={err} />}
@@ -366,7 +403,7 @@ function TwoFactorStep({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="tfa-code">Code</Label>
-        <Input id="tfa-code" inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="123456" autoComplete="one-time-code" autoFocus />
+        <Input id="tfa-code" inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required placeholder="Enter 6-digit code" autoComplete="one-time-code" autoFocus />
       </div>
       {err && <ErrorBox msg={err} />}
       <div className="flex gap-2">

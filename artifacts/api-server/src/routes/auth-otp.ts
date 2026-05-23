@@ -53,6 +53,30 @@ async function findUserByPhoneFlexible(raw: string) {
 }
 
 const otpRequestLimit = rateLimit({ name: "auth.otp.request.ip", windowMs: 60 * 1000, max: 5 });
+// Per-identifier hourly cap so a single phone/email can't be hammered with
+// "Resend code" clicks even across IPs. Five sends per hour mirrors the
+// product spec ("5 attempts every 1 hour"). Falls back to a no-op when the
+// identifier is missing — the body validator will return 400 in that case.
+const otpRequestPerIdentifierLimit = rateLimit({
+  name: "auth.otp.request.identifier",
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  ignoreIp: true,
+  keyExtra: (req) => {
+    // Canonicalize using the same normalisers as the user-lookup / OTP-send
+    // pipeline so callers can't bypass the per-identifier cap by re-encoding
+    // the same phone number (e.g. "+91 98765 43210" vs "9876543210"). The
+    // channel is included in the key to keep email and phone buckets
+    // separate even if values would collide.
+    const body = req.body as { identifier?: unknown; channel?: unknown } | undefined;
+    const rawId = typeof body?.identifier === "string" ? body.identifier.trim() : "";
+    if (!rawId) return null;
+    const rawCh = typeof body?.channel === "string" ? body.channel : "";
+    if (rawCh === "email") return `email:${normalizeEmail(rawId)}`;
+    if (rawCh === "sms" || rawCh === "whatsapp") return `phone:${normalizePhone(rawId)}`;
+    return null;
+  },
+});
 const otpVerifyLimit = rateLimit({ name: "auth.otp.verify.ip", windowMs: 15 * 60 * 1000, max: 30 });
 const regStartLimit = rateLimit({ name: "auth.register.start.ip", windowMs: 60 * 60 * 1000, max: 10 });
 
@@ -68,7 +92,7 @@ const RequestOtpBody = z.object({
   identifier: z.string().trim().min(3).max(200),
 });
 
-router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBody }), async (req, res) => {
+router.post("/auth/request-otp", otpRequestLimit, otpRequestPerIdentifierLimit, validate({ body: RequestOtpBody }), async (req, res) => {
   const body = req.body as z.infer<typeof RequestOtpBody>;
   // If the platform doesn't have WhatsApp provider credentials, silently
   // coerce whatsapp → sms so stale clients still work.

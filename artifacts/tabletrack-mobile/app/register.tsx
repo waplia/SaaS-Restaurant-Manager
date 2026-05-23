@@ -198,20 +198,20 @@ export default function RegisterScreen() {
         {step === "details" && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Field label="Full name" colors={colors}>
-              <TextInputBox value={name} onChangeText={setName} placeholder="Priya Sharma" colors={colors} icon="person-outline" />
+              <TextInputBox value={name} onChangeText={setName} placeholder="Enter your full name" colors={colors} icon="person-outline" />
             </Field>
             <Field label="Restaurant name" colors={colors}>
-              <TextInputBox value={restaurantName} onChangeText={setRestaurantName} placeholder="Spice Garden" colors={colors} icon="restaurant-outline" />
+              <TextInputBox value={restaurantName} onChangeText={setRestaurantName} placeholder="Enter your restaurant name" colors={colors} icon="restaurant-outline" />
             </Field>
             <Field label="Email" colors={colors}>
               <TextInputBox
-                value={email} onChangeText={setEmail} placeholder="you@restaurant.com"
+                value={email} onChangeText={setEmail} placeholder="Enter your email"
                 keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
                 colors={colors} icon="mail-outline"
               />
             </Field>
             <Field label="Mobile number" colors={colors}>
-              <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" testID="register-phone" />
+              <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="Enter your mobile number" testID="register-phone" />
             </Field>
             <Field label="Password" colors={colors}>
               <View style={[styles.inputWrap, { borderColor: colors.border }]}>
@@ -219,7 +219,7 @@ export default function RegisterScreen() {
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={password} onChangeText={setPassword}
-                  placeholder="At least 8 characters" placeholderTextColor={colors.mutedForeground}
+                  placeholder="Enter at least 8 characters" placeholderTextColor={colors.mutedForeground}
                   secureTextEntry={!showPassword}
                 />
                 <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10}>
@@ -233,13 +233,13 @@ export default function RegisterScreen() {
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={confirm} onChangeText={setConfirm}
-                  placeholder="Repeat your password" placeholderTextColor={colors.mutedForeground}
+                  placeholder="Re-enter your password" placeholderTextColor={colors.mutedForeground}
                   secureTextEntry={!showPassword}
                 />
               </View>
             </Field>
             <Field label="Referral code (optional)" colors={colors}>
-              <TextInputBox value={referral} onChangeText={setReferral} placeholder="FRIEND10" colors={colors} icon="pricetag-outline" autoCapitalize="characters" />
+              <TextInputBox value={referral} onChangeText={setReferral} placeholder="Enter referral code (optional)" colors={colors} icon="pricetag-outline" autoCapitalize="characters" />
             </Field>
 
             <Pressable
@@ -312,7 +312,7 @@ export default function RegisterScreen() {
                   value={otpCode}
                   onChangeText={(v) => setOtpCode(v.replace(/\D/g, "").slice(0, 6))}
                   keyboardType="number-pad" maxLength={6}
-                  placeholder="123456" placeholderTextColor={colors.mutedForeground}
+                  placeholder="Enter 6-digit code" placeholderTextColor={colors.mutedForeground}
                   autoFocus
                 />
               </View>

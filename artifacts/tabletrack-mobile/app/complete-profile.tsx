@@ -114,13 +114,13 @@ export default function CompleteProfileScreen() {
                     <Ionicons name="restaurant-outline" size={18} color={colors.mutedForeground} />
                     <TextInput style={[styles.input, { color: colors.foreground }]}
                       value={restaurantName} onChangeText={setRestaurantName}
-                      placeholder="Spice Garden" placeholderTextColor={colors.mutedForeground} />
+                      placeholder="Enter your restaurant name" placeholderTextColor={colors.mutedForeground} />
                   </View>
                 </View>
               )}
               <View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
+                <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="Enter your mobile number" />
               </View>
               {whatsappEnabled && (
                 <View style={{ flexDirection: "row", gap: 8 }}>
@@ -151,7 +151,7 @@ export default function CompleteProfileScreen() {
                   <TextInput style={[styles.input, { color: colors.foreground, letterSpacing: 4 }]}
                     value={code} onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
                     keyboardType="number-pad" maxLength={6}
-                    placeholder="123456" placeholderTextColor={colors.mutedForeground} autoFocus />
+                    placeholder="Enter 6-digit code" placeholderTextColor={colors.mutedForeground} autoFocus />
                 </View>
               </View>
               <View style={{ flexDirection: "row", gap: 8 }}>

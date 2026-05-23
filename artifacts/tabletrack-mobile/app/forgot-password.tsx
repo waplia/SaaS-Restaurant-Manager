@@ -187,7 +187,7 @@ export default function ForgotPasswordScreen() {
                     <TextInput
                       style={[styles.input, { color: colors.foreground }]}
                       value={email} onChangeText={setEmail}
-                      placeholder="you@restaurant.com" placeholderTextColor={colors.mutedForeground}
+                      placeholder="Enter your email" placeholderTextColor={colors.mutedForeground}
                       keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
                     />
                   </View>
@@ -195,7 +195,7 @@ export default function ForgotPasswordScreen() {
               ) : (
                 <View style={{ gap: 6 }}>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
-                  <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" testID="forgot-phone" />
+                  <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="Enter your mobile number" testID="forgot-phone" />
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
                     Use the mobile number on your account. We'll send the code via SMS.
                   </Text>
@@ -236,7 +236,7 @@ export default function ForgotPasswordScreen() {
                   <TextInput
                     style={[styles.input, { color: colors.foreground, letterSpacing: 8, textAlign: "center", fontSize: 18, fontFamily: "Inter_600SemiBold" }]}
                     value={code} onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="123456" placeholderTextColor={colors.mutedForeground}
+                    placeholder="Enter 6-digit code" placeholderTextColor={colors.mutedForeground}
                     keyboardType="number-pad" maxLength={6} autoComplete="one-time-code" textContentType="oneTimeCode"
                   />
                 </View>
@@ -249,7 +249,7 @@ export default function ForgotPasswordScreen() {
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     value={password} onChangeText={setPassword}
-                    placeholder="At least 8 characters" placeholderTextColor={colors.mutedForeground}
+                    placeholder="Enter at least 8 characters" placeholderTextColor={colors.mutedForeground}
                     secureTextEntry autoCapitalize="none"
                   />
                 </View>
@@ -262,7 +262,7 @@ export default function ForgotPasswordScreen() {
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     value={confirm} onChangeText={setConfirm}
-                    placeholder="Repeat new password" placeholderTextColor={colors.mutedForeground}
+                    placeholder="Re-enter your new password" placeholderTextColor={colors.mutedForeground}
                     secureTextEntry autoCapitalize="none"
                   />
                 </View>

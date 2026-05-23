@@ -156,6 +156,15 @@ export default function LoginScreen() {
   const [otpChannel, setOtpChannel] = useState<Channel>("sms");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
+  // Countdown between resends. Paired with the server's per-identifier
+  // 5/hour cap so users can't hammer the "Resend" button.
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   // 2fa
   const [twoFa, setTwoFa] = useState<{ userId: number; channel: Channel; hint?: string } | null>(null);
@@ -256,8 +265,23 @@ export default function LoginScreen() {
         identifier: otpIdentifier.trim(),
       });
       setOtpStep("verify");
+      setResendIn(30);
     } catch (err) {
       Alert.alert("Could not send code", err instanceof Error ? err.message : "Try again");
+    } finally { setLoading(false); }
+  }
+
+  async function handleResendOtp() {
+    if (resendIn > 0 || loading) return;
+    setLoading(true);
+    try {
+      await postJSON<{ ok: boolean }>("/auth/request-otp", {
+        channel: tab === "email" ? "email" : otpChannel,
+        identifier: otpIdentifier.trim(),
+      });
+      setResendIn(30);
+    } catch (err) {
+      Alert.alert("Could not resend", err instanceof Error ? err.message : "Try again");
     } finally { setLoading(false); }
   }
 
@@ -336,7 +360,7 @@ export default function LoginScreen() {
                     value={twoFaCode}
                     onChangeText={(v) => setTwoFaCode(v.replace(/\D/g, "").slice(0, 6))}
                     keyboardType="number-pad"
-                    placeholder="123456"
+                    placeholder="Enter 6-digit code"
                     placeholderTextColor={colors.mutedForeground}
                   />
                 </View>
@@ -401,7 +425,7 @@ export default function LoginScreen() {
                         <TextInput
                           style={[styles.input, { color: colors.foreground }]}
                           value={identifier} onChangeText={setIdentifier}
-                          placeholder="you@example.com"
+                          placeholder="Enter your email"
                           placeholderTextColor={colors.mutedForeground}
                           keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
                           testID="email-input"
@@ -412,7 +436,7 @@ export default function LoginScreen() {
                         value={identifier}
                         onChange={setIdentifier}
                         defaultCountry="IN"
-                        placeholder="9876543210"
+                        placeholder="Enter your mobile number"
                         testID="phone-input"
                       />
                     )}
@@ -424,7 +448,7 @@ export default function LoginScreen() {
                       <TextInput
                         style={[styles.input, { color: colors.foreground }]}
                         value={password} onChangeText={setPassword}
-                        placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
+                        placeholder="Enter your password" placeholderTextColor={colors.mutedForeground}
                         secureTextEntry={!showPassword} testID="password-input"
                       />
                       <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10}>
@@ -476,7 +500,7 @@ export default function LoginScreen() {
                         <TextInput
                           style={[styles.input, { color: colors.foreground }]}
                           value={otpIdentifier} onChangeText={onChangeOtpIdentifier}
-                          placeholder="you@example.com"
+                          placeholder="Enter your email"
                           placeholderTextColor={colors.mutedForeground}
                           keyboardType="email-address"
                           autoCapitalize="none" autoCorrect={false}
@@ -487,7 +511,7 @@ export default function LoginScreen() {
                         value={otpIdentifier}
                         onChange={setOtpIdentifier}
                         defaultCountry="IN"
-                        placeholder="9876543210"
+                        placeholder="Enter your mobile number"
                         testID="otp-phone-input"
                       />
                     )}
@@ -533,7 +557,7 @@ export default function LoginScreen() {
                         style={[styles.input, { color: colors.foreground }]}
                         value={otpCode}
                         onChangeText={(v) => setOtpCode(v.replace(/\D/g, "").slice(0, 6))}
-                        keyboardType="number-pad" placeholder="123456"
+                        keyboardType="number-pad" placeholder="Enter 6-digit code"
                         placeholderTextColor={colors.mutedForeground}
                       />
                     </View>
@@ -544,6 +568,19 @@ export default function LoginScreen() {
                   >
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Verify & sign in</Text>}
                   </Pressable>
+                  <View style={{ alignItems: "center", marginTop: 4 }}>
+                    {resendIn > 0 ? (
+                      <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                        Resend code in {resendIn}s
+                      </Text>
+                    ) : (
+                      <Pressable onPress={handleResendOtp} disabled={loading} hitSlop={8}>
+                        <Text style={{ color: colors.primary, fontSize: 13, fontFamily: "Inter_500Medium", opacity: loading ? 0.5 : 1 }}>
+                          Resend code
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </>
               )}
             </>

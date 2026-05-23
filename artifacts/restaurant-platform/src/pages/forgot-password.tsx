@@ -108,7 +108,7 @@ export default function ForgotPasswordPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
-                  id="email" type="email" placeholder="you@restaurant.com"
+                  id="email" type="email" placeholder="Enter your email"
                   value={email} onChange={e => setEmail(e.target.value)} required autoFocus
                 />
               </div>
@@ -139,7 +139,7 @@ export default function ForgotPasswordPage() {
                 <Label htmlFor="code">Verification code</Label>
                 <Input
                   id="code" inputMode="numeric" autoComplete="one-time-code"
-                  pattern="[0-9]{6}" maxLength={6} placeholder="123456"
+                  pattern="[0-9]{6}" maxLength={6} placeholder="Enter 6-digit code"
                   value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required autoFocus
                   className="text-center text-lg tracking-[0.5em] font-mono"
@@ -148,12 +148,12 @@ export default function ForgotPasswordPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="password">New password</Label>
-                <Input id="password" type="password" placeholder="At least 8 characters"
+                <Input id="password" type="password" placeholder="Enter at least 8 characters"
                   value={password} onChange={e => setPassword(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="confirm">Confirm password</Label>
-                <Input id="confirm" type="password" placeholder="Repeat your password"
+                <Input id="confirm" type="password" placeholder="Re-enter your password"
                   value={confirm} onChange={e => setConfirm(e.target.value)} required />
               </div>
 
