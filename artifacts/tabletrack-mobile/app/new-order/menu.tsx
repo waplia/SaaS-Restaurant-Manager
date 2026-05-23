@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Platform,
+  View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Platform, Modal, KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -54,9 +54,19 @@ export default function NewOrderMenuScreen() {
   // the menu was opened from the home/tables screen. Reconcile the cart
   // context so a stale `cart.tableId` from a previous session can never
   // win at send time.
-  const params = useLocalSearchParams<{ tableId?: string; tableLabel?: string }>();
+  const params = useLocalSearchParams<{
+    tableId?: string;
+    tableLabel?: string;
+    existingOrderId?: string;
+    runningOrder?: string;
+  }>();
   const routeTableId = params.tableId != null ? Number(params.tableId) : NaN;
   const routeTableLabel = typeof params.tableLabel === "string" ? params.tableLabel : null;
+  // Task #602: when launched from the Running Order screen, we append items
+  // to the existing order via POST /orders/:id/items instead of creating a
+  // fresh parent order. This guarantees a single bill per table session.
+  const appendOrderId = params.existingOrderId != null ? Number(params.existingOrderId) : NaN;
+  const isAppendMode = Number.isFinite(appendOrderId) && appendOrderId > 0;
   useEffect(() => {
     if (Number.isFinite(routeTableId) && routeTableId > 0) {
       if (cart.tableId !== routeTableId || (routeTableLabel && cart.tableLabel !== routeTableLabel)) {
@@ -80,6 +90,14 @@ export default function NewOrderMenuScreen() {
   // still-failing items are re-sent (with per-line idempotency keys, so
   // even an already-applied item POST won't double-bill the order).
   const [pendingOrder, setPendingOrder] = useState<{ orderId: number; createKey: string } | null>(null);
+  // Task #602 — Manager-PIN approval flow for adding items after a bill
+  // has been generated. The server returns 409 REQUIRES_APPROVAL when the
+  // current waiter role can't bypass post-bill behavior. We collect the
+  // affected lines, prompt for a PIN, and retry just those lines with the
+  // PIN in the body.
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [managerPin, setManagerPin] = useState("");
+  const [pendingApprovalLines, setPendingApprovalLines] = useState<string[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -195,13 +213,33 @@ export default function NewOrderMenuScreen() {
       return;
     }
 
+    // Task #602 — when running-order policy `askBeforeAdding` is on, double-
+    // check before silently appending another KOT round to a guest's bill.
+    const askBeforeAdding = !!((settings as { runningOrderSettings?: { askBeforeAdding?: boolean } }).runningOrderSettings?.askBeforeAdding);
+    if (isAppendMode && askBeforeAdding) {
+      const ok = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          "Add to running bill?",
+          `${cart.items.length} item${cart.items.length === 1 ? "" : "s"} will be added to ${resolvedTableLabel ?? "this table"}'s running order and fired to the kitchen as a new KOT round.`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+            { text: "Add to bill", onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!ok) return;
+    }
+
     setBusy(true);
     try {
       // Reuse the existing parent order on retry instead of creating a new
       // one. The createKey is also kept stable across retries so even the
       // create-order call itself is dedupable on the server side if the
       // previous attempt reached the DB but the response was lost.
-      let orderId = pendingOrder?.orderId ?? null;
+      //
+      // Task #602: when isAppendMode is true we skip the createOrder call
+      // entirely and POST items directly against the running order id.
+      let orderId = pendingOrder?.orderId ?? (isAppendMode ? appendOrderId : null);
       const createKey = pendingOrder?.createKey ?? mobileUid();
 
       if (orderId == null) {
@@ -235,12 +273,17 @@ export default function NewOrderMenuScreen() {
       // response instead of double-billing the order.
       const succeededLineIds: string[] = [];
       const failed: Array<{ name: string; reason: string }> = [];
+      // Task #602 — When the server returns 409 REQUIRES_APPROVAL
+      // (post-bill add with require_approval policy), keep those lines
+      // in the cart and surface a manager-PIN prompt at the end.
+      const needsApproval: string[] = [];
+      const postedOrderId = orderId;
       for (const line of cart.items) {
         const mods = (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
-        const itemKey = `item_${orderId}_${line.lineId}`;
+        const itemKey = `item_${postedOrderId}_${line.lineId}`;
         try {
           await withTimeout((signal) =>
-            customFetch(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, {
+            customFetch(`/api/restaurants/${restaurantId}/orders/${postedOrderId}/items`, {
               method: "POST",
               body: JSON.stringify({
                 menuItemId: line.menuItemId,
@@ -254,11 +297,26 @@ export default function NewOrderMenuScreen() {
           );
           succeededLineIds.push(line.lineId);
         } catch (itemErr) {
-          const e = itemErr as { data?: { error?: string } | null; message?: string };
-          const serverMsg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
+          const e = itemErr as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
+          const code = e?.data && typeof e.data === "object" ? e.data.code : undefined;
+          if (code === "REQUIRES_APPROVAL" || e?.status === 409) {
+            needsApproval.push(line.lineId);
+            continue;
+          }
+          // Drop closed-order failures from the cart — retrying them
+          // can never succeed; the order is sealed.
+          const msg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
             ? e.data.error
             : (itemErr instanceof RequestTimeoutError ? "Timed out" : (e?.message ?? "Failed"));
-          failed.push({ name: line.name, reason: serverMsg });
+          if (
+            code === "BILL_ALREADY_GENERATED" ||
+            /completed|cancelled|already (?:settled|paid)/i.test(msg)
+          ) {
+            failed.push({ name: line.name, reason: msg });
+            succeededLineIds.push(line.lineId); // drop from cart
+            continue;
+          }
+          failed.push({ name: line.name, reason: msg });
         }
       }
 
@@ -268,6 +326,13 @@ export default function NewOrderMenuScreen() {
       // the failures. This keeps the alert copy honest ("retry won't
       // duplicate") and matches what the user sees in the cart sheet.
       for (const id of succeededLineIds) removeLine(id);
+
+      if (needsApproval.length > 0) {
+        setPendingApprovalLines(needsApproval);
+        setManagerPin("");
+        setPinModalOpen(true);
+        return;
+      }
 
       if (failed.length > 0) {
         const lines = failed.map((f) => `• ${f.name} — ${f.reason}`).join("\n");
@@ -285,6 +350,12 @@ export default function NewOrderMenuScreen() {
       setPendingOrder(null);
       clearCart();
       setCartOpen(false);
+      // Task #602: invalidate the running-order query so the Running Order
+      // screen reloads with the freshly-added KOT round when we navigate
+      // back to it.
+      if (isAppendMode) {
+        qc.invalidateQueries({ queryKey: ["running-order"] });
+      }
       // Dismiss the new-order modal back to whatever screen launched it
       // (waiter Tables, owner Home, etc.). Hard-navigating to a fixed
       // "/(owner)/orders" route caused an infinite redirect loop for
@@ -311,6 +382,90 @@ export default function NewOrderMenuScreen() {
     } finally {
       // Always clear the spinner — even on timeout/abort or unexpected
       // errors above, the user must never see a stuck button.
+      setBusy(false);
+    }
+  };
+
+  // Task #602 — retry the approval-required lines with the manager PIN
+  // attached. We re-use the same per-line idempotency keys so any line the
+  // server already accepted earlier won't double-bill.
+  const handleManagerPinSubmit = async () => {
+    const pin = managerPin.trim();
+    if (!pin) {
+      Alert.alert("PIN required", "Enter the manager PIN to authorise adding items.");
+      return;
+    }
+    const orderId = pendingOrder?.orderId ?? (isAppendMode ? appendOrderId : null);
+    if (orderId == null) {
+      setPinModalOpen(false);
+      return;
+    }
+    const lineIds = new Set(pendingApprovalLines);
+    const lines = cart.items.filter((l) => lineIds.has(l.lineId));
+    setBusy(true);
+    try {
+      const succeeded: string[] = [];
+      const stillFailed: Array<{ name: string; reason: string }> = [];
+      let pinRejected = false;
+      for (const line of lines) {
+        const mods = (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
+        const itemKey = `item_${orderId}_${line.lineId}`;
+        try {
+          await withTimeout((signal) =>
+            customFetch(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, {
+              method: "POST",
+              body: JSON.stringify({
+                menuItemId: line.menuItemId,
+                quantity: line.quantity,
+                modifiers: mods.length ? mods : undefined,
+                notes: line.note ?? undefined,
+                managerPin: pin,
+              }),
+              headers: { "X-Idempotency-Key": itemKey },
+              signal,
+            }),
+          );
+          succeeded.push(line.lineId);
+        } catch (e) {
+          const err = e as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
+          const code = err?.data && typeof err.data === "object" ? err.data.code : undefined;
+          if (code === "REQUIRES_APPROVAL" || err?.status === 409 || /pin|approval/i.test(err?.message ?? "")) {
+            pinRejected = true;
+          }
+          stillFailed.push({
+            name: line.name,
+            reason: err?.data?.error ?? err?.message ?? "Failed",
+          });
+        }
+      }
+      for (const id of succeeded) removeLine(id);
+
+      if (pinRejected && succeeded.length === 0) {
+        Alert.alert("PIN rejected", "Manager PIN was not accepted. Ask the manager to re-enter it.");
+        return; // keep modal open
+      }
+
+      setPinModalOpen(false);
+      setManagerPin("");
+      setPendingApprovalLines([]);
+      if (isAppendMode) qc.invalidateQueries({ queryKey: ["running-order"] });
+      qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
+
+      if (stillFailed.length > 0) {
+        Alert.alert(
+          "Some items still failed",
+          stillFailed.map((f) => `• ${f.name} — ${f.reason}`).join("\n"),
+        );
+        return;
+      }
+      // All approved-and-sent — close back to the running-order screen.
+      clearCart();
+      setCartOpen(false);
+      try {
+        if (router.canDismiss()) router.dismissAll();
+        else router.back();
+      } catch { router.back(); }
+    } finally {
       setBusy(false);
     }
   };
@@ -372,7 +527,14 @@ export default function NewOrderMenuScreen() {
           </ScrollView>
         ) : null}
 
-        {cart.tableLabel ? (
+        {isAppendMode ? (
+          <View style={[styles.contextRow, { borderColor: "#f59e0b", backgroundColor: "#fef3c7" }]}>
+            <Ionicons name="add-circle" size={12} color="#b45309" />
+            <Text style={{ color: "#b45309", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+              Adding to running bill · {cart.tableLabel ?? `Table ${routeTableId}`}
+            </Text>
+          </View>
+        ) : cart.tableLabel ? (
           <View style={[styles.contextRow, { borderColor: colors.border, backgroundColor: colors.accent }]}>
             <Ionicons name="restaurant" size={12} color={colors.primary} />
             <Text style={{ color: colors.primary, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
@@ -487,8 +649,71 @@ export default function NewOrderMenuScreen() {
         taxRate={taxRate}
         serviceCharge={serviceCharge}
         busy={busy}
-        primaryLabel="Send to Kitchen"
+        primaryLabel={isAppendMode ? "Add to running bill" : "Send to Kitchen"}
       />
+
+      {/* Task #602 — manager-PIN approval modal for post-bill adds. */}
+      <Modal
+        visible={pinModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPinModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.pinBackdrop}
+        >
+          <View style={[styles.pinCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ alignItems: "center", marginBottom: 8 }}>
+              <Ionicons name="lock-closed-outline" size={28} color={colors.primary} />
+            </View>
+            <Text style={[styles.pinTitle, { color: colors.foreground }]}>Manager approval</Text>
+            <Text style={[styles.pinSubtitle, { color: colors.mutedForeground }]}>
+              The bill has already been generated. Enter the manager PIN to add {pendingApprovalLines.length} item{pendingApprovalLines.length === 1 ? "" : "s"} to this order.
+            </Text>
+            <TextInput
+              value={managerPin}
+              onChangeText={setManagerPin}
+              placeholder="Manager PIN"
+              placeholderTextColor={colors.mutedForeground}
+              secureTextEntry
+              keyboardType="number-pad"
+              autoFocus
+              style={[styles.pinInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+            />
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+              <Pressable
+                onPress={() => { setPinModalOpen(false); setManagerPin(""); }}
+                style={({ pressed }) => [
+                  styles.pinBtn,
+                  { borderColor: colors.border, opacity: pressed ? 0.7 : 1, flex: 1 },
+                ]}
+              >
+                <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleManagerPinSubmit}
+                disabled={busy || !managerPin.trim()}
+                style={({ pressed }) => [
+                  styles.pinBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                    opacity: pressed || busy || !managerPin.trim() ? 0.7 : 1,
+                    flex: 1,
+                  },
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ color: "#fff", fontFamily: "Inter_700Bold" }}>Approve & add</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -517,4 +742,10 @@ const styles = StyleSheet.create({
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   contextRow: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
   list: { padding: 12 },
+  pinBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", padding: 24 },
+  pinCard: { borderRadius: 18, borderWidth: 1, padding: 22, gap: 6 },
+  pinTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
+  pinSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", marginBottom: 12 },
+  pinInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 18, fontFamily: "Inter_600SemiBold", letterSpacing: 6, textAlign: "center" },
+  pinBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", justifyContent: "center" },
 });

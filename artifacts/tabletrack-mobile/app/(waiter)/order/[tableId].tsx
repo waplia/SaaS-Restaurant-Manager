@@ -359,12 +359,31 @@ export default function WaiterOrderScreen() {
     const queue = await readQueueCache();
     if (!queue || queue.length === 0) return;
     let successCount = 0;
+    let droppedCount = 0;
     const failed: QueuedOrder[] = [];
     for (const entry of queue) {
       try {
         await submitOrderItems(entry.items, entry.tableId, undefined, entry.itemKeys, entry.idempotencyKey);
         successCount++;
-      } catch {
+      } catch (err) {
+        // Task #602 — When the table's previous order was already closed
+        // (completed / cancelled / settled) while we were offline, the
+        // server will reject the replay with a 400. Retrying is pointless,
+        // so we drop the entry instead of looping forever on every reconnect.
+        const e = err as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
+        const code = e?.data && typeof e.data === "object" ? e.data.code : undefined;
+        const msg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
+          ? e.data.error
+          : (e?.message ?? "");
+        const isClosedOrder =
+          e?.status === 400 && (
+            code === "BILL_ALREADY_GENERATED" ||
+            /completed|cancelled|already (?:settled|paid)|closed/i.test(msg)
+          );
+        if (isClosedOrder) {
+          droppedCount++;
+          continue;
+        }
         failed.push(entry);
       }
     }
@@ -375,7 +394,16 @@ export default function WaiterOrderScreen() {
     }
     if (successCount > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Back Online", `${successCount} queued order${successCount > 1 ? "s" : ""} sent to kitchen.`);
+      Alert.alert(
+        "Back Online",
+        `${successCount} queued order${successCount > 1 ? "s" : ""} sent to kitchen.` +
+          (droppedCount > 0 ? `\n\n${droppedCount} order${droppedCount > 1 ? "s were" : " was"} dropped — the table was already closed while you were offline.` : ""),
+      );
+    } else if (droppedCount > 0) {
+      Alert.alert(
+        "Queue cleared",
+        `${droppedCount} queued order${droppedCount > 1 ? "s were" : " was"} dropped — the table was already closed while you were offline.`,
+      );
     }
   };
 

@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform,
   TextInput, Alert,
 } from "react-native";
+import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +11,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { useRunningOrdersSummary } from "@/hooks/useRunningOrder";
 import { EntityFormSheet, FormField, formInputStyle } from "@/components/EntityFormSheet";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 
@@ -28,6 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
   free: "#16a34a",
   available: "#16a34a",
   occupied: "#ea580c",
+  bill_requested: "#7c3aed",
   reserved: "#2563eb",
   cleaning: "#9ca3af",
   billed: "#7c3aed",
@@ -112,31 +115,7 @@ export default function TablesScreen() {
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
             Long-press a table to edit or delete it.
           </Text>
-          <View style={styles.grid}>
-            {tables.map(t => {
-              const color = STATUS_COLOR[t.status ?? "free"] ?? STATUS_COLOR.free;
-              return (
-                <Pressable
-                  key={t.id}
-                  onLongPress={() => setEditing(t)}
-                  delayLongPress={250}
-                  style={({ pressed }) => [
-                    styles.tile,
-                    { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <View style={[styles.statusDot, { backgroundColor: color }]} />
-                  <Text style={[styles.label, { color: colors.foreground }]}>{tableLabel(t)}</Text>
-                  {t.capacity ? (
-                    <Text style={[styles.capacity, { color: colors.mutedForeground }]}>
-                      <Ionicons name="people-outline" size={11} /> {t.capacity}
-                    </Text>
-                  ) : null}
-                  <Text style={[styles.status, { color }]}>{(t.status ?? "free").replace("_", " ")}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <RunningSummariesGrid tables={tables} colors={colors} setEditing={setEditing} />
         </ScrollView>
       )}
 
@@ -159,6 +138,73 @@ export default function TablesScreen() {
         onDelete={() => editing && deleteM.mutate(editing.id)}
         deleting={deleteM.isPending}
       />
+    </View>
+  );
+}
+
+function RunningSummariesGrid({
+  tables, colors, setEditing,
+}: {
+  tables: Table[];
+  colors: ReturnType<typeof useColors>;
+  setEditing: (t: Table) => void;
+}) {
+  const occupiedIds = React.useMemo(
+    () =>
+      tables
+        .filter((t) => {
+          const s = t.status ?? "free";
+          return s === "occupied" || s === "bill_requested" || s === "billed";
+        })
+        .map((t) => t.id),
+    [tables],
+  );
+  const summaries = useRunningOrdersSummary(occupiedIds);
+  return (
+    <View style={styles.grid}>
+      {tables.map(t => {
+              const color = STATUS_COLOR[t.status ?? "free"] ?? STATUS_COLOR.free;
+              const summary = summaries.get(t.id);
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => {
+                    const status = t.status ?? "free";
+                    const isOccupied = status === "occupied" || status === "bill_requested" || status === "billed";
+                    if (!isOccupied) return;
+                    router.push({
+                      pathname: "/running-order/[tableId]",
+                      params: { tableId: String(t.id), tableLabel: tableLabel(t) },
+                    } as never);
+                  }}
+                  onLongPress={() => setEditing(t)}
+                  delayLongPress={250}
+                  style={({ pressed }) => [
+                    styles.tile,
+                    { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <View style={[styles.statusDot, { backgroundColor: color }]} />
+                  <Text style={[styles.label, { color: colors.foreground }]}>{tableLabel(t)}</Text>
+                  {t.capacity ? (
+                    <Text style={[styles.capacity, { color: colors.mutedForeground }]}>
+                      <Ionicons name="people-outline" size={11} /> {t.capacity}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.status, { color }]}>{(t.status ?? "free").replace("_", " ")}</Text>
+                  {summary ? (
+                    <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 2 }}>
+                      <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                        ₹{Number(summary.runningTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                      </Text>
+                      <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10 }}>
+                        {summary.itemCount} item{summary.itemCount === 1 ? "" : "s"} · {summary.elapsedMinutes}m
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
     </View>
   );
 }
