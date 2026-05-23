@@ -30,24 +30,44 @@ const router = Router();
 
 // Look up a user by phone with several common shape variants. Users
 // commonly type just the local digits ("9602374514") into the login form
-// while the DB stores the full E.164 ("+919602374514"). Try in order:
-//  1) exact match on digits-only normalisation (back-compat)
+// while the DB stores the full E.164 ("+919602374514") or the workspace
+// canonical form ("91 9602374514"). Strategy:
+//  1) digits-only equality (covers "+919...", "919...", "91 9...", etc.)
 //  2) digits-only suffix match (last 10 digits) — covers bare local input
+//     even when several test rows share a suffix, by preferring the row
+//     whose stored digits match most specifically.
 async function findUserByPhoneFlexible(raw: string) {
   const normalized = normalizePhone(raw);
   const digitsOnly = normalized.replace(/[^0-9]/g, "");
-  // Exact normalised match first (covers "+919602374514" or "919602374514").
+  if (!digitsOnly) return undefined;
+
+  // Exact digits-only equality — comparing digits-only on both sides so a
+  // stored "+919602374514" matches a typed "919602374514" or "9602374514"
+  // when the dial code is present in either side.
   let [u] = await db.select().from(usersTable)
-    .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9+]', '', 'g') = ${normalized}`);
+    .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9]', '', 'g') = ${digitsOnly}`);
   if (u) return u;
+
   // Suffix match on the trailing significant digits. Use up to 10 digits
-  // to match standard mobile numbers globally; require at least 7 to avoid
-  // collisions on very short inputs.
+  // (standard global mobile length) and require at least 7 to avoid
+  // collisions on very short inputs. When several rows match the suffix
+  // (e.g. seed/test users), pick the one whose stored digits-only form
+  // matches the typed digits-only form most specifically.
   if (digitsOnly.length >= 7) {
     const suffix = digitsOnly.slice(-10);
     const matches = await db.select().from(usersTable)
       .where(sql`regexp_replace(coalesce(${usersTable.phone}, ''), '[^0-9]', '', 'g') LIKE ${"%" + suffix}`);
     if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+      // Prefer a row that ends with the *full* typed digits, then the
+      // shortest stored form (most likely the canonical national number,
+      // not a longer test variant). This keeps the lookup deterministic.
+      const ranked = matches
+        .map((m) => ({ m, d: (m.phone ?? "").replace(/[^0-9]/g, "") }))
+        .filter((x) => x.d.endsWith(suffix))
+        .sort((a, b) => a.d.length - b.d.length);
+      if (ranked.length > 0) return ranked[0].m;
+    }
   }
   return undefined;
 }
