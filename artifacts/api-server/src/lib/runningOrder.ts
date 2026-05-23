@@ -123,7 +123,13 @@ export async function withTableLock<T>(
   fn: (tx: typeof db) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async tx => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${restaurantId}::bigint, ${tableId}::bigint)`);
+    // PostgreSQL ships two arities: `pg_advisory_xact_lock(int, int)` and
+    // `pg_advisory_xact_lock(bigint)`. There is NO `(bigint, bigint)` overload,
+    // so casting both args to bigint resolves to no function and throws. We
+    // pack (restaurantId, tableId) into a single bigint key instead.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(((${restaurantId}::bigint << 32) | (${tableId}::bigint & 4294967295)))`,
+    );
     return fn(tx as unknown as typeof db);
   });
 }
@@ -197,7 +203,11 @@ export async function createKotBatchForItems(args: {
   let roundNumber = args.roundNumber;
   if (!roundNumber) {
     roundNumber = await db.transaction(async tx => {
-      await tx.execute(sql`select pg_advisory_xact_lock(${restaurantId}::bigint, ${orderId}::bigint)`);
+      // See note in withTableLock — pack two ints into one bigint key because
+      // pg_advisory_xact_lock has no (bigint, bigint) overload.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(((${restaurantId}::bigint << 32) | (${orderId}::bigint & 4294967295)))`,
+      );
       const [{ max }] = await tx
         .select({ max: sql<number>`coalesce(max(${kotBatchesTable.roundNumber}), 0)` })
         .from(kotBatchesTable)
