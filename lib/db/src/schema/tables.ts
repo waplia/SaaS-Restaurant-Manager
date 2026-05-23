@@ -98,6 +98,33 @@ export const waitlistEntriesTable = pgTable("waitlist_entries", {
   byRestaurantStatus: index("waitlist_restaurant_status_idx").on(t.restaurantId, t.status),
 }));
 
+// Task #601 — Table sessions for the running-order model. One row per
+// "seating" at a dine-in table: opened when the first dine-in order is
+// placed on a free table, closed after the final bill is paid and the table
+// is freed. All KOT rounds and the single final bill for that seating roll
+// up against this session.
+export const tableSessionsTable = pgTable("table_sessions", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  branchId: integer("branch_id"),
+  tableId: integer("table_id").notNull().references(() => floorTablesTable.id),
+  customerId: integer("customer_id"),
+  waiterId: integer("waiter_id").references(() => usersTable.id),
+  status: text("status").notNull().default("open"), // open | bill_generated | paid | closed | cancelled
+  partySize: integer("party_size"),
+  notes: text("notes"),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  billGeneratedAt: timestamp("bill_generated_at"),
+  paidAt: timestamp("paid_at"),
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  byRestaurantTable: index("table_sessions_restaurant_table_idx").on(t.restaurantId, t.tableId, t.status),
+}));
+
+export type TableSession = typeof tableSessionsTable.$inferSelect;
+
 export const insertFloorTableSchema = createInsertSchema(floorTablesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertFloorTable = z.infer<typeof insertFloorTableSchema>;
 export type FloorTable = typeof floorTablesTable.$inferSelect;

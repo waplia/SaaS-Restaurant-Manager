@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable } from "../lib/db";
+import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable, tableSessionsTable, kotBatchesTable } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
 import { toE164 } from "@workspace/phone-utils";
 import { triggerAutoPost } from "./accounting-books";
@@ -53,6 +53,16 @@ import { broadcastEvent, broadcastOrderUpdate } from "../lib/socketio";
 import { emitWebhookEvent } from "../lib/webhookDispatcher";
 import { pushToStaff } from "../lib/pushNotify";
 import { createKitchenTicketsForOrder, ensureTicketForAddedItem } from "../lib/kitchenRouting";
+import {
+  loadRunningOrderSettings,
+  saveRunningOrderSettings,
+  getActiveRunningOrderForTable,
+  openTableSession,
+  closeTableSession,
+  createKotBatchForItems,
+  freeTableIfIdle,
+  withTableLock,
+} from "../lib/runningOrder";
 import { recordVariantPour } from "./bar";
 import { issueTokenForOrder, syncTokenWithTickets } from "../lib/tokens";
 import { sendEmail, sendWhatsApp, orderConfirmationEmail } from "../lib/notifications";
@@ -307,7 +317,10 @@ async function getRestaurantRates(restaurantId: number) {
 
 export async function recalculateOrderTotals(orderId: number, restaurantId: number) {
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-  const subtotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
+  // Task #601 — cancelled items remain in the table for audit but are not
+  // billed to the guest, so exclude them from the running totals.
+  const billable = items.filter(i => i.status !== "cancelled");
+  const subtotal = billable.reduce((s, i) => s + Number(i.totalPrice), 0);
   const { taxRate, serviceRate } = await getRestaurantRates(restaurantId);
   const taxAmount = subtotal * taxRate;
   const serviceCharge = subtotal * serviceRate;
@@ -680,7 +693,272 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     if (main) resolvedBranchId = main.id;
   }
 
-  const [order] = await db.insert(ordersTable).values({
+  // ───── Task #601 — Single running bill per dine-in table ─────
+  // When a dine-in order targets a table that already has an open running
+  // order, append the new items to that running order (a new KOT round)
+  // instead of opening a second bill. Caller can opt out with
+  // `addToExistingBill: false` to start a deliberate party-split, but
+  // only when settings.allowSeparateBill=true AND the caller holds an
+  // owner/manager role or supplies a verified manager PIN.
+  const resolvedOrderType = orderType ?? (ckContext ? "delivery" : "dine_in");
+  const isDineIn = resolvedOrderType === "dine_in" && !ckContext;
+  const roSettings = isDineIn ? await loadRunningOrderSettings(restaurantId) : null;
+  const requestedSeparate = req.body?.addToExistingBill === false;
+  const addToExistingBill = !requestedSeparate;
+
+  // To prevent two concurrent create-order requests from both opening a
+  // brand-new running order on the same table (one-bill invariant), we
+  // resolve merge vs open inside a per-table advisory lock and write the
+  // mergeTarget / new order header under that lock. The lock is released
+  // when the tx commits.
+  let mergeTarget: typeof ordersTable.$inferSelect | null = null;
+  let lockedNewOrder: typeof ordersTable.$inferSelect | null = null;
+  let lockedTableSessionId: number | null = null;
+
+  if (isDineIn && roSettings?.enabled && tableId) {
+    // Server-side gating for party-split: separate-bill is rejected
+    // unless the policy allows it AND an authorised role / valid manager
+    // PIN authorises this specific attempt.
+    if (requestedSeparate) {
+      if (!roSettings.allowSeparateBill) {
+        return void res.status(403).json({
+          error: "Separate bills are disabled for this restaurant",
+          code: "SEPARATE_BILL_DISABLED",
+        });
+      }
+      const role = (req as any).user?.role;
+      const isAuthorisedRole = ["owner", "manager", "super_admin"].includes(role);
+      const supplied = String(req.body?.managerPin ?? "");
+      let pinOk = false;
+      if (!isAuthorisedRole && supplied) {
+        try {
+          const { verifyManagerPin, loadDiscountsConfig } = await import("../lib/discounts");
+          const cfg = await loadDiscountsConfig(restaurantId);
+          pinOk = await verifyManagerPin(supplied, cfg);
+        } catch { pinOk = false; }
+      }
+      if (!isAuthorisedRole && !pinOk) {
+        return void res.status(403).json({
+          error: "Manager approval required to start a separate bill",
+          code: "SEPARATE_BILL_APPROVAL_REQUIRED",
+        });
+      }
+    }
+
+    // One-running-order invariant: under a per-table advisory lock, either
+    // capture the existing running order (merge) or open a fresh
+    // table_session + order header. Two concurrent create requests can't
+    // both see "no existing" and each open a new bill — the second waits
+    // for the first to commit and then sees the running order it just
+    // wrote. Bill_generated handling for the merge case is also resolved
+    // here so the merge decision is consistent with the lock state.
+    // For POS, `require_approval` is enforced server-side by requiring
+    // either an authorised role (owner/manager/super_admin) or a valid
+    // manager PIN before merging into a bill_generated order. Cashier/
+    // waiter without approval is rejected with REQUIRES_APPROVAL.
+    let posApprovalOk = false;
+    {
+      const role = (req as any).user?.role;
+      const isAuthorisedRole = ["owner", "manager", "super_admin"].includes(role);
+      const supplied = String(req.body?.managerPin ?? "");
+      let pinOk = false;
+      if (!isAuthorisedRole && supplied) {
+        try {
+          const { verifyManagerPin, loadDiscountsConfig } = await import("../lib/discounts");
+          const cfg = await loadDiscountsConfig(restaurantId);
+          pinOk = await verifyManagerPin(supplied, cfg);
+        } catch { pinOk = false; }
+      }
+      posApprovalOk = isAuthorisedRole || pinOk;
+    }
+    const lockedResult = await withTableLock(restaurantId, Number(tableId), async tx => {
+      const existing = addToExistingBill
+        ? await getActiveRunningOrderForTable(restaurantId, Number(tableId), tx)
+        : null;
+      if (existing) {
+        if (existing.status === "bill_generated") {
+          if (roSettings.afterBillBehavior === "block") {
+            return { kind: "blocked" as const, reason: "block" as const };
+          }
+          if (roSettings.afterBillBehavior === "require_approval" && !posApprovalOk) {
+            return { kind: "blocked" as const, reason: "require_approval" as const };
+          }
+        }
+        return { kind: "merge" as const, order: existing };
+      }
+      const [sess] = await tx.insert(tableSessionsTable).values({
+        restaurantId,
+        branchId: resolvedBranchId,
+        tableId: Number(tableId),
+        waiterId: req.user?.sub ?? null,
+        customerId: resolvedCustomerId ?? null,
+        status: "open",
+      }).returning();
+      const [newOrder] = await tx.insert(ordersTable).values({
+        tableSessionId: sess.id,
+        isRunningOrder: true,
+        restaurantId,
+        branchId: resolvedBranchId,
+        tableId: Number(tableId),
+        orderNumber: generateOrderNumber(),
+        orderType: "dine_in",
+        notes,
+        customerName,
+        customerPhone,
+        customerId: resolvedCustomerId,
+        isPriority: isPriority ?? false,
+        subtotal: "0.00",
+        taxAmount: "0.00",
+        serviceCharge: "0.00",
+        discountAmount: "0.00",
+        totalAmount: "0.00",
+      }).returning();
+      return { kind: "open" as const, order: newOrder, tableSessionId: sess.id };
+    });
+    if (lockedResult.kind === "blocked") {
+      if (lockedResult.reason === "require_approval") {
+        return void res.status(409).json({
+          error: "Manager approval required to add to a bill-generated order",
+          code: "REQUIRES_APPROVAL",
+        });
+      }
+      return void res.status(409).json({
+        error: "Bill has already been generated for this table",
+        code: "BILL_ALREADY_GENERATED",
+      });
+    }
+    if (lockedResult.kind === "merge") {
+      mergeTarget = lockedResult.order;
+    } else {
+      lockedNewOrder = lockedResult.order;
+      lockedTableSessionId = lockedResult.tableSessionId;
+    }
+  }
+
+  if (mergeTarget) {
+    // Append items into the existing running order as a new KOT round.
+    // If we're appending into a bill_generated order (approved above),
+    // reopen the lifecycle: clear bill_generated_at, flip status back to
+    // pending, and reopen the table_session — a freshly-printed bill is
+    // now stale and must be re-generated.
+    if (mergeTarget.status === "bill_generated") {
+      await db.update(ordersTable).set({
+        status: "pending",
+        billGeneratedAt: null,
+        updatedAt: new Date(),
+      }).where(eq(ordersTable.id, mergeTarget.id));
+      if (mergeTarget.tableSessionId) {
+        await db.update(tableSessionsTable).set({
+          status: "open",
+          billGeneratedAt: null,
+          updatedAt: new Date(),
+        }).where(eq(tableSessionsTable.id, mergeTarget.tableSessionId));
+      }
+      if (mergeTarget.tableId) {
+        await db.update(floorTablesTable).set({
+          status: "occupied", updatedAt: new Date(),
+        }).where(and(eq(floorTablesTable.id, mergeTarget.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+      }
+      broadcastEvent(restaurantId, "order:reopened", { id: mergeTarget.id });
+    }
+    const appendedItemIds: number[] = [];
+    for (const ei of enrichedItems) {
+      const [oi] = await db.insert(orderItemsTable).values({
+        orderId: mergeTarget.id,
+        menuItemId: ei.menuItem.id,
+        menuItemName: ei.menuItem.name,
+        quantity: ei.qty,
+        unitPrice: ei.unitPrice.toFixed(2),
+        totalPrice: (ei.unitPrice * ei.qty).toFixed(2),
+        notes: ei.notes,
+      }).returning();
+      appendedItemIds.push(oi.id);
+      if (ei.variantId) {
+        await recordVariantPour({
+          restaurantId, orderId: mergeTarget.id, orderItemId: oi.id,
+          variantId: ei.variantId, qty: ei.qty, unitPrice: ei.unitPrice,
+        }).catch(err => { console.error("[bar] recordVariantPour failed:", err); });
+      }
+      for (const mod of ei.modifiers ?? []) {
+        await db.insert(orderItemModifiersTable).values({
+          orderItemId: oi.id,
+          modifierId: mod.modifierId ?? null,
+          modifierGroupId: mod.modifierGroupId ?? null,
+          groupName: mod.groupName ?? null,
+          modifierName: mod.name,
+          quantity: mod.quantity,
+          price: mod.price.toFixed(2),
+        });
+      }
+      if (ei.appliedRule) {
+        await db.insert(pricingRuleApplicationsTable).values({
+          orderItemId: oi.id,
+          pricingRuleId: ei.appliedRule.id,
+          ruleName: ei.appliedRule.name,
+          ruleType: ei.appliedRule.ruleType,
+          originalUnitPrice: ei.originalPrice.toFixed(2),
+          adjustedUnitPrice: ei.unitPrice.toFixed(2),
+        }).catch(() => {});
+      }
+    }
+    const batchRes = await createKotBatchForItems({
+      restaurantId,
+      orderId: mergeTarget.id,
+      tableSessionId: mergeTarget.tableSessionId ?? null,
+      createdFor: "new",
+      source: "pos",
+      firedByUserId: req.user?.sub ?? null,
+      orderItemIds: appendedItemIds,
+      isPriority: isPriority ?? mergeTarget.isPriority ?? false,
+    });
+    await recalculateOrderTotals(mergeTarget.id, restaurantId);
+    const [refreshed] = await db.select().from(ordersTable).where(eq(ordersTable.id, mergeTarget.id));
+    const refreshedItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, mergeTarget.id));
+    broadcastEvent(restaurantId, "order:updated", { id: mergeTarget.id, mergedRound: batchRes.batch.roundNumber });
+    for (const t of batchRes.tickets) {
+      broadcastEvent(restaurantId, "order:new", { ...refreshed, ticketId: t.ticketId, kitchenId: t.kitchenId });
+    }
+    return void res.status(200).json({ ...refreshed, items: refreshedItems, merged: true, kotBatch: batchRes.batch });
+  }
+
+  // Open a new table session for a fresh dine-in running order — but
+  // only if the lock branch above didn't already pre-create the order
+  // header (in which case we reuse those values to preserve the
+  // one-running-order invariant).
+  let newTableSessionId: number | null = lockedTableSessionId;
+  if (!lockedNewOrder && isDineIn && roSettings?.enabled && tableId) {
+    const sess = await openTableSession({
+      restaurantId,
+      branchId: resolvedBranchId,
+      tableId: Number(tableId),
+      waiterId: req.user?.sub ?? null,
+      customerId: resolvedCustomerId ?? null,
+    });
+    newTableSessionId = sess.id;
+  }
+
+  let order: typeof ordersTable.$inferSelect;
+  if (lockedNewOrder) {
+    // Update the placeholder header inserted under the lock with the
+    // real totals/notes computed below — but the row identity (id,
+    // tableSessionId, isRunningOrder) is already locked-in.
+    const [updated] = await db.update(ordersTable).set({
+      notes,
+      customerName,
+      customerPhone,
+      customerId: resolvedCustomerId,
+      isPriority: isPriority ?? false,
+      subtotal: subtotal.toFixed(2),
+      taxAmount: taxAmount.toFixed(2),
+      serviceCharge: serviceCharge.toFixed(2),
+      totalAmount: totalAmount.toFixed(2),
+      updatedAt: new Date(),
+    }).where(eq(ordersTable.id, lockedNewOrder.id)).returning();
+    order = updated;
+  } else {
+  const [insertedOrder] = await db.insert(ordersTable).values({
+    tableSessionId: newTableSessionId,
+    isRunningOrder: isDineIn && roSettings?.enabled ? true : false,
     restaurantId,
     branchId: resolvedBranchId,
     tableId,
@@ -712,6 +990,8 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
       ? deliveryAddress.trim().slice(0, 500)
       : null,
   }).returning();
+    order = insertedOrder;
+  }
 
   // Deduct packaging stock for cloud-kitchen orders
   if (ckContext && ckContext.packagingDeductions.length > 0) {
@@ -766,11 +1046,23 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     }
   }
 
-  const createdTickets = await createKitchenTicketsForOrder({
-    orderId: order.id,
+  // Fire the first KOT round for the new order (Task #601 — every dine-in
+  // round is a kot_batch; for non-running orders we still use the helper so
+  // the kitchen ticket shape is uniform).
+  const newOrderItems = await db.select({ id: orderItemsTable.id })
+    .from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  const batchRes = await createKotBatchForItems({
     restaurantId,
+    orderId: order.id,
+    tableSessionId: order.tableSessionId ?? null,
+    createdFor: "new",
+    source: "pos",
+    firedByUserId: req.user?.sub ?? null,
+    orderItemIds: newOrderItems.map(i => i.id),
+    roundNumber: 1,
     isPriority: isPriority ?? false,
   });
+  const createdTickets = batchRes.tickets;
 
   if (tableId) {
     await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
@@ -871,6 +1163,13 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, Number(req.params.id)), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Not found" });
+  // Task #601 — surface KOT round history on the canonical order-detail
+  // payload so POS/KDS clients can render a per-round timeline without
+  // a second round-trip. Only populated when batches exist (legacy
+  // single-shot orders return an empty array).
+  const kotBatches = await db.select().from(kotBatchesTable)
+    .where(eq(kotBatchesTable.orderId, order.id))
+    .orderBy(kotBatchesTable.roundNumber);
   const itemsRaw = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
   const itemIds = itemsRaw.map((i) => i.id);
   const applications = itemIds.length > 0
@@ -925,6 +1224,7 @@ router.get("/restaurants/:restaurantId/orders/:id", async (req, res) => {
   res.json({
     ...order,
     items,
+    kotBatches,
     discounts,
     paymentMethod: latestPayment?.method ?? null,
     paymentAmount: latestPayment?.amount ?? null,
@@ -969,6 +1269,54 @@ router.post("/restaurants/:restaurantId/orders/:id/items", idempotency(), async 
   if (!order) return void res.status(404).json({ error: "Order not found" });
   if (order.status === "completed" || order.status === "cancelled") {
     return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
+  }
+
+  // Task #601 — enforce afterBillBehavior when items are appended after
+  // the bill has already been generated on a running order.
+  if (order.isRunningOrder && order.status === "bill_generated") {
+    const ro = await loadRunningOrderSettings(restaurantId);
+    if (ro.afterBillBehavior === "block") {
+      return void res.status(409).json({
+        error: "Bill has already been generated for this order",
+        code: "BILL_ALREADY_GENERATED",
+      });
+    }
+    if (ro.afterBillBehavior === "require_approval") {
+      const role = (req as any).user?.role;
+      const isAuthorisedRole = ["owner", "manager", "super_admin"].includes(role);
+      const supplied = String(req.body?.managerPin ?? "");
+      let pinOk = false;
+      if (!isAuthorisedRole && supplied) {
+        try {
+          const { verifyManagerPin, loadDiscountsConfig } = await import("../lib/discounts");
+          const cfg = await loadDiscountsConfig(restaurantId);
+          pinOk = await verifyManagerPin(supplied, cfg);
+        } catch { pinOk = false; }
+      }
+      if (!isAuthorisedRole && !pinOk) {
+        return void res.status(409).json({
+          error: "Manager approval required to add items after the bill is generated",
+          code: "REQUIRES_APPROVAL",
+        });
+      }
+    }
+    // Reopen the order lifecycle so the previously-printed bill is
+    // invalidated and the kitchen sees the new round as part of an open
+    // (not bill_generated) order.
+    await db.update(ordersTable).set({
+      status: "pending", billGeneratedAt: null, updatedAt: new Date(),
+    }).where(eq(ordersTable.id, orderId));
+    if (order.tableSessionId) {
+      await db.update(tableSessionsTable).set({
+        status: "open", billGeneratedAt: null, updatedAt: new Date(),
+      }).where(eq(tableSessionsTable.id, order.tableSessionId));
+    }
+    if (order.tableId) {
+      await db.update(floorTablesTable).set({
+        status: "occupied", updatedAt: new Date(),
+      }).where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    }
+    broadcastEvent(restaurantId, "order:reopened", { id: orderId });
   }
 
   const [mi] = await db.select().from(menuItemsTable).where(and(eq(menuItemsTable.id, menuItemId), eq(menuItemsTable.restaurantId, restaurantId)));
@@ -1034,8 +1382,16 @@ router.post("/restaurants/:restaurantId/orders/:id/items", idempotency(), async 
     // *and* an existing line whose persisted unit price still matches the
     // current rule-resolved price — otherwise pricing-rule history would be
     // overwritten on the existing line.
-    const existingItems = await db.select().from(orderItemsTable)
-      .where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
+    //
+    // Task #601: for running dine-in orders we deliberately do NOT
+    // coalesce — every add must produce a fresh line so the new KOT
+    // batch we fire below contains only the *new* delta quantity, not
+    // the order's running total for that menu item. Coalescing would
+    // otherwise reprint the cumulative qty on every round.
+    const existingItems = order.isRunningOrder
+      ? []
+      : await db.select().from(orderItemsTable)
+          .where(and(eq(orderItemsTable.orderId, orderId), eq(orderItemsTable.menuItemId, menuItemId)));
 
     let targetLine: typeof existingItems[0] | null = null;
     for (const ex of existingItems) {
@@ -1093,13 +1449,33 @@ router.post("/restaurants/:restaurantId/orders/:id/items", idempotency(), async 
     }).catch(err => { console.error("[bar] recordVariantPour failed:", err); });
   }
 
-  const newTicket = await ensureTicketForAddedItem({ orderId, restaurantId, menuItemId: mi.id });
+  // Task #601 — when this order is a running dine-in order, fire a fresh
+  // KOT batch for the new item. For legacy/non-running orders the simpler
+  // `ensureTicketForAddedItem` helper still applies (per-kitchen ticket
+  // is reused if one is already firing).
+  let newTicket: { ticketId: number; kitchenId: number } | null = null;
+  let addedRound: number | null = null;
+  if (newItemId && order.isRunningOrder) {
+    const batchRes = await createKotBatchForItems({
+      restaurantId,
+      orderId,
+      tableSessionId: order.tableSessionId ?? null,
+      createdFor: "new",
+      source: "pos",
+      firedByUserId: req.user?.sub ?? null,
+      orderItemIds: [newItemId],
+    });
+    newTicket = batchRes.tickets[0] ?? null;
+    addedRound = batchRes.batch.roundNumber;
+  } else {
+    newTicket = await ensureTicketForAddedItem({ orderId, restaurantId, menuItemId: mi.id });
+  }
 
   const totals = await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
-  broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals });
+  broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals, addedRound });
   if (newTicket) {
     broadcastEvent(restaurantId, "order:new", {
       id: orderId,
@@ -1112,6 +1488,57 @@ router.post("/restaurants/:restaurantId/orders/:id/items", idempotency(), async 
   res.json({ ...updatedOrder, items });
 });
 
+/**
+ * Task #601 — Modify an existing item on a running order. Used by the POS
+ * to bump quantities or add notes between rounds. Fires a `modified` KOT
+ * batch so the kitchen sees the delta.
+ */
+router.patch("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency(), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const orderId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const { quantity, notes } = req.body as { quantity?: number; notes?: string };
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+  if (!order) return void res.status(404).json({ error: "Order not found" });
+  if (order.status === "completed" || order.status === "cancelled" || order.paymentStatus === "paid") {
+    return void res.status(400).json({ error: "Cannot modify a closed order" });
+  }
+
+  const [target] = await db.select().from(orderItemsTable)
+    .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
+  if (!target) return void res.status(404).json({ error: "Item not found" });
+  if (target.status === "cancelled") return void res.status(400).json({ error: "Item is cancelled" });
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (typeof quantity === "number" && quantity > 0 && quantity !== target.quantity) {
+    updates.quantity = quantity;
+    updates.totalPrice = (Number(target.unitPrice) * quantity).toFixed(2);
+  }
+  if (typeof notes === "string") updates.notes = notes;
+
+  await db.update(orderItemsTable).set(updates).where(eq(orderItemsTable.id, itemId));
+
+  if (order.isRunningOrder) {
+    await createKotBatchForItems({
+      restaurantId,
+      orderId,
+      tableSessionId: order.tableSessionId ?? null,
+      createdFor: "modified",
+      source: "pos",
+      firedByUserId: req.user?.sub ?? null,
+      orderItemIds: [itemId],
+    });
+  }
+
+  const totals = await recalculateOrderTotals(orderId, restaurantId);
+  const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  broadcastEvent(restaurantId, "order:updated", { id: orderId, ...totals });
+
+  res.json({ ...updatedOrder, items });
+});
+
 router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency(), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const orderId = Number(req.params.id);
@@ -1119,7 +1546,7 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency
 
   const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
   if (!order) return void res.status(404).json({ error: "Order not found" });
-  if (order.status === "completed" || order.status === "cancelled") {
+  if (order.status === "completed" || order.status === "cancelled" || order.paymentStatus === "paid") {
     return void res.status(400).json({ error: "Cannot modify a completed or cancelled order" });
   }
 
@@ -1128,9 +1555,32 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency
     .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
   if (!targetItem) return void res.status(404).json({ error: "Item not found in this order" });
 
-  await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
-  await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.orderItemId, itemId));
-  await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
+  if (order.isRunningOrder) {
+    // Task #601 — soft-cancel preserves the audit trail (KOT batches still
+    // reference this item) and the kitchen sees a "VOID" event without us
+    // wiping modifiers/discount rows.
+    if (targetItem.status !== "cancelled") {
+      await db.update(orderItemsTable).set({
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledByUserId: req.user?.sub ?? null,
+        updatedAt: new Date(),
+      }).where(eq(orderItemsTable.id, itemId));
+      await createKotBatchForItems({
+        restaurantId,
+        orderId,
+        tableSessionId: order.tableSessionId ?? null,
+        createdFor: "cancelled",
+        source: "pos",
+        firedByUserId: req.user?.sub ?? null,
+        orderItemIds: [itemId],
+      });
+    }
+  } else {
+    await db.delete(orderItemModifiersTable).where(eq(orderItemModifiersTable.orderItemId, itemId));
+    await db.delete(orderDiscountsTable).where(eq(orderDiscountsTable.orderItemId, itemId));
+    await db.delete(orderItemsTable).where(eq(orderItemsTable.id, itemId));
+  }
 
   const totals = await recalculateOrderTotals(orderId, restaurantId);
   const [updatedOrder] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
@@ -2244,9 +2694,27 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
         ne(ordersTable.paymentStatus, "paid"),
       )).returning();
       if (!u) throw new Error("ORDER_ALREADY_PAID");
+      // Task #601 — close the running-order lifecycle on payment.
+      if (u.isRunningOrder || u.tableSessionId) {
+        const now = new Date();
+        await tx.update(ordersTable).set({
+          isRunningOrder: false,
+          paidAt: now,
+          closedAt: now,
+        }).where(eq(ordersTable.id, u.id));
+        if (u.tableSessionId) {
+          await tx.update(tableSessionsTable).set({
+            status: "paid",
+            paidAt: now,
+            closedAt: now,
+            updatedAt: now,
+          }).where(eq(tableSessionsTable.id, u.tableSessionId));
+        }
+      }
       if (u.tableId) {
-        await tx.update(floorTablesTable).set({ status: "free" })
-          .where(and(eq(floorTablesTable.id, u.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+        // Task #601 — only free the table if no other running order is
+        // still open on it (e.g. a parallel party-split bill).
+        await freeTableIfIdle(restaurantId, u.tableId, tx as unknown as typeof db);
       }
       await tx.insert(paymentsTable).values({
         restaurantId,
@@ -2825,6 +3293,96 @@ router.get(
       avgPickupSeconds: pickupCount > 0 ? Math.round(totalPickupMs / pickupCount / 1000) : 0,
       revenue: revenue.toFixed(2),
     });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task #601 — Running-order lifecycle endpoints
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/restaurants/:restaurantId/tables/:tableId/active-order", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const tableId = Number(req.params.tableId);
+  const order = await getActiveRunningOrderForTable(restaurantId, tableId);
+  if (!order) return void res.json({ order: null });
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  const batches = await db.select().from(kotBatchesTable)
+    .where(eq(kotBatchesTable.orderId, order.id))
+    .orderBy(kotBatchesTable.roundNumber);
+  const billable = items.filter(i => i.status !== "cancelled");
+  const runningTotal = billable.reduce((s, i) => s + Number(i.totalPrice ?? 0), 0);
+  res.json({
+    order: { ...order, runningTotal: runningTotal.toFixed(2) },
+    items,
+    kotBatches: batches,
+  });
+});
+
+router.post(
+  "/restaurants/:restaurantId/orders/:id/generate-bill",
+  requireRole("owner", "manager", "cashier", "waiter", "super_admin"),
+  idempotency(),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const orderId = Number(req.params.id);
+    const [order] = await db.select().from(ordersTable)
+      .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));
+    if (!order) return void res.status(404).json({ error: "Order not found" });
+    if (!order.isRunningOrder) {
+      return void res.status(400).json({ error: "Order is not a running order" });
+    }
+    if (order.paymentStatus === "paid" || order.status === "cancelled") {
+      return void res.status(400).json({ error: "Order is no longer billable" });
+    }
+    await recalculateOrderTotals(orderId, restaurantId);
+    const [updated] = await db.update(ordersTable).set({
+      status: "bill_generated",
+      billGeneratedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(ordersTable.id, orderId)).returning();
+    // Task #601 — propagate lifecycle state to the table_session AND
+    // floor_table so floor staff see "bill requested" on the floor map.
+    // The table is still in use; the freeTableIfIdle helper on payment
+    // resets it back to `free` when every running order has cleared.
+    if (updated.tableSessionId) {
+      await db.update(tableSessionsTable).set({
+        status: "bill_requested",
+        billGeneratedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(tableSessionsTable.id, updated.tableSessionId));
+    }
+    if (updated.tableId) {
+      await db.update(floorTablesTable).set({
+        status: "bill_requested",
+        updatedAt: new Date(),
+      }).where(and(eq(floorTablesTable.id, updated.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    }
+    broadcastEvent(restaurantId, "order:bill-generated", {
+      id: updated.id,
+      orderNumber: updated.orderNumber,
+      totalAmount: updated.totalAmount,
+    });
+    broadcastOrderUpdate(updated.id, { id: updated.id, status: updated.status, billGeneratedAt: updated.billGeneratedAt });
+    res.json(updated);
+  },
+);
+
+router.get("/restaurants/:restaurantId/settings/running-order",
+  requireRole("owner", "manager", "cashier", "waiter", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const cfg = await loadRunningOrderSettings(restaurantId);
+    res.json(cfg);
+  },
+);
+
+router.put("/restaurants/:restaurantId/settings/running-order",
+  requireRole("owner", "manager", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const saved = await saveRunningOrderSettings(restaurantId, req.body ?? {}, req.user?.sub ?? null);
+    broadcastEvent(restaurantId, "settings:running-order", saved);
+    res.json(saved);
   },
 );
 

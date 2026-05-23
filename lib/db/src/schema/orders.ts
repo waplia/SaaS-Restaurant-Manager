@@ -2,7 +2,7 @@ import { pgTable, text, serial, timestamp, integer, boolean, decimal, index, jso
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
-import { floorTablesTable } from "./tables";
+import { floorTablesTable, tableSessionsTable } from "./tables";
 import { menuItemsTable } from "./menu";
 import { usersTable } from "./users";
 import { kitchensTable } from "./kitchens";
@@ -74,6 +74,17 @@ export const ordersTable = pgTable("orders", {
   scheduledFor: timestamp("scheduled_for"),
   deliveryAddress: text("delivery_address"),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  // Task #601 — Running order / single bill per dine-in table. When this
+  // order rolls up multiple KOT rounds against one table session, the
+  // session id is set here and `isRunningOrder` is true until the final
+  // bill is paid. `billGeneratedAt`/`paidAt`/`closedAt` capture the
+  // running-order lifecycle timestamps so reports can distinguish "items
+  // still being added" from "bill printed, awaiting payment".
+  tableSessionId: integer("table_session_id"),
+  isRunningOrder: boolean("is_running_order").notNull().default(false),
+  billGeneratedAt: timestamp("bill_generated_at"),
+  paidAt: timestamp("paid_at"),
+  closedAt: timestamp("closed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -87,9 +98,18 @@ export const orderItemsTable = pgTable("order_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
-  status: text("status").notNull().default("pending"),
+  status: text("status").notNull().default("pending"), // pending | preparing | ready | served | cancelled
   startedAt: timestamp("started_at"),
   readyAt: timestamp("ready_at"),
+  // Task #601 — Round number within the parent running order (1-based) and
+  // the KOT batch id this item was fired in. Items added later for the same
+  // order get a fresh batch each time so the kitchen prints/screens know
+  // which items are new vs. already-being-prepared.
+  kotBatchId: integer("kot_batch_id"),
+  addedRoundNumber: integer("added_round_number").notNull().default(1),
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelledByUserId: integer("cancelled_by_user_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -230,3 +250,38 @@ export const managerOtpsTable = pgTable("manager_otps", {
 ]);
 
 export type ManagerOtp = typeof managerOtpsTable.$inferSelect;
+
+// Task #601 — One row per KOT round fired against a running order.
+// `roundNumber` increments per order (1 = initial), `createdFor` records
+// whether the round added new items, modified existing items, or cancelled
+// items. Linked tickets remain in `kitchen_tickets` (1 batch -> many
+// tickets, one per kitchen). Items reference the batch via `kot_batch_id`.
+export const kotBatchesTable = pgTable("kot_batches", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  orderId: integer("order_id").notNull().references(() => ordersTable.id),
+  tableSessionId: integer("table_session_id").references(() => tableSessionsTable.id),
+  roundNumber: integer("round_number").notNull().default(1),
+  createdFor: text("created_for").notNull().default("new"), // new | modified | cancelled
+  status: text("status").notNull().default("fired"),         // fired | acknowledged | cancelled
+  firedByUserId: integer("fired_by_user_id").references(() => usersTable.id),
+  source: text("source").notNull().default("pos"),            // pos | qr | manager | system
+  notes: text("notes"),
+  itemSnapshot: jsonb("item_snapshot").$type<Array<{
+    orderItemId: number;
+    menuItemId: number;
+    menuItemName: string;
+    quantity: number;
+    notes?: string | null;
+    action?: "new" | "modified" | "cancelled";
+    previousQuantity?: number | null;
+  }>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => [
+  index("kot_batches_order_idx").on(t.orderId, t.roundNumber),
+  index("kot_batches_restaurant_idx").on(t.restaurantId, t.createdAt),
+]);
+
+export type KotBatch = typeof kotBatchesTable.$inferSelect;
+export type InsertKotBatch = typeof kotBatchesTable.$inferInsert;

@@ -554,21 +554,106 @@ router.post("/public/orders", async (req, res) => {
 
   const totalWithDelivery = totalAmount + deliveryFeeAmount;
 
-  const [order] = await db.insert(ordersTable).values({
-    restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
-    subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
-    serviceCharge: "0.00", discountAmount: "0.00",
-    totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
-    customerId: resolvedCustomerRow?.id ?? null,
-    vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
-    vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
-    vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
-    parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
-    scheduledFor: scheduledForDate,
-    deliveryAddress: deliveryAddressClean,
-    deliveryFee: deliveryFeeAmount.toFixed(2),
-  }).returning();
+  // Task #601 — QR dine-in merge: if guests are scanning a table that already
+  // has a running order, append items as a new KOT round into that order
+  // (gated by `qrAddToRunningBill`). Respects `afterBillBehavior` once the
+  // bill has been generated.
+  const { loadRunningOrderSettings, getActiveRunningOrderForTable, createKotBatchForItems, openTableSession, withTableLock } = await import("../lib/runningOrder");
+  const { tableSessionsTable, floorTablesTable: ftTable } = await import("../lib/db");
+  const roSettings = await loadRunningOrderSettings(restaurantId);
 
+  let order: typeof ordersTable.$inferSelect;
+  let qrMergeTarget: typeof ordersTable.$inferSelect | null = null;
+  let mergedRound: number | null = null;
+
+  // Task #601 — QR merge/open under per-table advisory lock so concurrent
+  // QR scans on the same table can never both open a second running order.
+  // afterBillBehavior=require_approval is enforced server-side here for QR:
+  // guests cannot approve, so we treat require_approval like block (POS has
+  // a manager-PIN path to override).
+  if (tableId && resolvedOrderType === "dine_in" && roSettings.enabled) {
+    const locked = await withTableLock(restaurantId, tableId, async tx => {
+      // One-running-order invariant: always look up the existing running
+      // order under the table lock, regardless of toggles. Toggles control
+      // whether QR may merge into it — never whether it exists.
+      const existing = await getActiveRunningOrderForTable(restaurantId, tableId, tx);
+      if (existing) {
+        if (!roSettings.qrAddToRunningBill) {
+          return { kind: "blocked" as const, reason: "qr_add_disabled" as const };
+        }
+        if (existing.status === "bill_generated" &&
+            (roSettings.afterBillBehavior === "block" || roSettings.afterBillBehavior === "require_approval")) {
+          return { kind: "blocked" as const, reason: roSettings.afterBillBehavior };
+        }
+        return { kind: "merge" as const, order: existing };
+      }
+      const [sess] = await tx.insert(tableSessionsTable).values({
+        restaurantId, branchId: null, tableId,
+        customerId: resolvedCustomerRow?.id ?? null,
+        status: "open",
+      }).returning();
+      const [newOrder] = await tx.insert(ordersTable).values({
+        restaurantId, tableId, orderNumber: generateOrderNumber(), orderType: "dine_in",
+        tableSessionId: sess.id, isRunningOrder: true,
+        subtotal: "0.00", taxAmount: "0.00", serviceCharge: "0.00", discountAmount: "0.00",
+        totalAmount: "0.00",
+        customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
+        customerId: resolvedCustomerRow?.id ?? null,
+        scheduledFor: scheduledForDate,
+        deliveryAddress: deliveryAddressClean,
+        deliveryFee: deliveryFeeAmount.toFixed(2),
+      }).returning();
+      await tx.update(ftTable).set({ status: "occupied", updatedAt: new Date() })
+        .where(and(eq(ftTable.id, tableId), eq(ftTable.restaurantId, restaurantId)));
+      return { kind: "open" as const, order: newOrder };
+    });
+    if (locked.kind === "blocked") {
+      if (locked.reason === "qr_add_disabled") {
+        return void res.status(409).json({
+          error: "This table already has an open order. Please ask a staff member to add items.",
+          code: "QR_ADD_DISABLED",
+        });
+      }
+      return void res.status(409).json({
+        error: locked.reason === "require_approval"
+          ? "A staff member must approve adding items after the bill has been generated"
+          : "Bill already generated for this table",
+        code: locked.reason === "require_approval" ? "REQUIRES_STAFF_APPROVAL" : "BILL_ALREADY_GENERATED",
+      });
+    }
+    order = locked.order;
+    if (locked.kind === "merge") qrMergeTarget = locked.order;
+    // The new row already has totals=0; we re-update with the computed
+    // totals (existing subtotal/tax) below for the non-merge case so the
+    // header reflects the items we're about to insert.
+    if (locked.kind === "open") {
+      const [updated] = await db.update(ordersTable).set({
+        subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
+        totalAmount: totalWithDelivery.toFixed(2),
+        updatedAt: new Date(),
+      }).where(eq(ordersTable.id, order.id)).returning();
+      order = updated;
+    }
+  } else {
+    [order] = await db.insert(ordersTable).values({
+      restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
+      tableSessionId: null,
+      isRunningOrder: false,
+      subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
+      serviceCharge: "0.00", discountAmount: "0.00",
+      totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
+      customerId: resolvedCustomerRow?.id ?? null,
+      vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
+      vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
+      vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
+      parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
+      scheduledFor: scheduledForDate,
+      deliveryAddress: deliveryAddressClean,
+      deliveryFee: deliveryFeeAmount.toFixed(2),
+    }).returning();
+  }
+
+  const insertedItemIds: number[] = [];
   for (const ei of enrichedItems) {
     const modTotal = ei.modifiers.reduce((s, m) => s + m.price * m.quantity, 0);
     const unitPrice = Number(ei.mi.price) + modTotal;
@@ -576,6 +661,7 @@ router.post("/public/orders", async (req, res) => {
       orderId: order.id, menuItemId: ei.mi.id, menuItemName: ei.mi.name,
       quantity: ei.qty, unitPrice: unitPrice.toFixed(2), totalPrice: (unitPrice * ei.qty).toFixed(2), notes: ei.notes ?? null,
     }).returning();
+    insertedItemIds.push(oi.id);
     for (const mod of ei.modifiers) {
       await db.insert(orderItemModifiersTable).values({
         orderItemId: oi.id,
@@ -589,6 +675,33 @@ router.post("/public/orders", async (req, res) => {
     }
   }
 
+  // Recompute totals into the merged order (existing subtotal/tax already
+  // counted, we now add the appended items). If the merge hit a
+  // bill_generated order (only reachable when afterBillBehavior=allow),
+  // reopen the lifecycle so the stale bill is invalidated.
+  if (qrMergeTarget) {
+    if (qrMergeTarget.status === "bill_generated") {
+      await db.update(ordersTable).set({
+        status: "pending", billGeneratedAt: null, updatedAt: new Date(),
+      }).where(eq(ordersTable.id, order.id));
+      if (qrMergeTarget.tableSessionId) {
+        await db.update(tableSessionsTable).set({
+          status: "open", billGeneratedAt: null, updatedAt: new Date(),
+        }).where(eq(tableSessionsTable.id, qrMergeTarget.tableSessionId));
+      }
+      if (qrMergeTarget.tableId) {
+        await db.update(ftTable).set({
+          status: "occupied", updatedAt: new Date(),
+        }).where(and(eq(ftTable.id, qrMergeTarget.tableId), eq(ftTable.restaurantId, restaurantId)));
+      }
+      broadcastEvent(restaurantId, "order:reopened", { id: order.id });
+    }
+    const { recalculateOrderTotals } = await import("./orders");
+    await recalculateOrderTotals(order.id, restaurantId);
+    const [refreshed] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id));
+    if (refreshed) order = refreshed;
+  }
+
   // Modifier-driven inventory deduction (recipes are deducted elsewhere via deductInventoryForOrder).
   try {
     const { deductInventoryForModifiers } = await import("../lib/modifierEnrichment");
@@ -600,7 +713,25 @@ router.post("/public/orders", async (req, res) => {
     console.error("[public order] modifier inventory deduction failed:", err);
   }
 
-  const createdTickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId, isPriority: false });
+  // Task #601 — every QR dine-in round is a KOT batch (so KDS/printers see
+  // round-by-round prep tickets). For non-dine-in QR orders, fall back to
+  // the simple per-order ticket helper to preserve existing behaviour.
+  let createdTickets: Array<{ ticketId: number; kitchenId: number }> = [];
+  if (tableId && resolvedOrderType === "dine_in" && roSettings.enabled) {
+    const batchRes = await createKotBatchForItems({
+      restaurantId,
+      orderId: order.id,
+      tableSessionId: order.tableSessionId ?? null,
+      createdFor: "new",
+      source: "qr",
+      orderItemIds: insertedItemIds,
+    });
+    createdTickets = batchRes.tickets;
+    mergedRound = batchRes.batch.roundNumber;
+  } else {
+    createdTickets = await createKitchenTicketsForOrder({ orderId: order.id, restaurantId, isPriority: false });
+  }
+  void mergedRound;
 
   if (tableId) {
     const [validTable] = await db.select({ id: floorTablesTable.id }).from(floorTablesTable).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
