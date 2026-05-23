@@ -876,7 +876,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 /** Footer card replacing the old user-name pill — surfaces the active
  *  restaurant + outlet, links to View / Edit profile, and offers an inline
  *  outlet switcher for owners who manage multiple outlets. Task #600. */
-function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onNavigate: () => void }) {
+function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onNavigate?: () => void }) {
+  const handleNavigate = onNavigate ?? (() => {});
   const { user, logout } = useAuth();
   const { data: restaurant } = useRestaurantInfo();
   const { branches, selectedBranchId, setSelectedBranchId, hasMultipleBranches } = useBranchContext();
@@ -973,7 +974,7 @@ function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onN
           <div className="py-1">
             <Link
               href="/settings/general"
-              onClick={() => { setOpen(false); onNavigate(); }}
+              onClick={() => { setOpen(false); handleNavigate(); }}
               className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
             >
               <Eye className="w-3.5 h-3.5 text-muted-foreground" />
@@ -981,7 +982,7 @@ function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onN
             </Link>
             <Link
               href="/settings/upi-qr"
-              onClick={() => { setOpen(false); onNavigate(); }}
+              onClick={() => { setOpen(false); handleNavigate(); }}
               className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
             >
               <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
@@ -989,7 +990,7 @@ function SidebarRestaurantCard({ initials, onNavigate }: { initials: string; onN
             </Link>
             <Link
               href="/settings"
-              onClick={() => { setOpen(false); onNavigate(); }}
+              onClick={() => { setOpen(false); handleNavigate(); }}
               className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
             >
               <Settings className="w-3.5 h-3.5 text-muted-foreground" />

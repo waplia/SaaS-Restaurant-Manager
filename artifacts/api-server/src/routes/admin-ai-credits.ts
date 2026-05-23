@@ -425,11 +425,11 @@ router.post("/admin/ai/wallets/:tenantId/adjust", async (req: Request, res: Resp
           credits: String(delta),
           bucket,
           reason,
-          balance: String(balance.totalAvailable ?? balance.bonus ?? 0),
+          balance: String(balance.available ?? balance.bonus ?? 0),
           restaurant: restaurantName,
           appName: "Khana Lagao",
         }, { tenantId, recipientType: "user" });
-      } else if (delta < 0 && Number(balance.totalAvailable ?? 0) <= 0) {
+      } else if (delta < 0 && Number(balance.available ?? 0) <= 0) {
         void sendByTemplateKey("ai_credits_exhausted", owner.email, {
           name: owner.name ?? owner.email,
           restaurant: restaurantName,
@@ -495,7 +495,7 @@ router.post("/admin/ai/wallets/:tenantId/recharge", async (req: Request, res: Re
         name: owner.name ?? owner.email,
         credits: String(result.creditsAdded ?? 0),
         bonus: String(result.bonusAdded ?? 0),
-        balance: String(summarizeWallet(result.wallet).totalAvailable ?? 0),
+        balance: String(summarizeWallet(result.wallet).available ?? 0),
         packageName: pkgRow?.name ?? "Recharge",
         restaurant: tenantRow?.name ?? "your restaurant",
         appName: "Khana Lagao",

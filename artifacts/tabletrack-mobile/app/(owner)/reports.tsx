@@ -38,7 +38,7 @@ function ReportsScreen() {
     queryFn: () => customFetch<{ name?: string }>(`/api/restaurants/${restaurantId}`).catch(() => ({})),
     enabled: restaurantId != null,
   });
-  const outletLabel = outletNameQ.data?.name
+  const outletLabel = (outletNameQ.data as { name?: string } | undefined)?.name
     ?? (outletScopeId == null ? "Your outlet" : `Outlet #${outletScopeId}`);
   const trend = Array.isArray(trendQ.data) ? trendQ.data : [];
   const popular = Array.isArray(popularQ.data) ? popularQ.data : [];

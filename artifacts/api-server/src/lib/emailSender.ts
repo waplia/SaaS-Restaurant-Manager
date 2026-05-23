@@ -17,6 +17,7 @@ import {
   type EmailLog,
 } from "./db";
 import { logger } from "./logger";
+import { getAppSettings } from "./appSettings";
 import {
   injectTracking,
   randomTrackingToken,

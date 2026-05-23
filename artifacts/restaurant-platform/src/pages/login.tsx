@@ -30,11 +30,12 @@ export default function LoginPage() {
   const { acceptAuthPayload, loginWith2faCheck } = useAuth();
   const [, navigate] = useLocation();
 
-  const tabs: Array<{ id: Tab; label: string; enabled: boolean }> = [
+  const allTabs: Array<{ id: Tab; label: string; enabled: boolean }> = [
     { id: "password", label: "Password", enabled: settings.authPasswordLoginEnabled !== false },
     { id: "mobile", label: "Mobile OTP", enabled: settings.authMobileOtpLoginEnabled !== false },
     { id: "email", label: "Email OTP", enabled: settings.authEmailOtpLoginEnabled !== false },
-  ].filter(t => t.enabled);
+  ];
+  const tabs = allTabs.filter(t => t.enabled);
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "password");
 
   // shared state for 2FA challenge step

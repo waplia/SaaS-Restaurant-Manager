@@ -404,7 +404,7 @@ router.post("/restaurants/:restaurantId/ops/handovers",
         const phoneRecipients = [
           ...owners.map(o => ({ phone: o.phone, name: o.name })),
           ...toUser.map(u => ({ phone: u.phone, name: u.name })),
-        ].filter((r): r is { phone: string; name: string | null } => !!r.phone);
+        ].filter((r): r is typeof r & { phone: string } => !!r.phone);
         const summaryHtml = `<ul>
   <li><b>Cash:</b> ${row.cashIssue ?? "—"}</li>
   <li><b>Stock:</b> ${row.stockIssue ?? "—"}</li>
@@ -426,7 +426,7 @@ router.post("/restaurants/:restaurantId/ops/handovers",
         if (phoneRecipients.length) {
           const [tRow] = await db.select({ tenantId: restaurantsTable.tenantId }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
           const { sendLifecycleSms } = await import("../lib/smsSender");
-          const date = new Date(row.shiftDate ?? Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+          const date = new Date(row.submittedAt ?? Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
           for (const r of phoneRecipients) {
             if (!tRow?.tenantId) break;
             void sendLifecycleSms({

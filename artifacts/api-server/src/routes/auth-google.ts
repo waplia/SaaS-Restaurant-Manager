@@ -36,7 +36,7 @@ function signPendingToken(userId: number, email: string): string {
     JWT_SECRET, { expiresIn: PENDING_TTL });
 }
 function verifyPendingToken(token: string): PendingPayload {
-  const p = jwt.verify(token, JWT_SECRET) as PendingPayload;
+  const p = jwt.verify(token, JWT_SECRET) as unknown as PendingPayload;
   if (p.type !== "google-pending") throw new Error("Invalid pending token");
   return p;
 }

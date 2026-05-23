@@ -3050,7 +3050,7 @@ function UpiQrSection() {
 
   React.useEffect(() => {
     if (!r) return;
-    const rr = r as Record<string, unknown>;
+    const rr = r as unknown as Record<string, unknown>;
     setDraft({
       upiQrEnabled: !!rr.upiQrEnabled,
       upiId: (rr.upiId as string) ?? "",

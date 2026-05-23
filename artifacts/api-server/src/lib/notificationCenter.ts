@@ -277,10 +277,15 @@ async function sendOnChannel(
       }, {
         tenantId: r.tenantId ?? null,
         restaurantId: r.restaurantIds[0] ?? null,
-        kind: bc.priority === "urgent" ? "transactional" : "lifecycle",
+        // Super-admin announcements always go via the transactional pipeline,
+        // even when not urgent: they're operational broadcasts to admin users
+        // (not marketing to customers), so they must not be gated by the
+        // marketing consent / unsubscribe / plan-feature checks that "marketing"
+        // would trigger inside sendByTemplateKey.
+        kind: "transactional",
         recipientType: "user",
       });
-      return { status: result?.ok ? "sent" : "failed", recipient: r.email, providerMessageId: result?.messageId ?? null, error: result?.ok ? undefined : (result?.error ?? "send failed") };
+      return { status: result?.ok ? "sent" : "failed", recipient: r.email, providerMessageId: result?.providerMessageId ?? null, error: result?.ok ? undefined : (result?.error ?? "send failed") };
     }
     if (channel === "sms") {
       if (!r.phone) return { status: "skipped", recipient: null, error: "No phone" };

@@ -1564,7 +1564,6 @@ router.delete("/restaurants/:restaurantId/orders/:id/items/:itemId", idempotency
         status: "cancelled",
         cancelledAt: new Date(),
         cancelledByUserId: req.user?.sub ?? null,
-        updatedAt: new Date(),
       }).where(eq(orderItemsTable.id, itemId));
       await createKotBatchForItems({
         restaurantId,

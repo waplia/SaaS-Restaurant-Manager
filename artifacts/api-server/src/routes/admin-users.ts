@@ -48,7 +48,7 @@ const RestoreBody = z.object({ reactivate: z.boolean().optional() });
 
 router.post(
   "/admin/users/:id/restore",
-  validate(RestoreBody),
+  validate({ body: RestoreBody }),
   async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }

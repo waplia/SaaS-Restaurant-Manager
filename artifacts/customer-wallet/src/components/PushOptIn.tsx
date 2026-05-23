@@ -50,7 +50,11 @@ export default function PushOptIn({ customerId }: { customerId?: number | null }
       if (!publicKey) throw new Error("Web Push is not configured by the platform yet.");
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
+        // TS lib.dom now narrows BufferSource to ArrayBuffer-backed buffers,
+        // while the generic Uint8Array we return is typed against ArrayBufferLike
+        // (which also covers SharedArrayBuffer). Cast through BufferSource so
+        // the runtime call stays identical without fighting the lib types.
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
       });
       const json = sub.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
       await api("/public/push/subscribe", {

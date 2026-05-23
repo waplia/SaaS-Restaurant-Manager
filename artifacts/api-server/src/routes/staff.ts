@@ -280,8 +280,7 @@ router.post("/restaurants/:restaurantId/staff", requireRole("owner", "manager", 
       const rawAppUrl = (settings as { appUrl?: string }).appUrl
         ?? process.env.PUBLIC_APP_URL
         ?? process.env.APP_URL
-        ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "")
-        ?? "";
+        ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
       // Belt-and-braces: ensure the value actually parses. If somehow we end
       // up with a non-URL (e.g. a leftover relative path in app_settings),
       // skip the email rather than ship a broken link.

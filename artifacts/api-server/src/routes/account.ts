@@ -42,8 +42,8 @@ const RequestBody = z.object({
 
 router.post(
   "/account/delete/request",
-  rateLimit({ windowMs: 60_000, max: 5 }),
-  validate(RequestBody),
+  rateLimit({ name: "account.delete.request", windowMs: 60_000, max: 5 }),
+  validate({ body: RequestBody }),
   async (req, res) => {
     const userId = (req as any).user?.id as number | undefined;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -102,8 +102,8 @@ const VerifyBody = z.object({
 
 router.post(
   "/account/delete/verify",
-  rateLimit({ windowMs: 60_000, max: 10 }),
-  validate(VerifyBody),
+  rateLimit({ name: "account.delete.verify", windowMs: 60_000, max: 10 }),
+  validate({ body: VerifyBody }),
   async (req, res) => {
     const userId = (req as any).user?.id as number | undefined;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }

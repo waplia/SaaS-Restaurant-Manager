@@ -2341,7 +2341,7 @@ export function useSubmitManualPayment() {
 
 // ─── Super-admin: payment-method settings + approvals ───────────
 export interface PaymentProviderRow {
-  provider: "cashfree" | "razorpay" | "bank" | "upi";
+  provider: "cashfree" | "razorpay" | "bank" | "upi" | "phonepe" | "payu" | "paytm" | "ccavenue" | "billdesk" | "instamojo" | "easebuzz" | "pinelabs" | "juspay";
   isEnabled: boolean;
   isDefault: boolean;
   config: Record<string, unknown>;
@@ -3496,7 +3496,7 @@ export const OFFLINE_CAPABLE_TYPES: DeviceType[] = ["android_pos", "tablet_menu"
 export const CARD_TERMINAL_TYPES: DeviceType[] = ["card_terminal"];
 
 // ── Terminals (Task #420) ───────────────────────────────────────────────
-export type TerminalProviderId = "stripe" | "square" | "clover" | "custom";
+export type TerminalProviderId = "stripe" | "square" | "clover" | "phonepe" | "custom";
 
 export interface TerminalRecord extends DeviceRecord {
   terminal: {

@@ -135,7 +135,7 @@ export default function MenuScreen() {
         "Name this menu category (e.g. Starters, Main Course).",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Add", onPress: (val) => { const n = (val ?? "").trim(); if (n) createCategory.mutate(n); } },
+          { text: "Add", onPress: (val?: string) => { const n = (val ?? "").trim(); if (n) createCategory.mutate(n); } },
         ],
         "plain-text",
       );
