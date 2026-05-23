@@ -1,0 +1,184 @@
+Add Running Order / Open Table / Single Final Bill feature for dine-in restaurant orders.
+
+Current problem:
+When a customer orders again from the same table, the system creates a separate order and separate bill. In real restaurants, customers usually order multiple times during the same sitting, but final bill should be single.
+
+Required behavior:
+- For dine-in table orders, create one active running order per occupied table.
+- If the same table orders again before final settlement, add new items to the existing active running order instead of creating a separate final bill.
+- Print a separate KOT only for newly added items.
+- Generate one combined final bill when staff/customer chooses Generate Bill or Settle Bill.
+
+Flow:
+1. Customer/staff creates first order for a table.
+2. Table status becomes occupied/running.
+3. Order status becomes running/open.
+4. KOT prints for first items.
+5. If more items are added later from same table, append them to the same running order.
+6. Print new KOT only for newly added items.
+7. Keep all items under the same bill/order session.
+8. When customer asks for bill, generate a single bill containing all items from the running order.
+9. After payment, close the order and mark table as available.
+
+Add options:
+- Add More Items
+- View Running Order
+- Generate Final Bill
+- Settle Bill
+- Close Table
+- Split Bill optional
+- Move Table optional
+- Merge Tables optional
+
+Table order logic:
+- Each table can have only one active running order at a time.
+- If active order exists, new dine-in order should ask:
+  “Table already has a running order. Add items to existing bill?”
+- Default action should be Add to Existing Bill.
+- Do not create a new bill unless staff explicitly chooses New Separate Bill.
+- Separate bill option should require manager permission if enabled.
+
+KOT logic:
+- Every new item addition should create a new KOT batch.
+- KOT should print only newly added items.
+- Modified items should print modified KOT.
+- Cancelled items should print cancelled KOT.
+- Final bill should include all active/non-cancelled items from all KOT batches.
+
+Bill logic:
+- Final bill should show all items together.
+- It can optionally show order rounds/KOT references.
+- Bill should include subtotal, taxes, service charge, discounts, tips, round off, and grand total.
+- UPI QR should print on final bill if enabled.
+- Do not print UPI QR on KOT.
+
+Statuses:
+Table status:
+- available
+- occupied
+- running_order
+- bill_requested
+- payment_pending
+- closed
+
+Running order status:
+- open
+- running
+- bill_generated
+- payment_pending
+- paid
+- cancelled
+- closed
+
+KOT batch status:
+- pending
+- printed
+- preparing
+- ready
+- cancelled
+
+Database updates:
+Add table_sessions or running_orders if not already available.
+
+table_sessions:
+- id
+- restaurant_id
+- outlet_id
+- table_id
+- customer_id nullable
+- waiter_id nullable
+- status: active/bill_requested/payment_pending/closed
+- started_at
+- closed_at
+
+orders:
+- id
+- restaurant_id
+- outlet_id
+- table_id
+- table_session_id
+- order_type: dine_in/takeaway/delivery
+- status: open/running/bill_generated/payment_pending/paid/closed/cancelled
+- is_running_order
+- bill_generated_at
+- paid_at
+- closed_at
+
+order_items:
+- id
+- order_id
+- kot_batch_id
+- menu_item_id
+- quantity
+- price
+- modifiers_json
+- note
+- status: active/cancelled/served
+- added_round_number
+- added_at
+
+kot_batches:
+- id
+- restaurant_id
+- outlet_id
+- order_id
+- table_session_id
+- kot_number
+- station_id nullable
+- status
+- created_for: new_items/modified_items/cancelled_items
+- printed_at
+- created_at
+
+invoices:
+- id
+- restaurant_id
+- outlet_id
+- order_id
+- table_session_id
+- invoice_number
+- subtotal
+- tax
+- discount
+- service_charge
+- total
+- payment_status
+- generated_at
+
+POS UI requirements:
+- On table screen, show occupied tables with running bill amount.
+- When opening an occupied table, show running order summary.
+- Add “Add More Items” button.
+- Add “Generate Bill” button.
+- Add “Settle Payment” button.
+- Show KOT history/rounds.
+- Show item status.
+- Show total amount live.
+
+QR ordering requirements:
+- If customer scans QR from an occupied table and an active table session exists, add items to the current running order.
+- If bill is already generated, restaurant can choose whether to allow more items or require staff approval.
+- If payment is pending, show warning before adding more items.
+
+Admin settings:
+Add setting:
+- Enable running order for dine-in
+- Auto-merge same table orders into running bill
+- Ask before adding to existing bill
+- Allow separate bill for same table
+- Separate bill requires manager approval
+- Allow add items after bill generated
+- Reopen bill if more items added
+- Auto-print KOT for new items
+- Auto-generate bill only on request
+- Auto-close table after payment
+
+Important rules:
+- Takeaway/delivery orders should usually create separate orders and bills.
+- Running order should mainly apply to dine-in table orders.
+- Final bill should be generated once at the end.
+- Multiple KOTs should exist under one order/session.
+- No duplicate bill should be created for every item addition.
+- No mock data.
+- No broken routes.
+- No raw ID input.
