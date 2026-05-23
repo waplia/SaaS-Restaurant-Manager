@@ -11,7 +11,7 @@ import {
   subscriptionPlansTable,
   branchesTable,
 } from "../lib/db";
-import { getAppSettings } from "../lib/appSettings";
+import { getAppSettings, isPlatformWhatsappConfigured } from "../lib/appSettings";
 import { decryptSecret } from "../lib/aiEncryption";
 import { signAccessToken, signRefreshToken } from "../lib/auth";
 import { createSession } from "../lib/sessions";
@@ -356,7 +356,9 @@ const PendingOtpBody = z.object({
 });
 
 router.post("/auth/google/pending/request-otp", googleLimit, validate({ body: PendingOtpBody }), async (req, res) => {
-  const { pendingToken, phone, channel } = req.body as z.infer<typeof PendingOtpBody>;
+  const body = req.body as z.infer<typeof PendingOtpBody>;
+  const channel = body.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : body.channel;
+  const { pendingToken, phone } = body;
   let pending: PendingPayload;
   try { pending = verifyPendingToken(pendingToken); }
   catch { res.status(401).json({ error: "Session expired. Please sign in again." }); return; }
@@ -381,7 +383,9 @@ const PendingVerifyBody = z.object({
 });
 
 router.post("/auth/google/pending/verify", googleLimit, validate({ body: PendingVerifyBody }), async (req, res) => {
-  const { pendingToken, phone, code, channel, restaurantName } = req.body as z.infer<typeof PendingVerifyBody>;
+  const body = req.body as z.infer<typeof PendingVerifyBody>;
+  const channel = body.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : body.channel;
+  const { pendingToken, phone, code, restaurantName } = body;
   let pending: PendingPayload;
   try { pending = verifyPendingToken(pendingToken); }
   catch { res.status(401).json({ error: "Session expired. Please sign in again." }); return; }

@@ -85,6 +85,7 @@ interface PublicAuthSettings {
   emailOtpLoginEnabled: boolean;
   twoFactorEnabled: boolean;
   otpDefaultChannel: "sms" | "whatsapp";
+  whatsappEnabled?: boolean;
   signupEnabled?: boolean;
   googleSignInEnabled?: boolean;
   googleClientId?: string | null;
@@ -172,7 +173,7 @@ export default function LoginScreen() {
         if (res.ok) {
           const s = (await res.json()) as PublicAuthSettings;
           setAuthSettings(s);
-          setOtpChannel(s.otpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
+          setOtpChannel(s.whatsappEnabled !== false && s.otpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
           if (!s.passwordLoginEnabled) {
             if (s.mobileOtpLoginEnabled) setTab("mobile");
             else if (s.emailOtpLoginEnabled) setTab("email");
@@ -491,7 +492,7 @@ export default function LoginScreen() {
                       />
                     )}
                   </View>
-                  {tab === "mobile" && (
+                  {tab === "mobile" && authSettings?.whatsappEnabled !== false && (
                     <View style={styles.field}>
                       <Text style={[styles.label, { color: colors.mutedForeground }]}>Send code via</Text>
                       <View style={{ flexDirection: "row", gap: 8 }}>

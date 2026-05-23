@@ -103,7 +103,8 @@ export default function LoginPage() {
               {tab === "mobile" && (
                 <OtpTab
                   channelKind="mobile"
-                  defaultChannel={settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms"}
+                  whatsappEnabled={settings.whatsappEnabled !== false}
+                  defaultChannel={settings.whatsappEnabled !== false && settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms"}
                   on2fa={(c) => setTwoFa(c)}
                   onSuccess={(data) => { acceptAuthPayload(data); navigate("/dashboard"); }}
                 />
@@ -111,6 +112,7 @@ export default function LoginPage() {
               {tab === "email" && (
                 <OtpTab
                   channelKind="email"
+                  whatsappEnabled={settings.whatsappEnabled !== false}
                   defaultChannel="email"
                   on2fa={(c) => setTwoFa(c)}
                   onSuccess={(data) => { acceptAuthPayload(data); navigate("/dashboard"); }}
@@ -228,10 +230,11 @@ function PasswordTab({
 
 // ─────────────────────────────────────────────────────────────────
 function OtpTab({
-  channelKind, defaultChannel, on2fa, onSuccess,
+  channelKind, defaultChannel, whatsappEnabled = true, on2fa, onSuccess,
 }: {
   channelKind: "mobile" | "email";
   defaultChannel: Channel;
+  whatsappEnabled?: boolean;
   on2fa: (c: { userId: number; channel: Channel; hint?: string }) => void;
   onSuccess: (data: { accessToken: string; refreshToken: string; user: NonNullable<LoginResponse["user"]> }) => void;
 }) {
@@ -300,18 +303,20 @@ function OtpTab({
             <Label>Mobile number</Label>
             <PhoneInput value={identifier} onChange={setIdentifier} defaultCountry="IN" placeholder="9876543210" />
           </div>
-          <div className="space-y-1.5">
-            <Label>Send code via</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["sms", "whatsapp"] as const).map(c => (
-                <button type="button" key={c}
-                  onClick={() => setChannel(c)}
-                  className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
-                  {c === "sms" ? "SMS" : "WhatsApp"}
-                </button>
-              ))}
+          {whatsappEnabled && (
+            <div className="space-y-1.5">
+              <Label>Send code via</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["sms", "whatsapp"] as const).map(c => (
+                  <button type="button" key={c}
+                    onClick={() => setChannel(c)}
+                    className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
+                    {c === "sms" ? "SMS" : "WhatsApp"}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </>
       ) : (
         <div className="space-y-1.5">

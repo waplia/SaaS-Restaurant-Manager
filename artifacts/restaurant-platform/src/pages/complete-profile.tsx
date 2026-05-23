@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth, type AuthUser } from "@/lib/auth";
+import { useAppSettings } from "@/lib/appSettings";
 
 // This page is reached after /auth/google/verify returns `pending: true`.
 // We hold a short-lived `pendingToken` (passed via session storage by
@@ -15,6 +16,8 @@ import { useAuth, type AuthUser } from "@/lib/auth";
 export default function CompleteProfilePage() {
   const { acceptAuthPayload } = useAuth();
   const [, navigate] = useLocation();
+  const appSettings = useAppSettings();
+  const whatsappEnabled = appSettings.whatsappEnabled !== false;
 
   const pendingToken = useMemo(() => sessionStorage.getItem("googlePendingToken"), []);
   const missingRestaurant = sessionStorage.getItem("googleMissingRestaurant") === "1";
@@ -91,17 +94,19 @@ export default function CompleteProfilePage() {
               <Label>Mobile number</Label>
               <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Send code via</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["sms", "whatsapp"] as const).map((c) => (
-                  <button type="button" key={c} onClick={() => setChannel(c)}
-                    className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
-                    {c === "sms" ? "SMS" : "WhatsApp"}
-                  </button>
-                ))}
+            {whatsappEnabled && (
+              <div className="space-y-1.5">
+                <Label>Send code via</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["sms", "whatsapp"] as const).map((c) => (
+                    <button type="button" key={c} onClick={() => setChannel(c)}
+                      className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
+                      {c === "sms" ? "SMS" : "WhatsApp"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             {err && <ErrorBox msg={err} />}
             <Button type="submit" className="w-full" disabled={loading || !phone || (missingRestaurant && !restaurantName.trim())}>
               {loading ? "Sending…" : "Send code"}

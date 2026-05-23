@@ -22,6 +22,7 @@ export interface PublicAppSettings {
   maintenanceMessage: string | null;
   signupEnabled: boolean;
   landingPageEnabled: boolean;
+  whatsappEnabled?: boolean;
 }
 
 const DEFAULTS: PublicAppSettings = {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform, ScrollView,
@@ -32,6 +32,22 @@ export default function CompleteProfileScreen() {
   const [channel, setChannel] = useState<"sms" | "whatsapp">("sms");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch(`${baseUrl}/auth/settings/public`);
+        if (r.ok) {
+          const s = (await r.json()) as { whatsappEnabled?: boolean };
+          if (s.whatsappEnabled === false) {
+            setWhatsappEnabled(false);
+            setChannel("sms");
+          }
+        }
+      } catch { /* default to enabled */ }
+    })();
+  }, [baseUrl]);
 
   async function requestOtp() {
     if (!phone.trim()) { Alert.alert("Required", "Enter your mobile number."); return; }
@@ -106,17 +122,19 @@ export default function CompleteProfileScreen() {
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Mobile number</Text>
                 <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
               </View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {(["sms", "whatsapp"] as const).map(c => (
-                  <Pressable key={c} onPress={() => setChannel(c)}
-                    style={[styles.chip, { borderColor: channel === c ? colors.primary : colors.border,
-                      backgroundColor: channel === c ? colors.primary + "14" : "transparent" }]}>
-                    <Text style={{ color: channel === c ? colors.primary : colors.mutedForeground, fontWeight: "500" }}>
-                      {c === "sms" ? "SMS" : "WhatsApp"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {whatsappEnabled && (
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {(["sms", "whatsapp"] as const).map(c => (
+                    <Pressable key={c} onPress={() => setChannel(c)}
+                      style={[styles.chip, { borderColor: channel === c ? colors.primary : colors.border,
+                        backgroundColor: channel === c ? colors.primary + "14" : "transparent" }]}>
+                      <Text style={{ color: channel === c ? colors.primary : colors.mutedForeground, fontWeight: "500" }}>
+                        {c === "sms" ? "SMS" : "WhatsApp"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
               <Pressable onPress={requestOtp} disabled={loading}
                 style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 }]}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send code</Text>}

@@ -19,7 +19,7 @@ import { authenticate, invalidateTokenVersionCache } from "../middleware/authent
 import { rateLimit } from "../middleware/rateLimit";
 import { validate } from "../middleware/validate";
 import { recordAuditLog } from "../lib/audit";
-import { getAppSettings } from "../lib/appSettings";
+import { getAppSettings, isPlatformWhatsappConfigured } from "../lib/appSettings";
 import { sendStaffOtp, verifyStaffOtp, normalizePhone, normalizeEmail, newRegistrationToken } from "../lib/staffOtp";
 import { parsePhone } from "@workspace/phone-utils";
 import { sendLifecycleSms } from "../lib/smsSender";
@@ -69,7 +69,11 @@ const RequestOtpBody = z.object({
 });
 
 router.post("/auth/request-otp", otpRequestLimit, validate({ body: RequestOtpBody }), async (req, res) => {
-  const { channel, identifier } = req.body as z.infer<typeof RequestOtpBody>;
+  const body = req.body as z.infer<typeof RequestOtpBody>;
+  // If the platform doesn't have WhatsApp provider credentials, silently
+  // coerce whatsapp → sms so stale clients still work.
+  const channel = body.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : body.channel;
+  const { identifier } = body;
   const settings = await getAppSettings();
   if (channel === "email" && !settings.authEmailOtpLoginEnabled) {
     res.status(403).json({ error: "Email OTP login is disabled by the platform." });
@@ -130,7 +134,9 @@ const VerifyOtpBody = z.object({
 });
 
 router.post("/auth/verify-otp", otpVerifyLimit, validate({ body: VerifyOtpBody }), async (req, res) => {
-  const { channel, identifier, code } = req.body as z.infer<typeof VerifyOtpBody>;
+  const body = req.body as z.infer<typeof VerifyOtpBody>;
+  const channel = body.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : body.channel;
+  const { identifier, code } = body;
   let user: typeof usersTable.$inferSelect | undefined;
   if (channel === "email") {
     [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(identifier)));
@@ -388,7 +394,9 @@ router.post("/auth/register/start", regStartLimit, validate({ body: RegisterStar
     res.status(403).json({ error: "Signups are currently disabled by the platform administrator." });
     return;
   }
-  const { countryCode, phone, channel } = req.body as z.infer<typeof RegisterStartBody>;
+  const regBody = req.body as z.infer<typeof RegisterStartBody>;
+  const channel = regBody.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : regBody.channel;
+  const { countryCode, phone } = regBody;
   // Canonicalise via the shared parser so we tolerate every shape the
   // various clients can send: "+91" + "8306020200", "+91" + "918306020200"
   // (country code accidentally re-typed), "+9183" + "06020200" (mobile
@@ -451,7 +459,9 @@ const RegisterVerifyBody = z.object({
 });
 
 router.post("/auth/register/verify-otp", regStartLimit, validate({ body: RegisterVerifyBody }), async (req, res) => {
-  const { registrationToken, code, channel } = req.body as z.infer<typeof RegisterVerifyBody>;
+  const verifyBody = req.body as z.infer<typeof RegisterVerifyBody>;
+  const channel = verifyBody.channel === "whatsapp" && !isPlatformWhatsappConfigured() ? "sms" : verifyBody.channel;
+  const { registrationToken, code } = verifyBody;
   const [session] = await db.select().from(registrationSessionsTable)
     .where(and(
       eq(registrationSessionsTable.token, registrationToken),
@@ -663,6 +673,7 @@ router.post("/auth/register/complete", regStartLimit, validate({ body: RegisterC
 // ────────────────────────────────────────────────────────────────────────────
 router.get("/auth/settings/public", async (_req, res) => {
   const s = await getAppSettings();
+  const whatsappEnabled = isPlatformWhatsappConfigured();
   res.json({
     passwordLoginEnabled: s.authPasswordLoginEnabled,
     mobileOtpLoginEnabled: s.authMobileOtpLoginEnabled,
@@ -670,7 +681,10 @@ router.get("/auth/settings/public", async (_req, res) => {
     twoFactorEnabled: s.authTwoFactorEnabled,
     selfRegistrationRequireMobileOtp: s.authSelfRegistrationRequireMobileOtp,
     signupEnabled: s.signupEnabled,
-    otpDefaultChannel: s.authOtpDefaultChannel,
+    whatsappEnabled,
+    // If WhatsApp isn't configured by the super admin, force the default
+    // channel back to SMS so clients never preselect an unavailable channel.
+    otpDefaultChannel: whatsappEnabled ? s.authOtpDefaultChannel : "sms",
     googleSignInEnabled: !!(s.googleSignInEnabled && s.googleClientId),
     googleClientId: s.googleSignInEnabled ? s.googleClientId : null,
     googleIosClientId: s.googleSignInEnabled ? (s.googleIosClientId ?? null) : null,

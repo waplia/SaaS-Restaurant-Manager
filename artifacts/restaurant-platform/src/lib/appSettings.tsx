@@ -30,6 +30,10 @@ export interface PublicAppSettings {
   authSelfRegistrationRequireMobileOtp?: boolean;
   authOtpDefaultChannel?: "sms" | "whatsapp";
   googleSignInEnabled?: boolean;
+  /** True when the super admin has WhatsApp provider credentials wired up.
+   *  When false, all client UIs must hide the SMS/WhatsApp channel chooser
+   *  and send OTPs via SMS only. */
+  whatsappEnabled?: boolean;
 }
 
 const DEFAULTS: PublicAppSettings = {

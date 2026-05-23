@@ -40,7 +40,10 @@ export default function RegisterPage() {
   const needsOtp = settings.authSelfRegistrationRequireMobileOtp !== false;
   const [step, setStep] = useState<Step>("choose");
   const [phone, setPhone] = useState("");
-  const [channel, setChannel] = useState<"sms" | "whatsapp">(settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms");
+  const whatsappEnabled = settings.whatsappEnabled !== false;
+  const [channel, setChannel] = useState<"sms" | "whatsapp">(
+    whatsappEnabled && settings.authOtpDefaultChannel === "whatsapp" ? "whatsapp" : "sms",
+  );
   const [code, setCode] = useState("");
   const [token, setToken] = useState<string | null>(null);
 
@@ -213,17 +216,19 @@ export default function RegisterPage() {
                 <Label>Mobile number</Label>
                 <PhoneInput value={phone} onChange={setPhone} defaultCountry="IN" placeholder="9876543210" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Send code via</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["sms", "whatsapp"] as const).map(c => (
-                    <button type="button" key={c} onClick={() => setChannel(c)}
-                      className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
-                      {c === "sms" ? "SMS" : "WhatsApp"}
-                    </button>
-                  ))}
+              {whatsappEnabled && (
+                <div className="space-y-1.5">
+                  <Label>Send code via</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["sms", "whatsapp"] as const).map(c => (
+                      <button type="button" key={c} onClick={() => setChannel(c)}
+                        className={`py-2 text-sm border rounded-lg ${channel === c ? "border-primary bg-primary/5 text-primary font-medium" : "border-border text-muted-foreground"}`}>
+                        {c === "sms" ? "SMS" : "WhatsApp"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               {err && <ErrorBox msg={err} />}
               <Button type="submit" className="w-full" disabled={loading || !phone}>{loading ? "Sending…" : "Send code"}</Button>
             </form>

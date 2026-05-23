@@ -68,6 +68,7 @@ export default function RegisterScreen() {
   const [resendIn, setResendIn] = useState(0);
 
   const [signupEnabled, setSignupEnabled] = useState(true);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -75,9 +76,16 @@ export default function RegisterScreen() {
       try {
         const r = await fetch(`${getApiBaseUrl()}/api/auth/settings/public`);
         if (r.ok) {
-          const s = (await r.json()) as { signupEnabled?: boolean; otpDefaultChannel?: "sms" | "whatsapp" };
+          const s = (await r.json()) as {
+            signupEnabled?: boolean;
+            otpDefaultChannel?: "sms" | "whatsapp";
+            whatsappEnabled?: boolean;
+          };
           if (s.signupEnabled === false) setSignupEnabled(false);
-          if (s.otpDefaultChannel === "whatsapp") setChannel("whatsapp");
+          const waEnabled = s.whatsappEnabled !== false;
+          setWhatsappEnabled(waEnabled);
+          if (waEnabled && s.otpDefaultChannel === "whatsapp") setChannel("whatsapp");
+          else setChannel("sms");
         }
       } catch { /* default to enabled */ }
     })();
@@ -253,22 +261,24 @@ export default function RegisterScreen() {
               </Text>
             </Pressable>
 
-            <View style={{ marginTop: 4 }}>
-              <Text style={[styles.label, { color: colors.mutedForeground }]}>Send verification code via</Text>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-                {(["sms", "whatsapp"] as Channel[]).map((c) => (
-                  <Pressable key={c} onPress={() => setChannel(c)}
-                    style={[styles.channelBtn, {
-                      borderColor: channel === c ? colors.primary : colors.border,
-                      backgroundColor: channel === c ? colors.primary + "14" : "transparent",
-                    }]}>
-                    <Text style={{ color: channel === c ? colors.primary : colors.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                      {c === "sms" ? "SMS" : "WhatsApp"}
-                    </Text>
-                  </Pressable>
-                ))}
+            {whatsappEnabled && (
+              <View style={{ marginTop: 4 }}>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Send verification code via</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                  {(["sms", "whatsapp"] as Channel[]).map((c) => (
+                    <Pressable key={c} onPress={() => setChannel(c)}
+                      style={[styles.channelBtn, {
+                        borderColor: channel === c ? colors.primary : colors.border,
+                        backgroundColor: channel === c ? colors.primary + "14" : "transparent",
+                      }]}>
+                      <Text style={{ color: channel === c ? colors.primary : colors.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                        {c === "sms" ? "SMS" : "WhatsApp"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             <Pressable
               onPress={startOtp} disabled={loading}

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { apiFetch, apiAction, apiPost } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAppSettings } from "@/lib/appSettings";
 
 type Settings = {
   appName: string;
@@ -149,6 +150,7 @@ function Section({ title, description, children }: { title: string; description?
 export default function AdminSettingsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const publicSettings = useAppSettings();
   const { data, isLoading } = useQuery<Settings>({
     queryKey: ["admin-app-settings"],
     queryFn: () => apiFetch<Settings>("/admin/app-settings"),
@@ -292,9 +294,15 @@ export default function AdminSettingsPage() {
             <Label>Default OTP channel for mobile</Label>
             <select className="w-full h-9 px-3 rounded border border-input bg-background text-sm" value={form.authOtpDefaultChannel} onChange={(e) => set("authOtpDefaultChannel", e.target.value as "sms" | "whatsapp")}>
               <option value="sms">SMS</option>
-              <option value="whatsapp">WhatsApp</option>
+              <option value="whatsapp" disabled={publicSettings.whatsappEnabled === false}>
+                WhatsApp{publicSettings.whatsappEnabled === false ? " (not configured)" : ""}
+              </option>
             </select>
-            <p className="text-xs text-muted-foreground mt-1">Used as the pre-selected channel in the login & signup screens.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {publicSettings.whatsappEnabled === false
+                ? "WhatsApp provider credentials (Twilio) are not configured, so the SMS/WhatsApp chooser is hidden across the app and all OTPs are sent via SMS. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM to enable WhatsApp."
+                : "Used as the pre-selected channel in the login & signup screens."}
+            </p>
           </div>
         </Section>
 

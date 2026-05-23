@@ -1,6 +1,20 @@
 import { eq } from "drizzle-orm";
 import { db, appSettingsTable, type AppSettings, type PublicAppSettings } from "./db";
 
+/**
+ * True when the platform has provider credentials wired up to send WhatsApp
+ * messages without a per-restaurant override (used for auth OTPs sent before
+ * a restaurant context exists, e.g. signup / login). Mirrors the check in
+ * notificationCenter.getChannelCapabilities() and notifications.sendWhatsApp.
+ */
+export function isPlatformWhatsappConfigured(): boolean {
+  return !!(
+    process.env.TWILIO_ACCOUNT_SID &&
+    process.env.TWILIO_AUTH_TOKEN &&
+    process.env.TWILIO_WHATSAPP_FROM
+  );
+}
+
 let cache: { settings: AppSettings; loadedAt: number } | null = null;
 const TTL_MS = 15_000;
 
@@ -34,17 +48,25 @@ export async function updateAppSettings(
   updatedBy: number | null,
 ): Promise<AppSettings> {
   await getAppSettings(true); // ensure row exists
+  // Defensive: if the platform doesn't have WhatsApp provider credentials,
+  // never let the saved default channel be "whatsapp" — coerce to "sms" so
+  // a stale UI state can't persist an unavailable channel.
+  const normalisedPatch: Partial<AppSettings> =
+    patch.authOtpDefaultChannel === "whatsapp" && !isPlatformWhatsappConfigured()
+      ? { ...patch, authOtpDefaultChannel: "sms" }
+      : patch;
   const [row] = await db
     .update(appSettingsTable)
-    .set({ ...patch, updatedBy: updatedBy ?? null, updatedAt: new Date() })
+    .set({ ...normalisedPatch, updatedBy: updatedBy ?? null, updatedAt: new Date() })
     .where(eq(appSettingsTable.id, SINGLETON_ID))
     .returning();
   invalidateAppSettingsCache();
   return row;
 }
 
-export function toPublicAppSettings(s: AppSettings): PublicAppSettings {
+export function toPublicAppSettings(s: AppSettings): PublicAppSettings & { whatsappEnabled: boolean } {
   return {
+    whatsappEnabled: isPlatformWhatsappConfigured(),
     appName: s.appName,
     logoUrl: s.logoUrl,
     faviconUrl: s.faviconUrl,
