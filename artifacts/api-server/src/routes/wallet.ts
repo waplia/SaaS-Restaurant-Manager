@@ -17,7 +17,7 @@
  *   GET    /wallet/ledger             — cross-restaurant ledger entries
  */
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   customerUsersTable,
@@ -259,14 +259,14 @@ router.get("/wallet/summary", requireCustomer, async (req, res) => {
     .from(ordersTable)
     .where(and(
       inArray(ordersTable.restaurantId, restaurantIds),
-      sql`(
-        ${ordersTable.customerId} = ANY(${customerIds})
-        OR (
-          ${ordersTable.customerId} IS NULL
-          AND REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
-              = (SELECT phone FROM customer_users WHERE id = ${uid})
-        )
-      )`,
+      or(
+        customerIds.length > 0 ? inArray(ordersTable.customerId, customerIds) : sql`false`,
+        and(
+          isNull(ordersTable.customerId),
+          sql`REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
+              = (SELECT phone FROM customer_users WHERE id = ${uid})`,
+        ),
+      ),
     ))
     .groupBy(ordersTable.restaurantId);
 
@@ -394,14 +394,14 @@ router.get("/wallet/visits", requireCustomer, async (req, res) => {
     .innerJoin(restaurantsTable, eq(restaurantsTable.id, ordersTable.restaurantId))
     .where(and(
       inArray(ordersTable.restaurantId, restaurantIds),
-      sql`(
-        ${ordersTable.customerId} = ANY(${customerIds})
-        OR (
-          ${ordersTable.customerId} IS NULL
-          AND REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
-              = (SELECT phone FROM customer_users WHERE id = ${uid})
-        )
-      )`,
+      or(
+        customerIds.length > 0 ? inArray(ordersTable.customerId, customerIds) : sql`false`,
+        and(
+          isNull(ordersTable.customerId),
+          sql`REGEXP_REPLACE(${ordersTable.customerPhone}, '[^0-9+]', '', 'g')
+              = (SELECT phone FROM customer_users WHERE id = ${uid})`,
+        ),
+      ),
     ))
     .orderBy(desc(ordersTable.createdAt))
     .limit(50);
