@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/PhoneInput";
 import { useAuth, type LoginResponse } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { useForceLightTheme } from "@/lib/useForceLightTheme";
 import { GoogleSignInButton, OrDivider } from "@/components/GoogleSignInButton";
 
 type Tab = "password" | "mobile" | "email";
@@ -26,6 +27,7 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
 }
 
 export default function LoginPage() {
+  useForceLightTheme();
   const settings = useAppSettings();
   const { acceptAuthPayload, loginWith2faCheck } = useAuth();
   const [, navigate] = useLocation();

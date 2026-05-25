@@ -8,6 +8,7 @@ import { PhoneInput } from "@/components/PhoneInput";
 import { parsePhone } from "@workspace/phone-utils";
 import { useAuth, type AuthUser } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { useForceLightTheme } from "@/lib/useForceLightTheme";
 import { GoogleSignInButton, OrDivider } from "@/components/GoogleSignInButton";
 
 const FEATURES = [
@@ -33,6 +34,7 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
 }
 
 export default function RegisterPage() {
+  useForceLightTheme();
   const settings = useAppSettings();
   const { acceptAuthPayload } = useAuth();
   const [, navigate] = useLocation();

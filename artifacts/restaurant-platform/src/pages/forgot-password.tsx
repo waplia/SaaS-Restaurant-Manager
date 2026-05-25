@@ -4,6 +4,7 @@ import { Flame, ArrowLeft, Mail, KeyRound, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useForceLightTheme } from "@/lib/useForceLightTheme";
 
 // Single-screen OTP-based password reset (replaces the old email-link flow).
 //   step 1 "email"    → user enters email, server emails a 6-digit code
@@ -17,6 +18,7 @@ const API_BASE = "/api";
 type Step = "email" | "verify" | "done";
 
 export default function ForgotPasswordPage() {
+  useForceLightTheme();
   const [, navigate] = useLocation();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
