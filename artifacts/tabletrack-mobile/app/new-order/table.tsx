@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -28,8 +28,18 @@ export default function PickTableScreen() {
   });
   const tables = (Array.isArray(q.data) ? q.data : []) as FloorTable[];
 
+  const [search, setSearch] = useState("");
+  const filteredTables = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return tables;
+    return tables.filter((t) => {
+      const label = ((t as unknown as { tableNumber?: string }).tableNumber ?? `t${t.id}`).toString().toLowerCase();
+      return label.includes(needle) || String(t.id).includes(needle);
+    });
+  }, [tables, search]);
+
   const byFloor: Record<string, FloorTable[]> = {};
-  for (const t of tables) {
+  for (const t of filteredTables) {
     const f = (t as unknown as { floor?: string | null }).floor ?? "Main";
     (byFloor[f] ??= []).push(t);
   }
@@ -57,7 +67,30 @@ export default function PickTableScreen() {
       contentContainerStyle={{ padding: 16, gap: 20 }}
       refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
     >
+      <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <Ionicons name="search" size={16} color={colors.mutedForeground} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search tables"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.searchInput, { color: colors.foreground }]}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {search.length > 0 ? (
+          <Pressable onPress={() => setSearch("")} hitSlop={10}>
+            <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+      </View>
       <Legend colors={colors} />
+      {filteredTables.length === 0 ? (
+        <Text style={{ color: colors.mutedForeground, textAlign: "center", marginTop: 24, fontSize: 13 }}>
+          No tables match &ldquo;{search}&rdquo;.
+        </Text>
+      ) : null}
       {Object.entries(byFloor).map(([floor, list]) => (
         <View key={floor} style={{ gap: 10 }}>
           <Text style={[styles.floor, { color: colors.mutedForeground }]}>{floor}</Text>
@@ -109,4 +142,10 @@ const styles = StyleSheet.create({
   status: { fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 10, borderRadius: 12, borderWidth: 1 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  searchWrap: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 2 },
 });

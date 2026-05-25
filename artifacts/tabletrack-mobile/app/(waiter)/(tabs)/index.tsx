@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import {
   View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Platform,
+  TextInput, Pressable,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +40,19 @@ export default function TablesScreen() {
   });
 
   const tableList = (Array.isArray(data) ? data : []) as FloorTableExt[];
+
+  // Quick search across table number / id so a waiter can jump straight to
+  // "T12" without scrolling a 60-table floor plan.
+  const [search, setSearch] = useState("");
+  const filteredTables = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tableList;
+    return tableList.filter((t) => {
+      const label = (t.tableNumber ?? `t${t.id}`).toString().toLowerCase();
+      return label.includes(q) || String(t.id).includes(q);
+    });
+  }, [tableList, search]);
+
   // Task #602 — fetch the running-order summary for every occupied tile so
   // we can render live total, item count and elapsed time on the card.
   const occupiedIds = React.useMemo(
@@ -61,13 +76,36 @@ export default function TablesScreen() {
 
       <MyShiftPanel />
 
+      {tableList.length > 0 ? (
+        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Ionicons name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search tables"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch("")} hitSlop={10}>
+              <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : tableList.length === 0 ? (
         <EmptyState icon="grid-outline" title="No tables" message="Tables will appear here once configured." />
+      ) : filteredTables.length === 0 ? (
+        <EmptyState icon="search-outline" title="No matches" message={`No tables match "${search}".`} />
       ) : (
         <FlatList
-          data={tableList}
+          data={filteredTables}
           keyExtractor={(t) => String(t.id)}
           numColumns={2}
           columnWrapperStyle={styles.row}
@@ -121,4 +159,11 @@ const styles = StyleSheet.create({
   sub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   list: { padding: 16, gap: 12 },
   row: { justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  searchWrap: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginHorizontal: 16, marginTop: 12,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 2 },
 });

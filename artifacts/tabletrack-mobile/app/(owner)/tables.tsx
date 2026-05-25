@@ -54,6 +54,16 @@ export default function TablesScreen() {
   const tables = Array.isArray(q.data) ? q.data : [];
   const tableLimit = limits.tables(tables.length);
 
+  const [search, setSearch] = useState("");
+  const filteredTables = React.useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return tables;
+    return tables.filter((t) => {
+      const label = (t.tableNumber ?? t.label ?? `t${t.id}`).toString().toLowerCase();
+      return label.includes(needle) || String(t.id).includes(needle);
+    });
+  }, [tables, search]);
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
   const errToast = (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not save");
 
@@ -112,10 +122,34 @@ export default function TablesScreen() {
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: isWeb ? 100 : 100 }}
         >
+          <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <Ionicons name="search" size={16} color={colors.mutedForeground} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search tables"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.searchInput, { color: colors.foreground }]}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+            {search.length > 0 ? (
+              <Pressable onPress={() => setSearch("")} hitSlop={10}>
+                <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </View>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
             Long-press a table to edit or delete it.
           </Text>
-          <RunningSummariesGrid tables={tables} colors={colors} setEditing={setEditing} />
+          {filteredTables.length === 0 ? (
+            <Text style={{ color: colors.mutedForeground, textAlign: "center", marginTop: 16, fontSize: 13 }}>
+              No tables match &ldquo;{search}&rdquo;.
+            </Text>
+          ) : (
+            <RunningSummariesGrid tables={filteredTables} colors={colors} setEditing={setEditing} />
+          )}
         </ScrollView>
       )}
 
@@ -272,4 +306,10 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, fontFamily: "Inter_400Regular", paddingHorizontal: 4 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  searchWrap: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 2 },
 });
