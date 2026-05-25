@@ -61,6 +61,13 @@ const SERVER_TO_CLIENT_STATUS: Record<string, ItemStatus> = {
   out_of_stock: "oos",
 };
 
+// Module-level stable references for the KDS lists — exporting them from
+// the render closure was forcing FlatList to re-create every row on each
+// render (one of the root causes of the scroll lag).
+const EMPTY_CHECKS: Record<number, ItemStatus> = {};
+const noop = () => {};
+const kdsKeyExtractor = (t: KdsTicket) => String(t.id);
+
 function KitchenScreen() {
   return (
     <RoleGate module="kitchen">
@@ -446,6 +453,52 @@ function KdsView() {
     return Array.from(groups.entries()).map(([title, data]) => ({ title, data }));
   }, [tab, buckets.byTab.history, historySearch]);
 
+  // Pre-compute the per-item check map for every ticket in the active
+  // bucket ONCE per render instead of inside renderItem. Each map is a
+  // stable reference until the ticket's items or local overrides change,
+  // which keeps the KdsOrderCard memo comparator happy and stops the
+  // entire list from re-rendering when one card flips state.
+  const checksByTicket = useMemo(() => {
+    const map = new Map<number, Record<number, ItemStatus>>();
+    for (const t of buckets.filtered) {
+      const checks: Record<number, ItemStatus> = {};
+      for (const i of t.items ?? []) checks[i.id] = computeItemStatus(i);
+      map.set(t.id, checks);
+    }
+    return map;
+  }, [buckets.filtered, computeItemStatus]);
+
+  const renderActiveItem = useCallback(({ item }: { item: KdsTicket }) => {
+    const checks = checksByTicket.get(item.id) ?? EMPTY_CHECKS;
+    return (
+      <KdsOrderCard
+        ticket={item}
+        itemChecks={checks}
+        onCycleItem={(itemId) => onCycleItem(item, itemId)}
+        onPrimaryAction={advanceTicket}
+        onCancel={requestCancel}
+        onPriority={togglePriority}
+        onBump={bumpTicket}
+        onReprint={reprintKot}
+        isPending={!!pendingTicketIds[item.id]}
+      />
+    );
+  }, [checksByTicket, onCycleItem, advanceTicket, requestCancel, togglePriority, bumpTicket, reprintKot, pendingTicketIds]);
+
+  const openHistoryTarget = useCallback((t: KdsTicket) => setHistoryTarget(t), []);
+
+  const renderHistoryItem = useCallback(({ item }: { item: KdsTicket }) => (
+    <Pressable onPress={() => setHistoryTarget(item)}>
+      <KdsOrderCard
+        ticket={item}
+        itemChecks={EMPTY_CHECKS}
+        onCycleItem={noop}
+        onPrimaryAction={openHistoryTarget}
+        onCancel={openHistoryTarget}
+      />
+    </Pressable>
+  ), [openHistoryTarget]);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: isWeb ? 16 : insets.top + 4, borderBottomColor: colors.border }]}>
@@ -558,7 +611,7 @@ function KdsView() {
         ) : (
           <SectionList
             sections={historySections}
-            keyExtractor={(t) => String(t.id)}
+            keyExtractor={kdsKeyExtractor}
             stickySectionHeadersEnabled
             contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 84 }]}
             renderSectionHeader={({ section }) => (
@@ -567,20 +620,13 @@ function KdsView() {
                 <Text style={[styles.sectionHeaderCount, { color: colors.mutedForeground }]}>{section.data.length}</Text>
               </View>
             )}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => setHistoryTarget(item)}>
-                <KdsOrderCard
-                  ticket={item}
-                  itemChecks={{}}
-                  onCycleItem={() => {}}
-                  onPrimaryAction={() => setHistoryTarget(item)}
-                  onCancel={() => setHistoryTarget(item)}
-                />
-              </Pressable>
-            )}
+            renderItem={renderHistoryItem}
             refreshControl={
               <RefreshControl refreshing={ticketsQ.isRefetching} onRefresh={ticketsQ.refetch} tintColor={colors.primary} />
             }
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
           />
         )
       ) : buckets.filtered.length === 0 ? (
@@ -596,28 +642,19 @@ function KdsView() {
       ) : (
         <FlatList
           data={buckets.filtered}
-          keyExtractor={(t) => String(t.id)}
+          keyExtractor={kdsKeyExtractor}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 84 }]}
           refreshControl={
             <RefreshControl refreshing={ticketsQ.isRefetching} onRefresh={ticketsQ.refetch} tintColor={colors.primary} />
           }
-          renderItem={({ item }) => {
-            const checks: Record<number, ItemStatus> = {};
-            for (const i of item.items ?? []) checks[i.id] = computeItemStatus(i);
-            return (
-              <KdsOrderCard
-                ticket={item}
-                itemChecks={checks}
-                onCycleItem={(itemId) => onCycleItem(item, itemId)}
-                onPrimaryAction={advanceTicket}
-                onCancel={requestCancel}
-                onPriority={togglePriority}
-                onBump={bumpTicket}
-                onReprint={reprintKot}
-                isPending={!!pendingTicketIds[item.id]}
-              />
-            );
-          }}
+          renderItem={renderActiveItem}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          // Gate clipping to Android — on iOS this is a known cause of
+          // sticky-header / row disappearance, which is unacceptable on
+          // a KDS where missing a ticket means a missed order.
+          removeClippedSubviews={Platform.OS === "android"}
         />
       )}
 

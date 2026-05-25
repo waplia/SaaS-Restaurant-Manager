@@ -69,39 +69,47 @@ function formatMs(ms: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function useLiveTimer(startIso: string | undefined) {
-  const [now, setNow] = useState(Date.now());
+// Isolated ticker. Keeping the 1-Hz interval inside its own tiny component
+// means only THIS text re-renders every second — not the whole card. Before
+// this split, 10 visible tickets caused 10 full card re-renders per second,
+// which is what was making the KDS list lag when scrolling.
+const LiveTimerText = React.memo(function LiveTimerText({
+  startIso, color,
+}: { startIso: string | undefined; color: string }) {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  if (!startIso) return "00:00";
-  return formatMs(now - new Date(startIso).getTime());
-}
+  const label = startIso ? formatMs(now - new Date(startIso).getTime()) : "00:00";
+  return <Text style={[styles.timerText, { color }]}>{label}</Text>;
+});
 
-function usePulse(active: boolean) {
-  const anim = React.useRef(new Animated.Value(0)).current;
+// Isolated pulse. Uses opacity (native-driver compatible) instead of an
+// interpolated background colour, so the animation runs entirely on the
+// UI thread and never blocks JS during scrolling.
+const PulseBanner = React.memo(function PulseBanner({ label }: { label: string }) {
+  const anim = React.useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
-    if (!active) {
-      anim.setValue(0);
-      return;
-    }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 700, useNativeDriver: false }),
-        Animated.timing(anim, { toValue: 0, duration: 700, useNativeDriver: false }),
+        Animated.timing(anim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.6, duration: 700, useNativeDriver: true }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [active, anim]);
-  return anim;
-}
+  }, [anim]);
+  return (
+    <Animated.View style={[styles.delayBanner, { backgroundColor: "#fecaca", opacity: anim }]}>
+      <Ionicons name="warning" size={12} color="#b91c1c" />
+      <Text style={styles.delayBannerText}>{label}</Text>
+    </Animated.View>
+  );
+});
 
-export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction, onCancel, onPriority, onBump, onReprint, isPending }: Props) {
+function KdsOrderCardImpl({ ticket, itemChecks, onCycleItem, onPrimaryAction, onCancel, onPriority, onBump, onReprint, isPending }: Props) {
   const colors = useColors();
-  const timer = useLiveTimer(ticket.createdAt);
-  const pulse = usePulse(!!ticket.isDelayed);
   const otMeta = ORDER_TYPE_META[ticket.orderType ?? "dine_in"] ?? { label: ticket.orderType ?? "Order", color: "#6b7280" };
   const stMeta = STATUS_META[ticket.status] ?? STATUS_META.new;
   const primary = PRIMARY_FOR_STATUS[ticket.status] ?? null;
@@ -143,26 +151,14 @@ export function KdsOrderCard({ ticket, itemChecks, onCycleItem, onPrimaryAction,
         <View style={{ alignItems: "flex-end", gap: 4 }}>
           <View style={[styles.timerPill, { backgroundColor: ticket.isDelayed ? "#fee2e2" : colors.muted }]}>
             <Ionicons name="time-outline" size={12} color={ticket.isDelayed ? "#dc2626" : colors.mutedForeground} />
-            <Text style={[styles.timerText, { color: ticket.isDelayed ? "#dc2626" : colors.foreground }]}>{timer}</Text>
+            <LiveTimerText startIso={ticket.createdAt} color={ticket.isDelayed ? "#dc2626" : colors.foreground} />
           </View>
           <Text style={[styles.paymentText, { color: paymentColor }]}>{paymentLabel}</Text>
         </View>
       </View>
 
       {ticket.isDelayed ? (
-        <Animated.View
-          style={[
-            styles.delayBanner,
-            {
-              backgroundColor: pulse.interpolate({ inputRange: [0, 1], outputRange: ["#fee2e2", "#fecaca"] }),
-            },
-          ]}
-        >
-          <Ionicons name="warning" size={12} color="#b91c1c" />
-          <Text style={styles.delayBannerText}>
-            DELAYED{(ticket.overdueMinutes ?? 0) > 0 ? ` +${ticket.overdueMinutes}m` : ""}
-          </Text>
-        </Animated.View>
+        <PulseBanner label={`DELAYED${(ticket.overdueMinutes ?? 0) > 0 ? ` +${ticket.overdueMinutes}m` : ""}`} />
       ) : null}
 
       <View style={styles.items}>
@@ -300,5 +296,25 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderRadius: 10 },
 });
+
+// Reference-identity comparator. React Query hands us fresh ticket objects
+// whenever the server data changes, and our optimistic mutations spread
+// (`{...t, ...}`), so any change to a ticket produces a new reference.
+// `itemChecks` is rebuilt only when a row's overrides change (see
+// `checksByTicket` in kitchen.tsx). That makes ref equality both correct
+// and far cheaper than a deep field-by-field compare during fast scrolling.
+// It also keeps callback closures fresh whenever the ticket changes, so
+// inline handlers like `(id) => onCycleItem(ticket, id)` never go stale.
+function areEqual(prev: Props, next: Props) {
+  return (
+    prev.ticket === next.ticket &&
+    prev.itemChecks === next.itemChecks &&
+    prev.isPending === next.isPending &&
+    prev.onPrimaryAction === next.onPrimaryAction &&
+    prev.onCancel === next.onCancel
+  );
+}
+
+export const KdsOrderCard = React.memo(KdsOrderCardImpl, areEqual);
 
 export { ITEM_CYCLE };
