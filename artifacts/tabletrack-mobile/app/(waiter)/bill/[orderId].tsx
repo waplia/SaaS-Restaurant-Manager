@@ -146,7 +146,10 @@ export default function BillScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: 16, paddingBottom: (isWeb ? 34 : insets.bottom) + 24 },
+          {
+            paddingTop: (isWeb ? 16 : insets.top) + 16,
+            paddingBottom: (isWeb ? 34 : insets.bottom) + 24,
+          },
         ]}
       >
         {!isPaid && (
