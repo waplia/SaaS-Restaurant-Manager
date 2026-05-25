@@ -1,0 +1,18 @@
+- Creating native directory (./android)
+✔ Created native directory
+- Updating package.json
+✔ Updated package.json
+- Running prebuild
+✖ Prebuild failed
+Error: [android.dangerous]: withAndroidDangerousBaseMod: [expo-notifications] Resource name "new-order" is not valid. Android resource names must start with a letter and contain only lowercase a-z, 0-9, or underscore characters. Additionally, Java reserved words are not allowed.
+Error: [android.dangerous]: withAndroidDangerousBaseMod: [expo-notifications] Resource name "new-order" is not valid. Android resource names must start with a letter and contain only lowercase a-z, 0-9, or underscore characters. Additionally, Java reserved words are not allowed.
+    at assertValidAndroidAssetName (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/utils/validations.js:17:11)
+    at writeNotificationSoundFile (/home/expo/workingdir/build/node_modules/.pnpm/expo-notifications@0.32.17_expo@54.0.34_react-native@0.81.5_@babel+core@7.29.0_@types+r_3f352e759566ce1a97568ab2527229d9/node_modules/expo-notifications/plugin/build/withNotificationsAndroid.js:180:58)
+    at setNotificationSounds (/home/expo/workingdir/build/node_modules/.pnpm/expo-notifications@0.32.17_expo@54.0.34_react-native@0.81.5_@babel+core@7.29.0_@types+r_3f352e759566ce1a97568ab2527229d9/node_modules/expo-notifications/plugin/build/withNotificationsAndroid.js:169:9)
+    at /home/expo/workingdir/build/node_modules/.pnpm/expo-notifications@0.32.17_expo@54.0.34_react-native@0.81.5_@babel+core@7.29.0_@types+r_3f352e759566ce1a97568ab2527229d9/node_modules/expo-notifications/plugin/build/withNotificationsAndroid.js:72:13
+    at action (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:199:29)
+    at interceptingMod (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:104:27)
+    at action (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:204:14)
+    at async interceptingMod (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:104:21)
+    at async interceptingMod (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:104:21)
+    at async interceptingMod (/home/expo/workingdir/build/node_modules/.pnpm/@expo+config-plugins@54.0.4/node_modules/@expo/config-plugins/build/plugins/withMod.js:104:21)

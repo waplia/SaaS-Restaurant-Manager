@@ -55,7 +55,7 @@ async function registerNotificationChannels(): Promise<void> {
       name: "New orders",
       description: "Triumphant chime for new incoming orders.",
       importance: Notifications.AndroidImportance.MAX,
-      sound: "new-order.wav",
+      sound: "new_order.wav",
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#F97316",
     });
