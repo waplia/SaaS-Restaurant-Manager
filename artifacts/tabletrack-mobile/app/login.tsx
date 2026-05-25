@@ -388,7 +388,7 @@ export default function LoginScreen() {
                     <Pressable key={t} onPress={() => { setTab(t); setOtpStep("request"); setOtpCode(""); }}
                       style={[styles.tab, tab === t && { backgroundColor: colors.card }]}>
                       <Text style={{ color: tab === t ? colors.foreground : colors.mutedForeground, fontSize: 13, fontFamily: "Inter_500Medium" }}>
-                        {t === "password" ? "Password" : t === "mobile" ? "Mobile" : "Email"}
+                        {t === "password" ? "Password" : t === "mobile" ? "Mobile OTP" : "Email OTP"}
                       </Text>
                     </Pressable>
                   ))}
