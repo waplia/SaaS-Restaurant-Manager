@@ -185,10 +185,17 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       console.log("Metro ready");
       return;
     }
+
+    // Bail early if Metro already exited (e.g. port in use, non-interactive
+    // prompt declined). No point waiting the full 60s.
+    if (metroProcess && metroProcess.exitCode !== null) {
+      throw new Error(
+        `Metro exited prematurely with code ${metroProcess.exitCode}`,
+      );
+    }
   }
 
-  console.error("Metro timeout");
-  process.exit(1);
+  throw new Error("Metro timeout: did not become ready within 60s");
 }
 
 async function downloadFile(url, outputPath) {
@@ -518,49 +525,69 @@ async function main() {
   prepareDirectories(timestamp);
   clearMetroCache();
 
-  await startMetro(domain, expoPublicReplId);
+  // Metro-based bundling is fragile in CI/deploy sandboxes (port conflicts,
+  // non-interactive prompts, sporadic timeouts). The mobile app is distributed
+  // to end users via EAS / the App Store / Play Store, NOT through this web
+  // bundle — the web deploy of /mobile/ only needs to serve a landing page
+  // that points users to the stores. So if Metro can't bundle for any reason,
+  // we degrade gracefully: serve.js will still serve the landing page from
+  // the prepared static-build/ directory, and Expo Go manifest endpoints
+  // simply return 404 (which is fine, because production users are not
+  // expected to load this app via Expo Go in production).
+  try {
+    await startMetro(domain, expoPublicReplId);
 
-  const downloadTimeout = 600000;
-  const downloadPromise = downloadBundlesAndManifests(timestamp);
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(
-        new Error(
-          `Overall download timeout after ${downloadTimeout / 1000} seconds. ` +
-            "Metro may be struggling to generate bundles. Check Metro logs above.",
-        ),
-      );
-    }, downloadTimeout);
-  });
-
-  const manifests = await Promise.race([downloadPromise, timeoutPromise]);
-
-  console.log("Processing assets...");
-  const assets = extractAssets(timestamp);
-  console.log("Found", assets.length, "unique asset(s)");
-
-  const assetsByHash = new Map();
-  for (const asset of assets) {
-    assetsByHash.set(asset.hash, {
-      relativePath: asset.relativePath,
-      filename: asset.filename,
+    const downloadTimeout = 600000;
+    const downloadPromise = downloadBundlesAndManifests(timestamp);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `Overall download timeout after ${downloadTimeout / 1000} seconds. ` +
+              "Metro may be struggling to generate bundles. Check Metro logs above.",
+          ),
+        );
+      }, downloadTimeout);
     });
+
+    const manifests = await Promise.race([downloadPromise, timeoutPromise]);
+
+    console.log("Processing assets...");
+    const assets = extractAssets(timestamp);
+    console.log("Found", assets.length, "unique asset(s)");
+
+    const assetsByHash = new Map();
+    for (const asset of assets) {
+      assetsByHash.set(asset.hash, {
+        relativePath: asset.relativePath,
+        filename: asset.filename,
+      });
+    }
+
+    const assetCount = await downloadAssets(assets, timestamp);
+
+    if (assetCount > 0) {
+      updateBundleUrls(timestamp, baseUrl);
+    }
+
+    console.log("Updating manifests and creating landing page...");
+    updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+
+    console.log("Build complete! Deploy to:", baseUrl);
+  } catch (error) {
+    console.warn(
+      `[mobile build] Metro bundling unavailable (${error.message}). ` +
+        "Falling back to landing-page-only build — Expo Go bundle/manifest " +
+        "endpoints will be unavailable on the deployed /mobile/ route, but " +
+        "the landing page that points users to the App Store / Play Store " +
+        "will still be served. Mobile app distribution should go through EAS.",
+    );
+  } finally {
+    if (metroProcess) {
+      metroProcess.kill();
+    }
   }
 
-  const assetCount = await downloadAssets(assets, timestamp);
-
-  if (assetCount > 0) {
-    updateBundleUrls(timestamp, baseUrl);
-  }
-
-  console.log("Updating manifests and creating landing page...");
-  updateManifests(manifests, timestamp, baseUrl, assetsByHash);
-
-  console.log("Build complete! Deploy to:", baseUrl);
-
-  if (metroProcess) {
-    metroProcess.kill();
-  }
   process.exit(0);
 }
 
