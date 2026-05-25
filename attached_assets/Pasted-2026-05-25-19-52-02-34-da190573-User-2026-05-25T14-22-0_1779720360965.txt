@@ -1,0 +1,73 @@
+2026-05-25 19:52:02.34
+da190573
+User
+[2026-05-25T14:22:02.345Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:22:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:52:07.24
+da190573
+User
+{"level":50,"time":1779718927245,"pid":22,"hostname":"localhost","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3\nparams: active,2026-05-25T14:22:03.644Z,200: relation \"email_sequence_enrollments\" does not exist","stack":"Error: Failed query: select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3\nparams: active,2026-05-25T14:22:03.644Z,200\n at NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runSequenceTick (/home/runner/workspace/artifacts/api-server/src/lib/emailSequences.ts:76:15)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:410:7)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)\ncaused by: error: relation \"email_sequence_enrollments\" does not exist\n at <anonymous> (/home/runner/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n at async NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runSequenceTick (/home/runner/workspace/artifacts/api-server/src/lib/emailSequences.ts:76:15)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:410:7)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)","query":"select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3","params":["active","2026-05-25T14:22:03.644Z",200]},"msg":"[email-center] tick failed"}
+2026-05-25 19:53:01.14
+da190573
+User
+[2026-05-25T14:23:01.146Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:23:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:53:02.04
+da190573
+User
+[2026-05-25T14:23:02.045Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:23:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:53:05.74
+da190573
+User
+{"level":50,"time":1779718985744,"pid":22,"hostname":"localhost","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3\nparams: active,2026-05-25T14:23:03.245Z,200: relation \"email_sequence_enrollments\" does not exist","stack":"Error: Failed query: select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3\nparams: active,2026-05-25T14:23:03.245Z,200\n at NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runSequenceTick (/home/runner/workspace/artifacts/api-server/src/lib/emailSequences.ts:76:15)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:410:7)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)\ncaused by: error: relation \"email_sequence_enrollments\" does not exist\n at <anonymous> (/home/runner/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n at async NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runSequenceTick (/home/runner/workspace/artifacts/api-server/src/lib/emailSequences.ts:76:15)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:410:7)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)","query":"select \"id\", \"sequence_id\", \"tenant_id\", \"recipient_email\", \"recipient_name\", \"context\", \"current_step\", \"status\", \"stop_reason\", \"next_run_at\", \"last_run_at\", \"enrolled_at\", \"completed_at\" from \"email_sequence_enrollments\" where (\"email_sequence_enrollments\".\"status\" = $1 and \"email_sequence_enrollments\".\"next_run_at\" <= $2) limit $3","params":["active","2026-05-25T14:23:03.245Z",200]},"msg":"[email-center] tick failed"}
+2026-05-25 19:53:06.94
+da190573
+User
+{"level":30,"time":1779718986948,"pid":22,"hostname":"localhost","alerts":2,"msg":"Kitchen delay alerts emitted"}
+2026-05-25 19:54:01.04
+da190573
+User
+[2026-05-25T14:24:01.046Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:24:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:54:02.14
+da190573
+User
+[2026-05-25T14:24:02.145Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:24:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:54:02.94
+da190573
+User
+[2026-05-25T14:24:02.944Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:24:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:54:07.24
+da190573
+User
+{"level":30,"time":1779719047244,"pid":22,"hostname":"localhost","alerts":1,"msg":"Kitchen delay alerts emitted"}
+2026-05-25 19:54:27.31
+da190573
+User
+{"level":30,"time":1779719067313,"pid":22,"hostname":"localhost","req":{"id":16,"method":"GET","url":"/api/public/app-settings"},"res":{"statusCode":304},"responseTime":80,"msg":"request completed"}
+2026-05-25 19:55:01.74
+da190573
+User
+[2026-05-25T14:25:01.745Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:02.64
+da190573
+User
+[2026-05-25T14:25:02.646Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:03.54
+da190573
+User
+[2026-05-25T14:25:03.546Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:04.34
+da190573
+User
+[2026-05-25T14:25:04.345Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:04.84
+da190573
+User
+[2026-05-25T14:25:04.846Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:05.74
+da190573
+User
+[2026-05-25T14:25:05.745Z] [PID: 22] [NODE-CRON] [WARN] missed execution at Mon May 25 2026 14:25:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-05-25 19:55:09.64
+da190573
+User
+{"level":50,"time":1779719109645,"pid":22,"hostname":"localhost","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"id\", \"restaurant_id\", \"level1_minutes\", \"level2_minutes\", \"level3_minutes\", \"notify_managers\", \"notify_owners\", \"is_active\", \"updated_at\" from \"complaint_escalation_rules\" where \"complaint_escalation_rules\".\"is_active\" = $1\nparams: true: relation \"complaint_escalation_rules\" does not exist","stack":"Error: Failed query: select \"id\", \"restaurant_id\", \"level1_minutes\", \"level2_minutes\", \"level3_minutes\", \"notify_managers\", \"notify_owners\", \"is_active\", \"updated_at\" from \"complaint_escalation_rules\" where \"complaint_escalation_rules\".\"is_active\" = $1\nparams: true\n at NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runComplaintEscalationSweep (/home/runner/workspace/artifacts/api-server/src/routes/customer-quality.ts:587:17)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:191:17)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)\ncaused by: error: relation \"complaint_escalation_rules\" does not exist\n at <anonymous> (/home/runner/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n at async NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n at async <anonymous> (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n at async runComplaintEscalationSweep (/home/runner/workspace/artifacts/api-server/src/routes/customer-quality.ts:587:17)\n at async <anonymous> (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:191:17)\n at async import_node_cron2.default.schedule.timezone (/home/runner/workspace/artifacts/api-server/src/lib/scheduler.ts:26:11)\n at async Timeout._onTimeout (/home/runner/workspace/node_modules/.pnpm/node-cron@4.2.1/node_modules/node-cron/src/scheduler/runner.ts:100:30)","query":"select \"id\", \"restaurant_id\", \"level1_minutes\", \"level2_minutes\", \"level3_minutes\", \"notify_managers\", \"notify_owners\", \"is_active\", \"updated_at\" from \"complaint_escalation_rules\" where \"complaint_escalation_rules\".\"is_active\" = $1","params":[true]},"msg":"[customer-quality] complaint escalation failed"}
+2026-05-25 19:55:10.14
