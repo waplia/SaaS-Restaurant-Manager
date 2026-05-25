@@ -380,7 +380,7 @@ export default function LoginScreen() {
             </>
           ) : (
             <>
-              <Text style={[styles.title, { color: colors.foreground }]}>Sign in With</Text>
+              <Text style={[styles.title, { color: colors.foreground }]}>Sign in with</Text>
 
               {availableTabs.length > 1 && (
                 <View style={[styles.tabs, { backgroundColor: colors.muted }]}>
