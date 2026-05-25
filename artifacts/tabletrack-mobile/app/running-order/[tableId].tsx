@@ -673,7 +673,6 @@ export default function RunningOrderScreen() {
         visible={settleOpen}
         onClose={() => setSettleOpen(false)}
         title="Settle payment"
-        scrollable={false}
       >
         <AppText variant="bodyMd" color="mutedForeground">Total due</AppText>
         <AppText variant="title" weight="bold" color="primary">{fmt(grandTotal)}</AppText>
