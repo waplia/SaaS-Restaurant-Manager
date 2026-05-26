@@ -377,6 +377,26 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
     return () => window.removeEventListener("pos:openHold", open);
   }, []);
 
+  // Route every POS cue (cart add/remove, payment success, scan, etc.)
+  // through this single AudioContext. pos.tsx's `playPosSound(cue)` helper
+  // fires `pos:sound` window events; we map those cues onto our SoundKind
+  // palette and play them here. Keeps one — and only one — audio engine on
+  // the page so the user's gesture activation always counts.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const cue = (e as CustomEvent<string>).detail;
+      // "scan" doesn't exist in SoundKind — borrow the high-pitched click.
+      const map: Record<string, SoundKind> = {
+        add: "add", remove: "remove", success: "success",
+        error: "error", scan: "click",
+      };
+      const kind = map[cue];
+      if (kind) play(kind);
+    };
+    window.addEventListener("pos:sound", handler);
+    return () => window.removeEventListener("pos:sound", handler);
+  }, [play]);
+
   const toggleFullscreen = useCallback(async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
