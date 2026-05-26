@@ -44,11 +44,13 @@ export function Button(
 }
 
 export function Input(
-  { style, ...rest }: React.InputHTMLAttributes<HTMLInputElement>,
+  { style, inputRef, ...rest }:
+  React.InputHTMLAttributes<HTMLInputElement> & { inputRef?: React.Ref<HTMLInputElement> },
 ) {
   return (
     <input
       {...rest}
+      ref={inputRef}
       style={{
         background: colors.bg,
         border: `1px solid ${colors.borderStrong}`,

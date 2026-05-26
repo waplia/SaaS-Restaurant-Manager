@@ -3,6 +3,7 @@ import type { SelectionState, User } from "../../../shared/ipc-contract";
 import { Button, colors } from "../ui/components";
 import { HardwareSettings } from "./HardwareSettings";
 import { useScanner } from "../hooks/useScanner";
+import { OrderWorkspace } from "./OrderWorkspace";
 
 interface Props {
   user: User;
@@ -240,24 +241,25 @@ export function WorkspaceScreen(props: Props) {
 
       <main style={{
         gridArea: "main",
-        overflow: "auto", padding: 24,
-        display: active === "hardware" ? "block" : "grid",
-        placeItems: active === "hardware" ? undefined : "center",
+        overflow: "hidden",
+        display: "flex", flexDirection: "column", minHeight: 0,
       }}>
-        {active === "hardware" ? (
-          <HardwareSettings online={props.online} />
+        {active === "orders" ? (
+          <OrderWorkspace />
+        ) : active === "hardware" ? (
+          <div style={{ overflow: "auto", padding: 24, flex: 1 }}>
+            <HardwareSettings online={props.online} />
+          </div>
         ) : (
-          <div style={{ textAlign: "center", maxWidth: 480 }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>Workspace ready</h2>
-            <p style={{ color: colors.textDim, lineHeight: 1.5 }}>
-              Your shift is open and the terminal is connected. The order entry workspace
-              arrives in <b style={{ color: colors.textPrimary }}>Phase 2</b> — menu grid,
-              cart, modifiers, and KOT print. Printers, drawer and the scanner are wired
-              up now in <b style={{ color: colors.textPrimary }}>Hardware</b>.
-            </p>
-            <div style={{ marginTop: 24, display: "flex", gap: 8, justifyContent: "center" }}>
-              <Button variant="ghost" onClick={() => setActive("hardware")}>Open Hardware settings</Button>
-              <Button variant="ghost" onClick={props.onSwitchOutlet}>Switch counter</Button>
+          <div style={{ display: "grid", placeItems: "center", flex: 1, padding: 24 }}>
+            <div style={{ textAlign: "center", maxWidth: 420 }}>
+              <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>Coming soon</h2>
+              <p style={{ color: colors.textDim, lineHeight: 1.5 }}>
+                This area unlocks in a later phase.
+              </p>
+              <div style={{ marginTop: 20 }}>
+                <Button variant="ghost" onClick={() => setActive("orders")}>← Back to Orders</Button>
+              </div>
             </div>
           </div>
         )}

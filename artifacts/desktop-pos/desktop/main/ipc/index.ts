@@ -5,12 +5,20 @@
  * implementation. Each handler is wrapped in a uniform try/catch that returns
  * `{ ok:true, data }` or `{ ok:false, error }` — the preload bridge unwraps
  * this so renderer code can `await` and `try/catch` like a normal function.
+ *
+ * Phase 2 additions:
+ *   • menu:* / tables:* / customers:* / orders:* / discounts:* — wired against
+ *     the real API endpoints via `ApiClient`.
+ *   • A short-lived in-memory cache for the menu bundle (categories+items) so
+ *     the order grid renders instantly when the user toggles between tabs.
+ *     Invalidated automatically after a new order is created so 86'd items
+ *     and price overrides refresh.
  */
 
 import { ipcMain, app, shell, BrowserWindow } from "electron";
 import type {
   IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot,
-  OrderKotPayload, OrderBillPayload,
+  OrderKotPayload, OrderBillPayload, MenuCategory, MenuItem,
 } from "../../shared/ipc-contract";
 import { ApiClient, ApiError, type ApiOrderDetail, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
@@ -19,6 +27,13 @@ import type { PrinterEngine } from "../printers";
 interface SettingsApi {
   get: () => { apiBaseUrl: string };
   set: (patch: { apiBaseUrl?: string }) => { apiBaseUrl: string };
+}
+
+const MENU_CACHE_TTL_MS = 60_000;
+interface MenuCacheEntry {
+  at: number;
+  categories: MenuCategory[];
+  items: MenuItem[];
 }
 
 export function registerApiIpc(opts: {
@@ -32,6 +47,24 @@ export function registerApiIpc(opts: {
   client.onAuthLost(() => {
     getWindow()?.webContents.send("auth:invalidated");
   });
+
+  const menuCache = new Map<number, MenuCacheEntry>();
+  function invalidateMenu(restaurantId?: number): void {
+    if (restaurantId == null) menuCache.clear();
+    else menuCache.delete(restaurantId);
+  }
+
+  async function loadMenuBundle(restaurantId: number, force = false): Promise<MenuCacheEntry> {
+    const cached = menuCache.get(restaurantId);
+    if (!force && cached && Date.now() - cached.at < MENU_CACHE_TTL_MS) return cached;
+    const [categories, items] = await Promise.all([
+      client.listCategories(restaurantId),
+      client.listMenuItems(restaurantId, {}),
+    ]);
+    const entry: MenuCacheEntry = { at: Date.now(), categories, items };
+    menuCache.set(restaurantId, entry);
+    return entry;
+  }
 
   function snapshot(): SessionSnapshot {
     const user = sessionStore.getUser();
@@ -70,17 +103,23 @@ export function registerApiIpc(opts: {
     return id;
   }
 
+  function currentBranchId(): number | null {
+    return sessionStore.getSelection().branchId ?? null;
+  }
+
   // ─── App / settings / session snapshot ───────────────────────────────
   handle("settings:get", () => settings.get());
   handle("settings:set", (patch) => {
     const next = settings.set(patch);
     client.setBaseUrl(next.apiBaseUrl);
+    invalidateMenu();
     return next;
   });
   handle("session:snapshot", () => snapshot());
   handle("session:clear-selection", () => {
     sessionStore.resetSelection();
     sessionStore.setOpenSession(null, null);
+    invalidateMenu();
     return snapshot();
   });
   handle("app:version", () => ({ version: app.getVersion(), platform: process.platform }));
@@ -99,6 +138,7 @@ export function registerApiIpc(opts: {
     if (r.user.restaurantId && !sessionStore.getSelection().restaurantId) {
       sessionStore.patchSelection({ restaurantId: r.user.restaurantId });
     }
+    invalidateMenu();
     return { user: r.user };
   });
 
@@ -117,6 +157,7 @@ export function registerApiIpc(opts: {
     await client.logout();
     sessionStore.clearAll();
     sessionStore.resetSelection();
+    invalidateMenu();
     return true as const;
   });
 
@@ -133,6 +174,7 @@ export function registerApiIpc(opts: {
 
   // ─── Selection ───────────────────────────────────────────────────────
   handle("selection:set-restaurant", ({ restaurantId }) => {
+    invalidateMenu();
     return sessionStore.patchSelection({
       restaurantId,
       branchId: null, branchName: null,
@@ -168,32 +210,117 @@ export function registerApiIpc(opts: {
     return r;
   });
 
-  // ─── Orders: create + auto-print KOTs ────────────────────────────────
-  // Phase 3 wires the order-send path end-to-end:
-  //   renderer → orders:create → API.createOrder → printers.dispatchKots
-  // Silent: failures bubble up as the failed-prints tray (toast in renderer).
-  // The KOT print is fire-and-await here so the renderer learns about printer
-  // problems immediately rather than waiting for an event round-trip.
+  // ─── Menu ────────────────────────────────────────────────────────────
+  handle("menu:restaurant", async () => client.getRestaurantInfo(requireRestaurantId()));
+
+  handle("menu:list", async (req) => {
+    const force = !!(req && typeof req === "object" && "force" in req && (req as { force?: boolean }).force);
+    const bundle = await loadMenuBundle(requireRestaurantId(), force);
+    return { categories: bundle.categories, items: bundle.items };
+  });
+
+  handle("menu:categories", async () => {
+    const bundle = await loadMenuBundle(requireRestaurantId());
+    return bundle.categories;
+  });
+
+  handle("menu:items", async ({ categoryId, search }) => {
+    // When no filters, serve the cached bundle's items so the grid is instant.
+    if (categoryId == null && !search) {
+      const bundle = await loadMenuBundle(requireRestaurantId());
+      return bundle.items;
+    }
+    return client.listMenuItems(requireRestaurantId(), { categoryId, search });
+  });
+
+  handle("menu:modifiers", async ({ menuItemId }) => {
+    return client.listItemModifierGroups(Number(menuItemId));
+  });
+
+  // ─── Tables ──────────────────────────────────────────────────────────
+  handle("tables:list", async () => client.listTables(requireRestaurantId()));
+  handle("tables:active-order", async ({ tableId }) => {
+    const id = await client.getTableActiveOrderId(requireRestaurantId(), Number(tableId));
+    return { orderId: id };
+  });
+
+  // ─── Customers ───────────────────────────────────────────────────────
+  handle("customers:search", async ({ search, limit }) => {
+    return client.searchCustomers(requireRestaurantId(), String(search ?? "").trim(), limit ?? 20);
+  });
+  handle("customers:create", async (body) => {
+    return client.createCustomer(requireRestaurantId(), body);
+  });
+  handle("customers:lookup", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const phone = typeof req === "object" && req && "phone" in req ? (req as any).phone : null;
+    const query = typeof req === "object" && req && "query" in req ? (req as any).query : null;
+    const term = (phone ?? query ?? "").trim();
+
+    if (!term) {
+      if (phone) throw new Error("phone required");
+      return [];
+    }
+
+    // If it's the Phase 3 lookup-by-phone (returning single object)
+    if (phone && !query) {
+      return client.lookupCustomerByPhone(restaurantId, term) as Promise<IpcContract["customers:lookup"]["res"]>;
+    }
+
+    // If it's the Phase 2 search-style lookup
+    return client.searchCustomers(restaurantId, term, 10);
+  });
+
+  handle("menu:lookup-by-barcode", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const code = String(req?.code ?? "").trim();
+    if (!code) throw new Error("code required");
+    return client.lookupMenuItemByCode(restaurantId, code);
+  });
+
+  // ─── Orders ──────────────────────────────────────────────────────────
+  handle("orders:list", async ({ status, limit } = {}) => {
+    return client.listOrders(requireRestaurantId(), {
+      status, limit: limit ?? 30, branchId: currentBranchId(),
+    });
+  });
+
+  handle("orders:detail", async ({ id }) => client.getOrder(requireRestaurantId(), Number(id)));
+
   handle("orders:create", async (req) => {
     const restaurantId = requireRestaurantId();
-    const order = await client.createOrder(restaurantId, req);
+    const body = { branchId: currentBranchId(), ...req };
+    const order = await client.createOrder(restaurantId, body);
+
+    // Phase 2: invalidate menu cache
+    invalidateMenu(restaurantId);
+
+    // Phase 3: auto-print KOTs
     try {
       const kotPayload = buildKotPayload(order);
       if (kotPayload.items.length > 0) {
         await printerEngine.dispatchKots(kotPayload);
       }
     } catch (err) {
-      // Print failure should not roll back the created order; the entry is
-      // already in the failed-prints tray for retry.
       console.warn("[orders:create] KOT auto-print failed:", (err as Error).message);
     }
-    return order as IpcContract["orders:create"]["res"];
+
+    return order;
+  });
+
+  handle("orders:add-items", async ({ orderId, items, idempotencyKey }) => {
+    const detail = await client.addOrderItems(
+      requireRestaurantId(), Number(orderId), items ?? [], idempotencyKey,
+    );
+    invalidateMenu(requireRestaurantId());
+    return detail;
+  });
+
+  handle("orders:update", async ({ id, patch }) => {
+    return client.patchOrder(requireRestaurantId(), Number(id), patch);
   });
 
   // ─── Bill print by order id (main fetches the data) ──────────────────
-  // Renderer hands main an orderId; main pulls the canonical order + outlet
-  // details and formats the receipt. Keeps the receipt formatter as the
-  // single source of truth and prevents drift between web POS and desktop.
   handle("printers:print-bill-for-order", async (req) => {
     const restaurantId = requireRestaurantId();
     const [order, outlet] = await Promise.all([
@@ -209,27 +336,16 @@ export function registerApiIpc(opts: {
     return true as const;
   });
 
-  // ─── Scanner consumers ───────────────────────────────────────────────
-  handle("customers:lookup", async (req) => {
-    const restaurantId = requireRestaurantId();
-    if (!req || typeof req.phone !== "string" || !req.phone.trim()) {
-      throw new Error("phone required");
-    }
-    return client.lookupCustomerByPhone(restaurantId, req.phone.trim()) as Promise<IpcContract["customers:lookup"]["res"]>;
+  // ─── Discounts ───────────────────────────────────────────────────────
+  handle("discounts:config", async () => client.loadDiscountsConfig(requireRestaurantId()));
+  handle("discounts:apply", async (req) => client.applyDiscount(requireRestaurantId(), req));
+  handle("discounts:remove", async ({ orderId, discountId, idempotencyKey }) => {
+    return client.removeDiscount(
+      requireRestaurantId(), Number(orderId), Number(discountId), idempotencyKey,
+    );
   });
 
-  handle("menu:lookup-by-barcode", async (req) => {
-    const restaurantId = requireRestaurantId();
-    const code = String(req?.code ?? "").trim();
-    if (!code) throw new Error("code required");
-    return client.lookupMenuItemByCode(restaurantId, code);
-  });
-
-  // ─── Remaining Phase 2 / Phase 4 placeholders ────────────────────────
-  handle("menu:list", () => { throw new Error("menu:list not yet implemented (Phase 2)"); });
-  handle("menu:categories", () => { throw new Error("menu:categories not yet implemented (Phase 2)"); });
-  handle("orders:list", () => { throw new Error("orders:list not yet implemented (Phase 2)"); });
-  handle("orders:update", () => { throw new Error("orders:update not yet implemented (Phase 2)"); });
+  // ─── Phase 4 placeholders ────────────────────────────────────────────
   handle("payments:record", () => { throw new Error("payments:record not yet implemented (Phase 4)"); });
 }
 

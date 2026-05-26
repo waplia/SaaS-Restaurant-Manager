@@ -68,20 +68,46 @@ const api = {
     close: (req: IpcContract["shifts:close"]["req"]) => invoke("shifts:close", req),
   },
 
-  // ─── Phase 2+ stubs (typed; throws until wired) ───────────────────
+  // ─── Menu (Phase 2) ───────────────────────────────────────────────
   menu: {
-    list: () => invoke("menu:list"),
+    restaurant: () => invoke("menu:restaurant"),
+    list: (req?: IpcContract["menu:list"]["req"]) => invoke("menu:list", req ?? undefined),
     categories: () => invoke("menu:categories"),
     lookupByBarcode: (code: string) => invoke("menu:lookup-by-barcode", { code }),
+    items: (req: IpcContract["menu:items"]["req"]) => invoke("menu:items", req),
+    modifiers: (req: IpcContract["menu:modifiers"]["req"]) => invoke("menu:modifiers", req),
   },
-  orders: {
-    list: (req: IpcContract["orders:list"]["req"]) => invoke("orders:list", req),
-    create: (req: IpcContract["orders:create"]["req"]) => invoke("orders:create", req),
-    update: (req: IpcContract["orders:update"]["req"]) => invoke("orders:update", req),
+
+  // ─── Tables (Phase 2) ─────────────────────────────────────────────
+  tables: {
+    list: () => invoke("tables:list"),
+    activeOrder: (req: IpcContract["tables:active-order"]["req"]) => invoke("tables:active-order", req),
   },
+
+  // ─── Customers (Phase 2) ──────────────────────────────────────────
   customers: {
+    search: (req: IpcContract["customers:search"]["req"]) => invoke("customers:search", req),
+    create: (req: IpcContract["customers:create"]["req"]) => invoke("customers:create", req),
     lookup: (req: IpcContract["customers:lookup"]["req"]) => invoke("customers:lookup", req),
   },
+
+  // ─── Orders (Phase 2) ─────────────────────────────────────────────
+  orders: {
+    list: (req: IpcContract["orders:list"]["req"]) => invoke("orders:list", req),
+    detail: (req: IpcContract["orders:detail"]["req"]) => invoke("orders:detail", req),
+    create: (req: IpcContract["orders:create"]["req"]) => invoke("orders:create", req),
+    addItems: (req: IpcContract["orders:add-items"]["req"]) => invoke("orders:add-items", req),
+    update: (req: IpcContract["orders:update"]["req"]) => invoke("orders:update", req),
+  },
+
+  // ─── Discounts (Phase 2) ──────────────────────────────────────────
+  discounts: {
+    config: () => invoke("discounts:config"),
+    apply: (req: IpcContract["discounts:apply"]["req"]) => invoke("discounts:apply", req),
+    remove: (req: IpcContract["discounts:remove"]["req"]) => invoke("discounts:remove", req),
+  },
+
+  // ─── Payments (Phase 4 stub, kept) ────────────────────────────────
   payments: {
     record: (req: IpcContract["payments:record"]["req"]) => invoke("payments:record", req),
   },

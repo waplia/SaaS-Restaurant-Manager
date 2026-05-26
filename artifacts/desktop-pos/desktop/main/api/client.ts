@@ -8,14 +8,21 @@
  *     token. If refresh also fails, clear the session and surface an error.
  *   • Normalise errors into a single `ApiError` shape so IPC handlers can
  *     translate them into structured envelopes.
+ *   • Carry caller-supplied `X-Idempotency-Key` headers through to the API
+ *     so server-side de-dupe wins on retries (Phase 2 — order create / add
+ *     items / discount apply / discount remove).
  *
  * Uses Node's built-in `fetch` (Node 20+ / Electron 28+) — no axios.
  */
 
+import { randomUUID } from "node:crypto";
 import { sessionStore } from "../session-store";
 import type {
   User, Restaurant, Branch, Terminal,
   CashRegisterCurrent, CashRegisterSession, DenominationInput,
+  RestaurantInfo, MenuCategory, MenuItem, ModifierGroup,
+  FloorTable, CustomerSummary, CreateOrderRequest, CartItemInput,
+  OrderHeader, OrderDetailView, DiscountsConfig, ApplyDiscountRequest,
 } from "../../shared/ipc-contract";
 
 export class ApiError extends Error {
@@ -30,6 +37,8 @@ interface RequestOptions {
   body?: unknown;
   /** Bypass token attachment / refresh — used by login + refresh themselves. */
   noAuth?: boolean;
+  /** Extra request headers (e.g. X-Idempotency-Key). */
+  headers?: Record<string, string>;
   /** Internal flag to prevent infinite refresh recursion. */
   _retried?: boolean;
 }
@@ -60,7 +69,11 @@ export class ApiClient {
     if (!this.baseUrl) throw new ApiError(0, "API base URL not configured. Open Settings.");
 
     const url = `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
-    const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(opts.headers ?? {}),
+    };
 
     if (!opts.noAuth) {
       const { accessToken } = sessionStore.getTokens();
@@ -154,6 +167,178 @@ export class ApiClient {
   async listTerminals(restaurantId: number): Promise<Terminal[]> {
     const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/terminals`);
     return Array.isArray(data) ? (data as Terminal[]) : [];
+  }
+
+  async getRestaurantInfo(restaurantId: number): Promise<RestaurantInfo> {
+    return this.request<RestaurantInfo>(`/api/restaurants/${restaurantId}`);
+  }
+
+  // ─── Menu ─────────────────────────────────────────────────────────────
+  async listCategories(restaurantId: number): Promise<MenuCategory[]> {
+    const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/categories`);
+    return Array.isArray(data) ? (data as MenuCategory[]) : [];
+  }
+
+  async listMenuItems(
+    restaurantId: number,
+    opts: { categoryId?: number; search?: string } = {},
+  ): Promise<MenuItem[]> {
+    const qs: string[] = [];
+    if (opts.categoryId != null) qs.push(`categoryId=${encodeURIComponent(String(opts.categoryId))}`);
+    if (opts.search) qs.push(`search=${encodeURIComponent(opts.search)}`);
+    const suffix = qs.length > 0 ? `?${qs.join("&")}` : "";
+    const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/items${suffix}`);
+    return Array.isArray(data) ? (data as MenuItem[]) : [];
+  }
+
+  async listItemModifierGroups(menuItemId: number): Promise<ModifierGroup[]> {
+    const data = await this.request<unknown>(`/api/items/${menuItemId}/modifier-groups`);
+    return Array.isArray(data) ? (data as ModifierGroup[]) : [];
+  }
+
+  // ─── Tables ───────────────────────────────────────────────────────────
+  async listTables(restaurantId: number): Promise<FloorTable[]> {
+    const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/tables`);
+    return Array.isArray(data) ? (data as FloorTable[]) : [];
+  }
+
+  async getTableActiveOrderId(restaurantId: number, tableId: number): Promise<number | null> {
+    try {
+      const r = await this.request<{ order: { id: number } | null }>(
+        `/api/restaurants/${restaurantId}/tables/${tableId}/active-order`,
+      );
+      return r?.order?.id ?? null;
+    } catch (err) {
+      // Treat "no active order" as a soft no.
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  // ─── Customers ────────────────────────────────────────────────────────
+  async searchCustomers(restaurantId: number, search: string, limit = 20): Promise<CustomerSummary[]> {
+    const qs: string[] = [`limit=${encodeURIComponent(String(limit))}`];
+    if (search) qs.push(`search=${encodeURIComponent(search)}`);
+    const r = await this.request<{ data?: CustomerSummary[] }>(
+      `/api/restaurants/${restaurantId}/customers?${qs.join("&")}`,
+    );
+    return Array.isArray(r?.data) ? r.data : [];
+  }
+
+  async createCustomer(
+    restaurantId: number,
+    body: { name?: string; phone?: string; email?: string },
+  ): Promise<CustomerSummary> {
+    return this.request<CustomerSummary>(`/api/restaurants/${restaurantId}/customers`, {
+      method: "POST",
+      body,
+    });
+  }
+
+  // ─── Orders ───────────────────────────────────────────────────────────
+  async listOrders(
+    restaurantId: number,
+    opts: { status?: string; limit?: number; branchId?: number | null } = {},
+  ): Promise<OrderHeader[]> {
+    const qs: string[] = [];
+    if (opts.status) qs.push(`status=${encodeURIComponent(opts.status)}`);
+    if (opts.limit) qs.push(`limit=${encodeURIComponent(String(opts.limit))}`);
+    if (opts.branchId != null) qs.push(`branchId=${encodeURIComponent(String(opts.branchId))}`);
+    const suffix = qs.length > 0 ? `?${qs.join("&")}` : "";
+    const r = await this.request<{ data?: OrderHeader[] }>(
+      `/api/restaurants/${restaurantId}/orders${suffix}`,
+    );
+    return Array.isArray(r?.data) ? r.data : [];
+  }
+
+  async getOrder(restaurantId: number, orderId: number): Promise<OrderDetailView> {
+    return this.request<OrderDetailView>(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+  }
+
+  async createOrder(
+    restaurantId: number,
+    body: CreateOrderRequest,
+  ): Promise<OrderDetailView> {
+    const { idempotencyKey, ...payload } = body;
+    const key = idempotencyKey || randomUUID();
+    const created = await this.request<OrderHeader>(
+      `/api/restaurants/${restaurantId}/orders`,
+      { method: "POST", body: payload, headers: { "X-Idempotency-Key": key } },
+    );
+    // Fetch the full detail (items + discounts) for the renderer.
+    return this.getOrder(restaurantId, created.id);
+  }
+
+  async addOrderItems(
+    restaurantId: number,
+    orderId: number,
+    items: CartItemInput[],
+    idempotencyKey?: string,
+  ): Promise<OrderDetailView> {
+    // Per-item POST mirrors the web POS; preserves modifier handling.
+    // Key is the caller-supplied per-action UUID prefix + a *stable* line
+    // index (no Date.now()) so retries collapse instead of re-inserting.
+    const base = idempotencyKey || randomUUID();
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx];
+      const key = `${base}:${idx}:${it.menuItemId}`;
+      await this.request<unknown>(
+        `/api/restaurants/${restaurantId}/orders/${orderId}/items`,
+        { method: "POST", body: it, headers: { "X-Idempotency-Key": key } },
+      );
+    }
+    return this.getOrder(restaurantId, orderId);
+  }
+
+  async patchOrder(
+    restaurantId: number,
+    orderId: number,
+    patch: Partial<OrderHeader>,
+  ): Promise<OrderHeader> {
+    return this.request<OrderHeader>(
+      `/api/restaurants/${restaurantId}/orders/${orderId}`,
+      { method: "PATCH", body: patch },
+    );
+  }
+
+  // ─── Discounts ────────────────────────────────────────────────────────
+  async loadDiscountsConfig(restaurantId: number): Promise<DiscountsConfig> {
+    try {
+      const r = await this.request<unknown>(`/api/restaurants/${restaurantId}/settings/discounts`);
+      if (r && typeof r === "object") return r as DiscountsConfig;
+      return {};
+    } catch (err) {
+      // Endpoint may be feature-gated — degrade gracefully.
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) return {};
+      throw err;
+    }
+  }
+
+  async applyDiscount(
+    restaurantId: number,
+    req: ApplyDiscountRequest,
+  ): Promise<OrderDetailView> {
+    const { orderId, idempotencyKey, ...body } = req;
+    const key = idempotencyKey || randomUUID();
+    await this.request<unknown>(
+      `/api/restaurants/${restaurantId}/orders/${orderId}/discounts`,
+      { method: "POST", body, headers: { "X-Idempotency-Key": key } },
+    );
+    return this.getOrder(restaurantId, orderId);
+  }
+
+  async removeDiscount(
+    restaurantId: number,
+    orderId: number,
+    discountId: number,
+    idempotencyKey?: string,
+  ): Promise<OrderDetailView> {
+    const key = idempotencyKey || randomUUID();
+    await this.request<unknown>(
+      `/api/restaurants/${restaurantId}/orders/${orderId}/discounts/${discountId}`,
+      { method: "DELETE", headers: { "X-Idempotency-Key": key } },
+    );
+    return this.getOrder(restaurantId, orderId);
   }
 
   // ─── Cash register / shifts ───────────────────────────────────────────

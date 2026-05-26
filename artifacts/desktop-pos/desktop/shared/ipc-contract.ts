@@ -32,6 +32,12 @@ export interface Restaurant {
   city?: string | null;
 }
 
+export interface RestaurantInfo extends Restaurant {
+  taxRate?: string | number | null;
+  serviceCharge?: string | number | null;
+  currency?: string | null;
+}
+
 export interface Branch {
   id: number;
   name: string;
@@ -79,6 +85,191 @@ export interface CashRegisterCurrent {
     totalCashOut: number;
     expectedCash: number;
   } | null;
+}
+
+// ─── Menu / cart / orders ───────────────────────────────────────────────────
+
+export interface MenuCategory {
+  id: number;
+  name: string;
+  description?: string | null;
+  sortOrder?: number | null;
+  imageUrl?: string | null;
+}
+
+export interface MenuItem {
+  id: number;
+  restaurantId: number;
+  categoryId: number | null;
+  name: string;
+  description?: string | null;
+  price: string;
+  imageUrl?: string | null;
+  isVeg?: boolean | null;
+  isAvailable?: boolean | null;
+  preparationTime?: number | null;
+  modifierGroupCount?: number;
+  hasModifiers?: boolean;
+  hasRequiredModifiers?: boolean;
+}
+
+export interface ModifierOption {
+  id: number;
+  groupId: number;
+  name: string;
+  price: string;
+  isAvailable?: boolean | null;
+  sortOrder?: number | null;
+}
+
+export interface ModifierGroup {
+  id: number;
+  menuItemId: number;
+  name: string;
+  isRequired?: boolean | null;
+  minSelections?: number | null;
+  maxSelections?: number | null;
+  isActive?: boolean | null;
+  showOnPos?: boolean | null;
+  sortOrder?: number | null;
+  modifiers?: ModifierOption[];
+}
+
+export interface FloorTable {
+  id: number;
+  restaurantId: number;
+  tableNumber: string;
+  capacity: number;
+  status: string;
+  positionX?: number | null;
+  positionY?: number | null;
+  shape?: string | null;
+  isActive?: boolean;
+}
+
+export interface CustomerSummary {
+  id: number;
+  name: string | null;
+  phone: string | null;
+  email?: string | null;
+  loyaltyPoints?: number | null;
+  visits?: number | null;
+  totalSpent?: string | number | null;
+}
+
+export type OrderType =
+  | "dine_in" | "takeaway" | "delivery"
+  | "qr_order" | "reservation_order" | "curbside";
+
+export interface CartModifierInput {
+  /** Optional — when present, server reconciles against the live modifier row
+   *  for current price / availability. Otherwise the fallback {name,price}
+   *  shape is honoured for backwards compatibility. */
+  modifierId?: number;
+  name: string;
+  /** String to preserve decimal precision on the wire. */
+  price: string;
+  quantity?: number;
+}
+
+export interface CartItemInput {
+  menuItemId: number;
+  quantity: number;
+  notes?: string;
+  modifiers?: CartModifierInput[];
+}
+
+export interface CreateOrderRequest {
+  orderType: OrderType;
+  tableId?: number | null;
+  customerName?: string;
+  customerPhone?: string;
+  customerId?: number | null;
+  notes?: string;
+  isPriority?: boolean;
+  branchId?: number | null;
+  items: CartItemInput[];
+  /** Optional client-supplied idempotency key (UUID). When absent, the main
+   *  process generates one so a single user click can't double-create. */
+  idempotencyKey?: string;
+}
+
+export interface OrderHeader {
+  id: number;
+  restaurantId: number;
+  orderNumber: string;
+  status: string;
+  orderType: string;
+  tableId: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerId: number | null;
+  subtotal: string;
+  taxAmount: string;
+  serviceCharge: string;
+  discountAmount: string;
+  totalAmount: string;
+  createdAt: string;
+  isRunningOrder?: boolean;
+  isPriority?: boolean;
+  notes?: string | null;
+}
+
+export interface OrderItemView {
+  id: number;
+  orderId: number;
+  menuItemId: number;
+  menuItemName: string;
+  quantity: number;
+  unitPrice: string;
+  totalPrice: string;
+  notes?: string | null;
+  modifiers?: Array<{
+    id: number;
+    name: string;
+    price: string;
+    quantity: number;
+  }>;
+}
+
+export interface OrderDiscountView {
+  id: number;
+  type: "percentage" | "flat" | "item" | "coupon" | "loyalty";
+  amount: string;
+  reason?: string | null;
+  couponCode?: string | null;
+  orderItemId?: number | null;
+}
+
+export interface OrderDetailView extends OrderHeader {
+  items: OrderItemView[];
+  discounts: OrderDiscountView[];
+}
+
+export interface DiscountsConfig {
+  presetReasons?: string[];
+  thresholdPct?: number | null;
+  thresholdAmount?: number | null;
+  hasManagerPin?: boolean;
+  otpEnabled?: boolean;
+  roleCaps?: Record<string, { pct?: number | null; amount?: number | null }>;
+}
+
+/**
+ * Apply a discount to an order or single line.
+ *
+ * `idempotencyKey` is supplied by the renderer (one per user action) and
+ * kept stable across retries so the server collapses duplicate clicks.
+ */
+export interface ApplyDiscountRequest {
+  idempotencyKey?: string;
+  orderId: number;
+  type: "percentage" | "flat" | "item";
+  value: number;
+  reason: string;
+  orderItemId?: number;
+  managerPin?: string;
+  managerOtp?: string;
 }
 
 // ─── Connection / session state stored in main process ──────────────────────
@@ -279,14 +470,53 @@ export type IpcContract = {
     res: { ok: true };
   };
 
-  // Placeholders for later phases (Phase 2/4 will wire bodies). Defined
-  // here so the preload surface and types lock in now.
-  "menu:list": { req: void; res: unknown };
-  "menu:categories": { req: void; res: unknown };
-  "orders:list": { req: { status?: string }; res: unknown };
-  "orders:create": { req: unknown; res: unknown };
-  "orders:update": { req: { id: number; patch: unknown }; res: unknown };
-  "customers:lookup": { req: { phone?: string; query?: string }; res: unknown };
+  // Menu --------------------------------------------------------------------
+  /** Returns the restaurant info needed for tax + service-charge math. */
+  "menu:restaurant": { req: void; res: RestaurantInfo };
+  /** Phase-1 placeholder; now returns the menu bundle (categories+items). */
+  "menu:list": { req: { force?: boolean } | void; res: { categories: MenuCategory[]; items: MenuItem[] } };
+  "menu:categories": { req: void; res: MenuCategory[] };
+  "menu:items": { req: { categoryId?: number; search?: string }; res: MenuItem[] };
+  "menu:modifiers": { req: { menuItemId: number }; res: ModifierGroup[] };
+
+  // Tables ------------------------------------------------------------------
+  "tables:list": { req: void; res: FloorTable[] };
+  /** Returns the in-progress (running) order on a dine-in table, if any.
+   *  Lets the POS reopen the existing tab when a cashier taps an occupied
+   *  table — matches the web POS auto-resume behaviour. */
+  "tables:active-order": { req: { tableId: number }; res: { orderId: number | null } };
+
+  // Customers ---------------------------------------------------------------
+  "customers:search": {
+    req: { search?: string; limit?: number };
+    res: CustomerSummary[];
+  };
+  "customers:create": {
+    req: { name?: string; phone?: string; email?: string };
+    res: CustomerSummary;
+  };
+  /** Phase-1 placeholder, now wired. Accepts either a phone or a free-text query. */
+  "customers:lookup": { req: { phone?: string; query?: string }; res: CustomerSummary[] };
+
+  // Orders ------------------------------------------------------------------
+  "orders:list": { req: { status?: string; limit?: number }; res: OrderHeader[] };
+  "orders:detail": { req: { id: number }; res: OrderDetailView };
+  "orders:create": { req: CreateOrderRequest; res: OrderDetailView };
+  "orders:add-items": {
+    req: { orderId: number; items: CartItemInput[]; idempotencyKey?: string };
+    res: OrderDetailView;
+  };
+  "orders:update": { req: { id: number; patch: Partial<OrderHeader> }; res: OrderHeader };
+
+  // Discounts ---------------------------------------------------------------
+  "discounts:config": { req: void; res: DiscountsConfig };
+  "discounts:apply": { req: ApplyDiscountRequest; res: OrderDetailView };
+  "discounts:remove": {
+    req: { orderId: number; discountId: number; idempotencyKey?: string };
+    res: OrderDetailView;
+  };
+
+  // Payments (Phase 4 placeholder, kept for API stability) -----------------
   "payments:record": { req: unknown; res: unknown };
 
   // Printers / hardware -----------------------------------------------------
