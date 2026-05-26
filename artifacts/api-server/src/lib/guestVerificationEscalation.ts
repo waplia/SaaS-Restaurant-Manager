@@ -14,7 +14,7 @@
  * even if the cron runs slightly off-schedule.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { db, kitchenTicketsTable, ordersTable, notificationsTable } from "./db";
+import { db, kitchenTicketsTable, ordersTable, notificationsTable, restaurantSettingsTable } from "./db";
 import { broadcastEvent } from "./socketio";
 import { pushToStaff } from "./pushNotify";
 import { logger } from "./logger";
@@ -87,6 +87,75 @@ export async function releaseHeldTicketsForPaidOrder(
   return result;
 }
 
+/**
+ * Release ALL pending guest-verification holds for a restaurant. Used when
+ * the owner flips the kill switch off — existing held tickets shouldn't
+ * keep paging staff after the feature is disabled. Flips every held
+ * ticket → 'new', marks each affected session staff-verified (system),
+ * and broadcasts so KDS picks them up. Safe no-op when nothing is held.
+ */
+export async function releaseAllHeldTicketsForRestaurant(
+  restaurantId: number,
+): Promise<{ releasedTickets: number; releasedOrders: number }> {
+  const now = new Date();
+  const result = await db.transaction(async (tx) => {
+    const released = await tx.update(kitchenTicketsTable)
+      .set({ status: "new", updatedAt: now })
+      .where(and(
+        eq(kitchenTicketsTable.restaurantId, restaurantId),
+        eq(kitchenTicketsTable.status, "pending_acceptance"),
+      ))
+      .returning({
+        id: kitchenTicketsTable.id,
+        kitchenId: kitchenTicketsTable.kitchenId,
+        orderId: kitchenTicketsTable.orderId,
+      });
+    if (released.length === 0) return { released, orders: [] as Array<{ id: number; tableSessionId: number | null; tableId: number | null; orderNumber: string | null }> };
+    const orderIds = Array.from(new Set(released.map(r => r.orderId)));
+    const orders = await tx.select({
+      id: ordersTable.id,
+      tableSessionId: ordersTable.tableSessionId,
+      tableId: ordersTable.tableId,
+      orderNumber: ordersTable.orderNumber,
+    }).from(ordersTable).where(sql`${ordersTable.id} = ANY(${orderIds})`);
+    const sessionIds = Array.from(new Set(orders.map(o => o.tableSessionId).filter((x): x is number => x != null)));
+    if (sessionIds.length > 0) {
+      const { tableSessionsTable } = await import("./db");
+      await tx.update(tableSessionsTable).set({ staffVerifiedAt: now, updatedAt: now })
+        .where(sql`${tableSessionsTable.id} = ANY(${sessionIds})`);
+    }
+    // Mark any unread guest_verification notifications as read so the bell
+    // banner / unread count clears immediately when the owner disables the
+    // feature. Without this, stale "Guest verification needed" entries linger.
+    await tx.update(notificationsTable).set({ isRead: true })
+      .where(and(
+        eq(notificationsTable.restaurantId, restaurantId),
+        eq(notificationsTable.type, "guest_verification"),
+        eq(notificationsTable.isRead, false),
+      ));
+    return { released, orders };
+  });
+
+  if (result.released.length > 0) {
+    try {
+      const byOrder = new Map(result.orders.map(o => [o.id, o]));
+      for (const t of result.released) {
+        const o = byOrder.get(t.orderId);
+        broadcastEvent(restaurantId, "guest_verification:accepted", {
+          orderId: t.orderId, tableId: o?.tableId ?? null, autoReleasedByDisable: true,
+        });
+        broadcastEvent(restaurantId, "order:new", {
+          id: t.orderId, orderNumber: o?.orderNumber ?? null, status: "new",
+          tableId: o?.tableId ?? null, ticketId: t.id, kitchenId: t.kitchenId,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, restaurantId }, "[guest-verification] broadcast after disable-release failed");
+    }
+  }
+  return { releasedTickets: result.released.length, releasedOrders: result.orders.length };
+}
+
 export async function runGuestVerificationEscalation(now: Date): Promise<{ repinged: number; escalated: number }> {
   // Pick one ticket per order (the oldest) to avoid double-pinging when an
   // order spans multiple kitchens — we ping per order, not per ticket.
@@ -108,7 +177,26 @@ export async function runGuestVerificationEscalation(now: Date): Promise<{ repin
   let repinged = 0;
   let escalated = 0;
 
+  // Per-restaurant kill-switch cache for this tick. If an owner has disabled
+  // Guest Verification, we must NOT continue re-pinging/escalating their
+  // held tickets — even if a few are still in 'pending_acceptance' from a
+  // narrow race between the toggle save and an in-flight QR order.
+  const gvDisabledRestaurants = new Set<number>();
+  const gvCheckedRestaurants = new Set<number>();
+
   for (const r of rows) {
+    if (!gvCheckedRestaurants.has(r.restaurantId)) {
+      gvCheckedRestaurants.add(r.restaurantId);
+      const [gvRow] = await db.select({ data: restaurantSettingsTable.data })
+        .from(restaurantSettingsTable)
+        .where(and(
+          eq(restaurantSettingsTable.restaurantId, r.restaurantId),
+          eq(restaurantSettingsTable.section, "guest-verification"),
+        ));
+      const enabled = (gvRow?.data as { enabled?: boolean } | undefined)?.enabled !== false;
+      if (!enabled) gvDisabledRestaurants.add(r.restaurantId);
+    }
+    if (gvDisabledRestaurants.has(r.restaurantId)) continue;
     if (!r.ticketCreatedAt) continue;
     const ageMin = (now.getTime() - new Date(r.ticketCreatedAt).getTime()) / 60_000;
     const ageWhole = Math.floor(ageMin);
@@ -120,6 +208,9 @@ export async function runGuestVerificationEscalation(now: Date): Promise<{ repin
     const shouldReping = !shouldEscalate && ageWhole === REPING_AT_MIN;
 
     if (!shouldReping && !shouldEscalate) continue;
+    // Defensive duplicate of the per-row guard above — never page when the
+    // owner has disabled the feature for this restaurant.
+    if (gvDisabledRestaurants.has(r.restaurantId)) continue;
 
     try {
       if (shouldEscalate) {

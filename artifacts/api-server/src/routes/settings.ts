@@ -172,6 +172,25 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
     entityId: row.restaurantId, restaurantId, targetRestaurantId: restaurantId,
     oldValue: previous?.data ?? null, newValue: data,
   });
+
+  // When the owner flips Guest Verification OFF, auto-release any tickets
+  // still held in 'pending_acceptance'. Otherwise the notification dropdown
+  // and verification queue would keep paging staff about orders placed
+  // before the kill switch was disabled.
+  if (section === "guest-verification") {
+    const wasEnabled = ((previous?.data ?? {}) as { enabled?: boolean }).enabled !== false;
+    const nowEnabled = (data as { enabled?: boolean }).enabled !== false;
+    if (wasEnabled && !nowEnabled) {
+      try {
+        const { releaseAllHeldTicketsForRestaurant } = await import("../lib/guestVerificationEscalation");
+        await releaseAllHeldTicketsForRestaurant(restaurantId);
+      } catch (err) {
+        // Don't fail the settings save if release fails — log and move on.
+        // Staff can manually accept the stragglers from the verification queue.
+        console.error("[settings] guest-verification release-on-disable failed:", err);
+      }
+    }
+  }
   let respData: unknown = row.data;
   if (section === "discounts") {
     const src = (row.data ?? {}) as Record<string, unknown>;
