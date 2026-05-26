@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import * as SecureStorage from "@/lib/secureStorage";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { router } from "expo-router";
 import { setAuthTokenGetter, setUnauthorizedHandler } from "@workspace/api-client-react";
@@ -57,6 +58,21 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const PUSH_TOKEN_STORAGE_KEY = "expoPushToken";
 
+/**
+ * Resolve the EAS project id from app.json's `expo.extra.eas.projectId`.
+ * Required by `getExpoPushTokenAsync` since Expo SDK 49 — without it the
+ * call throws on real devices/dev builds. Reads from both `expoConfig`
+ * (modern, SDK 49+) and `manifest`/`manifest2` (legacy fallback).
+ */
+function getEasProjectId(): string | undefined {
+  const fromExpoConfig = Constants.expoConfig?.extra?.eas?.projectId;
+  if (typeof fromExpoConfig === "string" && fromExpoConfig.length > 0) return fromExpoConfig;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const legacy = (Constants as any).easConfig?.projectId ?? (Constants as any).manifest?.extra?.eas?.projectId;
+  if (typeof legacy === "string" && legacy.length > 0) return legacy;
+  return undefined;
+}
+
 async function registerPushToken(userId: number, accessToken: string): Promise<string | null> {
   if (Platform.OS === "web") return null;
   try {
@@ -66,24 +82,44 @@ async function registerPushToken(userId: number, accessToken: string): Promise<s
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== "granted") return null;
+    if (finalStatus !== "granted") {
+      console.warn("[push] notification permission not granted:", finalStatus);
+      return null;
+    }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    const projectId = getEasProjectId();
+    if (!projectId) {
+      console.warn("[push] no EAS projectId found in app.json (expo.extra.eas.projectId). Push will not work in dev/prod builds.");
+    }
+
+    // SDK 49+ requires `projectId` to be passed explicitly. Without it the
+    // call throws "No projectId found" on real devices.
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
     const pushToken = tokenData.data;
+    console.log("[push] registered Expo push token:", pushToken);
 
     const baseUrl = getApiBaseUrl();
-    await fetch(`${baseUrl}/api/users/${userId}/push-token`, {
+    const res = await fetch(`${baseUrl}/api/users/${userId}/push-token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ token: pushToken, platform: Platform.OS }),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn("[push] failed to send token to server:", err);
+      return null;
+    });
+    if (res && !res.ok) {
+      console.warn("[push] server rejected token registration:", res.status, await res.text().catch(() => ""));
+    }
 
     await SecureStorage.setItem(PUSH_TOKEN_STORAGE_KEY, pushToken);
     return pushToken;
-  } catch {
+  } catch (err) {
+    console.warn("[push] registerPushToken failed:", err);
     return null;
   }
 }

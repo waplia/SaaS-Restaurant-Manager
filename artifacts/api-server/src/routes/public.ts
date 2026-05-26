@@ -740,6 +740,20 @@ router.post("/public/orders", async (req, res) => {
     }
     await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
     broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
+    // Fire push to staff so phones light up even when the app is backgrounded.
+    try {
+      const { pushToStaff } = await import("../lib/pushNotify");
+      await pushToStaff(
+        { restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
+        {
+          title: `New QR Order · #${order.orderNumber}`,
+          body: `Guest placed an order from a table.`,
+          data: { orderId: order.id, type: "new_order", screen: "kitchen" },
+        },
+      );
+    } catch (err) {
+      logger.error?.({ err, orderId: order.id }, "QR new-order push failed");
+    }
   }
 
   for (const t of createdTickets) {
@@ -1868,6 +1882,19 @@ router.post("/public/restaurants/:slug/reservations", async (req, res) => {
   });
   broadcastEvent(restaurant.id, "notification:new", { type: "reservation_request", id: reservation.id });
   broadcastEvent(restaurant.id, "reservation:new", { id: reservation.id });
+  try {
+    const { pushToStaff } = await import("../lib/pushNotify");
+    await pushToStaff(
+      { restaurantId: restaurant.id, roles: ["manager", "owner"], type: "reservation_request" },
+      {
+        title: "New reservation request",
+        body: `${guestName.trim()} · party of ${ps} · ${dt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`,
+        data: { reservationId: reservation.id, type: "reservation_request" },
+      },
+    );
+  } catch (err) {
+    logger.error?.({ err, reservationId: reservation.id }, "reservation push failed");
+  }
 
   res.status(201).json({
     id: reservation.id,
@@ -2230,6 +2257,19 @@ router.post("/public/review-qr/:qrCode/generate-draft", async (req, res) => {
         message: (comment || tags.join(", ") || "Customer left private feedback").slice(0, 200),
       });
       broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+      try {
+        const { pushToStaff } = await import("../lib/pushNotify");
+        await pushToStaff(
+          { restaurantId: qr.restaurantId, roles: ["manager", "owner"], type: rating <= 2 ? "negative_feedback" : "feedback" },
+          {
+            title: `New ${rating}★ feedback`,
+            body: (comment || tags.join(", ") || "Customer left private feedback").slice(0, 200),
+            data: { feedbackId: fb.id, type: "feedback", rating },
+          },
+        );
+      } catch (err) {
+        logger.error?.({ err, feedbackId: fb.id }, "feedback push failed");
+      }
     }
   }
 
@@ -2403,6 +2443,19 @@ router.post("/public/review-qr/:qrCode/feedback", async (req, res) => {
         message: ((fb.comment ?? tags.join(", ")) || "Customer left private feedback").slice(0, 200),
       });
       broadcastEvent(qr.restaurantId, "notification:new", { type: "feedback", id: fb.id });
+      try {
+        const { pushToStaff } = await import("../lib/pushNotify");
+        await pushToStaff(
+          { restaurantId: qr.restaurantId, roles: ["manager", "owner"], type: rating <= 2 ? "negative_feedback" : "feedback" },
+          {
+            title: `New ${rating}★ feedback`,
+            body: ((fb.comment ?? tags.join(", ")) || "Customer left private feedback").slice(0, 200),
+            data: { feedbackId: fb.id, type: "feedback", rating },
+          },
+        );
+      } catch (err) {
+        logger.error?.({ err, feedbackId: fb.id }, "feedback push failed");
+      }
     }
   }
   res.status(201).json({ ok: true, id: fb.id });

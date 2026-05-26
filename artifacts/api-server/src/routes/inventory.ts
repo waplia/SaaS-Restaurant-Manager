@@ -86,6 +86,19 @@ async function triggerLowStockNotification(item: { id: number; name: string; cur
     });
     const { broadcastEvent } = await import("../lib/socketio");
     broadcastEvent(restaurantId, "notification:new", { type: "low_stock" });
+    try {
+      const { pushToStaff } = await import("../lib/pushNotify");
+      await pushToStaff(
+        { restaurantId, roles: ["manager", "owner"], type: "low_stock" },
+        {
+          title: "Low stock alert",
+          body: `${item.name} is running low (${Number(item.currentStock).toFixed(1)} ${item.unit} left).`,
+          data: { itemId: item.id, type: "low_stock" },
+        },
+      );
+    } catch (err) {
+      console.error("low-stock push failed:", err);
+    }
     const { sendEmail, lowStockEmail } = await import("../lib/notifications");
     const { restaurantsTable, usersTable } = await import("../lib/db");
     const { eq, and } = await import("drizzle-orm");
