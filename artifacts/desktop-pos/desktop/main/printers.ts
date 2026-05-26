@@ -1,31 +1,24 @@
 /**
  * Printer subsystem.
  *
- * Exposes:
- *   • printers:list         — enumerate OS printers (via offscreen window)
- *   • printers:test         — print a small test page to a chosen printer
- *   • printers:print-receipt — bill print (thermal ESC/POS or fallback HTML)
- *   • printers:print-kot     — KOT print
+ * Channels (all listed in `desktop/shared/ipc-contract.ts`):
+ *   • printers:list           — enumerate OS printers
+ *   • printers:test           — print a small test page
+ *   • printers:print-receipt  — bill print (ESC/POS)
+ *   • printers:print-kot      — KOT print (ESC/POS)
  *
  * ESC/POS bytes are built locally — no external dep required for the common
- * "init / text / cut / drawer-kick" path. For complex layouts the renderer
- * may instead request a silent HTML print via the offscreen window.
+ * "init / text / cut / drawer-kick" path.
  */
 
 import { ipcMain, BrowserWindow } from "electron";
-import path from "node:path";
-import type { IpcResult, ReceiptPrintPayload, KotPrintPayload } from "./types";
+import type { IpcResult } from "./types";
+import type { ReceiptPrintRequest, KotPrintRequest } from "../shared/ipc-contract";
 
 const ESC = 0x1b;
 const GS = 0x1d;
 
 export function escposBytes(text: string, opts: { cut?: boolean; drawer?: boolean } = {}): Buffer {
-  // ESC @  → reset
-  // ESC ! 0 → normal font
-  // text (CP437-ish; we just push UTF-8 — most thermal printers handle it
-  //   acceptably when the renderer feeds plain ASCII receipts).
-  // GS V 1 → partial cut
-  // ESC p 0 25 250 → pulse drawer pin 2 (kick)
   const init = Buffer.from([ESC, 0x40, ESC, 0x21, 0x00]);
   const body = Buffer.from(text, "utf8");
   const feed = Buffer.from("\n\n\n\n", "utf8");
@@ -59,7 +52,8 @@ export function registerPrinterHandlers(deps: PrinterDeps): void {
     }
   });
 
-  ipcMain.handle("printers:test", async (e, printerName: string): Promise<IpcResult<true>> => {
+  ipcMain.handle("printers:test", async (_e, req: { printerName: string }): Promise<IpcResult<true>> => {
+    const printerName = req?.printerName;
     if (typeof printerName !== "string" || !printerName) return { ok: false, error: "printerName required" };
     try {
       const text =
@@ -79,7 +73,7 @@ export function registerPrinterHandlers(deps: PrinterDeps): void {
     }
   });
 
-  ipcMain.handle("printers:print-receipt", async (_e, payload: ReceiptPrintPayload): Promise<IpcResult<true>> => {
+  ipcMain.handle("printers:print-receipt", async (_e, payload: ReceiptPrintRequest): Promise<IpcResult<true>> => {
     if (!payload || typeof payload.text !== "string") return { ok: false, error: "invalid payload" };
     const target = payload.printerName;
     if (!target) return { ok: false, error: "No bill printer configured" };
@@ -97,7 +91,7 @@ export function registerPrinterHandlers(deps: PrinterDeps): void {
     }
   });
 
-  ipcMain.handle("printers:print-kot", async (_e, payload: KotPrintPayload): Promise<IpcResult<true>> => {
+  ipcMain.handle("printers:print-kot", async (_e, payload: KotPrintRequest): Promise<IpcResult<true>> => {
     if (!payload || typeof payload.text !== "string") return { ok: false, error: "invalid payload" };
     const target = payload.printerName;
     if (!target) return { ok: false, error: "No KOT printer configured" };

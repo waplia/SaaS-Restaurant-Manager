@@ -14,5 +14,5 @@
     "allowImportingTsExtensions": false,
     "types": ["vite/client"]
   },
-  "include": ["src/**/*", "../preload/preload-api.d.ts"]
+  "include": ["src/**/*", "../preload/preload-api.d.ts", "../shared/**/*"]
 }

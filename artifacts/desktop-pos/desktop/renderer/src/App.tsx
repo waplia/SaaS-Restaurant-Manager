@@ -1,376 +1,191 @@
 /**
- * Desktop POS shell.
+ * Desktop POS shell — native, no webview.
  *
- * The renderer is intentionally thin: it embeds the existing web POS
- * (artifacts/restaurant-platform) in a sandboxed <webview>, and surrounds it
- * with desktop-only chrome:
- *   • Connection / outlet / counter setup gate (settings screen on first run).
- *   • Top bar with shift status, version, and update banner.
- *   • Printer settings panel (enumerate OS printers, assign by role, test).
- *   • Failed-prints retry tray.
+ * Drives a tiny gate-based state machine:
+ *   • no API URL              → ConnectionSettings
+ *   • not authenticated       → Login
+ *   • authenticated, no outlet → OutletPicker
+ *   • outlet but no counter    → CounterPicker
+ *   • counter but no open shift→ ShiftOpen
+ *   • everything ready         → Workspace
  *
- * Backend-verified payments, cart math, KOTs, shifts, sound, calculator and
- * keyboard shortcuts already live in the web POS shell — we do not duplicate
- * them here. Desktop adds: silent ESC/POS printing, cash-drawer kick, local
- * cart safety on crash, auto-update, multi-window guard.
+ * Every data op is an IPC call into the main process — see
+ * `desktop/shared/ipc-contract.ts` for the full surface.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopSettings } from "../../main/types";
+import { useCallback, useEffect, useState } from "react";
+import type { SessionSnapshot, User } from "../../shared/ipc-contract";
+import { LoginScreen } from "./screens/Login";
+import { OutletPickerScreen } from "./screens/OutletPicker";
+import { CounterPickerScreen } from "./screens/CounterPicker";
+import { ShiftOpenScreen } from "./screens/ShiftOpen";
+import { WorkspaceScreen } from "./screens/Workspace";
+import { ConnectionSettingsScreen } from "./screens/ConnectionSettings";
+import { FullscreenCenter, Spinner } from "./ui/components";
 
-type Tab = "pos" | "settings" | "printers" | "failed";
-
-interface UpdateState {
-  status: "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error" | "disabled" | "no-feed";
-  version?: string;
-  percent?: number;
-  message?: string;
-}
-
-const tab_btn: React.CSSProperties = {
-  background: "transparent", border: 0, color: "#cbd5e1",
-  padding: "8px 14px", cursor: "pointer", fontSize: 14, borderRadius: 6,
-};
-const tab_btn_active: React.CSSProperties = { ...tab_btn, background: "#1f2937", color: "#fff" };
-const panel: React.CSSProperties = { padding: 24, overflow: "auto", height: "100%" };
-const input: React.CSSProperties = {
-  background: "#0f172a", border: "1px solid #334155", color: "#e5e7eb",
-  padding: "8px 10px", borderRadius: 6, fontSize: 14, width: "100%",
-};
-const label: React.CSSProperties = { display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 };
-const btn: React.CSSProperties = {
-  background: "#ea580c", color: "#fff", border: 0, padding: "8px 14px",
-  borderRadius: 6, cursor: "pointer", fontSize: 14,
-};
-const btn_ghost: React.CSSProperties = { ...btn, background: "#1f2937" };
-const row: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 };
+type Override = "settings" | "switch-outlet" | null;
 
 export function App() {
-  const [settings, setSettings] = useState<DesktopSettings | null>(null);
-  const [tab, setTab] = useState<Tab>("pos");
-  const [version, setVersion] = useState<string>("");
-  const [platform, setPlatform] = useState<string>("");
-  const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
-  const [printers, setPrinters] = useState<Array<{ name: string; isDefault: boolean }>>([]);
-  const [failed, setFailed] = useState<Array<{ id: string; at: number; entry: unknown }>>([]);
-  const webviewRef = useRef<HTMLElement & { src?: string; reload?: () => void; openDevTools?: () => void }>(null);
+  const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
+  const [version, setVersion] = useState("");
+  const [platform, setPlatform] = useState("");
+  const [override, setOverride] = useState<Override>(null);
+  const [online, setOnline] = useState<boolean>(navigator.onLine);
 
-  // Bootstrap: load settings, version, printers, failed-print queue, and
-  // subscribe to update events.
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const [s, v] = await Promise.all([
-        window.khanalagao.settings.get(),
-        window.khanalagao.app.version(),
-      ]);
-      if (!mounted) return;
-      setSettings(s);
-      setVersion(v.version);
-      setPlatform(v.platform);
-      try { setPrinters(await window.khanalagao.printers.list()); } catch { /* webContents not ready */ }
-      try { setFailed((await window.khanalagao.failedPrints.list()) as typeof failed); } catch { /* noop */ }
-      // First-run gate: if no API base URL is set OR no outlet/counter,
-      // land on settings so the cashier configures the terminal before use.
-      if (!s.apiBaseUrl || !s.defaultOutletId || !s.defaultCounterId) setTab("settings");
-    })();
-    const off = window.khanalagao.updates.onEvent((evt) => {
-      setUpdate((cur) => {
-        if (evt.type === "available") return { status: "available", version: evt.version };
-        if (evt.type === "progress") return { status: "downloading", percent: evt.percent };
-        if (evt.type === "downloaded") return { status: "downloaded", version: evt.version };
-        if (evt.type === "error") return { status: "error", message: evt.message };
-        if (evt.type === "none") return { status: "none" };
-        return cur;
-      });
-    });
-    return () => { mounted = false; off(); };
+  const refresh = useCallback(async () => {
+    const snap = await window.khanalagao.session.snapshot();
+    setSnapshot(snap);
   }, []);
 
-  const webviewSrc = useMemo(() => {
-    if (!settings?.apiBaseUrl) return "about:blank";
-    const base = settings.apiBaseUrl.replace(/\/+$/, "");
-    const url = new URL(base + (settings.webPosPath || "/pos"));
-    if (settings.defaultOutletId) url.searchParams.set("outlet", String(settings.defaultOutletId));
-    if (settings.defaultCounterId) url.searchParams.set("counter", String(settings.defaultCounterId));
-    if (settings.defaultOrderType) url.searchParams.set("order", settings.defaultOrderType);
-    url.searchParams.set("shell", "desktop");
-    url.searchParams.set("ver", version || "dev");
-    return url.toString();
-  }, [settings, version]);
+  useEffect(() => {
+    (async () => {
+      const [s, v, snap] = await Promise.all([
+        window.khanalagao.settings.get(),
+        window.khanalagao.app.version(),
+        window.khanalagao.session.snapshot(),
+      ]);
+      setApiBaseUrl(s.apiBaseUrl);
+      setVersion(v.version);
+      setPlatform(v.platform);
+      setSnapshot(snap);
+    })().catch(console.error);
 
-  if (!settings) {
-    return <div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading Khanalagao POS…</div>;
+    // Token-refresh failure → land back on login.
+    const offAuth = window.khanalagao.auth.onInvalidated(() => {
+      void refresh();
+    });
+
+    const goOn = () => setOnline(true);
+    const goOff = () => setOnline(false);
+    window.addEventListener("online", goOn);
+    window.addEventListener("offline", goOff);
+
+    return () => {
+      offAuth();
+      window.removeEventListener("online", goOn);
+      window.removeEventListener("offline", goOff);
+    };
+  }, [refresh]);
+
+  // Once an outlet is picked, ask the server whether a shift is already open
+  // (e.g. cashier crashed and reopened the app mid-shift). Skips on signed-out
+  // state to avoid unnecessary 401s.
+  useEffect(() => {
+    if (!snapshot?.auth.isAuthenticated) return;
+    if (!snapshot.selection.restaurantId) return;
+    window.khanalagao.shifts.current()
+      .then((r) => {
+        if (r.session) void refresh();
+      })
+      .catch(() => { /* surfaced when user reaches ShiftOpen */ });
+  }, [snapshot?.auth.isAuthenticated, snapshot?.selection.restaurantId, refresh]);
+
+  // Loading
+  if (!snapshot || apiBaseUrl === null) {
+    return <FullscreenCenter><Spinner size={28} /></FullscreenCenter>;
   }
 
-  return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", height: "100%" }}>
-      <TopBar
-        tab={tab} setTab={setTab}
-        version={version} platform={platform}
-        update={update}
-        onCheckUpdates={async () => {
-          setUpdate({ status: "checking" });
-          try {
-            const r = await window.khanalagao.updates.check();
-            setUpdate({ status: (r.status as UpdateState["status"]) ?? "idle", version: r.version });
-          } catch (err) {
-            setUpdate({ status: "error", message: (err as Error).message });
-          }
-        }}
-        onReload={() => webviewRef.current?.reload?.()}
-        failedCount={failed.length}
+  // Settings override (always available via menu)
+  if (override === "settings") {
+    return (
+      <ConnectionSettingsScreen
+        initialUrl={apiBaseUrl}
+        version={version}
+        platform={platform}
+        onSaved={(url) => { setApiBaseUrl(url); setOverride(null); }}
+        onClose={() => setOverride(null)}
       />
-      <div style={{ position: "relative", overflow: "hidden" }}>
-        <div style={{ display: tab === "pos" ? "block" : "none", height: "100%" }}>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <webview
-            // @ts-expect-error — webview is a custom element exposed by Electron.
-            ref={webviewRef}
-            src={webviewSrc}
-            partition="persist:khanalagao-pos"
-            allowpopups="true"
-            style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
-          />
-          {!settings.apiBaseUrl && (
-            <EmptyState onConfigure={() => setTab("settings")} />
-          )}
-        </div>
-        {tab === "settings" && <SettingsPanel settings={settings} onSave={async (patch) => setSettings(await window.khanalagao.settings.set(patch))} />}
-        {tab === "printers" && <PrintersPanel
-          settings={settings}
-          printers={printers}
-          onRefresh={async () => setPrinters(await window.khanalagao.printers.list())}
-          onSave={async (patch) => setSettings(await window.khanalagao.settings.set(patch))}
-        />}
-        {tab === "failed" && <FailedPanel
-          items={failed}
-          onClear={async () => { await window.khanalagao.failedPrints.clear(); setFailed([]); }}
-          onRefresh={async () => setFailed((await window.khanalagao.failedPrints.list()) as typeof failed)}
-        />}
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
-function TopBar(props: {
-  tab: Tab; setTab: (t: Tab) => void;
-  version: string; platform: string;
-  update: UpdateState;
-  onCheckUpdates: () => void;
-  onReload: () => void;
-  failedCount: number;
-}) {
-  const u = props.update;
-  const updateLabel = (() => {
-    switch (u.status) {
-      case "checking": return "Checking for updates…";
-      case "available": return `Update available: ${u.version}`;
-      case "downloading": return `Downloading… ${Math.round(u.percent ?? 0)}%`;
-      case "downloaded": return `Update ready — restart to install`;
-      case "error": return `Update error: ${u.message}`;
-      case "no-feed": return "Auto-update not configured";
-      case "disabled": return "Auto-update disabled";
-      case "none": return "Up to date";
-      default: return "";
-    }
-  })();
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-      background: "#111827", borderBottom: "1px solid #1f2937",
-    }}>
-      <div style={{ fontWeight: 700, marginRight: 12 }}>Khanalagao POS</div>
-      <button style={props.tab === "pos" ? tab_btn_active : tab_btn} onClick={() => props.setTab("pos")}>POS</button>
-      <button style={props.tab === "settings" ? tab_btn_active : tab_btn} onClick={() => props.setTab("settings")}>Settings</button>
-      <button style={props.tab === "printers" ? tab_btn_active : tab_btn} onClick={() => props.setTab("printers")}>Printers</button>
-      <button style={props.tab === "failed" ? tab_btn_active : tab_btn} onClick={() => props.setTab("failed")}>
-        Failed prints{props.failedCount ? ` (${props.failedCount})` : ""}
-      </button>
-      <div style={{ flex: 1 }} />
-      <span style={{ fontSize: 12, color: "#94a3b8" }}>{updateLabel}</span>
-      <button style={btn_ghost} onClick={props.onCheckUpdates}>Check updates</button>
-      <button style={btn_ghost} onClick={props.onReload}>Reload POS</button>
-      <span style={{ fontSize: 12, color: "#64748b" }}>v{props.version} · {props.platform}</span>
-    </div>
-  );
-}
+  // Gate 1 — connection
+  if (!apiBaseUrl) {
+    return (
+      <ConnectionSettingsScreen
+        initialUrl=""
+        version={version}
+        platform={platform}
+        onSaved={(url) => { setApiBaseUrl(url); }}
+      />
+    );
+  }
 
-function EmptyState({ onConfigure }: { onConfigure: () => void }) {
-  return (
-    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-      <div style={{ textAlign: "center" }}>
-        <h2 style={{ marginBottom: 8 }}>Welcome to Khanalagao POS</h2>
-        <p style={{ color: "#94a3b8", marginBottom: 16 }}>
-          Set the server URL, outlet and counter to start taking orders.
-        </p>
-        <button style={btn} onClick={onConfigure}>Open settings</button>
-      </div>
-    </div>
-  );
-}
+  // Gate 2 — authentication
+  if (!snapshot.auth.isAuthenticated || !snapshot.auth.user) {
+    return (
+      <LoginScreen
+        apiBaseUrl={apiBaseUrl}
+        onSignedIn={async (_user: User) => { await refresh(); }}
+        onOpenSettings={() => setOverride("settings")}
+      />
+    );
+  }
 
-function SettingsPanel({ settings, onSave }: { settings: DesktopSettings; onSave: (p: Partial<DesktopSettings>) => Promise<void> }) {
-  const [draft, setDraft] = useState<DesktopSettings>(settings);
-  useEffect(() => setDraft(settings), [settings]);
-  const set = <K extends keyof DesktopSettings>(k: K, v: DesktopSettings[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  return (
-    <div style={panel}>
-      <h2 style={{ marginTop: 0 }}>Terminal settings</h2>
-      <div style={row}>
-        <div>
-          <label style={label}>Server URL (Khanalagao API)</label>
-          <input style={input} value={draft.apiBaseUrl} onChange={(e) => set("apiBaseUrl", e.target.value)} placeholder="https://app.khanalagao.in" />
-        </div>
-        <div>
-          <label style={label}>Web POS path</label>
-          <input style={input} value={draft.webPosPath} onChange={(e) => set("webPosPath", e.target.value)} placeholder="/pos" />
-        </div>
-      </div>
-      <div style={row}>
-        <div>
-          <label style={label}>Default outlet ID</label>
-          <input style={input} type="number" value={draft.defaultOutletId ?? ""}
-            onChange={(e) => set("defaultOutletId", e.target.value ? Number(e.target.value) : null)} />
-        </div>
-        <div>
-          <label style={label}>Default counter ID</label>
-          <input style={input} type="number" value={draft.defaultCounterId ?? ""}
-            onChange={(e) => set("defaultCounterId", e.target.value ? Number(e.target.value) : null)} />
-        </div>
-      </div>
-      <div style={row}>
-        <div>
-          <label style={label}>Default order type</label>
-          <select style={input as React.CSSProperties}
-            value={draft.defaultOrderType}
-            onChange={(e) => set("defaultOrderType", e.target.value as DesktopSettings["defaultOrderType"])}>
-            <option value="dine_in">Dine-in</option>
-            <option value="takeaway">Takeaway</option>
-            <option value="delivery">Delivery</option>
-          </select>
-        </div>
-        <div>
-          <label style={label}>Auto-update feed URL (optional)</label>
-          <input style={input} value={draft.updateFeedUrl ?? ""}
-            placeholder="https://updates.khanalagao.in/desktop-pos/"
-            onChange={(e) => set("updateFeedUrl", e.target.value || null)} />
-        </div>
-      </div>
-      <fieldset style={{ border: "1px solid #1f2937", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-        <legend style={{ padding: "0 8px", color: "#cbd5e1" }}>Behaviour</legend>
-        <Toggle label="Launch at login" v={draft.autoLaunch} on={(v) => set("autoLaunch", v)} />
-        <Toggle label="Start fullscreen" v={draft.startFullscreen} on={(v) => set("startFullscreen", v)} />
-        <Toggle label="Keep screen awake during shift" v={draft.keepScreenAwake} on={(v) => set("keepScreenAwake", v)} />
-        <Toggle label="Check for updates automatically" v={draft.checkForUpdates} on={(v) => set("checkForUpdates", v)} />
-        <Toggle label="Auto-print KOT on order send" v={draft.autoPrintKot} on={(v) => set("autoPrintKot", v)} />
-        <Toggle label="Auto-print bill on settle" v={draft.autoPrintBill} on={(v) => set("autoPrintBill", v)} />
-        <Toggle label="Auto-open cash drawer on cash payment" v={draft.autoOpenDrawerOnCash} on={(v) => set("autoOpenDrawerOnCash", v)} />
-        <Toggle label="Sound enabled" v={draft.soundEnabled} on={(v) => set("soundEnabled", v)} />
-        <Toggle label="Barcode/QR scanner (HID) enabled" v={draft.scannerEnabled} on={(v) => set("scannerEnabled", v)} />
-      </fieldset>
-      <button style={btn} onClick={() => onSave(draft)}>Save</button>
-    </div>
-  );
-}
+  const signOut = async () => {
+    try { await window.khanalagao.auth.logout(); }
+    finally { await refresh(); }
+  };
 
-function Toggle({ label: l, v, on }: { label: string; v: boolean; on: (v: boolean) => void }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 14 }}>
-      <input type="checkbox" checked={v} onChange={(e) => on(e.target.checked)} />
-      <span>{l}</span>
-    </label>
-  );
-}
+  const switchOutlet = async () => {
+    await window.khanalagao.session.clearSelection();
+    setOverride(null);
+    await refresh();
+  };
 
-function PrintersPanel(props: {
-  settings: DesktopSettings;
-  printers: Array<{ name: string; isDefault: boolean }>;
-  onRefresh: () => void;
-  onSave: (p: Partial<DesktopSettings>) => Promise<void>;
-}) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string>("");
-  const roles: Array<{ key: keyof DesktopSettings; label: string }> = [
-    { key: "billPrinter", label: "Bill / receipt printer" },
-    { key: "kotPrinter", label: "KOT printer (default)" },
-    { key: "kitchenPrinter", label: "Kitchen station printer" },
-    { key: "barPrinter", label: "Bar station printer" },
-    { key: "parcelPrinter", label: "Parcel / takeaway printer" },
-    { key: "cashDrawerPrinter", label: "Cash drawer (via printer)" },
-  ];
-  return (
-    <div style={panel}>
-      <h2 style={{ marginTop: 0 }}>Printers</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button style={btn_ghost} onClick={props.onRefresh}>Refresh list</button>
-        <span style={{ color: "#94a3b8", fontSize: 13, alignSelf: "center" }}>
-          {props.printers.length} OS printer{props.printers.length === 1 ? "" : "s"} detected
-        </span>
-      </div>
-      {roles.map((r) => (
-        <div key={r.key} style={{ marginBottom: 14 }}>
-          <label style={label}>{r.label}</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <select
-              style={input as React.CSSProperties}
-              value={(props.settings[r.key] as string | null) ?? ""}
-              onChange={(e) => props.onSave({ [r.key]: e.target.value || null } as Partial<DesktopSettings>)}>
-              <option value="">— Not assigned —</option>
-              {props.printers.map((p) => (
-                <option key={p.name} value={p.name}>{p.name}{p.isDefault ? " (default)" : ""}</option>
-              ))}
-            </select>
-            <button
-              style={btn_ghost}
-              disabled={!props.settings[r.key] || busy === r.key}
-              onClick={async () => {
-                const name = props.settings[r.key] as string | null;
-                if (!name) return;
-                setBusy(r.key as string); setMsg("");
-                try {
-                  await window.khanalagao.printers.test(name);
-                  setMsg(`Test sent to ${name}.`);
-                } catch (err) {
-                  setMsg(`Failed: ${(err as Error).message}`);
-                } finally { setBusy(null); }
-              }}
-            >{busy === r.key ? "Printing…" : "Test"}</button>
-            {r.key === "cashDrawerPrinter" && (
-              <button style={btn_ghost} onClick={async () => {
-                try { await window.khanalagao.drawer.open(); setMsg("Drawer pulse sent."); }
-                catch (err) { setMsg(`Failed: ${(err as Error).message}`); }
-              }}>Kick drawer</button>
-            )}
-          </div>
-        </div>
-      ))}
-      {msg && <div style={{ marginTop: 12, color: "#94a3b8", fontSize: 13 }}>{msg}</div>}
-    </div>
-  );
-}
+  // Gate 3 — outlet (restaurant + branch)
+  if (override === "switch-outlet" || !snapshot.selection.restaurantId || !snapshot.selection.branchId) {
+    return (
+      <OutletPickerScreen
+        selection={snapshot.selection}
+        onPicked={async () => { setOverride(null); await refresh(); }}
+        onSignOut={signOut}
+      />
+    );
+  }
 
-function FailedPanel(props: {
-  items: Array<{ id: string; at: number; entry: unknown }>;
-  onClear: () => void;
-  onRefresh: () => void;
-}) {
+  // Gate 4 — counter
+  if (!snapshot.selection.counterId) {
+    return (
+      <CounterPickerScreen
+        selection={snapshot.selection}
+        onPicked={async () => { await refresh(); }}
+        onBack={async () => {
+          await window.khanalagao.selection.setRestaurant({ restaurantId: snapshot.selection.restaurantId! });
+          await refresh();
+        }}
+      />
+    );
+  }
+
+  // Gate 5 — open shift
+  if (!snapshot.shift.sessionId) {
+    return (
+      <ShiftOpenScreen
+        selection={snapshot.selection}
+        user={snapshot.auth.user}
+        onOpened={refresh}
+        onBack={async () => {
+          await window.khanalagao.selection.setBranch({
+            branchId: snapshot.selection.branchId!,
+            branchName: snapshot.selection.branchName ?? "",
+          });
+          await refresh();
+        }}
+      />
+    );
+  }
+
+  // Workspace
   return (
-    <div style={panel}>
-      <h2 style={{ marginTop: 0 }}>Failed prints</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button style={btn_ghost} onClick={props.onRefresh}>Refresh</button>
-        <button style={btn_ghost} onClick={props.onClear} disabled={!props.items.length}>Clear queue</button>
-      </div>
-      {!props.items.length && <p style={{ color: "#94a3b8" }}>No failed prints recorded.</p>}
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {props.items.map((it) => (
-          <li key={it.id} style={{ border: "1px solid #1f2937", borderRadius: 8, padding: 12, marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: "#94a3b8" }}>{new Date(it.at).toLocaleString()}</div>
-            <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12 }}>{JSON.stringify(it.entry, null, 2)}</pre>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <WorkspaceScreen
+      user={snapshot.auth.user}
+      selection={snapshot.selection}
+      shiftOpenedAt={snapshot.shift.openedAt}
+      online={online}
+      onOpenSettings={() => setOverride("settings")}
+      onSignOut={signOut}
+      onSwitchOutlet={switchOutlet}
+    />
   );
 }
