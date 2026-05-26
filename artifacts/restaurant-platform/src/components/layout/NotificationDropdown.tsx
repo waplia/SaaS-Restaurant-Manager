@@ -1,8 +1,8 @@
 import { useRef, useEffect, useState } from "react";
-import { Bell, CheckCheck, ExternalLink, Info, AlertTriangle, ShoppingCart, Package, Users, ChefHat, Phone } from "lucide-react";
+import { Bell, CheckCheck, ExternalLink, Info, AlertTriangle, ShoppingCart, Package, Users, ChefHat, Phone, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { useNotifications, useMarkAllNotificationsRead } from "@/lib/hooks";
+import { useNotifications, useMarkAllNotificationsRead, useGuestVerifications } from "@/lib/hooks";
 import type { AppNotification } from "@/lib/types";
 
 const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -49,11 +49,17 @@ export function NotificationDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { data: notifications } = useNotifications();
+  const { data: heldVerifications = [] } = useGuestVerifications();
   const markAll = useMarkAllNotificationsRead();
 
   const all = Array.isArray(notifications) ? notifications as AppNotification[] : [];
   const recent = all.slice(0, 6);
-  const unread = all.filter(n => !n.isRead).length;
+  const heldCount = Array.isArray(heldVerifications) ? heldVerifications.length : 0;
+  // Held guest verifications count as actionable items too, so the bell
+  // badge surfaces them to owners/managers who don't camp on the Tables
+  // page. Tapping the banner deep-links to /waiter-requests where the
+  // Accept/Reject controls live.
+  const unread = all.filter(n => !n.isRead).length + heldCount;
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -99,7 +105,26 @@ export function NotificationDropdown() {
           </div>
 
           <div className="overflow-y-auto flex-1">
-            {recent.length === 0 ? (
+            {heldCount > 0 && (
+              <Link
+                href="/waiter-requests"
+                onClick={() => setOpen(false)}
+                className="flex items-start gap-3 px-4 py-3 border-b border-border/50 bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-200 leading-snug">
+                    {heldCount} guest {heldCount === 1 ? "order" : "orders"} awaiting verification
+                  </p>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
+                    QR orders held — tap to Accept or Reject
+                  </p>
+                </div>
+              </Link>
+            )}
+            {recent.length === 0 && heldCount === 0 ? (
               <div className="px-4 py-8 text-center text-muted-foreground text-sm">
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 No notifications yet
