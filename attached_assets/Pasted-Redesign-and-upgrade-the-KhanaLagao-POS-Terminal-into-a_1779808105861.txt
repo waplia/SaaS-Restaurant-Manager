@@ -1,0 +1,638 @@
+Redesign and upgrade the KhanaLagao POS Terminal into a modern full-page restaurant POS.
+
+Current requirement:
+POS should open in a separate full-page / full-screen route, not inside a small dashboard section or cramped layout. It should feel like a real modern restaurant POS with fast billing, item search, category browsing, cart, table/order modes, calculator, sound/tone feedback, keyboard shortcuts, printing, payments, and all important restaurant POS features.
+
+Important:
+- Do not break existing orders, menu, tables, KOT, kitchen, payments, reports, inventory, or QR order flow.
+- Do not use mock data.
+- POS must use real menu items, real prices, real add-ons, real inventory, real tables, and real customers.
+- Every button must work or show a clear permission/configuration message.
+- POS should be fast, touch-friendly, tablet-friendly, and desktop-friendly.
+- No infinite loading.
+- No raw ID fields.
+- All selections must be dropdown/search/real data.
+
+Route:
+Open POS in a dedicated full-page route:
+
+/pos
+/restaurant/pos
+or existing route, but full-screen.
+
+Add button:
+Dashboard → Open POS
+
+When clicked:
+Open POS in full-page mode.
+Optional:
+Open in new tab button: “Open Full POS”
+
+====================================================
+1. FULL PAGE POS LAYOUT
+====================================================
+
+Create a modern 3-column POS layout:
+
+Left Panel:
+- Order type selector
+- Table/customer selector
+- Categories
+- Quick filters
+- Recent orders / held bills
+
+Center Panel:
+- Menu item search
+- Category tabs
+- Item grid with images
+- Popular items
+- Recent items
+- Bestseller items
+
+Right Panel:
+- Cart / Current bill
+- Customer details
+- Discounts/taxes
+- Payment actions
+- KOT / Bill / Hold / Complete
+
+POS should support full-screen mode:
+- Hide main sidebar/header when POS is open
+- Show compact POS header only
+- Add “Exit POS” button
+- Add “Fullscreen” toggle
+
+====================================================
+2. POS HEADER
+====================================================
+
+Top POS header should show:
+- KhanaLagao logo
+- Outlet switcher
+- Counter name
+- Cashier name
+- Shift status
+- Current date/time
+- Online/offline status
+- Printer status
+- Open orders count
+- Today sales quick amount
+- Settings icon
+- Exit POS button
+
+Quick status badges:
+- Kitchen connected
+- Printer online/offline
+- Payment provider active
+- Cash drawer status if available
+
+====================================================
+3. ORDER TYPE MODES
+====================================================
+
+POS should support:
+
+- Dine-in
+- Takeaway
+- Delivery
+- QR Order
+- Reservation order
+- Tiffin order if module enabled
+- Catering/event order if module enabled
+
+Dine-in flow:
+- Select floor/table visually
+- Show table status
+- Add customer optional
+- Add items
+- Send KOT
+- Add more items later
+- Split/merge bill
+- Close table after payment
+
+Takeaway flow:
+- Customer optional/required based on settings
+- Add items
+- Payment
+- Token number
+- Print receipt
+
+Delivery flow:
+- Customer required
+- Address required
+- Delivery fee
+- Delivery status
+- Rider assignment if available
+
+====================================================
+4. MENU ITEM GRID
+====================================================
+
+Menu item cards should show:
+- Food image
+- Item name
+- Price
+- Veg/non-veg icon
+- Category
+- Availability status
+- Bestseller badge
+- Stock warning if low
+- Add button
+- Customize button if add-ons exist
+
+Item search:
+- Search by item name
+- Search by category
+- Search by alias
+- Search by SKU/code
+- Search by tags
+- Barcode scanner support if available
+
+Filters:
+- Veg
+- Non-veg
+- Bestseller
+- Available
+- Combos
+- Offers
+- Recently ordered
+- Popular today
+
+Item card behavior:
+- Tap item once → add to cart if no modifiers
+- Tap item with modifiers → open customization modal
+- Long press/right click → item details/availability
+
+====================================================
+5. ADD-ONS / MODIFIERS
+====================================================
+
+POS must support full customization:
+
+Examples:
+- Extra cheese
+- Extra sauce
+- No onion
+- No garlic
+- Less spicy
+- Extra spicy
+- Add fries
+- Add cold drink
+- Half/full
+- Size variants
+- Cooking preference
+
+Customization modal:
+- Item image
+- Item name
+- Base price
+- Variant selection
+- Required modifier groups
+- Optional add-ons
+- Quantity
+- Special note
+- Final price
+- Add to cart
+
+Validation:
+- Required modifiers must be selected.
+- Out-of-stock add-ons disabled.
+- Price updates live.
+
+====================================================
+6. CART / BILL PANEL
+====================================================
+
+Cart should be powerful and easy.
+
+Show:
+- Order type
+- Table/customer
+- Items
+- Quantity stepper
+- Modifier details
+- Item notes
+- Item price
+- Remove item
+- Edit customization
+- Subtotal
+- Discount
+- Tax/GST
+- Service charge
+- Delivery charge
+- Round off
+- Grand total
+
+Actions:
+- Send KOT
+- Print KOT
+- Hold Bill
+- Recall Bill
+- Save Order
+- Split Bill
+- Merge Bill
+- Apply Discount
+- Add Note
+- Cancel Order
+- Pay
+- Print Bill
+- Share Bill
+
+====================================================
+7. POS SOUND / TONE FEEDBACK
+====================================================
+
+Add sound/tone feedback.
+
+Sound events:
+- Item added to cart
+- Item removed
+- KOT sent
+- Payment success
+- Payment failed
+- New QR order received
+- Kitchen order ready
+- Error/warning
+- Hold bill
+- Recall bill
+
+Settings:
+POS Settings → Sounds
+
+Options:
+- Enable/disable POS sounds
+- Choose tone
+- Volume control
+- Mute for current session
+- Different sound for new order
+
+Important:
+Sound should not be annoying.
+Use short, soft modern tones.
+
+====================================================
+8. POS CALCULATOR
+====================================================
+
+Add built-in calculator in POS.
+
+Placement:
+- Cart panel top/right calculator icon
+- Payment screen calculator
+- Discount modal calculator
+
+Calculator features:
+- Basic arithmetic
+- Quick amount calculation
+- Cash received calculator
+- Change return calculator
+- Split payment calculator
+- Discount calculator
+- Tax inclusive/exclusive helper
+
+Examples:
+- Customer gives ₹1000, bill ₹736 → show change ₹264
+- Split ₹2400 between 4 people → ₹600 each
+- Add 10% discount → show final amount
+
+Do not make it a random external calculator; integrate into POS payment flow.
+
+====================================================
+9. PAYMENT SCREEN
+====================================================
+
+Modern payment modal should support:
+
+Payment methods:
+- Cash
+- UPI manual
+- Card manual
+- PhonePe EDC
+- PhonePe Dynamic QR
+- Razorpay
+- Cashfree
+- Stripe Terminal
+- Split payment
+- Wallet/store credit
+- Pay later/credit
+- Complimentary/void with permission
+
+Payment screen:
+- Amount due
+- Cash received
+- Change return
+- Split payment rows
+- Payment provider status
+- Start terminal payment
+- Generate QR/payment link
+- Payment success/failure state
+- Print/share invoice
+
+Split payment:
+- Cash + UPI
+- Card + cash
+- Wallet + cash
+- Multiple customers
+
+Do not mark paid unless payment is verified for provider payments.
+
+====================================================
+10. KOT / KITCHEN FLOW
+====================================================
+
+POS should support:
+- Send KOT
+- Print KOT
+- Reprint KOT
+- Item-wise KOT
+- Station-wise KOT
+- Kitchen display update
+- Bar printer if enabled
+- Parcel printer if enabled
+
+KOT should include:
+- Order number
+- Table
+- Item name
+- Quantity
+- Modifiers
+- Notes
+- Time
+- Waiter/cashier
+- Priority
+
+If printer fails:
+- Save print job
+- Show retry
+- Do not lose KOT
+
+====================================================
+11. TABLE FEATURES
+====================================================
+
+Add modern table support in POS:
+
+- Visual table map
+- Table status colors
+- Occupied table
+- Available table
+- Reserved table
+- Cleaning table
+- Billed table
+- Transfer table
+- Merge tables
+- Split table bill
+- Add items to existing table
+- Move order from takeaway to dine-in if allowed
+
+====================================================
+12. CUSTOMER FEATURES
+====================================================
+
+In POS customer panel:
+- Search customer by phone/name
+- Add new customer quickly
+- Customer order history
+- Loyalty points
+- Wallet balance
+- Credit due
+- Birthday/anniversary badge
+- Favorite items
+- Apply customer coupon
+- Send invoice by WhatsApp/SMS/email if enabled
+
+No raw customer ID.
+
+====================================================
+13. DISCOUNTS / COUPONS
+====================================================
+
+Support:
+- Item discount
+- Bill discount
+- Percentage discount
+- Flat discount
+- Coupon code
+- Loyalty redemption
+- Manager approval for high discount
+- Reason required for manual discount
+
+Rules:
+- Discount permission by role
+- Max discount limit
+- Audit logs
+- Discount report
+
+====================================================
+14. HOLD / RECALL BILL
+====================================================
+
+Add:
+- Hold current bill
+- Name held bill
+- Recall held bill
+- Hold multiple bills
+- Auto-save current cart
+- Show held bills list
+
+Useful for busy counter/QSR.
+
+====================================================
+15. QUICK ORDER / FAST BILLING
+====================================================
+
+Add fast billing mode:
+- Popular items grid
+- Numeric quantity keypad
+- Barcode scan support
+- One-tap add
+- Quick payment
+- Print and close
+- Token number
+
+Good for cafes, QSR, takeaway counters.
+
+====================================================
+16. KEYBOARD SHORTCUTS
+====================================================
+
+Add keyboard shortcuts for desktop POS:
+
+- F2: Search item
+- F4: Hold bill
+- F5: Recall bill
+- F6: Send KOT
+- F7: Print bill
+- F8: Payment
+- Esc: Close modal
+- Ctrl + Enter: Complete payment
+- + / -: Quantity change
+- Delete: Remove item
+
+Show shortcuts help modal:
+Press ? or keyboard icon.
+
+====================================================
+17. OFFLINE / SYNC SUPPORT
+====================================================
+
+If possible, add basic offline-safe behavior:
+
+- Show offline banner
+- Prevent provider payments while offline
+- Allow cart draft locally
+- Auto-save cart draft
+- Sync when online if supported
+- Do not lose current bill on refresh
+
+At minimum:
+- Current cart must not disappear accidentally.
+- Warn before leaving with unsaved cart.
+
+====================================================
+18. POS SETTINGS
+====================================================
+
+Restaurant Admin → Settings → POS Settings
+
+Settings:
+- Default order type
+- Default outlet/counter
+- Auto-send KOT after order
+- Auto-print bill after payment
+- Sound enabled
+- Default discount rules
+- Tax inclusive/exclusive
+- Round-off enabled
+- Quick billing mode
+- Require customer for delivery
+- Require table for dine-in
+- Allow negative stock sale
+- Show item images
+- Show bestseller items
+- Enable calculator
+- Enable keyboard shortcuts
+- Enable hold bill
+- Enable split bill
+
+====================================================
+19. ROLE PERMISSIONS
+====================================================
+
+Permissions:
+- Open POS
+- Create order
+- Edit order
+- Cancel order
+- Apply discount
+- Override price
+- Void item
+- Take payment
+- Refund payment
+- Reprint bill
+- Open cash drawer
+- Close shift
+- View today sales
+- Manage POS settings
+
+Cashier should not access admin settings unless allowed.
+
+====================================================
+20. UI DESIGN STYLE
+====================================================
+
+POS should look modern and premium.
+
+Design:
+- Full-screen POS layout
+- Large touch targets
+- Food images
+- Category chips
+- Clean cart panel
+- Orange accent
+- Dark/white mode if available
+- Smooth bottom sheets/modals
+- Clear status badges
+- Professional cashier-friendly UI
+- Fast and minimal clicks
+
+Avoid:
+- Long scrolling forms
+- Small buttons
+- Raw IDs
+- Crowded dashboard layout
+- Too many nested menus
+
+====================================================
+21. REPORTING IMPACT
+====================================================
+
+POS activity should update:
+- Orders
+- Kitchen/KOT
+- Tables
+- Inventory deduction
+- Customer history
+- Loyalty
+- Payments
+- Cashier closing
+- Sales report
+- Item sales report
+- Tax report
+- Staff/cashier report
+
+====================================================
+22. TESTING CHECKLIST
+====================================================
+
+Test these live:
+
+1. Open POS full page.
+2. Search item.
+3. Add item with sound.
+4. Add item with modifiers.
+5. Add multiple quantities.
+6. Add customer.
+7. Select dine-in table.
+8. Send KOT.
+9. Kitchen receives order.
+10. Print/reprint KOT.
+11. Hold and recall bill.
+12. Apply discount.
+13. Split bill.
+14. Cash payment with change calculator.
+15. UPI payment.
+16. PhonePe/terminal payment if configured.
+17. Print/share invoice.
+18. Inventory deducts.
+19. Reports update.
+20. Refresh page and cart safety works.
+21. Role permissions work.
+22. No infinite loading.
+23. No mock data.
+
+====================================================
+23. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- POS opens in a new full-page/full-screen route.
+- POS has modern 3-column layout.
+- Menu items are searchable.
+- Item images show.
+- Add-ons/modifiers work.
+- Cart is powerful and easy.
+- Sound/tone works when adding item/payment/new order.
+- Calculator works inside POS/payment.
+- Dine-in/takeaway/delivery modes work.
+- Table flow works.
+- KOT/kitchen works.
+- Payment flow works.
+- Hold/recall bill works.
+- Discounts/coupons work.
+- Keyboard shortcuts work.
+- Reports update.
+- No dead buttons.
+- No mock data.
+- No infinite loading.
+- Full live testing completed.
