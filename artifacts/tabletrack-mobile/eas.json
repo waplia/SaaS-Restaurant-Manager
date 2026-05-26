@@ -15,7 +15,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "hstttps://khanalagao.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://khanalagao.com"
       },
       "android": {
         "buildType": "apk"

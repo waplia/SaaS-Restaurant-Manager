@@ -21,7 +21,7 @@ function soundForType(type: PushType): { sound: string; channelId: string } {
   switch (type) {
     case "new_order":
       // Mirrors web socket("order:new") → playNewOrderChime()
-      return { sound: "new-order.wav", channelId: "new-order" };
+      return { sound: "new_order.wav", channelId: "new-order" };
     case "waiter_call":
     case "kitchen_delay":
     case "panic_alert":

@@ -169,7 +169,7 @@ export async function sendPush(opts: {
   body: string;
   data?: Record<string, unknown>;
   /**
-   * Custom sound filename bundled in the mobile app (e.g. "new-order.wav",
+   * Custom sound filename bundled in the mobile app (e.g. "new_order.wav",
    * "notification.wav"). iOS uses this filename verbatim from the app
    * bundle. Android uses the matching notification channel set up in
    * `_layout.tsx`; pass `channelId` for that. Falls back to the OS
