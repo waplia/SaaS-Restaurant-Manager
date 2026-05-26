@@ -507,6 +507,8 @@ function Router() {
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/printers" component={() => <RoleProtectedRoute component={SettingsPrintersPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsTerminalsPage} feature="card_terminal" />} allow={["owner", "manager", "cashier"]} />} />
+      {/* Common-typo redirect: singular → plural (the actual page route). */}
+      <Route path="/settings/terminal"><Redirect to="/settings/terminals" /></Route>
       <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/guest-verification" component={() => <RoleProtectedRoute component={SettingsGuestVerificationPage} allow={["owner"]} />} />
       <Route path="/settings/order-capacity" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsOrderCapacityPage} feature="ops_order_capacity" />} allow={["owner", "manager"]} />} />
