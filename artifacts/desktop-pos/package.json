@@ -83,6 +83,11 @@
     "dmg": {
       "title": "TableTrack POS ${version}"
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://example.com/updates"
+      }
+    ]
   }
 }
