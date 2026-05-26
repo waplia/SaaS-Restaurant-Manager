@@ -17,6 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.khanalagao.restaurant",
       "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Allow KhanaLagao to use the camera so you can scan table QR codes and capture menu / expense photos.",
         "NSMicrophoneUsageDescription": "Allow KhanaLagao to use the microphone so you can dictate orders with voice.",
@@ -29,6 +30,7 @@
     "android": {
       "package": "com.khanalagao.restaurant",
       "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#f97316"
