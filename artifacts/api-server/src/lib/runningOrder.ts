@@ -305,7 +305,10 @@ export async function createKotBatchForItems(args: {
         isPriority: isPriority ?? false,
         expectedPrepMinutes,
         expectedReadyAt,
-        status: createdFor === "cancelled" ? "cancelled" : "pending",
+        // Status must align with the KDS frontend filter (`new` | `preparing`
+        // | `ready`). Using "pending" here meant every QR dine-in KOT was
+        // invisible on the kitchen display even though the ticket row existed.
+        status: createdFor === "cancelled" ? "cancelled" : "new",
       })
       .returning();
     created.push({ ticketId: t.id, kitchenId: kid });
