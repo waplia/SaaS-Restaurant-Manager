@@ -58,7 +58,6 @@
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "build/icon.ico",
       "artifactName": "TableTrack POS Setup ${version}.${ext}"
     },
     "nsis": {
@@ -71,15 +70,13 @@
     },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["universal"] }],
-      "icon": "build/icon.icns",
       "category": "public.app-category.business",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "artifactName": "TableTrack POS ${version}.${ext}"
     },
     "dmg": {
-      "title": "TableTrack POS ${version}",
-      "icon": "build/icon.icns"
+      "title": "TableTrack POS ${version}"
     },
     "publish": [
       {
