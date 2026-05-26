@@ -1,12 +1,12 @@
-# KhanaLagao Restaurant — desktop build & operations guide
+# Khanalagao POS — desktop build & operations guide
 
-This package (`@workspace/desktop-pos`) wraps the existing KhanaLagao web POS
+This package (`@workspace/desktop-pos`) wraps the existing Khanalagao web POS
 in an Electron shell that produces real native installers:
 
 | Platform | Output                                  | Target  |
 |----------|-----------------------------------------|---------|
-| Windows  | `release/KhanaLagao Restaurant Setup x.y.z.exe`| NSIS x64 |
-| macOS    | `release/KhanaLagao Restaurant x.y.z.dmg`      | DMG universal (Intel + Apple Silicon) |
+| Windows  | `release/Khanalagao POS Setup x.y.z.exe`| NSIS x64 |
+| macOS    | `release/Khanalagao POS x.y.z.dmg`      | DMG universal (Intel + Apple Silicon) |
 
 ## Why an Electron shell?
 
@@ -98,8 +98,8 @@ produces the real installers on the matching hosts:
 
 - Triggers on pushes of tags matching `desktop-pos-v*` (and via manual
   `workflow_dispatch`).
-- `windows-latest` runner → `KhanaLagao Restaurant Setup x.y.z.exe` + `latest.yml`.
-- `macos-14` runner → `KhanaLagao Restaurant x.y.z.dmg` + `latest-mac.yml`.
+- `windows-latest` runner → `Khanalagao POS Setup x.y.z.exe` + `latest.yml`.
+- `macos-14` runner → `Khanalagao POS x.y.z.dmg` + `latest-mac.yml`.
 - Each installer is uploaded as a workflow artifact, and on tag pushes
   electron-builder publishes them straight to the matching GitHub Release
   (so the same Release also becomes the auto-update feed if you point
@@ -143,7 +143,7 @@ configured".
 
 ## First-run setup (cashier)
 
-1. Launch **KhanaLagao Restaurant**.
+1. Launch **Khanalagao POS**.
 2. **Settings → Server URL** — point at the tenant's API/web POS host.
 3. Enter the **outlet ID** and **counter ID** for this terminal.
 4. **Printers** — pick the OS printer for each role and hit **Test**.

@@ -72,7 +72,7 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
         <section style={section}>
           <h2 style={h2}>Connection</h2>
           <Field label="API base URL"
-            hint="Your KhanaLagao web URL — e.g. https://app.khanalagao.in">
+            hint="Your Khanalagao web URL — e.g. https://app.khanalagao.in">
             <input style={input} value={form.apiBaseUrl}
               onChange={(e) => update({ apiBaseUrl: e.target.value })} placeholder="https://app.khanalagao.in" />
           </Field>

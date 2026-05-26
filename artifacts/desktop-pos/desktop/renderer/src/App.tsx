@@ -100,7 +100,7 @@ export function App() {
   }, [settings, version]);
 
   if (!settings) {
-    return <div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading KhanaLagao Restaurant…</div>;
+    return <div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading Khanalagao POS…</div>;
   }
 
   return (
@@ -180,7 +180,7 @@ function TopBar(props: {
       display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
       background: "#111827", borderBottom: "1px solid #1f2937",
     }}>
-      <div style={{ fontWeight: 700, marginRight: 12 }}>KhanaLagao Restaurant</div>
+      <div style={{ fontWeight: 700, marginRight: 12 }}>Khanalagao POS</div>
       <button style={props.tab === "pos" ? tab_btn_active : tab_btn} onClick={() => props.setTab("pos")}>POS</button>
       <button style={props.tab === "settings" ? tab_btn_active : tab_btn} onClick={() => props.setTab("settings")}>Settings</button>
       <button style={props.tab === "printers" ? tab_btn_active : tab_btn} onClick={() => props.setTab("printers")}>Printers</button>
@@ -200,7 +200,7 @@ function EmptyState({ onConfigure }: { onConfigure: () => void }) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <h2 style={{ marginBottom: 8 }}>Welcome to KhanaLagao Restaurant</h2>
+        <h2 style={{ marginBottom: 8 }}>Welcome to Khanalagao POS</h2>
         <p style={{ color: "#94a3b8", marginBottom: 16 }}>
           Set the server URL, outlet and counter to start taking orders.
         </p>
@@ -219,7 +219,7 @@ function SettingsPanel({ settings, onSave }: { settings: DesktopSettings; onSave
       <h2 style={{ marginTop: 0 }}>Terminal settings</h2>
       <div style={row}>
         <div>
-          <label style={label}>Server URL (KhanaLagao API)</label>
+          <label style={label}>Server URL (Khanalagao API)</label>
           <input style={input} value={draft.apiBaseUrl} onChange={(e) => set("apiBaseUrl", e.target.value)} placeholder="https://app.khanalagao.in" />
         </div>
         <div>

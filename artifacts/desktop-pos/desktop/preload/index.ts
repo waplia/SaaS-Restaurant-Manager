@@ -57,4 +57,4 @@ const api = {
 
 contextBridge.exposeInMainWorld("khanalagao", api);
 
-export type KhanaLagaoDesktopApi = typeof api;
+export type KhanalagaoDesktopApi = typeof api;

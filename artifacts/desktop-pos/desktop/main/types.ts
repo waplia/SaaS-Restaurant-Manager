@@ -1,5 +1,5 @@
 export interface DesktopSettings {
-  /** Base URL of the KhanaLagao API + web POS (e.g. https://app.khanalagao.in). */
+  /** Base URL of the Khanalagao API + web POS (e.g. https://app.khanalagao.in). */
   apiBaseUrl: string;
   /** Path the desktop shell loads inside the embedded webview. */
   webPosPath: string;

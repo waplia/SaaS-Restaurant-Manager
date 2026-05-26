@@ -1,5 +1,5 @@
 /**
- * KhanaLagao Restaurant — Electron main process.
+ * Khanalagao POS — Electron main process.
  *
  * Responsibilities:
  *   • Create a single, fullscreen POS window per OS user (multi-window guard).
@@ -145,7 +145,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#0b0f17",
     show: false,
     autoHideMenuBar: true,
-    title: "KhanaLagao Restaurant",
+    title: "Khanalagao POS",
     webPreferences: {
       preload: path.join(app.getAppPath(), "dist/preload/index.js"),
       contextIsolation: true,

@@ -1,6 +1,6 @@
-# KhanaLagao Restaurant (Desktop)
+# Khanalagao POS (Desktop)
 
-Electron desktop terminal that re-uses the existing KhanaLagao web POS and
+Electron desktop terminal that re-uses the existing Khanalagao web POS and
 adds desktop-only capabilities (system printers, ESC/POS, cash-drawer kick,
 OS shortcuts, auto-launch, auto-update, local cart safety, offline banner).
 
@@ -14,8 +14,8 @@ OS shortcuts, auto-launch, auto-update, local cart safety, offline banner).
 
 ```bash
 pnpm run dev          # launches renderer + Electron in dev mode
-pnpm run package:win  # build KhanaLagao Restaurant Setup <version>.exe (NSIS)
-pnpm run package:mac  # build KhanaLagao Restaurant <version>.dmg (universal)
+pnpm run package:win  # build Khanalagao POS Setup <version>.exe (NSIS)
+pnpm run package:mac  # build Khanalagao POS <version>.dmg (universal)
 ```
 
 > **Note:** Replit's hosted environment is Linux, so installer artifacts
