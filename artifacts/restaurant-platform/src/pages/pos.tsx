@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { Link } from "wouter";
 import { PosShell, holdBill, type HeldBill } from "@/components/pos/PosShell";
 import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
@@ -1217,11 +1218,16 @@ function PaymentModal({
             <>
               <TotalsSummary />
               {terminals.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 px-4 py-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300 text-center">
+                <div className="flex flex-col items-center gap-3 px-4 py-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300 text-center">
                   <CreditCard className="w-7 h-7" />
                   <p className="font-semibold">Configuration required</p>
                   <p className="text-xs">No card terminals are paired yet. Pair one in Settings → Card Terminals to accept tap-to-pay.</p>
-                  <a href="/settings/terminals" className="text-xs font-semibold text-primary hover:underline mt-1">Open Terminal Settings →</a>
+                  <Link href="/settings/terminals">
+                    <Button size="sm" className="mt-1 gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5" />
+                      Open Terminal Settings
+                    </Button>
+                  </Link>
                 </div>
               ) : (
                 <div className="space-y-3">
