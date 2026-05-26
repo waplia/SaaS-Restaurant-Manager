@@ -1,0 +1,76 @@
+waplia@Harshs-MacBook-Pro SaaS-Restaurant-Manager % pnpm --filter @workspace/desktop-pos run build:mac
+$ pnpm run package:mac
+$ pnpm run build && electron-builder --mac --universal --publish never
+$ pnpm run clean && pnpm run build:main && pnpm run build:preload && pnpm run build:renderer
+$ rimraf dist release
+$ tsc -p desktop/main/tsconfig.json
+desktop/main/index.ts:74:43 - error TS2339: Property 'get' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+74   return { ...DEFAULT_SETTINGS, ...(store.get("settings") as Partial<DesktopSettings>) };
+                                             ~~~
+
+desktop/main/index.ts:79:9 - error TS2339: Property 'set' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+79   store.set("settings", next);
+           ~~~
+
+desktop/main/index.ts:174:24 - error TS2339: Property 'get' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+174     const cart = store.get("cart");
+                           ~~~
+
+desktop/main/index.ts:175:22 - error TS2339: Property 'isQuiting' does not exist on type 'App'.
+
+175     if (cart && !app.isQuiting) {
+                         ~~~~~~~~~
+
+desktop/main/index.ts:208:11 - error TS2339: Property 'set' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+208     store.set("cart", cart ?? null);
+              ~~~
+
+desktop/main/index.ts:211:82 - error TS2339: Property 'get' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+211   ipcMain.handle("cart:load", (): IpcResult<unknown> => ({ ok: true, data: store.get("cart") ?? null }));
+                                                                                     ~~~
+
+desktop/main/index.ts:212:63 - error TS2339: Property 'set' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+212   ipcMain.handle("cart:clear", (): IpcResult<true> => { store.set("cart", null); return { ok: true, data: true }; });
+                                                                  ~~~
+
+desktop/main/index.ts:214:94 - error TS2339: Property 'get' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+214   ipcMain.handle("failed-prints:list", (): IpcResult<unknown[]> => ({ ok: true, data: (store.get("failedPrints") as unknown[]) ?? [] }));
+                                                                                                 ~~~
+
+desktop/main/index.ts:216:26 - error TS2339: Property 'get' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+216     const list = ((store.get("failedPrints") as unknown[]) ?? []).slice(-49);
+                             ~~~
+
+desktop/main/index.ts:218:11 - error TS2339: Property 'set' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+218     store.set("failedPrints", list);
+              ~~~
+
+desktop/main/index.ts:221:72 - error TS2339: Property 'set' does not exist on type 'ElectronStore<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[]; }>'.
+
+221   ipcMain.handle("failed-prints:clear", (): IpcResult<true> => { store.set("failedPrints", []); return { ok: true, data: true }; });
+                                                                           ~~~
+
+desktop/main/index.ts:269:36 - error TS2307: Cannot find module '@thiagoelg/node-printer' or its corresponding type declarations.
+
+269       const printer = await import("@thiagoelg/node-printer").catch(() => null) as
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Found 12 errors in the same file, starting at: desktop/main/index.ts:74
+
+[ELIFECYCLE] Command failed with exit code 2.
+[ELIFECYCLE] Command failed with exit code 2.
+[ELIFECYCLE] Command failed with exit code 2.
+/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/artifacts/desktop-pos:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @workspace/desktop-pos@1.0.0 build:mac: `pnpm run package:mac`
+Exit status 2
+waplia@Harshs-MacBook-Pro SaaS-Restaurant-Manager % 

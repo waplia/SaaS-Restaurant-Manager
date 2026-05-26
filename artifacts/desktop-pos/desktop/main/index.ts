@@ -51,14 +51,26 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   updateFeedUrl: null,
 };
 
-const store = new Store<{ settings: DesktopSettings; cart: unknown; failedPrints: unknown[] }>({
+// electron-store v10 extends `conf`, whose generic-typed get/set methods don't
+// always surface cleanly to TypeScript in projects that use stricter settings.
+// Wrap as a plain typed store so call sites stay readable.
+interface PersistedShape {
+  settings: DesktopSettings;
+  cart: unknown;
+  failedPrints: unknown[];
+}
+interface PersistentStore {
+  get<K extends keyof PersistedShape>(key: K): PersistedShape[K];
+  set<K extends keyof PersistedShape>(key: K, value: PersistedShape[K]): void;
+}
+const store = new Store<PersistedShape>({
   name: "tabletrack-pos",
   defaults: {
     settings: DEFAULT_SETTINGS,
     cart: null,
     failedPrints: [],
   },
-});
+}) as unknown as PersistentStore;
 
 // ───── Single-instance guard (multi-window per counter is the responsibility
 // of the renderer; we enforce one OS window). Second-launch focuses the live
@@ -72,6 +84,14 @@ let mainWindow: BrowserWindow | null = null;
 
 function getSettings(): DesktopSettings {
   return { ...DEFAULT_SETTINGS, ...(store.get("settings") as Partial<DesktopSettings>) };
+}
+
+// `isQuiting` is our own flag (set on `before-quit`) used to bypass the
+// unsaved-bill warning during an explicit quit. Not part of Electron's typed
+// `App` surface, so we expose it via a narrow interface.
+interface QuitableApp { isQuiting?: boolean }
+function isAppQuiting(): boolean {
+  return Boolean((app as unknown as QuitableApp).isQuiting);
 }
 
 function saveSettings(patch: Partial<DesktopSettings>): DesktopSettings {
@@ -172,7 +192,7 @@ async function createWindow(): Promise<void> {
   // source of truth for "is there a bill in progress"; main relays via IPC.
   mainWindow.on("close", (event) => {
     const cart = store.get("cart");
-    if (cart && !app.isQuiting) {
+    if (cart && !isAppQuiting()) {
       const choice = dialog.showMessageBoxSync(mainWindow!, {
         type: "warning",
         buttons: ["Cancel", "Discard & quit"],
@@ -266,6 +286,9 @@ async function sendRawToPrinter(printerName: string, bytes: Buffer): Promise<voi
     try {
       // Lazy import — keep the dep optional so the app still launches if the
       // native module wasn't built for the user's electron version.
+      // Optional native dep — keep typed loose so build doesn't require it.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — peer dep, may not be installed in all environments
       const printer = await import("@thiagoelg/node-printer").catch(() => null) as
         | { default: { printDirect: (opts: { data: Buffer; printer: string; type: string; success: () => void; error: (e: Error) => void }) => void } }
         | null;
