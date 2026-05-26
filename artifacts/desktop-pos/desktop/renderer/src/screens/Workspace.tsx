@@ -6,6 +6,7 @@ import { useScanner } from "../hooks/useScanner";
 import { OrderWorkspace } from "./OrderWorkspace";
 import { ReportsScreen } from "./ReportsScreen";
 import { CloseShiftModal } from "./order/CloseShiftModal";
+import { SyncPanel } from "./order/SyncPanel";
 
 interface Props {
   user: User;
@@ -29,6 +30,9 @@ export function WorkspaceScreen(props: Props) {
   const [active, setActive] = useState<typeof NAV[number]["key"]>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCloseShift, setShowCloseShift] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [pendingOps, setPendingOps] = useState(0);
+  const [conflictCount, setConflictCount] = useState(0);
   const [scannerEnabled, setScannerEnabled] = useState(true);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ kind: "ok" | "warn" | "err"; text: string } | null>(null);
@@ -50,6 +54,19 @@ export function WorkspaceScreen(props: Props) {
     const sync = () => window.khanalagao.failedPrints.list().then((l) => setFailedCount(l.length)).catch(() => undefined);
     void sync();
     const off = window.khanalagao.failedPrints.onChanged(sync);
+    return () => { off(); };
+  }, []);
+
+  // Phase 5 — pending/conflict pills in the topbar mirror the sync engine.
+  useEffect(() => {
+    const sync = async () => {
+      try {
+        const s = await window.khanalagao.sync.status();
+        setPendingOps(s.pending); setConflictCount(s.conflicts);
+      } catch { /* ignore — until main is ready */ }
+    };
+    void sync();
+    const off = window.khanalagao.sync.onStatusChanged(sync);
     return () => { off(); };
   }, []);
 
@@ -150,6 +167,23 @@ export function WorkspaceScreen(props: Props) {
           >⚠ {failedCount} failed print{failedCount === 1 ? "" : "s"}</button>
         )}
 
+        {(pendingOps > 0 || conflictCount > 0 || !props.online) && (
+          <button
+            onClick={() => setShowSync(true)}
+            title="Sync status"
+            style={{
+              background: conflictCount > 0 ? "rgba(220,38,38,0.16)" : "rgba(234,179,8,0.16)",
+              border: `1px solid ${conflictCount > 0 ? "rgba(220,38,38,0.5)" : "rgba(234,179,8,0.5)"}`,
+              color: conflictCount > 0 ? "#fca5a5" : "#fde68a",
+              padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+            }}
+          >
+            {conflictCount > 0
+              ? `⚑ ${conflictCount} conflict${conflictCount === 1 ? "" : "s"}`
+              : `⟳ ${pendingOps} pending`}
+          </button>
+        )}
+
         {lastScan && (
           <span style={{
             background: colors.brandSoft, color: "#fff",
@@ -207,6 +241,7 @@ export function WorkspaceScreen(props: Props) {
             >
               <MenuItem onClick={() => { setMenuOpen(false); props.onSwitchOutlet(); }}>Switch outlet / counter</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); props.onOpenSettings(); }}>Connection settings</MenuItem>
+              <MenuItem onClick={() => { setMenuOpen(false); setShowSync(true); }}>Sync status…</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); setShowCloseShift(true); }}>Close shift…</MenuItem>
               <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
               <MenuItem danger onClick={() => { setMenuOpen(false); props.onSignOut(); }}>Sign out</MenuItem>
@@ -280,6 +315,8 @@ export function WorkspaceScreen(props: Props) {
           }}
         />
       )}
+
+      {showSync && <SyncPanel onClose={() => setShowSync(false)} />}
     </div>
   );
 }

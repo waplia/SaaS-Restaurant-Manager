@@ -33,17 +33,28 @@ export function CloseShiftModal({ onClose, onClosed }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Phase 5 — surface the pending-ops queue so the cashier knows whether
+  // the close will go through cleanly or needs a manager-PIN force-close.
+  const [pendingOps, setPendingOps] = useState(0);
+  const [online, setOnline] = useState<boolean>(true);
 
   useEffect(() => {
     let alive = true;
     Promise.all([
       window.khanalagao.shifts.current(),
       window.khanalagao.discounts.config().catch(() => ({} as DiscountsConfig)),
-    ]).then(([c, d]) => {
+      window.khanalagao.sync.status(),
+      window.khanalagao.connectivity.get(),
+    ]).then(([c, d, s, conn]) => {
       if (!alive) return;
       setCurrent(c); setCfg(d); setLoading(false);
+      setPendingOps(s.pending); setOnline(conn.online);
     }).catch((e) => { if (alive) { setErr((e as Error).message); setLoading(false); } });
-    return () => { alive = false; };
+    const offSync = window.khanalagao.sync.onStatusChanged(async () => {
+      try { setPendingOps((await window.khanalagao.sync.status()).pending); } catch { /* ignore */ }
+    });
+    const offConn = window.khanalagao.connectivity.onChange((s) => setOnline(s.online));
+    return () => { alive = false; offSync(); offConn(); };
   }, []);
 
   const counted = useMemo(
@@ -57,7 +68,11 @@ export function CloseShiftModal({ onClose, onClosed }: {
     : 0;
   const variance = counted - expected;
   const varianceMaterial = Math.abs(variance) >= 0.01;
-  const needsPin = cfg?.hasManagerPin === true && varianceMaterial;
+  // A manager PIN is needed for either a material variance OR a force-close
+  // while sync ops are still queued. The main process enforces both gates.
+  const needsPinForVariance = cfg?.hasManagerPin === true && varianceMaterial;
+  const needsPinForPending = pendingOps > 0;
+  const needsPin = needsPinForVariance || needsPinForPending;
 
   async function submit() {
     if (!current?.session) { setErr("No open shift to close."); return; }
@@ -65,7 +80,13 @@ export function CloseShiftModal({ onClose, onClosed }: {
       setErr("Variance reason is required."); return;
     }
     if (needsPin && !pin.trim()) {
-      setErr("Manager PIN is required for variance close."); return;
+      setErr(needsPinForPending && !needsPinForVariance
+        ? `Manager PIN is required to force-close with ${pendingOps} unsynced change${pendingOps === 1 ? "" : "s"}.`
+        : "Manager PIN is required for variance close.");
+      return;
+    }
+    if (!online) {
+      setErr("Cannot close while offline — reconnect to the server first."); return;
     }
     setBusy(true); setErr(null);
     try {
@@ -93,6 +114,15 @@ export function CloseShiftModal({ onClose, onClosed }: {
       )}
       {!loading && current?.session && (
         <>
+          {(pendingOps > 0 || !online) && (
+            <div style={{ marginBottom: 12 }}>
+              <Banner kind={!online ? "error" : "info"}>
+                {!online
+                  ? "Offline — reconnect to close this shift."
+                  : `${pendingOps} change${pendingOps === 1 ? "" : "s"} still syncing. Wait for sync to finish, or enter a manager PIN to force-close (queue is preserved).`}
+              </Banner>
+            </div>
+          )}
           <div style={{
             display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12,
             background: colors.bg, padding: 12, borderRadius: 8, marginBottom: 14,

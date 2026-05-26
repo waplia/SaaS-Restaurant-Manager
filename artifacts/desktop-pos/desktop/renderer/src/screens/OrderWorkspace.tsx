@@ -48,6 +48,14 @@ const ORDER_TYPES: Array<{ key: OrderType; label: string }> = [
 ];
 
 export function OrderWorkspace() {
+  // Phase 5 — mirror connectivity into local state so the pay modal can
+  // gate non-cash tenders without prop-drilling from the App shell.
+  const [online, setOnline] = useState<boolean>(true);
+  useEffect(() => {
+    window.khanalagao.connectivity.get().then((s) => setOnline(s.online)).catch(() => undefined);
+    const off = window.khanalagao.connectivity.onChange((s) => setOnline(s.online));
+    return () => { off(); };
+  }, []);
   // ─── Data state ────────────────────────────────────────────────────
   const [restaurant, setRestaurant] = useState<RestaurantInfo | null>(null);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
@@ -608,6 +616,7 @@ export function OrderWorkspace() {
       {showPay && placedOrder && (
         <PaymentModal
           order={placedOrder}
+          online={online}
           onClose={() => setShowPay(false)}
           onPaid={(next) => {
             // Main `orders:pay` already auto-prints the bill and kicks the

@@ -26,6 +26,7 @@
     "typecheck": "tsc -p desktop/main/tsconfig.json --noEmit && tsc -p desktop/preload/tsconfig.json --noEmit && tsc -p desktop/renderer/tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -42,6 +43,7 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9"
   },
@@ -59,10 +61,20 @@
       "assets/**/*"
     ],
     "extraResources": [
-      { "from": "assets/sounds", "to": "sounds" }
+      {
+        "from": "assets/sounds",
+        "to": "sounds"
+      }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico",
       "artifactName": "Khanalagao POS Setup ${version}.${ext}"
     },
@@ -75,7 +87,14 @@
       "shortcutName": "Khanalagao POS"
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.business",
       "hardenedRuntime": true,

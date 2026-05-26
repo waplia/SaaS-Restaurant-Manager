@@ -20,12 +20,16 @@ import { fmtINR } from "./types";
 
 type Lane = "cash" | "upi" | "card";
 
-export function PaymentModal({ order, onClose, onPaid }: {
+export function PaymentModal({ order, onClose, onPaid, online }: {
   order: OrderDetailView;
   onClose: () => void;
   onPaid: (next: OrderDetailView) => void;
+  /** Drives the offline tender gate — UPI / card require a live connection. */
+  online: boolean;
 }) {
   const [lane, setLane] = useState<Lane>("cash");
+  // Snap back to cash if the connection drops while a non-cash lane is open.
+  useEffect(() => { if (!online && lane !== "cash") setLane("cash"); }, [online, lane]);
   const [tip, setTip] = useState("");
   const [cashTendered, setCashTendered] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,20 +157,32 @@ export function PaymentModal({ order, onClose, onPaid }: {
 
       {/* Tender tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {(["cash", "upi", "card"] as Lane[]).map((k) => (
-          <button
-            key={k}
-            onClick={() => { setLane(k); setErr(null); }}
-            disabled={busy}
-            style={{
-              flex: 1, padding: "10px 12px", borderRadius: 6,
-              background: lane === k ? colors.brand : colors.panelAlt,
-              color: lane === k ? "#fff" : colors.textPrimary,
-              border: 0, fontWeight: 600, fontSize: 13, cursor: "pointer",
-            }}
-          >{k === "cash" ? "Cash" : k === "upi" ? "UPI" : "Card (terminal)"}</button>
-        ))}
+        {(["cash", "upi", "card"] as Lane[]).map((k) => {
+          const disabledByOffline = !online && k !== "cash";
+          return (
+            <button
+              key={k}
+              onClick={() => { if (disabledByOffline) return; setLane(k); setErr(null); }}
+              disabled={busy || disabledByOffline}
+              title={disabledByOffline ? "Requires connection — offline only supports cash" : undefined}
+              style={{
+                flex: 1, padding: "10px 12px", borderRadius: 6,
+                background: lane === k ? colors.brand : colors.panelAlt,
+                color: lane === k ? "#fff" : colors.textPrimary,
+                border: 0, fontWeight: 600, fontSize: 13,
+                cursor: disabledByOffline ? "not-allowed" : "pointer",
+                opacity: disabledByOffline ? 0.5 : 1,
+              }}
+            >{k === "cash" ? "Cash" : k === "upi" ? "UPI" : "Card (terminal)"}</button>
+          );
+        })}
       </div>
+
+      {!online && (
+        <div style={{ marginBottom: 12 }}>
+          <Banner kind="info">Offline mode — only cash payments can be recorded. They will sync when the connection returns.</Banner>
+        </div>
+      )}
 
       {err && <div style={{ marginBottom: 12 }}><Banner kind="error">{err}</Banner></div>}
 

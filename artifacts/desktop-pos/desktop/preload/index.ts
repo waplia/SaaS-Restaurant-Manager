@@ -12,6 +12,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   IpcChannel, IpcContract, IpcEnvelope, UpdateEvent, PrinterRole,
+  ConnectivityState,
 } from "../shared/ipc-contract";
 
 async function invoke<C extends IpcChannel>(
@@ -179,6 +180,34 @@ const api = {
       ipcRenderer.on("updates:event", listener);
       return () => ipcRenderer.removeListener("updates:event", listener);
     },
+  },
+
+  // ─── Phase 5 — connectivity / sync / local cache ───────────────────
+  connectivity: {
+    get: () => invoke("connectivity:get"),
+    probe: () => invoke("connectivity:probe"),
+    onChange: (cb: (s: ConnectivityState) => void) => {
+      const listener = (_: unknown, state: ConnectivityState) => cb(state);
+      ipcRenderer.on("connectivity:state", listener);
+      return () => ipcRenderer.removeListener("connectivity:state", listener);
+    },
+  },
+  sync: {
+    status: () => invoke("sync:status"),
+    runNow: () => invoke("sync:run-now"),
+    listConflicts: () => invoke("sync:conflicts:list"),
+    resolveConflict: (req: IpcContract["sync:conflicts:resolve"]["req"]) =>
+      invoke("sync:conflicts:resolve", req),
+    onStatusChanged: (cb: () => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("sync:status-changed", listener);
+      return () => ipcRenderer.removeListener("sync:status-changed", listener);
+    },
+  },
+  local: {
+    info: () => invoke("local:info"),
+    reset: () => invoke("local:reset", { confirm: true }),
+    hydrate: () => invoke("local:hydrate"),
   },
 } as const;
 

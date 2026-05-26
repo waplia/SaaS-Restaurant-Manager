@@ -20,10 +20,18 @@ import type {
   IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot,
   OrderKotPayload, OrderBillPayload, MenuCategory, MenuItem,
   OrderDetailView, OrderHeader, ZReportSummary, ShiftKpis,
+  SyncStatusView, ConflictEntry, LocalStoreInfo,
 } from "../../shared/ipc-contract";
 import { ApiClient, ApiError, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
 import type { PrinterEngine } from "../printers";
+import * as Offline from "./offline";
+import type { Connectivity } from "../sync/connectivity";
+import type { SyncEngine } from "../sync/engine";
+import { hydrateAll } from "../sync/hydrate";
+import * as P from "../db/pending";
+import { dbStats, resetDb, getDb } from "../db";
+import { countAll, kvGet, kvSet } from "../db/queries";
 
 /** Z-report cache contract — implemented in `main/index.ts` against
  *  electron-store with a 30-day retention sweep on every write. */
@@ -51,8 +59,32 @@ export function registerApiIpc(opts: {
   getWindow: () => BrowserWindow | null;
   printerEngine: PrinterEngine;
   zReportCache: ZReportCacheApi;
+  connectivity: Connectivity;
+  syncEngine: SyncEngine;
 }): void {
-  const { client, settings, getWindow, printerEngine, zReportCache } = opts;
+  const { client, settings, getWindow, printerEngine, zReportCache, connectivity, syncEngine } = opts;
+
+  const offlineCtx: Offline.OfflineContext = {
+    client,
+    isOnline: () => connectivity.current().online,
+    restaurantId: () => requireRestaurantId(),
+    branchId: () => currentBranchId(),
+    triggerSync: () => { void syncEngine.drain(); },
+    awaitDrain: (timeoutMs?: number) => syncEngine.awaitDrain(timeoutMs),
+  };
+
+  // Broadcast connectivity + sync changes to the renderer.
+  connectivity.on("change", (state) => {
+    getWindow()?.webContents.send("connectivity:state", state);
+    // When we come back online, drain immediately.
+    if (state.online) void syncEngine.drain();
+  });
+  connectivity.on("probe", (state) => {
+    getWindow()?.webContents.send("connectivity:state", state);
+  });
+  syncEngine.on("status", () => {
+    getWindow()?.webContents.send("sync:status-changed");
+  });
 
   client.onAuthLost(() => {
     getWindow()?.webContents.send("auth:invalidated");
@@ -180,16 +212,39 @@ export function registerApiIpc(opts: {
   // ─── Restaurants / branches / terminals ──────────────────────────────
   handle("restaurants:list", () => client.listRestaurants());
   handle("branches:list", ({ restaurantId }) => client.listBranches(restaurantId));
-  handle("terminals:list", ({ restaurantId }) => client.listTerminals(restaurantId));
+  handle("terminals:list", async ({ restaurantId }) => {
+    // Local-first; backgrounded refresh when online.
+    const cached = kvGet(`terminals:${restaurantId}`);
+    if (cached) {
+      if (connectivity.current().online) {
+        void client.listTerminals(restaurantId)
+          .then((t) => kvSet(`terminals:${restaurantId}`, JSON.stringify(t)))
+          .catch(() => undefined);
+      }
+      try { return JSON.parse(cached); } catch { /* fallthrough */ }
+    }
+    if (!connectivity.current().online) return [];
+    const fresh = await client.listTerminals(restaurantId);
+    kvSet(`terminals:${restaurantId}`, JSON.stringify(fresh));
+    return fresh;
+  });
 
   // ─── Selection ───────────────────────────────────────────────────────
   handle("selection:set-restaurant", ({ restaurantId }) => {
     invalidateMenu();
-    return sessionStore.patchSelection({
+    const result = sessionStore.patchSelection({
       restaurantId,
       branchId: null, branchName: null,
       counterId: null, counterName: null,
     });
+    // Hydrate-on-outlet-pick (and effectively post-login). Deterministic
+    // trigger independent of the connectivity polling edge, so the cache is
+    // warm before the cashier reaches Open Shift.
+    if (restaurantId != null && connectivity.current().online) {
+      void hydrateAll(client, restaurantId).catch((err) =>
+        console.warn("[hydrate:on-select] failed:", (err as Error).message));
+    }
+    return result;
   });
   handle("selection:set-branch", ({ branchId, branchName }) => {
     return sessionStore.patchSelection({
@@ -215,6 +270,16 @@ export function registerApiIpc(opts: {
   });
 
   handle("shifts:close", async (req) => {
+    // Phase 5 — block a normal close while sync ops are still pending so the
+    // shift Z-report can't lie about totals. A manager PIN forces the close
+    // and leaves the queue in place (it drains when the next shift opens).
+    const pending = P.pendingCount();
+    if (pending > 0 && !req.managerPin) {
+      throw new Error(`${pending} change${pending === 1 ? "" : "s"} still syncing. Wait for sync to finish, or enter a manager PIN to force-close.`);
+    }
+    if (!connectivity.current().online) {
+      throw new Error("Cannot close a shift while offline — totals must be reconciled with the server.");
+    }
     const restaurantId = requireRestaurantId();
     const closed = await client.closeShift(restaurantId, req.sessionId, {
       denominations: req.denominations,
@@ -294,64 +359,46 @@ export function registerApiIpc(opts: {
   });
 
   // ─── Menu ────────────────────────────────────────────────────────────
-  handle("menu:restaurant", async () => client.getRestaurantInfo(requireRestaurantId()));
+  handle("menu:restaurant", () => Offline.getRestaurantInfo(offlineCtx));
 
-  handle("menu:list", async (req) => {
-    const force = !!(req && typeof req === "object" && "force" in req && (req as { force?: boolean }).force);
-    const bundle = await loadMenuBundle(requireRestaurantId(), force);
-    return { categories: bundle.categories, items: bundle.items };
-  });
+  handle("menu:list", async () => Offline.listMenuBundle(offlineCtx));
 
-  handle("menu:categories", async () => {
-    const bundle = await loadMenuBundle(requireRestaurantId());
-    return bundle.categories;
-  });
+  handle("menu:categories", async () => (await Offline.listMenuBundle(offlineCtx)).categories);
 
   handle("menu:items", async ({ categoryId, search }) => {
-    // When no filters, serve the cached bundle's items so the grid is instant.
-    if (categoryId == null && !search) {
-      const bundle = await loadMenuBundle(requireRestaurantId());
-      return bundle.items;
-    }
-    return client.listMenuItems(requireRestaurantId(), { categoryId, search });
+    const bundle = await Offline.listMenuBundle(offlineCtx);
+    if (categoryId == null && !search) return bundle.items;
+    const q = (search ?? "").trim().toLowerCase();
+    return bundle.items.filter((it) =>
+      (categoryId == null || it.categoryId === categoryId) &&
+      (!q || it.name.toLowerCase().includes(q))
+    );
   });
 
-  handle("menu:modifiers", async ({ menuItemId }) => {
-    return client.listItemModifierGroups(Number(menuItemId));
-  });
+  handle("menu:modifiers", async ({ menuItemId }) =>
+    Offline.listModifierGroups(offlineCtx, Number(menuItemId)));
 
   // ─── Tables ──────────────────────────────────────────────────────────
-  handle("tables:list", async () => client.listTables(requireRestaurantId()));
+  handle("tables:list", () => Offline.listTables(offlineCtx));
   handle("tables:active-order", async ({ tableId }) => {
-    const id = await client.getTableActiveOrderId(requireRestaurantId(), Number(tableId));
+    const id = await Offline.getActiveTableOrderId(offlineCtx, Number(tableId));
     return { orderId: id };
   });
 
   // ─── Customers ───────────────────────────────────────────────────────
-  handle("customers:search", async ({ search, limit }) => {
-    return client.searchCustomers(requireRestaurantId(), String(search ?? "").trim(), limit ?? 20);
-  });
-  handle("customers:create", async (body) => {
-    return client.createCustomer(requireRestaurantId(), body);
-  });
+  handle("customers:search", ({ search, limit }) =>
+    Offline.searchCustomers(offlineCtx, String(search ?? "").trim(), limit ?? 20));
+  handle("customers:create", (body) => Offline.createCustomer(offlineCtx, body));
   handle("customers:lookup", async (req) => {
-    const restaurantId = requireRestaurantId();
-    const phone = typeof req === "object" && req && "phone" in req ? (req as any).phone : null;
-    const query = typeof req === "object" && req && "query" in req ? (req as any).query : null;
+    const phone = typeof req === "object" && req && "phone" in req ? (req as { phone?: string }).phone : null;
+    const query = typeof req === "object" && req && "query" in req ? (req as { query?: string }).query : null;
     const term = (phone ?? query ?? "").trim();
-
     if (!term) {
       if (phone) throw new Error("phone required");
       return [];
     }
-
-    // If it's the Phase 3 lookup-by-phone (returning single object)
-    if (phone && !query) {
-      return client.lookupCustomerByPhone(restaurantId, term) as Promise<IpcContract["customers:lookup"]["res"]>;
-    }
-
-    // If it's the Phase 2 search-style lookup
-    return client.searchCustomers(restaurantId, term, 10);
+    if (phone && !query) return Offline.lookupCustomerByPhone(offlineCtx, term);
+    return Offline.searchCustomers(offlineCtx, term, 10);
   });
 
   handle("menu:lookup-by-barcode", async (req) => {
@@ -362,39 +409,31 @@ export function registerApiIpc(opts: {
   });
 
   // ─── Orders ──────────────────────────────────────────────────────────
-  handle("orders:list", async ({ status, limit } = {}) => {
-    return client.listOrders(requireRestaurantId(), {
-      status, limit: limit ?? 30, branchId: currentBranchId(),
-    });
-  });
+  handle("orders:list", ({ status, limit } = { status: undefined, limit: undefined }) =>
+    Offline.listOrders(offlineCtx, status, limit ?? 30));
 
-  handle("orders:detail", async ({ id }) => client.getOrder(requireRestaurantId(), Number(id)));
+  handle("orders:detail", ({ id }) => Offline.getOrderDetail(offlineCtx, Number(id)));
 
   handle("orders:create", async (req) => {
     const restaurantId = requireRestaurantId();
-    const body = { branchId: currentBranchId(), ...req };
-    const order = await client.createOrder(restaurantId, body);
-
-    // Phase 2: invalidate menu cache
+    const order = await Offline.createOrder(offlineCtx, req);
     invalidateMenu(restaurantId);
-
-    // Phase 3: auto-print KOTs
+    // KOT auto-print runs against the local order payload (server-confirmed
+    // or local-only). The kitchen needs the ticket the moment the cashier
+    // confirms the cart — the printer is hardware-local, so this works
+    // regardless of network state. The KOT carries the local order number
+    // (e.g. "L-000123") which is harmless on a paper slip.
     try {
       const kotPayload = buildKotPayload(order);
-      if (kotPayload.items.length > 0) {
-        await printerEngine.dispatchKots(kotPayload);
-      }
+      if (kotPayload.items.length > 0) await printerEngine.dispatchKots(kotPayload);
     } catch (err) {
       console.warn("[orders:create] KOT auto-print failed:", (err as Error).message);
     }
-
     return order;
   });
 
-  handle("orders:add-items", async ({ orderId, items, idempotencyKey }) => {
-    const detail = await client.addOrderItems(
-      requireRestaurantId(), Number(orderId), items ?? [], idempotencyKey,
-    );
+  handle("orders:add-items", async (args) => {
+    const detail = await Offline.addOrderItems(offlineCtx, args);
     invalidateMenu(requireRestaurantId());
     return detail;
   });
@@ -406,10 +445,10 @@ export function registerApiIpc(opts: {
   // ─── Bill print by order id (main fetches the data) ──────────────────
   handle("printers:print-bill-for-order", async (req) => {
     const restaurantId = requireRestaurantId();
-    const [order, outlet] = await Promise.all([
-      client.getOrder(restaurantId, req.orderId),
-      client.getRestaurant(restaurantId).catch(() => null),
-    ]);
+    // Local-first: serve order + outlet from cache so bill reprints work
+    // during an outage. Fall back to the API only when the cache misses.
+    const order = await Offline.getOrderDetail(offlineCtx, Number(req.orderId));
+    const outlet = await client.getRestaurant(restaurantId).catch(() => null);
     const payload = buildBillPayload(order, outlet, {
       openDrawer: !!req.openDrawer,
       copies: req.copies,
@@ -420,7 +459,25 @@ export function registerApiIpc(opts: {
   });
 
   // ─── Discounts ───────────────────────────────────────────────────────
-  handle("discounts:config", async () => client.loadDiscountsConfig(requireRestaurantId()));
+  handle("discounts:config", async () => {
+    const rid = requireRestaurantId();
+    const cached = kvGet(`discounts:${rid}`);
+    if (cached) {
+      if (connectivity.current().online) {
+        void client.loadDiscountsConfig(rid)
+          .then((d) => kvSet(`discounts:${rid}`, JSON.stringify(d)))
+          .catch(() => undefined);
+      }
+      try { return JSON.parse(cached); } catch { /* fallthrough */ }
+    }
+    if (!connectivity.current().online) {
+      // Empty discounts config so the UI still renders.
+      return { rules: [], coupons: [] } as unknown;
+    }
+    const fresh = await client.loadDiscountsConfig(rid);
+    kvSet(`discounts:${rid}`, JSON.stringify(fresh));
+    return fresh;
+  });
   handle("discounts:apply", async (req) => client.applyDiscount(requireRestaurantId(), req));
   handle("discounts:remove", async ({ orderId, discountId, idempotencyKey }) => {
     return client.removeDiscount(
@@ -457,19 +514,24 @@ export function registerApiIpc(opts: {
 
   handle("orders:pay", async (req) => {
     const restaurantId = requireRestaurantId();
-    const detail = await client.payOrder(restaurantId, Number(req.orderId), {
+    const detail = await Offline.payOrder(offlineCtx, {
+      orderId: Number(req.orderId),
       paymentMethod: req.paymentMethod,
       tipAmount: req.tipAmount,
       stripePaymentIntentId: req.stripePaymentIntentId,
       razorpayPaymentId: req.razorpayPaymentId,
       razorpayOrderId: req.razorpayOrderId,
       razorpaySignature: req.razorpaySignature,
-    }, req.idempotencyKey);
+      idempotencyKey: req.idempotencyKey,
+    });
 
     // Auto-print bill + drawer kick on success. The drawer only kicks for
-    // cash tenders — UPI/card don't need the till to open.
+    // cash tenders — UPI/card don't need the till to open. Print works
+    // offline because the formatter doesn't need the network.
     try {
-      const outlet = await client.getRestaurant(restaurantId).catch(() => null);
+      const outlet = connectivity.current().online
+        ? await client.getRestaurant(restaurantId).catch(() => null)
+        : null;
       const payload = buildBillPayload(detail, outlet, {
         openDrawer: req.paymentMethod === "cash",
         copies: 1,
@@ -524,6 +586,57 @@ export function registerApiIpc(opts: {
   handle("printers:print-z-report", async (report) => {
     await dispatchZReportPrint(report, printerEngine);
     return true as const;
+  });
+
+  // ─── Phase 5 — connectivity / sync / local cache ─────────────────────
+  function buildSyncStatusView(): SyncStatusView {
+    const s = syncEngine.status();
+    return Offline.buildSyncStatus(
+      connectivity.current().online,
+      s.draining,
+      s.lastRunAt,
+      s.lastError,
+    );
+  }
+
+  handle("connectivity:get", () => connectivity.current());
+  handle("connectivity:probe", () => connectivity.probe());
+  handle("sync:status", () => buildSyncStatusView());
+  handle("sync:run-now", async () => {
+    await connectivity.probe();
+    await syncEngine.drain();
+    return buildSyncStatusView();
+  });
+  handle("sync:conflicts:list", (): ConflictEntry[] => P.listConflicts());
+  handle("sync:conflicts:resolve", ({ id, action }) => {
+    P.resolveConflict(Number(id), action);
+    if (action === "retry") void syncEngine.drain();
+    return P.listConflicts();
+  });
+  handle("local:info", (): LocalStoreInfo => {
+    const stats = dbStats();
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId ?? null;
+    const lastAt = rid ? Number(kvGet(`hydrate:lastAt:${rid}`) ?? "0") || null : null;
+    return {
+      path: stats.path,
+      sizeBytes: stats.sizeBytes,
+      counts: countAll(),
+      hydrateLastAt: lastAt,
+    };
+  });
+  handle("local:reset", ({ confirm }) => {
+    if (!confirm) throw new Error("local:reset requires { confirm: true }");
+    resetDb();
+    // Force a fresh schema build so subsequent calls work.
+    getDb();
+    const stats = dbStats();
+    return { path: stats.path, sizeBytes: stats.sizeBytes, counts: countAll(), hydrateLastAt: null };
+  });
+  handle("local:hydrate", async () => {
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId;
+    if (!rid) throw new Error("Pick a restaurant first.");
+    await hydrateAll(client, rid);
+    return { ok: true as const };
   });
 }
 

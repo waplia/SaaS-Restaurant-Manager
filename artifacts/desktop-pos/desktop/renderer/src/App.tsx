@@ -31,7 +31,7 @@ export function App() {
   const [version, setVersion] = useState("");
   const [platform, setPlatform] = useState("");
   const [override, setOverride] = useState<Override>(null);
-  const [online, setOnline] = useState<boolean>(navigator.onLine);
+  const [online, setOnline] = useState<boolean>(true);
 
   const refresh = useCallback(async () => {
     const snap = await window.khanalagao.session.snapshot();
@@ -56,15 +56,37 @@ export function App() {
       void refresh();
     });
 
-    const goOn = () => setOnline(true);
-    const goOff = () => setOnline(false);
-    window.addEventListener("online", goOn);
-    window.addEventListener("offline", goOff);
+    // Phase 5 — drive the online pill from the main-process /healthz probe
+    // instead of `navigator.onLine`, which only reflects raw link state.
+    let lastOnline = true;
+    let hasShownOfflineToast = false;
+    window.khanalagao.connectivity.get()
+      .then((s) => { lastOnline = s.online; setOnline(s.online); })
+      .catch(() => undefined);
+    const offConn = window.khanalagao.connectivity.onChange((s) => {
+      setOnline(s.online);
+      // One-time toast when we *first* drop offline. Reset after a recovery
+      // so a second outage in the same session still notifies the cashier.
+      if (!s.online && lastOnline && !hasShownOfflineToast) {
+        hasShownOfflineToast = true;
+        try {
+          // Lightweight DOM toast — Workspace will surface a proper banner
+          // via the connectivity pill, but the toast gives an immediate cue.
+          const div = document.createElement("div");
+          div.textContent = "Offline mode — orders will sync when reconnected";
+          div.setAttribute("role", "status");
+          div.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;background:#1f2937;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.2);";
+          document.body.appendChild(div);
+          setTimeout(() => div.remove(), 4500);
+        } catch { /* renderer-only */ }
+      }
+      if (s.online && !lastOnline) hasShownOfflineToast = false;
+      lastOnline = s.online;
+    });
 
     return () => {
       offAuth();
-      window.removeEventListener("online", goOn);
-      window.removeEventListener("offline", goOff);
+      offConn();
     };
   }, [refresh]);
 

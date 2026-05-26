@@ -397,6 +397,8 @@ function DeviceTab({ online }: { online: boolean }) {
         </div>
       </Card>
 
+      <LocalCacheCard online={online} />
+
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
@@ -432,6 +434,78 @@ function DeviceTab({ online }: { online: boolean }) {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * Local cache card — Phase 5.
+ *
+ * Shows the on-disk SQLite footprint and lets the cashier re-pull the menu
+ * + tables snapshot from the server. "Reset local data" wipes the cache
+ * (after a confirm) so a fresh hydrate can start clean — useful when the
+ * outlet is being switched or the file is suspected of corruption.
+ */
+function LocalCacheCard({ online }: { online: boolean }) {
+  const [info, setInfo] = useState<import("../../../shared/ipc-contract").LocalStoreInfo | null>(null);
+  const [busy, setBusy] = useState<null | "hydrate" | "reset">(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try { setInfo(await window.khanalagao.local.info()); }
+    catch (e) { setErr((e as Error).message); }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  async function hydrate() {
+    setBusy("hydrate"); setErr(null);
+    try { await window.khanalagao.local.hydrate(); await refresh(); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setBusy(null); }
+  }
+  async function reset() {
+    if (!window.confirm("Reset the local cache? Pending sync operations and cached menu/tables will be wiped. The server data is untouched.")) return;
+    setBusy("reset"); setErr(null);
+    try { await window.khanalagao.local.reset(); await refresh(); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setBusy(null); }
+  }
+
+  return (
+    <Card>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>Local data</div>
+      <div style={{ color: colors.textDim, fontSize: 12, marginBottom: 10 }}>
+        The terminal keeps a SQLite cache of the menu, tables and pending
+        sync operations so it can keep selling during a network outage.
+      </div>
+      {err && <div style={{ marginBottom: 10 }}><Banner kind="error">{err}</Banner></div>}
+      {!info ? <Spinner size={18} /> : (
+        <>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12,
+            fontSize: 12, color: colors.textDim,
+          }}>
+            <div>Size: <b style={{ color: colors.textPrimary }}>{(info.sizeBytes / 1024).toFixed(1)} KB</b></div>
+            <div>Items: <b style={{ color: colors.textPrimary }}>{info.counts.menu_items ?? 0}</b></div>
+            <div>Tables: <b style={{ color: colors.textPrimary }}>{info.counts.tables ?? 0}</b></div>
+            <div>Customers: <b style={{ color: colors.textPrimary }}>{info.counts.customers ?? 0}</b></div>
+            <div>Orders cached: <b style={{ color: colors.textPrimary }}>{info.counts.orders ?? 0}</b></div>
+            <div>Pending ops: <b style={{ color: colors.textPrimary }}>{info.counts.pending_operations ?? 0}</b></div>
+          </div>
+          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 10, fontFamily: "monospace" }}>
+            {info.path}
+          </div>
+        </>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <Button variant="ghost" disabled={!online || busy != null} onClick={() => void hydrate()}>
+          {busy === "hydrate" ? "Hydrating…" : "Re-hydrate menu + tables"}
+        </Button>
+        <Button variant="ghost" disabled={busy != null} onClick={() => void reset()}>
+          {busy === "reset" ? "Resetting…" : "Reset local data"}
+        </Button>
+      </div>
+    </Card>
   );
 }
 

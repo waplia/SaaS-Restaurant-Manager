@@ -712,7 +712,61 @@ export type IpcContract = {
   "scanner:clear-scans": { req: void; res: true };
 
   "updates:check": { req: void; res: { status: string; version?: string } };
+
+  // ─── Phase 5: connectivity / sync / local cache ─────────────────────────
+  "connectivity:get": { req: void; res: ConnectivityState };
+  "connectivity:probe": { req: void; res: ConnectivityState };
+  "sync:status": { req: void; res: SyncStatusView };
+  "sync:run-now": { req: void; res: SyncStatusView };
+  "sync:conflicts:list": { req: void; res: ConflictEntry[] };
+  "sync:conflicts:resolve": { req: { id: number; action: "discard" | "retry" | "skip" }; res: ConflictEntry[] };
+  "local:info": { req: void; res: LocalStoreInfo };
+  "local:reset": { req: { confirm: true }; res: LocalStoreInfo };
+  "local:hydrate": { req: void; res: { ok: true } };
 };
+
+// ─── Phase 5 — connectivity / sync ─────────────────────────────────────────
+export interface ConnectivityState {
+  online: boolean;
+  lastCheckedAt: number | null;
+  latencyMs: number | null;
+  error: string | null;
+}
+
+export interface SyncStatusView {
+  online: boolean;
+  draining: boolean;
+  pending: number;
+  conflicts: number;
+  lastRunAt: number | null;
+  lastError: string | null;
+  /** Oldest-first queue summary (capped — UI only needs the head). */
+  queue: Array<{
+    id: number;
+    kind: string;
+    status: string;
+    attempts: number;
+    createdAt: number;
+    summary: string;
+    lastError: string | null;
+  }>;
+}
+
+export interface ConflictEntry {
+  id: number;
+  opId: number;
+  kind: string;
+  summary: string;
+  details: string | null;
+  capturedAt: number;
+}
+
+export interface LocalStoreInfo {
+  path: string;
+  sizeBytes: number;
+  counts: Record<string, number>;
+  hydrateLastAt: number | null;
+}
 
 export interface ReceiptPrintRequest {
   printerName?: string;
@@ -733,7 +787,12 @@ export type IpcRes<C extends IpcChannel> = IpcContract[C]["res"];
 export type IpcEnvelope<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // Channels for events main → renderer (no request shape).
-export type IpcEventChannel = "updates:event" | "auth:invalidated" | "printers:failed-changed";
+export type IpcEventChannel =
+  | "updates:event"
+  | "auth:invalidated"
+  | "printers:failed-changed"
+  | "connectivity:state"
+  | "sync:status-changed";
 export interface UpdateEvent {
   type: "available" | "progress" | "downloaded" | "error" | "none";
   version?: string;

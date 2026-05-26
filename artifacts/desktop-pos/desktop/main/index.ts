@@ -20,6 +20,11 @@ import { registerPrinterHandlers, escposBytes, kickCashDrawerCommand } from "./p
 import type { PrinterEngine } from "./printers";
 import { ApiClient } from "./api/client";
 import { registerApiIpc } from "./ipc";
+import { Connectivity } from "./sync/connectivity";
+import { SyncEngine } from "./sync/engine";
+import { hydrateAll } from "./sync/hydrate";
+import { getDb } from "./db";
+import { sessionStore } from "./session-store";
 import type { DesktopSettings } from "./types";
 import type {
   PrinterAssignments, DrawerSettings, FailedPrintEntry, ZReportSummary,
@@ -345,6 +350,25 @@ app.whenReady().then(async () => {
   // module assignments have been wired; the printer handler also registers
   // a richer version that takes per-call printer overrides.
   void kickCashDrawerCommand;
+  // ─── Phase 5 — open the local SQLite cache + start sync subsystem ──────
+  getDb();
+  const connectivity = new Connectivity(() => getSettings().apiBaseUrl);
+  const syncEngine = new SyncEngine(
+    apiClient,
+    () => sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId ?? null,
+    () => sessionStore.getSelection().branchId ?? null,
+    () => connectivity.current().online,
+  );
+  connectivity.on("change", (state) => {
+    if (state.online) {
+      void syncEngine.drain();
+      const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId;
+      if (rid) hydrateAll(apiClient, rid).catch((err) =>
+        console.warn("[hydrate] failed:", (err as Error).message));
+    }
+  });
+  connectivity.start();
+
   registerApiIpc({
     client: apiClient,
     settings: {
@@ -357,9 +381,18 @@ app.whenReady().then(async () => {
     getWindow: () => mainWindow,
     printerEngine,
     zReportCache: zReportCacheAdapter(),
+    connectivity,
+    syncEngine,
   });
   wireAutoUpdater();
   await createWindow();
+
+  // Hydrate every 5 minutes while online + signed in.
+  setInterval(() => {
+    if (!connectivity.current().online) return;
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId;
+    if (rid) hydrateAll(apiClient, rid).catch(() => {/* logged inside */});
+  }, 5 * 60 * 1000);
 
   const settings = getSettings();
   if (settings.checkForUpdates && settings.updateFeedUrl) {
