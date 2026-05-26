@@ -3,6 +3,7 @@ import { eq, and, gt } from "drizzle-orm";
 import { db, restaurantsTable, branchesTable, subscriptionPlansTable, tenantsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { seedDefaultExpenseCategories } from "./expenses";
+import { seedDefaultDiscountSettings } from "../lib/discounts";
 import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
@@ -60,6 +61,10 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
   const [restaurant] = await db.insert(restaurantsTable).values({ tenantId, name, slug, description, phone, email, address, city, country, taxRate, openingTime, closingTime }).returning();
   // Seed default expense categories for the new restaurant so owners can record expenses immediately.
   await seedDefaultExpenseCategories(restaurant.id);
+  // Seed default cashier-facing discount reasons so the POS "Apply Discount"
+  // flow works on day one (without preset reasons it rejects every manual
+  // discount with a 422). Idempotent: no-op if owner already customised.
+  await seedDefaultDiscountSettings(restaurant.id, req.user?.sub ?? null);
   await recordAuditLog({
     req, module: "restaurants", action: "restaurant.create", entity: "restaurant",
     entityId: restaurant.id, restaurantId: restaurant.id, targetRestaurantId: restaurant.id,

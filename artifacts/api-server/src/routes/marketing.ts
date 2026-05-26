@@ -766,6 +766,13 @@ adminRouter.post("/admin/leads/:id/convert", async (req, res) => {
       .where(eq(leadsTable.id, id))
       .returning();
 
+    // Seed default cashier-facing discount reasons inside the same
+    // transaction so the new restaurant's POS can apply discounts on
+    // day one (without presets the order route rejects every manual
+    // discount with a 422). Idempotent on (restaurantId, section).
+    const { seedDefaultDiscountSettings } = await import("../lib/discounts");
+    await seedDefaultDiscountSettings(restaurant.id, owner.id, tx);
+
     return { tenant, restaurant, owner, updated };
   });
 

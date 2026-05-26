@@ -197,6 +197,12 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
         isActive: true,
       }).returning();
 
+      // Seed default cashier-facing discount reasons inside the same
+      // transaction so the POS "Apply Discount" flow works on day one
+      // (without preset reasons it 422s every manual discount).
+      const { seedDefaultDiscountSettings } = await import("../lib/discounts");
+      await seedDefaultDiscountSettings(r.id, u.id, tx);
+
       return { t, r, u };
     });
     tenant = result.t;

@@ -171,3 +171,68 @@ export async function deleteOrderDiscountsByType(orderId: number, type: string):
   await db.delete(orderDiscountsTable)
     .where(and(eq(orderDiscountsTable.orderId, orderId), eq(orderDiscountsTable.type, type)));
 }
+
+// ─── Defaults seeded on restaurant creation ──────────────────────────
+//
+// Every new restaurant gets a sensible set of cashier-facing discount
+// reasons so the POS "Apply Discount" flow works on day one without the
+// owner having to visit Settings → Discounts first. (Without preset
+// reasons, the POS rejects every manual discount with a 422.)
+//
+// The seed is idempotent — if a discounts settings row already exists
+// for the restaurant (e.g. owner already customised it), this is a no-op.
+export const DEFAULT_DISCOUNT_PRESET_REASONS: readonly string[] = [
+  "Loyal customer",
+  "Comp item",
+  "Manager override",
+  "Damaged / quality issue",
+  "Promo / marketing",
+  "Staff meal",
+];
+
+export const DEFAULT_DISCOUNTS_CONFIG = {
+  presetReasons: [...DEFAULT_DISCOUNT_PRESET_REASONS],
+  thresholdPercent: 15,
+  thresholdAmount: 500,
+  otpEnabled: false,
+  roleCaps: {
+    cashier: { percent: 10, amount: 200 },
+    waiter:  { percent: 10, amount: 200 },
+    manager: { percent: 30, amount: 1000 },
+  },
+  suspicious: {
+    perBillPercent: 50,
+    perShiftAmount: 5000,
+    perCustomerMaxVisits: 5,
+    perCustomerVisitDiscountPct: 30,
+  },
+} as const;
+
+type TxOrDb = typeof db;
+
+/**
+ * Seed the default `discounts` settings row for a brand-new restaurant.
+ * Safe to call multiple times — uses INSERT … ON CONFLICT DO NOTHING on
+ * (restaurantId, section) so an owner's existing customisations are
+ * never overwritten.
+ *
+ * Pass a Drizzle transaction in `tx` to keep the seed inside the same
+ * registration transaction; otherwise the default `db` handle is used.
+ */
+export async function seedDefaultDiscountSettings(
+  restaurantId: number,
+  updatedByUserId: number | null = null,
+  tx: TxOrDb = db,
+): Promise<void> {
+  await tx
+    .insert(restaurantSettingsTable)
+    .values({
+      restaurantId,
+      section: "discounts",
+      data: DEFAULT_DISCOUNTS_CONFIG,
+      updatedBy: updatedByUserId,
+    })
+    .onConflictDoNothing({
+      target: [restaurantSettingsTable.restaurantId, restaurantSettingsTable.section],
+    });
+}
