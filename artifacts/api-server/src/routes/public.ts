@@ -735,7 +735,11 @@ router.post("/public/orders", async (req, res) => {
         .select({ openedBy: tableSessionsTable.openedBy, staffVerifiedAt: tableSessionsTable.staffVerifiedAt })
         .from(tableSessionsTable)
         .where(eq(tableSessionsTable.id, order.tableSessionId));
-      isHeld = sessRow?.openedBy === "qr" && !sessRow?.staffVerifiedAt;
+      // Skip the verification hold when the order has already been paid
+      // (online prepaid flows): real money committed eliminates the
+      // dine-and-dash fraud vector the hold is designed to catch.
+      const isPrepaid = order.paymentStatus === "paid";
+      isHeld = sessRow?.openedBy === "qr" && !sessRow?.staffVerifiedAt && !isPrepaid;
     }
     const batchRes = await createKotBatchForItems({
       restaurantId,
@@ -1146,6 +1150,12 @@ router.get("/public/orders/verify-session", async (req, res) => {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       if (session.payment_status === "paid" && String(session.metadata?.orderId) === String(id)) {
         await db.update(ordersTable).set({ paymentStatus: "paid", status: "preparing" }).where(eq(ordersTable.id, id));
+        // Auto-release any guest-verification hold: payment proves the
+        // guest is real, fraud risk is gone, kitchen can start prep.
+        try {
+          const { releaseHeldTicketsForPaidOrder } = await import("../lib/guestVerificationEscalation");
+          await releaseHeldTicketsForPaidOrder(id, order.restaurantId);
+        } catch (err) { req.log?.error({ err, orderId: id }, "release held tickets after Stripe verify failed"); }
         broadcastOrderUpdate(id, { id, paymentStatus: "paid", status: "preparing" });
         broadcastEvent(order.restaurantId, "order:update", { id, paymentStatus: "paid", status: "preparing" });
         return res.json({ verified: true, paymentStatus: "paid", orderId: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount });
@@ -1460,6 +1470,13 @@ router.post("/public/orders/:id/pay", async (req, res) => {
   } catch (err) {
     req.log?.error({ err }, "public/pay: payments ledger insert failed (continuing)");
   }
+
+  // Auto-release any guest-verification hold: payment proves the guest is
+  // real, fraud risk is gone, kitchen can start prep.
+  try {
+    const { releaseHeldTicketsForPaidOrder } = await import("../lib/guestVerificationEscalation");
+    await releaseHeldTicketsForPaidOrder(orderId, order.restaurantId);
+  } catch (err) { req.log?.error({ err, orderId }, "release held tickets after public/pay failed"); }
 
   broadcastEvent(order.restaurantId, "order:update", { id: order.id, status: order.status, paymentStatus: "paid" });
   broadcastOrderUpdate(orderId, { id: order.id, status: order.status, paymentStatus: "paid" });

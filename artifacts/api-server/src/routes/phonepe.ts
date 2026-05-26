@@ -178,6 +178,7 @@ async function markPaidFromTransaction(args: {
   // Update order paid amount + status if fully covered.
   const [order] = await db.select({
     totalAmount: ordersTable.totalAmount,
+    restaurantId: ordersTable.restaurantId,
   }).from(ordersTable).where(eq(ordersTable.id, args.orderId));
 
   if (order) {
@@ -194,6 +195,17 @@ async function markPaidFromTransaction(args: {
     await db.update(ordersTable).set({
       paymentStatus: isPaid ? "paid" : "partially_paid",
     }).where(eq(ordersTable.id, args.orderId));
+    // Fully-paid online orders auto-release any guest-verification hold:
+    // real money committed means the dine-and-dash risk is gone.
+    if (isPaid) {
+      try {
+        const { releaseHeldTicketsForPaidOrder } = await import("../lib/guestVerificationEscalation");
+        await releaseHeldTicketsForPaidOrder(args.orderId, order.restaurantId);
+      } catch (err) {
+        // best-effort; payment flow must not fail on broadcast issues
+        void err;
+      }
+    }
   }
 
   return pay.id;

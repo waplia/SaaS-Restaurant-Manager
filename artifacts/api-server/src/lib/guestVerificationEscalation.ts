@@ -22,6 +22,71 @@ import { logger } from "./logger";
 const REPING_AT_MIN = 2;
 const ESCALATE_AT_MIN = 5;
 
+/**
+ * Release any guest-verification holds for an order. Called when an order's
+ * payment completes online (Stripe/PhonePe etc.) — once the guest has paid
+ * real money the fraud vector is gone, so held tickets are auto-flipped to
+ * 'new' and the session is marked staff-verified (system-verified). Safe to
+ * call on orders that were never held: it's a no-op when zero rows match.
+ *
+ * Returns the count of released tickets so the caller can decide whether to
+ * broadcast `order:new` / `guest_verification:accepted` events.
+ */
+export async function releaseHeldTicketsForPaidOrder(
+  orderId: number,
+  restaurantId: number,
+): Promise<{ released: Array<{ id: number; kitchenId: number | null }>; tableSessionId: number | null; tableId: number | null; orderNumber: string | null }> {
+  const now = new Date();
+  const result = await db.transaction(async (tx) => {
+    const released = await tx.update(kitchenTicketsTable)
+      .set({ status: "new", updatedAt: now })
+      .where(and(
+        eq(kitchenTicketsTable.orderId, orderId),
+        eq(kitchenTicketsTable.restaurantId, restaurantId),
+        eq(kitchenTicketsTable.status, "pending_acceptance"),
+      ))
+      .returning({ id: kitchenTicketsTable.id, kitchenId: kitchenTicketsTable.kitchenId });
+    if (released.length === 0) {
+      return { released, tableSessionId: null, tableId: null, orderNumber: null };
+    }
+    const [order] = await tx.select({
+      id: ordersTable.id,
+      tableSessionId: ordersTable.tableSessionId,
+      tableId: ordersTable.tableId,
+      orderNumber: ordersTable.orderNumber,
+    }).from(ordersTable).where(eq(ordersTable.id, orderId));
+    if (order?.tableSessionId) {
+      const { tableSessionsTable } = await import("./db");
+      await tx.update(tableSessionsTable).set({
+        staffVerifiedAt: now, updatedAt: now,
+      }).where(eq(tableSessionsTable.id, order.tableSessionId));
+    }
+    return {
+      released,
+      tableSessionId: order?.tableSessionId ?? null,
+      tableId: order?.tableId ?? null,
+      orderNumber: order?.orderNumber ?? null,
+    };
+  });
+
+  if (result.released.length > 0) {
+    try {
+      broadcastEvent(restaurantId, "guest_verification:accepted", {
+        orderId, tableId: result.tableId, autoReleasedByPayment: true,
+      });
+      for (const t of result.released) {
+        broadcastEvent(restaurantId, "order:new", {
+          id: orderId, orderNumber: result.orderNumber, status: "new",
+          tableId: result.tableId, ticketId: t.id, kitchenId: t.kitchenId,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, orderId }, "[guest-verification] broadcast after auto-release failed");
+    }
+  }
+  return result;
+}
+
 export async function runGuestVerificationEscalation(now: Date): Promise<{ repinged: number; escalated: number }> {
   // Pick one ticket per order (the oldest) to avoid double-pinging when an
   // order spans multiple kitchens — we ping per order, not per ticket.
