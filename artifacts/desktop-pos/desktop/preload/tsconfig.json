@@ -3,8 +3,8 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "outDir": "../../dist/preload",
-    "rootDir": ".",
+    "outDir": "../../dist",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,5 +12,5 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "../main/types.ts"]
 }
