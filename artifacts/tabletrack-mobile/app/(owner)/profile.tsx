@@ -171,6 +171,29 @@ export default function OwnerProfileScreen() {
     },
   });
 
+  // Guest-verification hold (QR anti-fraud) — owner kill switch. Lives on
+  // restaurant_settings/guest-verification (owner-only). Default ON when no
+  // row exists, matching the server fallback.
+  const guestVerificationQ = useQuery<{ section: string; data: { enabled?: boolean } | null }>({
+    queryKey: ["settings", restaurantId, "guest-verification"],
+    queryFn: () => customFetch(`/api/restaurants/${restaurantId}/settings/guest-verification`),
+    enabled: restaurantId != null && canEdit,
+  });
+  const guestVerificationEnabled = (guestVerificationQ.data?.data?.enabled ?? true) !== false;
+  const toggleGuestVerificationMut = useMutation({
+    mutationFn: (enable: boolean) =>
+      customFetch(`/api/restaurants/${restaurantId}/settings/guest-verification`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: enable }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", restaurantId, "guest-verification"] }),
+    onError: (err: unknown) => {
+      qc.invalidateQueries({ queryKey: ["settings", restaurantId, "guest-verification"] });
+      Alert.alert("Could not update", err instanceof Error ? err.message : "Try again.");
+    },
+  });
+
   const handleLogout = () =>
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -309,6 +332,19 @@ export default function OwnerProfileScreen() {
                 {saveMut.isPending ? "Saving…" : "Save changes"}
               </Text>
             </Pressable>
+          )}
+
+          {canEdit && (
+            <>
+              <SectionHeader colors={colors} title="Guest Verification (QR Anti-Fraud)" subtitle="Hold QR dine-in orders for waiter verification before firing to kitchen. Staff-opened tables and online-paid orders are never held." />
+              <ToggleRow
+                colors={colors}
+                label="Enable guest verification hold"
+                value={guestVerificationEnabled}
+                onChange={v => toggleGuestVerificationMut.mutate(v)}
+                disabled={guestVerificationQ.isLoading || toggleGuestVerificationMut.isPending}
+              />
+            </>
           )}
         </>
       )}

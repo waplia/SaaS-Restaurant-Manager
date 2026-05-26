@@ -68,7 +68,6 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "devices", label: "Devices & Hardware", icon: Printer, href: "/settings/devices" },
       { key: "kitchens", label: "Kitchens & Stations", icon: ChefHat, href: "/settings/kitchens" },
       { key: "token-display", label: "Token Display", icon: Hash, href: "/settings/token-display" },
-      { key: "guest-verification", label: "Guest Verification (QR Anti-Fraud)", icon: ShieldAlert, ownerOnly: true, href: "/settings/guest-verification" },
     ],
   },
   {

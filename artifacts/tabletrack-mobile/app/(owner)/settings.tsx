@@ -31,7 +31,6 @@ export default function SettingsScreen() {
     { icon: "mail-outline", label: "Email", right: user?.email },
     { icon: "ribbon-outline", label: "Role", right: ROLE_LABEL[user?.role ?? ""] ?? user?.role },
     { icon: "notifications-outline", label: "Notifications", onPress: () => router.push("/notification-settings" as never) },
-    { icon: "shield-checkmark-outline", label: "Guest verification", onPress: () => router.push("/guest-verification-settings" as never) },
     { icon: "business-outline", label: "Outlets", onPress: () => router.push("/(owner)/outlets" as never) },
     { icon: "trash-outline", label: "Delete account", onPress: () => router.push("/(owner)/delete-account" as never) },
     { icon: "help-buoy-outline", label: "Support", onPress: () => router.push("/(owner)/support" as never) },

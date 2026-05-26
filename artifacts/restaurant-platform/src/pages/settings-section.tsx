@@ -132,7 +132,7 @@ function renderSection(key: SectionKey) {
     case "allergens": return <AllergensSection />;
     case "kot": return <KotSection />;
     case "cancellation-reasons": return <CancellationReasonsSection />;
-    case "order-settings": return <OrderSettingsSection />;
+    case "order-settings": return <><OrderSettingsSection /><GuestVerificationSection /></>;
     case "refund-reasons": return <RefundReasonsSection />;
     case "direct-ordering": return <DirectOrderingSection />;
     case "ai": return <AiSection />;
@@ -2168,6 +2168,31 @@ function OrderSettingsSection() {
         </>
       )}
     </SettingForm>
+  );
+}
+
+/* ---------------- 24b. Guest Verification Hold (QR anti-fraud) ---------------- */
+interface GuestVerificationCfg { enabled: boolean }
+function GuestVerificationSection() {
+  const defaults: GuestVerificationCfg = { enabled: true };
+  return (
+    <div className="mt-6 pt-6 border-t border-border">
+      <h3 className="text-base font-semibold text-foreground mb-1">Guest Verification (QR Anti-Fraud)</h3>
+      <p className="text-xs text-muted-foreground mb-4">
+        Hold kitchen tickets for QR dine-in orders until a waiter physically verifies the guest.
+        Staff-opened tables and online-paid orders are never held. Disabling affects only new orders.
+      </p>
+      <SettingForm section="guest-verification" defaults={defaults}>
+        {(s, set) => (
+          <Toggle
+            label="Enable guest verification hold"
+            hint="QR orders at unstaffed tables wait for waiter acceptance before firing to the kitchen."
+            checked={s.enabled}
+            onChange={v => set(p => ({ ...p, enabled: v }))}
+          />
+        )}
+      </SettingForm>
+    </div>
   );
 }
 
