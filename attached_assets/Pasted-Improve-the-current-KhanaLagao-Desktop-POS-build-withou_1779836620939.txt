@@ -1,0 +1,201 @@
+Improve the current KhanaLagao Desktop POS build without changing or deleting existing menu data. The current items/categories are real data added by us, so keep them as they are.
+
+Upgrade the POS with these improvements:
+
+1. Better Item Cards
+- Keep existing menu items.
+- Improve item card UI.
+- Add image support on item cards.
+- If image is missing, show clean placeholder.
+- Show item name, price, veg/non-veg icon, availability, add-on/modifier indicator, and quantity already added to cart.
+- Add compact view and image view toggle.
+
+2. Cart / Order Ticket Upgrade
+- Make right-side cart more powerful.
+- Show selected order type, table, customer, cashier, and order note.
+- Add quantity controls, edit item, remove item, item notes, modifiers, subtotal, tax, discount, service charge, round-off, and total.
+- Add action buttons: Hold, KOT, Print, Pay, Discount, Note, Clear.
+
+3. Payment Modal
+Add full payment screen with:
+- Cash
+- UPI
+- Card
+- PhonePe EDC
+- Dynamic QR
+- Razorpay/Cashfree/Stripe if configured
+- Split payment
+- Pay later
+- Wallet/loyalty
+- Cash received/change return calculator
+- Payment status verification
+
+4. Built-in Calculator
+- Add calculator button in header/cart/payment.
+- Support normal calculation, cash received, change return, split bill, and discount calculation.
+
+5. Sound Feedback
+Add POS sounds for:
+- Item added
+- Item removed
+- KOT sent
+- Payment success
+- Payment failed
+- New QR order
+- Printer error
+Add sound on/off and volume setting.
+
+6. Hold / Recall Bills
+- Hold current order.
+- Recall held order.
+- Show held bill count.
+- Auto-save current cart so it does not disappear on refresh/app restart.
+
+7. Table Flow
+Make Tables functional:
+- Table map
+- Free/occupied/reserved/billed status
+- Open table
+- Transfer table
+- Merge table
+- Split table bill
+- Add items to running table
+- Show running amount on table
+
+8. Customer Flow
+Make Customers functional:
+- Search customer by phone/name
+- Add customer
+- Loyalty points
+- Wallet/due amount
+- Last order
+- WhatsApp/call button
+- Customer notes
+
+9. QR Orders
+Add QR Orders panel:
+- Show incoming QR orders
+- Accept/reject
+- Merge with table/order
+- Send to KOT
+- Payment status
+- New QR order sound alert
+
+10. KOT / Kitchen
+- Send KOT
+- Print KOT
+- Reprint KOT
+- Station-wise KOT
+- KOT pending/ready status
+- Failed KOT print retry
+
+11. Hardware / Printer Page
+Make Hardware functional:
+- Bill printer setup
+- KOT printer setup
+- Test print
+- Reprint last bill
+- Reprint last KOT
+- Failed print queue
+- Retry all failed prints
+- Cash drawer test
+- Barcode scanner test
+- Printer online/offline status
+
+12. Failed Print Queue
+Current header shows failed prints. Make it clickable:
+- Open failed print queue
+- Show print type, order, printer, error reason
+- Retry selected
+- Retry all
+- Mark resolved
+- Open printer setup
+
+13. Cashier Shift
+Add:
+- Open shift
+- Opening cash
+- Cash in/out
+- Expense from POS
+- Close shift
+- Cash count
+- Payment method summary
+- Mismatch reason
+- Print shift report
+
+14. Keyboard Shortcuts
+Add shortcut help modal:
+- F2 search
+- F3 cart
+- F4 send order/KOT
+- F5 recall bill
+- F7 print
+- F8 payment
+- Del remove item
+- +/- quantity
+- ? help
+
+15. Item Customization
+When item has add-ons/modifiers:
+- Open customization modal
+- Variant/size
+- Add-ons
+- No onion/no garlic
+- Less spicy/extra spicy
+- Extra sauce
+- Notes
+- Quantity
+- Final price
+- Add to cart
+
+16. Reports Inside POS
+Reports menu should show:
+- Today sales
+- Payment split
+- Cashier sales
+- Item sales
+- Discounts
+- Cancelled orders
+- Refunds
+- Shift summary
+
+17. Desktop App Behavior
+- App should start directly in POS if enabled.
+- Support fullscreen.
+- Auto launch option.
+- Keep screen awake option.
+- Show app version.
+- Check update.
+- Secure logout.
+- Remember selected outlet/counter.
+- Use real backend data only.
+
+18. UI Polish
+- Keep the current dark POS style.
+- Improve cart panel design.
+- Improve item card spacing.
+- Make buttons touch/cashier friendly.
+- Add hover/active states.
+- Add compact/dense mode.
+- Add clear empty states.
+- No dead buttons.
+- No infinite loading.
+
+Important:
+Do not remove or replace existing menu items/categories. They are user-added data. Only improve UI, flow, and POS functionality around the existing data.
+
+Acceptance:
+- Existing menu data remains unchanged.
+- POS has better item cards and cart.
+- Payment modal works.
+- Calculator works.
+- Sound feedback works.
+- Hold/recall works.
+- Tables and Customers are functional.
+- QR orders are functional.
+- Printer failed queue works.
+- Hardware page works.
+- Shift management works.
+- KOT/printing works.
+- Reports work.
+- Real backend data only.
