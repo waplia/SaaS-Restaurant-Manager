@@ -1,0 +1,664 @@
+Build KhanaLagao Desktop POS App using Electron for Windows and macOS.
+
+Goal:
+Create a production-ready desktop POS app for KhanaLagao restaurants. The desktop app should work like a real restaurant cashier POS system with full-screen POS, printer support, sound alerts, offline cart safety, KOT printing, payment integrations, table management, and secure login.
+
+Important:
+- Use Electron for desktop app.
+- Build for Windows .exe installer.
+- Build for macOS .dmg installer.
+- Keep existing web dashboard, backend, mobile app, and POS APIs unchanged.
+- Reuse existing POS UI where possible but optimize it for desktop.
+- Do not use mock data.
+- Desktop app must connect to real KhanaLagao backend APIs.
+- App must support real restaurant login, role permissions, outlet/counter selection, and cashier shift.
+- No dead buttons.
+- No infinite loading.
+- No raw ID input.
+- Desktop app should feel like a fast native POS, not a browser window.
+
+App Name:
+KhanaLagao POS
+
+Desktop Package Names:
+Windows App Name: KhanaLagao POS
+macOS App Name: KhanaLagao POS
+
+====================================================
+1. ELECTRON APP STRUCTURE
+====================================================
+
+Create Electron app structure:
+
+desktop/
+- main/
+  - main.ts or main.js
+  - preload.ts or preload.js
+  - ipc-handlers/
+  - printers/
+  - updater/
+  - devices/
+  - storage/
+- renderer/
+  - POS UI
+  - login
+  - settings
+  - printer setup
+- assets/
+  - app icon
+  - tray icon
+  - sounds
+- electron-builder config
+- package scripts
+- docs/desktop-pos-build.md
+
+Use:
+- Electron
+- Electron Builder
+- Secure preload bridge
+- No direct Node access in renderer
+- contextIsolation enabled
+- nodeIntegration disabled
+
+====================================================
+2. DESKTOP APP ROUTES / SCREENS
+====================================================
+
+Desktop app should include:
+
+1. Login Screen
+- Email/phone + password
+- OTP login if enabled
+- Google login if supported
+- Remember device
+- Offline not allowed for first login
+
+2. Outlet / Counter Selection
+- Select restaurant
+- Select branch/outlet
+- Select counter
+- Select cashier shift
+
+3. Full POS Terminal
+- Main daily-use screen
+
+4. Printer Setup
+- Bill printer
+- KOT printer
+- Bar printer
+- Kitchen printer
+- Test print
+
+5. Device Settings
+- Sound settings
+- Scanner settings
+- Cash drawer settings
+- Scale support placeholder if needed
+- Auto-start option
+
+6. Sync / Connection Status
+- Online/offline
+- Pending sync
+- Failed print jobs
+- API status
+
+7. App Settings
+- API URL
+- App version
+- Check update
+- Logout
+- Clear local cache
+
+====================================================
+3. DESKTOP POS FULL-SCREEN UI
+====================================================
+
+POS should open as a full desktop page.
+
+Layout:
+- Left: tables/order type/customer
+- Center: menu items/search/category grid
+- Right: order ticket/cart/payment actions
+
+POS header:
+- Restaurant name
+- Outlet
+- Counter
+- Cashier
+- Shift timer
+- Online/offline status
+- Printer status
+- KOT status
+- Sound toggle
+- Calculator
+- Fullscreen toggle
+- Exit POS
+
+Desktop-specific:
+- True fullscreen mode
+- Keyboard shortcuts
+- Fast item search
+- Larger item grid
+- Right-side cart always visible
+- Multi-window prevention for same counter if needed
+
+====================================================
+4. POS CORE FEATURES
+====================================================
+
+Add all these POS features:
+
+Order Types:
+- Dine-in
+- Takeaway
+- Delivery
+- QR Orders
+- Reservation Order
+- Tiffin Order if enabled
+- Catering/Event Order if enabled
+
+Table Features:
+- Visual table map
+- Floor filter
+- Table status colors
+- Open table
+- Add items to running table
+- Transfer table
+- Merge table
+- Split table bill
+- Mark table cleaning/free
+- Table running amount
+
+Menu Features:
+- Fast item search
+- Category tabs
+- Food image grid
+- Veg/non-veg filter
+- Bestseller filter
+- Recent items
+- Popular today
+- Item availability status
+- Item stock warning
+- Barcode/SKU search
+
+Item Add Flow:
+- One-click add if no modifiers
+- Customize modal if add-ons exist
+- Variants
+- Add-ons
+- Modifiers
+- Spice level
+- No onion/no garlic
+- Extra sauce/extra cheese
+- Item notes
+- Quantity stepper
+
+Cart/Bill:
+- Items
+- Quantity
+- Modifiers
+- Notes
+- Subtotal
+- Discount
+- Tax/GST
+- Service charge
+- Delivery charge
+- Round off
+- Grand total
+- Hold bill
+- Recall bill
+- Cancel bill
+- Print bill
+- Share invoice
+- Send KOT
+- Pay
+
+====================================================
+5. DESKTOP PRINTER SUPPORT
+====================================================
+
+Add real desktop printing support.
+
+Printer features:
+- Detect system printers
+- Select default bill printer
+- Select default KOT printer
+- Select kitchen station printers
+- Test print
+- Print bill
+- Print KOT
+- Reprint bill
+- Reprint KOT
+- Failed print queue
+- Retry failed print
+- Silent printing if supported
+- Print preview option
+
+KOT printing:
+- Station-wise KOT
+- Item-wise KOT
+- Kitchen KOT
+- Bar KOT
+- Parcel KOT
+
+Bill printing:
+- Thermal receipt format
+- A4 invoice format
+- Custom footer
+- GST details
+- QR payment code if enabled
+- Restaurant logo if configured
+
+Support:
+- USB printers through OS printer list
+- Network printers by IP if possible
+- Bluetooth printer support if OS exposes it
+- ESC/POS support if library available
+- Cash drawer kick command if supported
+
+====================================================
+6. CASH DRAWER SUPPORT
+====================================================
+
+Add optional cash drawer support.
+
+Features:
+- Open cash drawer button
+- Open drawer after cash payment setting
+- Permission required
+- Audit log
+- ESC/POS drawer kick command through receipt printer if supported
+
+If unsupported:
+Show:
+“Cash drawer support requires compatible printer/device setup.”
+
+====================================================
+7. BARCODE / QR SCANNER SUPPORT
+====================================================
+
+Support scanner input.
+
+Most USB barcode scanners act like keyboard input.
+
+Features:
+- Barcode/SKU scan into item search
+- QR order scan
+- Customer loyalty QR scan
+- Table QR scan
+- Focus scanner mode
+- Scan sound
+- Invalid scan warning
+
+No special driver required for keyboard-style scanners.
+
+====================================================
+8. SOUND / TONE SUPPORT
+====================================================
+
+Add desktop sound feedback.
+
+Sound events:
+- Item added
+- Item removed
+- KOT sent
+- Payment success
+- Payment failed
+- New QR order
+- Kitchen order ready
+- Printer error
+- Warning/error
+- Shift close
+
+Settings:
+- Enable/disable sounds
+- Volume control
+- Choose tone
+- Mute current shift
+
+Use local sound files inside app assets.
+
+====================================================
+9. BUILT-IN CALCULATOR
+====================================================
+
+Add POS calculator.
+
+Features:
+- Basic calculator
+- Cash received/change return
+- Split bill calculator
+- Discount calculator
+- Tax inclusive/exclusive helper
+- Quick add amount
+- Payment modal calculator
+
+Placement:
+- Header calculator icon
+- Payment screen
+- Discount modal
+
+====================================================
+10. PAYMENT INTEGRATION IN DESKTOP
+====================================================
+
+Desktop POS payment methods:
+
+- Cash
+- Manual UPI
+- Manual Card
+- PhonePe EDC
+- PhonePe Dynamic QR
+- Razorpay
+- Cashfree
+- Stripe Terminal if configured
+- Split payment
+- Wallet/store credit
+- Pay later/credit
+
+Desktop payment flow:
+- Provider payments must verify status from backend.
+- Do not mark paid from frontend only.
+- Show pending/success/failed states.
+- Allow retry/check status/cancel.
+- Print bill after success if setting enabled.
+
+PhonePe EDC:
+- Select terminal
+- Send amount to machine through backend API
+- Poll/check status
+- Mark invoice paid only after verified success
+
+====================================================
+11. CASHIER SHIFT FEATURES
+====================================================
+
+Add shift management.
+
+Features:
+- Open shift
+- Opening cash amount
+- Cash in
+- Cash out
+- Expense from POS
+- Closing cash count
+- Payment method summary
+- Cash mismatch reason
+- Manager approval
+- Shift close report
+- Print shift summary
+
+POS should require open shift if setting enabled.
+
+====================================================
+12. OFFLINE / LOCAL SAFETY
+====================================================
+
+Desktop app should protect cashier work.
+
+Add:
+- Local cart auto-save
+- Unsaved bill warning on exit
+- Held bills saved locally + server
+- Offline banner
+- Failed API retry state
+- Pending print queue
+- Safe refresh
+- Reconnect and sync status
+
+Minimum:
+- Current cart should not disappear on app refresh/crash.
+- Print jobs should be retryable.
+- Online payments disabled while offline.
+
+Advanced optional:
+- Offline order draft mode
+- Sync when online
+- Conflict handling
+
+====================================================
+13. KEYBOARD SHORTCUTS
+====================================================
+
+Add desktop shortcuts:
+
+- F2 Search item
+- F3 Customer search
+- F4 Hold bill
+- F5 Recall bill
+- F6 Send KOT
+- F7 Print bill
+- F8 Payment
+- F9 Open cash drawer
+- F10 Shift close
+- Ctrl + N New bill
+- Ctrl + P Print
+- Ctrl + Enter Complete payment
+- Esc Close modal
+- Delete Remove selected item
+- + Increase quantity
+- - Decrease quantity
+- ? Shortcut help
+
+Add shortcut help modal.
+
+====================================================
+14. DESKTOP APP SETTINGS
+====================================================
+
+Settings should include:
+
+- API base URL
+- Auto launch on system startup
+- Start in fullscreen
+- Default outlet
+- Default counter
+- Default order type
+- Enable sounds
+- Printer setup
+- Cash drawer setup
+- Scanner mode
+- Auto print KOT
+- Auto print bill
+- Auto open cash drawer
+- Keep screen awake
+- Check for updates
+- Clear cache
+- Logout
+
+Store safe settings locally.
+Do not store secrets insecurely.
+
+====================================================
+15. AUTO UPDATE SUPPORT
+====================================================
+
+Add desktop auto update architecture.
+
+Use electron-updater if release server is available.
+
+Features:
+- Check for updates
+- Download update
+- Install on restart
+- Force update for critical versions
+- Show current app version
+- Release notes
+
+If update server not configured:
+Show manual update instructions.
+
+====================================================
+16. SECURITY REQUIREMENTS
+====================================================
+
+Electron security:
+- contextIsolation true
+- nodeIntegration false
+- sandbox where possible
+- secure preload API
+- validate IPC payloads
+- no remote module
+- no unsafe eval
+- no secrets in renderer
+- tokens stored securely
+- role permissions enforced by backend
+- tenant isolation
+- app lock/PIN optional
+
+Auth:
+- Secure token storage
+- Auto logout if token expired
+- Device/session tracking
+- Logout clears tokens
+
+====================================================
+17. DESKTOP BUILD SETUP
+====================================================
+
+Use electron-builder.
+
+Build targets:
+
+Windows:
+- NSIS installer .exe
+- Portable optional
+- App icon .ico
+
+macOS:
+- DMG installer
+- ZIP optional
+- App icon .icns
+- Apple notarization ready if credentials available
+
+Optional Linux:
+- AppImage
+- deb
+
+Package scripts:
+- desktop:dev
+- desktop:build:win
+- desktop:build:mac
+- desktop:build:all
+- desktop:package
+- desktop:dist
+
+Create docs/desktop-pos-build.md with:
+- Install dependencies
+- Run desktop dev
+- Build Windows exe
+- Build macOS dmg
+- Printer setup
+- Signing notes
+- Auto update notes
+- Troubleshooting
+
+====================================================
+18. INSTALLER / BRANDING
+====================================================
+
+Desktop app branding:
+- App icon
+- Installer icon
+- Splash screen
+- App name: KhanaLagao POS
+- Publisher: Waplia Digital Solutions
+- Copyright
+- Version
+
+Installer should:
+- Install app
+- Create desktop shortcut
+- Create start menu shortcut on Windows
+- Allow auto update later
+
+====================================================
+19. HARDWARE SUPPORT MATRIX
+====================================================
+
+Add documentation for hardware:
+
+Supported:
+- USB thermal printer through OS printer
+- Network printer through IP/OS printer
+- USB barcode scanner as keyboard input
+- Cash drawer through ESC/POS printer if supported
+- PhonePe EDC through API, no cable required
+
+Not directly supported unless built later:
+- Direct raw USB driver for every printer
+- Weighing scale
+- Customer display
+- Local payment terminal SDK without provider API
+
+====================================================
+20. DESKTOP TESTING CHECKLIST
+====================================================
+
+Test on Windows:
+- Install .exe
+- Login
+- Select outlet/counter
+- Open shift
+- Open POS
+- Add item
+- Customize item
+- Send KOT
+- Print KOT
+- Take cash payment
+- Calculate change
+- Print bill
+- Close shift
+- Reopen app
+- Held bill/cart safety
+- Keyboard shortcuts
+- Sound alerts
+- Printer test
+
+Test on macOS:
+- Install DMG
+- Login
+- POS full screen
+- Printer selection
+- Bill/KOT print
+- Payment flow
+- Shortcuts
+- Sound
+- App update check
+
+Test edge cases:
+- Printer offline
+- Internet offline
+- Payment pending
+- API error
+- App restart with cart
+- Permission denied
+- Cashier cannot access admin features
+
+====================================================
+21. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Electron desktop app is created.
+- Windows .exe build is configured.
+- macOS .dmg build is configured.
+- POS opens full-screen inside desktop app.
+- Login/outlet/counter/shift flow works.
+- Item search and cart work.
+- Add-ons/modifiers work.
+- KOT send/print works.
+- Bill print works.
+- Payment flow works.
+- Calculator works.
+- Sound alerts work.
+- Hold/recall works.
+- Printer setup works.
+- Keyboard shortcuts work.
+- Cart auto-save works.
+- Cashier closing works.
+- App uses real backend data.
+- No mock data.
+- No dead buttons.
+- No infinite loading.
+- docs/desktop-pos-build.md is created.
