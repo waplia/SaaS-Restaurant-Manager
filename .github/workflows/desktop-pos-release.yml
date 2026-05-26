@@ -1,0 +1,114 @@
+name: desktop-pos release
+
+# Build TableTrack POS installers for Windows and macOS on every
+# `desktop-pos-v*` tag push and upload them (plus the electron-updater
+# `latest.yml` / `latest-mac.yml` metadata) as workflow artifacts and,
+# when run on a tag, straight to the matching GitHub Release.
+#
+# The Replit Linux container cannot produce a real `.exe` (needs Windows or
+# wine + a code-sign cert) or a notarized `.dmg` (needs macOS), so the actual
+# packaging always runs on the matching `windows-latest` / `macos-14` runner.
+
+on:
+  push:
+    tags:
+      - "desktop-pos-v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish artifacts to the GitHub Release"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows installer
+            builder_flags: --win --x64
+            artifact_name: tabletrack-pos-windows
+            artifact_glob: |
+              artifacts/desktop-pos/release/*.exe
+              artifacts/desktop-pos/release/*.exe.blockmap
+              artifacts/desktop-pos/release/latest.yml
+          - os: macos-14
+            label: macOS installer
+            builder_flags: --mac --universal
+            artifact_name: tabletrack-pos-macos
+            artifact_glob: |
+              artifacts/desktop-pos/release/*.dmg
+              artifacts/desktop-pos/release/*.dmg.blockmap
+              artifacts/desktop-pos/release/*.zip
+              artifacts/desktop-pos/release/latest-mac.yml
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # electron-builder picks these up automatically when present.
+      # Wire them in repo settings → Secrets and variables → Actions.
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Let electron-builder publish straight to the GitHub Release on tag
+      # pushes; for manual runs without a tag we keep it local.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check desktop-pos
+        run: pnpm --filter @workspace/desktop-pos run typecheck
+
+      - name: Compile main/preload/renderer bundles
+        run: pnpm --filter @workspace/desktop-pos run build
+
+      - name: Decide publish mode
+        id: publish_mode
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            echo "mode=always" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.publish }}" == "true" ]]; then
+            echo "mode=always" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=never" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package installer (${{ matrix.label }})
+        shell: bash
+        run: |
+          pnpm --filter @workspace/desktop-pos exec electron-builder \
+            ${{ matrix.builder_flags }} \
+            --publish "${{ steps.publish_mode.outputs.mode }}"
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 30

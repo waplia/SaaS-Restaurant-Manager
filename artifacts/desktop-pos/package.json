@@ -82,7 +82,10 @@
       "icon": "build/icon.icns"
     },
     "publish": [
-      { "provider": "generic", "url": "https://updates.tabletrack.in/desktop-pos/" }
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
     ]
   }
 }

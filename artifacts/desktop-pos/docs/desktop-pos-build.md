@@ -91,18 +91,55 @@ APPLE_TEAM_ID=ABCDE12345
 ```
 electron-builder picks these up automatically and notarizes the DMG.
 
+## Automated CI builds
+
+A GitHub Actions workflow at `.github/workflows/desktop-pos-release.yml`
+produces the real installers on the matching hosts:
+
+- Triggers on pushes of tags matching `desktop-pos-v*` (and via manual
+  `workflow_dispatch`).
+- `windows-latest` runner → `TableTrack POS Setup x.y.z.exe` + `latest.yml`.
+- `macos-14` runner → `TableTrack POS x.y.z.dmg` + `latest-mac.yml`.
+- Each installer is uploaded as a workflow artifact, and on tag pushes
+  electron-builder publishes them straight to the matching GitHub Release
+  (so the same Release also becomes the auto-update feed if you point
+  `updateFeedUrl` at `https://github.com/<org>/<repo>/releases/latest/download/`).
+
+Add these repository secrets before tagging a real release:
+
+| Secret | Purpose |
+|--------|---------|
+| `CSC_LINK` | Base64 (or URL) of the code-signing certificate (`.pfx` for Windows, `.p12` for macOS Developer ID). |
+| `CSC_KEY_PASSWORD` | Password for the certificate above. |
+| `APPLE_ID` | Apple ID used to notarize the macOS DMG. |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple ID. |
+| `APPLE_TEAM_ID` | Apple Developer Team ID. |
+
+Without these the workflow still builds, but the artifacts will be unsigned
+(useful for smoke-testing the packaging itself).
+
 ## Auto-update feed
 
-The installer ships with a placeholder generic feed
-(`https://updates.tabletrack.in/desktop-pos/`). To enable real updates:
+The packaged installer is wired up to electron-builder's **GitHub** provider
+(`build.publish.provider = "github"` in `package.json`). On every
+`desktop-pos-v*` tag the CI workflow creates / updates a GitHub Release and
+uploads the installers together with `latest.yml` / `latest-mac.yml`, which
+is exactly what electron-updater needs as a feed.
 
-1. Set `updateFeedUrl` from the **Settings** screen (or pre-seed it via a
-   managed config push).
-2. Host `latest.yml` / `latest-mac.yml` and the installer artifacts on that
-   URL after each release.
+Two ways to consume the feed at runtime:
 
-When `updateFeedUrl` is null the app still launches normally — the top bar
-simply shows "Auto-update not configured".
+1. **Use the GitHub Release directly** — leave `updateFeedUrl` blank to let
+   electron-updater fetch from the GitHub Releases of the configured repo
+   (default behavior of the `github` provider).
+2. **Mirror behind your own URL** — set `updateFeedUrl` from the **Settings**
+   screen (or a managed config push) to any HTTPS location where you re-host
+   `latest.yml`, `latest-mac.yml` and the installer artifacts (for example
+   `https://github.com/<org>/<repo>/releases/latest/download/`, or a CDN
+   that mirrors the release assets).
+
+When `updateFeedUrl` is null and no GitHub release is reachable the app
+still launches normally — the top bar simply shows "Auto-update not
+configured".
 
 ## First-run setup (cashier)
 
