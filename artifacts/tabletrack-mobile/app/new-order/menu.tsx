@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Platform, Modal, KeyboardAvoidingView,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Platform, Modal, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

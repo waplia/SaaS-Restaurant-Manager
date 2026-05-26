@@ -1,8 +1,6 @@
 import React, { useState } from "react";
-import {
-  View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Alert, Image,
-  ActivityIndicator, Platform, RefreshControl, KeyboardAvoidingView,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, Platform, RefreshControl, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";

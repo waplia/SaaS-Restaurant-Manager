@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator,
-  ScrollView, Alert, Platform,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform } from "react-native";
 import { useLocalSearchParams, useNavigation, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

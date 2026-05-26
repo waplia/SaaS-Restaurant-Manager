@@ -1,8 +1,6 @@
 import React, { useState } from "react";
-import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Linking, Platform,
-  TextInput, Alert, Modal, Share,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Linking, Platform, TextInput, Modal, Share } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";

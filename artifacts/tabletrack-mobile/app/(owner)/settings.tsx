@@ -1,10 +1,11 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Alert, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { useAlert } from "@/components/ui/AppAlert";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ROLE_LABEL } from "@/lib/roles";
 
@@ -12,16 +13,17 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { confirm } = useAlert();
   const isWeb = Platform.OS === "web";
 
-  const handleLogout = () => {
-    Alert.alert("Sign out", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out", style: "destructive",
-        onPress: async () => { await logout(); router.replace("/login"); },
-      },
-    ]);
+  const handleLogout = async () => {
+    const ok = await confirm("Sign out", "Are you sure?", {
+      confirmText: "Sign out",
+      destructive: true,
+    });
+    if (!ok) return;
+    await logout();
+    router.replace("/login");
   };
 
   const rows: Array<{ icon: keyof typeof Ionicons.glyphMap; label: string; right?: string; onPress?: () => void }> = [

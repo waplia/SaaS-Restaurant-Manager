@@ -1,30 +1,28 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Alert, ScrollView, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { useAlert } from "@/components/ui/AppAlert";
 import { LeaveSection } from "@/components/LeaveSection";
 
 export default function WaiterProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { confirm } = useAlert();
   const isWeb = Platform.OS === "web";
 
-  const handleLogout = () => {
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/login");
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    const ok = await confirm("Sign out", "Are you sure you want to sign out?", {
+      confirmText: "Sign out",
+      destructive: true,
+    });
+    if (!ok) return;
+    await logout();
+    router.replace("/login");
   };
 
   return (

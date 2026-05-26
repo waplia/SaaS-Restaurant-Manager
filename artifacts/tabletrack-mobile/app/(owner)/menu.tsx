@@ -1,8 +1,6 @@
 import React, { useState } from "react";
-import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, Switch, TextInput,
-  Platform, Alert, Pressable, Modal, KeyboardAvoidingView, Image, ActivityIndicator,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Switch, TextInput, Platform, Pressable, Modal, KeyboardAvoidingView, Image, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
@@ -129,20 +127,10 @@ export default function MenuScreen() {
       Alert.alert("Set up your menu first", "Finish onboarding to create your first menu, then categories can be added here.");
       return;
     }
-    if (Platform.OS === "ios") {
-      Alert.prompt(
-        "New category",
-        "Name this menu category (e.g. Starters, Main Course).",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Add", onPress: (val?: string) => { const n = (val ?? "").trim(); if (n) createCategory.mutate(n); } },
-        ],
-        "plain-text",
-      );
-    } else {
-      setNewCategoryName("");
-      setAddingCategory(true);
-    }
+    // Use the themed in-page input on both platforms — `Alert.prompt` is
+    // iOS-only and would diverge from the AppAlert visual language.
+    setNewCategoryName("");
+    setAddingCategory(true);
   }
 
   const addButton = (

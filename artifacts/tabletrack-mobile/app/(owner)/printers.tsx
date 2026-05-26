@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View as RNView, ScrollView, StyleSheet, Pressable, RefreshControl, Alert, ActivityIndicator } from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View as RNView, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";

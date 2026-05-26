@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Alert, Platform } from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";

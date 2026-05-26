@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Modal, View, Text, TextInput, Pressable, ScrollView,
-  ActivityIndicator, StyleSheet, Alert, Platform,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "@/lib/secureStorage";
 import { useColors } from "@/hooks/useColors";

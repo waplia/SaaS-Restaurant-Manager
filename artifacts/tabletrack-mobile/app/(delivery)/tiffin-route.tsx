@@ -1,8 +1,6 @@
 import React, { useCallback } from "react";
-import {
-  View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator,
-  Pressable, Linking, Alert,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";

@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import { Modal, View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Modal, View, Text, Pressable, StyleSheet, Platform, Alert as RNAlert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
@@ -36,6 +36,16 @@ interface QueueItem extends AlertOptions {
   _id: number;
 }
 
+// Module-level imperative handler (set by <AppAlertProvider>). Declared
+// here — *above* the provider — so the provider's effect can reference it
+// without hitting the TDZ / hoisting issue seen in the React Native
+// bundler when these were declared later in the file.
+type Handler = (opts: AlertOptions) => void;
+let __handler: Handler | null = null;
+function __setAlertHandler(h: Handler | null) {
+  __handler = h;
+}
+
 /**
  * Wrap the app once. Provides a themed Android/iOS-consistent alert dialog
  * that fully replaces React Native's platform `Alert.alert`. Uses the same
@@ -50,6 +60,16 @@ export function AppAlertProvider({ children }: { children: React.ReactNode }) {
     const item: QueueItem = { _id: seqRef.current, ...opts };
     setQueue((q) => [...q, item]);
   }, []);
+
+  // Register the module-level imperative handler so `Alert.alert(...)`
+  // imported from this module works anywhere (including outside the React
+  // tree — e.g. utility modules, mutation onError callbacks). On unmount
+  // we fall back to the native dialog rather than silently swallowing the
+  // call.
+  useEffect(() => {
+    __setAlertHandler(show);
+    return () => __setAlertHandler(null);
+  }, [show]);
 
   const confirm = useCallback(
     (title: string, message?: string, opts?: { confirmText?: string; cancelText?: string; destructive?: boolean }) =>
@@ -226,6 +246,38 @@ function ButtonLabel({ text, color }: { text: string; color: string }) {
     </Text>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Module-level imperative API — drop-in replacement for React Native's
+// `Alert` static. Lets callers do `Alert.alert(title, msg, buttons)` from
+// anywhere without needing a hook. Wired up by <AppAlertProvider> via
+// `__setAlertHandler` (declared near the top of this file). If no provider
+// is mounted yet we fall back to the platform dialog so we never lose a
+// message.
+// ---------------------------------------------------------------------------
+
+export const Alert = {
+  alert(
+    title: string,
+    message?: string,
+    buttons?: Array<{ text?: string; style?: "default" | "cancel" | "destructive"; onPress?: () => void | Promise<void> }>,
+    _options?: { cancelable?: boolean },
+  ) {
+    const mapped: AlertButton[] | undefined = buttons?.map((b) => ({
+      text: b.text ?? "OK",
+      style: b.style,
+      onPress: b.onPress,
+    }));
+    const tone: AlertTone | undefined = mapped?.some((b) => b.style === "destructive") ? "destructive" : undefined;
+    if (__handler) {
+      __handler({ title, message, buttons: mapped, tone, cancelable: _options?.cancelable });
+    } else {
+      // Provider not mounted (cold start before _layout renders) — fall
+      // back to the native dialog so the user still sees the message.
+      RNAlert.alert(title, message, buttons as never, _options);
+    }
+  },
+};
 
 export function useAlert(): AlertCtx {
   const ctx = useContext(Ctx);

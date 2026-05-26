@@ -1,7 +1,6 @@
 import React, { useState, useRef } from "react";
-import {
-  View, Text, StyleSheet, Pressable, Platform, Alert, TextInput, Image,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, StyleSheet, Pressable, Platform, TextInput, Image } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";

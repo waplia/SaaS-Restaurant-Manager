@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  View, Text, StyleSheet, SectionList, FlatList, Pressable, ScrollView, RefreshControl,
-  Alert, Platform, Switch, TextInput, Vibration, Modal,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, StyleSheet, SectionList, FlatList, Pressable, ScrollView, RefreshControl, Platform, Switch, TextInput, Vibration, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";

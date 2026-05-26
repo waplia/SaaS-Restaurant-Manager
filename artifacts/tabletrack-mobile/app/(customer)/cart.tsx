@@ -1,8 +1,6 @@
 import React, { useState } from "react";
-import {
-  View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform,
-  TextInput,
-} from "react-native";
+import { Alert } from "@/components/ui/AppAlert";
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, Linking, Platform, TextInput } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
