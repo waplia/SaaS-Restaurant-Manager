@@ -1,12 +1,12 @@
-# TableTrack POS — desktop build & operations guide
+# KhanaLagao Restaurant — desktop build & operations guide
 
-This package (`@workspace/desktop-pos`) wraps the existing TableTrack web POS
+This package (`@workspace/desktop-pos`) wraps the existing KhanaLagao web POS
 in an Electron shell that produces real native installers:
 
 | Platform | Output                                  | Target  |
 |----------|-----------------------------------------|---------|
-| Windows  | `release/TableTrack POS Setup x.y.z.exe`| NSIS x64 |
-| macOS    | `release/TableTrack POS x.y.z.dmg`      | DMG universal (Intel + Apple Silicon) |
+| Windows  | `release/KhanaLagao Restaurant Setup x.y.z.exe`| NSIS x64 |
+| macOS    | `release/KhanaLagao Restaurant x.y.z.dmg`      | DMG universal (Intel + Apple Silicon) |
 
 ## Why an Electron shell?
 
@@ -98,8 +98,8 @@ produces the real installers on the matching hosts:
 
 - Triggers on pushes of tags matching `desktop-pos-v*` (and via manual
   `workflow_dispatch`).
-- `windows-latest` runner → `TableTrack POS Setup x.y.z.exe` + `latest.yml`.
-- `macos-14` runner → `TableTrack POS x.y.z.dmg` + `latest-mac.yml`.
+- `windows-latest` runner → `KhanaLagao Restaurant Setup x.y.z.exe` + `latest.yml`.
+- `macos-14` runner → `KhanaLagao Restaurant x.y.z.dmg` + `latest-mac.yml`.
 - Each installer is uploaded as a workflow artifact, and on tag pushes
   electron-builder publishes them straight to the matching GitHub Release
   (so the same Release also becomes the auto-update feed if you point
@@ -143,7 +143,7 @@ configured".
 
 ## First-run setup (cashier)
 
-1. Launch **TableTrack POS**.
+1. Launch **KhanaLagao Restaurant**.
 2. **Settings → Server URL** — point at the tenant's API/web POS host.
 3. Enter the **outlet ID** and **counter ID** for this terminal.
 4. **Printers** — pick the OS printer for each role and hit **Test**.
@@ -157,13 +157,13 @@ configured".
 - The Electron BrowserWindow uses `contextIsolation: true`,
   `nodeIntegration: false`, and a custom CSP restricted to the configured API
   origin.
-- The only API exposed to the renderer is `window.tabletrack.*` from
+- The only API exposed to the renderer is `window.khanalagao.*` from
   `desktop/preload/index.ts`. No arbitrary IPC, no `require`, no `process`.
 - External `http(s)` links open in the user's default browser via
   `shell.openExternal`; the BrowserWindow itself never navigates away from
   the local renderer bundle.
 - The embedded `<webview>` uses its own persisted partition
-  (`persist:tabletrack-pos`), so the web POS keeps its own cookies/storage
+  (`persist:khanalagao-pos`), so the web POS keeps its own cookies/storage
   isolated from the shell.
 - Payments are settled by the existing backend `/payments` flow — the desktop
   shell has no path to mark a bill paid client-side.

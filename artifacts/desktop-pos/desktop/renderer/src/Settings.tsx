@@ -27,7 +27,7 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
   useEffect(() => { setForm(settings); }, [settings]);
 
   useEffect(() => {
-    window.tabletrack.printers.list().then(setPrinters).catch(() => setPrinters([]));
+    window.khanalagao.printers.list().then(setPrinters).catch(() => setPrinters([]));
   }, []);
 
   const update = (patch: Partial<DesktopSettings>) => setForm((f) => ({ ...f, ...patch }));
@@ -35,7 +35,7 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
   const handleTest = async (name: string | null) => {
     if (!name) return setMsg("Pick a printer first.");
     setBusy(true);
-    try { await window.tabletrack.printers.test(name); setMsg(`Test print sent to ${name}`); }
+    try { await window.khanalagao.printers.test(name); setMsg(`Test print sent to ${name}`); }
     catch (err) { setMsg(`Test failed: ${(err as Error).message}`); }
     finally { setBusy(false); }
   };
@@ -50,7 +50,7 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
   const handleCheckUpdates = async () => {
     setBusy(true);
     try {
-      const r = await window.tabletrack.updates.check();
+      const r = await window.khanalagao.updates.check();
       setMsg(r.status === "no-feed"
         ? "No update server configured — running latest local build."
         : `Update check: ${r.status}${r.version ? ` (v${r.version})` : ""}`);
@@ -72,9 +72,9 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
         <section style={section}>
           <h2 style={h2}>Connection</h2>
           <Field label="API base URL"
-            hint="Your TableTrack web URL — e.g. https://app.tabletrack.in">
+            hint="Your KhanaLagao web URL — e.g. https://app.khanalagao.in">
             <input style={input} value={form.apiBaseUrl}
-              onChange={(e) => update({ apiBaseUrl: e.target.value })} placeholder="https://app.tabletrack.in" />
+              onChange={(e) => update({ apiBaseUrl: e.target.value })} placeholder="https://app.khanalagao.in" />
           </Field>
           <Field label="Web POS path" hint="Loaded inside the terminal at launch.">
             <input style={input} value={form.webPosPath}
@@ -166,7 +166,7 @@ export function SettingsPanel({ settings, version, onSave, onLaunch, onClose }: 
             <Toggle label="Check for updates" checked={form.checkForUpdates} onChange={(v) => update({ checkForUpdates: v })} />
             <Field label="Update feed URL (electron-updater 'generic' provider)">
               <input style={input} value={form.updateFeedUrl ?? ""}
-                placeholder="https://updates.tabletrack.in/desktop-pos/"
+                placeholder="https://updates.khanalagao.in/desktop-pos/"
                 onChange={(e) => update({ updateFeedUrl: e.target.value || null })} />
             </Field>
             <button style={btn} disabled={busy} onClick={handleCheckUpdates}>Check now</button>
@@ -219,5 +219,5 @@ const h2: React.CSSProperties = { fontSize: 14, textTransform: "uppercase", lett
 const input: React.CSSProperties = { background: "#0b0f17", color: "#f4f5f7", border: "1px solid #374151", borderRadius: 6, padding: "8px 10px", fontSize: 13, width: "100%" };
 const btn: React.CSSProperties = { background: "#1f2937", color: "#f4f5f7", border: "1px solid #374151", borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 13 };
 const btnGhost: React.CSSProperties = { ...btn, background: "transparent" };
-const btnPrimary: React.CSSProperties = { ...btn, background: "#2563eb", borderColor: "#2563eb" };
+const btnPrimary: React.CSSProperties = { ...btn, background: "#ea580c", borderColor: "#ea580c" };
 const footer: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center", marginTop: 20, paddingTop: 16, borderTop: "1px solid #1f2937" };

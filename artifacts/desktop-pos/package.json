@@ -2,8 +2,8 @@
   "name": "@workspace/desktop-pos",
   "version": "1.0.0",
   "private": true,
-  "description": "TableTrack POS — desktop terminal (Windows + macOS)",
-  "author": "TableTrack",
+  "description": "KhanaLagao Restaurant — desktop terminal (Windows + macOS)",
+  "author": "KhanaLagao",
   "repository": {
     "type": "git",
     "url": "https://github.com/waplia/SaaS-Restaurant-Manager.git"
@@ -46,8 +46,8 @@
     "electron-updater": "^6.3.9"
   },
   "build": {
-    "appId": "in.tabletrack.pos",
-    "productName": "TableTrack POS",
+    "appId": "in.khanalagao.pos",
+    "productName": "KhanaLagao Restaurant",
     "asar": true,
     "directories": {
       "buildResources": "build",
@@ -63,7 +63,7 @@
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "artifactName": "TableTrack POS Setup ${version}.${ext}"
+      "artifactName": "KhanaLagao Restaurant Setup ${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -71,17 +71,17 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TableTrack POS"
+      "shortcutName": "KhanaLagao Restaurant"
     },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["universal"] }],
       "category": "public.app-category.business",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "artifactName": "TableTrack POS ${version}.${ext}"
+      "artifactName": "KhanaLagao Restaurant ${version}.${ext}"
     },
     "dmg": {
-      "title": "TableTrack POS ${version}"
+      "title": "KhanaLagao Restaurant ${version}"
     },
     "publish": [
       {

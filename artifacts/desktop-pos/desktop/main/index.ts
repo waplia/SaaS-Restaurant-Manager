@@ -1,5 +1,5 @@
 /**
- * TableTrack POS — Electron main process.
+ * KhanaLagao Restaurant — Electron main process.
  *
  * Responsibilities:
  *   • Create a single, fullscreen POS window per OS user (multi-window guard).
@@ -25,7 +25,7 @@ const IS_DEV = process.env.NODE_ENV === "development";
 const RENDERER_URL = process.env.DESKTOP_RENDERER_URL ?? null;
 
 const DEFAULT_SETTINGS: DesktopSettings = {
-  apiBaseUrl: "https://app.tabletrack.in",
+  apiBaseUrl: "https://app.khanalagao.in",
   webPosPath: "/pos",
   autoLaunch: false,
   startFullscreen: true,
@@ -63,7 +63,7 @@ interface PersistentStore {
   set<K extends keyof PersistedShape>(key: K, value: PersistedShape[K]): void;
 }
 const store = new Store<PersistedShape>({
-  name: "tabletrack-pos",
+  name: "khanalagao-pos",
   defaults: {
     settings: DEFAULT_SETTINGS,
     cart: null,
@@ -115,7 +115,7 @@ function applyCsp(): void {
   // The <webview> tag uses its own session and is responsible for the web POS.
   const settings = getSettings();
   const apiOrigin = (() => {
-    try { return new URL(settings.apiBaseUrl).origin; } catch { return "https://app.tabletrack.in"; }
+    try { return new URL(settings.apiBaseUrl).origin; } catch { return "https://app.khanalagao.in"; }
   })();
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({
@@ -145,7 +145,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#0b0f17",
     show: false,
     autoHideMenuBar: true,
-    title: "TableTrack POS",
+    title: "KhanaLagao Restaurant",
     webPreferences: {
       preload: path.join(app.getAppPath(), "dist/preload/index.js"),
       contextIsolation: true,

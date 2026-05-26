@@ -1,7 +1,7 @@
 /**
  * Preload bridge.
  *
- * Exposes a narrow, typed `window.tabletrack` API to the renderer using
+ * Exposes a narrow, typed `window.khanalagao` API to the renderer using
  * contextBridge. Every method is a thin wrapper around an ipcRenderer.invoke
  * with a fixed channel name — no arbitrary IPC, no `require`, no `process`.
  */
@@ -55,6 +55,6 @@ const api = {
   },
 } as const;
 
-contextBridge.exposeInMainWorld("tabletrack", api);
+contextBridge.exposeInMainWorld("khanalagao", api);
 
-export type TableTrackDesktopApi = typeof api;
+export type KhanaLagaoDesktopApi = typeof api;

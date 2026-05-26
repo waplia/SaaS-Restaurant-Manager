@@ -1,8 +1,8 @@
-import type { TableTrackDesktopApi } from "./index";
+import type { KhanaLagaoDesktopApi } from "./index";
 
 declare global {
   interface Window {
-    tabletrack: TableTrackDesktopApi;
+    khanalagao: KhanaLagaoDesktopApi;
   }
 }
 

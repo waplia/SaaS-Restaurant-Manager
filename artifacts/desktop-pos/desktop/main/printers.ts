@@ -64,7 +64,7 @@ export function registerPrinterHandlers(deps: PrinterDeps): void {
     try {
       const text =
         "================================\n" +
-        "      TableTrack POS — TEST\n" +
+        "      KhanaLagao Restaurant — TEST\n" +
         "================================\n" +
         `Printer: ${printerName}\n` +
         `Time   : ${new Date().toLocaleString()}\n` +

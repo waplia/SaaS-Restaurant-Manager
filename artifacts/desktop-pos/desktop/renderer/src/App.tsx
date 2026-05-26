@@ -39,7 +39,7 @@ const input: React.CSSProperties = {
 };
 const label: React.CSSProperties = { display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 };
 const btn: React.CSSProperties = {
-  background: "#2563eb", color: "#fff", border: 0, padding: "8px 14px",
+  background: "#ea580c", color: "#fff", border: 0, padding: "8px 14px",
   borderRadius: 6, cursor: "pointer", fontSize: 14,
 };
 const btn_ghost: React.CSSProperties = { ...btn, background: "#1f2937" };
@@ -61,20 +61,20 @@ export function App() {
     let mounted = true;
     (async () => {
       const [s, v] = await Promise.all([
-        window.tabletrack.settings.get(),
-        window.tabletrack.app.version(),
+        window.khanalagao.settings.get(),
+        window.khanalagao.app.version(),
       ]);
       if (!mounted) return;
       setSettings(s);
       setVersion(v.version);
       setPlatform(v.platform);
-      try { setPrinters(await window.tabletrack.printers.list()); } catch { /* webContents not ready */ }
-      try { setFailed((await window.tabletrack.failedPrints.list()) as typeof failed); } catch { /* noop */ }
+      try { setPrinters(await window.khanalagao.printers.list()); } catch { /* webContents not ready */ }
+      try { setFailed((await window.khanalagao.failedPrints.list()) as typeof failed); } catch { /* noop */ }
       // First-run gate: if no API base URL is set OR no outlet/counter,
       // land on settings so the cashier configures the terminal before use.
       if (!s.apiBaseUrl || !s.defaultOutletId || !s.defaultCounterId) setTab("settings");
     })();
-    const off = window.tabletrack.updates.onEvent((evt) => {
+    const off = window.khanalagao.updates.onEvent((evt) => {
       setUpdate((cur) => {
         if (evt.type === "available") return { status: "available", version: evt.version };
         if (evt.type === "progress") return { status: "downloading", percent: evt.percent };
@@ -100,7 +100,7 @@ export function App() {
   }, [settings, version]);
 
   if (!settings) {
-    return <div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading TableTrack POS…</div>;
+    return <div style={{ display: "grid", placeItems: "center", height: "100%" }}>Loading KhanaLagao Restaurant…</div>;
   }
 
   return (
@@ -112,7 +112,7 @@ export function App() {
         onCheckUpdates={async () => {
           setUpdate({ status: "checking" });
           try {
-            const r = await window.tabletrack.updates.check();
+            const r = await window.khanalagao.updates.check();
             setUpdate({ status: (r.status as UpdateState["status"]) ?? "idle", version: r.version });
           } catch (err) {
             setUpdate({ status: "error", message: (err as Error).message });
@@ -128,7 +128,7 @@ export function App() {
             // @ts-expect-error — webview is a custom element exposed by Electron.
             ref={webviewRef}
             src={webviewSrc}
-            partition="persist:tabletrack-pos"
+            partition="persist:khanalagao-pos"
             allowpopups="true"
             style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
           />
@@ -136,17 +136,17 @@ export function App() {
             <EmptyState onConfigure={() => setTab("settings")} />
           )}
         </div>
-        {tab === "settings" && <SettingsPanel settings={settings} onSave={async (patch) => setSettings(await window.tabletrack.settings.set(patch))} />}
+        {tab === "settings" && <SettingsPanel settings={settings} onSave={async (patch) => setSettings(await window.khanalagao.settings.set(patch))} />}
         {tab === "printers" && <PrintersPanel
           settings={settings}
           printers={printers}
-          onRefresh={async () => setPrinters(await window.tabletrack.printers.list())}
-          onSave={async (patch) => setSettings(await window.tabletrack.settings.set(patch))}
+          onRefresh={async () => setPrinters(await window.khanalagao.printers.list())}
+          onSave={async (patch) => setSettings(await window.khanalagao.settings.set(patch))}
         />}
         {tab === "failed" && <FailedPanel
           items={failed}
-          onClear={async () => { await window.tabletrack.failedPrints.clear(); setFailed([]); }}
-          onRefresh={async () => setFailed((await window.tabletrack.failedPrints.list()) as typeof failed)}
+          onClear={async () => { await window.khanalagao.failedPrints.clear(); setFailed([]); }}
+          onRefresh={async () => setFailed((await window.khanalagao.failedPrints.list()) as typeof failed)}
         />}
       </div>
     </div>
@@ -180,7 +180,7 @@ function TopBar(props: {
       display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
       background: "#111827", borderBottom: "1px solid #1f2937",
     }}>
-      <div style={{ fontWeight: 700, marginRight: 12 }}>TableTrack POS</div>
+      <div style={{ fontWeight: 700, marginRight: 12 }}>KhanaLagao Restaurant</div>
       <button style={props.tab === "pos" ? tab_btn_active : tab_btn} onClick={() => props.setTab("pos")}>POS</button>
       <button style={props.tab === "settings" ? tab_btn_active : tab_btn} onClick={() => props.setTab("settings")}>Settings</button>
       <button style={props.tab === "printers" ? tab_btn_active : tab_btn} onClick={() => props.setTab("printers")}>Printers</button>
@@ -200,7 +200,7 @@ function EmptyState({ onConfigure }: { onConfigure: () => void }) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <h2 style={{ marginBottom: 8 }}>Welcome to TableTrack POS</h2>
+        <h2 style={{ marginBottom: 8 }}>Welcome to KhanaLagao Restaurant</h2>
         <p style={{ color: "#94a3b8", marginBottom: 16 }}>
           Set the server URL, outlet and counter to start taking orders.
         </p>
@@ -219,8 +219,8 @@ function SettingsPanel({ settings, onSave }: { settings: DesktopSettings; onSave
       <h2 style={{ marginTop: 0 }}>Terminal settings</h2>
       <div style={row}>
         <div>
-          <label style={label}>Server URL (TableTrack API)</label>
-          <input style={input} value={draft.apiBaseUrl} onChange={(e) => set("apiBaseUrl", e.target.value)} placeholder="https://app.tabletrack.in" />
+          <label style={label}>Server URL (KhanaLagao API)</label>
+          <input style={input} value={draft.apiBaseUrl} onChange={(e) => set("apiBaseUrl", e.target.value)} placeholder="https://app.khanalagao.in" />
         </div>
         <div>
           <label style={label}>Web POS path</label>
@@ -253,7 +253,7 @@ function SettingsPanel({ settings, onSave }: { settings: DesktopSettings; onSave
         <div>
           <label style={label}>Auto-update feed URL (optional)</label>
           <input style={input} value={draft.updateFeedUrl ?? ""}
-            placeholder="https://updates.tabletrack.in/desktop-pos/"
+            placeholder="https://updates.khanalagao.in/desktop-pos/"
             onChange={(e) => set("updateFeedUrl", e.target.value || null)} />
         </div>
       </div>
@@ -329,7 +329,7 @@ function PrintersPanel(props: {
                 if (!name) return;
                 setBusy(r.key as string); setMsg("");
                 try {
-                  await window.tabletrack.printers.test(name);
+                  await window.khanalagao.printers.test(name);
                   setMsg(`Test sent to ${name}.`);
                 } catch (err) {
                   setMsg(`Failed: ${(err as Error).message}`);
@@ -338,7 +338,7 @@ function PrintersPanel(props: {
             >{busy === r.key ? "Printing…" : "Test"}</button>
             {r.key === "cashDrawerPrinter" && (
               <button style={btn_ghost} onClick={async () => {
-                try { await window.tabletrack.drawer.open(); setMsg("Drawer pulse sent."); }
+                try { await window.khanalagao.drawer.open(); setMsg("Drawer pulse sent."); }
                 catch (err) { setMsg(`Failed: ${(err as Error).message}`); }
               }}>Kick drawer</button>
             )}
