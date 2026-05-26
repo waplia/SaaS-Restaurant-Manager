@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Layout } from "@/components/layout/Layout";
+import { PosShell, holdBill, type HeldBill } from "@/components/pos/PosShell";
 import {
   useFloorTables, useMenus, useMenuCategories, useMenuItems,
   useCreateOrder, usePayOrder, useVoidOrder, useOrders,
@@ -1291,6 +1291,8 @@ export default function PosPage() {
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
@@ -1695,13 +1697,133 @@ export default function PosPage() {
     setShowPayModal(false); setShowSplitModal(false);
   };
 
+  // ─── POS Shell integration: auto-save, hold/recall, keyboard handlers ──
+  const DRAFT_KEY = "tt_pos_cart_draft";
+  // Restore last cart draft on mount
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { cart?: CartItem[]; customerName?: string; orderType?: string; selectedTableId?: number | null };
+      if (Array.isArray(draft.cart) && draft.cart.length > 0) {
+        setCart(draft.cart);
+        if (typeof draft.customerName === "string") setCustomerName(draft.customerName);
+        if (draft.orderType === "dine_in" || draft.orderType === "takeaway" || draft.orderType === "delivery") setOrderType(draft.orderType);
+        if (typeof draft.selectedTableId === "number" || draft.selectedTableId === null) setSelectedTableId(draft.selectedTableId ?? null);
+      }
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist cart draft on every change (only pre-placement)
+  useEffect(() => {
+    try {
+      if (placedOrder || cart.length === 0) {
+        window.localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        cart, customerName, orderType, selectedTableId,
+      }));
+    } catch { /* noop */ }
+  }, [cart, customerName, orderType, selectedTableId, placedOrder]);
+  // Warn before unload if there's an unsaved cart
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (cart.length > 0 && !placedOrder) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+      return undefined;
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [cart.length, placedOrder]);
+
+  const handleHoldBill = useCallback(() => {
+    if (cart.length === 0 || placedOrder) {
+      toast({ title: "Nothing to hold", description: placedOrder ? "Order already placed." : "Cart is empty.", variant: "destructive" });
+      return;
+    }
+    const label = customerName?.trim()
+      || (selectedTableId ? `Table · ${(tables as FloorTable[]).find(t => t.id === selectedTableId)?.tableNumber ?? selectedTableId}` : null)
+      || `${orderType.replace("_", "-")} · ${cart.length} item${cart.length > 1 ? "s" : ""}`;
+    holdBill(label, { cart, customerName, orderType, selectedTableId });
+    setCart([]); setCustomerName(""); setCustomerPhone(""); setLinkedCustomerId(null); setSelectedTableId(null);
+    toast({ title: "Bill held", description: `Recall it any time with F5 — saved as "${label}".` });
+  }, [cart, placedOrder, customerName, selectedTableId, tables, orderType, toast]);
+
+  const handleRecallBill = useCallback((bill: HeldBill) => {
+    const p = bill.payload as { cart?: CartItem[]; customerName?: string; orderType?: "dine_in" | "takeaway" | "delivery"; selectedTableId?: number | null };
+    if (!p || !Array.isArray(p.cart)) return;
+    setCart(p.cart);
+    setCustomerName(p.customerName ?? "");
+    if (p.orderType) setOrderType(p.orderType);
+    setSelectedTableId(p.selectedTableId ?? null);
+    setPlacedOrder(null);
+    toast({ title: "Bill recalled", description: bill.label });
+  }, [toast]);
+
+  const handleIncQty = useCallback(() => {
+    setCart(prev => prev.length === 0 ? prev : prev.map((c, i) => i === prev.length - 1 ? { ...c, quantity: c.quantity + 1 } : c));
+  }, []);
+  const handleDecQty = useCallback(() => {
+    setCart(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      if (last.quantity <= 1) return prev.slice(0, -1);
+      return prev.map((c, i) => i === prev.length - 1 ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  }, []);
+  const handleDeleteLast = useCallback(() => {
+    setCart(prev => prev.slice(0, -1));
+  }, []);
+  const handlePrintCurrent = useCallback(() => {
+    if (!placedOrder) {
+      toast({ title: "Place order first", variant: "destructive" });
+      return;
+    }
+    printReceipt({
+      orderNumber: placedOrder.orderNumber,
+      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
+      orderType,
+      items: placedOrder
+        ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
+        : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers })),
+      totals: displayTotals,
+      paymentMethod: "pending",
+      customerName,
+      restaurantName: restaurant?.name,
+      logoUrl: restaurant?.logoUrl ?? undefined,
+      restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
+      restaurantPhone: restaurant?.phone ?? undefined,
+      createdAt: placedOrder.createdAt,
+      discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placedOrder, liveItems, cart, displayTotals, customerName, restaurant, orderType, discountReceiptLines, toast]);
+
   // Receipt items for modals (works pre and post placement)
   const receiptDisplayItems = placedOrder
     ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] as CartModifier[] }))
     : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
 
   return (
-    <Layout>
+    <PosShell
+      handlers={{
+        onSearchFocus: () => searchInputRef.current?.focus(),
+        onHold: handleHoldBill,
+        onKOT: handlePrintCurrent,
+        onPrint: handlePrintCurrent,
+        onPay: handlePayNow,
+        onPlaceOrder: () => { void handlePlaceOrder(); },
+        onIncQty: handleIncQty,
+        onDecQty: handleDecQty,
+        onDelete: handleDeleteLast,
+        onNewOrder: handleNewOrder,
+      }}
+      onRecallBill={handleRecallBill}
+    >
       <div className="flex flex-1 min-h-0 overflow-hidden bg-background">
 
         {/* Left panel */}
@@ -1830,6 +1952,30 @@ export default function PosPage() {
             </div>
           )}
 
+          {/* Search bar */}
+          <div className="border-b border-border flex-shrink-0 bg-background px-4 py-2">
+            <div className="relative">
+              <Input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search items by name… (F2)"
+                className="h-9 pl-9 text-sm"
+                data-testid="pos-item-search"
+              />
+              <ShoppingBag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Category filter */}
           <div className="border-b border-border flex-shrink-0 bg-background overflow-x-auto">
             <div className="flex gap-1.5 px-4 py-2 w-max min-w-full">
@@ -1851,7 +1997,11 @@ export default function PosPage() {
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-              {(menuItems as MenuItem[]).filter(i => i.isAvailable).map(item => {
+              {(() => {
+                const q = searchQuery.trim().toLowerCase();
+                const src = q ? (allMenuItems as MenuItem[]) : (menuItems as MenuItem[]);
+                return src.filter(i => i.isAvailable && (!q || i.name.toLowerCase().includes(q)));
+              })().map(item => {
                 const inCart = cart.find(c => c.menuItemId === item.id);
                 const inLive = placedOrder ? liveItems.some(li => li.menuItemId === item.id) : false;
                 return (
@@ -2387,7 +2537,7 @@ export default function PosPage() {
           onConfirm={handleVoiceOrderConfirm}
         />
       )}
-    </Layout>
+    </PosShell>
   );
 }
 

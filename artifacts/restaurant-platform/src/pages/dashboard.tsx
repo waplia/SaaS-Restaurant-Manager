@@ -10,7 +10,7 @@ import {
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users, Trash2, Monitor, ExternalLink } from "lucide-react";
 import { useWasteDashboardTile } from "@/lib/hooks";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -125,7 +125,25 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         subtitle={subtitle}
-        actions={hasMultipleBranches ? <BranchSwitcher /> : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href="/pos">
+              <Button size="sm" className="gap-1.5 shadow-sm" data-testid="dashboard-open-pos">
+                <Monitor className="w-4 h-4" /> Open POS
+              </Button>
+            </Link>
+            <button
+              onClick={() => window.open("/app/pos", "_blank", "noopener,noreferrer")}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="Open POS in a new window"
+              aria-label="Open POS in a new window"
+              data-testid="dashboard-open-pos-new-tab"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+            {hasMultipleBranches && <BranchSwitcher />}
+          </div>
+        }
       />
 
       <div className="p-6 space-y-6">
