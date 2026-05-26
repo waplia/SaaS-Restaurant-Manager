@@ -1,0 +1,72 @@
+Upgrade POS Terminal with all modern restaurant POS features and proper flow.
+
+POS should open as a full-screen page and include these features:
+
+Main POS Flow:
+1. Select outlet/counter/cashier shift
+2. Select order type:
+   - Dine-in
+   - Takeaway
+   - Delivery
+   - QR Order
+   - Reservation Order
+3. For dine-in, select floor/table visually
+4. Search/select customer or add new customer
+5. Search menu items quickly
+6. Browse categories/items with food images
+7. Add items to cart
+8. Customize items with variants, add-ons, modifiers, spice level, no onion, extra sauce, notes
+9. Review cart/bill
+10. Send KOT to kitchen
+11. Hold/recall bill if needed
+12. Apply discount/coupon/loyalty
+13. Take payment
+14. Print/share invoice
+15. Complete order and update reports/inventory
+
+POS Features to Add:
+- Full-page modern POS layout
+- Fast item search
+- Category tabs/chips
+- Food image item grid
+- Bestseller/recent/popular items
+- Veg/non-veg filters
+- Item availability status
+- Add-ons/modifiers/variants
+- Quantity stepper
+- Item notes
+- Customer search/add
+- Table selection/map
+- Add more items to running table
+- Transfer table
+- Merge table
+- Split bill
+- Hold bill
+- Recall bill
+- KOT send/print/reprint
+- Station-wise KOT
+- Cart auto-save
+- Discount/coupon/loyalty redemption
+- Manager approval for high discount
+- GST/tax/service charge/round-off
+- Cash payment
+- UPI payment
+- Card payment
+- PhonePe/Razorpay/Stripe terminal payment if configured
+- Split payment
+- Pay later/credit
+- Payment status verification
+- Built-in calculator
+- Cash received/change return calculator
+- Sound/tone when item added, removed, payment success, new order, error
+- Keyboard shortcuts
+- Barcode/QR scan support if available
+- Printer status
+- Offline/connection warning
+- Role permission control
+- Cashier shift opening/closing
+- Daily sales summary
+- POS settings
+
+Design:
+Make POS fast, touch-friendly, modern, image-rich, and cashier-friendly. No raw ID inputs, no mock data, no dead buttons, no infinite loading. Every action should use real data and update orders, kitchen, tables, inventory, payments, cashier closing, and reports.

@@ -178,9 +178,13 @@ router.put("/restaurants/:restaurantId/settings/:section", requireSettingsWriter
   // and verification queue would keep paging staff about orders placed
   // before the kill switch was disabled.
   if (section === "guest-verification") {
-    const wasEnabled = ((previous?.data ?? {}) as { enabled?: boolean }).enabled !== false;
     const nowEnabled = (data as { enabled?: boolean }).enabled !== false;
-    if (wasEnabled && !nowEnabled) {
+    // Run the release whenever the setting is saved in the OFF state — not
+    // only on the enabled→disabled transition. This way an owner who's
+    // already disabled the feature can re-save to clean up any stale holds
+    // or escalation notifications that accumulated before the kill switch
+    // was wired up. The release is idempotent: no held tickets = no-op.
+    if (!nowEnabled) {
       try {
         const { releaseAllHeldTicketsForRestaurant } = await import("../lib/guestVerificationEscalation");
         await releaseAllHeldTicketsForRestaurant(restaurantId);
