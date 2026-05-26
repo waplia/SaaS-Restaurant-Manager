@@ -43,6 +43,7 @@ import SettingsAccountPage from "@/pages/settings-account";
 import SettingsKitchensPage from "@/pages/settings-kitchens";
 import SettingsDevicesPage from "@/pages/settings-devices";
 import SettingsPrintersPage from "@/pages/settings-printers";
+import SettingsCountersPage from "@/pages/settings-counters";
 import SettingsTerminalsPage from "@/pages/settings-terminals";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
 import SettingsGuestVerificationPage from "@/pages/settings-guest-verification";
@@ -506,6 +507,7 @@ function Router() {
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/printers" component={() => <RoleProtectedRoute component={SettingsPrintersPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
+      <Route path="/settings/counters" component={() => <RoleProtectedRoute component={SettingsCountersPage} allow={["owner", "manager"]} />} />
       {/* Card-terminal pairing/management is a baseline POS need — keep the
           role gate, but drop the plan gate so tenants on any plan can reach
           the page (the backend gate is removed too). */}
