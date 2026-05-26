@@ -8,7 +8,7 @@ import {
   useOrderDetail, useAddOrderItem, useRemoveOrderItem,
   useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig, useRequestManagerDiscountOtp,
   useCreatePaymentIntent, useCreateRazorpayOrder,
-  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useCreateCustomer, useApplyCoupon,
+  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useCreateCustomer, useApplyCoupon, useCustomers,
   useCurrentCashRegister,
   useTerminals, useTerminalCharge, useConfirmTerminalCharge, useTerminalRunOnReader,
   usePendingCartSessions, useReservations,
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/PhoneInput";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy } from "@/lib/types";
+import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy, Customer } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
 import { apiPost, apiAction, apiGet, isOfflineQueuedResult } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +30,7 @@ import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
-  Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift,
+  Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift, Search, User,
   QrCode, CalendarClock, Clock, Leaf, StickyNote, Pause, RotateCcw,
 } from "lucide-react";
 import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
@@ -1355,6 +1355,7 @@ export default function PosPage() {
   const [couponInput, setCouponInput] = useState("");
   const [showPayModal, setShowPayModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [showTableGrid, setShowTableGrid] = useState(true);
   const [placedOrder, setPlacedOrder] = useState<OrderDetail | null>(null);
   const [modPickerItem, setModPickerItem] = useState<MenuItem | null>(null);
@@ -2115,6 +2116,16 @@ export default function PosPage() {
                 size="sm"
                 variant="outline"
                 className="h-12 text-xs px-2 flex-shrink-0 whitespace-nowrap"
+                onClick={() => setShowCustomerSearch(true)}
+                title="Search saved customers by name or phone"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span className="ml-1">Find</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-12 text-xs px-2 flex-shrink-0 whitespace-nowrap"
                 onClick={handleLinkCustomer}
                 disabled={createCustomerMut.isPending || !(customerPhone || "").trim()}
                 title={foundCustomer ? `Link ${foundCustomer.name}` : "Create & link new customer with this phone"}
@@ -2702,6 +2713,21 @@ export default function PosPage() {
         </div>
       </div>
 
+      {showCustomerSearch && (
+        <CustomerSearchModal
+          onClose={() => setShowCustomerSearch(false)}
+          onSelect={(c) => {
+            setLinkedCustomerId(c.id);
+            setCustomerName(c.name);
+            setCustomerPhone(c.phone || "");
+            setPhoneQuery(c.phone || "");
+            setShowCustomerSearch(false);
+            toast({ title: `Linked: ${c.name}`, description: `Loyalty balance: ${c.loyaltyPoints ?? 0} pts` });
+            playPosSound("success");
+          }}
+        />
+      )}
+
       {modPickerItem && (
         <ModifierPickerModal
           item={modPickerItem}
@@ -2998,6 +3024,107 @@ function PosUpsellStrip({
           </button>
         )))}
        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CustomerSearchModal — POS-side "Find customer" picker. Lets cashiers search
+// the saved customer list by name OR phone (server already supports both via
+// ilike on the `search` param) and link the result to the current bill. Lives
+// inline here because it's only used by the POS — no point in a shared file.
+// ---------------------------------------------------------------------------
+function CustomerSearchModal({
+  onClose,
+  onSelect,
+}: {
+  onClose: () => void;
+  onSelect: (c: Customer) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 200);
+    return () => clearTimeout(t);
+  }, [q]);
+  // Always load *something* — empty search returns the 20 most recent
+  // customers so the cashier can pick a regular without typing.
+  const { data, isLoading } = useCustomers({ search: debounced || undefined, limit: 20 });
+  const results = data?.data ?? [];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-card w-full max-w-md rounded-2xl shadow-xl border border-border flex flex-col max-h-[80vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="font-semibold text-base flex items-center gap-2">
+            <Search className="w-4 h-4 text-primary" /> Find customer
+          </h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-3 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+            <Input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Search by name or phone…"
+              className="pl-9 h-10"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            {debounced ? `Matching "${debounced}"` : "Showing recent customers"}
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground text-sm gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+            </div>
+          ) : results.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm gap-2">
+              <User className="w-8 h-8 opacity-40" />
+              <p>No customers found.</p>
+              <p className="text-xs">Try a different name or phone, or use the Add button to create a new one.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {results.map(c => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(c)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/60 text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{c.name}</span>
+                        {c.isVip && (
+                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                            VIP
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {c.phone || "No phone"}{c.email ? ` · ${c.email}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-primary font-semibold flex-shrink-0">
+                      <Star className="w-3.5 h-3.5 fill-primary" />
+                      {c.loyaltyPoints ?? 0} pts
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
