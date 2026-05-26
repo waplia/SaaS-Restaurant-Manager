@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { SelectionState, Terminal } from "../../../shared/ipc-contract";
-import { Button, Card, Banner, BrandHeader, FullscreenCenter, Spinner, colors } from "../ui/components";
+import type { SelectionState } from "../../../shared/ipc-contract";
+import { Button, Input, Label, Banner, BrandHeader, FullscreenCenter, colors } from "../ui/components";
 
 interface Props {
   selection: SelectionState;
@@ -9,24 +9,30 @@ interface Props {
 }
 
 export function CounterPickerScreen({ selection, onPicked, onBack }: Props) {
-  const [terminals, setTerminals] = useState<Terminal[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState<string>(selection.counterName ?? "");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(true);
 
   useEffect(() => {
-    if (!selection.restaurantId) return;
-    window.khanalagao.terminals.list({
-      restaurantId: selection.restaurantId,
-      branchId: selection.branchId ?? undefined,
-    })
-      .then(setTerminals)
-      .catch((err) => setError((err as Error).message));
-  }, [selection.restaurantId, selection.branchId]);
+    let cancelled = false;
+    window.khanalagao.selection.suggestCounterName()
+      .then((r) => {
+        if (cancelled) return;
+        if (!name) setName(r.existingName ?? r.suggestion);
+      })
+      .catch(() => { /* fall back to whatever's in state */ })
+      .finally(() => { if (!cancelled) setLoadingSuggestion(false); });
+    return () => { cancelled = true; };
+  }, []);
 
-  const pick = async (t: Terminal) => {
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) { setError("Give this counter a name (e.g. Counter 1, Front Cash)"); return; }
     setBusy(true); setError(null);
     try {
-      const next = await window.khanalagao.selection.setCounter({ counterId: t.id, counterName: t.name });
+      const next = await window.khanalagao.selection.registerLocalCounter({ counterName: trimmed });
       onPicked(next);
     } catch (err) {
       setError((err as Error).message);
@@ -37,38 +43,42 @@ export function CounterPickerScreen({ selection, onPicked, onBack }: Props) {
 
   return (
     <FullscreenCenter>
-      <div style={{ width: "min(960px, 95vw)" }}>
-        <BrandHeader subtitle={`Pick your counter at ${selection.branchName ?? "this outlet"}`} />
-        {error && <div style={{ marginBottom: 16 }}><Banner kind="error">{error}</Banner></div>}
+      <form onSubmit={save} style={{
+        width: 480,
+        background: colors.panel,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 16,
+        padding: 36,
+      }}>
+        <BrandHeader subtitle={`Name this counter at ${selection.branchName ?? "this outlet"}`} />
 
-        {!terminals && <div style={{ display: "grid", placeItems: "center", padding: 40 }}><Spinner /></div>}
+        {error && <div style={{ marginBottom: 14 }}><Banner kind="error">{error}</Banner></div>}
 
-        {terminals && (
-          <div style={{
-            display: "grid", gap: 16,
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          }}>
-            {terminals.length === 0 && (
-              <div style={{ color: colors.textDim, gridColumn: "1 / -1", textAlign: "center", padding: 40 }}>
-                No counters configured for this outlet. Ask your manager to add one.
-              </div>
-            )}
-            {terminals.map((t) => (
-              <Card key={t.id} onClick={() => !busy && pick(t)} selected={selection.counterId === t.id}>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{t.name}</div>
-                <div style={{ color: colors.textDim, fontSize: 12, marginTop: 6, display: "flex", gap: 8 }}>
-                  {t.type && <span>{t.type}</span>}
-                  {t.status && <span>· {t.status}</span>}
-                </div>
-              </Card>
-            ))}
+        <div style={{ marginBottom: 16 }}>
+          <Label>Counter name</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Counter 1"
+            disabled={busy || loadingSuggestion}
+            autoFocus
+            maxLength={60}
+          />
+          <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+            This name identifies this workstation in reports, KOTs, and Z-reports.
+            Each cash drawer / counter at your outlet should run its own desktop
+            install with a different name (e.g. "Counter 1", "Bar Counter", "Front Cash").
           </div>
-        )}
-
-        <div style={{ marginTop: 20, textAlign: "center" }}>
-          <Button variant="ghost" onClick={onBack} disabled={busy}>← Change outlet</Button>
         </div>
-      </div>
+
+        <Button type="submit" disabled={busy || !name.trim()} style={{ width: "100%" }}>
+          {busy ? "Saving…" : selection.counterId ? "Update counter name" : "Use this workstation as a counter"}
+        </Button>
+
+        <div style={{ marginTop: 18, textAlign: "center" }}>
+          <Button variant="ghost" type="button" onClick={onBack} disabled={busy}>← Change outlet</Button>
+        </div>
+      </form>
     </FullscreenCenter>
   );
 }

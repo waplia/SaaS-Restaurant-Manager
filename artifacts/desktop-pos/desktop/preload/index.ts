@@ -60,6 +60,9 @@ const api = {
     setRestaurant: (req: IpcContract["selection:set-restaurant"]["req"]) => invoke("selection:set-restaurant", req),
     setBranch: (req: IpcContract["selection:set-branch"]["req"]) => invoke("selection:set-branch", req),
     setCounter: (req: IpcContract["selection:set-counter"]["req"]) => invoke("selection:set-counter", req),
+    registerLocalCounter: (req: IpcContract["selection:register-local-counter"]["req"]) =>
+      invoke("selection:register-local-counter", req),
+    suggestCounterName: () => invoke("selection:suggest-counter-name"),
   },
 
   // ─── Shifts ───────────────────────────────────────────────────────

@@ -5405,3 +5405,69 @@ export function useUpdateSupplierNetworkInfo() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["suppliers"] }),
   });
 }
+
+// ============================================================================
+// POS Counters (Option B — workstations, NOT Stripe card terminals).
+// ============================================================================
+
+export interface CounterRecord {
+  id: number;
+  restaurantId: number;
+  branchId: number | null;
+  name: string;
+  machineId: string | null;
+  description: string | null;
+  isActive: boolean;
+  lastSeenAt: string | null;
+  appVersion: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useCounters(branchId?: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  const qs = branchId ? `?branchId=${branchId}` : "";
+  return useQuery({
+    queryKey: ["counters", RESTAURANT_ID, branchId ?? null],
+    queryFn: () => apiGet<CounterRecord[]>(`/restaurants/${RESTAURANT_ID}/counters${qs}`),
+    staleTime: 15000,
+  });
+}
+
+export function useCreateCounter() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; branchId?: number | null; description?: string | null; isActive?: boolean }) =>
+      apiPost<CounterRecord>(`/restaurants/${RESTAURANT_ID}/counters`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["counters", RESTAURANT_ID] }),
+  });
+}
+
+export function useUpdateCounter() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...patch }: { id: number; name?: string; branchId?: number | null; description?: string | null; isActive?: boolean }) =>
+      apiPatch<CounterRecord>(`/restaurants/${RESTAURANT_ID}/counters/${id}`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["counters", RESTAURANT_ID] }),
+  });
+}
+
+export function useDeleteCounter() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/restaurants/${RESTAURANT_ID}/counters/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["counters", RESTAURANT_ID] }),
+  });
+}
+
+export function useUnclaimCounter() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiPost<CounterRecord>(`/restaurants/${RESTAURANT_ID}/counters/${id}/unclaim`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["counters", RESTAURANT_ID] }),
+  });
+}

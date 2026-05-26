@@ -232,14 +232,13 @@ export function registerApiIpc(opts: {
   // ─── Selection ───────────────────────────────────────────────────────
   handle("selection:set-restaurant", ({ restaurantId }) => {
     invalidateMenu();
+    // NOTE: counterId/counterName intentionally NOT reset — the counter is
+    // the physical machine, not the outlet. A single desktop install
+    // keeps its counter identity across outlet switches.
     const result = sessionStore.patchSelection({
       restaurantId,
       branchId: null, branchName: null,
-      counterId: null, counterName: null,
     });
-    // Hydrate-on-outlet-pick (and effectively post-login). Deterministic
-    // trigger independent of the connectivity polling edge, so the cache is
-    // warm before the cashier reaches Open Shift.
     if (restaurantId != null && connectivity.current().online) {
       void hydrateAll(client, restaurantId).catch((err) =>
         console.warn("[hydrate:on-select] failed:", (err as Error).message));
@@ -247,13 +246,29 @@ export function registerApiIpc(opts: {
     return result;
   });
   handle("selection:set-branch", ({ branchId, branchName }) => {
-    return sessionStore.patchSelection({
-      branchId, branchName,
-      counterId: null, counterName: null,
-    });
+    // Same reasoning as above — keep counter identity across branch switches.
+    return sessionStore.patchSelection({ branchId, branchName });
   });
   handle("selection:set-counter", ({ counterId, counterName }) => {
     return sessionStore.patchSelection({ counterId, counterName });
+  });
+  handle("selection:register-local-counter", ({ counterName }) => {
+    const trimmed = (counterName ?? "").trim() || "Counter 1";
+    const existing = sessionStore.getSelection().counterId;
+    // Reuse the existing machine UUID if we already minted one — only the
+    // display name changes on re-registration. This keeps the counter's
+    // identity stable across re-opens of the "rename" screen.
+    const counterId = existing ?? (() => {
+      const { randomUUID } = require("node:crypto") as typeof import("node:crypto");
+      return `local-${randomUUID()}`;
+    })();
+    return sessionStore.patchSelection({ counterId, counterName: trimmed });
+  });
+  handle("selection:suggest-counter-name", () => {
+    const os = require("node:os") as typeof import("node:os");
+    const existing = sessionStore.getSelection().counterName;
+    const host = (os.hostname?.() ?? "").split(".")[0]?.trim() || "Counter 1";
+    return { suggestion: host, existingName: existing ?? null };
   });
 
   // ─── Shifts ──────────────────────────────────────────────────────────

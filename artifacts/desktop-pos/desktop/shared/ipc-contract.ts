@@ -359,7 +359,7 @@ export interface SelectionState {
   restaurantId: number | null;
   branchId: number | null;
   branchName: string | null;
-  counterId: number | null;
+  counterId: string | null;
   counterName: string | null;
   rememberDevice: boolean;
 }
@@ -535,7 +535,15 @@ export type IpcContract = {
   // Selection persistence ---------------------------------------------------
   "selection:set-restaurant": { req: { restaurantId: number }; res: SelectionState };
   "selection:set-branch": { req: { branchId: number; branchName: string }; res: SelectionState };
-  "selection:set-counter": { req: { counterId: number; counterName: string }; res: SelectionState };
+  "selection:set-counter": { req: { counterId: string; counterName: string }; res: SelectionState };
+  /** Phase A — local counter self-registration. Generates a stable machine
+   *  UUID on first call and persists it. Subsequent calls update the
+   *  display name only. No backend coordination — each desktop install is
+   *  its own counter (Petpooja-style). */
+  "selection:register-local-counter": { req: { counterName: string }; res: SelectionState };
+  /** Returns the suggested counter name on first launch (OS hostname,
+   *  trimmed). Lets the input field pre-fill with something sensible. */
+  "selection:suggest-counter-name": { req: void; res: { suggestion: string; existingName: string | null } };
 
   // Shifts / cash register --------------------------------------------------
   "shifts:current": { req: void; res: CashRegisterCurrent };
