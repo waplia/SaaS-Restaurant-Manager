@@ -29,7 +29,7 @@ const IS_DEV = process.env.NODE_ENV === "development";
 const RENDERER_URL = process.env.DESKTOP_RENDERER_URL ?? null;
 
 const DEFAULT_SETTINGS: DesktopSettings = {
-  apiBaseUrl: "https://app.tabletrack.in",
+  apiBaseUrl: "https://khanalagao.com",
   autoLaunch: false,
   startFullscreen: true,
   keepScreenAwake: true,
@@ -108,7 +108,7 @@ function buildShellUrl(): string {
 function applyCsp(): void {
   const apiOrigin = (() => {
     try { return new URL(getSettings().apiBaseUrl).origin; }
-    catch { return "https://app.tabletrack.in"; }
+    catch { return "https://khanalagao.com"; }
   })();
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({

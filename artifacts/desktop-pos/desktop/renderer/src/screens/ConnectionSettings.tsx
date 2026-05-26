@@ -18,7 +18,7 @@ export function ConnectionSettingsScreen({ initialUrl, version, platform, onSave
   const save = async () => {
     const trimmed = url.trim();
     if (!/^https?:\/\//i.test(trimmed)) {
-      setError("Enter a full URL — e.g. https://app.tabletrack.in");
+      setError("Enter a full URL — e.g. https://khanalagao.com");
       return;
     }
     setBusy(true); setError(null); setInfo(null);
@@ -52,11 +52,11 @@ export function ConnectionSettingsScreen({ initialUrl, version, platform, onSave
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://app.tabletrack.in"
+            placeholder="https://khanalagao.com"
             disabled={busy}
           />
           <div style={{ color: colors.textMuted, fontSize: 11, marginTop: 6 }}>
-            Default: https://app.tabletrack.in. Use a custom URL only if your team runs a self-hosted server.
+            Default: https://khanalagao.com. Use a custom URL only if your team runs a self-hosted server.
           </div>
         </div>
 
