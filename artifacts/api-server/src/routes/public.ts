@@ -591,6 +591,11 @@ router.post("/public/orders", async (req, res) => {
         restaurantId, branchId: null, tableId,
         customerId: resolvedCustomerRow?.id ?? null,
         status: "open",
+        // Guest-verification hold: this session was opened by a QR scan
+        // (untrusted). staffVerifiedAt is left null so the first KOT
+        // round of this session is held in 'pending_acceptance' until a
+        // waiter taps Accept. See createKotBatchForItems below.
+        openedBy: "qr",
       }).returning();
       const [newOrder] = await tx.insert(ordersTable).values({
         restaurantId, tableId, orderNumber: generateOrderNumber(), orderType: "dine_in",
@@ -716,8 +721,22 @@ router.post("/public/orders", async (req, res) => {
   // Task #601 — every QR dine-in round is a KOT batch (so KDS/printers see
   // round-by-round prep tickets). For non-dine-in QR orders, fall back to
   // the simple per-order ticket helper to preserve existing behaviour.
+  //
+  // Guest-verification hold: if the table session was opened by a QR scan
+  // (`openedBy='qr'`) and no staff member has verified the guest yet
+  // (`staffVerifiedAt IS NULL`), this batch is created with status
+  // 'pending_acceptance' — KDS hides it until a waiter accepts on Tables /
+  // Requests / mobile push. Staff-opened sessions skip the hold.
   let createdTickets: Array<{ ticketId: number; kitchenId: number }> = [];
+  let isHeld = false;
   if (tableId && resolvedOrderType === "dine_in" && roSettings.enabled) {
+    if (order.tableSessionId) {
+      const [sessRow] = await db
+        .select({ openedBy: tableSessionsTable.openedBy, staffVerifiedAt: tableSessionsTable.staffVerifiedAt })
+        .from(tableSessionsTable)
+        .where(eq(tableSessionsTable.id, order.tableSessionId));
+      isHeld = sessRow?.openedBy === "qr" && !sessRow?.staffVerifiedAt;
+    }
     const batchRes = await createKotBatchForItems({
       restaurantId,
       orderId: order.id,
@@ -725,6 +744,7 @@ router.post("/public/orders", async (req, res) => {
       createdFor: "new",
       source: "qr",
       orderItemIds: insertedItemIds,
+      held: isHeld,
     });
     createdTickets = batchRes.tickets;
     mergedRound = batchRes.batch.roundNumber;
@@ -738,21 +758,48 @@ router.post("/public/orders", async (req, res) => {
     if (validTable) {
       await db.update(floorTablesTable).set({ status: "occupied" }).where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
     }
-    await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
-    broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
-    // Fire push to staff so phones light up even when the app is backgrounded.
-    try {
-      const { pushToStaff } = await import("../lib/pushNotify");
-      await pushToStaff(
-        { restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
-        {
-          title: `New QR Order · #${order.orderNumber}`,
-          body: `Guest placed an order from a table.`,
-          data: { orderId: order.id, type: "new_order", screen: "kitchen" },
-        },
-      );
-    } catch (err) {
-      logger.error?.({ err, orderId: order.id }, "QR new-order push failed");
+    if (isHeld) {
+      // Guest-verification hold: notify waiters to physically verify the
+      // guest before the kitchen starts. Do NOT play the standard new-order
+      // chime — this is an action item, not a "kitchen, start cooking" cue.
+      await db.insert(notificationsTable).values({
+        restaurantId, type: "guest_verification",
+        title: "Guest verification needed",
+        message: `Table ordered via QR — accept to fire to kitchen. Order: ${order.orderNumber}`,
+        entityId: order.id, entityType: "order",
+      });
+      broadcastEvent(restaurantId, "notification:new", { type: "guest_verification" });
+      broadcastEvent(restaurantId, "guest_verification:new", { orderId: order.id, tableId, orderNumber: order.orderNumber });
+      try {
+        const { pushToStaff } = await import("../lib/pushNotify");
+        await pushToStaff(
+          { restaurantId, roles: ["waiter", "manager", "owner"], type: "guest_verification" },
+          {
+            title: `Guest needs verification · Table order #${order.orderNumber}`,
+            body: `Tap to accept and fire to kitchen.`,
+            data: { orderId: order.id, tableId, type: "guest_verification", screen: "tables" },
+          },
+        );
+      } catch (err) {
+        logger.error?.({ err, orderId: order.id }, "Guest verification push failed");
+      }
+    } else {
+      await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
+      broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
+      // Fire push to staff so phones light up even when the app is backgrounded.
+      try {
+        const { pushToStaff } = await import("../lib/pushNotify");
+        await pushToStaff(
+          { restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
+          {
+            title: `New QR Order · #${order.orderNumber}`,
+            body: `Guest placed an order from a table.`,
+            data: { orderId: order.id, type: "new_order", screen: "kitchen" },
+          },
+        );
+      } catch (err) {
+        logger.error?.({ err, orderId: order.id }, "QR new-order push failed");
+      }
     }
   }
 

@@ -142,7 +142,11 @@ export async function openTableSession(args: {
   customerId?: number | null;
   partySize?: number | null;
   notes?: string | null;
+  /** 'staff' when opened from POS / waiter app (trusted), 'qr' when opened
+   *  by a guest scan (untrusted — first KOT will be held). */
+  openedBy?: "staff" | "qr";
 }) {
+  const openedBy = args.openedBy ?? "staff";
   const [session] = await db
     .insert(tableSessionsTable)
     .values({
@@ -154,6 +158,10 @@ export async function openTableSession(args: {
       partySize: args.partySize ?? undefined,
       notes: args.notes ?? undefined,
       status: "open",
+      openedBy,
+      // Staff-opened sessions are implicitly verified — the staff member
+      // physically placed the order or seated the guest.
+      staffVerifiedAt: openedBy === "staff" ? new Date() : undefined,
     })
     .returning();
   return session;
@@ -193,8 +201,13 @@ export async function createKotBatchForItems(args: {
   roundNumber?: number;
   isPriority?: boolean;
   notes?: string | null;
+  /** When true, kitchen_tickets are created with status='pending_acceptance'
+   *  instead of 'new'. KDS hides pending tickets so the kitchen never starts
+   *  cooking until a waiter accepts the guest. Used by the QR
+   *  guest-verification hold. Cancelled rounds ignore this flag. */
+  held?: boolean;
 }) {
-  const { restaurantId, orderId, tableSessionId, createdFor, source, firedByUserId, orderItemIds, isPriority, notes } = args;
+  const { restaurantId, orderId, tableSessionId, createdFor, source, firedByUserId, orderItemIds, isPriority, notes, held } = args;
 
   // Compute next round number per-order. Wrap in an advisory lock keyed on
   // the order id so two concurrent add/cancel requests can't both grab the
@@ -308,7 +321,11 @@ export async function createKotBatchForItems(args: {
         // Status must align with the KDS frontend filter (`new` | `preparing`
         // | `ready`). Using "pending" here meant every QR dine-in KOT was
         // invisible on the kitchen display even though the ticket row existed.
-        status: createdFor === "cancelled" ? "cancelled" : "new",
+        // 'pending_acceptance' is the guest-verification hold — KDS hides
+        // these until a waiter accepts (then they flip to 'new').
+        status: createdFor === "cancelled"
+          ? "cancelled"
+          : (held ? "pending_acceptance" : "new"),
       })
       .returning();
     created.push({ ticketId: t.id, kitchenId: kid });

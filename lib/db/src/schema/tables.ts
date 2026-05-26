@@ -113,6 +113,12 @@ export const tableSessionsTable = pgTable("table_sessions", {
   status: text("status").notNull().default("open"), // open | bill_generated | paid | closed | cancelled
   partySize: integer("party_size"),
   notes: text("notes"),
+  // Guest-verification hold: where the session was opened from and when
+  // a staff member verified the guest is present. When openedBy='qr' and
+  // staffVerifiedAt is null, the first KOT round is held in
+  // 'pending_acceptance' until a waiter taps Accept.
+  openedBy: text("opened_by"), // 'staff' | 'qr' | null
+  staffVerifiedAt: timestamp("staff_verified_at"),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   billGeneratedAt: timestamp("bill_generated_at"),
   paidAt: timestamp("paid_at"),

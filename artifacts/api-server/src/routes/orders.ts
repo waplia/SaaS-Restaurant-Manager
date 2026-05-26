@@ -805,6 +805,10 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
         waiterId: req.user?.sub ?? null,
         customerId: resolvedCustomerId ?? null,
         status: "open",
+        // POS-side staff opened the table; guest presence is implicitly
+        // verified so QR add-ons in this session won't be held.
+        openedBy: "staff",
+        staffVerifiedAt: new Date(),
       }).returning();
       const [newOrder] = await tx.insert(ordersTable).values({
         tableSessionId: sess.id,
@@ -2825,9 +2829,11 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", requirePlanFeature("kit
   if (status) {
     conditions.push(eq(kitchenTicketsTable.status, String(status)));
   } else {
-    // Default: hide cancelled / rejected tickets from the KDS feed. They
-    // remain queryable explicitly via ?status=cancelled for audit views.
-    conditions.push(sql`${kitchenTicketsTable.status} <> 'cancelled'`);
+    // Default: hide cancelled / rejected tickets and guest-verification
+    // holds from the KDS feed. `pending_acceptance` tickets are held until a
+    // waiter accepts the guest; the kitchen must not see them. Both remain
+    // queryable explicitly via ?status= for audit/verification views.
+    conditions.push(sql`${kitchenTicketsTable.status} NOT IN ('cancelled', 'pending_acceptance')`);
   }
   if (kitchenId) conditions.push(eq(kitchenTicketsTable.kitchenId, Number(kitchenId)));
 
@@ -3394,6 +3400,231 @@ router.put("/restaurants/:restaurantId/settings/running-order",
     const saved = await saveRunningOrderSettings(restaurantId, req.body ?? {}, req.user?.sub ?? null);
     broadcastEvent(restaurantId, "settings:running-order", saved);
     res.json(saved);
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Guest Verification Hold — endpoints
+// ---------------------------------------------------------------------------
+// When a guest places a QR order at a table whose session was opened by a QR
+// scan (not by staff), the KOT batch is created with kitchen_tickets.status
+// = 'pending_acceptance'. The KDS filter (new|preparing|ready) naturally
+// hides these tickets so the kitchen never starts cooking until a waiter
+// taps Accept.
+
+/**
+ * List orders currently in the guest-verification hold. Used by the POS
+ * Tables / Requests / Orders banner and the mobile waiter app.
+ */
+router.get(
+  "/restaurants/:restaurantId/guest-verifications",
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const rows = await db
+      .select({
+        orderId: ordersTable.id,
+        orderNumber: ordersTable.orderNumber,
+        tableId: ordersTable.tableId,
+        tableSessionId: ordersTable.tableSessionId,
+        totalAmount: ordersTable.totalAmount,
+        customerName: ordersTable.customerName,
+        customerPhone: ordersTable.customerPhone,
+        notes: ordersTable.notes,
+        createdAt: ordersTable.createdAt,
+        ticketId: kitchenTicketsTable.id,
+        ticketCreatedAt: kitchenTicketsTable.createdAt,
+        sessionOpenedAt: tableSessionsTable.startedAt,
+      })
+      .from(kitchenTicketsTable)
+      .innerJoin(ordersTable, eq(ordersTable.id, kitchenTicketsTable.orderId))
+      .leftJoin(tableSessionsTable, eq(tableSessionsTable.id, ordersTable.tableSessionId))
+      .where(and(
+        eq(kitchenTicketsTable.restaurantId, restaurantId),
+        eq(kitchenTicketsTable.status, "pending_acceptance"),
+      ))
+      .orderBy(desc(kitchenTicketsTable.createdAt));
+    // Collapse to one entry per order (multiple kitchens → multiple tickets).
+    const byOrder = new Map<number, any>();
+    for (const r of rows) {
+      const existing = byOrder.get(r.orderId);
+      if (!existing) {
+        byOrder.set(r.orderId, {
+          orderId: r.orderId,
+          orderNumber: r.orderNumber,
+          tableId: r.tableId,
+          tableSessionId: r.tableSessionId,
+          totalAmount: r.totalAmount,
+          customerName: r.customerName,
+          customerPhone: r.customerPhone,
+          notes: r.notes,
+          createdAt: r.createdAt,
+          heldAt: r.ticketCreatedAt,
+          sessionOpenedAt: r.sessionOpenedAt,
+          ticketIds: [r.ticketId],
+        });
+      } else {
+        existing.ticketIds.push(r.ticketId);
+      }
+    }
+    const orders = Array.from(byOrder.values());
+    // Pull items for each order in one round-trip.
+    if (orders.length > 0) {
+      const ids = orders.map(o => o.orderId);
+      const items = await db
+        .select({
+          orderId: orderItemsTable.orderId,
+          name: orderItemsTable.menuItemName,
+          quantity: orderItemsTable.quantity,
+          unitPrice: orderItemsTable.unitPrice,
+          notes: orderItemsTable.notes,
+        })
+        .from(orderItemsTable)
+        .where(inArray(orderItemsTable.orderId, ids));
+      const byId = new Map<number, any[]>();
+      for (const it of items) {
+        const arr = byId.get(it.orderId) ?? [];
+        arr.push(it);
+        byId.set(it.orderId, arr);
+      }
+      for (const o of orders) o.items = byId.get(o.orderId) ?? [];
+    }
+    res.json(orders);
+  },
+);
+
+/**
+ * Accept a held guest order: flip pending_acceptance tickets → 'new' so KDS
+ * picks them up, mark the table session as staff-verified, broadcast.
+ */
+router.post(
+  "/restaurants/:restaurantId/orders/:id/accept-guest",
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const orderId = Number(req.params.id);
+    const userId = (req as any).user?.sub ?? null;
+
+    const [order] = await db.select().from(ordersTable).where(and(
+      eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId),
+    ));
+    if (!order) return void res.status(404).json({ error: "Order not found" });
+
+    const now = new Date();
+    // Atomic compare-and-flip: only the first concurrent request wins. The
+    // RETURNING clause tells us exactly which tickets transitioned. If zero
+    // rows came back, another request already accepted or rejected — we
+    // must NOT broadcast/verify based on a stale pre-read.
+    const releasedTickets = await db.transaction(async (tx) => {
+      const released = await tx.update(kitchenTicketsTable)
+        .set({ status: "new", updatedAt: now })
+        .where(and(
+          eq(kitchenTicketsTable.orderId, orderId),
+          eq(kitchenTicketsTable.restaurantId, restaurantId),
+          eq(kitchenTicketsTable.status, "pending_acceptance"),
+        ))
+        .returning({ id: kitchenTicketsTable.id, kitchenId: kitchenTicketsTable.kitchenId });
+      if (released.length > 0 && order.tableSessionId) {
+        await tx.update(tableSessionsTable).set({
+          staffVerifiedAt: now,
+          waiterId: userId ?? undefined,
+          updatedAt: now,
+        }).where(eq(tableSessionsTable.id, order.tableSessionId));
+      }
+      return released;
+    });
+
+    if (releasedTickets.length === 0) {
+      return void res.status(409).json({ error: "Order has no held tickets", code: "NOT_HELD" });
+    }
+
+    broadcastEvent(restaurantId, "guest_verification:accepted", { orderId, tableId: order.tableId });
+    for (const t of releasedTickets) {
+      broadcastEvent(restaurantId, "order:new", {
+        id: orderId, orderNumber: order.orderNumber, status: order.status,
+        tableId: order.tableId, ticketId: t.id, kitchenId: t.kitchenId,
+      });
+    }
+
+    try {
+      await recordAuditLog({
+        restaurantId, userId,
+        userDisplay: (req as any).user?.email ?? null,
+        role: (req as any).user?.role ?? null,
+        module: "orders", action: "guest_verification.accept",
+        entity: "ORDER", entityId: orderId,
+        details: `Accepted guest verification for order ${order.orderNumber}`,
+      });
+    } catch (err) { void err; }
+
+    res.json({ ok: true, ticketsReleased: releasedTickets.length });
+  },
+);
+
+/**
+ * Reject a held guest order: cancel order, cancel held tickets, free table,
+ * close session. Used when waiter confirms no guest is present.
+ */
+router.post(
+  "/restaurants/:restaurantId/orders/:id/reject-guest",
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const orderId = Number(req.params.id);
+    const userId = (req as any).user?.sub ?? null;
+    const reason = typeof req.body?.reason === "string" ? String(req.body.reason).slice(0, 500) : "Guest not present";
+
+    const [order] = await db.select().from(ordersTable).where(and(
+      eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId),
+    ));
+    if (!order) return void res.status(404).json({ error: "Order not found" });
+
+    const now = new Date();
+    // Atomic: only proceed with cancel if THIS transaction actually flipped
+    // held tickets. Prevents a late reject from cancelling an order that a
+    // concurrent accept already released to the kitchen.
+    const cancelledTickets = await db.transaction(async (tx) => {
+      const cancelled = await tx.update(kitchenTicketsTable)
+        .set({ status: "cancelled", updatedAt: now })
+        .where(and(
+          eq(kitchenTicketsTable.orderId, orderId),
+          eq(kitchenTicketsTable.restaurantId, restaurantId),
+          eq(kitchenTicketsTable.status, "pending_acceptance"),
+        ))
+        .returning({ id: kitchenTicketsTable.id });
+      if (cancelled.length === 0) return cancelled;
+
+      await tx.update(ordersTable).set({ status: "cancelled", updatedAt: now }).where(eq(ordersTable.id, orderId));
+      if (order.tableSessionId) {
+        await tx.update(tableSessionsTable).set({
+          status: "cancelled", closedAt: now, updatedAt: now,
+        }).where(eq(tableSessionsTable.id, order.tableSessionId));
+      }
+      if (order.tableId) {
+        await tx.update(floorTablesTable).set({ status: "free", updatedAt: now })
+          .where(and(eq(floorTablesTable.id, order.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+      }
+      await tx.insert(auditLogsTable).values({
+        restaurantId, userId,
+        userDisplay: (req as any).user?.email ?? null,
+        role: (req as any).user?.role ?? null,
+        module: "orders", action: "guest_verification.reject",
+        entity: "ORDER", entityId: orderId,
+        oldValue: { status: order.status } as any,
+        newValue: { status: "cancelled", reason } as any,
+        details: `Rejected guest verification for order ${order.orderNumber}: ${reason}`,
+      });
+      return cancelled;
+    });
+
+    if (cancelledTickets.length === 0) {
+      return void res.status(409).json({ error: "Order has no held tickets", code: "NOT_HELD" });
+    }
+
+    broadcastEvent(restaurantId, "guest_verification:rejected", { orderId, tableId: order.tableId });
+    broadcastEvent(restaurantId, "order:status", { id: orderId, status: "cancelled", orderNumber: order.orderNumber });
+
+    res.json({ ok: true, ticketsCancelled: cancelledTickets.length });
   },
 );
 

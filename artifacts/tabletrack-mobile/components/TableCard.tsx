@@ -13,6 +13,10 @@ interface TableCardProps {
   itemCount?: number | null;
   elapsedMinutes?: number | null;
   billGenerated?: boolean;
+  /** Guest Verification Hold — when present, render a yellow/red glow and
+   *  "Verify guest" badge. Red + pulse once the wait has escalated. */
+  guestVerificationHeld?: boolean;
+  guestVerificationEscalated?: boolean;
 }
 
 const STATUS_PALETTE: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -47,6 +51,7 @@ function fmtMoney(amount: string | number | undefined | null): string {
 export function TableCard({
   label, capacity, status, onPress,
   runningTotal, itemCount, elapsedMinutes, billGenerated,
+  guestVerificationHeld, guestVerificationEscalated,
 }: TableCardProps) {
   const colors = useColors();
   const palette = STATUS_PALETTE[status] ?? STATUS_PALETTE.free;
@@ -56,14 +61,28 @@ export function TableCard({
     (itemCount != null && itemCount > 0) ||
     (elapsedMinutes != null && elapsedMinutes >= 0);
 
+  const heldBorder = guestVerificationEscalated ? "#dc2626" : "#facc15";
+  const heldBg = guestVerificationEscalated ? "#fef2f2" : "#fefce8";
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: palette.bg, borderColor: palette.border, opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: guestVerificationHeld ? heldBg : palette.bg,
+          borderColor: guestVerificationHeld ? heldBorder : palette.border,
+          borderWidth: guestVerificationHeld ? 2.5 : 1.5,
+          opacity: pressed ? 0.85 : 1,
+        },
       ]}
       onPress={onPress}
     >
+      {guestVerificationHeld ? (
+        <View style={styles.heldBadge}>
+          <Ionicons name="warning" size={10} color="#92400e" />
+          <Text style={styles.heldBadgeText}>Verify guest</Text>
+        </View>
+      ) : null}
       <View style={[styles.dot, { backgroundColor: palette.dot }]} />
       <Text style={[styles.label, { color: palette.text }]}>{label}</Text>
       <Text style={[styles.capacity, { color: colors.mutedForeground }]}>{capacity} seats</Text>
@@ -131,4 +150,20 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   metaPill: { flexDirection: "row", alignItems: "center", gap: 3 },
   metaText: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  heldBadge: {
+    position: "absolute",
+    top: -8,
+    right: 8,
+    backgroundColor: "#fde047",
+    borderColor: "#facc15",
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    zIndex: 2,
+  },
+  heldBadgeText: { fontSize: 10, color: "#92400e", fontFamily: "Inter_600SemiBold" },
 });

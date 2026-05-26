@@ -3,7 +3,7 @@ import { db, usersTable, userDevicesTable } from "./db";
 import { sendPush } from "./notifications";
 import { logger } from "./logger";
 
-export type PushType = "waiter_call" | "new_order" | "reservation" | "reservation_request" | "leave_decision" | "leave_request" | "payroll" | "fraud_alert" | "kitchen_delay" | "panic_alert" | "approval_request" | "incident_reported" | "temperature_alert" | "low_stock" | "feedback" | "vip_alert" | "negative_feedback";
+export type PushType = "waiter_call" | "new_order" | "reservation" | "reservation_request" | "leave_decision" | "leave_request" | "payroll" | "fraud_alert" | "kitchen_delay" | "panic_alert" | "approval_request" | "incident_reported" | "temperature_alert" | "low_stock" | "feedback" | "vip_alert" | "negative_feedback" | "guest_verification";
 
 /**
  * Map each push type to the bundled mobile sound + Android channel so the
@@ -23,6 +23,7 @@ function soundForType(type: PushType): { sound: string; channelId: string } {
       // Mirrors web socket("order:new") → playNewOrderChime()
       return { sound: "new_order.wav", channelId: "new-order" };
     case "waiter_call":
+    case "guest_verification":
     case "kitchen_delay":
     case "panic_alert":
     case "fraud_alert":

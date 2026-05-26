@@ -830,6 +830,22 @@ export function startScheduler(): void {
     catch (err) { logger.error({ err }, "[documents-expiry] failed"); }
   });
 
+  // Guest verification escalation: every minute, scan held kitchen tickets
+  // (status='pending_acceptance'). At ~2 min re-ping waiters; at ~5 min add
+  // managers and owners to the ping. Never auto-fires — only nags.
+  registerCron("guest_verification_escalation", "* * * * *", "Re-pings waiters every 2 min for held QR orders; escalates to managers+owners at 5 min (never auto-fires)");
+  trackCron("guest_verification_escalation", "* * * * *", async () => {
+    try {
+      const { runGuestVerificationEscalation } = await import("./guestVerificationEscalation");
+      const r = await runGuestVerificationEscalation(new Date());
+      if (r.repinged > 0 || r.escalated > 0) {
+        logger.info({ repinged: r.repinged, escalated: r.escalated }, "[guest-verification] escalation tick");
+      }
+    } catch (err) {
+      logger.error({ err }, "Guest verification escalation failed");
+    }
+  });
+
   // Kitchen delay alerts: scan active tickets every minute, emit alerts for
   // tickets past their per-restaurant configured threshold (default 10 min).
   trackCron("kitchen_delay_detector", "* * * * *", async () => {

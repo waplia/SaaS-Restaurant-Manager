@@ -106,6 +106,10 @@ function routeForNotification(data: Record<string, unknown> | undefined): string
       return "/(owner)/feedback";
     case "reservation_reminder":
       return "/(owner)/tables";
+    case "guest_verification":
+      // Held QR order awaiting waiter verification — deep-link to the
+      // waiter tables tab where the held card glows + opens the sheet.
+      return "/(waiter)/(tabs)";
     case "ai_insight":
       return "/(owner)/khana-ai-chat";
     default:

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, useCurbsideQueue, useCurbsideHandover, useCurbsideReport } from "@/lib/hooks";
+import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, useCurbsideQueue, useCurbsideHandover, useCurbsideReport, useGuestVerifications } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle, Car } from "lucide-react";
@@ -30,13 +30,22 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   cancelled: XCircle,
 };
 
-function OrderCard({ order, onOpen }: { order: Order; onOpen: (id: number) => void }) {
+function OrderCard({ order, onOpen, heldForVerification }: { order: Order; onOpen: (id: number) => void; heldForVerification?: boolean }) {
   return (
     <button
       type="button"
       onClick={() => onOpen(order.id)}
-      className="group w-full text-left bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200"
+      className={cn(
+        "group w-full text-left bg-card border border-border rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200",
+        heldForVerification && "ring-2 ring-yellow-400 border-yellow-400",
+      )}
     >
+      {heldForVerification && (
+        <div className="-mx-4 -mt-4 mb-2 px-4 py-2 bg-yellow-100 border-b border-yellow-300 rounded-t-xl flex items-center gap-2 text-yellow-900 text-xs font-semibold">
+          <AlertTriangle className="w-4 h-4" />
+          <span>Held for guest verification — open to accept or reject</span>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -294,6 +303,8 @@ export default function OrdersPage() {
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const [tab, setTab] = useState<"all" | "curbside">("all");
   const { data: ordersData } = useOrders(statusFilter !== "all" ? { status: statusFilter } : undefined);
+  const { data: heldVerifications = [] } = useGuestVerifications();
+  const heldOrderIds = useMemo(() => new Set(heldVerifications.map(v => v.orderId)), [heldVerifications]);
 
   const orders: Order[] = ordersData?.data ?? [];
 
@@ -333,7 +344,7 @@ export default function OrdersPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {orders.map((order: Order) => (
-                <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} />
+                <OrderCard key={order.id} order={order} onOpen={setOpenOrderId} heldForVerification={heldOrderIds.has(order.id)} />
               ))}
               {orders.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center text-center py-20 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-muted/20">

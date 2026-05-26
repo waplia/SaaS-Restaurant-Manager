@@ -1349,6 +1349,25 @@ export interface WaiterRequest {
   updatedAt: string;
 }
 
+/** A QR-placed order currently held in `pending_acceptance` awaiting waiter
+ *  verification that a guest is physically at the table. See server
+ *  `GET /restaurants/:id/guest-verifications`. */
+export interface GuestVerification {
+  orderId: number;
+  orderNumber: string;
+  tableId: number | null;
+  tableSessionId: number | null;
+  totalAmount: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  notes: string | null;
+  createdAt: string;
+  heldAt: string;
+  sessionOpenedAt: string | null;
+  ticketIds: number[];
+  items: Array<{ orderId: number; name: string; quantity: number; unitPrice: string; notes: string | null }>;
+}
+
 export interface AppNotification {
   id: number;
   type: string;

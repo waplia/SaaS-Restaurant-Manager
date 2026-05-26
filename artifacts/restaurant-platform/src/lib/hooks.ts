@@ -1209,6 +1209,51 @@ export function useNotifications() {
   });
 }
 
+// --- Guest Verification Hold (QR anti-fraud) -------------------------------
+
+export function useGuestVerifications(opts?: { enabled?: boolean }) {
+  const RESTAURANT_ID = useRestaurantId();
+  return useQuery({
+    queryKey: ["guest-verifications", RESTAURANT_ID],
+    queryFn: () =>
+      apiGet<import("./types").GuestVerification[]>(
+        `/restaurants/${RESTAURANT_ID}/guest-verifications`,
+      ),
+    refetchInterval: 15000,
+    enabled: opts?.enabled ?? true,
+  });
+}
+
+export function useAcceptGuestVerification() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: number) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/accept-guest`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["guest-verifications", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["kitchen", "tickets", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["notifications", RESTAURANT_ID] });
+    },
+  });
+}
+
+export function useRejectGuestVerification() {
+  const RESTAURANT_ID = useRestaurantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: number; reason?: string }) =>
+      apiPost(`/restaurants/${RESTAURANT_ID}/orders/${orderId}/reject-guest`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["guest-verifications", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["orders", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["tables", RESTAURANT_ID] });
+      qc.invalidateQueries({ queryKey: ["notifications", RESTAURANT_ID] });
+    },
+  });
+}
+
 export interface KitchenPerformanceData {
   window: { from: string; to: string };
   kitchenId: number | null;

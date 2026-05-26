@@ -15,7 +15,11 @@ import { apiGet } from "@/lib/api";
 import type { jsPDF } from "jspdf";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { FloorTable, Reservation, CreateReservationInput } from "@/lib/types";
+import type { FloorTable, Reservation, CreateReservationInput, GuestVerification } from "@/lib/types";
+import { useGuestVerifications } from "@/lib/hooks";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GuestVerificationCard } from "@/components/GuestVerificationCard";
+import { AlertTriangle } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isWithinInterval, addMinutes, isPast } from "date-fns";
 
 const TABLE_STATUS: Record<string, { label: string; bg: string; border: string; text: string; dot: string }> = {
@@ -531,6 +535,8 @@ function TableCard({
   mergeMode,
   mergeSelected,
   onMergeSelect,
+  heldVerification,
+  onHeldClick,
 }: {
   table: FloorTable;
   reservation?: Reservation;
@@ -540,20 +546,38 @@ function TableCard({
   mergeMode: boolean;
   mergeSelected: number[];
   onMergeSelect: (id: number) => void;
+  heldVerification?: GuestVerification;
+  onHeldClick?: (v: GuestVerification) => void;
 }) {
   const cfg = TABLE_STATUS[table.status] ?? UNKNOWN_STATUS;
   const isMergeSelected = mergeSelected.includes(table.id);
+  const isHeld = !!heldVerification;
+  const heldSeconds = heldVerification ? Math.max(0, Math.floor((Date.now() - parseISO(heldVerification.heldAt).getTime()) / 1000)) : 0;
+  const heldEscalated = heldSeconds >= 300;
 
   return (
     <div
-      onClick={mergeMode ? () => onMergeSelect(table.id) : undefined}
+      onClick={
+        mergeMode
+          ? () => onMergeSelect(table.id)
+          : isHeld && heldVerification && onHeldClick
+          ? () => onHeldClick(heldVerification)
+          : undefined
+      }
       className={cn(
-        "border-2 rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default",
+        "border-2 rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default relative",
         mergeMode && "cursor-pointer",
+        isHeld && "cursor-pointer",
         isMergeSelected && "ring-4 ring-primary ring-offset-2",
+        isHeld && !isMergeSelected && (heldEscalated ? "ring-4 ring-red-400 ring-offset-2 animate-pulse" : "ring-4 ring-yellow-400 ring-offset-2"),
         cfg.bg, cfg.border, cfg.text,
       )}
     >
+      {isHeld && (
+        <div className="absolute -top-2 -right-2 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow border border-yellow-500">
+          <AlertTriangle className="w-3 h-3" /> Verify guest
+        </div>
+      )}
       <div className="flex items-start justify-between mb-2">
         <div>
           <p className="font-bold text-lg">{table.tableNumber}</p>
@@ -919,6 +943,20 @@ export default function TablesPage() {
   const [showReservations, setShowReservations] = useState(false);
   const [splitTable, setSplitTable] = useState<FloorTable | null>(null);
   const [bulkPrinting, setBulkPrinting] = useState<null | "single" | "grid">(null);
+  const [activeHeld, setActiveHeld] = useState<GuestVerification | null>(null);
+
+  const { data: heldVerifications = [] } = useGuestVerifications();
+  const heldByTable = new Map<number, GuestVerification>();
+  for (const v of heldVerifications) {
+    if (v.tableId != null && !heldByTable.has(v.tableId)) heldByTable.set(v.tableId, v);
+  }
+  // Refresh the active modal's data from the latest query (e.g., updated waitTime)
+  useEffect(() => {
+    if (!activeHeld) return;
+    const updated = heldVerifications.find(v => v.orderId === activeHeld.orderId);
+    if (!updated) setActiveHeld(null);
+    else if (updated.heldAt !== activeHeld.heldAt) setActiveHeld(updated);
+  }, [heldVerifications, activeHeld]);
 
   const handlePrintAllQrs = useCallback(async (layout: "single" | "grid") => {
     if (tables.length === 0) {
@@ -1252,6 +1290,8 @@ export default function TablesPage() {
                     mergeMode={mergeMode}
                     mergeSelected={mergeSelected}
                     onMergeSelect={handleMergeSelect}
+                    heldVerification={heldByTable.get(table.id)}
+                    onHeldClick={setActiveHeld}
                   />
                 ))}
               </div>
@@ -1329,6 +1369,20 @@ export default function TablesPage() {
       {splitTable && (
         <SplitOrderModal table={splitTable} allTables={tables as FloorTable[]} onClose={() => setSplitTable(null)} />
       )}
+
+      <Dialog open={!!activeHeld} onOpenChange={open => { if (!open) setActiveHeld(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Verify guest at table</DialogTitle>
+          </DialogHeader>
+          {activeHeld && (
+            <GuestVerificationCard
+              v={activeHeld}
+              tableLabel={(tables as FloorTable[]).find(t => t.id === activeHeld.tableId)?.tableNumber}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

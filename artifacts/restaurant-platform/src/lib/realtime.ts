@@ -58,6 +58,29 @@ export function useSocket(restaurantId: number) {
       void qc.invalidateQueries({ queryKey: ["notifications", restaurantId] });
     });
 
+    // Guest verification hold — new held order, accept, reject, re-ping,
+    // escalation. All five refresh the guest-verifications query so the
+    // Tables glow, Requests section and Orders banner stay in sync.
+    const refreshGuestVerifications = () => {
+      void qc.invalidateQueries({ queryKey: ["guest-verifications", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
+    };
+    socket.on("guest_verification:new", () => {
+      playNotificationChime();
+      refreshGuestVerifications();
+    });
+    socket.on("guest_verification:accepted", refreshGuestVerifications);
+    socket.on("guest_verification:rejected", refreshGuestVerifications);
+    socket.on("guest_verification:reping", () => {
+      playNotificationChime();
+      refreshGuestVerifications();
+    });
+    socket.on("guest_verification:escalated", () => {
+      playNotificationChime();
+      refreshGuestVerifications();
+    });
+
     socket.on("waiter_request:new", () => {
       playNotificationChime();
       void qc.invalidateQueries({ queryKey: ["waiter-requests", restaurantId] });

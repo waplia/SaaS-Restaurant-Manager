@@ -2,9 +2,12 @@ import { useMemo, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { useWaiterRequests, useAcknowledgeWaiterRequest, useResolveWaiterRequest } from "@/lib/hooks";
+import { useWaiterRequests, useAcknowledgeWaiterRequest, useResolveWaiterRequest, useGuestVerifications, useFloorTables } from "@/lib/hooks";
+import { GuestVerificationCard } from "@/components/GuestVerificationCard";
+import type { FloorTable } from "@/lib/types";
+import { AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { BellRing, Receipt, GlassWater, MessageSquare, Check, CheckCircle2, Clock, History } from "lucide-react";
+import { BellRing, Receipt, GlassWater, MessageSquare, Check, CheckCircle2, Clock, History, ShieldAlert } from "lucide-react";
 import { formatDistanceToNow, parseISO, differenceInSeconds } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { WaiterRequest } from "@/lib/types";
@@ -87,10 +90,18 @@ function RequestCard({ r, onAck, onResolve, busy }: { r: WaiterRequest; onAck: (
 
 export default function WaiterRequestsPage() {
   const { data: requests = [] } = useWaiterRequests();
+  const { data: heldVerifications = [] } = useGuestVerifications();
+  const { data: tables = [] } = useFloorTables();
   const ack = useAcknowledgeWaiterRequest();
   const resolve = useResolveWaiterRequest();
   const { toast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
+
+  const tableLabelById = useMemo(() => {
+    const m = new Map<number, string>();
+    (tables as FloorTable[]).forEach(t => m.set(t.id, t.tableNumber));
+    return m;
+  }, [tables]);
 
   const { active, history, pendingCount } = useMemo(() => {
     const active = requests.filter(r => r.status !== "resolved");
@@ -114,9 +125,28 @@ export default function WaiterRequestsPage() {
     <Layout>
       <PageHeader
         title="Waiter Requests"
-        subtitle={`${pendingCount} pending · ${active.length} active`}
+        subtitle={`${pendingCount} pending · ${active.length} active${heldVerifications.length ? ` · ${heldVerifications.length} guest verifications` : ""}`}
       />
       <div className="p-6 max-w-4xl space-y-6">
+        {heldVerifications.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                Guest Verification ({heldVerifications.length})
+              </h2>
+            </div>
+            <div className="space-y-3">
+              {heldVerifications.map(v => (
+                <GuestVerificationCard
+                  key={v.orderId}
+                  v={v}
+                  tableLabel={v.tableId != null ? tableLabelById.get(v.tableId) : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground">Active Requests</h2>

@@ -13,9 +13,11 @@ import { useColors } from "@/hooks/useColors";
 import { TableCard } from "@/components/TableCard";
 import { EmptyState } from "@/components/EmptyState";
 import { MyShiftPanel } from "@/components/MyShiftPanel";
+import { GuestVerificationSheet } from "@/components/GuestVerificationSheet";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRunningOrdersSummary } from "@/hooks/useRunningOrder";
+import { useGuestVerifications, type GuestVerification } from "@/hooks/useGuestVerifications";
 
 type FloorTableExt = FloorTable & { currentOrderId?: number | null };
 
@@ -63,6 +65,22 @@ export default function TablesScreen() {
     [tableList],
   );
   const summaries = useRunningOrdersSummary(occupiedIds);
+
+  const { data: heldVerifications = [] } = useGuestVerifications();
+  const heldByTable = useMemo(() => {
+    const m = new Map<number, GuestVerification>();
+    for (const v of heldVerifications) {
+      if (v.tableId != null && !m.has(v.tableId)) m.set(v.tableId, v);
+    }
+    return m;
+  }, [heldVerifications]);
+  const [activeHeld, setActiveHeld] = useState<GuestVerification | null>(null);
+  // Keep the open sheet's data fresh from the latest poll/socket refresh.
+  React.useEffect(() => {
+    if (!activeHeld) return;
+    const updated = heldVerifications.find(v => v.orderId === activeHeld.orderId);
+    if (!updated) setActiveHeld(null);
+  }, [heldVerifications, activeHeld]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -116,6 +134,10 @@ export default function TablesScreen() {
             const status = t.status ?? "available";
             const isOccupied = status === "occupied" || status === "bill_requested" || status === "billed";
             const summary = summaries.get(t.id);
+            const held = heldByTable.get(t.id);
+            const heldEscalated = held
+              ? (Date.now() - new Date(held.heldAt).getTime()) / 1000 >= 300
+              : false;
             return (
               <TableCard
                 label={label}
@@ -125,7 +147,13 @@ export default function TablesScreen() {
                 itemCount={summary?.itemCount}
                 elapsedMinutes={summary?.elapsedMinutes}
                 billGenerated={!!summary?.billGeneratedAt}
+                guestVerificationHeld={!!held}
+                guestVerificationEscalated={heldEscalated}
                 onPress={() => {
+                  if (held) {
+                    setActiveHeld(held);
+                    return;
+                  }
                   if (isOccupied) {
                     // Single-bill-per-table: jump to the running order so the
                     // waiter sees existing rounds + total instead of starting
@@ -148,6 +176,12 @@ export default function TablesScreen() {
           }}
         />
       )}
+
+      <GuestVerificationSheet
+        verification={activeHeld}
+        tableLabel={activeHeld?.tableId != null ? (tableList.find(tt => tt.id === activeHeld.tableId)?.tableNumber ?? undefined) : undefined}
+        onClose={() => setActiveHeld(null)}
+      />
     </View>
   );
 }
