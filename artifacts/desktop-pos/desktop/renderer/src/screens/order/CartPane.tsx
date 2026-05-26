@@ -29,6 +29,19 @@ interface Props {
   onPay?: () => void;
   onSplit?: () => void;
   onReprint?: () => void;
+  /** Reprint last KOT (F9). */
+  onReprintKot?: () => void;
+  /** Hold the current bill (F5). */
+  onHold?: () => void;
+  /** Add / edit a line note. */
+  onSetLineNote?: (lineKey: string, note: string) => void;
+  /** Cashier display name shown in the header. */
+  cashierName?: string;
+  /** Dense row mode (per app prefs). */
+  compact?: boolean;
+  /** Round-off applied to the grand total (cash mode). */
+  roundOffEnabled?: boolean;
+  onToggleRoundOff?: () => void;
   cartListRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -38,12 +51,23 @@ export function CartPane(props: Props) {
     customerName, customerPhone, selectedTableLabel, orderType, busy,
     selectedCartIdx, onSelectCartIdx, onEditLine,
     onQtyDelta, onRemoveLine, onSend, onClear, onOpenDiscount,
-    onOpenLineDiscount, onRemoveDiscount, onPay, onSplit, onReprint, cartListRef,
+    onOpenLineDiscount, onRemoveDiscount, onPay, onSplit, onReprint, onReprintKot,
+    onHold, onSetLineNote, cashierName, compact,
+    roundOffEnabled, onToggleRoundOff, cartListRef,
   } = props;
-  void customerName; void customerPhone;
 
   const serverItems = placedOrder?.items ?? [];
   const hasAnyLines = cart.length > 0 || serverItems.length > 0;
+
+  const rowPad = compact ? 6 : 10;
+  const rowGap = compact ? 4 : 6;
+
+  // Round-off to the nearest rupee for cash payments — purely a display
+  // hint here; the actual rounding is up to the server when the cashier
+  // pays cash. Show as a one-rupee adjustment row.
+  const rounded = Math.round(totals.totalAmount);
+  const roundOff = roundOffEnabled ? rounded - totals.totalAmount : 0;
+  const grandTotal = totals.totalAmount + roundOff;
 
   return (
     <aside style={{
@@ -67,6 +91,9 @@ export function CartPane(props: Props) {
           <div>{orderType.replace(/_/g, " ").toUpperCase()}{selectedTableLabel ? ` · ${selectedTableLabel}` : ""}</div>
           {(customerName || customerPhone) && (
             <div>{customerName || "Guest"}{customerPhone ? ` · ${customerPhone}` : ""}</div>
+          )}
+          {cashierName && (
+            <div style={{ marginTop: 2, color: colors.textMuted }}>Cashier · {cashierName}</div>
           )}
         </div>
       </div>
@@ -94,14 +121,15 @@ export function CartPane(props: Props) {
               onDoubleClick={() => { if (canEdit) onEditLine(line); }}
               title={canEdit ? "Double-click to edit options" : undefined}
               style={{
-                ...lineStyle,
+                padding: rowPad, borderRadius: 8, background: colors.panelAlt,
+                marginBottom: rowGap,
                 border: `1px solid ${isSel ? colors.brand : "transparent"}`,
                 cursor: "pointer",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.25 }}>{line.name}</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: colors.brand }}>
+                <div style={{ fontWeight: 600, fontSize: compact ? 13 : 14, lineHeight: 1.25 }}>{line.name}</div>
+                <div style={{ fontWeight: 700, fontSize: compact ? 13 : 14, color: colors.brand }}>
                   {fmtINR(line.unitPrice * line.quantity)}
                 </div>
               </div>
@@ -110,13 +138,30 @@ export function CartPane(props: Props) {
                   {line.modifiers.map(m => m.name).join(" · ")}
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+              {line.notes && (
+                <div style={{
+                  fontSize: 11, color: "#fed7aa", marginTop: 4,
+                  fontStyle: "italic",
+                }}>📝 {line.notes}</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: compact ? 6 : 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <StepBtn onClick={(e) => { e.stopPropagation(); onQtyDelta(line.lineKey, -1); }}>−</StepBtn>
                   <span style={{ minWidth: 24, textAlign: "center", fontWeight: 700 }}>{line.quantity}</span>
                   <StepBtn onClick={(e) => { e.stopPropagation(); onQtyDelta(line.lineKey, +1); }}>+</StepBtn>
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
+                  {onSetLineNote && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = window.prompt("Note for this line:", line.notes ?? "") ?? line.notes ?? "";
+                        onSetLineNote(line.lineKey, next.trim());
+                      }}
+                      style={lineActionStyle}
+                      title="Add / edit note"
+                    >Note</button>
+                  )}
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onEditLine(line); }}
@@ -139,17 +184,30 @@ export function CartPane(props: Props) {
           <div style={{ height: 1, background: colors.border, margin: "8px 4px" }} />
         )}
         {serverItems.map(it => (
-          <div key={`s${it.id}`} style={{ ...lineStyle, background: colors.bg }}>
+          <div key={`s${it.id}`} style={{
+            padding: rowPad, borderRadius: 8, background: colors.bg,
+            marginBottom: rowGap,
+          }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.25 }}>{it.menuItemName}</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: colors.brand }}>{fmtINR(Number(it.totalPrice))}</div>
+              <div style={{ fontWeight: 600, fontSize: compact ? 13 : 14, lineHeight: 1.25 }}>{it.menuItemName}</div>
+              <div style={{ fontWeight: 700, fontSize: compact ? 13 : 14, color: colors.brand }}>{fmtINR(Number(it.totalPrice))}</div>
             </div>
             {(it.modifiers && it.modifiers.length > 0) && (
               <div style={{ fontSize: 11, color: colors.textDim, marginTop: 4 }}>
                 {it.modifiers.map(m => m.name).join(" · ")}
               </div>
             )}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            {it.kitchenName && (
+              <div style={{
+                display: "inline-block", marginTop: 4,
+                fontSize: 10, color: colors.textDim,
+                background: colors.panelAlt, borderRadius: 999, padding: "1px 6px",
+              }}>{it.kitchenName}</div>
+            )}
+            {it.notes && (
+              <div style={{ fontSize: 11, color: "#fed7aa", marginTop: 4, fontStyle: "italic" }}>📝 {it.notes}</div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: compact ? 6 : 8 }}>
               <span style={{ fontSize: 12, color: colors.textDim }}>× {it.quantity}{" · sent"}</span>
               <button
                 onClick={() => onOpenLineDiscount(it.id, it.menuItemName)}
@@ -189,8 +247,48 @@ export function CartPane(props: Props) {
         )}
       </div>
 
+      {/* Action row */}
+      {hasAnyLines && (
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6,
+          padding: "10px 12px 0 12px",
+        }}>
+          {onHold && (
+            <ActionPill onClick={onHold} disabled={busy || cart.length === 0} title="Hold bill (F5)">
+              ⏸ Hold
+            </ActionPill>
+          )}
+          {onReprintKot && placedOrder && (
+            <ActionPill onClick={onReprintKot} disabled={busy} title="Reprint last KOT (F9)">
+              🖨 KOT
+            </ActionPill>
+          )}
+          {onReprint && placedOrder && (
+            <ActionPill onClick={onReprint} disabled={busy} title="Reprint bill">
+              🧾 Bill
+            </ActionPill>
+          )}
+          {onOpenDiscount && placedOrder && (
+            <ActionPill onClick={onOpenDiscount} disabled={busy} title="Apply discount">
+              % Disc
+            </ActionPill>
+          )}
+          {onToggleRoundOff && (
+            <ActionPill
+              onClick={onToggleRoundOff} disabled={busy}
+              active={!!roundOffEnabled}
+              title="Toggle round-off to nearest ₹"
+            >○ Round</ActionPill>
+          )}
+          <ActionPill
+            onClick={onClear} disabled={busy || cart.length === 0}
+            title="Clear pending cart"
+          >🗑 Clear</ActionPill>
+        </div>
+      )}
+
       {/* Totals footer */}
-      <div style={{ borderTop: `1px solid ${colors.border}`, padding: "12px 16px", background: colors.bg }}>
+      <div style={{ borderTop: `1px solid ${colors.border}`, padding: "12px 16px", background: colors.bg, marginTop: 10 }}>
         <Row label="Subtotal" value={fmtINR(totals.subtotal)} />
         <Row label={`Tax (${(taxRate * 100).toFixed(0)}%)`} value={fmtINR(totals.taxAmount)} />
         {totals.serviceCharge > 0 && (
@@ -199,8 +297,11 @@ export function CartPane(props: Props) {
         {totals.discountAmount > 0 && (
           <Row label="Discount" value={`−${fmtINR(totals.discountAmount)}`} color={colors.success} />
         )}
+        {roundOffEnabled && Math.abs(roundOff) > 0.0001 && (
+          <Row label="Round-off" value={`${roundOff >= 0 ? "+" : "−"}${fmtINR(Math.abs(roundOff))}`} color={colors.textDim} />
+        )}
         <div style={{ height: 1, background: colors.border, margin: "8px 0" }} />
-        <Row label="Total" value={fmtINR(totals.totalAmount)} bold />
+        <Row label="Total" value={fmtINR(grandTotal)} bold />
 
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           {placedOrder ? (
@@ -243,7 +344,7 @@ export function CartPane(props: Props) {
                 )}
                 {onPay && (
                   <Button onClick={onPay} disabled={busy || cart.length > 0} style={{ flex: 2 }}>
-                    Pay {fmtINR(totals.totalAmount)}
+                    Pay {fmtINR(grandTotal)} (F8)
                   </Button>
                 )}
               </>
@@ -255,11 +356,6 @@ export function CartPane(props: Props) {
   );
 }
 
-const lineStyle: React.CSSProperties = {
-  padding: 10, borderRadius: 8, background: colors.panelAlt,
-  marginBottom: 6,
-};
-
 const removeBtnStyle: React.CSSProperties = {
   background: "transparent", border: 0, color: colors.textDim,
   fontSize: 12, cursor: "pointer", padding: "4px 8px",
@@ -270,6 +366,29 @@ const lineActionStyle: React.CSSProperties = {
   color: colors.textPrimary, borderRadius: 6,
   fontSize: 11, cursor: "pointer", padding: "4px 8px", fontWeight: 600,
 };
+
+function ActionPill({ children, onClick, disabled, title, active }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        background: active ? colors.brandSoft : colors.panelAlt,
+        color: active ? "#fff" : colors.textPrimary,
+        border: 0, padding: "8px 6px", borderRadius: 6,
+        fontSize: 11, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >{children}</button>
+  );
+}
 
 function StepBtn({ children, onClick }: { children: React.ReactNode; onClick: (e: React.MouseEvent) => void }) {
   return (

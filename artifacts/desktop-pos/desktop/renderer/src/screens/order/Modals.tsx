@@ -64,17 +64,28 @@ export function Modal({ title, onClose, children, width = 560 }: {
  * instead of removing-and-re-adding. `confirmLabel` lets callers say
  * "Update" instead of the default "Add to cart".
  */
-export function ModifierModal({ item, onClose, onConfirm, initialModifierIds, confirmLabel }: {
+export function ModifierModal({
+  item, onClose, onConfirm, initialModifierIds, confirmLabel,
+  initialNotes, initialQuantity, notePresets,
+}: {
   item: MenuItem;
   onClose: () => void;
-  onConfirm: (mods: CartModifier[]) => void;
+  /** Second arg carries optional per-line note + quantity entered in the modal. */
+  onConfirm: (mods: CartModifier[], details?: { notes?: string; quantity?: number }) => void;
   initialModifierIds?: number[];
   confirmLabel?: string;
+  initialNotes?: string;
+  initialQuantity?: number;
+  /** Quick-tap note presets the cashier can append (e.g., "less spicy"). */
+  notePresets?: string[];
 }) {
   const [groups, setGroups] = useState<ModifierGroup[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Per group → set of selected modifier ids
   const [selected, setSelected] = useState<Record<number, Set<number>>>({});
+  const [notes, setNotes] = useState(initialNotes ?? "");
+  const [qty, setQty] = useState(Math.max(1, initialQuantity ?? 1));
+  const presets = notePresets ?? ["Less spicy", "Extra spicy", "No onion", "No garlic", "Make jain", "Pack separately"];
 
   useEffect(() => {
     let alive = true;
@@ -178,18 +189,68 @@ export function ModifierModal({ item, onClose, onConfirm, initialModifierIds, co
         </div>
       ))}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+      {/* Per-line note + quantity */}
+      <div style={{ marginTop: 6, borderTop: `1px solid ${colors.border}`, paddingTop: 12 }}>
+        <Label>Note for kitchen (optional)</Label>
+        <Input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g. extra spicy, no onion"
+        />
+        {presets.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {presets.map(p => (
+              <button
+                key={p}
+                onClick={() => setNotes(prev => prev ? `${prev}, ${p.toLowerCase()}` : p)}
+                style={{
+                  background: colors.panelAlt, color: colors.textPrimary, border: 0,
+                  borderRadius: 999, padding: "4px 10px", fontSize: 11, cursor: "pointer",
+                }}
+              >+ {p}</button>
+            ))}
+          </div>
+        )}
+        <div style={{ height: 12 }} />
+        <Label>Quantity</Label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => setQty(q => Math.max(1, q - 1))}
+            style={qtyBtnStyle}
+          >−</button>
+          <span style={{
+            minWidth: 48, textAlign: "center", fontWeight: 800, fontSize: 18,
+            fontVariantNumeric: "tabular-nums",
+          }}>{qty}</span>
+          <button
+            onClick={() => setQty(q => Math.min(99, q + 1))}
+            style={qtyBtnStyle}
+          >+</button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14 }}>
         <span style={{ fontSize: 13, color: colors.textDim }}>
-          + {fmtINR(allMods.reduce((s, m) => s + m.price, 0))} add-ons
+          Line total · <b style={{ color: colors.brand }}>
+            {fmtINR((Number(item.price) + allMods.reduce((s, m) => s + m.price, 0)) * qty)}
+          </b>
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => onConfirm(allMods)} disabled={!requiredOk}>{confirmLabel ?? "Add to cart"}</Button>
+          <Button
+            onClick={() => onConfirm(allMods, { notes: notes.trim() || undefined, quantity: qty })}
+            disabled={!requiredOk}
+          >{confirmLabel ?? "Add to cart"}</Button>
         </div>
       </div>
     </Modal>
   );
 }
+
+const qtyBtnStyle: React.CSSProperties = {
+  width: 38, height: 38, borderRadius: 8, border: 0, cursor: "pointer",
+  background: colors.panelAlt, color: colors.textPrimary, fontSize: 20, fontWeight: 800,
+};
 
 // ─── Table picker ──────────────────────────────────────────────────────────
 export function TablePickerModal({ tables, selectedId, onPick, onClose }: {
@@ -481,6 +542,13 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
     ["F2", "Focus menu search"],
     ["F3", "Focus cart (selects last line)"],
     ["F4", "Send order / add items"],
+    ["F5", "Hold / recall bills"],
+    ["F7", "Reprint / print bill"],
+    ["F8", "Open payment dialog"],
+    ["F9", "Reprint last KOT"],
+    ["Ctrl+L", "Open calculator"],
+    ["Ctrl+K", "Open calculator"],
+    ["Ctrl+N", "Start a new order"],
     ["Del", "Remove selected cart line"],
     ["+ / −", "Adjust quantity of selected line"],
     ["/", "Also focuses menu search"],

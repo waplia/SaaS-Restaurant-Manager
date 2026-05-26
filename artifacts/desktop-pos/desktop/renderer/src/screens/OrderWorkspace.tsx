@@ -36,10 +36,15 @@ import {
 } from "./order/Modals";
 import { PaymentModal } from "./order/PaymentModal";
 import { SplitBillModal } from "./order/SplitBillModal";
+import { HeldBillsModal } from "./order/HeldBillsModal";
+import { CalculatorModal } from "./order/CalculatorModal";
 import {
   type CartItem, type CartModifier, buildCartItem, computeLocalTotals,
   fmtINR, fromServerTotals,
 } from "./order/types";
+import { useSounds } from "../hooks/useSounds";
+import { useAppPrefs } from "../hooks/useAppPrefs";
+import { useHeldBills, type HeldBill } from "../hooks/useHeldBills";
 
 const ORDER_TYPES: Array<{ key: OrderType; label: string }> = [
   { key: "dine_in", label: "Dine-in" },
@@ -47,7 +52,34 @@ const ORDER_TYPES: Array<{ key: OrderType; label: string }> = [
   { key: "delivery", label: "Delivery" },
 ];
 
-export function OrderWorkspace() {
+export type WorkspaceHandoff =
+  | { kind: "table"; tableId: number; orderId?: number | null }
+  | { kind: "order"; orderId: number }
+  | { kind: "customer"; customer: CustomerSummary };
+
+interface OrderWorkspaceProps {
+  /** A request from another screen (Tables / QR / Customers) to focus a
+   *  specific table, resume a specific order, or attach a customer to the
+   *  current cart. Consumed exactly once. */
+  handoff?: WorkspaceHandoff | null;
+  /** Called after the workspace has applied the handoff so the parent can
+   *  clear it. */
+  onHandoffConsumed?: () => void;
+}
+
+const DRAFT_KEY = "kp:draftCart:v1";
+interface DraftCartV1 {
+  v: 1;
+  cart: CartItem[];
+  orderType: OrderType;
+  tableId: number | null;
+  walkInName: string;
+  walkInPhone: string;
+  customer: CustomerSummary | null;
+  savedAt: number;
+}
+
+export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
   // Phase 5 — mirror connectivity into local state so the pay modal can
   // gate non-cash tenders without prop-drilling from the App shell.
   const [online, setOnline] = useState<boolean>(true);
@@ -110,9 +142,20 @@ export function OrderWorkspace() {
   const [showHelp, setShowHelp] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
+  const [showHeld, setShowHeld] = useState(false);
+  const [showCalc, setShowCalc] = useState(false);
+  // Round-off was previously toggleable locally, but the backend `pay`
+  // call uses the unrounded server total, so a cashier-visible mismatch
+  // could appear at tender time. Disabled until backend round-off lands.
+  const roundOffEnabled = false;
   const anyModalOpen =
     !!modItem || showTablePicker || showCustomer || !!showDiscount || showHelp
-    || showPay || showSplit;
+    || showPay || showSplit || showHeld || showCalc;
+
+  // ─── Renderer-only hooks (sounds, prefs, held bills) ───────────────
+  const { play } = useSounds();
+  const { prefs, update } = useAppPrefs();
+  const heldBills = useHeldBills();
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const cartListRef = useRef<HTMLDivElement | null>(null);
@@ -155,28 +198,93 @@ export function OrderWorkspace() {
     return () => { alive = false; window.clearInterval(id); };
   }, []);
 
+  // ─── Draft cart autosave + restore ─────────────────────────────────
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as DraftCartV1;
+      if (!d || d.v !== 1 || !Array.isArray(d.cart) || d.cart.length === 0) return;
+      setCart(d.cart);
+      setOrderType(d.orderType);
+      setWalkInName(d.walkInName ?? "");
+      setWalkInPhone(d.walkInPhone ?? "");
+      setCustomer(d.customer ?? null);
+      // selectedTable is rehydrated after tables load
+    } catch { /* ignore corrupted draft */ }
+  }, []);
+
+  // Once `tables` is loaded, link up the restored draft's tableId.
+  useEffect(() => {
+    if (tables.length === 0 || selectedTable) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as DraftCartV1;
+      if (d?.v === 1 && d.tableId) {
+        const t = tables.find(x => x.id === d.tableId);
+        if (t) setSelectedTable(t);
+      }
+    } catch { /* ignore */ }
+  }, [tables, selectedTable]);
+
+  useEffect(() => {
+    // Don't autosave once an order is placed — the server is the source of truth.
+    if (placedOrder) return;
+    try {
+      if (cart.length === 0) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      const payload: DraftCartV1 = {
+        v: 1, cart, orderType,
+        tableId: selectedTable?.id ?? null,
+        walkInName, walkInPhone, customer,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    } catch { /* ignore quota */ }
+  }, [cart, orderType, selectedTable, walkInName, walkInPhone, customer, placedOrder]);
+
   const taxRate = useMemo(() => (Number(restaurant?.taxRate ?? 0) || 0) / 100, [restaurant]);
   const serviceRate = useMemo(() => (Number(restaurant?.serviceCharge ?? 0) || 0) / 100, [restaurant]);
 
   const localTotals = useMemo(() => computeLocalTotals(cart, taxRate, serviceRate), [cart, taxRate, serviceRate]);
+  const cartQtyByItemId = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const c of cart) m[c.menuItemId] = (m[c.menuItemId] ?? 0) + c.quantity;
+    return m;
+  }, [cart]);
   const totals = placedOrder ? fromServerTotals(placedOrder) : localTotals;
 
   // ─── Cart ops ──────────────────────────────────────────────────────
-  const addItemToCart = useCallback((item: MenuItem, mods: CartModifier[] = []) => {
+  const addItemToCart = useCallback((
+    item: MenuItem,
+    mods: CartModifier[] = [],
+    details?: { notes?: string; quantity?: number },
+  ) => {
     if (item.isAvailable === false) {
       setOpError(`${item.name} is 86'd.`);
+      play("error");
       return;
     }
     setOpError(null);
+    const addQty = Math.max(1, details?.quantity ?? 1);
     setCart(prev => {
       const built = buildCartItem(item, mods);
-      const existing = prev.find(c => c.lineKey === built.lineKey);
+      if (details?.notes) built.notes = details.notes;
+      built.quantity = addQty;
+      const existing = prev.find(c => c.lineKey === built.lineKey && (c.notes ?? "") === (built.notes ?? ""));
       if (existing) {
-        return prev.map(c => c.lineKey === built.lineKey ? { ...c, quantity: c.quantity + 1 } : c);
+        return prev.map(c => c === existing ? { ...c, quantity: c.quantity + addQty } : c);
       }
       return [...prev, built];
     });
-  }, []);
+    play("add");
+  }, [play]);
 
   const handlePickItem = useCallback((item: MenuItem) => {
     if (item.hasModifiers) {
@@ -231,7 +339,66 @@ export function OrderWorkspace() {
   const handleRemoveLine = useCallback((lineKey: string) => {
     setCart(prev => prev.filter(c => c.lineKey !== lineKey));
     setSelectedCartIdx(null);
+    play("remove");
+  }, [play]);
+
+  const handleSetLineNote = useCallback((lineKey: string, note: string) => {
+    setCart(prev => prev.map(c => c.lineKey === lineKey ? { ...c, notes: note || undefined } : c));
   }, []);
+
+  // ─── Held bills (hold / recall) ────────────────────────────────────
+  const handleHold = useCallback(() => {
+    if (cart.length === 0) { setOpError("Nothing in the cart to hold."); play("error"); return; }
+    const label = window.prompt("Label this bill (e.g. table or guest name):", selectedTable
+      ? `Table ${selectedTable.tableNumber}`
+      : (customer?.name ?? walkInName ?? `Bill ${new Date().toLocaleTimeString()}`));
+    if (label == null) return;
+    heldBills.hold({
+      label: label.trim() || "Untitled",
+      orderType,
+      tableId: selectedTable?.id ?? null,
+      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : null,
+      customerName: customer?.name ?? walkInName ?? null,
+      customerPhone: customer?.phone ?? walkInPhone ?? null,
+      lines: cart,
+      cashier: prefs.cashierName || undefined,
+    });
+    setCart([]);
+    setSelectedCartIdx(null);
+    play("hold");
+  }, [cart, selectedTable, customer, walkInName, walkInPhone, orderType, heldBills, prefs.cashierName, play]);
+
+  const handleRecall = useCallback((bill: HeldBill) => {
+    setCart(bill.lines);
+    setOrderType(bill.orderType);
+    setSelectedTable(bill.tableId
+      ? tables.find(t => t.id === bill.tableId) ?? null
+      : null);
+    setWalkInName(bill.customerName ?? "");
+    setWalkInPhone(bill.customerPhone ?? "");
+    setCustomer(null);
+    setShowHeld(false);
+    heldBills.remove(bill.id);
+  }, [tables, heldBills]);
+
+  // ─── Reprint last KOT ──────────────────────────────────────────────
+  const handleReprintKot = useCallback(async () => {
+    if (!placedOrder) return;
+    try {
+      await window.khanalagao.printers.printOrderKots({
+        orderNumber: placedOrder.orderNumber,
+        items: placedOrder.items.map(it => ({
+          name: it.menuItemName,
+          quantity: it.quantity,
+          kitchenId: it.kitchenId ?? null,
+          kitchenName: it.kitchenName ?? null,
+          modifiers: (it.modifiers ?? []).map(m => ({ name: m.name })),
+          notes: it.notes ?? null,
+        })),
+      });
+      play("kot");
+    } catch (e) { setOpError(`KOT reprint failed: ${(e as Error).message}`); play("error"); }
+  }, [placedOrder, play]);
 
   // ─── Resume an existing order ──────────────────────────────────────
   const loadOrderIntoPane = useCallback(async (orderId: number) => {
@@ -301,7 +468,43 @@ export function OrderWorkspace() {
     setWalkInPhone("");
     setSelectedCartIdx(null);
     setOpError(null);
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
   }, []);
+
+  // ─── Cross-screen handoff (Tables / QR / Customers) ────────────────
+  const handoffRef = useRef<WorkspaceHandoff | null | undefined>(undefined);
+  useEffect(() => {
+    const h = props.handoff;
+    if (!h || handoffRef.current === h) return;
+    // Defer: a free-table handoff arriving before `tables` loads would
+    // otherwise no-op and consume the handoff before it can be applied.
+    if (h.kind === "table" && !h.orderId && tables.length === 0) return;
+    handoffRef.current = h;
+    (async () => {
+      try {
+        if (h.kind === "order") {
+          await loadOrderIntoPane(h.orderId);
+        } else if (h.kind === "table") {
+          if (h.orderId) {
+            await loadOrderIntoPane(h.orderId);
+          } else {
+            const t = tables.find(x => x.id === h.tableId);
+            if (t) {
+              await handlePickTable(t);
+            } else {
+              setOpError(`Couldn't find table #${h.tableId} on the floor.`);
+            }
+          }
+        } else if (h.kind === "customer") {
+          setCustomer(h.customer);
+          if (h.customer.name) setWalkInName(h.customer.name);
+          if (h.customer.phone) setWalkInPhone(h.customer.phone);
+        }
+      } finally {
+        props.onHandoffConsumed?.();
+      }
+    })();
+  }, [props.handoff, props, loadOrderIntoPane, handlePickTable, tables]);
 
   const handleSend = useCallback(async () => {
     if (cart.length === 0) return;
@@ -397,6 +600,27 @@ export function OrderWorkspace() {
         return;
       }
       if (e.key === "F4") { e.preventDefault(); void handleSend(); return; }
+      if (e.key === "F5") { e.preventDefault(); cart.length > 0 ? handleHold() : setShowHeld(true); return; }
+      if (e.key === "F7") {
+        e.preventDefault();
+        if (placedOrder) {
+          void window.khanalagao.printers.printBillForOrder({ orderId: placedOrder.id })
+            .catch((err) => setOpError(`Bill print failed: ${(err as Error).message}`));
+        }
+        return;
+      }
+      if (e.key === "F8") {
+        e.preventDefault();
+        if (placedOrder && placedOrder.paymentStatus !== "paid") setShowPay(true);
+        return;
+      }
+      if (e.key === "F9") { e.preventDefault(); void handleReprintKot(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K" || e.key === "l" || e.key === "L")) {
+        e.preventDefault(); setShowCalc(true); return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {
+        e.preventDefault(); startNewOrder(); return;
+      }
       if (e.key === "?" && !inField) { e.preventDefault(); setShowHelp(true); return; }
       if (e.key === "/" && !inField) {
         e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); return;
@@ -422,7 +646,10 @@ export function OrderWorkspace() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [anyModalOpen, cart, selectedCartIdx, handleQtyDelta, handleRemoveLine, handleSend]);
+  }, [
+    anyModalOpen, cart, selectedCartIdx, handleQtyDelta, handleRemoveLine, handleSend,
+    handleHold, handleReprintKot, placedOrder, startNewOrder,
+  ]);
 
   if (loading) {
     return <div style={{ display: "grid", placeItems: "center", height: "100%" }}><Spinner size={28} /></div>;
@@ -486,6 +713,16 @@ export function OrderWorkspace() {
           <button onClick={() => setShowCustomer(true)} style={topPill(!!customerSummary)}>
             👤 {customerSummary || "Customer"}
           </button>
+          <button
+            onClick={() => setShowHeld(true)}
+            title="Held bills (F5)"
+            style={topPill(heldBills.bills.length > 0)}
+          >⏸ Held{heldBills.bills.length > 0 ? ` · ${heldBills.bills.length}` : ""}</button>
+          <button
+            onClick={() => setShowCalc(true)}
+            title="Calculator (Ctrl+K / Ctrl+L)"
+            style={topPill(false)}
+          >🧮 Calc</button>
           {placedOrder && (
             <Button variant="ghost" onClick={startNewOrder}>+ New order</Button>
           )}
@@ -512,6 +749,10 @@ export function OrderWorkspace() {
             onVegFilter={setVegFilter}
             onPickItem={handlePickItem}
             searchInputRef={searchRef}
+            layout={prefs.menuLayout}
+            onLayoutChange={(l) => update({ menuLayout: l })}
+            showImages={prefs.showItemImages}
+            cartQtyByItemId={cartQtyByItemId}
           />
         </div>
 
@@ -552,6 +793,12 @@ export function OrderWorkspace() {
           setShowDiscount({ kind: "line", orderItemId, label })
         }
         onRemoveDiscount={handleRemoveDiscount}
+        cashierName={prefs.cashierName || undefined}
+        compact={prefs.compactCart}
+        roundOffEnabled={roundOffEnabled}
+        onHold={handleHold}
+        onSetLineNote={handleSetLineNote}
+        onReprintKot={placedOrder ? handleReprintKot : undefined}
         onPay={placedOrder ? () => setShowPay(true) : undefined}
         onSplit={placedOrder ? () => setShowSplit(true) : undefined}
         onReprint={placedOrder ? async () => {
@@ -569,11 +816,11 @@ export function OrderWorkspace() {
           initialModifierIds={modItem.mode === "edit" ? modItem.initialIds : undefined}
           confirmLabel={modItem.mode === "edit" ? "Update line" : undefined}
           onClose={() => setModItem(null)}
-          onConfirm={(mods) => {
+          onConfirm={(mods, details) => {
             if (modItem.mode === "edit") {
               applyEditedModifiers(modItem.lineKey, modItem.item, mods);
             } else {
-              addItemToCart(modItem.item, mods);
+              addItemToCart(modItem.item, mods, details);
             }
             setModItem(null);
           }}
@@ -637,6 +884,19 @@ export function OrderWorkspace() {
             setShowSplit(false);
             setOrdersRailToken(t => t + 1);
           }}
+        />
+      )}
+      {showHeld && (
+        <HeldBillsModal
+          bills={heldBills.bills}
+          onClose={() => setShowHeld(false)}
+          onRecall={handleRecall}
+          onDelete={heldBills.remove}
+        />
+      )}
+      {showCalc && (
+        <CalculatorModal
+          onClose={() => setShowCalc(false)}
         />
       )}
     </div>

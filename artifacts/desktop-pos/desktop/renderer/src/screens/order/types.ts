@@ -88,6 +88,9 @@ export function modifierFromOption(opt: ModifierOption, groupId?: number): CartM
   };
 }
 
+/** Alias kept for the held-bills/cash-movement helpers. */
+export type CartLine = CartItem;
+
 export function fmtINR(n: number): string {
   if (!isFinite(n)) return "₹0.00";
   return `₹${n.toFixed(2)}`;

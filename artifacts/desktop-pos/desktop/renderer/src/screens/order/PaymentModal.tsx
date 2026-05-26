@@ -16,7 +16,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrderDetailView, PayMethod, Terminal } from "../../../../shared/ipc-contract";
 import { Banner, Button, Input, Label, Spinner, colors } from "../../ui/components";
 import { Modal } from "./Modals";
+import { CalculatorModal } from "./CalculatorModal";
 import { fmtINR } from "./types";
+import { useSounds } from "../../hooks/useSounds";
 
 type Lane = "cash" | "upi" | "card";
 
@@ -28,6 +30,13 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
   online: boolean;
 }) {
   const [lane, setLane] = useState<Lane>("cash");
+  const [showCalc, setShowCalc] = useState(false);
+  const { play } = useSounds();
+  // Wrap the success callback so every successful tender path emits the same
+  // "pay" cue, and every caught error rings the "error" cue — both audible
+  // feedback events were missing from the previous pass.
+  const handlePaid = (next: OrderDetailView) => { play("pay"); onPaid(next); };
+  const handleErr = (e: unknown) => { play("error"); setErr((e as Error).message); };
   // Snap back to cash if the connection drops while a non-cash lane is open.
   useEffect(() => { if (!online && lane !== "cash") setLane("cash"); }, [online, lane]);
   const [tip, setTip] = useState("");
@@ -75,8 +84,8 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
         tipAmount: tipNum > 0 ? tipNum : undefined,
         idempotencyKey: idemRef.current,
       });
-      onPaid(next);
-    } catch (e) { setErr((e as Error).message); }
+      handlePaid(next);
+    } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   }
 
@@ -97,9 +106,9 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
           razorpaySignature: `demo_sig_${Date.now()}`,
           idempotencyKey: idemRef.current,
         });
-        onPaid(next);
+        handlePaid(next);
       }
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   }
 
@@ -115,8 +124,8 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
         razorpaySignature: rzpSignature.trim(),
         idempotencyKey: idemRef.current,
       });
-      onPaid(next);
-    } catch (e) { setErr((e as Error).message); }
+      handlePaid(next);
+    } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   }
 
@@ -129,7 +138,7 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
         amount: grandTotal, tipAmount: tipNum > 0 ? tipNum : undefined,
       });
       setTerminalIntentId(r.paymentIntentId);
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   }
 
@@ -141,8 +150,8 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
         terminalDeviceId: terminalId, orderId: order.id,
         paymentIntentId: terminalIntentId,
       });
-      onPaid(confirmed);
-    } catch (e) { setErr((e as Error).message); }
+      handlePaid(confirmed);
+    } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   }
 
@@ -201,13 +210,44 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
         <>
           <div style={{ marginBottom: 14 }}>
             <Label>Cash tendered</Label>
-            <Input
-              autoFocus
-              inputMode="decimal"
-              value={cashTendered}
-              onChange={(e) => setCashTendered(e.target.value.replace(/[^\d.]/g, ""))}
-              placeholder={totalWithTip.toFixed(2)}
-            />
+            <div style={{ display: "flex", gap: 6 }}>
+              <Input
+                autoFocus
+                inputMode="decimal"
+                value={cashTendered}
+                onChange={(e) => setCashTendered(e.target.value.replace(/[^\d.]/g, ""))}
+                placeholder={totalWithTip.toFixed(2)}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCalc(true)}
+                title="Open calculator"
+                style={{
+                  background: colors.panelAlt, color: colors.textPrimary, border: 0,
+                  borderRadius: 6, padding: "0 14px", fontSize: 16, cursor: "pointer",
+                }}
+              >🧮</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => setCashTendered(totalWithTip.toFixed(2))}
+                style={cashChipStyle}
+              >Exact</button>
+              {[100, 200, 500, 2000].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    const due = Math.max(totalWithTip, n);
+                    const rounded = Math.ceil(due / n) * n;
+                    setCashTendered(rounded.toFixed(2));
+                  }}
+                  style={cashChipStyle}
+                >₹{n}</button>
+              ))}
+            </div>
             {Number(cashTendered) > 0 && (
               <div style={{ marginTop: 8, fontSize: 13, color: change > 0 ? colors.success : colors.textDim }}>
                 Change: <b>{fmtINR(change)}</b>
@@ -294,6 +334,18 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
           )}
         </>
       )}
+      {showCalc && (
+        <CalculatorModal
+          target={totalWithTip}
+          onClose={() => setShowCalc(false)}
+          onSendToCash={(v) => setCashTendered(v.toFixed(2))}
+        />
+      )}
     </Modal>
   );
 }
+
+const cashChipStyle: React.CSSProperties = {
+  background: colors.panelAlt, color: colors.textPrimary, border: 0,
+  borderRadius: 999, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600,
+};

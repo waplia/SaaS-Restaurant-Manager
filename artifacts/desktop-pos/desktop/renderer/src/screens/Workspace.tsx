@@ -3,10 +3,17 @@ import type { SelectionState, User } from "../../../shared/ipc-contract";
 import { Button, colors } from "../ui/components";
 import { HardwareSettings } from "./HardwareSettings";
 import { useScanner } from "../hooks/useScanner";
-import { OrderWorkspace } from "./OrderWorkspace";
+import { OrderWorkspace, type WorkspaceHandoff } from "./OrderWorkspace";
 import { ReportsScreen } from "./ReportsScreen";
+import { TablesScreen } from "./TablesScreen";
+import { CustomersScreen } from "./CustomersScreen";
+import { QrOrdersPanel } from "./QrOrdersPanel";
+import { AppSettingsScreen } from "./AppSettingsScreen";
 import { CloseShiftModal } from "./order/CloseShiftModal";
 import { SyncPanel } from "./order/SyncPanel";
+import { FailedPrintsModal } from "./order/FailedPrintsModal";
+import { CashMovementModal, type CashMovementKind } from "./order/CashMovementModal";
+import { useAppPrefs } from "../hooks/useAppPrefs";
 
 interface Props {
   user: User;
@@ -20,10 +27,12 @@ interface Props {
 
 const NAV = [
   { key: "orders", label: "Orders", enabled: true },
-  { key: "tables", label: "Tables", enabled: false },
-  { key: "customers", label: "Customers", enabled: false },
+  { key: "tables", label: "Tables", enabled: true },
+  { key: "qr", label: "QR orders", enabled: true },
+  { key: "customers", label: "Customers", enabled: true },
   { key: "reports", label: "Reports", enabled: true },
   { key: "hardware", label: "Hardware", enabled: true },
+  { key: "settings", label: "Settings", enabled: true },
 ] as const;
 
 export function WorkspaceScreen(props: Props) {
@@ -37,6 +46,15 @@ export function WorkspaceScreen(props: Props) {
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ kind: "ok" | "warn" | "err"; text: string } | null>(null);
   const [failedCount, setFailedCount] = useState(0);
+  const [showFailedPrints, setShowFailedPrints] = useState(false);
+  const [cashMovement, setCashMovement] = useState<CashMovementKind | null>(null);
+  const [handoff, setHandoff] = useState<WorkspaceHandoff | null>(null);
+  const { prefs: appPrefs } = useAppPrefs();
+
+  const openInOrders = useCallback((h: WorkspaceHandoff) => {
+    setHandoff(h);
+    setActive("orders");
+  }, []);
   const shiftTimer = useShiftTimer(props.shiftOpenedAt);
 
   // Mirror scanner-enabled state from main so the global hook respects the
@@ -158,8 +176,8 @@ export function WorkspaceScreen(props: Props) {
 
         {failedCount > 0 && (
           <button
-            onClick={() => setActive("hardware")}
-            title="Failed print jobs — open Hardware tab"
+            onClick={() => setShowFailedPrints(true)}
+            title="Failed print jobs — review and retry"
             style={{
               background: "rgba(220,38,38,0.16)", border: `1px solid rgba(220,38,38,0.5)`,
               color: "#fca5a5", padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
@@ -241,9 +259,14 @@ export function WorkspaceScreen(props: Props) {
             >
               <MenuItem onClick={() => { setMenuOpen(false); props.onSwitchOutlet(); }}>Switch outlet / counter</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); props.onOpenSettings(); }}>Connection settings</MenuItem>
+              <MenuItem onClick={() => { setMenuOpen(false); setActive("settings"); }}>App settings…</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); setShowSync(true); }}>Sync status…</MenuItem>
-              <MenuItem onClick={() => { setMenuOpen(false); setShowCloseShift(true); }}>Close shift…</MenuItem>
               <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
+              <MenuItem onClick={() => { setMenuOpen(false); setCashMovement("in"); }}>Cash in…</MenuItem>
+              <MenuItem onClick={() => { setMenuOpen(false); setCashMovement("out"); }}>Cash out…</MenuItem>
+              <MenuItem onClick={() => { setMenuOpen(false); setCashMovement("expense"); }}>Record expense…</MenuItem>
+              <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
+              <MenuItem onClick={() => { setMenuOpen(false); setShowCloseShift(true); }}>Close shift…</MenuItem>
               <MenuItem danger onClick={() => { setMenuOpen(false); props.onSignOut(); }}>Sign out</MenuItem>
             </div>
           )}
@@ -284,9 +307,17 @@ export function WorkspaceScreen(props: Props) {
         display: "flex", flexDirection: "column", minHeight: 0,
       }}>
         {active === "orders" ? (
-          <OrderWorkspace />
+          <OrderWorkspace handoff={handoff} onHandoffConsumed={() => setHandoff(null)} />
+        ) : active === "tables" ? (
+          <TablesScreen onOpenTable={(table, orderId) => openInOrders({ kind: "table", tableId: table.id, orderId })} />
+        ) : active === "qr" ? (
+          <QrOrdersPanel onOpenOrder={(orderId) => openInOrders({ kind: "order", orderId })} />
+        ) : active === "customers" ? (
+          <CustomersScreen onUseInOrder={(customer) => openInOrders({ kind: "customer", customer })} />
         ) : active === "reports" ? (
           <ReportsScreen />
+        ) : active === "settings" ? (
+          <AppSettingsScreen onSignOut={props.onSignOut} />
         ) : active === "hardware" ? (
           <div style={{ overflow: "auto", padding: 24, flex: 1 }}>
             <HardwareSettings online={props.online} />
@@ -317,6 +348,23 @@ export function WorkspaceScreen(props: Props) {
       )}
 
       {showSync && <SyncPanel onClose={() => setShowSync(false)} />}
+
+      {showFailedPrints && (
+        <FailedPrintsModal
+          onClose={() => setShowFailedPrints(false)}
+          online={props.online}
+          onJumpToHardware={() => { setShowFailedPrints(false); setActive("hardware"); }}
+        />
+      )}
+
+      {cashMovement && (
+        <CashMovementModal
+          kind={cashMovement}
+          cashier={appPrefs.cashierName || props.user.name}
+          onClose={() => setCashMovement(null)}
+          onSaved={() => setCashMovement(null)}
+        />
+      )}
     </div>
   );
 }

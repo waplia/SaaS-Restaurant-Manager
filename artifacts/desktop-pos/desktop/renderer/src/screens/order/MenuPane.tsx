@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { MenuCategory, MenuItem } from "../../../../shared/ipc-contract";
 import { Input, Spinner, colors } from "../../ui/components";
 import { fmtINR } from "./types";
@@ -15,13 +15,27 @@ interface Props {
   onVegFilter: (v: "all" | "veg" | "non_veg") => void;
   onPickItem: (item: MenuItem) => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  /** Persisted default from useAppPrefs. */
+  layout?: "image" | "compact";
+  onLayoutChange?: (l: "image" | "compact") => void;
+  /** Show item images on the tiles (image layout only). */
+  showImages?: boolean;
+  /** menuItemId → in-cart quantity, used for the corner qty badge. */
+  cartQtyByItemId?: Record<number, number>;
 }
 
 export function MenuPane(props: Props) {
   const {
     loading, categories, items, selectedCategoryId, onSelectCategory,
     search, onSearch, vegFilter, onVegFilter, onPickItem, searchInputRef,
+    layout: layoutProp, onLayoutChange, showImages = true, cartQtyByItemId,
   } = props;
+
+  const [localLayout, setLocalLayout] = useState<"image" | "compact">("image");
+  const layout = layoutProp ?? localLayout;
+  function setLayout(l: "image" | "compact") {
+    if (onLayoutChange) onLayoutChange(l); else setLocalLayout(l);
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -33,6 +47,10 @@ export function MenuPane(props: Props) {
       return true;
     });
   }, [items, search, selectedCategoryId, vegFilter]);
+
+  const gridCols = layout === "compact"
+    ? "repeat(auto-fill, minmax(140px, 1fr))"
+    : "repeat(auto-fill, minmax(170px, 1fr))";
 
   return (
     <div style={{
@@ -80,6 +98,9 @@ export function MenuPane(props: Props) {
           <FilterChip active={vegFilter === "all"} onClick={() => onVegFilter("all")}>All</FilterChip>
           <FilterChip active={vegFilter === "veg"} onClick={() => onVegFilter("veg")} color="#16a34a">🟢 Veg</FilterChip>
           <FilterChip active={vegFilter === "non_veg"} onClick={() => onVegFilter("non_veg")} color="#dc2626">🔴 Non-veg</FilterChip>
+          <div style={{ width: 1, height: 22, background: colors.border, margin: "0 4px" }} />
+          <FilterChip active={layout === "image"} onClick={() => setLayout("image")}>🖼 Cards</FilterChip>
+          <FilterChip active={layout === "compact"} onClick={() => setLayout("compact")}>≡ Compact</FilterChip>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
@@ -93,11 +114,18 @@ export function MenuPane(props: Props) {
           )}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
-            gap: 12,
+            gridTemplateColumns: gridCols,
+            gap: layout === "compact" ? 8 : 12,
           }}>
             {filtered.map((it) => (
-              <ItemCard key={it.id} item={it} onClick={() => onPickItem(it)} />
+              <ItemCard
+                key={it.id}
+                item={it}
+                onClick={() => onPickItem(it)}
+                layout={layout}
+                showImage={showImages}
+                cartQty={cartQtyByItemId?.[it.id] ?? 0}
+              />
             ))}
           </div>
         </div>
@@ -147,24 +175,58 @@ function FilterChip({ active, onClick, children, color }: {
   );
 }
 
-function ItemCard({ item, onClick }: { item: MenuItem; onClick: () => void }) {
+function ItemCard({ item, onClick, layout, showImage, cartQty }: {
+  item: MenuItem; onClick: () => void;
+  layout: "image" | "compact"; showImage: boolean; cartQty: number;
+}) {
   const disabled = item.isAvailable === false;
+  const compact = layout === "compact";
+  const img = !compact && showImage ? item.imageUrl : null;
+
   return (
     <button
       disabled={disabled}
       onClick={onClick}
       title={disabled ? "Item is 86'd" : item.name}
       style={{
+        position: "relative",
         textAlign: "left", border: `1px solid ${colors.border}`,
         background: disabled ? colors.bg : colors.panel,
         color: disabled ? colors.textMuted : colors.textPrimary,
-        borderRadius: 10, padding: 12, cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.55 : 1, display: "flex", flexDirection: "column", gap: 6,
-        minHeight: 96,
+        borderRadius: 10, padding: compact ? 8 : 12,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        display: "flex", flexDirection: "column", gap: 6,
+        minHeight: compact ? 64 : 96,
+        overflow: "hidden",
       }}
     >
+      {cartQty > 0 && (
+        <span style={{
+          position: "absolute", top: 6, left: 6, zIndex: 1,
+          background: colors.brand, color: "#fff",
+          padding: "2px 7px", borderRadius: 999,
+          fontSize: 11, fontWeight: 800, lineHeight: 1.2,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+        }}>×{cartQty}</span>
+      )}
+
+      {img && (
+        <div style={{
+          width: "100%", aspectRatio: "4 / 3", marginBottom: 4,
+          borderRadius: 6, overflow: "hidden",
+          background: colors.panelAlt,
+          backgroundImage: `url("${img}")`,
+          backgroundSize: "cover", backgroundPosition: "center",
+        }} />
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{item.name}</div>
+        <div style={{
+          fontSize: compact ? 12 : 14, fontWeight: 600,
+          lineHeight: 1.2, overflow: "hidden",
+          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+        }}>{item.name}</div>
         <div style={{
           width: 12, height: 12, border: `1.5px solid ${item.isVeg ? "#16a34a" : "#dc2626"}`,
           borderRadius: 2, display: "grid", placeItems: "center", flexShrink: 0,
@@ -175,8 +237,8 @@ function ItemCard({ item, onClick }: { item: MenuItem; onClick: () => void }) {
           }} />
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: colors.brand }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", gap: 6 }}>
+        <span style={{ fontSize: compact ? 12 : 13, fontWeight: 700, color: colors.brand }}>
           {fmtINR(Number(item.price))}
         </span>
         {item.hasModifiers && (
