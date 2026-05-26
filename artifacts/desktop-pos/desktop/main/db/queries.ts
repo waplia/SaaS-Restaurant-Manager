@@ -273,6 +273,24 @@ export function upsertKitchensFromItems(restaurantId: number, items: MenuItem[])
   txn();
 }
 
+// ─── Modifier groups (v2 migration) ───────────────────────────────────────
+// Stored per menu item so the offline order builder can pull spice levels,
+// add-ons, etc. without an API round-trip. Empty arrays are persisted too —
+// they mean "we checked and this item has no modifiers", which lets the
+// renderer skip the modal entirely while offline.
+export function upsertModifierGroups(itemId: number, groups: import("../../shared/ipc-contract").ModifierGroup[]): void {
+  getDb().prepare(
+    `INSERT OR REPLACE INTO modifier_groups(item_id, updated_at, payload) VALUES (?, ?, ?)`,
+  ).run(itemId, Date.now(), JSON.stringify(groups));
+}
+
+export function getModifierGroups(itemId: number): import("../../shared/ipc-contract").ModifierGroup[] | null {
+  const r = getDb().prepare(`SELECT payload FROM modifier_groups WHERE item_id=?`).get(itemId) as Row | undefined;
+  if (!r) return null;
+  try { return JSON.parse(r.payload) as import("../../shared/ipc-contract").ModifierGroup[]; }
+  catch { return null; }
+}
+
 export function nextLocalId(): number {
   // Local-only IDs are large negatives to avoid colliding with server ids.
   // We keep a monotonic counter in kv so retries land on the same row.

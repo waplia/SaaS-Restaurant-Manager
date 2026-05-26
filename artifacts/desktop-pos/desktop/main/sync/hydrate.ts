@@ -13,13 +13,12 @@ import {
   upsertCategories, upsertMenuItems, upsertTables, upsertCustomers,
   kvSet, listMenuItems,
   upsertSettings, upsertTerminals, upsertKitchensFromItems,
-  upsertDiscountRules,
+  upsertDiscountRules, upsertModifierGroups,
 } from "../db/queries";
 
 const RESTAURANT_INFO_KEY = (rid: number) => `restaurant_info:${rid}`;
 const TERMINALS_KEY = (rid: number) => `terminals:${rid}`;
 const DISCOUNTS_KEY = (rid: number) => `discounts:${rid}`;
-const MODIFIERS_KEY = (itemId: number) => `modifiers:${itemId}`;
 
 export async function hydrateAll(client: ApiClient, restaurantId: number): Promise<void> {
   // Phase A: the entities the cashier needs to *start* an order. We await
@@ -79,7 +78,9 @@ export async function hydrateAll(client: ApiClient, restaurantId: number): Promi
   await mapWithLimit(items, 4, async (it) => {
     try {
       const groups = await client.listItemModifierGroups(it.id);
-      kvSet(MODIFIERS_KEY(it.id), JSON.stringify(groups));
+      // Persist (even an empty array) so the offline modal knows the item
+      // genuinely has no options vs. "we never fetched it".
+      upsertModifierGroups(it.id, groups);
     } catch { /* per-item modifier hydrate is best-effort */ }
   });
 

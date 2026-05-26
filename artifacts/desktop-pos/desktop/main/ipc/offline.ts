@@ -47,7 +47,6 @@ function isNetworkError(err: unknown): boolean {
 
 // ─── KV-backed caches (small / typed) ────────────────────────────────────
 const RESTAURANT_INFO_KEY = (rid: number) => `restaurant_info:${rid}`;
-const MODIFIERS_KEY = (itemId: number) => `modifiers:${itemId}`;
 
 function refreshInBackground(label: string, fn: () => Promise<unknown>): void {
   // Fire-and-forget background refresh. Failures are logged but never bubble
@@ -106,20 +105,20 @@ export async function listMenuBundle(ctx: OfflineContext): Promise<{ categories:
 }
 
 export async function listModifierGroups(ctx: OfflineContext, itemId: number): Promise<ModifierGroup[]> {
-  const cached = kvGet(MODIFIERS_KEY(itemId));
-  if (cached) {
+  const cached = Q.getModifierGroups(itemId);
+  if (cached != null) {
     if (ctx.isOnline()) {
       refreshInBackground("modifiers", async () => {
         const g = await ctx.client.listItemModifierGroups(itemId);
-        kvSet(MODIFIERS_KEY(itemId), JSON.stringify(g));
+        Q.upsertModifierGroups(itemId, g);
       });
     }
-    return JSON.parse(cached) as ModifierGroup[];
+    return cached;
   }
   if (!ctx.isOnline()) return [];
   try {
     const g = await ctx.client.listItemModifierGroups(itemId);
-    kvSet(MODIFIERS_KEY(itemId), JSON.stringify(g));
+    Q.upsertModifierGroups(itemId, g);
     return g;
   } catch { return []; }
 }
