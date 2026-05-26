@@ -115,6 +115,17 @@ export function lookupCustomerByPhone(restaurantId: number, phone: string): Cust
   return rows.map((r) => JSON.parse(r.payload) as CustomerSummary);
 }
 
+/**
+ * Drop a customer row from the local cache by primary key. Used by the sync
+ * engine after a `customers:create` succeeds — the local negative-ID row is
+ * stale and the canonical server row has already been upserted, so leaving
+ * the negative row in place would let cashier searches return a phantom
+ * customer and deadlock the queue with an orphan `customerId<0` reference.
+ */
+export function deleteCustomerById(id: number): void {
+  getDb().prepare(`DELETE FROM customers WHERE id=?`).run(id);
+}
+
 // ─── Orders ────────────────────────────────────────────────────────────────
 export function upsertOrder(o: OrderDetailView, opts: { restaurantId: number; localOnly?: boolean; localId?: number; branchId?: number | null }): void {
   const now = Date.now();

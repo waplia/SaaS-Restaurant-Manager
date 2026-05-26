@@ -22,10 +22,10 @@ import type { ApiClient } from "../api/client";
 import { ApiError } from "../api/client";
 import {
   listPending, setStatus, removeOp, recordConflict, remapLocalOrderId,
-  remapLocalCustomerId, pendingCount, getOp,
+  remapLocalCustomerId, pendingCount, getOp, patchPayload,
 } from "../db/pending";
 import type { PendingOp } from "../db/pending";
-import { remapOrderId, upsertOrder, upsertCustomers } from "../db/queries";
+import { remapOrderId, upsertOrder, upsertCustomers, deleteCustomerById } from "../db/queries";
 import type {
   CreateOrderRequest, OrderDetailView, CartItemInput, PayMethod,
 } from "../../shared/ipc-contract";
@@ -224,7 +224,14 @@ export class SyncEngine extends EventEmitter {
         const body = op.payload as { name?: string; phone?: string; email?: string };
         const server = await this.client.createCustomer(restaurantId, body);
         upsertCustomers(restaurantId, [server]);
-        if (op.localCustomerId != null) remapLocalCustomerId(op.localCustomerId, server.id);
+        if (op.localCustomerId != null) {
+          remapLocalCustomerId(op.localCustomerId, server.id);
+          // Drop the stale negative-ID row from the cache. Without this the
+          // cashier's customer search would still match the phantom row and
+          // a fresh order could enqueue with `customerId: <negative>`,
+          // deadlocking the queue with no parent op to remap from.
+          deleteCustomerById(op.localCustomerId);
+        }
         break;
       }
       default:
@@ -245,7 +252,21 @@ function isReady(op: PendingOp): boolean {
   }
   if (op.kind === "orders:create") {
     const p = op.payload as { customerId?: number | null } | null;
-    if (p && typeof p.customerId === "number" && p.customerId < 0) return false;
+    if (p && typeof p.customerId === "number" && p.customerId < 0) {
+      // Defensive guard: if a parent `customers:create` is still in the
+      // queue we wait for its remap as designed. If no such parent exists
+      // (the row was stale or its parent op was already drained without
+      // remapping this child), strip the orphan reference and let the
+      // order create with no linked customer — losing the link is far
+      // better than a permanent queue stall.
+      const hasParent = listPending().some((o) =>
+        o.kind === "customers:create" && o.localCustomerId === p.customerId,
+      );
+      if (hasParent) return false;
+      (op.payload as { customerId?: number | null }).customerId = null;
+      // Persist the fix so subsequent drains see the cleaned payload.
+      patchPayload(op.id, op.payload);
+    }
   }
   return true;
 }
