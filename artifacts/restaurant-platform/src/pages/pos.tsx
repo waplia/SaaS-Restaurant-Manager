@@ -12,7 +12,9 @@ import {
   useCurrentCashRegister,
   useTerminals, useTerminalCharge, useConfirmTerminalCharge, useTerminalRunOnReader,
   usePendingCartSessions, useReservations,
+  usePopularItems,
 } from "@/lib/hooks";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -32,6 +34,7 @@ import {
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
   Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift, Search, User,
   QrCode, CalendarClock, Clock, Leaf, StickyNote, Pause, RotateCcw,
+  Phone, MessageCircle, Flame, Sparkles,
 } from "lucide-react";
 import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
 
@@ -1328,9 +1331,33 @@ export default function PosPage() {
   const { data: menus = [] } = useMenus();
   const firstMenuId = menus[0]?.id;
   const { data: categories = [] } = useMenuCategories(firstMenuId);
+  const categoryNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of categories as MenuCategory[]) m.set(c.id, (c.name ?? "").toLowerCase());
+    return m;
+  }, [categories]);
   const [selectedCat, setSelectedCat] = useState<number | undefined>();
   const { data: menuItems = [] } = useMenuItems({ categoryId: selectedCat });
   const { data: activeOrdersData } = useOrders();
+  const { data: popularItems = [] } = usePopularItems(6);
+  const [recentItemIds, setRecentItemIds] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("tt_pos_recent_items");
+      const arr = raw ? (JSON.parse(raw) as unknown) : [];
+      return Array.isArray(arr) ? arr.filter((n): n is number => typeof n === "number").slice(0, 8) : [];
+    } catch { return []; }
+  });
+  const pushRecentItem = useCallback((id: number) => {
+    setRecentItemIds(prev => {
+      const next = [id, ...prev.filter(x => x !== id)].slice(0, 8);
+      try { window.localStorage.setItem("tt_pos_recent_items", JSON.stringify(next)); } catch { /* storage full */ }
+      return next;
+    });
+  }, []);
+  const { user } = useAuth();
+  const userRole = (user?.role ?? "").toLowerCase();
+  const canManageMenu = !!user?.isSuperAdmin || ["owner", "admin", "manager"].includes(userRole);
   const activeOrders: Order[] = (activeOrdersData?.data ?? []).filter(
     o => o.status !== "completed" && o.status !== "cancelled"
   );
@@ -1566,7 +1593,8 @@ export default function PosPage() {
 
   const handleMenuItemClick = useCallback((item: MenuItem) => {
     setModPickerItem(item);
-  }, []);
+    pushRecentItem(item.id);
+  }, [pushRecentItem]);
 
   const updateQty = useCallback((lineKey: string, qty: number) => {
     if (qty <= 0) {
@@ -2043,21 +2071,31 @@ export default function PosPage() {
             {showTableGrid && (
               <div className="px-4 pb-3">
                 <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1.5 max-h-36 overflow-y-auto">
-                  {(tables as FloorTable[]).map(table => (
-                    <button
-                      key={table.id}
-                      onClick={() => handleSelectTable(table)}
-                      className={cn(
-                        "flex flex-col items-center justify-center aspect-square rounded-lg border-2 text-xs font-bold transition-all",
-                        selectedTableId === table.id
-                          ? "border-primary bg-primary text-primary-foreground scale-95 shadow-md"
-                          : TABLE_STATUS_STYLE[table.status] ?? "bg-gray-100 text-gray-600 border-gray-200"
-                      )}
-                    >
-                      <span>{table.tableNumber}</span>
-                      <span className="text-[9px] opacity-70 font-normal">{table.capacity}p</span>
-                    </button>
-                  ))}
+                  {(tables as FloorTable[]).map(table => {
+                    const tblOrder = activeOrders.find(o => o.tableId === table.id);
+                    const runningTotal = tblOrder ? Number(tblOrder.totalAmount ?? 0) : 0;
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={() => handleSelectTable(table)}
+                        title={tblOrder ? `${tblOrder.orderNumber} · ₹${runningTotal.toFixed(0)}` : `Table ${table.tableNumber} (${table.capacity} seats)`}
+                        className={cn(
+                          "relative flex flex-col items-center justify-center aspect-square rounded-lg border-2 text-xs font-bold transition-all",
+                          selectedTableId === table.id
+                            ? "border-primary bg-primary text-primary-foreground scale-95 shadow-md"
+                            : TABLE_STATUS_STYLE[table.status] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                        )}
+                      >
+                        <span>{table.tableNumber}</span>
+                        <span className="text-[9px] opacity-70 font-normal">{table.capacity}p</span>
+                        {runningTotal > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] font-bold px-1 py-px rounded leading-none shadow">
+                            ₹{runningTotal >= 1000 ? `${(runningTotal / 1000).toFixed(1)}k` : runningTotal.toFixed(0)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                   {tables.length === 0 && (
                     <p className="col-span-full text-xs text-muted-foreground py-2 text-center">No tables configured</p>
                   )}
@@ -2140,6 +2178,26 @@ export default function PosPage() {
               <Star className="w-3.5 h-3.5 fill-primary" />
               <span className="font-medium">{customerName}</span>
               <span className="text-muted-foreground">· {loyaltyAccount?.balance ?? 0} pts available</span>
+              {customerPhone && (
+                <>
+                  <a
+                    href={`tel:${customerPhone}`}
+                    className="ml-1 w-6 h-6 rounded flex items-center justify-center bg-secondary text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                    title={`Call ${customerPhone}`}
+                  >
+                    <Phone className="w-3 h-3" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${customerPhone.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="w-6 h-6 rounded flex items-center justify-center bg-secondary text-muted-foreground hover:bg-green-100 hover:text-green-700 transition-colors"
+                    title={`WhatsApp ${customerPhone}`}
+                  >
+                    <MessageCircle className="w-3 h-3" />
+                  </a>
+                </>
+              )}
               {!placedOrder && (
                 <button onClick={() => { setLinkedCustomerId(null); setCustomerPhone(""); setPhoneQuery(""); }} className="ml-auto text-muted-foreground hover:text-destructive">
                   <X className="w-3 h-3" />
@@ -2322,7 +2380,24 @@ export default function PosPage() {
                 const q = searchQuery.trim().toLowerCase();
                 const src = q ? (allMenuItems as MenuItem[]) : (menuItems as MenuItem[]);
                 return src.filter(i => {
-                  if (q && !i.name.toLowerCase().includes(q)) return false;
+                  if (q) {
+                    const extras = i as MenuItem & { sku?: string | null; barcode?: string | null; aliases?: string[] | null };
+                    const sku = (extras.sku ?? "").toLowerCase();
+                    const barcode = (extras.barcode ?? "").toLowerCase();
+                    const aliases = (extras.aliases ?? []).map(a => a.toLowerCase());
+                    const tags = (i.tags ?? []).map(t => t.toLowerCase());
+                    const desc = (i.description ?? "").toLowerCase();
+                    const catName = categoryNameById.get(i.categoryId) ?? "";
+                    const matched =
+                      i.name.toLowerCase().includes(q) ||
+                      sku.includes(q) ||
+                      barcode.includes(q) ||
+                      desc.includes(q) ||
+                      catName.includes(q) ||
+                      tags.some(t => t.includes(q)) ||
+                      aliases.some(a => a.includes(q));
+                    if (!matched) return false;
+                  }
                   if (vegFilter === "veg" && !i.isVeg) return false;
                   if (vegFilter === "non_veg" && i.isVeg) return false;
                   return true;
@@ -2364,6 +2439,16 @@ export default function PosPage() {
                       <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
                     </div>
                     <span className="inline-flex items-center text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full ring-1 ring-primary/20">₹{item.price}</span>
+                    {!isOut && (item.tags ?? []).some(t => t.toLowerCase() === "bestseller") && (
+                      <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow flex items-center gap-0.5">
+                        <Flame className="w-2.5 h-2.5" /> Top
+                      </div>
+                    )}
+                    {!isOut && (item.tags ?? []).some(t => ["new", "chef special", "chef's special"].includes(t.toLowerCase())) && (
+                      <div className="absolute bottom-12 left-2 bg-violet-500 text-white text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" /> New
+                      </div>
+                    )}
                     {isOut && (
                       <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow">
                         86'd
@@ -2377,11 +2462,98 @@ export default function PosPage() {
                   </button>
                 );
               })}
-              {menuItems.length === 0 && (
-                <div className="col-span-full flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <ShoppingBag className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm">No items found</p>
-                </div>
+              {(() => {
+                const q = searchQuery.trim().toLowerCase();
+                const src = q ? (allMenuItems as MenuItem[]) : (menuItems as MenuItem[]);
+                const visible = src.filter(i => {
+                  if (q) {
+                    const extras = i as MenuItem & { sku?: string | null; barcode?: string | null; aliases?: string[] | null };
+                    const sku = (extras.sku ?? "").toLowerCase();
+                    const barcode = (extras.barcode ?? "").toLowerCase();
+                    const aliases = (extras.aliases ?? []).map(a => a.toLowerCase());
+                    const tags = (i.tags ?? []).map(t => t.toLowerCase());
+                    const desc = (i.description ?? "").toLowerCase();
+                    const catName = categoryNameById.get(i.categoryId) ?? "";
+                    const matched = i.name.toLowerCase().includes(q) || sku.includes(q) || barcode.includes(q) || desc.includes(q) || catName.includes(q) || tags.some(t => t.includes(q)) || aliases.some(a => a.includes(q));
+                    if (!matched) return false;
+                  }
+                  if (vegFilter === "veg" && !i.isVeg) return false;
+                  if (vegFilter === "non_veg" && i.isVeg) return false;
+                  return true;
+                });
+                if (visible.length > 0) return null;
+                return (
+                  <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <ShoppingBag className="w-12 h-12 mb-3 opacity-20" />
+                    <p className="text-sm font-medium">{q ? `No items match "${searchQuery}"` : "No items found"}</p>
+                    <p className="text-xs mt-1 opacity-70">{q ? "Try a different name, category, SKU, alias or barcode" : "Pick a different category or add menu items"}</p>
+                    <div className="flex gap-2 mt-3">
+                      {q && (
+                        <button onClick={() => setSearchQuery("")} className="text-xs px-3 py-1.5 rounded-md border border-border hover:border-primary/50 hover:text-foreground">
+                          Clear search
+                        </button>
+                      )}
+                      {canManageMenu && (
+                        <a href="/menu" className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1">
+                          <Plus className="w-3 h-3" /> Create new item
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Discovery strips — visible when search is empty and on "All".
+                  Popular today is sourced from real dashboard analytics; Recently
+                  ordered is derived from the cashier's current active-orders list. */}
+              {searchQuery.trim() === "" && selectedCat == null && (
+                <>
+                  {popularItems.length > 0 && (
+                    <div className="col-span-full">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <Flame className="w-3 h-3 text-amber-500" /> Popular today
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {popularItems.map(pi => {
+                          const item = (allMenuItems as MenuItem[]).find(m => m.id === pi.menuItemId);
+                          if (!item || !item.isAvailable) return null;
+                          return (
+                            <button
+                              key={pi.menuItemId}
+                              onClick={() => handleMenuItemClick(item)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                              title={`${pi.orderCount} sold today`}
+                            >
+                              <span className="font-medium truncate max-w-[10rem]">{pi.name}</span>
+                              <span className="text-amber-600 dark:text-amber-400 font-semibold">×{pi.orderCount}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {recentItemIds.length > 0 && (
+                    <div className="col-span-full">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <RotateCcw className="w-3 h-3 text-primary" /> Recently ordered
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {recentItemIds.map(id => {
+                          const item = (allMenuItems as MenuItem[]).find(m => m.id === id);
+                          if (!item || !item.isAvailable) return null;
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => handleMenuItemClick(item)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-border bg-secondary/40 text-xs text-foreground hover:border-primary/50 hover:bg-accent/40"
+                            >
+                              <span className="font-medium truncate max-w-[10rem]">{item.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -2418,10 +2590,60 @@ export default function PosPage() {
           {/* Item list */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
             {!placedOrder && cart.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground pb-12">
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground pb-12 px-3">
                 <ShoppingBag className="w-10 h-10 mb-3 opacity-20" />
                 <p className="text-sm font-medium">Cart is empty</p>
-                <p className="text-xs mt-1 opacity-60">Tap items from the menu</p>
+                <p className="text-xs mt-1 opacity-60">Tap items from the menu, or use a shortcut</p>
+                <div className="grid grid-cols-2 gap-2 mt-4 w-full max-w-[15rem]">
+                  <button
+                    onClick={() => { searchInputRef.current?.focus(); }}
+                    className="flex flex-col items-center gap-1 p-2.5 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/40 transition-colors"
+                    title="Focus item search (F2)"
+                  >
+                    <Search className="w-4 h-4 text-primary" />
+                    <span className="text-[11px] font-medium text-foreground">Search</span>
+                    <span className="text-[9px] text-muted-foreground">F2</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowTableGrid(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    className="flex flex-col items-center gap-1 p-2.5 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/40 transition-colors"
+                    title="Pick a table"
+                  >
+                    <Utensils className="w-4 h-4 text-primary" />
+                    <span className="text-[11px] font-medium text-foreground">Table</span>
+                    <span className="text-[9px] text-muted-foreground">{selectedTable ? `T${selectedTable.tableNumber}` : "Pick"}</span>
+                  </button>
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent("pos:openHold"))}
+                    className="flex flex-col items-center gap-1 p-2.5 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/40 transition-colors"
+                    title="Recall a held bill (F5)"
+                  >
+                    <RotateCcw className="w-4 h-4 text-primary" />
+                    <span className="text-[11px] font-medium text-foreground">Recall</span>
+                    <span className="text-[9px] text-muted-foreground">F5</span>
+                  </button>
+                  {restaurant?.enableVoiceOrdering ? (
+                    <button
+                      onClick={() => setShowVoiceModal(true)}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/40 transition-colors"
+                      title="AI voice order"
+                    >
+                      <Mic className="w-4 h-4 text-primary" />
+                      <span className="text-[11px] font-medium text-foreground">Voice</span>
+                      <span className="text-[9px] text-muted-foreground">Talk</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => toast({ title: "Scan a barcode", description: "Use your barcode wedge or scan an item SKU." })}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/40 transition-colors"
+                      title="Scan a barcode"
+                    >
+                      <QrCode className="w-4 h-4 text-primary" />
+                      <span className="text-[11px] font-medium text-foreground">Scan</span>
+                      <span className="text-[9px] text-muted-foreground">SKU</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
