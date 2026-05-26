@@ -11,7 +11,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-  IpcChannel, IpcContract, IpcEnvelope, UpdateEvent,
+  IpcChannel, IpcContract, IpcEnvelope, UpdateEvent, PrinterRole,
 } from "../shared/ipc-contract";
 
 async function invoke<C extends IpcChannel>(
@@ -72,6 +72,7 @@ const api = {
   menu: {
     list: () => invoke("menu:list"),
     categories: () => invoke("menu:categories"),
+    lookupByBarcode: (code: string) => invoke("menu:lookup-by-barcode", { code }),
   },
   orders: {
     list: (req: IpcContract["orders:list"]["req"]) => invoke("orders:list", req),
@@ -85,20 +86,43 @@ const api = {
     record: (req: IpcContract["payments:record"]["req"]) => invoke("payments:record", req),
   },
 
-  // ─── Printers / hardware (Phase 3 will exercise these) ────────────
+  // ─── Printers / hardware ──────────────────────────────────────────
   printers: {
     list: () => invoke("printers:list"),
     test: (printerName: string) => invoke("printers:test", { printerName }),
+    getAssignments: () => invoke("printers:get-assignments"),
+    assignRole: (role: PrinterRole, printerName: string | null) => invoke("printers:assign", { role, printerName }),
+    assignKitchen: (kitchenId: number, printerName: string | null) => invoke("printers:assign", { kitchenId, printerName }),
     printReceipt: (req: IpcContract["printers:print-receipt"]["req"]) => invoke("printers:print-receipt", req),
     printKot: (req: IpcContract["printers:print-kot"]["req"]) => invoke("printers:print-kot", req),
+    printOrderKots: (req: IpcContract["printers:print-order-kots"]["req"]) => invoke("printers:print-order-kots", req),
+    printOrderBill: (req: IpcContract["printers:print-order-bill"]["req"]) => invoke("printers:print-order-bill", req),
+    printBillForOrder: (req: IpcContract["printers:print-bill-for-order"]["req"]) => invoke("printers:print-bill-for-order", req),
+    reprintLastKot: () => invoke("printers:reprint-last-kot"),
+    reprintLastBill: () => invoke("printers:reprint-last-bill"),
   },
   drawer: {
     open: (printerName?: string) => invoke("drawer:open", { printerName }),
+    getSettings: () => invoke("drawer:get-settings"),
+    setSettings: (patch: IpcContract["drawer:set-settings"]["req"]) => invoke("drawer:set-settings", patch),
   },
   failedPrints: {
     list: () => invoke("failed-prints:list"),
     add: (entry: unknown) => invoke("failed-prints:add", entry),
+    retry: (id: string) => invoke("failed-prints:retry", { id }),
+    discard: (id: string) => invoke("failed-prints:discard", { id }),
     clear: () => invoke("failed-prints:clear"),
+    onChanged: (cb: () => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("printers:failed-changed", listener);
+      return () => ipcRenderer.removeListener("printers:failed-changed", listener);
+    },
+  },
+  scanner: {
+    getState: () => invoke("scanner:get-state"),
+    setEnabled: (enabled: boolean) => invoke("scanner:set-enabled", { enabled }),
+    recordScan: (value: string) => invoke("scanner:record-scan", { value }),
+    clearScans: () => invoke("scanner:clear-scans"),
   },
   updates: {
     check: () => invoke("updates:check"),

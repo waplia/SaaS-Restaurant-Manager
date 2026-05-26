@@ -180,6 +180,85 @@ export class ApiClient {
     );
     return { ok: true };
   }
+
+  // ─── Orders / customers / menu (used by Phase 3 print handlers) ───────
+  async createOrder(restaurantId: number, body: unknown): Promise<ApiOrderDetail> {
+    return this.request<ApiOrderDetail>(`/api/restaurants/${restaurantId}/orders`, {
+      method: "POST", body,
+    });
+  }
+
+  async getOrder(restaurantId: number, orderId: number): Promise<ApiOrderDetail> {
+    return this.request<ApiOrderDetail>(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+  }
+
+  async getRestaurant(restaurantId: number): Promise<ApiRestaurantDetail> {
+    return this.request<ApiRestaurantDetail>(`/api/restaurants/${restaurantId}`);
+  }
+
+  async lookupCustomerByPhone(restaurantId: number, phone: string): Promise<unknown> {
+    const q = encodeURIComponent(phone);
+    return this.request<unknown>(`/api/restaurants/${restaurantId}/customers?search=${q}&limit=5`);
+  }
+
+  async lookupMenuItemByCode(restaurantId: number, code: string): Promise<{ id: number; name: string; price: number; sku?: string | null } | null> {
+    const q = encodeURIComponent(code);
+    const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/menu?search=${q}&limit=5`);
+    // Servers return either an array or { items: [...] }; tolerate both.
+    const items: Array<{ id: number; name: string; price: number | string; sku?: string | null; barcode?: string | null }> = Array.isArray(data)
+      ? (data as never[])
+      : Array.isArray((data as { items?: unknown[] })?.items)
+        ? ((data as { items: never[] }).items)
+        : [];
+    const codeLower = code.toLowerCase();
+    const hit = items.find((it) => (it.sku ?? "").toLowerCase() === codeLower
+      || (it.barcode ?? "").toLowerCase() === codeLower) ?? items[0];
+    if (!hit) return null;
+    return { id: hit.id, name: hit.name, price: Number(hit.price) || 0, sku: hit.sku ?? null };
+  }
+}
+
+/** Minimal subset of the API order-detail payload we consume in main. */
+export interface ApiOrderDetail {
+  id: number;
+  orderNumber: string;
+  orderType?: string | null;
+  status?: string | null;
+  tableId?: number | null;
+  tableLabel?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  subtotal?: number | string | null;
+  taxAmount?: number | string | null;
+  serviceCharge?: number | string | null;
+  discountAmount?: number | string | null;
+  totalAmount?: number | string | null;
+  createdAt?: string | null;
+  paymentMethod?: string | null;
+  paymentAmount?: number | string | null;
+  items: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    unitPrice?: number | string | null;
+    lineTotal?: number | string | null;
+    notes?: string | null;
+    kitchenId?: number | null;
+    kitchenName?: string | null;
+    modifiers?: Array<{ name: string; price?: number | string | null }>;
+  }>;
+  discounts?: Array<{ label?: string | null; name?: string | null; amount: number | string }>;
+}
+
+export interface ApiRestaurantDetail {
+  id: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  gstin?: string | null;
+  fssaiLicense?: string | null;
+  upiId?: string | null;
+  receiptFooter?: string | null;
 }
 
 function safeJson(text: string): unknown {

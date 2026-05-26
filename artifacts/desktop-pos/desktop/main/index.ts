@@ -1,5 +1,5 @@
 /**
- * Khanalagao POS — Electron main process (Phase 1: native shell, no webview).
+ * Khanalagao POS — Electron main process.
  *
  * Responsibilities:
  *   • Create one fullscreen window (single-instance guard).
@@ -7,7 +7,7 @@
  *     nodeIntegration in renderer, no <webview> tag.
  *   • Own the HTTP client to the Khanalagao API; renderer only sees IPC.
  *   • Persist connection settings + auth tokens + selection in electron-store.
- *   • Keep printer IPC + auto-updater wiring (Phase 3 will use them).
+ *   • Wire printer / drawer / scanner subsystem + auto-updater.
  */
 
 import { app, BrowserWindow, ipcMain, shell, Menu, session } from "electron";
@@ -17,9 +17,13 @@ import { promisify } from "node:util";
 import { autoUpdater } from "electron-updater";
 import Store from "electron-store";
 import { registerPrinterHandlers, escposBytes, kickCashDrawerCommand } from "./printers";
+import type { PrinterEngine } from "./printers";
 import { ApiClient } from "./api/client";
 import { registerApiIpc } from "./ipc";
-import type { DesktopSettings, IpcResult } from "./types";
+import type { DesktopSettings } from "./types";
+import type {
+  PrinterAssignments, DrawerSettings, FailedPrintEntry,
+} from "../shared/ipc-contract";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 const RENDERER_URL = process.env.DESKTOP_RENDERER_URL ?? null;
@@ -36,12 +40,15 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   barPrinter: null,
   parcelPrinter: null,
   cashDrawerPrinter: null,
+  kitchenPrinters: {},
+  drawerKickBefore: false,
+  scannerEnabled: true,
   updateFeedUrl: null,
 };
 
 interface PersistedShape {
   settings: DesktopSettings;
-  failedPrints: unknown[];
+  failedPrints: FailedPrintEntry[];
 }
 interface PersistentStore {
   get<K extends keyof PersistedShape>(key: K): PersistedShape[K];
@@ -151,32 +158,7 @@ async function createWindow(): Promise<void> {
 }
 
 function registerCoreIpc(): void {
-  ipcMain.handle("failed-prints:list", (): IpcResult<unknown[]> => ({
-    ok: true, data: (store.get("failedPrints") as unknown[]) ?? [],
-  }));
-  ipcMain.handle("failed-prints:add", (_e, entry: unknown): IpcResult<true> => {
-    const list = ((store.get("failedPrints") as unknown[]) ?? []).slice(-49);
-    list.push({ id: `fp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), entry });
-    store.set("failedPrints", list);
-    return { ok: true, data: true };
-  });
-  ipcMain.handle("failed-prints:clear", (): IpcResult<true> => {
-    store.set("failedPrints", []); return { ok: true, data: true };
-  });
-
-  ipcMain.handle("drawer:open", async (_e, req?: { printerName?: string }): Promise<IpcResult<true>> => {
-    const settings = getSettings();
-    const target = req?.printerName ?? settings.cashDrawerPrinter ?? settings.billPrinter;
-    if (!target) return { ok: false, error: "No drawer-capable printer configured" };
-    try {
-      await sendRawToPrinter(target, kickCashDrawerCommand());
-      return { ok: true, data: true };
-    } catch (err) {
-      return { ok: false, error: (err as Error).message };
-    }
-  });
-
-  ipcMain.handle("updates:check", async (): Promise<IpcResult<{ status: string; version?: string }>> => {
+  ipcMain.handle("updates:check", async () => {
     const settings = getSettings();
     if (!settings.checkForUpdates) return { ok: true, data: { status: "disabled" } };
     if (!settings.updateFeedUrl) return { ok: true, data: { status: "no-feed", version: app.getVersion() } };
@@ -194,7 +176,7 @@ async function sendRawToPrinter(printerName: string, bytes: Buffer): Promise<voi
   if (process.platform === "win32") {
     try {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — optional peer dep
+      // @ts-ignore — optional peer dep, may fail on Mac arm64 / Linux ARM
       const printer = await import("@thiagoelg/node-printer").catch(() => null) as
         | { default: { printDirect: (opts: { data: Buffer; printer: string; type: string; success: () => void; error: (e: Error) => void }) => void } }
         | null;
@@ -208,7 +190,7 @@ async function sendRawToPrinter(printerName: string, bytes: Buffer): Promise<voi
         });
         return;
       }
-    } catch { /* fall through */ }
+    } catch { /* fall through to PRINT shell-out */ }
     const tmp = path.join(app.getPath("temp"), `tt_raw_${Date.now()}.bin`);
     await promisify(fs.writeFile)(tmp, bytes);
     const { exec } = await import("node:child_process");
@@ -224,6 +206,68 @@ async function sendRawToPrinter(printerName: string, bytes: Buffer): Promise<voi
       lp.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`lp exited ${code}`)));
     });
   }
+}
+
+// ─── Printer assignments + drawer + failed-prints persistence adapters ─────
+function getAssignments(): PrinterAssignments {
+  const s = getSettings();
+  return {
+    billPrinter: s.billPrinter,
+    kotPrinter: s.kotPrinter,
+    kitchenPrinter: s.kitchenPrinter,
+    barPrinter: s.barPrinter,
+    parcelPrinter: s.parcelPrinter,
+    cashDrawerPrinter: s.cashDrawerPrinter,
+    kitchenPrinters: s.kitchenPrinters ?? {},
+  };
+}
+
+function setAssignments(patch: Partial<PrinterAssignments>): PrinterAssignments {
+  const mapped: Partial<DesktopSettings> = {};
+  if ("billPrinter" in patch) mapped.billPrinter = patch.billPrinter ?? null;
+  if ("kotPrinter" in patch) mapped.kotPrinter = patch.kotPrinter ?? null;
+  if ("kitchenPrinter" in patch) mapped.kitchenPrinter = patch.kitchenPrinter ?? null;
+  if ("barPrinter" in patch) mapped.barPrinter = patch.barPrinter ?? null;
+  if ("parcelPrinter" in patch) mapped.parcelPrinter = patch.parcelPrinter ?? null;
+  if ("cashDrawerPrinter" in patch) mapped.cashDrawerPrinter = patch.cashDrawerPrinter ?? null;
+  if ("kitchenPrinters" in patch) mapped.kitchenPrinters = patch.kitchenPrinters ?? {};
+  saveSettings(mapped);
+  return getAssignments();
+}
+
+function getDrawerSettings(): DrawerSettings {
+  return { kickBefore: !!getSettings().drawerKickBefore };
+}
+function setDrawerSettings(patch: Partial<DrawerSettings>): DrawerSettings {
+  const next = saveSettings({
+    drawerKickBefore: patch.kickBefore !== undefined ? !!patch.kickBefore : getSettings().drawerKickBefore,
+  });
+  return { kickBefore: !!next.drawerKickBefore };
+}
+
+function failedStore() {
+  return {
+    list(): FailedPrintEntry[] {
+      return (store.get("failedPrints") as FailedPrintEntry[]) ?? [];
+    },
+    add(entry: FailedPrintEntry): void {
+      const list = (store.get("failedPrints") as FailedPrintEntry[]) ?? [];
+      // Cap at 50 entries — drop oldest first.
+      const next = [...list, entry].slice(-50);
+      store.set("failedPrints", next);
+    },
+    update(id: string, patch: Partial<FailedPrintEntry>): void {
+      const list = (store.get("failedPrints") as FailedPrintEntry[]) ?? [];
+      store.set("failedPrints", list.map((x) => x.id === id ? { ...x, ...patch } : x));
+    },
+    remove(id: string): void {
+      const list = (store.get("failedPrints") as FailedPrintEntry[]) ?? [];
+      store.set("failedPrints", list.filter((x) => x.id !== id));
+    },
+    clear(): void {
+      store.set("failedPrints", []);
+    },
+  };
 }
 
 function wireAutoUpdater(): void {
@@ -260,7 +304,22 @@ app.on("window-all-closed", () => {
 app.whenReady().then(async () => {
   applyCsp();
   registerCoreIpc();
-  registerPrinterHandlers({ sendRawToPrinter, escposBytes });
+  const printerEngine: PrinterEngine = registerPrinterHandlers({
+    sendRawToPrinter,
+    escposBytes,
+    getAssignments,
+    setAssignments,
+    getDrawerSettings,
+    setDrawerSettings,
+    getScannerEnabled: () => !!getSettings().scannerEnabled,
+    setScannerEnabled: (v: boolean) => !!saveSettings({ scannerEnabled: v }).scannerEnabled,
+    failedStore: failedStore(),
+    notifyFailedChanged: () => mainWindow?.webContents.send("printers:failed-changed"),
+  });
+  // Keep the legacy `drawer:open` channel reachable even when no printer
+  // module assignments have been wired; the printer handler also registers
+  // a richer version that takes per-call printer overrides.
+  void kickCashDrawerCommand;
   registerApiIpc({
     client: apiClient,
     settings: {
@@ -271,6 +330,7 @@ app.whenReady().then(async () => {
       },
     },
     getWindow: () => mainWindow,
+    printerEngine,
   });
   wireAutoUpdater();
   await createWindow();

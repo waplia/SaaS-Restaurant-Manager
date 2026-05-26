@@ -8,17 +8,26 @@
  */
 
 import { ipcMain, app, shell, BrowserWindow } from "electron";
-import type { IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot } from "../../shared/ipc-contract";
-import { ApiClient, ApiError } from "../api/client";
+import type {
+  IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot,
+  OrderKotPayload, OrderBillPayload,
+} from "../../shared/ipc-contract";
+import { ApiClient, ApiError, type ApiOrderDetail, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
+import type { PrinterEngine } from "../printers";
 
 interface SettingsApi {
   get: () => { apiBaseUrl: string };
   set: (patch: { apiBaseUrl?: string }) => { apiBaseUrl: string };
 }
 
-export function registerApiIpc(opts: { client: ApiClient; settings: SettingsApi; getWindow: () => BrowserWindow | null }): void {
-  const { client, settings, getWindow } = opts;
+export function registerApiIpc(opts: {
+  client: ApiClient;
+  settings: SettingsApi;
+  getWindow: () => BrowserWindow | null;
+  printerEngine: PrinterEngine;
+}): void {
+  const { client, settings, getWindow, printerEngine } = opts;
 
   client.onAuthLost(() => {
     getWindow()?.webContents.send("auth:invalidated");
@@ -87,7 +96,6 @@ export function registerApiIpc(opts: { client: ApiClient; settings: SettingsApi;
     sessionStore.setTokens(r.accessToken, r.refreshToken);
     sessionStore.setUser(r.user);
     sessionStore.patchSelection({ rememberDevice: !!rememberDevice });
-    // If the user only belongs to one restaurant, pre-select it.
     if (r.user.restaurantId && !sessionStore.getSelection().restaurantId) {
       sessionStore.patchSelection({ restaurantId: r.user.restaurantId });
     }
@@ -160,12 +168,145 @@ export function registerApiIpc(opts: { client: ApiClient; settings: SettingsApi;
     return r;
   });
 
-  // ─── Phase 2+ placeholders ───────────────────────────────────────────
+  // ─── Orders: create + auto-print KOTs ────────────────────────────────
+  // Phase 3 wires the order-send path end-to-end:
+  //   renderer → orders:create → API.createOrder → printers.dispatchKots
+  // Silent: failures bubble up as the failed-prints tray (toast in renderer).
+  // The KOT print is fire-and-await here so the renderer learns about printer
+  // problems immediately rather than waiting for an event round-trip.
+  handle("orders:create", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const order = await client.createOrder(restaurantId, req);
+    try {
+      const kotPayload = buildKotPayload(order);
+      if (kotPayload.items.length > 0) {
+        await printerEngine.dispatchKots(kotPayload);
+      }
+    } catch (err) {
+      // Print failure should not roll back the created order; the entry is
+      // already in the failed-prints tray for retry.
+      console.warn("[orders:create] KOT auto-print failed:", (err as Error).message);
+    }
+    return order as IpcContract["orders:create"]["res"];
+  });
+
+  // ─── Bill print by order id (main fetches the data) ──────────────────
+  // Renderer hands main an orderId; main pulls the canonical order + outlet
+  // details and formats the receipt. Keeps the receipt formatter as the
+  // single source of truth and prevents drift between web POS and desktop.
+  handle("printers:print-bill-for-order", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const [order, outlet] = await Promise.all([
+      client.getOrder(restaurantId, req.orderId),
+      client.getRestaurant(restaurantId).catch(() => null),
+    ]);
+    const payload = buildBillPayload(order, outlet, {
+      openDrawer: !!req.openDrawer,
+      copies: req.copies,
+    });
+    const r = await printerEngine.dispatchBill(payload);
+    if (!r.ok) throw new Error(r.error);
+    return true as const;
+  });
+
+  // ─── Scanner consumers ───────────────────────────────────────────────
+  handle("customers:lookup", async (req) => {
+    const restaurantId = requireRestaurantId();
+    if (!req || typeof req.phone !== "string" || !req.phone.trim()) {
+      throw new Error("phone required");
+    }
+    return client.lookupCustomerByPhone(restaurantId, req.phone.trim()) as Promise<IpcContract["customers:lookup"]["res"]>;
+  });
+
+  handle("menu:lookup-by-barcode", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const code = String(req?.code ?? "").trim();
+    if (!code) throw new Error("code required");
+    return client.lookupMenuItemByCode(restaurantId, code);
+  });
+
+  // ─── Remaining Phase 2 / Phase 4 placeholders ────────────────────────
   handle("menu:list", () => { throw new Error("menu:list not yet implemented (Phase 2)"); });
   handle("menu:categories", () => { throw new Error("menu:categories not yet implemented (Phase 2)"); });
   handle("orders:list", () => { throw new Error("orders:list not yet implemented (Phase 2)"); });
-  handle("orders:create", () => { throw new Error("orders:create not yet implemented (Phase 2)"); });
   handle("orders:update", () => { throw new Error("orders:update not yet implemented (Phase 2)"); });
-  handle("customers:lookup", () => { throw new Error("customers:lookup not yet implemented (Phase 2)"); });
   handle("payments:record", () => { throw new Error("payments:record not yet implemented (Phase 4)"); });
+}
+
+// ─── Payload builders (API → ESC/POS DTO) ──────────────────────────────────
+function num(v: number | string | null | undefined): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  return 0;
+}
+
+function buildKotPayload(order: ApiOrderDetail): OrderKotPayload {
+  return {
+    orderNumber: order.orderNumber,
+    orderType: order.orderType ?? null,
+    tableLabel: order.tableLabel ?? null,
+    createdAt: order.createdAt ?? null,
+    outletName: null,
+    items: order.items.map((it) => ({
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      notes: it.notes ?? null,
+      kitchenId: it.kitchenId ?? null,
+      kitchenName: it.kitchenName ?? null,
+      modifiers: (it.modifiers ?? []).map((m) => ({ name: m.name })),
+    })),
+  };
+}
+
+function buildBillPayload(
+  order: ApiOrderDetail,
+  outlet: ApiRestaurantDetail | null,
+  extra: { openDrawer: boolean; copies?: number },
+): OrderBillPayload {
+  const payload: OrderBillPayload = {
+    orderNumber: order.orderNumber,
+    orderType: order.orderType ?? null,
+    tableLabel: order.tableLabel ?? null,
+    createdAt: order.createdAt ?? null,
+    customerName: order.customerName ?? null,
+    customerPhone: order.customerPhone ?? null,
+    items: order.items.map((it) => ({
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      unitPrice: num(it.unitPrice),
+      lineTotal: num(it.lineTotal),
+      notes: it.notes ?? null,
+      modifiers: (it.modifiers ?? []).map((m) => ({ name: m.name, price: num(m.price) })),
+    })),
+    subtotal: num(order.subtotal),
+    taxAmount: num(order.taxAmount),
+    serviceCharge: num(order.serviceCharge),
+    discountAmount: num(order.discountAmount),
+    totalAmount: num(order.totalAmount),
+    discounts: (order.discounts ?? []).map((d) => ({
+      label: d.label ?? d.name ?? "Discount",
+      amount: num(d.amount),
+    })),
+    taxBreakdown: [],
+    openDrawer: !!extra.openDrawer,
+    copies: extra.copies ?? 1,
+    footer: outlet?.receiptFooter ?? null,
+  };
+  if (order.paymentMethod) {
+    const tendered = order.paymentAmount != null ? num(order.paymentAmount) : undefined;
+    payload.payment = tendered != null
+      ? { method: order.paymentMethod, tendered }
+      : { method: order.paymentMethod };
+  }
+  if (outlet) {
+    payload.restaurant = {
+      name: outlet.name,
+      address: outlet.address ?? null,
+      phone: outlet.phone ?? null,
+      gstin: outlet.gstin ?? null,
+      fssaiLicense: outlet.fssaiLicense ?? null,
+      upiId: outlet.upiId ?? null,
+    };
+  }
+  return payload;
 }

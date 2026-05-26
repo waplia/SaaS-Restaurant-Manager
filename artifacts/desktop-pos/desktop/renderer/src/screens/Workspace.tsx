@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { SelectionState, User } from "../../../shared/ipc-contract";
 import { Button, colors } from "../ui/components";
+import { HardwareSettings } from "./HardwareSettings";
+import { useScanner } from "../hooks/useScanner";
 
 interface Props {
   user: User;
@@ -17,13 +19,80 @@ const NAV = [
   { key: "tables", label: "Tables", enabled: false },
   { key: "customers", label: "Customers", enabled: false },
   { key: "reports", label: "Reports", enabled: false },
-  { key: "settings", label: "Settings", enabled: false },
+  { key: "hardware", label: "Hardware", enabled: true },
 ] as const;
 
 export function WorkspaceScreen(props: Props) {
   const [active, setActive] = useState<typeof NAV[number]["key"]>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scannerEnabled, setScannerEnabled] = useState(true);
+  const [lastScan, setLastScan] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<{ kind: "ok" | "warn" | "err"; text: string } | null>(null);
+  const [failedCount, setFailedCount] = useState(0);
   const shiftTimer = useShiftTimer(props.shiftOpenedAt);
+
+  // Mirror scanner-enabled state from main so the global hook respects the
+  // current setting without a settings-screen round-trip.
+  useEffect(() => {
+    window.khanalagao.scanner.getState().then((s) => setScannerEnabled(s.enabled)).catch(() => undefined);
+    const id = window.setInterval(() => {
+      window.khanalagao.scanner.getState().then((s) => setScannerEnabled(s.enabled)).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Failed-prints badge in the topbar — driven by main process events.
+  useEffect(() => {
+    const sync = () => window.khanalagao.failedPrints.list().then((l) => setFailedCount(l.length)).catch(() => undefined);
+    void sync();
+    const off = window.khanalagao.failedPrints.onChanged(sync);
+    return () => { off(); };
+  }, []);
+
+  const onScan = useCallback(async (value: string) => {
+    setLastScan(value);
+    window.setTimeout(() => setLastScan((cur) => cur === value ? null : cur), 2200);
+    // Allow item-grid / customer-modal components to claim a scan via the
+    // global `tt:scan` event. `preventDefault()` opts out of the default
+    // route (customer lookup for phone-shaped scans, menu lookup otherwise).
+    const ev = new CustomEvent("tt:scan", { detail: { value }, cancelable: true });
+    const consumed = !window.dispatchEvent(ev);
+    if (consumed) return;
+    // Default consumer: route to the appropriate IPC and surface the result
+    // as a toast. Phone-shaped scans (10+ digits, possibly with separators)
+    // match the customer-modal lookup; everything else is treated as an
+    // item barcode / SKU and routed to the menu lookup.
+    const digits = value.replace(/\D+/g, "");
+    const showResult = (kind: "ok" | "warn" | "err", text: string) => {
+      setScanResult({ kind, text });
+      window.setTimeout(() => setScanResult((cur) => cur?.text === text ? null : cur), 3500);
+    };
+    try {
+      if (digits.length >= 10 && digits.length <= 13) {
+        const data = await window.khanalagao.customers.lookup({ phone: digits });
+        const list = Array.isArray(data) ? data : Array.isArray((data as { customers?: unknown[] })?.customers) ? (data as { customers: unknown[] }).customers : [];
+        if (list.length > 0) {
+          const top = list[0] as { name?: string; phone?: string };
+          showResult("ok", `Customer · ${top.name ?? "Unknown"}${top.phone ? ` · ${top.phone}` : ""}`);
+          window.dispatchEvent(new CustomEvent("tt:scan-customer", { detail: { customer: top, value } }));
+        } else {
+          showResult("warn", `No customer found for ${digits}`);
+        }
+      } else {
+        const item = await window.khanalagao.menu.lookupByBarcode(value);
+        if (item) {
+          showResult("ok", `Added · ${item.name} (₹${item.price.toFixed(2)})`);
+          window.dispatchEvent(new CustomEvent("tt:scan-item", { detail: { item, value } }));
+        } else {
+          showResult("warn", `No item matches "${value.slice(0, 24)}"`);
+        }
+      }
+    } catch (err) {
+      showResult("err", `Scan failed: ${(err as Error).message}`);
+    }
+  }, []);
+
+  useScanner({ enabled: scannerEnabled, onScan });
 
   return (
     <div style={{
@@ -65,6 +134,43 @@ export function WorkspaceScreen(props: Props) {
           background: colors.bg, padding: "6px 10px", borderRadius: 6,
           border: `1px solid ${colors.border}`, fontVariantNumeric: "tabular-nums",
         }}>⏱ {shiftTimer}</span>
+
+        {failedCount > 0 && (
+          <button
+            onClick={() => setActive("hardware")}
+            title="Failed print jobs — open Hardware tab"
+            style={{
+              background: "rgba(220,38,38,0.16)", border: `1px solid rgba(220,38,38,0.5)`,
+              color: "#fca5a5", padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+            }}
+          >⚠ {failedCount} failed print{failedCount === 1 ? "" : "s"}</button>
+        )}
+
+        {lastScan && (
+          <span style={{
+            background: colors.brandSoft, color: "#fff",
+            padding: "6px 10px", borderRadius: 6, fontSize: 12, fontFamily: "monospace",
+          }}>⌫ {lastScan.length > 16 ? lastScan.slice(0, 16) + "…" : lastScan}</span>
+        )}
+
+        {scanResult && (
+          <span
+            title={scanResult.text}
+            style={{
+              background: scanResult.kind === "ok" ? "rgba(34,197,94,0.16)"
+                : scanResult.kind === "warn" ? "rgba(234,179,8,0.16)"
+                : "rgba(220,38,38,0.16)",
+              border: `1px solid ${scanResult.kind === "ok" ? "rgba(34,197,94,0.45)"
+                : scanResult.kind === "warn" ? "rgba(234,179,8,0.45)"
+                : "rgba(220,38,38,0.5)"}`,
+              color: scanResult.kind === "ok" ? "#86efac"
+                : scanResult.kind === "warn" ? "#fde68a"
+                : "#fca5a5",
+              padding: "6px 10px", borderRadius: 6, fontSize: 12,
+              maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}
+          >{scanResult.text}</span>
+        )}
 
         <span title={props.online ? "Online" : "Offline"} style={{
           display: "inline-flex", alignItems: "center", gap: 6,
@@ -135,19 +241,26 @@ export function WorkspaceScreen(props: Props) {
       <main style={{
         gridArea: "main",
         overflow: "auto", padding: 24,
-        display: "grid", placeItems: "center",
+        display: active === "hardware" ? "block" : "grid",
+        placeItems: active === "hardware" ? undefined : "center",
       }}>
-        <div style={{ textAlign: "center", maxWidth: 480 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>Workspace ready</h2>
-          <p style={{ color: colors.textDim, lineHeight: 1.5 }}>
-            Your shift is open and the terminal is connected. The order entry workspace
-            arrives in <b style={{ color: colors.textPrimary }}>Phase 2</b> — menu grid,
-            cart, modifiers, and KOT print.
-          </p>
-          <div style={{ marginTop: 24, display: "flex", gap: 8, justifyContent: "center" }}>
-            <Button variant="ghost" onClick={props.onSwitchOutlet}>Switch counter</Button>
+        {active === "hardware" ? (
+          <HardwareSettings online={props.online} />
+        ) : (
+          <div style={{ textAlign: "center", maxWidth: 480 }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>Workspace ready</h2>
+            <p style={{ color: colors.textDim, lineHeight: 1.5 }}>
+              Your shift is open and the terminal is connected. The order entry workspace
+              arrives in <b style={{ color: colors.textPrimary }}>Phase 2</b> — menu grid,
+              cart, modifiers, and KOT print. Printers, drawer and the scanner are wired
+              up now in <b style={{ color: colors.textPrimary }}>Hardware</b>.
+            </p>
+            <div style={{ marginTop: 24, display: "flex", gap: 8, justifyContent: "center" }}>
+              <Button variant="ghost" onClick={() => setActive("hardware")}>Open Hardware settings</Button>
+              <Button variant="ghost" onClick={props.onSwitchOutlet}>Switch counter</Button>
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

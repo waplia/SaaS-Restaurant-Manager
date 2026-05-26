@@ -1,7 +1,5 @@
 /**
- * Persisted main-process settings. Phase 1 keeps the surface small —
- * just the connection URL, behaviour toggles, and the printer slots that
- * Phase 3 will hand to the print subsystem.
+ * Persisted main-process settings.
  *
  * Selection (restaurant/branch/counter) and auth tokens live in a separate
  * store namespace (`session-store.ts`) so wiping a logged-out terminal
@@ -21,6 +19,16 @@ export interface DesktopSettings {
   barPrinter: string | null;
   parcelPrinter: string | null;
   cashDrawerPrinter: string | null;
+  /**
+   * Per-kitchen printer overrides keyed by kitchen id (as string for JSON-safe
+   * storage). When set, KOT dispatch sends items with that kitchenId to this
+   * printer; otherwise it falls back to the role printers above.
+   */
+  kitchenPrinters: Record<string, string>;
+  /** Send drawer-pulse before the print payload (true) or after (false). */
+  drawerKickBefore: boolean;
+  /** Renderer-side barcode/QR scanner enabled. */
+  scannerEnabled: boolean;
   /** electron-updater generic feed URL; null = no auto-updates configured. */
   updateFeedUrl: string | null;
 }
