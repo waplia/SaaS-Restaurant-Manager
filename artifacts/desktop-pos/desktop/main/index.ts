@@ -51,9 +51,8 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   updateFeedUrl: null,
 };
 
-// electron-store v10 extends `conf`, whose generic-typed get/set methods don't
-// always surface cleanly to TypeScript in projects that use stricter settings.
-// Wrap as a plain typed store so call sites stay readable.
+// electron-store v8 (CommonJS-compatible). v10 is ESM-only and can't be
+// require()'d from our CJS main process.
 interface PersistedShape {
   settings: DesktopSettings;
   cart: unknown;
