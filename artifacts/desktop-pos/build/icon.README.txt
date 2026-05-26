@@ -1,0 +1,3 @@
+Replace icon.ico (Windows, 256x256) and icon.icns (macOS, 1024x1024) with the
+final TableTrack POS app icons before producing release builds. electron-builder
+will refuse to package the installers without these files present.
