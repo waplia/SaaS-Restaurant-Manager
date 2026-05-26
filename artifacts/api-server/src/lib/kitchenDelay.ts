@@ -73,7 +73,8 @@ export async function runDelayDetectionTick(now: Date = new Date()): Promise<{ a
       lastDelayAlertAt: kitchenTicketsTable.lastDelayAlertAt,
     })
     .from(kitchenTicketsTable)
-    .where(sql`${kitchenTicketsTable.status} IN ('new','preparing')`);
+    .innerJoin(ordersTable, eq(ordersTable.id, kitchenTicketsTable.orderId))
+    .where(sql`${kitchenTicketsTable.status} IN ('new','preparing') AND ${ordersTable.status} NOT IN ('completed','cancelled')`);
 
   if (active.length === 0) return { alertsCreated: 0 };
 

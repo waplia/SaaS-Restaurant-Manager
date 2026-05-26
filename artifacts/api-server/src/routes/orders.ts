@@ -293,6 +293,18 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
     sendOrderConfirmation(paidOrder, restaurantId).catch((err) => {
       console.error(`[OrderCompletion] Order confirmation notification failed for order ${orderId}:`, err);
     }),
+    // Auto-close any still-open kitchen tickets for this order so the delay
+    // detector cron stops firing once the guest has paid and left.
+    db.update(kitchenTicketsTable)
+      .set({ status: "served", updatedAt: new Date() })
+      .where(and(
+        eq(kitchenTicketsTable.orderId, orderId),
+        eq(kitchenTicketsTable.restaurantId, restaurantId),
+        sql`${kitchenTicketsTable.status} IN ('new','preparing','ready')`,
+      ))
+      .catch((err) => {
+        console.error(`[OrderCompletion] Auto-serve kitchen tickets failed for order ${orderId}:`, err);
+      }),
   ]);
 }
 
