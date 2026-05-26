@@ -314,7 +314,7 @@ const navConfig: NavEntry[] = [
       { kind: "link", href: "/marketplace/purchase-requests", label: "Bulk RFQs", icon: FileText, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/settings/devices", label: "Hardware & Devices", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
       { kind: "link", href: "/settings/printers", label: "Printers (BT / USB / LAN)", icon: Printer, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
-      { kind: "link", href: "/settings/terminals", label: "Card Terminals", icon: CreditCard, roles: ["owner", "manager", "cashier"], planGate: "card_terminal", badge: "premium" },
+      { kind: "link", href: "/settings/terminals", label: "Card Terminals", icon: CreditCard, roles: ["owner", "manager", "cashier"] },
       { kind: "link", href: "/settings/token-display", label: "Token Display", icon: BellRing, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/kitchens", label: "Kitchen Stations", icon: ChefHat, roles: ["owner", "manager"] },
       { kind: "link", href: "/settings/accounting", label: "Accounting Integrations", icon: ScrollText, roles: ["owner", "manager"] },

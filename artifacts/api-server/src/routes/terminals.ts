@@ -31,12 +31,13 @@ import Stripe from "stripe";
 
 const router = Router();
 
-// All terminal endpoints are tenant-scoped + plan-gated + role-gated.
+// All terminal endpoints are tenant-scoped + role-gated. The earlier
+// `requirePlanFeature("card_terminal")` gate was removed — pairing and
+// charging a card reader is baseline POS functionality, not a paid add-on.
 router.use(
   "/restaurants/:restaurantId/terminals",
   requireRole("owner", "manager", "cashier", "super_admin"),
   validateRestaurantAccess,
-  requirePlanFeature("card_terminal"),
 );
 
 // Pairing / unpairing / refunds are management actions — owner/manager only.

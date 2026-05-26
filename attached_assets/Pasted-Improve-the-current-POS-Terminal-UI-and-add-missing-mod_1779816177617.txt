@@ -1,0 +1,176 @@
+Improve the current POS Terminal UI and add missing modern POS features.
+
+Current POS is good but needs to become faster, more cashier-friendly, and more premium.
+
+Add / improve these:
+
+1. Cart Panel Improvements
+- Make right order ticket panel more powerful.
+- Show selected table, order type, customer, waiter/cashier.
+- Add quick buttons: Hold, KOT, Pay, Print, Discount, Note.
+- When cart is empty, show helpful quick actions:
+  “Select table”, “Search item”, “Scan barcode”, “Recall held bill”.
+
+2. Sticky Cart Total Bar
+- At bottom of right panel show always:
+  Subtotal, Discount, Tax, Grand Total.
+- Add large buttons:
+  Send KOT
+  Pay
+  Hold Bill
+
+3. Faster Item Add Experience
+- When item is added, play soft tone.
+- Show small animation/bounce on cart.
+- Show “Added” toast.
+- If item has add-ons, open customize modal.
+- If no add-ons, add instantly.
+
+4. Item Card Upgrade
+Each item card should show:
+- Item image
+- Name
+- Price
+- Veg/non-veg icon
+- Bestseller tag
+- Available/low stock status
+- Quick + button
+- Long press/right click for item details
+- Quantity badge if already added to cart
+
+5. Better Search
+- Search bar should stay sticky.
+- Search should support item name, category, alias, SKU, barcode.
+- Add “recently ordered” and “popular today”.
+- Keyboard shortcut F2 should focus search.
+
+6. Table Area Improvement
+- Current table row takes too much vertical space.
+- Make it collapsible.
+- Add floor filter.
+- Add status chips: Free, Occupied, Reserved, Billed.
+- Show table running amount and order count on occupied table.
+- Add table actions: Open, Transfer, Merge, Split, Bill.
+
+7. Order Type Flow
+Improve tabs:
+- Dine-in
+- Takeaway
+- Delivery
+- QR Orders
+- Reservations
+
+When user changes order type, show only required fields:
+- Dine-in → table required
+- Delivery → customer + address required
+- Takeaway → customer optional
+- QR Order → imported order details
+
+8. Customer Section
+- Make customer add/search cleaner.
+- Search by phone/name.
+- Show customer history, loyalty points, due amount, last visit.
+- Add quick WhatsApp/call buttons.
+- If no customer selected, keep compact.
+
+9. Built-in Calculator
+Add calculator icon in header/payment/cart.
+Calculator should support:
+- Cash received/change return
+- Split payment
+- Discount calculation
+- Quick amount calculator
+
+10. Payment Screen
+Add modern payment modal:
+- Cash
+- UPI
+- Card
+- PhonePe EDC
+- Dynamic QR
+- Razorpay/Cashfree/Stripe if configured
+- Split payment
+- Pay later
+- Wallet/loyalty
+- Cash received and change return
+
+11. Hold / Recall Bills
+- Add Hold Bill button.
+- Add Recall Bill list near header.
+- Show held bill name, table/customer, amount, time.
+
+12. KOT Controls
+- Send KOT
+- Print KOT
+- Reprint KOT
+- Station-wise KOT
+- Kitchen status badge
+- KOT pending/ready status on cart items.
+
+13. Quick Actions Header
+Add compact buttons:
+- New Bill
+- Held Bills
+- Running Tables
+- Last Bill
+- Reprint
+- Cash Drawer
+- Shift Close
+
+14. Keyboard Shortcuts
+Add shortcut help:
+- F2 Search
+- F4 Hold
+- F6 Send KOT
+- F7 Print
+- F8 Pay
+- Esc Close
+- Ctrl + Enter Complete Payment
+
+15. Shift / Cashier Features
+- Shift opening amount
+- Cash in/out
+- Expense from POS
+- Closing cash count
+- Payment method summary
+- Cash mismatch reason
+
+16. Visual Improvements
+- Make top header slightly smaller.
+- Reduce table section height.
+- Make cart panel more premium.
+- Make selected table/order type more visible.
+- Add dark mode option for POS.
+- Add larger touch-friendly buttons.
+- Make important actions orange/green.
+- Keep destructive actions red.
+
+17. Mobile/Tablet POS
+- On tablet, cart should slide from right.
+- On mobile, item grid first, cart as bottom sheet.
+- Big buttons for touch use.
+
+18. Smart Empty States
+- Empty cart: “Tap items to start order”
+- No item found: “Create new item” if permission allowed
+- No table selected: “Select table for dine-in”
+- Printer offline: “Printer offline, retry or continue”
+
+19. Error / Offline Safety
+- Auto-save cart.
+- Warn before exit if cart has items.
+- Show offline banner.
+- Prevent online payments if offline.
+- Retry failed KOT/print jobs.
+
+20. Reports Sync
+Every POS action should update:
+- Orders
+- Kitchen/KOT
+- Tables
+- Inventory
+- Customer history
+- Loyalty
+- Payments
+- Cashier closing
+- Sales reports

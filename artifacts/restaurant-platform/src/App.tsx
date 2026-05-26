@@ -506,7 +506,10 @@ function Router() {
       <Route path="/settings/kitchens" component={() => <RoleProtectedRoute component={SettingsKitchensPage} allow={["owner", "manager"]} />} />
       <Route path="/settings/devices" component={() => <RoleProtectedRoute component={SettingsDevicesPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/printers" component={() => <RoleProtectedRoute component={SettingsPrintersPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
-      <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsTerminalsPage} feature="card_terminal" />} allow={["owner", "manager", "cashier"]} />} />
+      {/* Card-terminal pairing/management is a baseline POS need — keep the
+          role gate, but drop the plan gate so tenants on any plan can reach
+          the page (the backend gate is removed too). */}
+      <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={SettingsTerminalsPage} allow={["owner", "manager", "cashier"]} />} />
       {/* Common-typo redirect: singular → plural (the actual page route). */}
       <Route path="/settings/terminal"><Redirect to="/settings/terminals" /></Route>
       <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
