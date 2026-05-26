@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { eq, and, desc, count, ne, notInArray, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, count, ne, notInArray, inArray, sql, gte, lte } from "drizzle-orm";
 import Stripe from "stripe";
+import { cashRegisterSessionsTable } from "@workspace/db";
 import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicketsTable, kitchensTable, menuItemsTable, menuItemVariantsTable, floorTablesTable, restaurantsTable, recipeMappingsTable, inventoryItemsTable, inventoryTransactionsTable, notificationsTable, customersTable, loyaltyTransactionsTable, couponsTable, paymentsTable, orderDiscountsTable, discountApprovalsTable, hotelStaysTable, hotelFoliosTable, hotelFolioLinesTable, vipAlertsTable, cartSessionsTable, usersTable, tenantsTable, subscriptionPlansTable, serviceTimerEventsTable, auditLogsTable, isFeatureEnabled, tipPoolsTable, tipPoolEntriesTable, tableSessionsTable, kotBatchesTable } from "../lib/db";
 import { recordAuditLog } from "../lib/audit";
 import { toE164 } from "@workspace/phone-utils";
@@ -2460,8 +2461,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
   }
 
   // Strict payment method enum validation
-  if (!["cash", "card", "upi", "room_charge"].includes(String(paymentMethod))) {
-    return void res.status(400).json({ error: `Invalid payment method '${paymentMethod}'. Must be cash, card, upi, or room_charge.` });
+  if (!["cash", "card", "upi", "room_charge", "pay_later"].includes(String(paymentMethod))) {
+    return void res.status(400).json({ error: `Invalid payment method '${paymentMethod}'. Must be cash, card, upi, room_charge, or pay_later.` });
   }
 
   // Load order — verify it exists and is payable before touching payment gateway
@@ -2551,6 +2552,62 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
       if (msg === "ORDER_ALREADY_PAID") return void res.status(409).json({ error: "Order is already paid", code: "ORDER_ALREADY_PAID" });
       console.error("[Pay/RoomCharge] Transaction failed:", err);
       return void res.status(500).json({ error: "Failed to post room charge" });
+    }
+    handleOrderCompletion(orderId, restaurantId, updatedOrder).catch(console.error);
+    broadcastEvent(restaurantId, "order:status", { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
+    broadcastOrderUpdate(updatedOrder.id, { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
+    return void res.json(updatedOrder);
+  }
+
+  // Pay-later (on-account): mark the order paid against the customer's tab
+  // without taking any money now. A payment ledger row is written with
+  // method=pay_later so the open balance can be reconciled later. Requires a
+  // customer attached to the order so there's a party to bill.
+  if (paymentMethod === "pay_later") {
+    if (!order.customerId) {
+      return void res.status(400).json({ error: "Pay Later requires a customer linked to the order" });
+    }
+    const total = Number(order.totalAmount);
+    let updatedOrder: typeof ordersTable.$inferSelect | undefined;
+    try {
+      updatedOrder = await db.transaction(async tx => {
+        const [u] = await tx.update(ordersTable).set({
+          paymentMethod: "pay_later",
+          paymentStatus: "paid",
+          status: "completed",
+          tipAmount: tipAmount.toFixed(2),
+          updatedAt: new Date(),
+        }).where(and(
+          eq(ordersTable.id, orderId),
+          eq(ordersTable.restaurantId, restaurantId),
+          ne(ordersTable.status, "cancelled"),
+          ne(ordersTable.paymentStatus, "paid"),
+        )).returning();
+        if (!u) throw new Error("ORDER_ALREADY_PAID");
+        if (u.tableId) {
+          await tx.update(floorTablesTable).set({ status: "free" })
+            .where(and(eq(floorTablesTable.id, u.tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+        }
+        await tx.insert(paymentsTable).values({
+          restaurantId,
+          direction: "in",
+          method: "pay_later",
+          amount: (total + tipAmount).toFixed(2),
+          tipAmount: tipAmount.toFixed(2),
+          partyType: "customer",
+          partyId: u.customerId,
+          referenceType: "order",
+          referenceId: u.id,
+          notes: "On-account / pay later",
+          recordedBy: req.user?.sub ?? null,
+        });
+        return u;
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === "ORDER_ALREADY_PAID") return void res.status(409).json({ error: "Order is already paid", code: "ORDER_ALREADY_PAID" });
+      console.error("[Pay/PayLater] Transaction failed:", err);
+      return void res.status(500).json({ error: "Failed to record pay-later" });
     }
     handleOrderCompletion(orderId, restaurantId, updatedOrder).catch(console.error);
     broadcastEvent(restaurantId, "order:status", { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
@@ -3627,5 +3684,118 @@ router.post(
     res.json({ ok: true, ticketsCancelled: cancelledTickets.length });
   },
 );
+
+// ─── POS: pending QR / online cart sessions ─────────────────────────────
+// Lists active cart sessions (channel = qr | online | app) for the POS
+// "QR Orders" tab so cashiers can see in-progress carts diners have started
+// from QR menus and seed a POS order from them.
+router.get("/restaurants/:restaurantId/cart-sessions/pending", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const channel = req.query.channel ? String(req.query.channel) : undefined;
+  const conds = [
+    eq(cartSessionsTable.restaurantId, restaurantId),
+    eq(cartSessionsTable.status, "active"),
+  ];
+  if (channel) conds.push(eq(cartSessionsTable.channel, channel));
+  const rows = await db.select({
+    id: cartSessionsTable.id,
+    sessionToken: cartSessionsTable.sessionToken,
+    channel: cartSessionsTable.channel,
+    tableId: cartSessionsTable.tableId,
+    customerName: cartSessionsTable.customerName,
+    customerPhone: cartSessionsTable.customerPhone,
+    items: cartSessionsTable.items,
+    subtotal: cartSessionsTable.subtotal,
+    lastActivityAt: cartSessionsTable.lastActivityAt,
+    createdAt: cartSessionsTable.createdAt,
+  }).from(cartSessionsTable)
+    .where(and(...conds))
+    .orderBy(desc(cartSessionsTable.lastActivityAt))
+    .limit(50);
+  res.json(rows);
+});
+
+// ─── POS: daily sales summary for the current/specified shift ───────────
+// Returns gross, discounts, taxes, service, tips, and breakdowns by payment
+// method and order type for the supplied cash-register session. Used by the
+// POS Daily Sales drawer so cashiers can see how the shift is tracking
+// without leaving the terminal.
+router.get("/restaurants/:restaurantId/pos/sales-summary", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const sessionId = req.query.sessionId ? Number(req.query.sessionId) : null;
+
+  // Resolve the time window from the cash-register session if given; else today.
+  let from: Date;
+  let to: Date;
+  let sessionInfo: { id: number; openedAt: Date; closedAt: Date | null; status: string } | null = null;
+  if (sessionId) {
+    const [s] = await db.select().from(cashRegisterSessionsTable).where(and(
+      eq(cashRegisterSessionsTable.id, sessionId),
+      eq(cashRegisterSessionsTable.restaurantId, restaurantId),
+    ));
+    if (!s) return void res.status(404).json({ error: "Session not found" });
+    from = s.openedAt;
+    to = s.closedAt ?? new Date();
+    sessionInfo = { id: s.id, openedAt: s.openedAt, closedAt: s.closedAt, status: s.status };
+  } else {
+    from = new Date(); from.setHours(0, 0, 0, 0);
+    to = new Date(); to.setHours(23, 59, 59, 999);
+  }
+
+  // Paid orders in window — group by order type and aggregate money columns.
+  const orderRows = await db.select({
+    orderType: ordersTable.orderType,
+    paymentMethod: ordersTable.paymentMethod,
+    count: sql<number>`cast(count(*) as int)`,
+    gross: sql<string>`cast(coalesce(sum(${ordersTable.totalAmount}), 0) as text)`,
+    discounts: sql<string>`cast(coalesce(sum(${ordersTable.discountAmount}), 0) as text)`,
+    tax: sql<string>`cast(coalesce(sum(${ordersTable.taxAmount}), 0) as text)`,
+    service: sql<string>`cast(coalesce(sum(${ordersTable.serviceCharge}), 0) as text)`,
+    tip: sql<string>`cast(coalesce(sum(${ordersTable.tipAmount}), 0) as text)`,
+  }).from(ordersTable)
+    .where(and(
+      eq(ordersTable.restaurantId, restaurantId),
+      eq(ordersTable.paymentStatus, "paid"),
+      gte(ordersTable.updatedAt, from),
+      lte(ordersTable.updatedAt, to),
+    ))
+    .groupBy(ordersTable.orderType, ordersTable.paymentMethod);
+
+  let gross = 0, discounts = 0, tax = 0, service = 0, tip = 0, orderCount = 0;
+  const byOrderType: Record<string, { count: number; gross: number }> = {};
+  const byMethod: Record<string, { count: number; gross: number }> = {};
+  for (const r of orderRows) {
+    const g = Number(r.gross);
+    gross += g;
+    discounts += Number(r.discounts);
+    tax += Number(r.tax);
+    service += Number(r.service);
+    tip += Number(r.tip);
+    orderCount += r.count;
+    const ot = r.orderType || "other";
+    byOrderType[ot] = byOrderType[ot] || { count: 0, gross: 0 };
+    byOrderType[ot].count += r.count;
+    byOrderType[ot].gross += g;
+    const pm = r.paymentMethod || "other";
+    byMethod[pm] = byMethod[pm] || { count: 0, gross: 0 };
+    byMethod[pm].count += r.count;
+    byMethod[pm].gross += g;
+  }
+
+  res.json({
+    session: sessionInfo,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    orderCount,
+    gross: gross.toFixed(2),
+    discounts: discounts.toFixed(2),
+    tax: tax.toFixed(2),
+    serviceCharge: service.toFixed(2),
+    tip: tip.toFixed(2),
+    net: (gross - tax - service).toFixed(2),
+    byOrderType: Object.entries(byOrderType).map(([k, v]) => ({ orderType: k, count: v.count, gross: v.gross.toFixed(2) })),
+    byMethod: Object.entries(byMethod).map(([k, v]) => ({ method: k, count: v.count, gross: v.gross.toFixed(2) })),
+  });
+});
 
 export default router;

@@ -6,11 +6,11 @@ import { useLocation } from "wouter";
 import {
   Maximize2, Minimize2, Volume2, VolumeX, LogOut, Wifi, WifiOff,
   Keyboard, Calculator as CalcIcon, Pause, RotateCcw, X, HelpCircle,
-  Printer, Activity,
+  Printer, Activity, Clock, IndianRupee, BarChart3, ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { useRestaurantInfo } from "@/lib/hooks";
+import { useRestaurantInfo, useCurrentCashRegister, usePosSalesSummary } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { useOnlineStatus, useOfflineSyncEngine } from "@/lib/useOnlineStatus";
@@ -319,6 +319,49 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
   const [showHelp, setShowHelp] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [showHold, setShowHold] = useState(false);
+  const [showSales, setShowSales] = useState(false);
+
+  // Cash-register / shift state for the header pill.
+  const { data: cashRegister } = useCurrentCashRegister();
+  const shiftSession = cashRegister?.session ?? null;
+  const shiftOpenedAt = shiftSession ? new Date(shiftSession.openedAt) : null;
+  const openingFloat = shiftSession ? Number(shiftSession.openingFloat ?? 0) : 0;
+
+  // ─── Barcode / keyboard-wedge scanner ──────────────────────────────────
+  // Scanners send keystrokes in a rapid burst terminated by Enter. We capture
+  // them globally (when no input is focused) and dispatch a "pos:scan" event
+  // that pos.tsx listens for. Threshold: ≥ 3 chars with avg gap < 50ms.
+  useEffect(() => {
+    const buf: { ch: string; t: number }[] = [];
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const inField = tag === "input" || tag === "textarea" || tag === "select"
+        || (e.target as HTMLElement | null)?.isContentEditable;
+      if (inField) return;
+      const now = performance.now();
+      if (e.key === "Enter") {
+        if (buf.length >= 3) {
+          const gaps = buf.slice(1).map((c, i) => c.t - buf[i].t);
+          const avg = gaps.reduce((a, b) => a + b, 0) / Math.max(gaps.length, 1);
+          if (avg < 50) {
+            const code = buf.map(c => c.ch).join("");
+            window.dispatchEvent(new CustomEvent("pos:scan", { detail: code }));
+            play("success");
+            e.preventDefault();
+          }
+        }
+        buf.length = 0;
+        return;
+      }
+      if (e.key.length === 1) {
+        if (buf.length > 0 && now - buf[buf.length - 1].t > 200) buf.length = 0;
+        buf.push({ ch: e.key, t: now });
+        if (buf.length > 40) buf.shift();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [play]);
 
   useEffect(() => {
     const f = () => setIsFull(!!document.fullscreenElement);
@@ -433,6 +476,27 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
             <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md bg-muted text-muted-foreground">
               <Activity className="w-3 h-3" /> KOT
             </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md",
+                shiftSession
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+              )}
+              title={
+                shiftSession && shiftOpenedAt
+                  ? `Shift open since ${shiftOpenedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Float ₹${openingFloat.toFixed(2)}`
+                  : "No active shift — open a cash register"
+              }
+            >
+              <Clock className="w-3 h-3" />
+              {shiftSession && shiftOpenedAt
+                ? `Shift ${shiftOpenedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "No shift"}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md bg-muted text-muted-foreground" title="Barcode scanner ready">
+              <ScanLine className="w-3 h-3" /> Scan
+            </span>
           </div>
 
           {/* Cashier + clock */}
@@ -448,6 +512,7 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
           {/* Action icons */}
           <div className="flex items-center gap-0.5 ml-1 border-l border-border pl-2">
             <IconBtn title="Calculator" onClick={() => { setShowCalc(s => !s); play("click"); }}><CalcIcon className="w-4 h-4" /></IconBtn>
+            <IconBtn title="Daily sales summary" onClick={() => { setShowSales(true); play("click"); }}><BarChart3 className="w-4 h-4" /></IconBtn>
             <IconBtn title="Held bills (F5)" onClick={() => { setShowHold(true); play("click"); }}><Pause className="w-4 h-4" /></IconBtn>
             <IconBtn title={muted ? "Unmute sounds" : "Mute sounds"} onClick={() => setMuted(m => !m)}>{muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</IconBtn>
             <IconBtn title="Shortcuts (?)" onClick={() => setShowHelp(true)}><HelpCircle className="w-4 h-4" /></IconBtn>
@@ -478,6 +543,7 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
 
       {showHelp && <ShortcutsHelpModal onClose={() => setShowHelp(false)} />}
       {showCalc && <CalculatorWidget onClose={() => setShowCalc(false)} />}
+      {showSales && <SalesSummaryDrawer sessionId={shiftSession?.id ?? null} onClose={() => setShowSales(false)} />}
       {showHold && (
         <HeldBillsDrawer
           onClose={() => setShowHold(false)}
@@ -498,6 +564,83 @@ function IconBtn({ title, onClick, children }: { title: string; onClick: () => v
     >
       {children}
     </button>
+  );
+}
+
+// ─── Daily Sales Summary drawer ──────────────────────────────────────────
+function SalesSummaryDrawer({ sessionId, onClose }: { sessionId: number | null; onClose: () => void }) {
+  const { data, isLoading } = usePosSalesSummary(sessionId);
+  const fmt = (v: string | number) => `₹${Number(v ?? 0).toFixed(2)}`;
+  return (
+    <div className="fixed inset-0 z-[95] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <h3 className="font-semibold flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-primary" /> Daily Sales Summary
+            {sessionId ? <span className="text-xs text-muted-foreground font-normal">· Current shift</span> : <span className="text-xs text-muted-foreground font-normal">· Today</span>}
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {isLoading || !data ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <SummaryStat label="Orders" value={String(data.orderCount)} />
+                <SummaryStat label="Gross" value={fmt(data.gross)} accent />
+                <SummaryStat label="Discounts" value={`− ${fmt(data.discounts)}`} />
+                <SummaryStat label="Tax" value={fmt(data.tax)} />
+                <SummaryStat label="Service" value={fmt(data.serviceCharge)} />
+                <SummaryStat label="Tips" value={fmt(data.tip)} />
+              </div>
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground flex items-center gap-1.5"><IndianRupee className="w-4 h-4 text-primary" />Net Sales</span>
+                <span className="text-xl font-bold tabular-nums text-primary">{fmt(data.net)}</span>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">By order type</p>
+                {data.byOrderType.length === 0 ? <p className="text-xs text-muted-foreground">No orders yet</p> : (
+                  <div className="space-y-1">
+                    {data.byOrderType.map(r => (
+                      <div key={r.orderType} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0">
+                        <span className="capitalize">{r.orderType.replace("_", " ")} <span className="text-xs text-muted-foreground">· {r.count}</span></span>
+                        <span className="font-mono tabular-nums">{fmt(r.gross)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">By payment method</p>
+                {data.byMethod.length === 0 ? <p className="text-xs text-muted-foreground">No payments yet</p> : (
+                  <div className="space-y-1">
+                    {data.byMethod.map(r => (
+                      <div key={r.method} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0">
+                        <span className="capitalize">{r.method.replace("_", " ")} <span className="text-xs text-muted-foreground">· {r.count}</span></span>
+                        <span className="font-mono tabular-nums">{fmt(r.gross)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center pt-2 border-t border-border">
+                {new Date(data.from).toLocaleString()} → {new Date(data.to).toLocaleString()}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={cn("p-3 rounded-lg border", accent ? "border-primary/30 bg-primary/5" : "border-border")}>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn("text-base font-bold tabular-nums mt-0.5", accent && "text-primary")}>{value}</p>
+    </div>
   );
 }
 

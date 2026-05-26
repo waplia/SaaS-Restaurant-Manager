@@ -2608,6 +2608,59 @@ export function useDeleteExpense() {
 
 
 
+// POS — list pending/in-progress diner cart sessions (QR / online / app).
+// Used by the POS "QR Orders" tab so the cashier can see carts diners have
+// started but not yet placed, and can convert them into POS orders.
+export function usePendingCartSessions(channel?: string) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (channel) q.set("channel", channel);
+  return useQuery({
+    queryKey: ["cart-sessions", "pending", RESTAURANT_ID, channel ?? "all"],
+    queryFn: () => apiGet<Array<{
+      id: number;
+      sessionToken: string;
+      channel: string;
+      tableId: number | null;
+      customerName: string | null;
+      customerPhone: string | null;
+      items: Array<{ menuItemId: number; name: string; quantity: number; price: string }>;
+      subtotal: string;
+      lastActivityAt: string;
+      createdAt: string;
+    }>>(`/restaurants/${RESTAURANT_ID}/cart-sessions/pending?${q}`),
+    refetchInterval: 15000,
+    enabled: !!RESTAURANT_ID,
+  });
+}
+
+// POS — Daily Sales Summary for the current shift (or today if no shift).
+// Backs the in-shell Sales drawer the cashier opens from the status bar.
+export function usePosSalesSummary(sessionId: number | null) {
+  const RESTAURANT_ID = useRestaurantId();
+  const q = new URLSearchParams();
+  if (sessionId) q.set("sessionId", String(sessionId));
+  return useQuery({
+    queryKey: ["pos", "sales-summary", RESTAURANT_ID, sessionId],
+    queryFn: () => apiGet<{
+      session: { id: number; openedAt: string; closedAt: string | null; status: string } | null;
+      from: string;
+      to: string;
+      orderCount: number;
+      gross: string;
+      discounts: string;
+      tax: string;
+      serviceCharge: string;
+      tip: string;
+      net: string;
+      byOrderType: Array<{ orderType: string; count: number; gross: string }>;
+      byMethod: Array<{ method: string; count: number; gross: string }>;
+    }>(`/restaurants/${RESTAURANT_ID}/pos/sales-summary?${q}`),
+    refetchInterval: 30000,
+    enabled: !!RESTAURANT_ID,
+  });
+}
+
 export function useCurrentCashRegister() {
   const RESTAURANT_ID = useRestaurantId();
   return useQuery({

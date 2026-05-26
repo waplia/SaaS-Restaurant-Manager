@@ -10,6 +10,7 @@ import {
   useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
   useCurrentCashRegister,
   useTerminals, useTerminalCharge, useConfirmTerminalCharge, useTerminalRunOnReader,
+  usePendingCartSessions, useReservations,
 } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import {
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
   Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift,
+  QrCode, CalendarClock, Clock, Leaf,
 } from "lucide-react";
 import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
 
@@ -65,7 +67,15 @@ const ORDER_TYPES = [
   { value: "dine_in", label: "Dine-in", icon: Utensils },
   { value: "takeaway", label: "Takeaway", icon: Package },
   { value: "delivery", label: "Delivery", icon: Bike },
+  { value: "qr_order", label: "QR Orders", icon: QrCode },
+  { value: "reservation_order", label: "Reservations", icon: CalendarClock },
 ] as const;
+
+type OrderTypeValue = typeof ORDER_TYPES[number]["value"];
+// Order types that actually create an order on the server. The new "qr_order"
+// and "reservation_order" tabs are inboxes that seed a real order in one of
+// the three primary types below.
+type ServerOrderType = "dine_in" | "takeaway" | "delivery";
 
 const PAYMENT_METHODS = [
   { value: "cash", label: "Cash", icon: Banknote },
@@ -73,6 +83,7 @@ const PAYMENT_METHODS = [
   { value: "upi", label: "UPI", icon: Smartphone },
   { value: "gift_card", label: "Gift Card", icon: Gift },
   { value: "terminal", label: "Terminal", icon: CreditCard },
+  { value: "pay_later", label: "Pay Later", icon: Clock },
 ];
 
 const TABLE_STATUS_STYLE: Record<string, string> = {
@@ -643,6 +654,7 @@ function PaymentModal({
   onConfirm,
   onTerminalConfirmed,
   isPending,
+  hasCustomer,
 }: {
   totals: Totals;
   orderId: number;
@@ -653,8 +665,10 @@ function PaymentModal({
    *  /orders/:id/pay (terminal /confirm is the sole finalizer). */
   onTerminalConfirmed?: (info: { providerRef: string; receiptUrl: string | null }) => Promise<void>;
   isPending: boolean;
+  /** Whether a customer is linked to the order. Required for pay_later. */
+  hasCustomer: boolean;
 }) {
-  const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card" | "terminal">("cash");
+  const [method, setMethod] = useState<"cash" | "card" | "upi" | "gift_card" | "terminal" | "pay_later">("cash");
   const [stage, setStage] = useState<PayStage>("select");
   const [amountTendered, setAmountTendered] = useState("");
   // Tip selection — drives both the displayed grand total and the value sent
@@ -749,6 +763,13 @@ function PaymentModal({
     if (method === "terminal") {
       if (terminalId == null && terminals.length > 0) setTerminalId(terminals[0].id);
       setStage("terminal-form"); return;
+    }
+    if (method === "pay_later") {
+      // No tender capture for pay-later — go straight to confirm so the
+      // cashier can review who's being billed on-account, then settle.
+      setStage("processing");
+      void onConfirm("pay_later", { tipAmount }).finally(() => setStage("select"));
+      return;
     }
     setStage("cash-confirm");
   };
@@ -966,13 +987,19 @@ function PaymentModal({
                 <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
                 <div className="grid grid-cols-3 gap-2">
                   {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => {
-                    const disabled = value === "cash" && !isRegisterOpen;
+                    const disabled = (value === "cash" && !isRegisterOpen)
+                      || (value === "pay_later" && !hasCustomer);
+                    const disabledHint = value === "cash" && !isRegisterOpen
+                      ? "Open the cash register before accepting cash"
+                      : value === "pay_later" && !hasCustomer
+                        ? "Link a customer (by phone) before billing on account"
+                        : "";
                     return (
                       <button
                         key={value}
                         disabled={disabled}
-                        title={disabled ? "Open the cash register before accepting cash" : ""}
-                        onClick={() => setMethod(value as "cash" | "card" | "upi" | "gift_card")}
+                        title={disabledHint}
+                        onClick={() => setMethod(value as "cash" | "card" | "upi" | "gift_card" | "terminal" | "pay_later")}
                         className={cn(
                           "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 active:scale-[0.98]",
                           disabled
@@ -998,8 +1025,19 @@ function PaymentModal({
                   </div>
                 )}
               </div>
-              <Button className="w-full h-11" onClick={handleProceed} disabled={method === "cash" && !isRegisterOpen}>
-                Continue with {method === "cash" ? "Cash" : method === "card" ? "Card" : method === "gift_card" ? "Gift Card" : "UPI"}
+              <Button
+                className="w-full h-11"
+                onClick={handleProceed}
+                disabled={(method === "cash" && !isRegisterOpen) || (method === "pay_later" && !hasCustomer)}
+              >
+                Continue with {
+                  method === "cash" ? "Cash"
+                  : method === "card" ? "Card"
+                  : method === "gift_card" ? "Gift Card"
+                  : method === "terminal" ? "Terminal"
+                  : method === "pay_later" ? "Pay Later"
+                  : "UPI"
+                }
               </Button>
             </>
           )}
@@ -1289,7 +1327,14 @@ export default function PosPage() {
   );
 
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
-  const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
+  const [orderType, setOrderType] = useState<OrderTypeValue>("dine_in");
+  // The server-bound order type — derived from `orderType` but never the
+  // inbox-only "qr_order" / "reservation_order" tabs. When the cashier is on
+  // one of those inbox tabs, server-side orders still default to "dine_in"
+  // (overridden once they seat a reservation or accept a QR cart).
+  const serverOrderType: ServerOrderType = (orderType === "qr_order" || orderType === "reservation_order")
+    ? "dine_in"
+    : orderType;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -1306,6 +1351,52 @@ export default function PosPage() {
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const restaurantIdForVoice = useRestaurantId();
   const { data: allMenuItems = [] } = useMenuItems({});
+
+  // Veg / Non-veg filter chips above the menu grid.
+  const [vegFilter, setVegFilter] = useState<"all" | "veg" | "non_veg">("all");
+
+  // POS shift gating — every cashier must have an open cash register session
+  // before they can use the terminal. The "register-closed" gate sits above
+  // the entire POS surface (read-only browsing still allowed via "Continue").
+  const { data: cashRegister } = useCurrentCashRegister();
+  const isRegisterOpenForPos = !!cashRegister?.session;
+  const [shiftBypassed, setShiftBypassed] = useState(false);
+
+  // Inbox data for the new QR Orders / Reservations tabs.
+  const { data: pendingCarts = [] } = usePendingCartSessions();
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const { data: todayReservations = [] } = useReservations({ date: todayDate });
+
+  // Barcode/keyboard-wedge scanner — listen for "pos:scan" events fired by
+  // PosShell, match against menu items (by sku/name) or tables (by number).
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const code = (ev as CustomEvent<string>).detail?.trim();
+      if (!code) return;
+      const item = (allMenuItems as MenuItem[]).find(i =>
+        (i as MenuItem & { sku?: string | null }).sku?.toLowerCase() === code.toLowerCase()
+      );
+      if (item) {
+        if (!item.isAvailable) {
+          toast({ title: "Item is 86'd", description: item.name, variant: "destructive" });
+          return;
+        }
+        handleMenuItemClick(item);
+        toast({ title: "Scanned", description: `Added ${item.name}` });
+        return;
+      }
+      const table = (tables as FloorTable[]).find(t => String(t.tableNumber) === code);
+      if (table) {
+        handleSelectTable(table);
+        toast({ title: "Scanned", description: `Selected Table ${table.tableNumber}` });
+        return;
+      }
+      toast({ title: "Scan not recognised", description: code, variant: "destructive" });
+    };
+    window.addEventListener("pos:scan", handler);
+    return () => window.removeEventListener("pos:scan", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allMenuItems, tables]);
 
   // Hide categories that have no available items — keeps the POS category
   // bar in sync with the diner-facing menu (which also hides empty cats).
@@ -1539,7 +1630,7 @@ export default function PosPage() {
     try {
       const result = await createOrder.mutateAsync({
         tableId: selectedTableId ?? undefined,
-        orderType,
+        orderType: serverOrderType,
         customerName: customerName || undefined,
         customerId: linkedCustomerId ?? undefined,
         items: cart.map(c => ({
@@ -1571,7 +1662,7 @@ export default function PosPage() {
   const handleVoiceOrderConfirm = async (payload: VoiceOrderConfirmation): Promise<void> => {
     const result = await createOrder.mutateAsync({
       tableId: payload.tableId ?? selectedTableId ?? undefined,
-      orderType: payload.tableId != null ? "dine_in" : orderType,
+      orderType: payload.tableId != null ? "dine_in" : serverOrderType,
       customerName: customerName || undefined,
       customerId: linkedCustomerId ?? undefined,
       notes: payload.notes,
@@ -1708,7 +1799,7 @@ export default function PosPage() {
       if (Array.isArray(draft.cart) && draft.cart.length > 0) {
         setCart(draft.cart);
         if (typeof draft.customerName === "string") setCustomerName(draft.customerName);
-        if (draft.orderType === "dine_in" || draft.orderType === "takeaway" || draft.orderType === "delivery") setOrderType(draft.orderType);
+        if (ORDER_TYPES.some(t => t.value === draft.orderType)) setOrderType(draft.orderType as OrderTypeValue);
         if (typeof draft.selectedTableId === "number" || draft.selectedTableId === null) setSelectedTableId(draft.selectedTableId ?? null);
       }
     } catch { /* noop */ }
@@ -1754,7 +1845,7 @@ export default function PosPage() {
   }, [cart, placedOrder, customerName, selectedTableId, tables, orderType, toast]);
 
   const handleRecallBill = useCallback((bill: HeldBill) => {
-    const p = bill.payload as { cart?: CartItem[]; customerName?: string; orderType?: "dine_in" | "takeaway" | "delivery"; selectedTableId?: number | null };
+    const p = bill.payload as { cart?: CartItem[]; customerName?: string; orderType?: OrderTypeValue; selectedTableId?: number | null };
     if (!p || !Array.isArray(p.cart)) return;
     setCart(p.cart);
     setCustomerName(p.customerName ?? "");
@@ -1976,19 +2067,144 @@ export default function PosPage() {
             </div>
           </div>
 
-          {/* Category filter */}
+          {/* Category filter + veg/non-veg chips */}
           <div className="border-b border-border flex-shrink-0 bg-background overflow-x-auto">
-            <div className="flex gap-1.5 px-4 py-2 w-max min-w-full">
+            <div className="flex gap-1.5 px-4 py-2 w-max min-w-full items-center">
               <Button size="sm" variant={!selectedCat ? "default" : "outline"} onClick={() => setSelectedCat(undefined)} className="flex-shrink-0 h-7 text-xs px-3">All</Button>
               {visibleCategories.map(c => (
                 <Button key={c.id} size="sm" variant={selectedCat === c.id ? "default" : "outline"} onClick={() => setSelectedCat(c.id)} className="flex-shrink-0 h-7 text-xs px-3 whitespace-nowrap">
                   {c.name}
                 </Button>
               ))}
+              <span className="w-px h-5 bg-border mx-1" />
+              {([
+                { v: "all", label: "All", dot: "bg-muted-foreground" },
+                { v: "veg", label: "Veg", dot: "bg-green-500" },
+                { v: "non_veg", label: "Non-veg", dot: "bg-red-500" },
+              ] as const).map(({ v, label, dot }) => (
+                <button
+                  key={v}
+                  onClick={() => setVegFilter(v)}
+                  className={cn(
+                    "flex-shrink-0 h-7 text-xs px-3 rounded-md border flex items-center gap-1.5 whitespace-nowrap transition-colors",
+                    vegFilter === v ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"
+                  )}
+                >
+                  <Leaf className={cn("w-3 h-3", v === "non_veg" && "hidden")} />
+                  <span className={cn("w-2 h-2 rounded-full", dot, v !== "non_veg" && "hidden")} />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Menu grid */}
+          {/* Shift-closed gate banner */}
+          {!isRegisterOpenForPos && !shiftBypassed && (
+            <div className="mx-3 mt-3 p-4 rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 flex items-start gap-3">
+              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">No active shift</p>
+                <p className="text-xs text-amber-800 dark:text-amber-300/80 mt-0.5">
+                  Open a cash register to take cash payments. You can still browse and ring up orders.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <a href="/cash-register" className="text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 whitespace-nowrap text-center">Open Shift</a>
+                <button onClick={() => setShiftBypassed(true)} className="text-xs text-amber-700 dark:text-amber-300 hover:underline">Continue anyway</button>
+              </div>
+            </div>
+          )}
+
+          {/* Main panel — Menu grid OR QR Order inbox OR Reservation inbox */}
+          {orderType === "qr_order" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <QrCode className="w-5 h-5 text-primary" />
+                <h2 className="font-semibold text-foreground">Pending QR & Digital Orders</h2>
+                <span className="ml-auto text-xs text-muted-foreground">{pendingCarts.length} waiting</span>
+              </div>
+              {pendingCarts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <QrCode className="w-12 h-12 mb-3 opacity-20" />
+                  <p className="text-sm">No pending QR carts</p>
+                  <p className="text-xs mt-1">Carts started from table QR codes will appear here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {pendingCarts.map((session) => {
+                    const tbl = (tables as FloorTable[]).find(t => t.id === session.tableId);
+                    return (
+                      <button
+                        key={session.id}
+                        onClick={() => {
+                          if (tbl) handleSelectTable(tbl);
+                          setOrderType("dine_in");
+                          toast({ title: "Seated QR cart", description: tbl ? `Table ${tbl.tableNumber}` : "Walk-in" });
+                        }}
+                        className="text-left p-4 rounded-xl border-2 border-border hover:border-primary/60 hover:bg-accent/40 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-semibold">{tbl ? `Table ${tbl.tableNumber}` : (session.channel || "Walk-in")}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium uppercase">{session.channel || "qr"}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Started {new Date(session.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {session.customerName ? ` · ${session.customerName}` : ""}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : orderType === "reservation_order" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarClock className="w-5 h-5 text-primary" />
+                <h2 className="font-semibold text-foreground">Today's Reservations</h2>
+                <span className="ml-auto text-xs text-muted-foreground">{todayReservations.length} booked</span>
+              </div>
+              {todayReservations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <CalendarClock className="w-12 h-12 mb-3 opacity-20" />
+                  <p className="text-sm">No reservations today</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {todayReservations.map((res) => {
+                    const tbl = (tables as FloorTable[]).find(t => t.id === res.tableId);
+                    const when = new Date(res.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    return (
+                      <div key={res.id} className="p-4 rounded-xl border-2 border-border">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-semibold">{res.guestName}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium uppercase">{res.status}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {res.partySize} guests · {when}
+                          {tbl ? ` · Table ${tbl.tableNumber}` : ""}
+                        </p>
+                        {tbl && (
+                          <Button
+                            size="sm"
+                            className="mt-2 h-7 text-xs w-full"
+                            onClick={() => {
+                              handleSelectTable(tbl);
+                              setCustomerName(res.guestName);
+                              setOrderType("dine_in");
+                              toast({ title: "Seated guest", description: `${res.guestName} at Table ${tbl.tableNumber}` });
+                            }}
+                          >
+                            Seat & Start Order
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="flex-1 overflow-y-auto p-3">
             {placedOrder && (
               <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -2000,26 +2216,37 @@ export default function PosPage() {
               {(() => {
                 const q = searchQuery.trim().toLowerCase();
                 const src = q ? (allMenuItems as MenuItem[]) : (menuItems as MenuItem[]);
-                return src.filter(i => i.isAvailable && (!q || i.name.toLowerCase().includes(q)));
+                return src.filter(i => {
+                  if (q && !i.name.toLowerCase().includes(q)) return false;
+                  if (vegFilter === "veg" && !i.isVeg) return false;
+                  if (vegFilter === "non_veg" && i.isVeg) return false;
+                  return true;
+                });
               })().map(item => {
                 const inCart = cart.find(c => c.menuItemId === item.id);
                 const inLive = placedOrder ? liveItems.some(li => li.menuItemId === item.id) : false;
+                const isOut = !item.isAvailable;
                 return (
                   <button
                     key={item.id}
-                    onClick={() => handleMenuItemClick(item)}
+                    onClick={() => { if (!isOut) handleMenuItemClick(item); }}
+                    disabled={isOut}
+                    title={isOut ? "Item is 86'd (out of stock)" : ""}
                     className={cn(
-                      "group relative text-left p-3 rounded-xl border-2 transition-all duration-150 active:scale-[0.98] hover:shadow-md hover:-translate-y-0.5",
-                      (inCart || inLive)
+                      "group relative text-left p-3 rounded-xl border-2 transition-all duration-150",
+                      isOut
+                        ? "border-border bg-muted/30 opacity-60 cursor-not-allowed"
+                        : "active:scale-[0.98] hover:shadow-md hover:-translate-y-0.5",
+                      !isOut && (inCart || inLive)
                         ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 shadow-sm shadow-primary/20"
-                        : "border-border hover:border-primary/50 hover:bg-accent/40"
+                        : !isOut && "border-border hover:border-primary/50 hover:bg-accent/40"
                     )}
                   >
                     {item.imageUrl ? (
                       <img
                         src={resolveImageUrl(item.imageUrl)}
                         alt=""
-                        className="w-full aspect-square object-cover rounded-lg mb-2 bg-muted"
+                        className={cn("w-full aspect-square object-cover rounded-lg mb-2 bg-muted", isOut && "grayscale")}
                         onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
@@ -2032,7 +2259,12 @@ export default function PosPage() {
                       <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
                     </div>
                     <span className="inline-flex items-center text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full ring-1 ring-primary/20">₹{item.price}</span>
-                    {(inCart || inLive) && (
+                    {isOut && (
+                      <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow">
+                        86'd
+                      </div>
+                    )}
+                    {!isOut && (inCart || inLive) && (
                       <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
                         {inCart?.quantity ?? liveItems.filter(li => li.menuItemId === item.id).reduce((s, li) => s + li.quantity, 0)}
                       </div>
@@ -2048,6 +2280,7 @@ export default function PosPage() {
               )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Right panel — Order ticket */}
@@ -2343,6 +2576,7 @@ export default function PosPage() {
           onConfirm={handleConfirmPayment}
           onTerminalConfirmed={handleTerminalConfirmed}
           isPending={payOrder.isPending}
+          hasCustomer={!!linkedCustomerId}
         />
       )}
 
