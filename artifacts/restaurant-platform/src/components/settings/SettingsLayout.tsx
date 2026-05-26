@@ -10,7 +10,7 @@ import {
   CalendarRange, Info, Globe, Printer, Download, ImageIcon, Truck,
   Wheat, Utensils, Ban, ListChecks, RefreshCw, Sparkles, Tablet, Heart,
   Search, ChefHat, KeyRound, Webhook, ScrollText, BookOpen, Activity, MessageCircle, Hash, Calculator, MonitorSmartphone,
-  Lock, ShoppingBag, Bell,
+  Lock, ShoppingBag, Bell, ShieldAlert,
 } from "lucide-react";
 
 export type SectionKey =
@@ -21,7 +21,7 @@ export type SectionKey =
   | "cancellation-reasons" | "order-settings" | "order-capacity" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "web-push" | "token-display" | "upi-qr"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
-  | "accounting" | "account" | "sessions" | "customer-app";
+  | "accounting" | "account" | "sessions" | "customer-app" | "guest-verification";
 
 type IconType = typeof Building2;
 
@@ -68,6 +68,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "devices", label: "Devices & Hardware", icon: Printer, href: "/settings/devices" },
       { key: "kitchens", label: "Kitchens & Stations", icon: ChefHat, href: "/settings/kitchens" },
       { key: "token-display", label: "Token Display", icon: Hash, href: "/settings/token-display" },
+      { key: "guest-verification", label: "Guest Verification (QR Anti-Fraud)", icon: ShieldAlert, ownerOnly: true, href: "/settings/guest-verification" },
     ],
   },
   {

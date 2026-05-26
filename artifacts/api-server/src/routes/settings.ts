@@ -22,6 +22,7 @@ const SettingsSectionBody = z.union([
 const OWNER_ONLY = new Set([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
   "currencies", "taxes", "loyalty", "discounts", "customer-app",
+  "guest-verification",
 ]);
 
 const ALL_SECTIONS = new Set([
@@ -33,6 +34,7 @@ const ALL_SECTIONS = new Set([
   "ai", "kiosk", "loyalty", "discounts", "kitchen-delay", "token-display",
   "direct-ordering", "customer-app",
   "order-capacity",
+  "guest-verification",
 ]);
 
 function rolesForSection(section: string): AppRole[] {

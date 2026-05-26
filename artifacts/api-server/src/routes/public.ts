@@ -739,7 +739,18 @@ router.post("/public/orders", async (req, res) => {
       // (online prepaid flows): real money committed eliminates the
       // dine-and-dash fraud vector the hold is designed to catch.
       const isPrepaid = order.paymentStatus === "paid";
-      isHeld = sessRow?.openedBy === "qr" && !sessRow?.staffVerifiedAt && !isPrepaid;
+      // Owner-controlled kill switch: restaurants can disable the
+      // verification hold entirely from Settings → Guest Verification.
+      // Default is enabled (no row OR row.data.enabled !== false).
+      const [gvSetting] = await db
+        .select({ data: restaurantSettingsTable.data })
+        .from(restaurantSettingsTable)
+        .where(and(
+          eq(restaurantSettingsTable.restaurantId, restaurantId),
+          eq(restaurantSettingsTable.section, "guest-verification"),
+        ));
+      const gvEnabled = (gvSetting?.data as { enabled?: boolean } | undefined)?.enabled !== false;
+      isHeld = gvEnabled && sessRow?.openedBy === "qr" && !sessRow?.staffVerifiedAt && !isPrepaid;
     }
     const batchRes = await createKotBatchForItems({
       restaurantId,

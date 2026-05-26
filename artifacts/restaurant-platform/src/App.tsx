@@ -45,6 +45,7 @@ import SettingsDevicesPage from "@/pages/settings-devices";
 import SettingsPrintersPage from "@/pages/settings-printers";
 import SettingsTerminalsPage from "@/pages/settings-terminals";
 import SettingsTokenDisplayPage from "@/pages/settings-token-display";
+import SettingsGuestVerificationPage from "@/pages/settings-guest-verification";
 import SettingsOrderCapacityPage from "@/pages/settings-order-capacity";
 import SettingsSessionsPage from "@/pages/settings-sessions";
 import TokensPage from "@/pages/tokens";
@@ -507,6 +508,7 @@ function Router() {
       <Route path="/settings/printers" component={() => <RoleProtectedRoute component={SettingsPrintersPage} allow={["owner", "manager", "cashier", "waiter", "kitchen"]} />} />
       <Route path="/settings/terminals" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsTerminalsPage} feature="card_terminal" />} allow={["owner", "manager", "cashier"]} />} />
       <Route path="/settings/token-display" component={() => <RoleProtectedRoute component={SettingsTokenDisplayPage} allow={["owner", "manager"]} />} />
+      <Route path="/settings/guest-verification" component={() => <RoleProtectedRoute component={SettingsGuestVerificationPage} allow={["owner"]} />} />
       <Route path="/settings/order-capacity" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SettingsOrderCapacityPage} feature="ops_order_capacity" />} allow={["owner", "manager"]} />} />
       <Route path="/tokens" component={() => <RoleProtectedRoute component={TokensPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
       <Route path="/tokens/history" component={() => <RoleProtectedRoute component={TokensHistoryPage} allow={["owner", "manager", "waiter", "cashier", "kitchen"]} />} />
