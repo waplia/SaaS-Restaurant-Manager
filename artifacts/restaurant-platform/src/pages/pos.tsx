@@ -7,7 +7,7 @@ import {
   useOrderDetail, useAddOrderItem, useRemoveOrderItem,
   useApplyDiscountLine, useRemoveDiscountLine, useDiscountsConfig, useRequestManagerDiscountOtp,
   useCreatePaymentIntent, useCreateRazorpayOrder,
-  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useApplyCoupon,
+  useApplyLoyalty, useCustomerLoyalty, useCustomerByPhone, useCreateCustomer, useApplyCoupon,
   useCurrentCashRegister,
   useTerminals, useTerminalCharge, useConfirmTerminalCharge, useTerminalRunOnReader,
   usePendingCartSessions, useReservations,
@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRestaurantId } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
 import { printOrder } from "@/lib/printOrder";
+import { playPosSound } from "@/lib/posSounds";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
@@ -1526,7 +1527,9 @@ export default function PosPage() {
         onSuccess: () => {
           setModPickerItem(null);
           toast({ title: `${item.name} added to order` });
+          playPosSound("add");
         },
+        onError: () => playPosSound("error"),
       });
     } else {
       const lineKey = makeLineKey(item.id, modifiers);
@@ -1547,6 +1550,7 @@ export default function PosPage() {
         }];
       });
       setModPickerItem(null);
+      playPosSound("add");
     }
   }, [placedOrder, addOrderItem, toast]);
 
@@ -1555,29 +1559,59 @@ export default function PosPage() {
   }, []);
 
   const updateQty = useCallback((lineKey: string, qty: number) => {
-    if (qty <= 0) setCart(prev => prev.filter(c => c.lineKey !== lineKey));
-    else setCart(prev => prev.map(c => c.lineKey === lineKey ? { ...c, quantity: qty } : c));
+    if (qty <= 0) {
+      setCart(prev => prev.filter(c => c.lineKey !== lineKey));
+      playPosSound("remove");
+    } else {
+      setCart(prev => prev.map(c => c.lineKey === lineKey ? { ...c, quantity: qty } : c));
+      playPosSound("add");
+    }
   }, []);
 
   const removeFromCart = useCallback((lineKey: string) => {
     setCart(prev => prev.filter(c => c.lineKey !== lineKey));
+    playPosSound("remove");
   }, []);
 
   const removeOrderItemById = useCallback((itemId: number) => {
     if (!placedOrder) return;
     removeOrderItem.mutate({ orderId: placedOrder.id, itemId }, {
-      onSuccess: () => toast({ title: "Item removed" }),
+      onSuccess: () => { toast({ title: "Item removed" }); playPosSound("remove"); },
+      onError: () => playPosSound("error"),
     });
   }, [placedOrder, removeOrderItem, toast]);
 
-  const handleLinkCustomer = () => {
-    if (!foundCustomer) {
-      toast({ title: "No customer found", description: "Try a different phone number.", variant: "destructive" });
+  const createCustomerMut = useCreateCustomer();
+  const handleLinkCustomer = async () => {
+    // Existing customer in this restaurant — link directly.
+    if (foundCustomer) {
+      setLinkedCustomerId(foundCustomer.id);
+      setCustomerName(foundCustomer.name);
+      toast({ title: `Linked: ${foundCustomer.name}`, description: `Loyalty balance: ${foundCustomer.loyaltyPoints} pts` });
       return;
     }
-    setLinkedCustomerId(foundCustomer.id);
-    setCustomerName(foundCustomer.name);
-    toast({ title: `Linked: ${foundCustomer.name}`, description: `Loyalty balance: ${foundCustomer.loyaltyPoints} pts` });
+    // New customer flow — create on the fly so cashiers don't have to
+    // leave POS, then link the new id. Requires at least a phone; uses
+    // the typed name if any, otherwise "Walk-in (<last 4>)" as a stable
+    // placeholder the cashier can rename later from the Customers page.
+    const phone = (customerPhone || "").trim();
+    if (!phone || phone.replace(/\D/g, "").length < 7) {
+      toast({ title: "Phone required", description: "Enter a customer phone number to create or link a profile.", variant: "destructive" });
+      playPosSound("error");
+      return;
+    }
+    const nameForNew = (customerName || "").trim() || `Walk-in ${phone.slice(-4)}`;
+    try {
+      const created = await createCustomerMut.mutateAsync({ name: nameForNew, phone, email: "", address: "", notes: "" }) as { id: number; name: string; loyaltyPoints?: number };
+      setLinkedCustomerId(created.id);
+      setCustomerName(created.name);
+      toast({ title: `Created & linked: ${created.name}`, description: `Loyalty balance: ${created.loyaltyPoints ?? 0} pts` });
+      playPosSound("success");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Try again.";
+      toast({ title: "Could not create customer", description: msg, variant: "destructive" });
+      playPosSound("error");
+    }
   };
 
   const handleApplyLoyalty = () => {
@@ -1717,8 +1751,10 @@ export default function PosPage() {
     });
     if (isOfflineQueuedResult(result)) {
       toast({ title: "Payment saved offline", description: `${placedOrder?.orderNumber} will be settled when you reconnect.` });
+      playPosSound("success");
     } else {
       toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
+      playPosSound("success");
     }
     setShowPayModal(false);
     const receiptItems = placedOrder
@@ -1746,6 +1782,7 @@ export default function PosPage() {
       title: "Terminal payment confirmed",
       description: `${placedOrder?.orderNumber ?? "Order"} marked as paid${info.receiptUrl ? " — receipt available" : ""}.`,
     });
+    playPosSound("success");
     const receiptItems = placedOrder
       ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
       : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
@@ -2025,8 +2062,16 @@ export default function PosPage() {
                 value={customerPhone}
                 onChange={v => { setCustomerPhone(v); setPhoneQuery(v); }}
               />
-              <Button size="sm" variant="outline" className="h-12 text-xs px-2 flex-shrink-0" onClick={handleLinkCustomer} disabled={!foundCustomer}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-12 text-xs px-2 flex-shrink-0 whitespace-nowrap"
+                onClick={handleLinkCustomer}
+                disabled={createCustomerMut.isPending || !(customerPhone || "").trim()}
+                title={foundCustomer ? `Link ${foundCustomer.name}` : "Create & link new customer with this phone"}
+              >
                 <UserCheck className="w-3.5 h-3.5" />
+                <span className="ml-1">{foundCustomer ? "Link" : "Add"}</span>
               </Button>
             </div>
           )}
