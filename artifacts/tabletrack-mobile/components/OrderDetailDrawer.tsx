@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, Animated, Dimensions, ActivityIndicator,
-  ScrollView, BackHandler, Alert, Platform,
+  ScrollView, BackHandler, Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -12,6 +13,7 @@ import {
 } from "@workspace/api-client-react";
 import type { OrderDetail } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useAlert, useAlertFn } from "@/components/ui/AppAlert";
 import { useAuth } from "@/context/AuthContext";
 
 const STATUS_FLOW: Record<string, string> = {
@@ -48,6 +50,9 @@ interface OrderDetailDrawerProps {
 export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) {
   const colors = useColors();
   const qc = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const { confirm } = useAlert();
+  const alert = useAlertFn();
   const { restaurantId } = useAuth();
   const screenW = Dimensions.get("window").width;
   const drawerW = Math.min(420, screenW);
@@ -111,64 +116,55 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       refreshLists();
     } catch {
-      Alert.alert("Update failed", "Could not advance the order.");
+      alert("Update failed", "Could not advance the order.");
     } finally {
       setBusy(false);
     }
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!order) return;
-    Alert.alert(
+    const ok = await confirm(
       "Confirm Payment",
       `Mark this order as paid via ${PAYMENT_METHODS.find((m) => m.key === selectedPayment)?.label ?? selectedPayment}?\n\nTotal: ₹${Number(order.totalAmount).toLocaleString()}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await payOrder.mutateAsync({
-                restaurantId,
-                id: order.id,
-                data: { paymentMethod: selectedPayment as "cash" | "card" | "upi" },
-              });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              refreshLists();
-              onClose();
-            } catch {
-              Alert.alert("Payment failed", "Could not record payment.");
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
+      { confirmText: "Confirm" },
     );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await payOrder.mutateAsync({
+        restaurantId,
+        id: order.id,
+        data: { paymentMethod: selectedPayment as "cash" | "card" | "upi" },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      refreshLists();
+      onClose();
+    } catch {
+      alert("Payment failed", "Could not record payment.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!order) return;
-    Alert.alert("Cancel Order", "Are you sure?", [
-      { text: "Back", style: "cancel" },
-      {
-        text: "Cancel Order",
-        style: "destructive",
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await updateOrder.mutateAsync({ restaurantId, id: order.id, data: { status: "cancelled" } });
-            refreshLists();
-            onClose();
-          } catch {
-            Alert.alert("Failed", "Could not cancel the order.");
-          } finally {
-            setBusy(false);
-          }
-        },
-      },
-    ]);
+    const ok = await confirm("Cancel Order", "Are you sure?", {
+      confirmText: "Cancel Order",
+      cancelText: "Back",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await updateOrder.mutateAsync({ restaurantId, id: order.id, data: { status: "cancelled" } });
+      refreshLists();
+      onClose();
+    } catch {
+      alert("Failed", "Could not cancel the order.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handlePriority = async () => {
@@ -182,7 +178,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
       });
       refreshLists();
     } catch {
-      Alert.alert("Failed", "Could not update priority.");
+      alert("Failed", "Could not update priority.");
     } finally {
       setBusy(false);
     }
@@ -245,7 +241,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
           </View>
         ) : (
           <>
-            <ScrollView contentContainerStyle={styles.body}>
+            <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]}>
               <View style={styles.metaRow}>
                 <View style={[styles.badge, { backgroundColor: sc.bg }]}>
                   <Text style={[styles.badgeText, { color: sc.text }]}>{order.status.replace("_", " ")}</Text>
@@ -410,7 +406,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  body: { padding: 16, gap: 12, paddingBottom: 120 },
+  body: { padding: 16, gap: 12 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   metaText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },

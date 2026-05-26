@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, RefreshControl, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -10,6 +11,7 @@ import { StatusBadge, type StatusTone } from "@/components/StatusBadge";
 
 type AttendanceRow = {
   id: number;
+  userId?: number;
   userName?: string;
   role?: string;
   status: "present" | "absent" | "late" | "on_leave" | string;
@@ -29,6 +31,7 @@ export default function AttendanceScreen() {
   const colors = useColors();
   const { restaurantId } = useAuth();
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
 
   const today = new Date().toISOString().slice(0, 10);
   const q = useQuery({
@@ -56,12 +59,12 @@ export default function AttendanceScreen() {
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
-          contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: isWeb ? 100 : 100 }}
+          contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: isWeb ? 100 : insets.bottom + 110 }}
         >
           {list.map(r => (
             <View key={r.id} style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.name, { color: colors.foreground }]}>{r.userName ?? `User #${r.id}`}</Text>
+                <Text style={[styles.name, { color: colors.foreground }]}>{r.userName ?? `User #${r.userId ?? r.id}`}</Text>
                 <Text style={[styles.meta, { color: colors.mutedForeground }]}>
                   {r.clockInAt ? `In ${new Date(r.clockInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "—"}
                   {r.clockOutAt ? ` · Out ${new Date(r.clockOutAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}

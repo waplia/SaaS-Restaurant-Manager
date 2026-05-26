@@ -1,10 +1,12 @@
 import React from "react";
 import {
   View, Text, StyleSheet, Modal, Pressable, KeyboardAvoidingView, Platform,
-  ScrollView, ActivityIndicator, Alert,
+  ScrollView, ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAlert } from "@/components/ui/AppAlert";
 import { BRAND } from "@/constants/brand";
 
 /**
@@ -30,16 +32,16 @@ export function EntityFormSheet({
   deleteConfirmMessage?: string;
 }) {
   const colors = useColors();
-  const handleDelete = () => {
+  const insets = useSafeAreaInsets();
+  const { confirm } = useAlert();
+  const handleDelete = async () => {
     if (!onDelete) return;
-    Alert.alert(
+    const ok = await confirm(
       "Delete",
       deleteConfirmMessage ?? "This cannot be undone. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: onDelete },
-      ],
+      { confirmText: "Delete", destructive: true },
     );
+    if (ok) onDelete();
   };
 
   return (
@@ -49,7 +51,7 @@ export function EntityFormSheet({
         style={styles.backdrop}
       >
         <Pressable style={styles.backdropTouch} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
           <View style={styles.headerRow}>
             <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={10}>

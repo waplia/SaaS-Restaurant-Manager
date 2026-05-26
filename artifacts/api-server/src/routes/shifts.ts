@@ -256,8 +256,38 @@ router.get("/restaurants/:restaurantId/attendance", async (req, res) => {
   if (userId) conditions.push(eq(attendanceTable.userId, Number(userId)));
   if (from) conditions.push(gte(attendanceTable.clockIn, new Date(String(from))));
   if (to) conditions.push(lte(attendanceTable.clockIn, new Date(String(to))));
-  const rows = await db.select().from(attendanceTable).where(and(...conditions)).orderBy(desc(attendanceTable.clockIn));
-  res.json(rows);
+  // Join users so the client can render the staff name instead of "User #id".
+  // Left-join so legacy rows whose user has been deleted still appear.
+  const rows = await db
+    .select({
+      id: attendanceTable.id,
+      userId: attendanceTable.userId,
+      restaurantId: attendanceTable.restaurantId,
+      date: attendanceTable.date,
+      clockIn: attendanceTable.clockIn,
+      clockOut: attendanceTable.clockOut,
+      status: attendanceTable.status,
+      scheduledShiftId: attendanceTable.scheduledShiftId,
+      scheduledMinutes: attendanceTable.scheduledMinutes,
+      lateMinutes: attendanceTable.lateMinutes,
+      source: attendanceTable.source,
+      markedByUserId: attendanceTable.markedByUserId,
+      notes: attendanceTable.notes,
+      userName: usersTable.name,
+      role: usersTable.role,
+    })
+    .from(attendanceTable)
+    .leftJoin(usersTable, eq(attendanceTable.userId, usersTable.id))
+    .where(and(...conditions))
+    .orderBy(desc(attendanceTable.clockIn));
+  // Mobile clients consume `clockInAt`/`clockOutAt` for display, but historical
+  // callers also read `clockIn`/`clockOut`. Provide both for compatibility.
+  const enriched = rows.map((r) => ({
+    ...r,
+    clockInAt: r.clockIn,
+    clockOutAt: r.clockOut,
+  }));
+  res.json(enriched);
 });
 
 async function performPunchIn(restaurantId: number, targetUserId: number, callerId: number, source: string, notes: string | null, ip?: string) {

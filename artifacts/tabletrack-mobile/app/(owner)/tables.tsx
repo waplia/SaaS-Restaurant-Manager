@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, Pressable, Platform,
-  TextInput, Alert,
+  TextInput,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
+import { useAlertFn } from "@/components/ui/AppAlert";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -43,6 +45,8 @@ export default function TablesScreen() {
   const { restaurantId } = useAuth();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
+  const alert = useAlertFn();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Table | null>(null);
   const limits = usePlanLimits();
@@ -65,7 +69,7 @@ export default function TablesScreen() {
   }, [tables, search]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
-  const errToast = (e: unknown) => Alert.alert("Failed", e instanceof Error ? e.message : "Could not save");
+  const errToast = (e: unknown) => alert("Failed", e instanceof Error ? e.message : "Could not save");
 
   const createM = useMutation({
     mutationFn: (body: { tableNumber: string; capacity: number }) =>
@@ -89,7 +93,7 @@ export default function TablesScreen() {
   const addButton = (
     <Pressable
       onPress={() => tableLimit.reached
-        ? Alert.alert("Plan limit reached", tableLimit.reason ?? "Upgrade your plan to add more tables.")
+        ? alert("Plan limit reached", tableLimit.reason ?? "Upgrade your plan to add more tables.")
         : setCreating(true)}
       hitSlop={10}
       style={({ pressed }) => [styles.addBtn, {
@@ -120,7 +124,16 @@ export default function TablesScreen() {
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.primary} />}
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: isWeb ? 100 : 100 }}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 12,
+            // Tab bar height ≈ 60dp + 14dp paddings, plus a ~22dp overhang
+            // from the raised NewOrderCenterButton, plus the device safe-area
+            // inset. Hard-coding 100 wasn't enough on phones with a chin /
+            // gesture bar, so the last row of tiles got hidden behind the
+            // floating tab bar. Compute it dynamically instead.
+            paddingBottom: isWeb ? 100 : insets.bottom + 110,
+          }}
         >
           <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <Ionicons name="search" size={16} color={colors.mutedForeground} />

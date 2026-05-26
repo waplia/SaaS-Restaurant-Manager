@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TextInput, Alert,
+  View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TextInput,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { parsePhone, expectedNationalLength } from "@workspace/phone-utils";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
+import { useAlertFn } from "@/components/ui/AppAlert";
 import { PhoneInput } from "@/components/PhoneInput";
 
 export interface CartCustomerPayload {
@@ -26,6 +28,8 @@ interface Props {
 
 export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, serviceCharge = 0, busy, primaryLabel = "Send to Kitchen" }: Props) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const alert = useAlertFn();
   const { cart, updateQuantity, removeLine, updateNote, total, attachCustomer } = useCart();
   const [noteEditing, setNoteEditing] = useState<string | null>(null);
   const [name, setName] = useState(cart.customer?.name ?? "");
@@ -66,7 +70,7 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
 
   const handleSend = async () => {
     if (trimmedPhone && !phoneValid) {
-      Alert.alert(
+      alert(
         "Check phone number",
         phoneExpected
           ? `Phone number should be ${phoneExpected} digits for the selected country.`
@@ -75,7 +79,7 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
       return;
     }
     if (isDelivery && !deliveryReady) {
-      Alert.alert("Delivery details required", "Name, phone and address are needed for delivery orders.");
+      alert("Delivery details required", "Name, phone and address are needed for delivery orders.");
       return;
     }
     const payload = buildPayload();
@@ -216,7 +220,7 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
           ) : null}
         </ScrollView>
 
-        <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+        <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
           <Pressable
             disabled={busy || cart.items.length === 0}
             onPress={handleSend}

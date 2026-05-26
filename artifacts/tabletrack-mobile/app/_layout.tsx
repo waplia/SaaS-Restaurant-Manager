@@ -19,6 +19,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AppAlertProvider } from "@/components/ui/AppAlert";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -208,8 +209,10 @@ export default function RootLayout() {
             <CartProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
-                  <StatusBar style="dark" translucent backgroundColor="transparent" />
-                  <RootLayoutNav />
+                  <AppAlertProvider>
+                    <StatusBar style="dark" translucent backgroundColor="transparent" />
+                    <RootLayoutNav />
+                  </AppAlertProvider>
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </CartProvider>

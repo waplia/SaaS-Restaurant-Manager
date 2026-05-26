@@ -68,7 +68,12 @@ export default function RegisterScreen() {
   const [resendIn, setResendIn] = useState(0);
 
   const [signupEnabled, setSignupEnabled] = useState(true);
-  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  // Default to FALSE: only show the WhatsApp channel option once we've
+  // confirmed the backend has WhatsApp configured (Twilio creds present).
+  // Previously defaulted to true, which briefly exposed the WhatsApp option
+  // on screens whose API settings request hadn't returned yet, sending the
+  // OTP via WhatsApp even when the provider wasn't enabled.
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -82,7 +87,9 @@ export default function RegisterScreen() {
             whatsappEnabled?: boolean;
           };
           if (s.signupEnabled === false) setSignupEnabled(false);
-          const waEnabled = s.whatsappEnabled !== false;
+          // Explicit opt-in: WhatsApp only enabled when the backend
+          // confirms it's configured (whatsappEnabled === true).
+          const waEnabled = s.whatsappEnabled === true;
           setWhatsappEnabled(waEnabled);
           if (waEnabled && s.otpDefaultChannel === "whatsapp") setChannel("whatsapp");
           else setChannel("sms");
