@@ -29,6 +29,18 @@ function getCtx(): AudioContext | null {
   }
 }
 
+// Honor the global POS mute toggle. The header in PosShell writes "1"/"0"
+// to this same localStorage key via its own `usePosSounds` hook — sharing
+// the key keeps the mute button authoritative for every cue source.
+const MUTE_KEY = "tt_pos_sound_muted";
+function isMuted(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(MUTE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 interface Tone {
   freq: number;     // Hz
   duration: number; // seconds
@@ -65,6 +77,7 @@ const CUES: Record<Cue, Tone[]> = {
  */
 export function playPosSound(cue: Cue): void {
   try {
+    if (isMuted()) return;
     const c = getCtx();
     if (!c) return;
     // Some browsers suspend the context until the next user gesture.

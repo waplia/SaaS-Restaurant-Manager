@@ -369,6 +369,14 @@ export function PosShell({ children, handlers, onRecallBill }: PosShellProps) {
     return () => document.removeEventListener("fullscreenchange", f);
   }, []);
 
+  // Allow children to open the held-bills drawer without threading a ref.
+  // pos.tsx dispatches `pos:openHold` from its "Recall (F5)" cart button.
+  useEffect(() => {
+    const open = () => setShowHold(true);
+    window.addEventListener("pos:openHold", open);
+    return () => window.removeEventListener("pos:openHold", open);
+  }, []);
+
   const toggleFullscreen = useCallback(async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();

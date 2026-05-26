@@ -23,14 +23,14 @@ import { apiPost, apiAction, apiGet, isOfflineQueuedResult } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useRestaurantId } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
-import { printOrder } from "@/lib/printOrder";
+import { printOrder, printKitchenTicket } from "@/lib/printOrder";
 import { playPosSound } from "@/lib/posSounds";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
   Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
   Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift,
-  QrCode, CalendarClock, Clock, Leaf,
+  QrCode, CalendarClock, Clock, Leaf, StickyNote, Pause, RotateCcw,
 } from "lucide-react";
 import { VoiceOrderModal, type VoiceOrderConfirmation } from "@/components/pos/VoiceOrderModal";
 
@@ -47,6 +47,8 @@ interface CartItem {
   modifiers: CartModifier[];
   unitPrice: number;
   quantity: number;
+  /** Per-line kitchen note ("no onions", "extra spicy", "allergy: nuts"). */
+  notes?: string;
 }
 
 interface Totals {
@@ -1337,6 +1339,7 @@ export default function PosPage() {
     ? "dine_in"
     : orderType;
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [noteEditingKey, setNoteEditingKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [customerName, setCustomerName] = useState("");
@@ -1670,6 +1673,7 @@ export default function PosPage() {
         items: cart.map(c => ({
           menuItemId: c.menuItemId,
           quantity: c.quantity,
+          notes: c.notes?.trim() || undefined,
           modifiers: c.modifiers.length > 0
             ? c.modifiers.map(m => ({ name: m.name, price: m.price.toFixed(2) }))
             : undefined,
@@ -1906,6 +1910,45 @@ export default function PosPage() {
   const handleDeleteLast = useCallback(() => {
     setCart(prev => prev.slice(0, -1));
   }, []);
+  const handlePrintKOT = useCallback(() => {
+    if (!placedOrder) {
+      toast({ title: "Place order first", description: "There's nothing to send to the kitchen yet.", variant: "destructive" });
+      playPosSound("error");
+      return;
+    }
+    // Prefer the local cart for KOT: it carries the modifier text + line
+    // notes that the GET order-items response does not echo back. The cart
+    // survives placement (it's only cleared on "New Order"), so post-place
+    // reprints still get full kitchen detail. Fall back to live items only
+    // for orders that weren't created on this device (e.g. recall path).
+    const items = cart.length > 0
+      ? cart.map(c => ({
+          name: c.name,
+          quantity: c.quantity,
+          unitPrice: c.unitPrice,
+          lineTotal: c.unitPrice * c.quantity,
+          modifiers: c.modifiers,
+          notes: c.notes,
+        }))
+      : liveItems.map(oi => ({
+          name: oi.menuItemName,
+          quantity: oi.quantity,
+          unitPrice: Number(oi.unitPrice),
+          lineTotal: Number(oi.totalPrice ?? Number(oi.unitPrice) * oi.quantity),
+          modifiers: [] as CartModifier[],
+          notes: oi.notes ?? undefined,
+        }));
+    printKitchenTicket({
+      orderNumber: placedOrder.orderNumber,
+      createdAt: placedOrder.createdAt,
+      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : undefined,
+      orderType,
+      items,
+    });
+    toast({ title: "KOT sent to kitchen printer" });
+    playPosSound("success");
+  }, [placedOrder, liveItems, cart, selectedTable, orderType, toast]);
+
   const handlePrintCurrent = useCallback(() => {
     if (!placedOrder) {
       toast({ title: "Place order first", variant: "destructive" });
@@ -1941,7 +1984,7 @@ export default function PosPage() {
       handlers={{
         onSearchFocus: () => searchInputRef.current?.focus(),
         onHold: handleHoldBill,
-        onKOT: handlePrintCurrent,
+        onKOT: handlePrintKOT,
         onPrint: handlePrintCurrent,
         onPay: handlePayNow,
         onPlaceOrder: () => { void handlePlaceOrder(); },
@@ -2367,22 +2410,49 @@ export default function PosPage() {
 
             {/* Pre-placement: local cart items */}
             {!placedOrder && cart.map(item => (
-              <div key={item.lineKey} className="flex items-start gap-2 py-2 border-b border-border/40 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.name}</p>
-                  {item.modifiers.length > 0 && (
-                    <p className="text-xs text-muted-foreground/70 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    ₹{item.unitPrice.toFixed(2)} × {item.quantity} = <span className="font-medium text-foreground">₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
-                  </p>
+              <div key={item.lineKey} className="py-2 border-b border-border/40 last:border-0">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    {item.modifiers.length > 0 && (
+                      <p className="text-xs text-muted-foreground/70 truncate">{item.modifiers.map(m => m.name).join(", ")}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      ₹{item.unitPrice.toFixed(2)} × {item.quantity} = <span className="font-medium text-foreground">₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <button
+                      onClick={() => setNoteEditingKey(k => k === item.lineKey ? null : item.lineKey)}
+                      className={cn(
+                        "w-6 h-6 rounded flex items-center justify-center transition-colors",
+                        item.notes ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300" : "bg-secondary text-muted-foreground hover:bg-amber-50 hover:text-amber-700",
+                      )}
+                      title={item.notes ? `Note: ${item.notes}` : "Add kitchen note"}
+                      data-testid={`pos-cart-note-${item.lineKey}`}
+                    >
+                      <StickyNote className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => updateQty(item.lineKey, item.quantity - 1)} className="w-6 h-6 rounded bg-secondary hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition-colors"><Minus className="w-3 h-3" /></button>
+                    <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                    <button onClick={() => updateQty(item.lineKey, item.quantity + 1)} className="w-6 h-6 rounded bg-secondary hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"><Plus className="w-3 h-3" /></button>
+                    <button onClick={() => removeFromCart(item.lineKey)} className="w-6 h-6 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors ml-0.5"><X className="w-3 h-3" /></button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-0.5 flex-shrink-0">
-                  <button onClick={() => updateQty(item.lineKey, item.quantity - 1)} className="w-6 h-6 rounded bg-secondary hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition-colors"><Minus className="w-3 h-3" /></button>
-                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                  <button onClick={() => updateQty(item.lineKey, item.quantity + 1)} className="w-6 h-6 rounded bg-secondary hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"><Plus className="w-3 h-3" /></button>
-                  <button onClick={() => removeFromCart(item.lineKey)} className="w-6 h-6 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors ml-0.5"><X className="w-3 h-3" /></button>
-                </div>
+                {(noteEditingKey === item.lineKey || item.notes) && (
+                  <div className="mt-1.5 pl-1">
+                    <Input
+                      autoFocus={noteEditingKey === item.lineKey}
+                      className="h-7 text-xs"
+                      placeholder="e.g. no onions, extra spicy, allergy: nuts"
+                      value={item.notes ?? ""}
+                      onChange={e => setCart(prev => prev.map(c => c.lineKey === item.lineKey ? { ...c, notes: e.target.value } : c))}
+                      onBlur={() => setNoteEditingKey(k => k === item.lineKey ? null : k)}
+                      onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }}
+                      data-testid={`pos-cart-note-input-${item.lineKey}`}
+                    />
+                  </div>
+                )}
               </div>
             ))}
 
@@ -2577,21 +2647,44 @@ export default function PosPage() {
                 )}
               </div>
 
+              {/* Pre-placement quick actions: Hold / Recall */}
+              {!placedOrder && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 text-xs text-muted-foreground"
+                    onClick={handleHoldBill}
+                    disabled={cart.length === 0}
+                    title="Park this cart for later (F4)"
+                    data-testid="pos-hold-bill"
+                  >
+                    <Pause className="w-3 h-3 mr-1" />Hold (F4)
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 text-xs text-muted-foreground"
+                    onClick={() => window.dispatchEvent(new CustomEvent("pos:openHold"))}
+                    title="Recall a held bill (F5)"
+                    data-testid="pos-recall-bills"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />Recall (F5)
+                  </Button>
+                </div>
+              )}
+
               {placedOrder && (
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => {
-                    printReceipt({
-                      orderNumber: placedOrder.orderNumber,
-                      tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
-                      orderType, items: receiptDisplayItems, totals: displayTotals,
-                      paymentMethod: "pending", customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
-                      restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
-                      restaurantPhone: restaurant?.phone ?? undefined,
-                      createdAt: placedOrder.createdAt,
-                      discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
-                    });
-                  }}>
-                    <Printer className="w-3 h-3 mr-1" />Print KOT
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 text-xs text-muted-foreground"
+                    onClick={handlePrintKOT}
+                    title="Send / reprint a kitchen order ticket"
+                    data-testid="pos-print-kot"
+                  >
+                    <Printer className="w-3 h-3 mr-1" />Reprint KOT
                   </Button>
                   <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={handleNewOrder}>
                     <Plus className="w-3 h-3 mr-1" />New Order
