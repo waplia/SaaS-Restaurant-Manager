@@ -25,6 +25,10 @@ interface Props {
   onOpenDiscount: () => void;
   onOpenLineDiscount: (orderItemId: number, label: string) => void;
   onRemoveDiscount: (discountId: number) => void;
+  /** Phase 4 — payment + bill actions on a placed order. */
+  onPay?: () => void;
+  onSplit?: () => void;
+  onReprint?: () => void;
   cartListRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -34,7 +38,7 @@ export function CartPane(props: Props) {
     customerName, customerPhone, selectedTableLabel, orderType, busy,
     selectedCartIdx, onSelectCartIdx, onEditLine,
     onQtyDelta, onRemoveLine, onSend, onClear, onOpenDiscount,
-    onOpenLineDiscount, onRemoveDiscount, cartListRef,
+    onOpenLineDiscount, onRemoveDiscount, onPay, onSplit, onReprint, cartListRef,
   } = props;
   void customerName; void customerPhone;
 
@@ -215,6 +219,37 @@ export function CartPane(props: Props) {
             </>
           )}
         </div>
+
+        {/* Phase 4 — payment + bill row (only when an order has been placed) */}
+        {placedOrder && (onPay || onSplit || onReprint) && (
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            {placedOrder.paymentStatus === "paid" ? (
+              <>
+                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 6, fontSize: 12,
+                  background: "rgba(22,163,74,0.14)", color: "#86efac", textAlign: "center", fontWeight: 700 }}>
+                  ✓ PAID{placedOrder.paymentMethod ? ` · ${String(placedOrder.paymentMethod).toUpperCase()}` : ""}
+                </div>
+                {onReprint && (
+                  <Button variant="ghost" onClick={onReprint} disabled={busy} style={{ flex: 1 }}>Reprint bill</Button>
+                )}
+              </>
+            ) : (
+              <>
+                {onReprint && (
+                  <Button variant="ghost" onClick={onReprint} disabled={busy} style={{ flex: 1 }}>Reprint</Button>
+                )}
+                {onSplit && (
+                  <Button variant="ghost" onClick={onSplit} disabled={busy || cart.length > 0} style={{ flex: 1 }}>Split</Button>
+                )}
+                {onPay && (
+                  <Button onClick={onPay} disabled={busy || cart.length > 0} style={{ flex: 2 }}>
+                    Pay {fmtINR(totals.totalAmount)}
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

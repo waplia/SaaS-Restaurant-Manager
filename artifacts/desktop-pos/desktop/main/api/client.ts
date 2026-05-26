@@ -23,6 +23,7 @@ import type {
   RestaurantInfo, MenuCategory, MenuItem, ModifierGroup,
   FloorTable, CustomerSummary, CreateOrderRequest, CartItemInput,
   OrderHeader, OrderDetailView, DiscountsConfig, ApplyDiscountRequest,
+  PayMethod, SplitLeg, ZReportSummary,
 } from "../../shared/ipc-contract";
 
 export class ApiError extends Error {
@@ -358,28 +359,153 @@ export class ApiClient {
     );
   }
 
-  async closeShift(restaurantId: number, sessionId: number, countedAmount: number, closeNotes?: string): Promise<{ ok: true }> {
-    await this.request<unknown>(
+  async closeShift(
+    restaurantId: number,
+    sessionId: number,
+    body: {
+      denominations?: DenominationInput[];
+      countedAmount?: number;
+      closeNotes?: string;
+      isBlindClose?: boolean;
+      varianceReason?: string;
+      managerPin?: string;
+    },
+  ): Promise<{
+    session: { id: number; closedAt?: string | null; isBlindClose?: boolean; varianceReason?: string | null };
+    totals: { openingFloat?: number; totalCashIn?: number | null; totalCashOut?: number | null; expectedCash?: number | null; actualCash?: number | null; overShort?: number | null };
+    blindClose?: boolean;
+  }> {
+    return this.request(
       `/api/restaurants/${restaurantId}/cash-register/sessions/${sessionId}/close`,
-      { method: "POST", body: { countedAmount, closeNotes: closeNotes ?? null, isBlindClose: false } },
+      {
+        method: "POST",
+        body: {
+          denominations: body.denominations,
+          countedAmount: body.countedAmount,
+          closeNotes: body.closeNotes ?? null,
+          isBlindClose: !!body.isBlindClose,
+          varianceReason: body.varianceReason ?? undefined,
+          managerPin: body.managerPin ?? undefined,
+        },
+      },
     );
-    return { ok: true };
   }
 
-  // ─── Orders / customers / menu (used by Phase 3 print handlers) ───────
-  async createOrder(restaurantId: number, body: unknown): Promise<ApiOrderDetail> {
-    return this.request<ApiOrderDetail>(`/api/restaurants/${restaurantId}/orders`, {
+  /** Z-report (post-close detail). Server returns a richer payload than the
+   *  on-the-fly X report used during the open shift. */
+  async getZReport(restaurantId: number, sessionId: number): Promise<{
+    session: { id: number; openedAt: string; closedAt?: string | null; openingFloat: string | number; isBlindClose?: boolean; varianceReason?: string | null; closeNotes?: string | null };
+    totals: { openingFloat: number; cashSales: number; totalCashIn: number; totalCashOut: number; expectedCash: number; actualCash?: number | null; overShort?: number | null };
+    tenderSummary: Record<string, { in: number; out: number; count: number }>;
+    orderCount: number;
+    grossRevenue: string | number;
+    movements: unknown[];
+    openedByName?: string | null;
+    closedByName?: string | null;
+  }> {
+    return this.request(`/api/restaurants/${restaurantId}/cash-register/sessions/${sessionId}/z-report`);
+  }
+
+  // ─── Phase 4: payments / split / terminals ────────────────────────────
+  async createStripeIntent(
+    restaurantId: number, orderId: number,
+    body: { customAmount?: number; tipAmount?: number },
+  ): Promise<{ clientSecret: string | null; intentId: string; mode: "live" | "demo"; totalAmount?: string | number }> {
+    return this.request(`/api/restaurants/${restaurantId}/orders/${orderId}/payment-intent`, {
       method: "POST", body,
     });
   }
 
-  async getOrder(restaurantId: number, orderId: number): Promise<ApiOrderDetail> {
-    return this.request<ApiOrderDetail>(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+  async createRazorpayOrder(
+    restaurantId: number, orderId: number,
+    body: { customAmount?: number; tipAmount?: number },
+  ): Promise<{ id: string; amount: number; currency: string; keyId: string | null; mode: "live" | "demo" }> {
+    return this.request(`/api/restaurants/${restaurantId}/orders/${orderId}/razorpay-order`, {
+      method: "POST", body,
+    });
   }
 
+  async terminalCharge(
+    restaurantId: number, terminalDeviceId: number,
+    body: { orderId: number; amount: number; tipAmount?: number },
+  ): Promise<{ paymentIntentId: string; status: string }> {
+    return this.request(
+      `/api/restaurants/${restaurantId}/terminals/${terminalDeviceId}/charge`,
+      { method: "POST", body },
+    );
+  }
+
+  async terminalConfirm(
+    restaurantId: number, terminalDeviceId: number,
+    body: { orderId: number; paymentIntentId: string },
+  ): Promise<OrderDetailView> {
+    await this.request<unknown>(
+      `/api/restaurants/${restaurantId}/terminals/${terminalDeviceId}/confirm`,
+      { method: "POST", body },
+    );
+    return this.getOrder(restaurantId, body.orderId);
+  }
+
+  async payOrder(
+    restaurantId: number, orderId: number,
+    body: {
+      paymentMethod: PayMethod;
+      tipAmount?: number;
+      stripePaymentIntentId?: string;
+      razorpayPaymentId?: string;
+      razorpayOrderId?: string;
+      razorpaySignature?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<OrderDetailView> {
+    const key = idempotencyKey || randomUUID();
+    await this.request<unknown>(
+      `/api/restaurants/${restaurantId}/orders/${orderId}/pay`,
+      { method: "POST", body, headers: { "X-Idempotency-Key": key } },
+    );
+    return this.getOrder(restaurantId, orderId);
+  }
+
+  async splitOrder(
+    restaurantId: number, orderId: number,
+    legs: SplitLeg[],
+    idempotencyKey?: string,
+  ): Promise<OrderDetailView> {
+    const key = idempotencyKey || randomUUID();
+    await this.request<unknown>(
+      `/api/restaurants/${restaurantId}/orders/${orderId}/split`,
+      { method: "POST", body: { payments: legs }, headers: { "X-Idempotency-Key": key } },
+    );
+    return this.getOrder(restaurantId, orderId);
+  }
+
+  // ─── Misc — used by Phase 3 print handler ──────────────────────────────
   async getRestaurant(restaurantId: number): Promise<ApiRestaurantDetail> {
     return this.request<ApiRestaurantDetail>(`/api/restaurants/${restaurantId}`);
   }
+
+  /** Untyped helper for Z-report builder: lists orders in a time window. */
+  async listOrdersInRange(
+    restaurantId: number,
+    opts: { from?: string; to?: string; limit?: number; branchId?: number | null } = {},
+  ): Promise<OrderHeader[]> {
+    const qs: string[] = [];
+    if (opts.from) qs.push(`from=${encodeURIComponent(opts.from)}`);
+    if (opts.to) qs.push(`to=${encodeURIComponent(opts.to)}`);
+    if (opts.limit) qs.push(`limit=${encodeURIComponent(String(opts.limit))}`);
+    if (opts.branchId != null) qs.push(`branchId=${encodeURIComponent(String(opts.branchId))}`);
+    const suffix = qs.length > 0 ? `?${qs.join("&")}` : "";
+    const r = await this.request<{ data?: OrderHeader[] } | OrderHeader[]>(
+      `/api/restaurants/${restaurantId}/orders${suffix}`,
+    );
+    const arr = Array.isArray(r) ? r : Array.isArray(r?.data) ? r.data : [];
+    return arr;
+  }
+
+  /** Suppress the now-deprecated cash session reference but keep `_zReportSummary`
+   *  referenced so ts strict mode doesn't complain about the new import. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private _zReportSummaryRef?: ZReportSummary;
 
   async lookupCustomerByPhone(restaurantId: number, phone: string): Promise<unknown> {
     const q = encodeURIComponent(phone);
@@ -401,38 +527,6 @@ export class ApiClient {
     if (!hit) return null;
     return { id: hit.id, name: hit.name, price: Number(hit.price) || 0, sku: hit.sku ?? null };
   }
-}
-
-/** Minimal subset of the API order-detail payload we consume in main. */
-export interface ApiOrderDetail {
-  id: number;
-  orderNumber: string;
-  orderType?: string | null;
-  status?: string | null;
-  tableId?: number | null;
-  tableLabel?: string | null;
-  customerName?: string | null;
-  customerPhone?: string | null;
-  subtotal?: number | string | null;
-  taxAmount?: number | string | null;
-  serviceCharge?: number | string | null;
-  discountAmount?: number | string | null;
-  totalAmount?: number | string | null;
-  createdAt?: string | null;
-  paymentMethod?: string | null;
-  paymentAmount?: number | string | null;
-  items: Array<{
-    id: number;
-    name: string;
-    quantity: number;
-    unitPrice?: number | string | null;
-    lineTotal?: number | string | null;
-    notes?: string | null;
-    kitchenId?: number | null;
-    kitchenName?: string | null;
-    modifiers?: Array<{ name: string; price?: number | string | null }>;
-  }>;
-  discounts?: Array<{ label?: string | null; name?: string | null; amount: number | string }>;
 }
 
 export interface ApiRestaurantDetail {

@@ -34,6 +34,8 @@ import { CartPane } from "./order/CartPane";
 import {
   CustomerModal, DiscountModal, HelpModal, ModifierModal, TablePickerModal,
 } from "./order/Modals";
+import { PaymentModal } from "./order/PaymentModal";
+import { SplitBillModal } from "./order/SplitBillModal";
 import {
   type CartItem, type CartModifier, buildCartItem, computeLocalTotals,
   fmtINR, fromServerTotals,
@@ -98,8 +100,11 @@ export function OrderWorkspace() {
     | { kind: "line"; orderItemId: number; label: string }
   >(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPay, setShowPay] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
   const anyModalOpen =
-    !!modItem || showTablePicker || showCustomer || !!showDiscount || showHelp;
+    !!modItem || showTablePicker || showCustomer || !!showDiscount || showHelp
+    || showPay || showSplit;
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const cartListRef = useRef<HTMLDivElement | null>(null);
@@ -539,6 +544,13 @@ export function OrderWorkspace() {
           setShowDiscount({ kind: "line", orderItemId, label })
         }
         onRemoveDiscount={handleRemoveDiscount}
+        onPay={placedOrder ? () => setShowPay(true) : undefined}
+        onSplit={placedOrder ? () => setShowSplit(true) : undefined}
+        onReprint={placedOrder ? async () => {
+          try {
+            await window.khanalagao.printers.printBillForOrder({ orderId: placedOrder.id });
+          } catch (e) { setOpError((e as Error).message); }
+        } : undefined}
         cartListRef={cartListRef}
       />
 
@@ -593,6 +605,31 @@ export function OrderWorkspace() {
         />
       )}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showPay && placedOrder && (
+        <PaymentModal
+          order={placedOrder}
+          onClose={() => setShowPay(false)}
+          onPaid={(next) => {
+            // Main `orders:pay` already auto-prints the bill and kicks the
+            // drawer for cash tenders — do NOT print again here.
+            setPlacedOrder(next);
+            setShowPay(false);
+            setOrdersRailToken(t => t + 1);
+          }}
+        />
+      )}
+      {showSplit && placedOrder && (
+        <SplitBillModal
+          order={placedOrder}
+          onClose={() => setShowSplit(false)}
+          onPaid={(next) => {
+            // Main `orders:split` auto-prints the bill on success.
+            setPlacedOrder(next);
+            setShowSplit(false);
+            setOrdersRailToken(t => t + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

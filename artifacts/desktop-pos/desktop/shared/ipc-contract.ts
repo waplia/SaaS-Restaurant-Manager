@@ -87,6 +87,76 @@ export interface CashRegisterCurrent {
   } | null;
 }
 
+// ─── Phase 4 — payments / split / shift close / reports ─────────────────────
+/** Tender types accepted by `orders:pay`. UPI is wired via Razorpay; "card"
+ *  is reserved for card-on-terminal (capture happens via `payments:terminal-*`
+ *  before `orders:pay` records the verified payment). */
+export type PayMethod = "cash" | "card" | "upi" | "room_charge" | "pay_later";
+
+/** A single split-bill leg. Server requires ≥2 legs and a cumulative total
+ *  ≥ the order grand total. */
+export interface SplitLeg {
+  paymentMethod: "cash" | "card" | "upi";
+  amount: number;
+  tipAmount?: number;
+  stripePaymentIntentId?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
+/** Aggregated KPIs for the Reports sidebar (30s refresh). Server-derived from
+ *  orders in the open-shift window — no extra endpoint, the main process
+ *  rolls these up from `client.listOrders` filtered by the shift `openedAt`. */
+export interface ShiftKpis {
+  sessionId: number;
+  openedAt: string;
+  orderCount: number;
+  paidCount: number;
+  unpaidCount: number;
+  voidedCount: number;
+  grossRevenue: number;
+  netRevenue: number;
+  taxCollected: number;
+  serviceCollected: number;
+  discountTotal: number;
+  tipsCollected: number;
+  byMethod: Array<{ method: string; amount: number; count: number }>;
+  averageTicket: number;
+  generatedAt: string;
+}
+
+/** Snapshot of a closed shift, cached locally for ≤30 days so reprints work
+ *  without round-tripping the server. */
+export interface ZReportSummary {
+  sessionId: number;
+  restaurantId: number;
+  outletName?: string | null;
+  branchName?: string | null;
+  counterName?: string | null;
+  openedAt: string;
+  closedAt: string;
+  openedByName?: string | null;
+  closedByName?: string | null;
+  openingFloat: number;
+  cashSales: number;
+  totalCashIn: number;
+  totalCashOut: number;
+  expectedCash: number | null;
+  countedCash: number | null;
+  overShort: number | null;
+  isBlindClose: boolean;
+  varianceReason?: string | null;
+  closeNotes?: string | null;
+  orderCount: number;
+  grossRevenue: number;
+  tenderSummary: Array<{ method: string; in: number; out: number; count: number }>;
+  /** Wire denominations counted at close so the reprint preserves the breakdown. */
+  denominations?: DenominationInput[];
+  /** Local cache timestamp (ms). */
+  cachedAt: number;
+}
+
 // ─── Menu / cart / orders ───────────────────────────────────────────────────
 
 export interface MenuCategory {
@@ -213,6 +283,12 @@ export interface OrderHeader {
   isRunningOrder?: boolean;
   isPriority?: boolean;
   notes?: string | null;
+  /** Phase 4 — server-side payment state for the Pay/Split UI. */
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentAmount?: string | number | null;
+  tableLabel?: string | null;
+  tipAmount?: string | number | null;
 }
 
 export interface OrderItemView {
@@ -224,6 +300,8 @@ export interface OrderItemView {
   unitPrice: string;
   totalPrice: string;
   notes?: string | null;
+  kitchenId?: number | null;
+  kitchenName?: string | null;
   modifiers?: Array<{
     id: number;
     name: string;
@@ -466,8 +544,20 @@ export type IpcContract = {
     res: CashRegisterSession;
   };
   "shifts:close": {
-    req: { sessionId: number; countedAmount: number; closeNotes?: string };
-    res: { ok: true };
+    req: {
+      sessionId: number;
+      /** Quick-count shortcut — server prefers `denominations` when present. */
+      countedAmount?: number;
+      /** Full tray breakdown — preferred path. */
+      denominations?: DenominationInput[];
+      isBlindClose?: boolean;
+      /** Required by the server when |variance| ≥ 0.01. */
+      varianceReason?: string;
+      closeNotes?: string;
+      /** Manager PIN gate enforced renderer-side via discounts config. */
+      managerPin?: string;
+    };
+    res: { zReport: ZReportSummary; blindClose: boolean };
   };
 
   // Menu --------------------------------------------------------------------
@@ -516,8 +606,61 @@ export type IpcContract = {
     res: OrderDetailView;
   };
 
-  // Payments (Phase 4 placeholder, kept for API stability) -----------------
+  // Payments (Phase 4) ------------------------------------------------------
+  /** Legacy stub kept so older renderers don't crash on hot-reload. */
   "payments:record": { req: unknown; res: unknown };
+  /** Create a Stripe PaymentIntent for an order (optionally a split share). */
+  "payments:stripe-intent": {
+    req: { orderId: number; customAmount?: number; tipAmount?: number };
+    res: { clientSecret: string | null; intentId: string; mode: "live" | "demo"; totalAmount?: string | number };
+  };
+  /** Create a Razorpay order for an order (optionally a split share). */
+  "payments:razorpay-order": {
+    req: { orderId: number; customAmount?: number; tipAmount?: number };
+    res: { id: string; amount: number; currency: string; keyId: string | null; mode: "live" | "demo" };
+  };
+  /** Send a charge to a card-present terminal (Stripe BBPOS / WisePOS). */
+  "payments:terminal-charge": {
+    req: { terminalDeviceId: number; orderId: number; amount: number; tipAmount?: number };
+    res: { paymentIntentId: string; status: string };
+  };
+  /** Confirm a terminal charge — server records the payment + marks paid. */
+  "payments:terminal-confirm": {
+    req: { terminalDeviceId: number; orderId: number; paymentIntentId: string };
+    res: OrderDetailView;
+  };
+
+  // Orders — pay / split (Phase 4) -----------------------------------------
+  "orders:pay": {
+    req: {
+      orderId: number;
+      paymentMethod: PayMethod;
+      tipAmount?: number;
+      stripePaymentIntentId?: string;
+      razorpayPaymentId?: string;
+      razorpayOrderId?: string;
+      razorpaySignature?: string;
+      idempotencyKey?: string;
+    };
+    res: OrderDetailView;
+  };
+  "orders:split": {
+    req: {
+      orderId: number;
+      legs: SplitLeg[];
+      idempotencyKey?: string;
+    };
+    res: OrderDetailView;
+  };
+
+  // Reports (Phase 4) -------------------------------------------------------
+  "reports:shift-kpis": { req: { sessionId: number }; res: ShiftKpis };
+
+  // Z-reports — cached locally for 30 days so reprints work offline ---------
+  "zReports:list": { req: void; res: ZReportSummary[] };
+  "zReports:get": { req: { sessionId: number }; res: ZReportSummary | null };
+  "zReports:reprint": { req: { sessionId: number }; res: true };
+  "printers:print-z-report": { req: ZReportSummary; res: true };
 
   // Printers / hardware -----------------------------------------------------
   "printers:list": { req: void; res: OsPrinter[] };

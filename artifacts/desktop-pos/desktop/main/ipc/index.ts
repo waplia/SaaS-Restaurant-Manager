@@ -19,10 +19,19 @@ import { ipcMain, app, shell, BrowserWindow } from "electron";
 import type {
   IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot,
   OrderKotPayload, OrderBillPayload, MenuCategory, MenuItem,
+  OrderDetailView, OrderHeader, ZReportSummary, ShiftKpis,
 } from "../../shared/ipc-contract";
-import { ApiClient, ApiError, type ApiOrderDetail, type ApiRestaurantDetail } from "../api/client";
+import { ApiClient, ApiError, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
 import type { PrinterEngine } from "../printers";
+
+/** Z-report cache contract — implemented in `main/index.ts` against
+ *  electron-store with a 30-day retention sweep on every write. */
+export interface ZReportCacheApi {
+  list(): ZReportSummary[];
+  get(sessionId: number): ZReportSummary | null;
+  upsert(report: ZReportSummary): void;
+}
 
 interface SettingsApi {
   get: () => { apiBaseUrl: string };
@@ -41,8 +50,9 @@ export function registerApiIpc(opts: {
   settings: SettingsApi;
   getWindow: () => BrowserWindow | null;
   printerEngine: PrinterEngine;
+  zReportCache: ZReportCacheApi;
 }): void {
-  const { client, settings, getWindow, printerEngine } = opts;
+  const { client, settings, getWindow, printerEngine, zReportCache } = opts;
 
   client.onAuthLost(() => {
     getWindow()?.webContents.send("auth:invalidated");
@@ -204,10 +214,83 @@ export function registerApiIpc(opts: {
     return session;
   });
 
-  handle("shifts:close", async ({ sessionId, countedAmount, closeNotes }) => {
-    const r = await client.closeShift(requireRestaurantId(), sessionId, countedAmount, closeNotes);
+  handle("shifts:close", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const closed = await client.closeShift(restaurantId, req.sessionId, {
+      denominations: req.denominations,
+      countedAmount: req.countedAmount,
+      closeNotes: req.closeNotes,
+      isBlindClose: req.isBlindClose,
+      varianceReason: req.varianceReason,
+      managerPin: req.managerPin,
+    });
     sessionStore.setOpenSession(null, null);
-    return r;
+
+    // Pull the post-close Z-report — server now has the closing totals locked
+    // in. We fall back to the response from `close` if the Z-report endpoint
+    // 404s on an older server build.
+    let zReport: ZReportSummary;
+    try {
+      const z = await client.getZReport(restaurantId, req.sessionId);
+      zReport = {
+        sessionId: req.sessionId,
+        restaurantId,
+        openedAt: z.session.openedAt,
+        closedAt: z.session.closedAt ?? new Date().toISOString(),
+        openedByName: z.openedByName ?? null,
+        closedByName: z.closedByName ?? null,
+        openingFloat: Number(z.totals.openingFloat) || 0,
+        cashSales: Number(z.totals.cashSales) || 0,
+        totalCashIn: Number(z.totals.totalCashIn) || 0,
+        totalCashOut: Number(z.totals.totalCashOut) || 0,
+        expectedCash: z.totals.expectedCash != null ? Number(z.totals.expectedCash) : null,
+        countedCash: z.totals.actualCash != null ? Number(z.totals.actualCash) : null,
+        overShort: z.totals.overShort != null ? Number(z.totals.overShort) : null,
+        isBlindClose: !!z.session.isBlindClose,
+        varianceReason: z.session.varianceReason ?? null,
+        closeNotes: z.session.closeNotes ?? null,
+        orderCount: Number(z.orderCount) || 0,
+        grossRevenue: Number(z.grossRevenue) || 0,
+        tenderSummary: Object.entries(z.tenderSummary ?? {}).map(([method, v]) => ({
+          method,
+          in: Number(v?.in) || 0,
+          out: Number(v?.out) || 0,
+          count: Number(v?.count) || 0,
+        })),
+        denominations: req.denominations,
+        cachedAt: Date.now(),
+      };
+    } catch (err) {
+      console.warn("[shifts:close] z-report fetch failed:", (err as Error).message);
+      zReport = {
+        sessionId: req.sessionId,
+        restaurantId,
+        openedAt: new Date(0).toISOString(),
+        closedAt: closed.session?.closedAt ?? new Date().toISOString(),
+        openingFloat: Number(closed.totals?.openingFloat) || 0,
+        cashSales: 0,
+        totalCashIn: Number(closed.totals?.totalCashIn ?? 0) || 0,
+        totalCashOut: Number(closed.totals?.totalCashOut ?? 0) || 0,
+        expectedCash: closed.totals?.expectedCash != null ? Number(closed.totals.expectedCash) : null,
+        countedCash: closed.totals?.actualCash != null ? Number(closed.totals.actualCash) : null,
+        overShort: closed.totals?.overShort != null ? Number(closed.totals.overShort) : null,
+        isBlindClose: !!closed.session?.isBlindClose,
+        varianceReason: closed.session?.varianceReason ?? null,
+        closeNotes: req.closeNotes ?? null,
+        orderCount: 0,
+        grossRevenue: 0,
+        tenderSummary: [],
+        denominations: req.denominations,
+        cachedAt: Date.now(),
+      };
+    }
+    zReportCache.upsert(zReport);
+
+    // Auto-print the Z-report if a bill printer is wired. Non-fatal.
+    try { await dispatchZReportPrint(zReport, printerEngine); }
+    catch (err) { console.warn("[shifts:close] Z-report auto-print failed:", (err as Error).message); }
+
+    return { zReport, blindClose: !!closed.blindClose || !!req.isBlindClose };
   });
 
   // ─── Menu ────────────────────────────────────────────────────────────
@@ -345,8 +428,103 @@ export function registerApiIpc(opts: {
     );
   });
 
-  // ─── Phase 4 placeholders ────────────────────────────────────────────
-  handle("payments:record", () => { throw new Error("payments:record not yet implemented (Phase 4)"); });
+  // ─── Phase 4: payments / split ───────────────────────────────────────
+  handle("payments:record", () => { throw new Error("payments:record deprecated — use orders:pay"); });
+
+  handle("payments:stripe-intent", async ({ orderId, customAmount, tipAmount }) => {
+    return client.createStripeIntent(requireRestaurantId(), Number(orderId), {
+      customAmount, tipAmount,
+    });
+  });
+
+  handle("payments:razorpay-order", async ({ orderId, customAmount, tipAmount }) => {
+    return client.createRazorpayOrder(requireRestaurantId(), Number(orderId), {
+      customAmount, tipAmount,
+    });
+  });
+
+  handle("payments:terminal-charge", async ({ terminalDeviceId, orderId, amount, tipAmount }) => {
+    return client.terminalCharge(requireRestaurantId(), Number(terminalDeviceId), {
+      orderId: Number(orderId), amount: Number(amount), tipAmount,
+    });
+  });
+
+  handle("payments:terminal-confirm", async ({ terminalDeviceId, orderId, paymentIntentId }) => {
+    return client.terminalConfirm(requireRestaurantId(), Number(terminalDeviceId), {
+      orderId: Number(orderId), paymentIntentId,
+    });
+  });
+
+  handle("orders:pay", async (req) => {
+    const restaurantId = requireRestaurantId();
+    const detail = await client.payOrder(restaurantId, Number(req.orderId), {
+      paymentMethod: req.paymentMethod,
+      tipAmount: req.tipAmount,
+      stripePaymentIntentId: req.stripePaymentIntentId,
+      razorpayPaymentId: req.razorpayPaymentId,
+      razorpayOrderId: req.razorpayOrderId,
+      razorpaySignature: req.razorpaySignature,
+    }, req.idempotencyKey);
+
+    // Auto-print bill + drawer kick on success. The drawer only kicks for
+    // cash tenders — UPI/card don't need the till to open.
+    try {
+      const outlet = await client.getRestaurant(restaurantId).catch(() => null);
+      const payload = buildBillPayload(detail, outlet, {
+        openDrawer: req.paymentMethod === "cash",
+        copies: 1,
+      });
+      const r = await printerEngine.dispatchBill(payload);
+      if (!r.ok) console.warn("[orders:pay] bill print failed:", r.error);
+    } catch (err) {
+      console.warn("[orders:pay] bill print threw:", (err as Error).message);
+    }
+    return detail;
+  });
+
+  handle("orders:split", async ({ orderId, legs, idempotencyKey }) => {
+    const restaurantId = requireRestaurantId();
+    const detail = await client.splitOrder(restaurantId, Number(orderId), legs, idempotencyKey);
+    try {
+      const outlet = await client.getRestaurant(restaurantId).catch(() => null);
+      const hasCash = legs.some((l) => l.paymentMethod === "cash");
+      const payload = buildBillPayload(detail, outlet, { openDrawer: hasCash, copies: 1 });
+      const r = await printerEngine.dispatchBill(payload);
+      if (!r.ok) console.warn("[orders:split] bill print failed:", r.error);
+    } catch (err) {
+      console.warn("[orders:split] bill print threw:", (err as Error).message);
+    }
+    return detail;
+  });
+
+  // ─── Reports — derived from orders.list within the open shift window ─────
+  handle("reports:shift-kpis", async ({ sessionId }) => {
+    const restaurantId = requireRestaurantId();
+    const open = sessionStore.getOpenSession();
+    const openedAt = open.id === sessionId && open.at
+      ? open.at
+      : new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const orders = await client.listOrdersInRange(restaurantId, {
+      from: openedAt,
+      branchId: currentBranchId(),
+      limit: 500,
+    });
+    return rollupKpis(sessionId, openedAt, orders);
+  });
+
+  // ─── Z-report cache + reprint ─────────────────────────────────────────
+  handle("zReports:list", () => zReportCache.list());
+  handle("zReports:get", ({ sessionId }) => zReportCache.get(Number(sessionId)));
+  handle("zReports:reprint", async ({ sessionId }) => {
+    const cached = zReportCache.get(Number(sessionId));
+    if (!cached) throw new Error("No cached Z-report for that shift (older than 30 days?).");
+    await dispatchZReportPrint(cached, printerEngine);
+    return true as const;
+  });
+  handle("printers:print-z-report", async (report) => {
+    await dispatchZReportPrint(report, printerEngine);
+    return true as const;
+  });
 }
 
 // ─── Payload builders (API → ESC/POS DTO) ──────────────────────────────────
@@ -356,7 +534,7 @@ function num(v: number | string | null | undefined): number {
   return 0;
 }
 
-function buildKotPayload(order: ApiOrderDetail): OrderKotPayload {
+function buildKotPayload(order: OrderDetailView): OrderKotPayload {
   return {
     orderNumber: order.orderNumber,
     orderType: order.orderType ?? null,
@@ -364,7 +542,7 @@ function buildKotPayload(order: ApiOrderDetail): OrderKotPayload {
     createdAt: order.createdAt ?? null,
     outletName: null,
     items: order.items.map((it) => ({
-      name: it.name,
+      name: it.menuItemName,
       quantity: Number(it.quantity) || 1,
       notes: it.notes ?? null,
       kitchenId: it.kitchenId ?? null,
@@ -375,7 +553,7 @@ function buildKotPayload(order: ApiOrderDetail): OrderKotPayload {
 }
 
 function buildBillPayload(
-  order: ApiOrderDetail,
+  order: OrderDetailView,
   outlet: ApiRestaurantDetail | null,
   extra: { openDrawer: boolean; copies?: number },
 ): OrderBillPayload {
@@ -387,10 +565,10 @@ function buildBillPayload(
     customerName: order.customerName ?? null,
     customerPhone: order.customerPhone ?? null,
     items: order.items.map((it) => ({
-      name: it.name,
+      name: it.menuItemName,
       quantity: Number(it.quantity) || 1,
       unitPrice: num(it.unitPrice),
-      lineTotal: num(it.lineTotal),
+      lineTotal: num(it.totalPrice),
       notes: it.notes ?? null,
       modifiers: (it.modifiers ?? []).map((m) => ({ name: m.name, price: num(m.price) })),
     })),
@@ -400,7 +578,7 @@ function buildBillPayload(
     discountAmount: num(order.discountAmount),
     totalAmount: num(order.totalAmount),
     discounts: (order.discounts ?? []).map((d) => ({
-      label: d.label ?? d.name ?? "Discount",
+      label: d.reason || d.couponCode || d.type || "Discount",
       amount: num(d.amount),
     })),
     taxBreakdown: [],
@@ -425,4 +603,113 @@ function buildBillPayload(
     };
   }
   return payload;
+}
+
+// ─── Z-report printing — ESC/POS formatter via the bill pipeline ─────────────
+async function dispatchZReportPrint(z: ZReportSummary, printerEngine: PrinterEngine): Promise<void> {
+  // Reuse the bill formatter by faking a "Z REPORT" order: the same printer
+  // path handles totals + footer + openDrawer.
+  const items: OrderBillPayload["items"] = z.tenderSummary.map((t) => ({
+    name: `Tender · ${t.method}`,
+    quantity: t.count,
+    unitPrice: 0,
+    lineTotal: t.in - t.out,
+    notes: null,
+  }));
+  if (z.openingFloat > 0) {
+    items.unshift({ name: "Opening float", quantity: 1, unitPrice: z.openingFloat, lineTotal: z.openingFloat, notes: null });
+  }
+  if (z.denominations && z.denominations.length > 0) {
+    for (const d of z.denominations) {
+      items.push({
+        name: `₹${d.denomination} × ${d.count}`,
+        quantity: d.count,
+        unitPrice: d.denomination,
+        lineTotal: d.denomination * d.count,
+        notes: null,
+      });
+    }
+  }
+  const footerLines = [
+    `Opening float: ₹${z.openingFloat.toFixed(2)}`,
+    `Cash sales:    ₹${z.cashSales.toFixed(2)}`,
+    `Cash in/out:   ₹${z.totalCashIn.toFixed(2)} / ₹${z.totalCashOut.toFixed(2)}`,
+    `Expected:      ${z.expectedCash != null ? `₹${z.expectedCash.toFixed(2)}` : "—"}`,
+    `Counted:       ${z.countedCash != null ? `₹${z.countedCash.toFixed(2)}` : "—"}`,
+    `Over/Short:    ${z.overShort != null ? `₹${z.overShort.toFixed(2)}` : "—"}`,
+    z.isBlindClose ? "(blind close)" : "",
+    z.varianceReason ? `Variance: ${z.varianceReason}` : "",
+    z.closeNotes ? `Notes: ${z.closeNotes}` : "",
+  ].filter(Boolean).join("\n");
+
+  const payload: OrderBillPayload = {
+    orderNumber: `Z-${z.sessionId}`,
+    orderType: "Z REPORT",
+    tableLabel: null,
+    createdAt: z.closedAt,
+    customerName: z.closedByName ?? null,
+    customerPhone: null,
+    items,
+    subtotal: z.grossRevenue,
+    taxAmount: 0,
+    serviceCharge: 0,
+    discountAmount: 0,
+    totalAmount: z.expectedCash ?? z.grossRevenue,
+    discounts: [],
+    taxBreakdown: [],
+    openDrawer: false,
+    copies: 1,
+    footer: footerLines,
+  };
+  const r = await printerEngine.dispatchBill(payload);
+  if (!r.ok) throw new Error(r.error);
+}
+
+// ─── Shift KPI roll-up ─────────────────────────────────────────────────────
+function rollupKpis(sessionId: number, openedAt: string, orders: OrderHeader[]): ShiftKpis {
+  const since = new Date(openedAt).getTime();
+  const inWindow = orders.filter((o) => {
+    const t = new Date(o.createdAt).getTime();
+    return Number.isFinite(t) && t >= since;
+  });
+  let gross = 0, tax = 0, service = 0, discount = 0, tips = 0;
+  let paid = 0, unpaid = 0, voided = 0;
+  const byMethod = new Map<string, { amount: number; count: number }>();
+  for (const o of inWindow) {
+    const total = num(o.totalAmount);
+    gross += total;
+    tax += num(o.taxAmount);
+    service += num(o.serviceCharge);
+    discount += num(o.discountAmount);
+    tips += num(o.tipAmount);
+    const status = String(o.paymentStatus ?? "").toLowerCase();
+    const orderStatus = String(o.status ?? "").toLowerCase();
+    if (orderStatus === "cancelled" || orderStatus === "voided") voided++;
+    else if (status === "paid") paid++;
+    else unpaid++;
+    if (status === "paid") {
+      const m = (o.paymentMethod || "unknown").toLowerCase();
+      const cur = byMethod.get(m) ?? { amount: 0, count: 0 };
+      cur.amount += num(o.paymentAmount) || total;
+      cur.count += 1;
+      byMethod.set(m, cur);
+    }
+  }
+  return {
+    sessionId,
+    openedAt,
+    orderCount: inWindow.length,
+    paidCount: paid,
+    unpaidCount: unpaid,
+    voidedCount: voided,
+    grossRevenue: gross,
+    netRevenue: gross - tax - service,
+    taxCollected: tax,
+    serviceCollected: service,
+    discountTotal: discount,
+    tipsCollected: tips,
+    byMethod: Array.from(byMethod.entries()).map(([method, v]) => ({ method, amount: v.amount, count: v.count })),
+    averageTicket: paid > 0 ? gross / paid : 0,
+    generatedAt: new Date().toISOString(),
+  };
 }

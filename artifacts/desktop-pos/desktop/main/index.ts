@@ -22,7 +22,7 @@ import { ApiClient } from "./api/client";
 import { registerApiIpc } from "./ipc";
 import type { DesktopSettings } from "./types";
 import type {
-  PrinterAssignments, DrawerSettings, FailedPrintEntry,
+  PrinterAssignments, DrawerSettings, FailedPrintEntry, ZReportSummary,
 } from "../shared/ipc-contract";
 
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -49,6 +49,8 @@ const DEFAULT_SETTINGS: DesktopSettings = {
 interface PersistedShape {
   settings: DesktopSettings;
   failedPrints: FailedPrintEntry[];
+  /** Phase 4 — local cache of post-close Z-reports for reprints. */
+  zReports: ZReportSummary[];
 }
 interface PersistentStore {
   get<K extends keyof PersistedShape>(key: K): PersistedShape[K];
@@ -56,8 +58,31 @@ interface PersistentStore {
 }
 const store = new Store<PersistedShape>({
   name: "khanalagao-pos",
-  defaults: { settings: DEFAULT_SETTINGS, failedPrints: [] },
+  defaults: { settings: DEFAULT_SETTINGS, failedPrints: [], zReports: [] },
 }) as unknown as PersistentStore;
+
+const Z_REPORT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+function zReportCacheAdapter() {
+  function readAll(): ZReportSummary[] {
+    const raw = (store.get("zReports") as ZReportSummary[]) ?? [];
+    const cutoff = Date.now() - Z_REPORT_TTL_MS;
+    const fresh = raw.filter((r) => (r.cachedAt ?? 0) >= cutoff);
+    if (fresh.length !== raw.length) store.set("zReports", fresh);
+    return fresh;
+  }
+  return {
+    list(): ZReportSummary[] {
+      return readAll().sort((a, b) => (b.cachedAt ?? 0) - (a.cachedAt ?? 0));
+    },
+    get(sessionId: number): ZReportSummary | null {
+      return readAll().find((r) => r.sessionId === sessionId) ?? null;
+    },
+    upsert(report: ZReportSummary): void {
+      const all = readAll().filter((r) => r.sessionId !== report.sessionId);
+      store.set("zReports", [...all, { ...report, cachedAt: report.cachedAt || Date.now() }]);
+    },
+  };
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -331,6 +356,7 @@ app.whenReady().then(async () => {
     },
     getWindow: () => mainWindow,
     printerEngine,
+    zReportCache: zReportCacheAdapter(),
   });
   wireAutoUpdater();
   await createWindow();

@@ -4,6 +4,8 @@ import { Button, colors } from "../ui/components";
 import { HardwareSettings } from "./HardwareSettings";
 import { useScanner } from "../hooks/useScanner";
 import { OrderWorkspace } from "./OrderWorkspace";
+import { ReportsScreen } from "./ReportsScreen";
+import { CloseShiftModal } from "./order/CloseShiftModal";
 
 interface Props {
   user: User;
@@ -19,13 +21,14 @@ const NAV = [
   { key: "orders", label: "Orders", enabled: true },
   { key: "tables", label: "Tables", enabled: false },
   { key: "customers", label: "Customers", enabled: false },
-  { key: "reports", label: "Reports", enabled: false },
+  { key: "reports", label: "Reports", enabled: true },
   { key: "hardware", label: "Hardware", enabled: true },
 ] as const;
 
 export function WorkspaceScreen(props: Props) {
   const [active, setActive] = useState<typeof NAV[number]["key"]>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showCloseShift, setShowCloseShift] = useState(false);
   const [scannerEnabled, setScannerEnabled] = useState(true);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ kind: "ok" | "warn" | "err"; text: string } | null>(null);
@@ -204,6 +207,7 @@ export function WorkspaceScreen(props: Props) {
             >
               <MenuItem onClick={() => { setMenuOpen(false); props.onSwitchOutlet(); }}>Switch outlet / counter</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); props.onOpenSettings(); }}>Connection settings</MenuItem>
+              <MenuItem onClick={() => { setMenuOpen(false); setShowCloseShift(true); }}>Close shift…</MenuItem>
               <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
               <MenuItem danger onClick={() => { setMenuOpen(false); props.onSignOut(); }}>Sign out</MenuItem>
             </div>
@@ -246,6 +250,8 @@ export function WorkspaceScreen(props: Props) {
       }}>
         {active === "orders" ? (
           <OrderWorkspace />
+        ) : active === "reports" ? (
+          <ReportsScreen />
         ) : active === "hardware" ? (
           <div style={{ overflow: "auto", padding: 24, flex: 1 }}>
             <HardwareSettings online={props.online} />
@@ -264,6 +270,16 @@ export function WorkspaceScreen(props: Props) {
           </div>
         )}
       </main>
+
+      {showCloseShift && (
+        <CloseShiftModal
+          onClose={() => setShowCloseShift(false)}
+          onClosed={() => {
+            setShowCloseShift(false);
+            setActive("reports");
+          }}
+        />
+      )}
     </div>
   );
 }

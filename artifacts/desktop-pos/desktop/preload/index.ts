@@ -91,13 +91,15 @@ const api = {
     lookup: (req: IpcContract["customers:lookup"]["req"]) => invoke("customers:lookup", req),
   },
 
-  // ─── Orders (Phase 2) ─────────────────────────────────────────────
+  // ─── Orders (Phase 2 + Phase 4 pay/split) ─────────────────────────
   orders: {
     list: (req: IpcContract["orders:list"]["req"]) => invoke("orders:list", req),
     detail: (req: IpcContract["orders:detail"]["req"]) => invoke("orders:detail", req),
     create: (req: IpcContract["orders:create"]["req"]) => invoke("orders:create", req),
     addItems: (req: IpcContract["orders:add-items"]["req"]) => invoke("orders:add-items", req),
     update: (req: IpcContract["orders:update"]["req"]) => invoke("orders:update", req),
+    pay: (req: IpcContract["orders:pay"]["req"]) => invoke("orders:pay", req),
+    split: (req: IpcContract["orders:split"]["req"]) => invoke("orders:split", req),
   },
 
   // ─── Discounts (Phase 2) ──────────────────────────────────────────
@@ -107,9 +109,28 @@ const api = {
     remove: (req: IpcContract["discounts:remove"]["req"]) => invoke("discounts:remove", req),
   },
 
-  // ─── Payments (Phase 4 stub, kept) ────────────────────────────────
+  // ─── Payments (Phase 4) ───────────────────────────────────────────
   payments: {
     record: (req: IpcContract["payments:record"]["req"]) => invoke("payments:record", req),
+    stripeIntent: (req: IpcContract["payments:stripe-intent"]["req"]) =>
+      invoke("payments:stripe-intent", req),
+    razorpayOrder: (req: IpcContract["payments:razorpay-order"]["req"]) =>
+      invoke("payments:razorpay-order", req),
+    terminalCharge: (req: IpcContract["payments:terminal-charge"]["req"]) =>
+      invoke("payments:terminal-charge", req),
+    terminalConfirm: (req: IpcContract["payments:terminal-confirm"]["req"]) =>
+      invoke("payments:terminal-confirm", req),
+  },
+
+  // ─── Reports + Z-reports (Phase 4) ────────────────────────────────
+  reports: {
+    shiftKpis: (req: IpcContract["reports:shift-kpis"]["req"]) =>
+      invoke("reports:shift-kpis", req),
+  },
+  zReports: {
+    list: () => invoke("zReports:list"),
+    get: (req: IpcContract["zReports:get"]["req"]) => invoke("zReports:get", req),
+    reprint: (req: IpcContract["zReports:reprint"]["req"]) => invoke("zReports:reprint", req),
   },
 
   // ─── Printers / hardware ──────────────────────────────────────────
@@ -124,6 +145,7 @@ const api = {
     printOrderKots: (req: IpcContract["printers:print-order-kots"]["req"]) => invoke("printers:print-order-kots", req),
     printOrderBill: (req: IpcContract["printers:print-order-bill"]["req"]) => invoke("printers:print-order-bill", req),
     printBillForOrder: (req: IpcContract["printers:print-bill-for-order"]["req"]) => invoke("printers:print-bill-for-order", req),
+    printZReport: (req: IpcContract["printers:print-z-report"]["req"]) => invoke("printers:print-z-report", req),
     reprintLastKot: () => invoke("printers:reprint-last-kot"),
     reprintLastBill: () => invoke("printers:reprint-last-bill"),
   },
