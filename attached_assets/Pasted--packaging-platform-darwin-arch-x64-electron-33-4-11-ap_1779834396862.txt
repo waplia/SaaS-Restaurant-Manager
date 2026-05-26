@@ -1,0 +1,23 @@
+• packaging       platform=darwin arch=x64 electron=33.4.11 appOutDir=release/mac-universal-x64-temp
+  ⨯ Application entry file "dist/main/index.js" in the "/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/artifacts/desktop-pos/release/mac-universal-x64-temp/Khanalagao POS.app/Contents/Resources/app.asar" does not exist. Seems like a wrong configuration.  failedTask=build stackTrace=Error: Application entry file "dist/main/index.js" in the "/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/artifacts/desktop-pos/release/mac-universal-x64-temp/Khanalagao POS.app/Contents/Resources/app.asar" does not exist. Seems like a wrong configuration.
+    at error (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/asar/asarFileChecker.ts:7:12)
+    at checkFileInArchive (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/asar/asarFileChecker.ts:31:11)
+    at MacPackager.checkFileInPackage (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/platformPackager.ts:527:7)
+    at MacPackager.sanityCheckPackage (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/platformPackager.ts:575:5)
+    at MacPackager.doPack (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/platformPackager.ts:329:5)
+    at MacPackager.doPack (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/macPackager.ts:127:9)
+    at MacPackager.pack (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/macPackager.ts:215:9)
+    at Packager.doBuild (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/packager.ts:459:9)
+    at executeFinally (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/builder-util@25.1.7/node_modules/builder-util/src/promise.ts:12:14)
+    at Packager.build (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/packager.ts:393:31)
+    at executeFinally (/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/node_modules/.pnpm/builder-util@25.1.7/node_modules/builder-util/src/promise.ts:12:14)
+/Users/waplia/Documents/khana-desktop/SaaS-Restaurant-Manager/artifacts/desktop-pos:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/desktop-pos@1.1.0 package:mac: `pnpm run build && electron-builder --mac --universal --publish never`
+Exit status 1
+===EXIT 0===
+total 8
+drwxr-xr-x@  5 waplia  staff  160 27 May 03:55 .
+drwxr-xr-x  13 waplia  staff  416 27 May 03:55 ..
+drwxr-xr-x@  3 waplia  staff   96 27 May 03:55 .icon-icns
+-rw-r--r--@  1 waplia  staff  841 27 May 03:55 builder-debug.yml
+drwxr-xr-x@  3 waplia  staff   96 27 May 03:55 mac-universal-x64-temp
