@@ -652,31 +652,36 @@ router.post("/public/orders", async (req, res) => {
       order = updated;
     }
   } else {
-    const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: resolvedOrderType });
-    [order] = await db.insert(ordersTable).values({
-      restaurantId, tableId: tableId ?? null,
-      orderNumber: __minted.orderNumber,
-      orderDisplayNumber: __minted.orderDisplayNumber,
-      orderInternalNumber: __minted.orderInternalNumber,
-      dailySequence: __minted.dailySequence,
-      orderTypePrefix: __minted.orderTypePrefix,
-      outletCode: __minted.outletCode,
-      businessDate: __minted.businessDate,
-      orderType: resolvedOrderType,
-      tableSessionId: null,
-      isRunningOrder: false,
-      subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
-      serviceCharge: "0.00", discountAmount: "0.00",
-      totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
-      customerId: resolvedCustomerRow?.id ?? null,
-      vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
-      vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
-      vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
-      parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
-      scheduledFor: scheduledForDate,
-      deliveryAddress: deliveryAddressClean,
-      deliveryFee: deliveryFeeAmount.toFixed(2),
-    }).returning();
+    // Mint + insert wrapped in one tx so the sequence increment rolls
+    // back if the order insert fails (Task #647 atomicity requirement).
+    order = await db.transaction(async tx => {
+      const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: resolvedOrderType, exec: tx });
+      const [row] = await tx.insert(ordersTable).values({
+        restaurantId, tableId: tableId ?? null,
+        orderNumber: __minted.orderNumber,
+        orderDisplayNumber: __minted.orderDisplayNumber,
+        orderInternalNumber: __minted.orderInternalNumber,
+        dailySequence: __minted.dailySequence,
+        orderTypePrefix: __minted.orderTypePrefix,
+        outletCode: __minted.outletCode,
+        businessDate: __minted.businessDate,
+        orderType: resolvedOrderType,
+        tableSessionId: null,
+        isRunningOrder: false,
+        subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),
+        serviceCharge: "0.00", discountAmount: "0.00",
+        totalAmount: totalWithDelivery.toFixed(2), customerName: customerName ?? null, customerPhone: normalizedCustomerPhone, notes: notes ?? null,
+        customerId: resolvedCustomerRow?.id ?? null,
+        vehicleColor: isCurbside ? String(vehicleColor).slice(0, 40) : null,
+        vehicleModel: isCurbside ? String(vehicleModel).slice(0, 80) : null,
+        vehicleNumber: isCurbside && typeof vehicleNumber === "string" ? vehicleNumber.slice(0, 40) : null,
+        parkingSpot: isCurbside && typeof parkingSpot === "string" ? parkingSpot.slice(0, 40) : null,
+        scheduledFor: scheduledForDate,
+        deliveryAddress: deliveryAddressClean,
+        deliveryFee: deliveryFeeAmount.toFixed(2),
+      }).returning();
+      return row;
+    });
   }
 
   const insertedItemIds: number[] = [];
