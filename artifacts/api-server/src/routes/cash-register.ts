@@ -11,11 +11,12 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId/cash-register",
-  requireRole("owner", "manager", "waiter", "super_admin"),
+  requireRole("owner", "manager", "waiter", "cashier", "super_admin"),
   validateRestaurantAccess,
 );
 
-// Roles allowed to perform sensitive register operations (close, movements, reports, history)
+// Roles allowed to perform sensitive register operations (close, movements, reports, history).
+// Cashiers can open their own shift and read /current, but management actions stay restricted.
 const MANAGER_ROLES = ["owner", "manager", "super_admin"] as const;
 
 const INR_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];

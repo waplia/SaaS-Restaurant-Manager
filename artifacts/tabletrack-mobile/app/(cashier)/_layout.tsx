@@ -6,7 +6,8 @@ export default function CashierLayout() {
   return (
     <AuthGate allowedRoles={["cashier", "manager", "owner", "super_admin"]}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="pay/[orderId]" options={{ presentation: "card" }} />
       </Stack>
     </AuthGate>
   );

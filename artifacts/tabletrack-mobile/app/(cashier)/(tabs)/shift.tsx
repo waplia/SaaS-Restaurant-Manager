@@ -1,0 +1,555 @@
+import React, { useMemo, useState } from "react";
+import { View, Pressable, ScrollView, RefreshControl, Share, Platform } from "react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Alert } from "@/components/ui/AppAlert";
+import { useTheme } from "@/theme";
+import {
+  AppText, AppCard, AppButton, AppInput, AppIcon, AppEmptyState, StatusChip,
+  AppBottomSheet, ConfirmationModal,
+} from "@/components/ui";
+import { RoleShellHeader } from "@/components/RoleShellHeader";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { DeviceStatusStrip } from "@/components/cashier/DeviceStatusStrip";
+import { useAuth } from "@/context/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
+import {
+  cashierFetch, INR_DENOMINATIONS,
+  type CashRegisterSession, type CashRegisterTotals, type CashMovement,
+} from "@/lib/cashierApi";
+
+type CurrentSession = {
+  session: CashRegisterSession | null;
+  totals: CashRegisterTotals | null;
+};
+
+interface MovementInput { amount: string; reason: string; type: "cash_in" | "cash_out" }
+
+function fmtCurrency(n: number | string | null | undefined): string {
+  const v = Number(n ?? 0);
+  if (!isFinite(v)) return "₹0";
+  return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+export default function CashierShiftScreen() {
+  const t = useTheme();
+  const { restaurantId, accessToken } = useAuth();
+  const qc = useQueryClient();
+  const canOpen = usePermission("shift.open");
+  const canClose = usePermission("shift.close");
+  const canMove = usePermission("cash.drop") || usePermission("cash.pickup");
+
+  const [openSheet, setOpenSheet] = useState(false);
+  const [closeSheet, setCloseSheet] = useState(false);
+  const [moveSheet, setMoveSheet] = useState<null | "cash_in" | "cash_out">(null);
+  const [denoms, setDenoms] = useState<Record<number, string>>({});
+  const [closeDenoms, setCloseDenoms] = useState<Record<number, string>>({});
+  const [openNotes, setOpenNotes] = useState("");
+  const [closeNotes, setCloseNotes] = useState("");
+  const [varianceReason, setVarianceReason] = useState("");
+  const [movement, setMovement] = useState<MovementInput>({ amount: "", reason: "", type: "cash_in" });
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  const currentQ = useQuery<CurrentSession>({
+    queryKey: ["cash-register-current", restaurantId],
+    queryFn: () => cashierFetch<CurrentSession>(accessToken, `/restaurants/${restaurantId}/cash-register/current`),
+    refetchInterval: 30_000,
+    enabled: !!accessToken,
+  });
+
+  const session = currentQ.data?.session ?? null;
+  const totals = currentQ.data?.totals ?? null;
+  const isOpen = session?.status === "open";
+
+  const detailsQ = useQuery({
+    queryKey: ["cash-register-session", restaurantId, session?.id],
+    queryFn: () =>
+      cashierFetch<{
+        session: CashRegisterSession;
+        movements: CashMovement[];
+        totals: CashRegisterTotals;
+      }>(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/${session!.id}`),
+    enabled: !!session?.id && !!accessToken && (canClose || canMove),
+    refetchInterval: 30_000,
+  });
+  const movements = detailsQ.data?.movements ?? [];
+
+  const openMut = useMutation({
+    mutationFn: (payload: { denominations: Array<{ denomination: number; count: number }>; notes?: string }) =>
+      cashierFetch<CashRegisterSession>(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/open`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setOpenSheet(false);
+      setDenoms({});
+      setOpenNotes("");
+      qc.invalidateQueries({ queryKey: ["cash-register-current"] });
+    },
+    onError: (e: Error) => {
+      Alert.alert("Could not open shift", e.message);
+    },
+  });
+
+  const closeMut = useMutation({
+    mutationFn: (payload: {
+      denominations: Array<{ denomination: number; count: number }>;
+      closeNotes?: string;
+      varianceReason?: string;
+    }) =>
+      cashierFetch(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/${session!.id}/close`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setCloseSheet(false);
+      setCloseDenoms({});
+      setCloseNotes("");
+      setVarianceReason("");
+      qc.invalidateQueries({ queryKey: ["cash-register-current"] });
+      qc.invalidateQueries({ queryKey: ["cash-register-session"] });
+    },
+    onError: (e: Error) => {
+      Alert.alert("Could not close shift", e.message);
+    },
+  });
+
+  const movementMut = useMutation({
+    mutationFn: (payload: { type: string; amount: number; reason?: string }) =>
+      cashierFetch(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/${session!.id}/movements`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setMoveSheet(null);
+      setMovement({ amount: "", reason: "", type: "cash_in" });
+      qc.invalidateQueries({ queryKey: ["cash-register-current"] });
+      qc.invalidateQueries({ queryKey: ["cash-register-session"] });
+    },
+    onError: (e: Error) => {
+      Alert.alert("Could not record movement", e.message);
+    },
+  });
+
+  const openTotal = useMemo(
+    () =>
+      INR_DENOMINATIONS.reduce(
+        (s, d) => s + d * (Number(denoms[d] || 0) || 0),
+        0,
+      ),
+    [denoms],
+  );
+  const closeTotal = useMemo(
+    () =>
+      INR_DENOMINATIONS.reduce(
+        (s, d) => s + d * (Number(closeDenoms[d] || 0) || 0),
+        0,
+      ),
+    [closeDenoms],
+  );
+
+  const expectedCash = Number(totals?.expectedCash ?? session?.expectedCash ?? 0);
+  const variance = closeTotal - expectedCash;
+  const varianceAbs = Math.abs(variance);
+  const needsReason = varianceAbs >= 0.01;
+
+  const submitOpen = () => {
+    const list = INR_DENOMINATIONS.map((d) => ({ denomination: d, count: Number(denoms[d] || 0) || 0 }));
+    if (openTotal <= 0) {
+      Alert.alert("Add opening float", "Count at least one note or coin to seed the float.");
+      return;
+    }
+    openMut.mutate({ denominations: list, notes: openNotes.trim() || undefined });
+  };
+
+  const submitClose = () => {
+    if (needsReason && !varianceReason.trim()) {
+      Alert.alert(
+        "Reason required",
+        `Counted cash is ${variance > 0 ? "over" : "short"} by ${fmtCurrency(varianceAbs)}. Enter a reason note before closing.`,
+      );
+      return;
+    }
+    const list = INR_DENOMINATIONS.map((d) => ({ denomination: d, count: Number(closeDenoms[d] || 0) || 0 }))
+      .filter((r) => r.count > 0);
+    closeMut.mutate({
+      denominations: list,
+      closeNotes: closeNotes.trim() || undefined,
+      varianceReason: varianceReason.trim() || undefined,
+    });
+  };
+
+  const submitMovement = () => {
+    const amt = Number(movement.amount);
+    if (!isFinite(amt) || amt <= 0) {
+      Alert.alert("Amount required", "Enter a positive amount.");
+      return;
+    }
+    if (!movement.reason.trim()) {
+      Alert.alert("Reason required", "Briefly describe why cash is being moved.");
+      return;
+    }
+    movementMut.mutate({ type: moveSheet!, amount: amt, reason: movement.reason.trim() });
+  };
+
+  const printReport = async () => {
+    if (!session) return;
+    const totalsView = totals ?? detailsQ.data?.totals;
+    const lines = [
+      `Cash Register — Session #${session.id}`,
+      `Opened by: ${session.openedByName ?? "—"} at ${new Date(session.openedAt).toLocaleString()}`,
+      `Status: ${session.status.toUpperCase()}`,
+      "",
+      `Opening float: ${fmtCurrency(totalsView?.openingFloat ?? session.openingFloat)}`,
+      `Cash sales:    ${fmtCurrency(totalsView?.cashSales)}`,
+      `Cash in:       ${fmtCurrency(totalsView?.cashIn)}`,
+      `Cash out:      ${fmtCurrency(totalsView?.cashOut)}`,
+      `Refunds:       ${fmtCurrency(totalsView?.refunds)}`,
+      `Expected cash: ${fmtCurrency(totalsView?.expectedCash)}`,
+      session.actualCash != null ? `Counted cash:  ${fmtCurrency(session.actualCash)}` : "",
+      session.overShort != null ? `Over/short:    ${fmtCurrency(session.overShort)}` : "",
+    ].filter(Boolean).join("\n");
+    try {
+      await Share.share({ message: lines, title: `Shift report #${session.id}` });
+    } catch {
+      Alert.alert("Print", "Could not open the share sheet.");
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: t.colors.background }}>
+      <RoleShellHeader title="Shift" subtitle="Cash register" />
+      <DeviceStatusStrip />
+      <OfflineBanner />
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={currentQ.isRefetching}
+            onRefresh={() => { void currentQ.refetch(); void detailsQ.refetch(); }}
+            tintColor={t.colors.primary}
+          />
+        }
+      >
+        {currentQ.isLoading ? null : !isOpen ? (
+          <AppCard padding={16} shadow="sm" style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  alignItems: "center", justifyContent: "center",
+                  backgroundColor: "#fef9c3",
+                }}
+              >
+                <AppIcon name="lock-closed" size={20} color="#854d0e" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="h3">Register is closed</AppText>
+                <AppText variant="small" color="mutedForeground">
+                  Open a session with the opening float so cash sales start tallying.
+                </AppText>
+              </View>
+            </View>
+            <AppButton
+              label={canOpen ? "Open register" : "Need permission"}
+              leftIcon="lock-open-outline"
+              onPress={() => setOpenSheet(true)}
+              disabled={!canOpen}
+            />
+          </AppCard>
+        ) : (
+          <>
+            <AppCard padding={14} shadow="sm" style={{ gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View>
+                  <AppText variant="micro" color="mutedForeground">SESSION OPEN</AppText>
+                  <AppText variant="h3">#{session!.id}</AppText>
+                </View>
+                <StatusChip label="Open" tone="success" icon="checkmark-circle" />
+              </View>
+              <AppText variant="small" color="mutedForeground">
+                {session!.openedByName ?? "Cashier"} · since {new Date(session!.openedAt).toLocaleString()}
+              </AppText>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 6 }}>
+                <Stat label="Opening float" value={fmtCurrency(totals?.openingFloat ?? session!.openingFloat)} />
+                <Stat label="Cash sales" value={fmtCurrency(totals?.cashSales)} />
+                <Stat label="Cash in" value={fmtCurrency(totals?.cashIn)} />
+                <Stat label="Cash out" value={fmtCurrency(totals?.cashOut)} />
+                <Stat label="Refunds" value={fmtCurrency(totals?.refunds)} tone="warn" />
+                <Stat label="Expected" value={fmtCurrency(totals?.expectedCash)} tone="primary" />
+              </View>
+            </AppCard>
+
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <AppButton
+                label="Cash in"
+                variant="outline"
+                size="sm"
+                leftIcon="arrow-down-circle-outline"
+                onPress={() => { setMovement({ amount: "", reason: "", type: "cash_in" }); setMoveSheet("cash_in"); }}
+                disabled={!canMove}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                label="Cash out"
+                variant="outline"
+                size="sm"
+                leftIcon="arrow-up-circle-outline"
+                onPress={() => { setMovement({ amount: "", reason: "", type: "cash_out" }); setMoveSheet("cash_out"); }}
+                disabled={!canMove}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                label="Print"
+                variant="outline"
+                size="sm"
+                leftIcon="print-outline"
+                onPress={printReport}
+                style={{ flex: 1 }}
+              />
+            </View>
+
+            <AppButton
+              label={canClose ? "Close register" : "Manager only"}
+              variant="destructive"
+              leftIcon="lock-closed-outline"
+              onPress={() => { setCloseDenoms({}); setCloseSheet(true); }}
+              disabled={!canClose}
+            />
+
+            <AppCard padding={14} shadow="sm" style={{ gap: 6 }}>
+              <AppText variant="h3">Recent movements</AppText>
+              {movements.length === 0 ? (
+                <AppText variant="small" color="mutedForeground">
+                  No manual movements yet. Cash-ins, drops, and payouts will appear here.
+                </AppText>
+              ) : (
+                movements.slice(0, 12).map((m) => {
+                  const isIn = m.type === "cash_in" || m.type === "sale";
+                  return (
+                    <View
+                      key={m.id}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingVertical: 6,
+                        borderBottomWidth: 1,
+                        borderBottomColor: t.colors.border,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <AppText variant="bodyMd" weight="semibold" numberOfLines={1}>
+                          {m.type.replace("_", " ")}
+                        </AppText>
+                        <AppText variant="micro" color="mutedForeground" numberOfLines={1}>
+                          {m.createdByName ?? ""} · {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {m.reason ? ` · ${m.reason}` : ""}
+                        </AppText>
+                      </View>
+                      <AppText
+                        variant="bodyMd"
+                        weight="bold"
+                        style={{ color: isIn ? "#16a34a" : "#dc2626" }}
+                      >
+                        {isIn ? "+" : "−"}{fmtCurrency(m.amount)}
+                      </AppText>
+                    </View>
+                  );
+                })
+              )}
+            </AppCard>
+          </>
+        )}
+
+        {!isOpen && currentQ.isLoading ? null : isOpen ? null : (
+          <AppEmptyState
+            icon="cash-outline"
+            title="No data yet"
+            description="Open a session to start tracking cash."
+          />
+        )}
+      </ScrollView>
+
+      <AppBottomSheet visible={openSheet} onClose={() => setOpenSheet(false)} title="Open register">
+        <AppText variant="small" color="mutedForeground">
+          Count the cash currently in the drawer. The totals roll up into your opening float.
+        </AppText>
+        <DenomGrid value={denoms} onChange={setDenoms} />
+        <View
+          style={{
+            flexDirection: "row", justifyContent: "space-between",
+            paddingTop: 8, borderTopWidth: 1, borderTopColor: t.colors.border,
+          }}
+        >
+          <AppText variant="bodyMd" weight="semibold">Opening float</AppText>
+          <AppText variant="h3" color="primary">{fmtCurrency(openTotal)}</AppText>
+        </View>
+        <AppInput
+          label="Notes (optional)"
+          value={openNotes}
+          onChangeText={setOpenNotes}
+          placeholder="Shift start notes…"
+          multiline
+        />
+        <AppButton
+          label="Open shift"
+          leftIcon="lock-open-outline"
+          loading={openMut.isPending}
+          onPress={submitOpen}
+        />
+      </AppBottomSheet>
+
+      <AppBottomSheet visible={closeSheet} onClose={() => setCloseSheet(false)} title="Close register">
+        <AppText variant="small" color="mutedForeground">
+          Count down the drawer. The system compares against the expected cash and asks for a reason if it doesn't match.
+        </AppText>
+        <DenomGrid value={closeDenoms} onChange={setCloseDenoms} />
+        <View style={{ gap: 4, paddingTop: 6, borderTopWidth: 1, borderTopColor: t.colors.border }}>
+          <Row label="Expected" value={fmtCurrency(expectedCash)} />
+          <Row label="Counted" value={fmtCurrency(closeTotal)} />
+          <Row
+            label={variance >= 0 ? "Over" : "Short"}
+            value={fmtCurrency(varianceAbs)}
+            valueColor={varianceAbs < 0.01 ? "#16a34a" : variance > 0 ? "#ca8a04" : "#dc2626"}
+          />
+        </View>
+        {needsReason ? (
+          <AppInput
+            label="Variance reason"
+            value={varianceReason}
+            onChangeText={setVarianceReason}
+            placeholder="Why doesn't the count match? (required)"
+            multiline
+            error={varianceReason.trim() ? null : "Required when counted ≠ expected"}
+          />
+        ) : null}
+        <AppInput
+          label="Close notes (optional)"
+          value={closeNotes}
+          onChangeText={setCloseNotes}
+          placeholder="Anything management should know…"
+          multiline
+        />
+        <AppButton
+          label="Close shift"
+          variant="destructive"
+          leftIcon="lock-closed-outline"
+          loading={closeMut.isPending}
+          onPress={() => setConfirmClose(true)}
+        />
+      </AppBottomSheet>
+
+      <ConfirmationModal
+        visible={confirmClose}
+        onConfirm={() => { setConfirmClose(false); submitClose(); }}
+        onCancel={() => setConfirmClose(false)}
+        title="Close this shift?"
+        message={
+          needsReason
+            ? `Variance: ${fmtCurrency(varianceAbs)}. The reason note will be saved with the close.`
+            : "Counted cash matches expected. This will finalize the session."
+        }
+        confirmLabel="Close shift"
+        tone="destructive"
+      />
+
+      <AppBottomSheet
+        visible={moveSheet !== null}
+        onClose={() => setMoveSheet(null)}
+        title={moveSheet === "cash_in" ? "Cash in" : "Cash out"}
+      >
+        <AppText variant="small" color="mutedForeground">
+          {moveSheet === "cash_in"
+            ? "Use for owner adds, change from petty cash, etc."
+            : "Use for pickups, drops, vendor payouts, etc."}
+        </AppText>
+        <AppInput
+          label="Amount (₹)"
+          value={movement.amount}
+          onChangeText={(v) => setMovement((m) => ({ ...m, amount: v.replace(/[^\d.]/g, "") }))}
+          keyboardType={Platform.OS === "web" ? "default" : "decimal-pad"}
+          placeholder="0"
+        />
+        <AppInput
+          label="Reason"
+          value={movement.reason}
+          onChangeText={(v) => setMovement((m) => ({ ...m, reason: v }))}
+          placeholder="Why is cash being moved?"
+        />
+        <AppButton
+          label={moveSheet === "cash_in" ? "Record cash in" : "Record cash out"}
+          loading={movementMut.isPending}
+          onPress={submitMovement}
+        />
+      </AppBottomSheet>
+    </View>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" | "primary" }) {
+  const t = useTheme();
+  const fg =
+    tone === "primary" ? t.colors.primary
+    : tone === "warn" ? "#ca8a04"
+    : t.colors.foreground;
+  return (
+    <View style={{ flexBasis: "30%", flexGrow: 1, gap: 2 }}>
+      <AppText variant="micro" color="mutedForeground">{label.toUpperCase()}</AppText>
+      <AppText variant="bodyMd" weight="bold" style={{ color: fg }}>{value}</AppText>
+    </View>
+  );
+}
+
+function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
+      <AppText variant="bodyMd">{label}</AppText>
+      <AppText variant="bodyMd" weight="bold" style={valueColor ? { color: valueColor } : undefined}>{value}</AppText>
+    </View>
+  );
+}
+
+function DenomGrid({
+  value, onChange,
+}: { value: Record<number, string>; onChange: (v: Record<number, string>) => void }) {
+  const t = useTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      {INR_DENOMINATIONS.map((d) => {
+        const count = value[d] ?? "";
+        const sub = (Number(count) || 0) * d;
+        return (
+          <View
+            key={d}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              paddingVertical: 4,
+              borderBottomWidth: 1,
+              borderBottomColor: t.colors.border,
+            }}
+          >
+            <View style={{ width: 64 }}>
+              <AppText variant="bodyMd" weight="semibold">₹{d}</AppText>
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                value={count}
+                onChangeText={(v) => onChange({ ...value, [d]: v.replace(/[^\d]/g, "") })}
+                keyboardType={Platform.OS === "web" ? "default" : "number-pad"}
+                placeholder="0"
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </View>
+            <View style={{ width: 90, alignItems: "flex-end" }}>
+              <AppText variant="bodyMd">₹{sub.toLocaleString("en-IN")}</AppText>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
