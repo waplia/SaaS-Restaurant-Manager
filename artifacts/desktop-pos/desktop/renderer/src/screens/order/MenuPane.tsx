@@ -93,23 +93,46 @@ export function MenuPane(props: Props) {
       <section style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{
           padding: 12, display: "flex", gap: 10, alignItems: "center",
+          flexWrap: "wrap",
           borderBottom: `1px solid ${colors.border}`, background: colors.panel,
         }}>
-          <div style={{ flex: 1, position: "relative" }}>
+          {/* Search must own its own row at narrow widths so the filter
+              chips don't squeeze the input down to a sliver. min-width:0
+              + a generous min-width:240 lets it grow when there's room
+              and wrap below the chips when there isn't. */}
+          <div style={{ flex: "1 1 240px", minWidth: 0, position: "relative" }}>
             <Input
               inputRef={searchInputRef}
-              placeholder="Search menu… (press / to focus)"
+              placeholder="Search menu, SKU or barcode… (press /)"
               value={search}
               onChange={(e) => onSearch(e.target.value)}
+              style={{ paddingLeft: 32 }}
             />
+            <span aria-hidden style={{
+              position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+              color: colors.textMuted, fontSize: 14, pointerEvents: "none",
+            }}>⌕</span>
+            {search && (
+              <button
+                onClick={() => onSearch("")}
+                title="Clear search"
+                style={{
+                  position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+                  background: "transparent", border: 0, color: colors.textDim,
+                  cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "4px 8px",
+                }}
+              >×</button>
+            )}
           </div>
-          <FilterChip active={vegFilter === "all"} onClick={() => onVegFilter("all")}>All</FilterChip>
-          <FilterChip active={vegFilter === "veg"} onClick={() => onVegFilter("veg")} color="#16a34a">🟢 Veg</FilterChip>
-          <FilterChip active={vegFilter === "non_veg"} onClick={() => onVegFilter("non_veg")} color="#dc2626">🔴 Non-veg</FilterChip>
-          <div style={{ width: 1, height: 22, background: colors.border, margin: "0 4px" }} />
-          <FilterChip active={layout === "image"} onClick={() => setLayout("image")}>🖼 Cards</FilterChip>
-          <FilterChip active={layout === "compact"} onClick={() => setLayout("compact")}>≡ Compact</FilterChip>
-          <FilterChip active={layout === "fast"} onClick={() => setLayout("fast")}>⚡ Fast bill</FilterChip>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
+            <FilterChip active={vegFilter === "all"} onClick={() => onVegFilter("all")}>All diet</FilterChip>
+            <FilterChip active={vegFilter === "veg"} onClick={() => onVegFilter("veg")} color="#16a34a">🟢 Veg</FilterChip>
+            <FilterChip active={vegFilter === "non_veg"} onClick={() => onVegFilter("non_veg")} color="#dc2626">🔴 Non-veg</FilterChip>
+            <div style={{ width: 1, height: 22, background: colors.border, alignSelf: "center", margin: "0 2px" }} />
+            <FilterChip active={layout === "image"} onClick={() => setLayout("image")}>🖼 Cards</FilterChip>
+            <FilterChip active={layout === "compact"} onClick={() => setLayout("compact")}>≡ Compact</FilterChip>
+            <FilterChip active={layout === "fast"} onClick={() => setLayout("fast")}>⚡ Fast bill</FilterChip>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
@@ -149,16 +172,17 @@ function CategoryChip({ label, count, selected, onClick }: {
   return (
     <button
       onClick={onClick}
+      title={label}
       style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        width: "100%", textAlign: "left",
+        width: "100%", textAlign: "left", gap: 8,
         background: selected ? colors.brandSoft : "transparent",
         color: selected ? "#fff" : colors.textPrimary,
         border: 0, padding: "10px 12px", borderRadius: 6,
         marginBottom: 2, cursor: "pointer", fontSize: 13, fontWeight: 500,
       }}
     >
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{label}</span>
       <span style={{
         fontSize: 11, color: selected ? "#fed7aa" : colors.textMuted,
         background: selected ? "rgba(0,0,0,0.25)" : colors.bg,
@@ -239,14 +263,31 @@ function ItemCard({ item, onClick, layout, showImage, cartQty }: {
         }}>Low</span>
       )}
 
-      {img && (
-        <div style={{
-          width: "100%", aspectRatio: "4 / 3", marginBottom: 4,
-          borderRadius: 6, overflow: "hidden",
-          background: colors.panelAlt,
-          backgroundImage: `url("${img}")`,
-          backgroundSize: "cover", backgroundPosition: "center",
-        }} />
+      {/* Image area in Cards layout: a real photo when we have one,
+          otherwise a tasteful initial-letter placeholder so the card
+          doesn't look like a broken/loading state. Compact + Fast
+          layouts skip the image area entirely. */}
+      {layout === "image" && (
+        img ? (
+          <div style={{
+            width: "100%", aspectRatio: "4 / 3", marginBottom: 4,
+            borderRadius: 6, overflow: "hidden",
+            background: colors.panelAlt,
+            backgroundImage: `url("${img}")`,
+            backgroundSize: "cover", backgroundPosition: "center",
+          }} />
+        ) : (
+          <div style={{
+            width: "100%", aspectRatio: "4 / 3", marginBottom: 4,
+            borderRadius: 6, overflow: "hidden",
+            background: `linear-gradient(135deg, ${colors.panelAlt}, ${colors.bg})`,
+            display: "grid", placeItems: "center",
+            color: colors.textMuted, fontSize: 38, fontWeight: 800,
+            letterSpacing: -1, textTransform: "uppercase",
+          }}>
+            {(item.name?.trim()?.[0] ?? "·")}
+          </div>
+        )
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>

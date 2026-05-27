@@ -288,7 +288,7 @@ export function TablePickerModal({ tables, selectedId, onPick, onClose }: {
                 cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
               }}
             >
-              <span style={{ fontWeight: 800, fontSize: 18 }}>T{t.tableNumber}</span>
+              <span style={{ fontWeight: 800, fontSize: 18 }}>{t.tableNumber}</span>
               <span style={{ fontSize: 11, color: colors.textDim }}>
                 {t.capacity} seats · {t.status}
               </span>

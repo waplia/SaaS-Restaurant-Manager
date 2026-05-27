@@ -99,7 +99,7 @@ export function TablesScreen({ onOpenTable }: Props) {
       const verb = "Transferred";
       setMoveDialog(null);
       await refresh();
-      setInfo(`${verb} table T${target.tableNumber}.`);
+      setInfo(`${verb} order to ${target.tableNumber}.`);
       window.setTimeout(() => setInfo(c => c?.startsWith(verb) ? null : c), 3500);
     } catch (e) {
       setErr((e as Error).message);
@@ -190,28 +190,36 @@ export function TablesScreen({ onOpenTable }: Props) {
           const palette = STATUS_PALETTE[status];
           return (
             <div key={t.id} style={{
-              background: colors.panel, border: `2px solid ${palette.border}`,
-              borderRadius: 10, padding: 14,
-              display: "flex", flexDirection: "column", gap: 6,
+              background: palette.bg, border: `2px solid ${palette.border}`,
+              borderRadius: 12, padding: 14,
+              display: "flex", flexDirection: "column", gap: 8,
+              boxShadow: live ? `0 0 0 1px ${palette.border}33 inset` : "none",
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>T{t.tableNumber}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                 <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                  fontSize: 22, fontWeight: 800, letterSpacing: -0.5,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }} title={t.tableNumber}>{t.tableNumber}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, textTransform: "uppercase",
                   color: palette.text, background: palette.chip,
-                  padding: "2px 6px", borderRadius: 999, letterSpacing: 0.5,
+                  padding: "3px 8px", borderRadius: 999, letterSpacing: 0.6,
+                  border: `1px solid ${palette.border}55`, flexShrink: 0,
                 }}>{status}</span>
               </div>
               <div style={{ fontSize: 11, color: colors.textDim }}>
                 {t.capacity} seats{t.shape ? ` · ${t.shape}` : ""}
               </div>
               {live && (
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 12, color: colors.textDim }}>Order</div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: colors.brand }}>
+                <div style={{
+                  marginTop: 2, padding: "6px 8px", borderRadius: 6,
+                  background: "rgba(0,0,0,0.25)",
+                }}>
+                  <div style={{ fontSize: 10, color: colors.textDim, textTransform: "uppercase", letterSpacing: 0.5 }}>Open order</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: colors.brand, marginTop: 2 }}>
                     #{shortOrderNumber(live)} · {fmtINR(Number(live.totalAmount))}
                   </div>
-                  <div style={{ fontSize: 11, color: colors.textMuted }}>{live.status}</div>
+                  <div style={{ fontSize: 11, color: colors.textMuted, textTransform: "capitalize" }}>{live.status}</div>
                 </div>
               )}
               <TableMetaRow
@@ -220,28 +228,29 @@ export function TablesScreen({ onOpenTable }: Props) {
                 onChange={(patch) => setMetaFor(t.id, patch)}
                 occupied={!!live}
               />
-              <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
                 <Button
-                  style={{ flex: 1, padding: "6px 8px", fontSize: 12 }}
+                  style={{ flex: 1, padding: "8px 8px", fontSize: 13 }}
                   onClick={() => onOpenTable(t, live?.id ?? null)}
                 >
-                  {live ? "Open" : "Seat"}
+                  {live ? "Open order" : "Seat guests"}
                 </Button>
                 <button
                   title="Move this order to a different (free) table"
                   disabled={!live}
                   onClick={() => live && setMoveDialog({ mode: "transfer", sourceTable: t, sourceOrder: live })}
-                  style={{ ...smallBtn, opacity: live ? 1 : 0.4, cursor: live ? "pointer" : "not-allowed" }}
-                >⇄</button>
+                  style={{ ...secondaryBtn, opacity: live ? 1 : 0.4, cursor: live ? "pointer" : "not-allowed" }}
+                >Move</button>
                 <button
                   title="Split bill"
+                  disabled={!live}
                   onClick={() => {
                     if (!live) { showInfo("No order to split."); return; }
                     onOpenTable(t, live.id);
                     showInfo(`Opened #${shortOrderNumber(live)} — use Split bill from the cart.`);
                   }}
-                  style={smallBtn}
-                >⊥</button>
+                  style={{ ...secondaryBtn, opacity: live ? 1 : 0.4, cursor: live ? "pointer" : "not-allowed" }}
+                >Split</button>
               </div>
             </div>
           );
@@ -292,7 +301,7 @@ function TableMoveOverlay({ dialog, tables, ordersByTable, busy, onPick, onClose
           <div>
             <h3 style={{ margin: 0, fontSize: 18 }}>Transfer order</h3>
             <div style={{ fontSize: 12, color: colors.textDim, marginTop: 2 }}>
-              Order #{shortOrderNumber(dialog.sourceOrder)} on T{dialog.sourceTable.tableNumber}
+              Order #{shortOrderNumber(dialog.sourceOrder)} on {dialog.sourceTable.tableNumber}
               {" · "}
               {fmtINR(Number(dialog.sourceOrder.totalAmount))}
             </div>
@@ -328,7 +337,7 @@ function TableMoveOverlay({ dialog, tables, ordersByTable, busy, onPick, onClose
                   opacity: disabled ? 0.45 : 1,
                 }}
               >
-                <div style={{ fontWeight: 800, fontSize: 16 }}>T{t.tableNumber}</div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{t.tableNumber}</div>
                 <div style={{ fontSize: 10, color: colors.textDim }}>
                   {t.capacity} seats · {occupied ? "occupied" : "free"}
                 </div>
@@ -420,15 +429,18 @@ function TableMetaRow({ table, meta, onChange, occupied }: {
   );
 }
 
-const STATUS_PALETTE: Record<string, { border: string; text: string; chip: string }> = {
-  available: { border: "#16a34a", text: "#86efac", chip: "rgba(22,163,74,0.18)" },
-  occupied:  { border: "#dc2626", text: "#fca5a5", chip: "rgba(220,38,38,0.18)" },
-  reserved:  { border: "#eab308", text: "#fde68a", chip: "rgba(234,179,8,0.18)" },
-  billed:    { border: "#ea580c", text: "#fed7aa", chip: "rgba(234,88,12,0.18)" },
+// Each status gets a coloured outline + a very subtle tinted card background
+// so the cashier can scan the floor at a glance without having to read
+// every status pill.
+const STATUS_PALETTE: Record<string, { border: string; text: string; chip: string; bg: string }> = {
+  available: { border: "#16a34a", text: "#86efac", chip: "rgba(22,163,74,0.22)",  bg: "#101e17" },
+  occupied:  { border: "#dc2626", text: "#fca5a5", chip: "rgba(220,38,38,0.22)",  bg: "#1f1113" },
+  reserved:  { border: "#eab308", text: "#fde68a", chip: "rgba(234,179,8,0.22)",  bg: "#1c1808" },
+  billed:    { border: "#ea580c", text: "#fed7aa", chip: "rgba(234,88,12,0.22)",  bg: "#1f1408" },
 };
 
-const smallBtn: React.CSSProperties = {
+const secondaryBtn: React.CSSProperties = {
   background: colors.panelAlt, border: `1px solid ${colors.borderStrong}`,
-  color: colors.textPrimary, borderRadius: 6, width: 30, height: 30,
-  cursor: "pointer", fontSize: 12, fontWeight: 700,
+  color: colors.textPrimary, borderRadius: 6, padding: "8px 10px",
+  cursor: "pointer", fontSize: 12, fontWeight: 600,
 };
