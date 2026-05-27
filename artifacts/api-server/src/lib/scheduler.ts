@@ -859,15 +859,16 @@ export function startScheduler(): void {
   });
 
   // Transient-notification cleanup: kitchen_delay notifications are emitted
-  // by the per-minute delay detector and can accumulate quickly (thousands
-  // per week per restaurant). Once they're more than 24 h old they have no
-  // operational value — the floor has long since moved on — but they still
-  // load into the waiter/owner notification feed and look like "the kitchen
-  // is still sending old delay notifications". Sweep them hourly.
-  registerCron("notifications_cleanup", "0 * * * *", "Hourly: deletes transient notifications (kitchen_delay, etc.) older than 24h so the feed stays current");
-  trackCron("notifications_cleanup", "0 * * * *", async () => {
+  // by the per-minute delay detector and accumulate FAST (thousands per day
+  // per restaurant). They only have operational value for a short window —
+  // by the time a delay alert is an hour old the floor has long since moved
+  // on, but the row still pollutes the waiter/owner notification feed and
+  // shows up looking like a fresh alert. Sweep every 5 minutes and use a
+  // 60-minute TTL so the feed stays current even during a noisy burst.
+  registerCron("notifications_cleanup", "*/5 * * * *", "Every 5 min: deletes transient notifications (kitchen_delay, waiter_call) older than 60 min so the feed stays current");
+  trackCron("notifications_cleanup", "*/5 * * * *", async () => {
     try {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const cutoff = new Date(Date.now() - 60 * 60 * 1000);
       const TRANSIENT_TYPES = ["kitchen_delay", "waiter_call"] as const;
       const deleted = await db.delete(notificationsTable)
         .where(and(
