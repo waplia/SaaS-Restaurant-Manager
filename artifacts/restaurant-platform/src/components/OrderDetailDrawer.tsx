@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo, useKitchenTickets, useRestaurantId } from "@/lib/hooks";
 import { apiFetch } from "@/lib/api";
@@ -7,20 +8,90 @@ import { useDeliveryExecutives, useAssignRider } from "@/lib/delivery";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat } from "lucide-react";
+import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat, Banknote, Smartphone } from "lucide-react";
 import { cn, formatOrderNumber } from "@/lib/utils";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
 import type { KitchenTicket } from "@/lib/types";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
 
+/**
+ * Print the rendered bill HTML using an off-screen iframe so we don't
+ * depend on the browser's popup blocker (which is on by default inside
+ * the Replit preview iframe and silently rejects `window.open`).
+ *
+ * Strategy:
+ *   1. Inject an <iframe> with the bill HTML as a blob URL.
+ *   2. Once loaded, call `iframe.contentWindow.print()` — Chrome / Safari /
+ *      Firefox all surface the system print dialog from this without
+ *      needing a popup window.
+ *   3. Remove the iframe a moment later so the page stays clean.
+ *
+ * If iframe printing throws (e.g. cross-origin, very old browser), we
+ * fall back to the legacy popup approach.
+ */
 async function openPrintWindowWithHtml(html: string, title: string): Promise<void> {
+  if (!html || typeof html !== "string") {
+    throw new Error("Bill renderer returned no HTML to print.");
+  }
+  // Inject a print trigger so the iframe self-prints once styles + logo
+  // are ready. We replace any existing autoprint marker so calling this
+  // twice doesn't stack scripts.
+  const withTitle = html.includes("<title>")
+    ? html
+    : html.replace(/<head[^>]*>/i, (m) => `${m}<title>${title.replace(/</g, "&lt;")}</title>`);
+
+  try {
+    const blob = new Blob([withTitle], { type: "text/html" });
+    const blobUrl = URL.createObjectURL(blob);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.src = blobUrl;
+    const cleanup = () => {
+      try { document.body.removeChild(iframe); } catch { /* ignore */ }
+      try { URL.revokeObjectURL(blobUrl); } catch { /* ignore */ }
+    };
+    const done = new Promise<void>((resolve, reject) => {
+      iframe.addEventListener("load", () => {
+        // Defer slightly so any images/fonts have a chance to render.
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+            // Most browsers block until the print dialog closes; clean
+            // up shortly after. Use a longer timeout on Safari which is
+            // sometimes async.
+            setTimeout(cleanup, 1000);
+            resolve();
+          } catch (err) {
+            cleanup();
+            reject(err as Error);
+          }
+        }, 250);
+      });
+      iframe.addEventListener("error", () => {
+        cleanup();
+        reject(new Error("Print preview failed to load."));
+      });
+    });
+    document.body.appendChild(iframe);
+    await done;
+    return;
+  } catch {
+    // Fall through to popup fallback.
+  }
+
   const w = window.open("", "_blank", "width=800,height=900");
-  if (!w) throw new Error("Pop-up blocked. Allow pop-ups to print the bill.");
+  if (!w) throw new Error("Pop-up blocked. Allow pop-ups for this page to print the bill.");
   w.document.open();
-  w.document.write(html);
+  w.document.write(withTitle);
   w.document.close();
   const trigger = () => {
-    try { w.document.title = title; } catch { /* ignore */ }
     try { w.focus(); w.print(); } catch { /* ignore */ }
   };
   if (w.document.readyState === "complete") setTimeout(trigger, 150);
@@ -83,15 +154,25 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
     }
   };
 
-  const handlePay = async () => {
+  const [showPayPicker, setShowPayPicker] = useState(false);
+  const handlePay = () => {
     if (!order) return;
+    setShowPayPicker(true);
+  };
+  const submitPayment = async (method: "cash" | "card" | "upi") => {
+    if (!order) return;
+    setShowPayPicker(false);
     try {
-      await payOrder.mutateAsync({ id: order.id, paymentMethod: "cash" });
+      await payOrder.mutateAsync({ id: order.id, paymentMethod: method });
       refreshDetail();
-      toast({ title: "Payment recorded!" });
+      toast({ title: `Payment recorded (${method.toUpperCase()})` });
       onClose();
-    } catch {
-      toast({ title: "Payment failed", variant: "destructive" });
+    } catch (e) {
+      toast({
+        title: "Payment failed",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
     }
   };
 
@@ -393,6 +474,51 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
           </>
         )}
       </SheetContent>
+
+      <Dialog open={showPayPicker} onOpenChange={setShowPayPicker}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Take payment</DialogTitle>
+            <DialogDescription>
+              {order ? `How is order #${formatOrderNumber(order.orderNumber)} being paid?` : "Select a payment method"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2 py-2">
+            <Button
+              variant="outline"
+              className="flex h-20 flex-col items-center justify-center gap-1"
+              onClick={() => submitPayment("cash")}
+              disabled={payOrder.isPending}
+            >
+              <Banknote className="h-6 w-6" />
+              <span className="text-sm font-medium">Cash</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex h-20 flex-col items-center justify-center gap-1"
+              onClick={() => submitPayment("card")}
+              disabled={payOrder.isPending}
+            >
+              <CreditCard className="h-6 w-6" />
+              <span className="text-sm font-medium">Card</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex h-20 flex-col items-center justify-center gap-1"
+              onClick={() => submitPayment("upi")}
+              disabled={payOrder.isPending}
+            >
+              <Smartphone className="h-6 w-6" />
+              <span className="text-sm font-medium">UPI</span>
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowPayPicker(false)} disabled={payOrder.isPending}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
