@@ -4,7 +4,10 @@ import { Header } from "@/components/Layout";
 import { Receipt } from "lucide-react";
 
 interface Visit {
-  id: number; orderNumber: string; restaurantId: number; totalAmount: string;
+  id: number; orderNumber: string;
+  orderDisplayNumber: string | null;
+  orderInternalNumber: string | null;
+  restaurantId: number; totalAmount: string;
   paymentStatus: string; createdAt: string; restaurantName: string;
   restaurantCurrency: string; restaurantLogo: string | null;
 }
@@ -36,7 +39,13 @@ export default function Visits() {
                 }
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{v.restaurantName}</p>
-                  <p className="text-xs text-zinc-500">#{v.orderNumber} · {fmtDate(v.createdAt)}</p>
+                  <p className="text-xs text-zinc-500">
+                    <span className="font-semibold text-zinc-700">{v.orderDisplayNumber ?? v.orderNumber}</span>
+                    {" · "}{fmtDate(v.createdAt)}
+                  </p>
+                  {v.orderInternalNumber && v.orderInternalNumber !== v.orderNumber && (
+                    <p className="text-[10px] text-zinc-400 truncate">{v.orderInternalNumber}</p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">{fmtMoney(v.totalAmount, v.restaurantCurrency)}</p>

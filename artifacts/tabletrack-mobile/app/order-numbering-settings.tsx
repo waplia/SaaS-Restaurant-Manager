@@ -10,35 +10,43 @@ import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 
 type Prefixes = { dine_in: string; takeaway: string; delivery: string; qr: string; reservation: string; tiffin: string; catering: string };
 type Cfg = {
-  enabled: boolean;
-  showDisplayNumberToGuests: boolean;
-  showInternalNumberInAudit: boolean;
-  resetDaily: boolean;
-  zeroPadDisplay: boolean;
+  dailyReset: boolean;
+  prefixByType: boolean;
+  paddingDigits: 3 | 4;
+  includeTableNumberForDineIn: boolean;
+  includeCounterCode: boolean;
+  outletWiseSequence: boolean;
   prefixes: Prefixes;
 };
 
 const DEFAULT_CFG: Cfg = {
-  enabled: true,
-  showDisplayNumberToGuests: true,
-  showInternalNumberInAudit: true,
-  resetDaily: true,
-  zeroPadDisplay: true,
+  dailyReset: true,
+  prefixByType: true,
+  paddingDigits: 3,
+  includeTableNumberForDineIn: true,
+  includeCounterCode: true,
+  outletWiseSequence: true,
   prefixes: { dine_in: "DN", takeaway: "TK", delivery: "DL", qr: "QR", reservation: "RS", tiffin: "TF", catering: "CT" },
 };
 
-const TOGGLES: Array<{ key: keyof Omit<Cfg, "prefixes">; title: string; description: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "enabled", title: "Dual order numbering", description: "Off = single legacy id only.", icon: "swap-horizontal-outline" },
-  { key: "showDisplayNumberToGuests", title: "Show display number to guests", description: "On QR menu, receipts and SMS.", icon: "eye-outline" },
-  { key: "showInternalNumberInAudit", title: "Show internal id in audit", description: "Includes payment exports.", icon: "document-text-outline" },
-  { key: "resetDaily", title: "Reset counter daily", description: "At business-day rollover.", icon: "refresh-outline" },
-  { key: "zeroPadDisplay", title: "Zero-pad display (DN-023)", description: "Off = DN-23 (no leading zeros).", icon: "ellipsis-horizontal-outline" },
+const TOGGLES: Array<{ key: keyof Omit<Cfg, "prefixes" | "paddingDigits">; title: string; description: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: "dailyReset", title: "Reset counter daily", description: "Off = single ever-growing counter per outlet/type.", icon: "refresh-outline" },
+  { key: "prefixByType", title: "Per-type prefix (DN / TK / DL)", description: "Off = single shared “ORD-” prefix.", icon: "pricetag-outline" },
+  { key: "includeTableNumberForDineIn", title: "Include table no. for dine-in", description: "Shows “Table 5” alongside the ticket number.", icon: "grid-outline" },
+  { key: "includeCounterCode", title: "Include counter code", description: "Adds the originating counter on the ticket.", icon: "business-outline" },
+  { key: "outletWiseSequence", title: "Outlet-wise sequence", description: "Off = one shared counter across all branches.", icon: "git-branch-outline" },
 ];
 
 const TYPE_LABELS: Array<[keyof Prefixes, string]> = [
   ["dine_in", "Dine-in"], ["takeaway", "Takeaway"], ["delivery", "Delivery"],
   ["qr", "QR"], ["reservation", "Reservation"], ["tiffin", "Tiffin"], ["catering", "Catering"],
 ];
+
+function previewFor(cfg: Cfg, key: keyof Prefixes): string {
+  const pad = cfg.paddingDigits === 4 ? 4 : 3;
+  const prefix = cfg.prefixByType ? (cfg.prefixes[key] || "DN") : "ORD";
+  return `${prefix}-${String(23).padStart(pad, "0")}`;
+}
 
 export default function OrderNumberingSettingsScreen() {
   const colors = useColors();
@@ -62,7 +70,8 @@ export default function OrderNumberingSettingsScreen() {
         const json = (await res.json()) as { data?: Partial<Cfg> };
         if (!cancelled) {
           const data = json.data ?? {};
-          setCfg({ ...DEFAULT_CFG, ...data, prefixes: { ...DEFAULT_CFG.prefixes, ...(data.prefixes ?? {}) } });
+          const padding = data.paddingDigits === 4 ? 4 : 3;
+          setCfg({ ...DEFAULT_CFG, ...data, paddingDigits: padding, prefixes: { ...DEFAULT_CFG.prefixes, ...(data.prefixes ?? {}) } });
         }
       } catch {
         if (!cancelled) setCfg(DEFAULT_CFG);
@@ -111,7 +120,7 @@ export default function OrderNumberingSettingsScreen() {
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40, gap: 12 }}>
             <View style={[styles.hint, { backgroundColor: colors.accent }]}>
               <Text style={[styles.hintText, { color: colors.foreground }]}>
-                Short daily ticket numbers (e.g. <Text style={styles.bold}>DN-023</Text>) for counter call-outs. A permanent internal id (e.g. <Text style={styles.bold}>KL-MAIN-…-000123</Text>) is used for payments and audit exports.
+                Short daily ticket numbers (e.g. <Text style={styles.bold}>{previewFor(cfg, "dine_in")}</Text>) for counter call-outs. A permanent internal id is used for payments and audit exports.
               </Text>
             </View>
 
@@ -133,6 +142,25 @@ export default function OrderNumberingSettingsScreen() {
               </View>
             ))}
 
+            <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
+                <Ionicons name="ellipsis-horizontal-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>Sequence padding</Text>
+                <Text style={[styles.rowDesc, { color: colors.mutedForeground }]}>
+                  {cfg.paddingDigits === 4 ? "4 digits — DN-0023" : "3 digits — DN-023"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => save({ ...cfg, paddingDigits: cfg.paddingDigits === 4 ? 3 : 4 })}
+                disabled={saving}
+                style={[styles.padToggle, { borderColor: colors.border, backgroundColor: colors.background }]}
+              >
+                <Text style={[styles.padToggleText, { color: colors.foreground }]}>{cfg.paddingDigits}</Text>
+              </Pressable>
+            </View>
+
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Prefixes per order type</Text>
             <View style={[styles.prefixCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {TYPE_LABELS.map(([key, label]) => (
@@ -146,6 +174,16 @@ export default function OrderNumberingSettingsScreen() {
                     autoCapitalize="characters"
                     style={[styles.prefixInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
                   />
+                </View>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Live preview</Text>
+            <View style={[styles.previewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {TYPE_LABELS.map(([key, label]) => (
+                <View key={key} style={[styles.previewRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.previewLabel, { color: colors.mutedForeground }]}>{label}</Text>
+                  <Text style={[styles.previewValue, { color: colors.foreground }]}>{previewFor(cfg, key)}</Text>
                 </View>
               ))}
             </View>
@@ -170,8 +208,14 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowTitle: { fontSize: 15, fontWeight: "600" },
   rowDesc: { fontSize: 12, marginTop: 2 },
+  padToggle: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
+  padToggleText: { fontSize: 16, fontWeight: "700" },
   prefixCard: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   prefixRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   prefixLabel: { fontSize: 14 },
   prefixInput: { minWidth: 80, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, textAlign: "center", fontWeight: "600", letterSpacing: 1 },
+  previewCard: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  previewRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  previewLabel: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  previewValue: { fontSize: 15, fontWeight: "700", fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) },
 });

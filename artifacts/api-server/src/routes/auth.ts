@@ -203,7 +203,7 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       const { seedDefaultDiscountSettings } = await import("../lib/discounts");
       await seedDefaultDiscountSettings(r.id, u.id, tx);
       const { seedDefaultOrderNumberingSettings } = await import("../lib/orderNumbers");
-      await seedDefaultOrderNumberingSettings(r.id, u.id);
+      await seedDefaultOrderNumberingSettings(r.id, u.id, tx);
 
       return { t, r, u };
     });

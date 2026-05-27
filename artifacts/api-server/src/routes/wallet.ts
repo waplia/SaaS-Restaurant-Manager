@@ -382,6 +382,8 @@ router.get("/wallet/visits", requireCustomer, async (req, res) => {
   const rows = await db.select({
     id: ordersTable.id,
     orderNumber: ordersTable.orderNumber,
+    orderDisplayNumber: ordersTable.orderDisplayNumber,
+    orderInternalNumber: ordersTable.orderInternalNumber,
     restaurantId: ordersTable.restaurantId,
     totalAmount: ordersTable.totalAmount,
     paymentStatus: ordersTable.paymentStatus,

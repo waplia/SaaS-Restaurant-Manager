@@ -815,7 +815,7 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
         openedBy: "staff",
         staffVerifiedAt: new Date(),
       }).returning();
-      const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: "dine_in" });
+      const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: "dine_in", exec: tx });
       const [newOrder] = await tx.insert(ordersTable).values({
         tableSessionId: sess.id,
         isRunningOrder: true,
@@ -985,8 +985,11 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     order = updated;
   } else {
   const __resolvedOrderType = orderType ?? (ckContext ? "delivery" : "dine_in");
-  const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: __resolvedOrderType });
-  const [insertedOrder] = await db.insert(ordersTable).values({
+  // Wrap mint + insert in one tx so the sequence increment is rolled back
+  // if the order insert fails (Task #647 atomicity requirement).
+  const insertedOrder = await db.transaction(async tx => {
+    const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: __resolvedOrderType, exec: tx });
+    const [row] = await tx.insert(ordersTable).values({
     tableSessionId: newTableSessionId,
     isRunningOrder: isDineIn && roSettings?.enabled ? true : false,
     restaurantId,
@@ -1026,6 +1029,8 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
       ? deliveryAddress.trim().slice(0, 500)
       : null,
   }).returning();
+    return row;
+  });
     order = insertedOrder;
   }
 

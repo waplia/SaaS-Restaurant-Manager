@@ -2180,35 +2180,68 @@ function OrderSettingsSection() {
  * customise prefixes from here.
  */
 interface OrderNumberingCfg {
-  enabled: boolean;
-  showDisplayNumberToGuests: boolean;
-  showInternalNumberInAudit: boolean;
-  resetDaily: boolean;
-  zeroPadDisplay: boolean;
+  dailyReset: boolean;
+  prefixByType: boolean;
+  paddingDigits: 3 | 4;
+  includeTableNumberForDineIn: boolean;
+  includeCounterCode: boolean;
+  outletWiseSequence: boolean;
   prefixes: { dine_in: string; takeaway: string; delivery: string; qr: string; reservation: string; tiffin: string; catering: string };
 }
 function OrderNumberingSection() {
   const defaults: OrderNumberingCfg = {
-    enabled: true,
-    showDisplayNumberToGuests: true,
-    showInternalNumberInAudit: true,
-    resetDaily: true,
-    zeroPadDisplay: true,
+    dailyReset: true,
+    prefixByType: true,
+    paddingDigits: 3,
+    includeTableNumberForDineIn: true,
+    includeCounterCode: true,
+    outletWiseSequence: true,
     prefixes: { dine_in: "DN", takeaway: "TK", delivery: "DL", qr: "QR", reservation: "RS", tiffin: "TF", catering: "CT" },
+  };
+  // Live preview of what numbers look like under current settings.
+  const renderPreview = (s: OrderNumberingCfg) => {
+    const pad = s.paddingDigits === 4 ? 4 : 3;
+    const seq = String(23).padStart(pad, "0");
+    const prefix = (type: keyof OrderNumberingCfg["prefixes"]) =>
+      s.prefixByType ? (s.prefixes[type] || "DN") : "ORD";
+    return [
+      { label: "Dine-in", value: `${prefix("dine_in")}-${seq}` },
+      { label: "Takeaway", value: `${prefix("takeaway")}-${seq}` },
+      { label: "Delivery", value: `${prefix("delivery")}-${seq}` },
+      { label: "QR", value: `${prefix("qr")}-${seq}` },
+      { label: "Reservation", value: `${prefix("reservation")}-${seq}` },
+      { label: "Tiffin", value: `${prefix("tiffin")}-${seq}` },
+      { label: "Catering", value: `${prefix("catering")}-${seq}` },
+    ];
   };
   return (
     <SettingForm section="order-numbering" defaults={defaults}>
       {(s, set) => (
         <>
           <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Short daily ticket numbers (e.g. <strong>DN-023</strong>) are called out at counters and shown on KOTs.
-            A permanent internal id (e.g. <strong>KL-MAIN-{new Date().toISOString().slice(0,10).replace(/-/g,"")}-000123</strong>) is used for payments and audit exports.
+            Short daily ticket numbers (e.g. <strong>DN-{String(23).padStart(s.paddingDigits === 4 ? 4 : 3, "0")}</strong>) are called out at counters and shown on KOTs.
+            A permanent internal id (e.g. <strong>KL-R12-MAIN-{new Date().toISOString().slice(0,10).replace(/-/g,"")}-DN-000123</strong>) is used for payments and audit exports.
           </div>
-          <Toggle label="Enable dual order numbering" hint="Off = single legacy id only." checked={s.enabled} onChange={v => set(p => ({ ...p, enabled: v }))} />
-          <Toggle label="Show display number to guests" hint="On QR menu, receipts and SMS." checked={s.showDisplayNumberToGuests} onChange={v => set(p => ({ ...p, showDisplayNumberToGuests: v }))} />
-          <Toggle label="Show internal number in audit / exports" checked={s.showInternalNumberInAudit} onChange={v => set(p => ({ ...p, showInternalNumberInAudit: v }))} />
-          <Toggle label="Reset daily counter at business-day rollover" checked={s.resetDaily} onChange={v => set(p => ({ ...p, resetDaily: v }))} />
-          <Toggle label="Zero-pad display numbers (DN-023 vs DN-23)" checked={s.zeroPadDisplay} onChange={v => set(p => ({ ...p, zeroPadDisplay: v }))} />
+          <Toggle label="Reset counter daily" hint="Off = single ever-growing counter per outlet/type." checked={s.dailyReset} onChange={v => set(p => ({ ...p, dailyReset: v }))} />
+          <Toggle label="Use per-type prefix (DN / TK / DL …)" hint="Off = single shared “ORD-” prefix for every order." checked={s.prefixByType} onChange={v => set(p => ({ ...p, prefixByType: v }))} />
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Sequence padding</Label>
+            <Row>
+              <Field label="">
+                <select
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                  value={String(s.paddingDigits)}
+                  onChange={e => set(p => ({ ...p, paddingDigits: (e.target.value === "4" ? 4 : 3) }))}
+                >
+                  <option value="3">3 digits — DN-023</option>
+                  <option value="4">4 digits — DN-0023</option>
+                </select>
+              </Field>
+            </Row>
+          </div>
+          <Toggle label="Include table number for dine-in" hint="Shows “Table 5” alongside the ticket number on KOTs and screens." checked={s.includeTableNumberForDineIn} onChange={v => set(p => ({ ...p, includeTableNumberForDineIn: v }))} />
+          <Toggle label="Include counter code" hint="Adds the originating counter on the ticket (per-counter rollout is a follow-up)." checked={s.includeCounterCode} onChange={v => set(p => ({ ...p, includeCounterCode: v }))} />
+          <Toggle label="Outlet-wise sequence" hint="On = each branch counts separately. Off = one shared counter across all branches." checked={s.outletWiseSequence} onChange={v => set(p => ({ ...p, outletWiseSequence: v }))} />
           <div className="space-y-2 pt-2 border-t border-border">
             <Label className="text-sm font-semibold">Prefixes per order type</Label>
             <Row>
@@ -2222,6 +2255,17 @@ function OrderNumberingSection() {
               <Field label="Tiffin"><Input maxLength={4} value={s.prefixes.tiffin} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, tiffin: e.target.value.toUpperCase() } }))} /></Field>
               <Field label="Catering"><Input maxLength={4} value={s.prefixes.catering} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, catering: e.target.value.toUpperCase() } }))} /></Field>
             </Row>
+          </div>
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-sm font-semibold">Live preview</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {renderPreview(s).map(p => (
+                <div key={p.label} className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{p.label}</div>
+                  <div className="font-mono text-sm font-semibold">{p.value}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}

@@ -600,7 +600,7 @@ router.post("/public/orders", async (req, res) => {
         // waiter taps Accept. See createKotBatchForItems below.
         openedBy: "qr",
       }).returning();
-      const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: "qr" });
+      const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: "qr", exec: tx });
       const [newOrder] = await tx.insert(ordersTable).values({
         restaurantId, tableId,
         orderNumber: __minted.orderNumber,
