@@ -18,7 +18,7 @@ const TabBar = makeAppTabBar([
 export default function OwnerLayout() {
   const colors = useColors();
   return (
-    <AuthGate allowedRoles={["owner", "manager", "super_admin", "cashier", "chef", "kitchen", "inventory_manager", "hr", "payroll", "marketing", "accountant"]}>
+    <AuthGate allowedRoles={["owner", "manager", "super_admin"]}>
       <View style={{ flex: 1 }}>
         <Tabs
           tabBar={(props) => <TabBar {...props} />}

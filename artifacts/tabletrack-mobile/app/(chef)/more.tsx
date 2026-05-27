@@ -35,7 +35,6 @@ export default function ChefMoreScreen() {
     ...(roles && roles.length > 1
       ? [{ icon: "swap-horizontal" as const, label: "Switch role", onPress: () => router.push("/role-switch" as never) }]
       : []),
-    { icon: "restaurant-outline", label: "Menu / 86 list", hint: "Mark items unavailable", onPress: () => router.push("/(owner)/menu" as never) },
     { icon: "notifications-outline", label: "Notification settings", onPress: () => router.push("/notification-settings" as never) },
     { icon: "help-circle-outline", label: "Help & support", onPress: () => router.push("/support" as never) },
     {
