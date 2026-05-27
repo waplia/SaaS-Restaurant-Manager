@@ -17,9 +17,16 @@ import OwnerProfileScreen from "./(owner)/profile";
  * UPI QR config, GSTIN, FSSAI, etc. from their More tab.
  */
 export default function ProfileScreen() {
-  const { user } = useAuth();
+  const { user, activeRole } = useAuth();
+  // Use the *active* role (what the user is currently operating as), not
+  // the primary `user.role`. A multi-role account (e.g. an owner who has
+  // switched into Cashier mode) should see the lightweight staff profile
+  // on the cashier shell — otherwise we render the owner restaurant
+  // editor whose useEffect+useQuery combo has caused a "Maximum update
+  // depth" crash for cashier sessions.
+  const effectiveRole = activeRole ?? user?.role ?? null;
   const isOwnerLike =
-    user?.role === "owner" || user?.role === "manager" || user?.role === "super_admin";
+    effectiveRole === "owner" || effectiveRole === "manager" || effectiveRole === "super_admin";
   if (isOwnerLike) return <OwnerProfileScreen />;
   return <StaffProfileScreen />;
 }
