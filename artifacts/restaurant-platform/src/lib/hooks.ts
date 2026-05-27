@@ -103,12 +103,26 @@ export function useStaffActivity() {
   });
 }
 
-export function useOrders(params?: { status?: string; tableId?: number; page?: number }) {
+export function useOrders(params?: {
+  status?: string;
+  tableId?: number;
+  page?: number;
+  orderType?: string;
+  paymentStatus?: string;
+  since?: string;
+  until?: string;
+  search?: string;
+}) {
   const RESTAURANT_ID = useRestaurantId();
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.tableId) q.set("tableId", String(params.tableId));
   if (params?.page) q.set("page", String(params.page));
+  if (params?.orderType && params.orderType !== "all") q.set("orderType", params.orderType);
+  if (params?.paymentStatus && params.paymentStatus !== "all") q.set("paymentStatus", params.paymentStatus);
+  if (params?.since) q.set("since", params.since);
+  if (params?.until) q.set("until", params.until);
+  if (params?.search) q.set("search", params.search);
   return useQuery({
     queryKey: ["orders", RESTAURANT_ID, params],
     queryFn: () => apiGet<OrdersResponse>(`/restaurants/${RESTAURANT_ID}/orders?${q}`),

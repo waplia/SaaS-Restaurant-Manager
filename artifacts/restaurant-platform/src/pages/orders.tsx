@@ -300,12 +300,30 @@ function CurbsideTab() {
   );
 }
 
+type DateRange = "today" | "7d" | "30d" | "all";
+
+function sinceIsoFor(d: DateRange): string | undefined {
+  if (d === "all") return undefined;
+  const now = new Date();
+  if (d === "today") {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  }
+  const days = d === "7d" ? 7 : 30;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange>("today");
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const [tab, setTab] = useState<"all" | "curbside">("all");
-  const { data: ordersData } = useOrders(statusFilter !== "all" ? { status: statusFilter } : undefined);
+  const { data: ordersData } = useOrders({
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    orderType: orderTypeFilter !== "all" ? orderTypeFilter : undefined,
+    since: sinceIsoFor(dateRange),
+  });
   const { data: heldVerifications = [] } = useGuestVerifications();
   const heldOrderIds = useMemo(() => new Set(heldVerifications.map(v => v.orderId)), [heldVerifications]);
 
@@ -338,12 +356,36 @@ export default function OrdersPage() {
           <CurbsideTab />
         ) : (
           <>
-            <div className="flex gap-2 mb-6 flex-wrap">
-              {statuses.map(s => (
-                <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">
-                  {s}
-                </Button>
-              ))}
+            <div className="flex flex-col gap-2 mb-6">
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs font-medium text-muted-foreground w-16">Status</span>
+                {statuses.map(s => (
+                  <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">
+                    {s}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs font-medium text-muted-foreground w-16">Type</span>
+                {(["all", "dine_in", "takeaway", "delivery", "curbside"] as const).map(t => (
+                  <Button key={t} size="sm" variant={orderTypeFilter === t ? "default" : "outline"} onClick={() => setOrderTypeFilter(t)} className="capitalize">
+                    {t.replace("_", " ")}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs font-medium text-muted-foreground w-16">Date</span>
+                {([
+                  { k: "today" as const, l: "Today" },
+                  { k: "7d" as const, l: "Last 7 days" },
+                  { k: "30d" as const, l: "Last 30 days" },
+                  { k: "all" as const, l: "All time" },
+                ]).map(d => (
+                  <Button key={d.k} size="sm" variant={dateRange === d.k ? "default" : "outline"} onClick={() => setDateRange(d.k)}>
+                    {d.l}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {orders.map((order: Order) => (

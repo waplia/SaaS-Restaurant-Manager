@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 
 type StatusFilter = "all" | "new" | "preparing" | "ready" | "completed";
 type TypeFilter = "all" | "qr" | "dine_in" | "takeaway" | "delivery";
+type DateFilter = "today" | "7d" | "30d" | "all";
 
 const STATUS_CHIPS: { key: StatusFilter; label: string; tone?: string }[] = [
   { key: "all", label: "All" },
@@ -32,6 +33,24 @@ const TYPE_CHIPS: { key: TypeFilter; label: string; icon?: keyof typeof Ionicons
   { key: "takeaway", label: "Takeaway", icon: "bag-handle-outline" },
   { key: "delivery", label: "Delivery", icon: "bicycle-outline" },
 ];
+const DATE_CHIPS: { key: DateFilter; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" },
+  { key: "all", label: "All time" },
+];
+
+function sinceIsoFor(d: DateFilter): string | null {
+  if (d === "all") return null;
+  const now = new Date();
+  if (d === "today") {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return start.toISOString();
+  }
+  const days = d === "7d" ? 7 : 30;
+  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return start.toISOString();
+}
 
 export default function OrdersScreen() {
   const colors = useColors();
@@ -41,6 +60,7 @@ export default function OrdersScreen() {
   const { restaurantId, effectiveBranchId } = useAuth();
   const [status, setStatus] = useState<StatusFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
+  const [dateRange, setDateRange] = useState<DateFilter>("today");
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   // Free-text search box. Debounced so we don't hammer the server on every
   // keystroke, and trimmed/lower-bounded so a single character doesn't run
@@ -57,8 +77,14 @@ export default function OrdersScreen() {
 
   // Map "new" filter to pending API status.
   const apiStatus = status === "new" ? "pending" : status === "preparing" ? "in_progress" : status;
+  const since = sinceIsoFor(dateRange);
+  // Server-side type filter when possible. "qr" is a sourceChannel, not an
+  // orderType, so it still falls through to the client-side filter below.
+  const apiOrderType: string | null = type === "all" || type === "qr" ? null : type;
   const params: Record<string, unknown> = { limit: 50 };
   if (apiStatus !== "all") params.status = apiStatus;
+  if (apiOrderType) params.orderType = apiOrderType;
+  if (since) params.since = since;
   if (search) params.search = search;
   if (effectiveBranchId != null) params.branchId = effectiveBranchId;
 
@@ -150,6 +176,18 @@ export default function OrdersScreen() {
         </ScrollView>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          {DATE_CHIPS.map((c) => {
+            const active = dateRange === c.key;
+            return (
+              <Pressable key={c.key} onPress={() => setDateRange(c.key)} style={[styles.pill, { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.card }]}>
+                <Ionicons name="calendar-outline" size={12} color={active ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.pillText, { color: active ? "#fff" : colors.mutedForeground }]}>{c.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {TYPE_CHIPS.map((c) => {
             const active = type === c.key;
             return (
@@ -179,6 +217,8 @@ export default function OrdersScreen() {
                 <Pressable onPress={() => setOpenOrderId(o.id)}>
                   <OrderCard
                     orderNumber={o.orderNumber ?? String(o.id)}
+                    displayNumber={(o as unknown as { orderDisplayNumber?: string | null }).orderDisplayNumber ?? null}
+                    internalNumber={(o as unknown as { orderInternalNumber?: string | null }).orderInternalNumber ?? null}
                     tableLabel={(o as unknown as { tableLabel?: string | null }).tableLabel}
                     itemCount={(o as { items?: unknown[] }).items?.length ?? 0}
                     total={o.totalAmount ?? 0}

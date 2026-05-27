@@ -355,7 +355,7 @@ export async function recalculateOrderTotals(orderId: number, restaurantId: numb
 }
 
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
-  const { status, tableId, customerId, page, limit, search, branchId } = req.query;
+  const { status, tableId, customerId, page, limit, search, branchId, orderType, paymentStatus, since, until } = req.query;
   const pg = Number(page) || 1;
   const lim = Number(limit) || 50;
   const offset = (pg - 1) * lim;
@@ -365,6 +365,18 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   if (status) conditions.push(eq(ordersTable.status, String(status)));
   if (tableId) conditions.push(eq(ordersTable.tableId, Number(tableId)));
   if (customerId) conditions.push(eq(ordersTable.customerId, Number(customerId)));
+  if (orderType && orderType !== "all") conditions.push(eq(ordersTable.orderType, String(orderType)));
+  if (paymentStatus && paymentStatus !== "all") conditions.push(eq(ordersTable.paymentStatus, String(paymentStatus)));
+  // Date-range filter on createdAt. ISO strings only; invalid input is
+  // ignored so the rest of the query still runs.
+  if (typeof since === "string" && since) {
+    const d = new Date(since);
+    if (!Number.isNaN(d.getTime())) conditions.push(sql`${ordersTable.createdAt} >= ${d}`);
+  }
+  if (typeof until === "string" && until) {
+    const d = new Date(until);
+    if (!Number.isNaN(d.getTime())) conditions.push(sql`${ordersTable.createdAt} <= ${d}`);
+  }
   if (branchId != null && branchId !== "") {
     const bn = Number(branchId);
     if (!Number.isFinite(bn)) {
@@ -391,6 +403,8 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
     const q = `%${search.trim().replace(/[%_]/g, (m) => `\\${m}`)}%`;
     conditions.push(sql`(
       ${ordersTable.orderNumber} ILIKE ${q}
+      OR coalesce(${ordersTable.orderDisplayNumber}, '') ILIKE ${q}
+      OR coalesce(${ordersTable.orderInternalNumber}, '') ILIKE ${q}
       OR coalesce(${ordersTable.customerName}, '') ILIKE ${q}
       OR coalesce(${ordersTable.customerPhone}, '') ILIKE ${q}
     )`);
@@ -3343,19 +3357,36 @@ router.patch(
           : eq(kitchenTicketsTable.orderId, orderId);
         const tickets = await db.select().from(kitchenTicketsTable)
           .where(and(ticketScope, notInArray(kitchenTicketsTable.status, ["served", "cancelled"])));
+        // Pre-resolve kitchen routing for every order item once so legacy
+        // (kotBatchId==null) ticket scoping can filter by kitchen instead
+        // of "every item on the order" — otherwise a multi-kitchen order
+        // never closes out kitchen A's ticket until kitchen B is also done.
+        const siblings = await db.select({
+          id: orderItemsTable.id,
+          status: orderItemsTable.status,
+          menuItemId: orderItemsTable.menuItemId,
+          kotBatchId: orderItemsTable.kotBatchId,
+        }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+        const siblingMenuIds = Array.from(new Set(
+          siblings.map(s => s.menuItemId).filter((x): x is number => x != null),
+        ));
+        const siblingKitchenRows = siblingMenuIds.length > 0
+          ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
+              .from(menuItemsTable).where(inArray(menuItemsTable.id, siblingMenuIds))
+          : [];
+        const itemKitchenById = new Map(siblingKitchenRows.map(r => [r.id, r.kitchenId] as const));
+
         for (const t of tickets) {
-          // Items that belong to this ticket (batch when present, else
-          // order+kitchen). Skip if anything is still un-served.
-          const siblings = await db.select({
-            id: orderItemsTable.id,
-            status: orderItemsTable.status,
-            menuItemId: orderItemsTable.menuItemId,
-            kotBatchId: orderItemsTable.kotBatchId,
-          }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+          // Items that belong to this ticket: batch when present, else
+          // kitchen-scoped (legacy fallback). Items with NULL menu kitchen
+          // are treated as matching (they were default-routed).
           const inThisTicket = siblings.filter(s => {
             if (s.status === "cancelled") return false;
             if (t.kotBatchId != null) return s.kotBatchId === t.kotBatchId;
-            return true; // legacy ticket: covers the whole order at this kitchen
+            if (t.kitchenId == null) return true;
+            if (s.menuItemId == null) return true;
+            const mk = itemKitchenById.get(s.menuItemId);
+            return mk == null || mk === t.kitchenId;
           });
           const allServed = inThisTicket.length > 0 && inThisTicket.every(s => s.status === "served");
           if (!allServed) continue;
