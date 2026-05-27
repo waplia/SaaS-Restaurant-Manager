@@ -16,7 +16,8 @@
   "packageManager": "pnpm@10.26.1",
   "pnpm": {
     "overrides": {
-      "minimatch": "^9.0.5"
+      "minimatch": "^9.0.5",
+      "@electron/asar": "^4.0.0"
     }
   }
 }

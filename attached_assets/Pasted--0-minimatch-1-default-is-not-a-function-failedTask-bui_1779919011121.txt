@@ -1,0 +1,16 @@
+  ⨯ (0 , minimatch_1.default) is not a function  failedTask=build stackTrace=TypeError: (0 , minimatch_1.default) is not a function
+    at shouldUnpackPath (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/src/asar.ts:158:33)
+    at handleFile (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/src/asar.ts:173:24)
+    at next (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/src/asar.ts:211:11)
+    at next (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/src/asar.ts:212:12)
+    at mergeASARs (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+universal@2.0.1/node_modules/@electron/universal/src/asar-utils.ts:215:5)
+    at makeUniversalApp (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/@electron+universal@2.0.1/node_modules/@electron/universal/src/index.ts:245:7)
+    at MacPackager.doPack (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/macPackager.ts:153:9)
+    at MacPackager.pack (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/macPackager.ts:215:9)
+    at Packager.doBuild (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/packager.ts:459:9)
+    at executeFinally (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/builder-util@25.1.7/node_modules/builder-util/src/promise.ts:12:14)
+    at Packager.build (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/app-builder-lib@25.1.8_dmg-builder@25.1.8/node_modules/app-builder-lib/src/packager.ts:393:31)
+    at executeFinally (/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/node_modules/.pnpm/builder-util@25.1.7/node_modules/builder-util/src/promise.ts:12:14)
+/Users/waplia/Documents/khana/SaaS-Restaurant-Manager/artifacts/desktop-pos:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/desktop-pos@1.5.0 package:mac: `pnpm run build && electron-builder --mac --universal --publish never`
+Exit status 1
