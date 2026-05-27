@@ -30,12 +30,15 @@ export default function CashierMoreScreen() {
   };
 
   const items: Item[] = [
+    // Every route below resolves to a top-level shim (orders.tsx, tables.tsx,
+    // expenses.tsx, printers.tsx) so the cashier doesn't trip the
+    // (owner)/_layout AuthGate which only allows owner/manager/super_admin.
     { icon: "person-circle-outline", label: "Profile", description: "Edit personal info", onPress: go("/profile") },
     { icon: "notifications-outline", label: "Notifications", description: "Inbox & alerts", onPress: go("/notifications") },
-    { icon: "list-outline", label: "All orders", description: "Browse every ticket", onPress: go("/(owner)/orders") },
-    { icon: "grid-outline", label: "Tables", description: "Floor view", onPress: go("/(owner)/tables") },
-    { icon: "wallet-outline", label: "Expenses", description: "Log petty cash spend", onPress: go("/(owner)/finance") },
-    { icon: "print-outline", label: "Printer & terminals", description: "Manage hardware", onPress: go("/settings") },
+    { icon: "list-outline", label: "All orders", description: "Browse every ticket", onPress: go("/orders") },
+    { icon: "grid-outline", label: "Tables", description: "Floor view", onPress: go("/tables") },
+    { icon: "wallet-outline", label: "Expenses", description: "Log petty cash spend", onPress: go("/expenses") },
+    { icon: "print-outline", label: "Printer & terminals", description: "Manage hardware", onPress: go("/printers") },
     { icon: "help-circle-outline", label: "Help & support", onPress: go("/support") },
     { icon: "settings-outline", label: "App settings", onPress: go("/settings") },
     {

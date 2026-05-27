@@ -142,6 +142,13 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="support" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="notifications" options={{ headerShown: false, presentation: "card" }} />
+      {/* Top-level shims that re-export owner screens so non-owner roles
+          (cashier, etc.) can reach them from their own More menus without
+          tripping the (owner)/_layout AuthGate. */}
+      <Stack.Screen name="orders" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="tables" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="expenses" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="printers" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="new-order" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="running-order/[tableId]" options={{ headerShown: false }} />
       <Stack.Screen name="notification-settings" options={{ headerShown: false, presentation: "card" }} />
