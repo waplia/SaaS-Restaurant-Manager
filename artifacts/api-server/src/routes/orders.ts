@@ -3093,11 +3093,23 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
           .from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, ids)))
       : [];
     const kitchenById = new Map(menuRows.map(m => [m.id, m.kitchenId] as const));
-    const matchIds = allItems
-      .filter(i => updated.kitchenId == null || (i.menuItemId != null && kitchenById.get(i.menuItemId) === updated.kitchenId))
-      .map(i => i.id);
+    // If we scoped by kotBatchId, the batch already represents exactly the
+    // items routed to this kitchen for this round — no extra kitchen filter
+    // needed. Legacy fallback still filters by kitchen mapping, but treats
+    // unmapped menu items (NULL kitchen_id, routed via defaultKitchenId)
+    // as matching the ticket so items aren't silently skipped.
+    const matchIds = updated.kotBatchId != null
+      ? allItems.map(i => i.id)
+      : allItems
+          .filter(i => {
+            if (updated.kitchenId == null) return true;
+            if (i.menuItemId == null) return true;
+            const mk = kitchenById.get(i.menuItemId);
+            return mk == null || mk === updated.kitchenId;
+          })
+          .map(i => i.id);
     if (matchIds.length > 0) {
-      const itemUpdates: Record<string, unknown> = { status, updatedAt: now };
+      const itemUpdates: Record<string, unknown> = { status };
       if (status === "preparing") itemUpdates.startedAt = now;
       if (status === "ready" || status === "served") itemUpdates.readyAt = now;
       // Forward-only: never demote an item that's already past this stage
