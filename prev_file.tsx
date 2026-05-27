@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,17 @@ import {
   TextInput,
   ActivityIndicator,
   Keyboard,
-  RefreshControl,
 } from "react-native";
 import { Alert } from "@/components/ui/AppAlert";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Stack, router, useFocusEffect } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { AppBottomSheet } from "@/components/ui/AppBottomSheet";
 import { AppButton } from "@/components/ui/AppButton";
-import { TimePickerField } from "@/components/TimePickerField";
 
 /**
  * Operational Shifts — mobile parity with the web Staff Scheduling
@@ -118,19 +116,6 @@ export default function OperationalShiftsScreen() {
     enabled: restaurantId != null,
   });
 
-  // Re-fetch every time this screen comes back into focus so changes made on
-  // the web (or any other device) appear immediately. This is the single
-  // source of truth for refresh — covers both fresh mounts and returning
-  // from a sub-screen, without the double-fetch from refetchOnMount.
-  useFocusEffect(
-    useCallback(() => {
-      if (restaurantId != null) {
-        shiftsQ.refetch();
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [restaurantId]),
-  );
-
   const [sheetOpen, setSheetOpen] = useState(false);
   const [draft, setDraft] = useState<ShiftDraft>({ name: "", startTime: "", endTime: "", days: [] });
 
@@ -209,10 +194,6 @@ export default function OperationalShiftsScreen() {
       Alert.alert("Hours", "Start and end can't be the same.");
       return;
     }
-    if (draft.days.length === 0) {
-      Alert.alert("Days required", "Pick at least one day this shift runs on.");
-      return;
-    }
     saveMut.mutate({ ...draft, name, startTime: s, endTime: e });
   };
 
@@ -261,14 +242,6 @@ export default function OperationalShiftsScreen() {
           paddingBottom: insets.bottom + 120,
           gap: 14,
         }}
-        refreshControl={
-          <RefreshControl
-            refreshing={shiftsQ.isRefetching && !shiftsQ.isLoading}
-            onRefresh={() => shiftsQ.refetch()}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
-        }
       >
         <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.heroIcon, { backgroundColor: colors.primary + "1A" }]}>
@@ -282,28 +255,6 @@ export default function OperationalShiftsScreen() {
             </Text>
           </View>
         </View>
-
-        {shiftsQ.isError && (
-          <View
-            style={[
-              styles.errorBox,
-              { backgroundColor: colors.destructive + "1A", borderColor: colors.destructive },
-            ]}
-          >
-            <Ionicons name="cloud-offline-outline" size={18} color={colors.destructive} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.destructive, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
-                Couldn't load shifts
-              </Text>
-              <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 }}>
-                {shiftsQ.error instanceof Error ? shiftsQ.error.message : "Check your connection and try again."}
-              </Text>
-            </View>
-            <Pressable onPress={() => shiftsQ.refetch()} hitSlop={8} style={{ padding: 6 }}>
-              <Ionicons name="refresh" size={20} color={colors.destructive} />
-            </Pressable>
-          </View>
-        )}
 
         {shiftsQ.isLoading ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
@@ -431,18 +382,26 @@ export default function OperationalShiftsScreen() {
           placeholder="Morning, Dinner, Late night…"
         />
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <TimePickerField
-            label="Starts"
-            icon="sunny-outline"
-            value={draft.startTime}
-            onChange={(v) => setDraft((d) => ({ ...d, startTime: v }))}
-          />
-          <TimePickerField
-            label="Ends"
-            icon="moon-outline"
-            value={draft.endTime}
-            onChange={(v) => setDraft((d) => ({ ...d, endTime: v }))}
-          />
+          <View style={{ flex: 1 }}>
+            <SheetField
+              colors={colors}
+              label="Starts"
+              value={draft.startTime}
+              onChange={v => setDraft(d => ({ ...d, startTime: v }))}
+              placeholder="09:00"
+              numeric
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <SheetField
+              colors={colors}
+              label="Ends"
+              value={draft.endTime}
+              onChange={v => setDraft(d => ({ ...d, endTime: v }))}
+              placeholder="17:00"
+              numeric
+            />
+          </View>
         </View>
 
         <View style={{ marginTop: 4 }}>
@@ -586,14 +545,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
