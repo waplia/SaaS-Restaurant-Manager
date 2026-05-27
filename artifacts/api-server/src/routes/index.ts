@@ -130,6 +130,8 @@ import adminWebPushRouter from "./admin-web-push";
 import phonepeRouter, { phonepePublicRouter } from "./phonepe";
 import accountRouter from "./account";
 import adminUsersRouter from "./admin-users";
+import adminAppDownloadsRouter from "./admin-app-downloads";
+import appDownloadsRouter from "./app-downloads";
 
 const router: IRouter = Router();
 
@@ -294,5 +296,7 @@ router.use(operationsRouter);
 router.use(vendorInvoicesRouter);
 router.use(customerAppRouter);
 router.use(phonepeRouter);
+router.use(adminAppDownloadsRouter);
+router.use(appDownloadsRouter);
 
 export default router;

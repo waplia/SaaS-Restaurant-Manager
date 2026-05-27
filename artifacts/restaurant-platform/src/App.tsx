@@ -89,6 +89,8 @@ import ApiLogsPage from "@/pages/api-logs";
 import DeveloperDocsPage from "@/pages/developer-docs";
 import OauthAppsPage from "@/pages/oauth-apps";
 import AdminSettingsPage from "@/pages/admin-settings";
+import AdminAppDownloadsPage from "@/pages/admin-app-downloads";
+import DownloadAppsPage from "@/pages/download-apps";
 import { AppSettingsProvider } from "@/lib/appSettings";
 import PosPage from "@/pages/pos";
 import HandheldPosPage from "@/pages/handheld-pos";
@@ -358,6 +360,8 @@ function Router() {
       <Route path="/my-training" component={() => <ProtectedRoute component={MyTrainingPage} />} />
       <Route path="/admin/system-health" component={() => <SuperAdminRoute component={SystemHealthPage} />} />
       <Route path="/admin/settings" component={() => <SuperAdminRoute component={AdminSettingsPage} />} />
+      <Route path="/admin/app-downloads" component={() => <SuperAdminRoute component={AdminAppDownloadsPage} />} />
+      <Route path="/download-apps" component={() => <ProtectedRoute component={DownloadAppsPage} />} />
       <Route path="/admin/addons" component={() => <SuperAdminRoute component={AdminAddonsPage} />} />
       <Route path="/marketplace" component={() => <RoleProtectedRoute component={MarketplacePage} allow={["owner", "manager"]} />} />
       <Route path="/marketplace/supplier-catalog" component={() => <RoleProtectedRoute component={() => <PlanProtectedRoute component={SupplierCatalogPage} feature="supplier_network" />} allow={["owner", "manager"]} />} />

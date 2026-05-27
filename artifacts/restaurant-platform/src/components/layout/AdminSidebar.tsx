@@ -4,7 +4,7 @@ import {
   ShieldCheck, LayoutDashboard, TrendingUp, Activity, History, Building2, Package, Tag, FileCheck2,
   CreditCard, Landmark, Megaphone, Mail, MessageSquare, MessageCircle, Bell, Inbox, FileText, LifeBuoy,
   Wrench, Settings, Brain, Sun, Moon, Search, ArrowLeft, ChevronDown, LogOut, Menu as MenuIcon, X, ListChecks,
-  Image as ImageIconLucide, UserX,
+  Image as ImageIconLucide, UserX, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -50,6 +50,7 @@ const NAV: NavEntry[] = [
     kind: "group", key: "feature_control", label: "Feature Control", icon: Settings,
     children: [
       { kind: "link", href: "/admin/settings", label: "App Settings", icon: Settings },
+      { kind: "link", href: "/admin/app-downloads", label: "App Downloads", icon: Download },
       { kind: "link", href: "/admin/maintenance", label: "System Maintenance", icon: Wrench },
     ],
   },

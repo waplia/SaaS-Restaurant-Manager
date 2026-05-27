@@ -10,7 +10,7 @@ import {
 import { useBranchContext } from "@/lib/branch";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users, Trash2, Monitor, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, AlertTriangle, Receipt, Users, Trash2, Monitor, ExternalLink, Download } from "lucide-react";
 import { useWasteDashboardTile } from "@/lib/hooks";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -225,6 +225,29 @@ export default function DashboardPage() {
             />
           )}
         </div>
+
+        <Link
+          href="/download-apps"
+          className="block bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Get the TableTrack apps</p>
+                <p className="text-base font-semibold text-foreground mt-0.5">
+                  Android · iOS · Windows · macOS · Web
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Install on phones, tablets and desktops for your staff
+                </p>
+              </div>
+            </div>
+            <span className="text-sm text-primary font-medium">Download →</span>
+          </div>
+        </Link>
 
         {wasteTile && (
           <Link

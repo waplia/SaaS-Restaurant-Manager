@@ -6,7 +6,7 @@ import {
   Flame, Sun, Moon, LogOut, ShieldCheck, Monitor, Receipt, Wallet, AlertCircle, AlertTriangle, Trash2,
   ChevronDown, Coins, TrendingUp, Percent, Truck, Banknote, BellRing, CalendarDays, Inbox, FileText, LifeBuoy,
   Sparkles, ImageIcon, Upload, History, Megaphone, Folder, BookOpen, GraduationCap, ScrollText, PartyPopper, Cake, Leaf, Award,
-  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket, Globe, Printer,
+  Soup, Wine, ClipboardCheck, Eye, Building2, Gift, MessageSquare, Search, Zap, Plus, Smartphone, CreditCard, RefreshCw, Rocket, Globe, Printer, Download,
 } from "lucide-react";
 import { useWaiterRequests, useRestaurantInfo } from "@/lib/hooks";
 import { useBranchContext } from "@/lib/branch";
@@ -310,6 +310,7 @@ const navConfig: NavEntry[] = [
     roles: ["owner", "manager"],
     children: [
       { kind: "link", href: "/marketplace", label: "Vendor Marketplace", icon: Package, roles: ["owner", "manager"] },
+      { kind: "link", href: "/download-apps", label: "Download Apps", icon: Download, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "accountant", "hr_officer", "auditor", "delivery_executive", "staff", "counter_staff", "super_admin"] },
       { kind: "link", href: "/marketplace/supplier-catalog", label: "Supplier Catalog", icon: Truck, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/marketplace/purchase-requests", label: "Bulk RFQs", icon: FileText, roles: ["owner", "manager"], planGate: "supplier_network", badge: "premium" },
       { kind: "link", href: "/settings/devices", label: "Hardware & Devices", icon: Monitor, roles: ["owner", "manager", "cashier", "waiter", "kitchen"] },
