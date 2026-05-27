@@ -1,0 +1,770 @@
+Redesign KhanaLagao Desktop POS App UI/UX and structure into a premium modern restaurant desktop POS.
+
+Goal:
+The desktop app should look and feel like a real modern POS system, not a simple web dashboard. It should have a dedicated desktop-style layout with a large left menu, full POS workspace, hardware/printer controls, cashier workflow, QR orders, kitchen display, customer display, shift closing, and modern UI.
+
+App name:
+KhanaLagao POS
+
+Platforms:
+Windows desktop app
+macOS desktop app
+
+Important:
+- Do not remove existing POS features.
+- Do not change existing menu/order data.
+- Do not use mock data.
+- Use real backend APIs.
+- Every button should work or show clear locked/configuration state.
+- No dead buttons.
+- No infinite loading.
+- No raw ID inputs.
+- Make it feel fast, professional, and cashier-friendly.
+
+====================================================
+1. DESKTOP APP STRUCTURE
+====================================================
+
+Create a proper desktop app shell.
+
+Layout:
+- Left vertical navigation menu
+- Top status header
+- Main work area
+- Right contextual panel where needed
+- Bottom quick shortcut/help bar
+
+The app should open directly to POS by default after login if restaurant setting allows.
+
+Left menu should have large icons + names:
+- POS
+- Orders
+- Tables
+- Kitchen
+- QR Orders
+- Customers
+- Payments
+- Shift
+- Hardware
+- Reports
+- Settings
+
+Menu design:
+- Big rounded icons
+- Text labels always visible
+- Active item highlighted in orange
+- Collapsed mode optional
+- Role-based visibility
+- Notification badges:
+  - Orders count
+  - QR orders count
+  - Failed prints count
+  - Payment pending count
+  - Low stock count
+
+Top header should show:
+- Restaurant name
+- Outlet selector
+- Counter selector
+- Cashier name
+- Shift status
+- Online/offline status
+- Printer status
+- Failed print count
+- Today sales
+- Current time
+- Fullscreen button
+- Lock app button
+- User profile/logout
+
+====================================================
+2. OVERALL UI STYLE
+====================================================
+
+Design style:
+- Modern dark POS theme
+- Premium orange accent
+- Large touch-friendly buttons
+- Clean item cards
+- Professional cashier workflow
+- Rounded corners
+- Soft shadows
+- High contrast
+- Fast keyboard navigation
+- Dense mode for busy counters
+- Comfortable mode for touch screens
+
+Colors:
+- Primary Orange: #FF6B1A
+- Deep Orange: #E85A0C
+- Dark Background: #0F172A
+- Card Background: #111827
+- Light Text: #F9FAFB
+- Muted Text: #9CA3AF
+- Success Green: #16A34A
+- Warning Amber: #F59E0B
+- Danger Red: #EF4444
+- Info Blue: #2563EB
+
+Add theme options:
+- Dark POS mode
+- Light mode optional
+- Compact/dense mode
+- Large touch mode
+
+====================================================
+3. POS SCREEN STRUCTURE
+====================================================
+
+POS screen should be the main screen.
+
+Use 3-column layout:
+
+Left POS Panel:
+- Order type selector
+- Table/customer section
+- Category list
+- Running tables
+- Held bills
+- Quick filters
+
+Center POS Panel:
+- Search bar
+- Category tabs
+- Item grid
+- Popular items
+- Recent items
+- Bestseller items
+- Item cards with image/name/price/add button
+
+Right POS Panel:
+- Current order/cart
+- Customer/order context
+- Items
+- Totals
+- Actions
+
+POS should be fast:
+- F2 focuses item search
+- Tap/click item adds instantly
+- Modifier items open customization modal
+- Cart auto-saves
+- Payment is one click away
+
+====================================================
+4. POS LEFT PANEL DETAILS
+====================================================
+
+Order type selector:
+- Dine-in
+- Takeaway
+- Delivery
+- QR Order
+- Reservation
+- Tiffin if enabled
+- Catering if enabled
+
+Table section:
+- For dine-in, show selected floor/table
+- Quick open table map
+- Running table count
+- Bill requested count
+- Ready to serve count
+
+Customer section:
+- Search customer by phone/name
+- Add new customer
+- Show loyalty/wallet/due if selected
+
+Quick views:
+- Running Tables
+- Held Bills
+- QR Orders
+- Recent Bills
+
+Category sidebar:
+- All Items
+- Popular
+- Recent
+- Starters
+- Main Course
+- Breads
+- Rice
+- Beverages
+- Desserts
+- Custom restaurant categories
+
+====================================================
+5. CENTER ITEM GRID
+====================================================
+
+Search bar:
+- Search item name
+- Category
+- SKU/barcode
+- Alias
+- Tags
+
+Item card should show:
+- Food image
+- Item name
+- Price
+- Veg/non-veg indicator
+- Availability
+- Bestseller badge
+- Modifier/add-on indicator
+- Low stock warning
+- Quantity already in cart
+- Quick + button
+
+Views:
+- Image grid view
+- Compact text view
+- Fast billing view
+
+Filters:
+- Veg
+- Non-veg
+- Available
+- Bestseller
+- Offers
+- Low stock hidden
+- Category chips
+
+Item actions:
+- Click = add item
+- If item has modifiers, open customize modal
+- Right-click/long press = details / mark unavailable if permission
+
+====================================================
+6. CART / ORDER TICKET PANEL
+====================================================
+
+Right cart panel should look like a real order ticket.
+
+Show:
+- Display order number
+- Order type
+- Table/customer
+- Cashier/waiter
+- Order time
+- Items
+- Quantity stepper
+- Modifier details
+- Item notes
+- Edit item
+- Remove item
+- Subtotal
+- Discount
+- Tax/GST
+- Service charge
+- Delivery charge
+- Round off
+- Grand total
+
+Cart action buttons:
+- Send KOT
+- Pay
+- Hold
+- Print
+- Discount
+- Note
+- Split
+- Clear
+
+Empty cart state:
+- “Tap items to start order”
+- Quick buttons:
+  - Select table
+  - Add customer
+  - Recall held bill
+  - Open QR orders
+
+Sticky bottom:
+- Grand Total
+- Send KOT
+- Pay
+
+====================================================
+7. ITEM CUSTOMIZATION MODAL
+====================================================
+
+For items with add-ons/modifiers:
+
+Modal should show:
+- Item image
+- Item name
+- Base price
+- Quantity
+- Variant/size
+- Required modifier groups
+- Optional add-ons
+- Spice level
+- No onion/no garlic
+- Extra sauce/extra cheese
+- Special note
+- Final price
+- Add to cart button
+
+Validation:
+- Required modifier must be selected
+- Unavailable add-ons disabled
+- Price updates instantly
+
+====================================================
+8. PAYMENT MODAL
+====================================================
+
+Design modern payment screen.
+
+Show:
+- Amount due
+- Payment methods
+- Payment status
+- Cash received
+- Change return
+- Split payment rows
+- Provider status
+- Complete payment button
+
+Payment methods:
+- Cash
+- UPI
+- Card
+- PhonePe EDC
+- PhonePe Dynamic QR
+- Razorpay
+- Cashfree
+- Stripe Terminal
+- Wallet/loyalty
+- Pay later
+- Complimentary/Void with permission
+
+Features:
+- Cash received calculator
+- Change return
+- Split payment
+- Payment verification
+- Retry/check status/cancel
+- Print/share invoice after success
+
+Do not mark provider payment paid until backend verifies success.
+
+====================================================
+9. BUILT-IN CALCULATOR
+====================================================
+
+Add calculator accessible from:
+- Header
+- Cart panel
+- Payment modal
+- Discount modal
+
+Calculator modes:
+- Basic calculator
+- Cash received/change return
+- Split bill
+- Discount calculation
+- Tax inclusive/exclusive helper
+
+====================================================
+10. SOUND / TONE SYSTEM
+====================================================
+
+Add modern POS sounds.
+
+Events:
+- Item added
+- Item removed
+- KOT sent
+- Payment success
+- Payment failed
+- New QR order
+- Kitchen ready
+- Printer error
+- Warning/error
+
+Settings:
+- Sound on/off
+- Volume
+- Choose tone
+- Mute current shift
+
+Use short professional tones.
+
+====================================================
+11. ORDERS MODULE
+====================================================
+
+Orders screen should show:
+- Live orders
+- Current orders
+- Held bills
+- Running tables
+- QR orders
+- Completed orders
+- Cancelled orders
+- Refunds
+
+Order card:
+- Display order number
+- Type
+- Table/customer
+- Amount
+- Status
+- Payment status
+- Time
+- Quick actions
+
+Actions:
+- Open
+- Print
+- Reprint
+- Refund
+- Cancel with permission
+- Share invoice
+
+====================================================
+12. TABLES MODULE
+====================================================
+
+Tables screen should be visual.
+
+Features:
+- Floor-wise table map
+- Table status:
+  - Free
+  - Occupied
+  - Ordered
+  - Preparing
+  - Ready
+  - Bill requested
+  - Billed
+  - Paid
+  - Cleaning
+- Running amount
+- Guest count
+- Assigned waiter
+- Time since opened
+
+Actions:
+- Open table
+- Add items
+- Transfer table
+- Merge table
+- Split bill
+- Request bill
+- Mark cleaned/free
+
+====================================================
+13. KITCHEN MODULE
+====================================================
+
+Add kitchen display mode inside desktop app.
+
+Screens:
+- New KOTs
+- Preparing
+- Ready
+- Delayed
+- Completed
+
+KOT card:
+- KOT number
+- Order display number
+- Table/order type
+- Items
+- Modifiers
+- Notes
+- Timer
+- Priority
+- Station
+
+Actions:
+- Start preparing
+- Mark item ready
+- Mark full order ready
+- Delay reason
+- Reprint KOT
+
+Add full-screen kitchen mode and sound alerts.
+
+====================================================
+14. QR ORDERS MODULE
+====================================================
+
+QR Orders screen:
+- Incoming QR orders
+- Pending acceptance
+- Accepted
+- Preparing
+- Payment pending
+- Completed
+
+Actions:
+- Accept
+- Reject
+- Merge with table
+- Send KOT
+- Take payment
+- Notify customer
+
+New QR order should trigger:
+- Badge
+- Sound
+- Desktop notification
+
+====================================================
+15. CUSTOMERS MODULE
+====================================================
+
+Customer panel/module:
+- Search by name/phone
+- Add customer
+- Customer profile
+- Order history
+- Loyalty points
+- Wallet balance
+- Due amount
+- Notes
+- Favorite items
+- Send WhatsApp/SMS/email
+- Apply coupon
+
+====================================================
+16. PAYMENTS MODULE
+====================================================
+
+Payment Center:
+- Today payments
+- Pending payments
+- Failed payments
+- Refunds
+- PhonePe/terminal transactions
+- Settlement status
+- Payment method split
+
+Actions:
+- Check status
+- Retry payment
+- Refund with permission
+- Print receipt
+- Reconcile
+
+====================================================
+17. SHIFT MODULE
+====================================================
+
+Cashier shift screen:
+- Open shift
+- Opening cash
+- Current sales
+- Cash in
+- Cash out
+- Expense from POS
+- Close shift
+- Cash count
+- Payment split
+- Cash mismatch reason
+- Manager approval
+- Print shift report
+
+POS should show shift status in header.
+
+====================================================
+18. HARDWARE MODULE
+====================================================
+
+Hardware Center:
+- Bill printer setup
+- KOT printer setup
+- Station printer setup
+- Test print
+- Reprint last bill
+- Reprint last KOT
+- Failed print queue
+- Retry selected/all failed prints
+- Cash drawer test
+- Barcode scanner test
+- Customer display setup
+- Printer online/offline status
+
+Failed print queue:
+- Print type
+- Order number
+- Printer name
+- Error reason
+- Retry
+- Mark resolved
+
+====================================================
+19. REPORTS MODULE
+====================================================
+
+Quick desktop reports:
+- Today sales
+- Payment split
+- Cashier sales
+- Item sales
+- Category sales
+- Discount report
+- Cancelled order report
+- Refund report
+- Shift summary
+- Tax summary
+
+Actions:
+- Print
+- Export
+- Share
+
+Keep reports lightweight inside desktop app.
+
+====================================================
+20. SETTINGS MODULE
+====================================================
+
+Desktop settings:
+- API URL
+- Default outlet/counter
+- Default screen on launch
+- Start in fullscreen
+- Auto launch on system start
+- Keep screen awake
+- Sound settings
+- Printer settings
+- Scanner settings
+- Customer display settings
+- Auto print KOT
+- Auto print bill
+- Update check
+- App version
+- Clear cache
+- Logout
+
+====================================================
+21. CUSTOMER DISPLAY MODE
+====================================================
+
+Add optional customer display window.
+
+Features:
+- Open second display window
+- Show current cart
+- Items
+- Total
+- Discount/tax
+- Payment QR
+- Payment status
+- Thank you screen
+
+Useful for counter billing.
+
+====================================================
+22. OFFLINE / LOCAL SAFETY
+====================================================
+
+Add:
+- Local cart auto-save
+- Held bills local backup
+- Failed print job queue
+- Offline banner
+- Retry pending actions
+- Warn before exit if cart has items
+- Disable online payment while offline
+- Safe app restart
+
+Do not lose active order due to refresh/app close.
+
+====================================================
+23. KEYBOARD SHORTCUTS
+====================================================
+
+Add shortcut system:
+
+F2 Search
+F3 Customer
+F4 Hold bill
+F5 Recall bill
+F6 Send KOT
+F7 Print bill
+F8 Pay
+F9 Cash drawer
+F10 Close shift
+Ctrl + N New bill
+Ctrl + P Print
+Ctrl + Enter Complete payment
+Esc Close modal
+Del Remove item
++ Increase quantity
+- Decrease quantity
+? Shortcut help
+
+Show shortcuts in bottom bar and help modal.
+
+====================================================
+24. SECURITY / PERMISSIONS
+====================================================
+
+Role permissions:
+- Open POS
+- Create order
+- Edit order
+- Cancel order
+- Void item
+- Apply discount
+- Override price
+- Take payment
+- Refund
+- Reprint bill
+- Open cash drawer
+- Close shift
+- Manage hardware
+- View reports
+- Change settings
+
+Manager approval required for:
+- High discount
+- Refund
+- Void item
+- Cancel paid order
+- Reprint old bill
+- Cash mismatch
+
+====================================================
+25. DESKTOP APP BEHAVIOR
+====================================================
+
+Make it feel native:
+- Fast startup
+- Direct POS launch
+- Fullscreen support
+- Auto launch option
+- Keep screen awake
+- Desktop notifications
+- App lock/PIN optional
+- Auto update check
+- App version visible
+- Secure logout
+- Remember outlet/counter
+- Prevent multiple cashier sessions if needed
+
+====================================================
+26. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Desktop app has modern left icon menu with labels.
+- POS screen has premium full 3-column layout.
+- Item grid, cart, payment, calculator, sounds, KOT, table flow work.
+- Orders, Tables, Kitchen, QR Orders, Customers, Payments, Shift, Hardware, Reports, Settings screens exist and are functional.
+- Customer display mode exists.
+- Failed print queue works.
+- Shift closing works.
+- Keyboard shortcuts work.
+- Local cart safety works.
+- Every screen uses real backend data.
+- No mock data.
+- No dead buttons.
+- No infinite loading.
+- UI looks like a professional modern desktop POS.

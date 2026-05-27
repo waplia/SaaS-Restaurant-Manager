@@ -208,7 +208,12 @@ export const DEFAULT_DISCOUNTS_CONFIG = {
   },
 } as const;
 
-type TxOrDb = typeof db;
+// Accept either the top-level `db` handle or a Drizzle transaction so
+// seeding can run inside a registration transaction. The tx type is
+// derived via inference to avoid importing PgTransaction generics.
+type TxOrDb =
+  | typeof db
+  | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Seed the default `discounts` settings row for a brand-new restaurant.

@@ -34,7 +34,13 @@ export const ORDER_NUMBERING_SECTION = "order-numbering";
 
 // Drizzle transaction or the global db handle. Both expose the same
 // insert/select/update API; mint must accept either.
-type Executor = typeof db;
+// Accept either the top-level `db` handle or a Drizzle transaction so the
+// same helper can be used inside `db.transaction(async tx => …)` blocks.
+// The tx type is derived via inference so we don't need to import the
+// PgTransaction generics by hand.
+type Executor =
+  | typeof db
+  | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // All seven recognised display prefixes. Anything not in this map
 // (custom/cloud-kitchen order types) falls back to a generic prefix.
