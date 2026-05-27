@@ -103,6 +103,12 @@ export const ordersTable = pgTable("orders", {
   billGeneratedAt: timestamp("bill_generated_at"),
   paidAt: timestamp("paid_at"),
   closedAt: timestamp("closed_at"),
+  // Task #674 — Frozen snapshot of the bill at generate-bill / payment time.
+  // Used as the single source of truth for reprints, WhatsApp / email shares,
+  // and the public QR receipt link. When set, every renderer must read from
+  // here instead of recomputing — that's what makes reprints byte-identical
+  // even after menu prices or restaurant settings change later.
+  billSnapshot: jsonb("bill_snapshot").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -85,3 +85,4 @@ export * from "./phonepe";
 export * from "./staff-auth";
 export * from "./counters";
 export * from "./app-downloads";
+export * from "./bill-templates";

@@ -8,6 +8,7 @@ import { toE164 } from "@workspace/phone-utils";
 import { triggerAutoPost } from "./accounting-books";
 import { mintOrderNumbers } from "../lib/orderNumbers";
 import { formatOrderNumber } from "../lib/orderNumber";
+import { freezeBillSnapshot } from "../lib/billSnapshot";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
 // side effects so plans without the entitlement see no behavior change).
@@ -2612,6 +2613,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
       return void res.status(500).json({ error: "Failed to post room charge" });
     }
     handleOrderCompletion(orderId, restaurantId, updatedOrder).catch(console.error);
+    try { await freezeBillSnapshot(updatedOrder.id); } catch (err) { void err; }
     broadcastEvent(restaurantId, "order:status", { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
     broadcastOrderUpdate(updatedOrder.id, { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
     return void res.json(updatedOrder);
@@ -2668,6 +2670,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
       return void res.status(500).json({ error: "Failed to record pay-later" });
     }
     handleOrderCompletion(orderId, restaurantId, updatedOrder).catch(console.error);
+    try { await freezeBillSnapshot(updatedOrder.id); } catch (err) { void err; }
     broadcastEvent(restaurantId, "order:status", { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
     broadcastOrderUpdate(updatedOrder.id, { id: updatedOrder.id, status: "completed", paymentStatus: "paid", orderNumber: updatedOrder.orderNumber });
     return void res.json(updatedOrder);
@@ -2931,6 +2934,8 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
   });
   // Service-timer: order has been billed (final stage).
   await recordTimerStage(restaurantId, updated.id, "billed");
+  // Task #674 — freeze final snapshot for receipts / reprints across surfaces.
+  try { await freezeBillSnapshot(updated.id); } catch (err) { void err; }
   broadcastEvent(restaurantId, "order:status", { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
   broadcastOrderUpdate(updated.id, { id: updated.id, status: "completed", paymentStatus: "paid", orderNumber: updated.orderNumber });
 
@@ -3738,6 +3743,9 @@ router.post(
       billGeneratedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(ordersTable.id, orderId)).returning();
+    // Task #674 — freeze the canonical bill snapshot so every channel
+    // (print, share, email, QR receipt) renders the same bytes on reprint.
+    try { await freezeBillSnapshot(orderId); } catch (err) { void err; }
     // Task #601 — propagate lifecycle state to the table_session AND
     // floor_table so floor staff see "bill requested" on the floor map.
     // The table is still in use; the freeTableIfIdle helper on payment
