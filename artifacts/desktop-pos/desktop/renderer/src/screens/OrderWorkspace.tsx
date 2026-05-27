@@ -69,6 +69,11 @@ interface OrderWorkspaceProps {
   /** Called after the workspace has applied the handoff so the parent can
    *  clear it. */
   onHandoffConsumed?: () => void;
+  /** Start with the Live Orders rail expanded. Used when the cashier
+   *  arrives via the "Orders" nav (where managing existing tickets is
+   *  the goal), vs. "POS" which collapses the rail to maximise menu
+   *  real estate for fresh orders. */
+  initialRailOpen?: boolean;
 }
 
 const DRAFT_KEY = "kp:draftCart:v1";
@@ -117,7 +122,7 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
   const [sending, setSending] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
   const [ordersRailToken, setOrdersRailToken] = useState(0);
-  const [railOpen, setRailOpen] = useState(false); // collapsed by default per spec
+  const [railOpen, setRailOpen] = useState(props.initialRailOpen ?? false);
   const [selectedCartIdx, setSelectedCartIdx] = useState<number | null>(null);
 
   // Stable per-action idempotency keys. Generated once when the cashier

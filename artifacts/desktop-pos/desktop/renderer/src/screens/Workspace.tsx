@@ -581,7 +581,17 @@ export function WorkspaceScreen(props: Props) {
         display: "flex", flexDirection: "column", minHeight: 0,
       }}>
         {(active === "pos" || active === "orders") ? (
-          <OrderWorkspace handoff={handoff} onHandoffConsumed={() => setHandoff(null)} />
+          // POS = blank slate for a new order (rail collapsed for max menu
+          // space). Orders = manage existing tickets (rail expanded so the
+          // cashier sees every live order on arrival). Same workspace, two
+          // entry modes — keyed so React fully remounts and the rail
+          // state actually flips when the cashier switches nav.
+          <OrderWorkspace
+            key={active}
+            handoff={handoff}
+            onHandoffConsumed={() => setHandoff(null)}
+            initialRailOpen={active === "orders"}
+          />
         ) : active === "tables" ? (
           <TablesScreen onOpenTable={(table, orderId) => openInOrders({ kind: "table", tableId: table.id, orderId })} />
         ) : active === "kitchen" ? (
