@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 
 interface Item {
@@ -48,6 +49,9 @@ export default function MoreScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 10 }}>
+        <View style={{ marginHorizontal: -16 }}>
+          <MyShiftPanel />
+        </View>
         {items.map((it) => (
           <Pressable
             key={it.label}

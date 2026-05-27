@@ -6,6 +6,7 @@ import { useTheme } from "@/theme";
 import {
   AppText, AppIcon, type AppIconName, ConfirmationModal,
 } from "@/components/ui";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABEL } from "@/lib/roles";
 
@@ -66,6 +67,10 @@ export default function WaiterMoreScreen() {
         }}
       >
         <AppText variant="h2" weight="bold">More</AppText>
+
+        <View style={{ marginHorizontal: -16 }}>
+          <MyShiftPanel />
+        </View>
 
         {user ? (
           <View style={{

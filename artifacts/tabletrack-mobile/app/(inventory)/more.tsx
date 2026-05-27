@@ -6,6 +6,7 @@ import {
   AppCard, AppText, AppIcon, AppButton, type AppIconName, ConfirmationModal,
 } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABEL } from "@/lib/roles";
 
@@ -48,6 +49,10 @@ export default function InventoryMore() {
             </View>
           </View>
         </AppCard>
+
+        <View style={{ marginHorizontal: -16 }}>
+          <MyShiftPanel />
+        </View>
 
         <AppCard padding={0}>
           {rows.map((r, i) => (

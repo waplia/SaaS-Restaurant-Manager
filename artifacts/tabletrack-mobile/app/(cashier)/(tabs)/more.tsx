@@ -8,6 +8,7 @@ import {
 import { RoleShellHeader } from "@/components/RoleShellHeader";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { DeviceStatusStrip } from "@/components/cashier/DeviceStatusStrip";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 
 interface Item {
@@ -84,6 +85,10 @@ export default function CashierMoreScreen() {
             </View>
           </View>
         </AppCard>
+
+        <View style={{ marginHorizontal: -12 }}>
+          <MyShiftPanel />
+        </View>
 
         {items.filter((i) => i.show !== false).map((item) => (
           <Pressable

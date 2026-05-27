@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useTheme } from "@/theme";
 import { useAuth } from "@/context/AuthContext";
 import { RoleShellScreen } from "@/components/RoleShellScreen";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { ROLE_LABEL } from "@/lib/roles";
 import {
   AppText, AppCard, AppIcon, ConfirmationModal,
@@ -66,6 +67,10 @@ export default function MarketingMoreScreen() {
           </View>
         </AppCard>
       ) : null}
+
+      <View style={{ marginHorizontal: -16 }}>
+        <MyShiftPanel />
+      </View>
 
       {items.filter(i => i.show !== false).map(item => (
         <Pressable

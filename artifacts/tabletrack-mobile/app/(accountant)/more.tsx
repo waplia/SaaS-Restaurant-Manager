@@ -1,13 +1,18 @@
 import React from "react";
 import { router } from "expo-router";
+import { View } from "react-native";
 import { RoleShellScreen } from "@/components/RoleShellScreen";
 import { RoleHomeCard, AppText } from "@/components/ui";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { useAuth } from "@/context/AuthContext";
 
 export default function AccountantMoreScreen() {
   const { user } = useAuth();
   return (
     <RoleShellScreen title="More" subtitle={user?.name ?? "Accountant"}>
+      <View style={{ marginHorizontal: -16 }}>
+        <MyShiftPanel />
+      </View>
       <AppText variant="h3">Money flows</AppText>
       <RoleHomeCard
         icon="business-outline"

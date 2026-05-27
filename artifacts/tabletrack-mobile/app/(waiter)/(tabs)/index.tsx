@@ -12,7 +12,6 @@ import type { FloorTable } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { TableCard } from "@/components/TableCard";
 import { EmptyState } from "@/components/EmptyState";
-import { MyShiftPanel } from "@/components/MyShiftPanel";
 import { GuestVerificationSheet } from "@/components/GuestVerificationSheet";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -107,8 +106,6 @@ export default function TablesScreen() {
           })()}
         </Text>
       </View>
-
-      <MyShiftPanel />
 
       {tableList.length > 0 ? (
         <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>

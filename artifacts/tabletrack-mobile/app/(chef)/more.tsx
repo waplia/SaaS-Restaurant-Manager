@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import { useChefColors } from "@/hooks/useChefColors";
 import { useAuth } from "@/context/AuthContext";
 import { useKitchensList } from "@/hooks/useKdsTickets";
+import { MyShiftPanel } from "@/components/MyShiftPanel";
 
 interface Row {
   icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -67,6 +68,10 @@ export default function ChefMoreScreen() {
             </View>
           ) : null}
         </View>
+      </View>
+
+      <View style={{ marginHorizontal: -16 }}>
+        <MyShiftPanel />
       </View>
 
       <View style={[styles.list, { backgroundColor: colors.card, borderColor: colors.border }]}>
