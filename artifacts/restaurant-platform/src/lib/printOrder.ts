@@ -1,3 +1,5 @@
+import { formatOrderNumber } from "@/lib/utils";
+
 export type PrintSize = "thermal-58mm" | "thermal-80mm" | "a5";
 
 /** Modes for when the Scan-to-Pay UPI QR block is included on the bill.
@@ -479,7 +481,12 @@ export function buildUpiPaymentUrl(opts: {
   orderNumber: string;
   noteFormat?: string | null;
 }): string {
-  const note = (opts.noteFormat || "Bill {orderNumber}").replace("{orderNumber}", opts.orderNumber);
+  // Strip any leading-zero padding so the UPI payment note (which is what
+  // the customer sees in their UPI app) reads "Bill DN-13", not "Bill DN-000013".
+  const note = (opts.noteFormat || "Bill {orderNumber}").replace(
+    "{orderNumber}",
+    formatOrderNumber(opts.orderNumber),
+  );
   const amt = (Number.isFinite(opts.amount) ? opts.amount : 0).toFixed(2);
   const params = new URLSearchParams({
     pa: opts.upiId,

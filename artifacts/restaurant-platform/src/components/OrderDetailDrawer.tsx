@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatOrderNumber } from "@/lib/utils";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
 import type { KitchenTicket } from "@/lib/types";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
@@ -212,7 +212,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
           <>
             <SheetHeader className="px-6 pt-6 pb-4 border-b border-border space-y-2">
               <div className="flex items-center gap-2">
-                <SheetTitle className="text-base">{order.orderNumber}</SheetTitle>
+                <SheetTitle className="text-base">{formatOrderNumber(order.orderNumber)}</SheetTitle>
                 {order.isPriority && <AlertTriangle className="w-4 h-4 text-orange-500" />}
                 <span className={cn("ml-auto text-xs font-medium px-2 py-1 rounded-full capitalize", STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600")}>
                   {order.status}

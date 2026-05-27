@@ -10,6 +10,7 @@ import {
   suppliersTable,
 } from "../db";
 import type { AccountingDataset } from "../db";
+import { formatOrderNumber } from "../orderNumber";
 
 export interface DatasetRow {
   /** ISO date (YYYY-MM-DD) used for the voucher / journal date. */
@@ -107,7 +108,7 @@ async function buildSalesDataset({ restaurantId, dateFrom, dateTo }: BuildDatase
     const description = orderItems
       .map((it) => `${it.quantity}× ${it.menuItemName}`)
       .join(", ")
-      .slice(0, 500) || `Order ${o.orderNumber}`;
+      .slice(0, 500) || `Order ${formatOrderNumber(o.orderNumber)}`;
     const subtotal = num(o.subtotal);
     const tax = num(o.taxAmount);
     const total = num(o.totalAmount);

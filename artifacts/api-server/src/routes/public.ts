@@ -53,6 +53,7 @@ import { webPushLogsTable } from "../lib/db";
 import { markLogClicked } from "../lib/webPush";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
 import { mintOrderNumbers } from "../lib/orderNumbers";
+import { formatOrderNumber } from "../lib/orderNumber";
 
 const router = Router();
 
@@ -806,7 +807,7 @@ router.post("/public/orders", async (req, res) => {
       await db.insert(notificationsTable).values({
         restaurantId, type: "guest_verification",
         title: "Guest verification needed",
-        message: `Table ordered via QR — accept to fire to kitchen. Order: ${order.orderNumber}`,
+        message: `Table ordered via QR — accept to fire to kitchen. Order: ${formatOrderNumber(order.orderNumber)}`,
         entityId: order.id, entityType: "order",
       });
       broadcastEvent(restaurantId, "notification:new", { type: "guest_verification" });
@@ -816,7 +817,7 @@ router.post("/public/orders", async (req, res) => {
         await pushToStaff(
           { restaurantId, roles: ["waiter", "manager", "owner"], type: "guest_verification" },
           {
-            title: `Guest needs verification · Table order #${order.orderNumber}`,
+            title: `Guest needs verification · Table order #${formatOrderNumber(order.orderNumber)}`,
             body: `Tap to accept and fire to kitchen.`,
             data: { orderId: order.id, tableId, type: "guest_verification", screen: "tables" },
           },
@@ -825,7 +826,7 @@ router.post("/public/orders", async (req, res) => {
         logger.error?.({ err, orderId: order.id }, "Guest verification push failed");
       }
     } else {
-      await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${order.orderNumber}` });
+      await db.insert(notificationsTable).values({ restaurantId, type: "new_order", title: "New QR Order", message: `QR order from table. Order: ${formatOrderNumber(order.orderNumber)}` });
       broadcastEvent(restaurantId, "notification:new", { type: "new_order" });
       // Fire push to staff so phones light up even when the app is backgrounded.
       try {
@@ -833,7 +834,7 @@ router.post("/public/orders", async (req, res) => {
         await pushToStaff(
           { restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
           {
-            title: `New QR Order · #${order.orderNumber}`,
+            title: `New QR Order · #${formatOrderNumber(order.orderNumber)}`,
             body: `Guest placed an order from a table.`,
             data: { orderId: order.id, type: "new_order", screen: "kitchen" },
           },
@@ -854,13 +855,13 @@ router.post("/public/orders", async (req, res) => {
       const [vipAlert] = await db.insert(vipAlertsTable).values({
         restaurantId, customerId: resolvedCustomerRow.id, orderId: order.id,
         trigger: "order_placed",
-        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${order.orderNumber}`,
+        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${formatOrderNumber(order.orderNumber)}`,
         channelsNotified: ["notification"],
       }).returning();
       await db.insert(notificationsTable).values({
         restaurantId, type: "vip_alert",
         title: `VIP guest arrived: ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? "Customer"}`,
-        message: `Order #${order.orderNumber} — give white-glove service`,
+        message: `Order #${formatOrderNumber(order.orderNumber)} — give white-glove service`,
         entityId: vipAlert.id, entityType: "vip_alert",
       });
     } catch (err) {
@@ -906,10 +907,13 @@ router.post("/public/orders", async (req, res) => {
       const dispatchTo = toE164(normalizedCustomerPhone, restaurant.country) ?? normalizedCustomerPhone;
       const safeName = order.customerName ?? "there";
       const orderTotal = `₹${Number(order.totalAmount).toFixed(2)}`;
+      // Format once so the WhatsApp template variable AND the plain-text
+      // fallback both show "DN-13" instead of "DN-000013".
+      const displayOrderNumber = formatOrderNumber(order.orderNumber);
       const rendered = await renderRestaurantEventBody(restaurantId, "order.placed",
-        [safeName, order.orderNumber, restaurant.name, orderTotal]);
+        [safeName, displayOrderNumber, restaurant.name, orderTotal]);
       const body = rendered
-        ?? `Hi ${safeName}, your order #${order.orderNumber} at ${restaurant.name} is received. Total: ${orderTotal}. We'll notify you once it's ready. Thank you!`;
+        ?? `Hi ${safeName}, your order #${displayOrderNumber} at ${restaurant.name} is received. Total: ${orderTotal}. We'll notify you once it's ready. Thank you!`;
       sendWhatsApp({
         to: dispatchTo,
         body,
@@ -1040,7 +1044,7 @@ router.post("/public/orders/:orderId/arrive", async (req, res) => {
     await db.insert(notificationsTable).values({
       restaurantId: order.restaurantId,
       type: "curbside_arrival",
-      title: `Curbside arrival: ${order.orderNumber}`,
+      title: `Curbside arrival: ${formatOrderNumber(order.orderNumber)}`,
       message: `${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}`.trim(),
       entityId: order.id, entityType: "order",
     });
@@ -1052,7 +1056,7 @@ router.post("/public/orders/:orderId/arrive", async (req, res) => {
     await pushToStaff(
       { restaurantId: order.restaurantId, roles: ["waiter", "manager", "owner", "cashier"], type: "new_order" },
       {
-        title: `Curbside guest arrived · ${order.orderNumber}`,
+        title: `Curbside guest arrived · ${formatOrderNumber(order.orderNumber)}`,
         body: `${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${updated.parkingSpot ? ` at spot ${updated.parkingSpot}` : ""}`.trim(),
         data: { orderId: order.id, kind: "curbside_arrival" },
       },
@@ -1064,7 +1068,7 @@ router.post("/public/orders/:orderId/arrive", async (req, res) => {
     const { sendWhatsApp, sendSms } = await import("../lib/notifications");
     const [r] = await db.select({ phone: restaurantsTable.phone, country: restaurantsTable.country })
       .from(restaurantsTable).where(eq(restaurantsTable.id, order.restaurantId));
-    const body = `🚗 Curbside arrival for #${order.orderNumber}. ${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}.`.trim();
+    const body = `🚗 Curbside arrival for #${formatOrderNumber(order.orderNumber)}. ${order.vehicleColor ?? ""} ${order.vehicleModel ?? ""}${order.vehicleNumber ? ` (${order.vehicleNumber})` : ""}${updated.parkingSpot ? ` · Spot ${updated.parkingSpot}` : ""}.`.trim();
     // Convert to E.164 (no spaces) so Twilio / WhatsApp accept the recipient.
     const dispatchTo = r?.phone ? (toE164(r.phone, r.country) ?? r.phone) : null;
     if (dispatchTo) {
@@ -1423,7 +1427,7 @@ router.post("/public/orders/:id/payment-intent", async (req, res) => {
       const returnUrl = `${baseUrl}${webBase}/menu/${restaurant?.slug ?? ""}/${order.tableId ?? ""}`;
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
-        line_items: [{ price_data: { currency, product_data: { name: `Order ${order.orderNumber}` }, unit_amount: amountSmallestUnit }, quantity: 1 }],
+        line_items: [{ price_data: { currency, product_data: { name: `Order ${formatOrderNumber(order.orderNumber)}` }, unit_amount: amountSmallestUnit }, quantity: 1 }],
         success_url: `${returnUrl}?order=${orderId}&token=${token}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: returnUrl,
         metadata: { orderId: String(orderId) },
@@ -1529,7 +1533,7 @@ router.post("/public/orders/:id/pay", async (req, res) => {
       const to = toE164(phone, restaurant?.country ?? null) ?? phone;
       const name = updated.customerName ?? order.customerName ?? "there";
       const total = Number(updated.totalAmount ?? order.totalAmount).toFixed(2);
-      const orderNumber = updated.orderNumber ?? order.orderNumber;
+      const orderNumber = formatOrderNumber(updated.orderNumber ?? order.orderNumber);
       const restName = restaurant?.name ?? "our restaurant";
       const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
       const rendered = await renderRestaurantEventBody(order.restaurantId, "order.confirmed",
@@ -2569,7 +2573,7 @@ router.post("/public/feedback", async (req, res) => {
   }
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, Number(orderId)));
   if (order) {
-    await db.insert(notificationsTable).values({ restaurantId: order.restaurantId, type: "feedback", title: `${rating}/5 Rating`, message: comment ?? `Customer gave ${rating} stars for order ${order.orderNumber}` });
+    await db.insert(notificationsTable).values({ restaurantId: order.restaurantId, type: "feedback", title: `${rating}/5 Rating`, message: comment ?? `Customer gave ${rating} stars for order ${formatOrderNumber(order.orderNumber)}` });
   }
   res.status(201).json({ success: true });
 });

@@ -13,6 +13,7 @@ import { RoleShellHeader } from "@/components/RoleShellHeader";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { DeviceStatusStrip } from "@/components/cashier/DeviceStatusStrip";
 import { useAuth } from "@/context/AuthContext";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 // Cashier counter queue. The previous filter (`status: "served,ready,delivered"`)
 // was a no-op because `orders.status` never holds any of those values — those
@@ -132,7 +133,7 @@ export default function CashierPaymentsScreen() {
               <AppCard padding={14} shadow="xs" style={{ gap: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                   <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                    <AppText variant="bodyMd" weight="semibold" numberOfLines={1}>#{o.orderNumber}</AppText>
+                    <AppText variant="bodyMd" weight="semibold" numberOfLines={1}>#{formatOrderNumber(o.orderNumber)}</AppText>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <StatusChip
                         label={(o.orderType ?? "order").replace("_", " ")}

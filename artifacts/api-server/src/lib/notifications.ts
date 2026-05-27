@@ -216,6 +216,8 @@ export async function sendPush(opts: {
   }
 }
 
+import { formatOrderNumber } from "./orderNumber";
+
 // ─── Builder helpers ──────────────────────────────────────────────
 // These wrap their body content in the shared `premiumLayout()` so even the
 // legacy call sites that still hand-build emails inherit the KhanaLagao card
@@ -229,16 +231,19 @@ export function orderConfirmationEmail(opts: {
   items: string[];
   total: string;
 }): { subject: string; html: string; text: string } {
-  const subject = `Order Confirmed — ${opts.orderNumber} at ${opts.restaurantName}`;
+  // Strip any leading-zero padding from the order number so customers see
+  // "Order DN-13" instead of "Order DN-000013" in confirmation emails.
+  const displayNumber = formatOrderNumber(opts.orderNumber);
+  const subject = `Order Confirmed — ${displayNumber} at ${opts.restaurantName}`;
   const itemList = opts.items.map(i => `<li>${i}</li>`).join("");
   return {
     subject,
-    text: `Hi ${opts.customerName}, your order ${opts.orderNumber} has been confirmed. Total: ₹${opts.total}`,
+    text: `Hi ${opts.customerName}, your order ${displayNumber} has been confirmed. Total: ₹${opts.total}`,
     html: premiumLayout({
-      preheader: `Order #${opts.orderNumber} at ${opts.restaurantName}`,
+      preheader: `Order #${displayNumber} at ${opts.restaurantName}`,
       heading: "Order confirmed",
       intro: `Hi <strong>${opts.customerName}</strong>, your order at <strong>${opts.restaurantName}</strong> is confirmed.`,
-      bodyHtml: `<p style="margin:0 0 8px 0"><strong>Order #${opts.orderNumber}</strong></p><ul>${itemList}</ul><p style="margin:8px 0 0 0;font-size:16px"><strong>Total: ₹${opts.total}</strong></p>`,
+      bodyHtml: `<p style="margin:0 0 8px 0"><strong>Order #${displayNumber}</strong></p><ul>${itemList}</ul><p style="margin:8px 0 0 0;font-size:16px"><strong>Total: ₹${opts.total}</strong></p>`,
       appName: "Khana Lagao",
     }),
   };

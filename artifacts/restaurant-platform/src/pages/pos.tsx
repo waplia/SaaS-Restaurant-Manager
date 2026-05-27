@@ -18,7 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/PhoneInput";
-import { cn } from "@/lib/utils";
+import { cn, formatOrderNumber } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { FloorTable, MenuItem, MenuCategory, Order, PosModifierGroup, OrderDetail, OrderItem, TipPolicy, Customer } from "@/lib/types";
 import { resolveImageUrl } from "@/components/ImageUploadField";
@@ -1724,7 +1724,7 @@ export default function PosPage() {
       }
       const order = result as OrderDetail;
       setPlacedOrder(order);
-      toast({ title: `Order ${order.orderNumber} placed!`, description: "Kitchen has been notified." });
+      toast({ title: `Order ${formatOrderNumber(order.orderNumber)} placed!`, description: "Kitchen has been notified." });
       return order;
     } catch {
       toast({ title: "Failed to place order", variant: "destructive" });
@@ -1761,7 +1761,7 @@ export default function PosPage() {
       unitPrice: Number(oi.unitPrice),
       quantity: oi.quantity,
     })));
-    toast({ title: `Order ${order.orderNumber} placed via voice`, description: "Kitchen has been notified." });
+    toast({ title: `Order ${formatOrderNumber(order.orderNumber)} placed via voice`, description: "Kitchen has been notified." });
   };
 
   const handlePayNow = async () => {
@@ -1789,10 +1789,10 @@ export default function PosPage() {
       tipAmount: details?.tipAmount,
     });
     if (isOfflineQueuedResult(result)) {
-      toast({ title: "Payment saved offline", description: `${placedOrder?.orderNumber} will be settled when you reconnect.` });
+      toast({ title: "Payment saved offline", description: `${formatOrderNumber(placedOrder?.orderNumber)} will be settled when you reconnect.` });
       playPosSound("success");
     } else {
-      toast({ title: "Payment confirmed!", description: `${placedOrder?.orderNumber} marked as paid.` });
+      toast({ title: "Payment confirmed!", description: `${formatOrderNumber(placedOrder?.orderNumber)} marked as paid.` });
       playPosSound("success");
     }
     setShowPayModal(false);
@@ -1819,7 +1819,7 @@ export default function PosPage() {
     setShowPayModal(false);
     toast({
       title: "Terminal payment confirmed",
-      description: `${placedOrder?.orderNumber ?? "Order"} marked as paid${info.receiptUrl ? " — receipt available" : ""}.`,
+      description: `${placedOrder?.orderNumber ? formatOrderNumber(placedOrder.orderNumber) : "Order"} marked as paid${info.receiptUrl ? " — receipt available" : ""}.`,
     });
     playPosSound("success");
     const receiptItems = placedOrder

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { useTheme } from "@/theme";
 import { useAuth } from "@/context/AuthContext";
+import { formatOrderNumber } from "@/lib/orderNumber";
 import {
   useActiveRunningOrder,
   useGenerateBill,
@@ -393,7 +394,7 @@ export default function RunningOrderScreen() {
     <AppScreen>
       <AppHeader
         title={tableLabel}
-        subtitle={`Order #${order.orderNumber} · ${elapsed}m${partySize ? ` · ${partySize} guests` : ""}${customerName ? ` · ${customerName}` : ""}`}
+        subtitle={`Order #${formatOrderNumber(order.orderNumber)} · ${elapsed}m${partySize ? ` · ${partySize} guests` : ""}${customerName ? ` · ${customerName}` : ""}`}
         showBack
         right={
           <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>

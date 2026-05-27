@@ -3,6 +3,7 @@ import type { Server as HTTPServer } from "http";
 import { verifyToken } from "./auth";
 import { validateGuestToken } from "./guestToken";
 import { sendWebPushToOrder } from "./webPush";
+import { formatOrderNumber } from "./orderNumber";
 
 interface SocketUser {
   restaurantId?: number;
@@ -128,7 +129,7 @@ export function broadcastOrderUpdate(orderId: number, data: unknown): void {
     };
     if (status && titleByStatus[status]) {
       const title = titleByStatus[status];
-      const body = orderNumber ? `Order ${orderNumber}: ${status}` : `Status: ${status}`;
+      const body = orderNumber ? `Order ${formatOrderNumber(orderNumber)}: ${status}` : `Status: ${status}`;
       void sendWebPushToOrder(orderId, { title, body, data: { orderId, status } });
     }
   }

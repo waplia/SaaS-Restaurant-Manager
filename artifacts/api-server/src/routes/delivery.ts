@@ -14,6 +14,7 @@ import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { broadcastEvent } from "../lib/socketio";
 import { sendPush } from "../lib/notifications";
+import { formatOrderNumber } from "../lib/orderNumber";
 
 const router = Router();
 
@@ -104,7 +105,7 @@ router.post("/restaurants/:restaurantId/delivery/assign", requireRole(...DELIVER
     restaurantId,
     type: "delivery_assigned",
     title: "Delivery assigned",
-    message: `Order #${order.orderNumber} assigned to ${rider.name}`,
+    message: `Order #${formatOrderNumber(order.orderNumber)} assigned to ${rider.name}`,
     entityId: orderId,
     entityType: "order",
   }).catch(() => {});
@@ -115,7 +116,7 @@ router.post("/restaurants/:restaurantId/delivery/assign", requireRole(...DELIVER
     sendPush({
       to: rider.pushToken,
       title: "New delivery assigned",
-      body: `Order #${order.orderNumber} • ₹${Number(order.totalAmount).toFixed(2)}${codAmount !== "0.00" ? ` • COD ₹${codAmount}` : ""}`,
+      body: `Order #${formatOrderNumber(order.orderNumber)} • ₹${Number(order.totalAmount).toFixed(2)}${codAmount !== "0.00" ? ` • COD ₹${codAmount}` : ""}`,
       data: { type: "delivery_assigned", orderId, assignmentId: assignment.id },
     }).catch(() => {});
   }

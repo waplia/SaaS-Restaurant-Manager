@@ -7,6 +7,7 @@ import { recordAuditLog } from "../lib/audit";
 import { toE164 } from "@workspace/phone-utils";
 import { triggerAutoPost } from "./accounting-books";
 import { mintOrderNumbers } from "../lib/orderNumbers";
+import { formatOrderNumber } from "../lib/orderNumber";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
 // side effects so plans without the entitlement see no behavior change).
@@ -168,7 +169,7 @@ async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, r
     const pointsEarned = computeEarnedPoints(earnableAmount, cfg, tier);
     if (pointsEarned > 0) {
       const expiresAt = computeExpiryDate(cfg);
-      txns.push({ customerId, restaurantId, points: pointsEarned, type: "earn", reason: `Order #${paidOrder.orderNumber}${tier.multiplier && tier.multiplier !== 1 ? ` (${tier.name} ×${tier.multiplier})` : ""}`, orderId: paidOrder.id, expiresAt });
+      txns.push({ customerId, restaurantId, points: pointsEarned, type: "earn", reason: `Order #${formatOrderNumber(paidOrder.orderNumber)}${tier.multiplier && tier.multiplier !== 1 ? ` (${tier.name} ×${tier.multiplier})` : ""}`, orderId: paidOrder.id, expiresAt });
       balanceDelta += pointsEarned;
     }
   }
@@ -176,7 +177,7 @@ async function earnLoyaltyForOrder(paidOrder: typeof ordersTable.$inferSelect, r
   if (pointsRedeemed > 0) {
     const deduct = Math.min(pointsRedeemed, customer.loyaltyPoints + balanceDelta);
     if (deduct > 0) {
-      txns.push({ customerId, restaurantId, points: -deduct, type: "redeem", reason: `Redeemed for order #${paidOrder.orderNumber}`, orderId: paidOrder.id });
+      txns.push({ customerId, restaurantId, points: -deduct, type: "redeem", reason: `Redeemed for order #${formatOrderNumber(paidOrder.orderNumber)}`, orderId: paidOrder.id });
       balanceDelta -= deduct;
     }
   }
@@ -232,7 +233,7 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
     const itemList = `<ul>${itemStrings.map(i => `<li>${i}</li>`).join("")}</ul>`;
     sendByTemplateKey("customer_order_confirmation", customer.email, {
       name: customer.name,
-      orderNumber: paidOrder.orderNumber,
+      orderNumber: formatOrderNumber(paidOrder.orderNumber),
       restaurant: restaurant?.name ?? "Restaurant",
       currency: "INR",
       amount: Number(paidOrder.totalAmount).toFixed(2),
@@ -245,10 +246,11 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
     const total = Number(paidOrder.totalAmount).toFixed(2);
     const restName = restaurant?.name ?? "our restaurant";
     const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
+    const displayOrderNumber = formatOrderNumber(paidOrder.orderNumber);
     const rendered = await renderRestaurantEventBody(restaurantId, "order.confirmed",
-      [safeName, paidOrder.orderNumber, restName, `₹${total}`, ""]);
+      [safeName, displayOrderNumber, restName, `₹${total}`, ""]);
     const msg = rendered
-      ?? `Hi ${safeName}, your order #${paidOrder.orderNumber} at ${restName} is confirmed. Total: ₹${total}. Thank you!`;
+      ?? `Hi ${safeName}, your order #${displayOrderNumber} at ${restName} is confirmed. Total: ₹${total}. Thank you!`;
     // Normalize to strict E.164 so WhatsApp / SMS providers accept the recipient.
     const [rCountry] = await db.select({ country: restaurantsTable.country }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
     const to = toE164(customer.phone, rCountry?.country ?? null) ?? customer.phone;
@@ -259,7 +261,7 @@ async function sendOrderConfirmation(paidOrder: typeof ordersTable.$inferSelect,
       void sendLifecycleSms({
         tenantId: tenantRow.tenantId, restaurantId, to,
         eventKey: "customer_order_confirmation",
-        variables: { name: safeName, orderNumber: paidOrder.orderNumber, restaurant: restName, amount: total, currency: "INR" },
+        variables: { name: safeName, orderNumber: displayOrderNumber, restaurant: restName, amount: total, currency: "INR" },
       });
     }
   }
@@ -273,7 +275,7 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
         restaurantId,
         type: "system_error",
         title: "Inventory Deduction Failed",
-        message: `Auto-deduction failed for order #${paidOrder.orderNumber}. Please adjust stock manually.`,
+        message: `Auto-deduction failed for order #${formatOrderNumber(paidOrder.orderNumber)}. Please adjust stock manually.`,
         entityId: orderId,
         entityType: "order",
       }).catch(() => {});
@@ -1145,7 +1147,7 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     restaurantId,
     type: "new_order",
     title: "New Order",
-    message: `Order #${order.orderNumber} placed${order.customerName ? ` by ${order.customerName}` : ""}`,
+    message: `Order #${formatOrderNumber(order.orderNumber)} placed${order.customerName ? ` by ${order.customerName}` : ""}`,
     entityId: order.id,
     entityType: "order",
   }).catch(() => {});
@@ -1156,7 +1158,7 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
       { restaurantId, roles: ["kitchen"], type: "new_order", kitchenId: t.kitchenId },
       {
         title: "New kitchen order",
-        body: `Order #${order.orderNumber}${order.tableId ? ` • Table ${order.tableId}` : ""}`,
+        body: `Order #${formatOrderNumber(order.orderNumber)}${order.tableId ? ` • Table ${order.tableId}` : ""}`,
         data: { screen: "kitchen", orderId: order.id, ticketId: t.ticketId, kitchenId: t.kitchenId },
       },
     ).catch(() => {});
@@ -1171,14 +1173,14 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
         restaurantId, customerId: resolvedCustomerRow.id,
         orderId: order.id,
         trigger: "order_placed",
-        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${order.orderNumber}`,
+        reason: `VIP guest ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? ""} placed order #${formatOrderNumber(order.orderNumber)}`,
         channelsNotified: ["notification"],
       }).returning();
       await db.insert(notificationsTable).values({
         restaurantId,
         type: "vip_alert",
         title: `VIP guest arrived: ${resolvedCustomerRow.name ?? resolvedCustomerRow.phone ?? "Customer"}`,
-        message: `Order #${order.orderNumber} — give white-glove service`,
+        message: `Order #${formatOrderNumber(order.orderNumber)} — give white-glove service`,
         entityId: vipAlert.id,
         entityType: "vip_alert",
       });
@@ -2584,7 +2586,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
         await tx.insert(hotelFolioLinesTable).values({
           folioId: folio!.id, tenantId: restaurant.tenantId, restaurantId,
           kind: "charge", source: "f&b",
-          description: `Order #${u.orderNumber}`,
+          description: `Order #${formatOrderNumber(u.orderNumber)}`,
           amount: total.toFixed(2),
           refType: "order", refId: u.id,
           recordedByUserId: req.user?.sub ?? null,
@@ -2885,7 +2887,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
             poolId: openPool.id, restaurantId, userId: beneficiaryUserId,
             sharePct: "0", amountRupees: tipAmount.toFixed(2),
             sourceType: "order", sourceOrderId: u.id, tableId: u.tableId ?? null,
-            notes: `${paymentMethod} tip on order ${u.orderNumber}`,
+            notes: `${paymentMethod} tip on order ${formatOrderNumber(u.orderNumber)}`,
           });
           await tx.update(tipPoolsTable)
             .set({ totalRupees: sql`COALESCE(${tipPoolsTable.totalRupees}, 0) + ${tipAmount.toFixed(2)}` })
@@ -2924,7 +2926,7 @@ router.post("/restaurants/:restaurantId/orders/:id/pay", idempotency(), async (r
     sourceRef: `order:${updated.id}`,
     entryDate: new Date().toISOString().slice(0, 10),
     amount: Number(updated.totalAmount ?? 0),
-    memo: `POS sale ${updated.orderNumber}`,
+    memo: `POS sale ${formatOrderNumber(updated.orderNumber)}`,
     userId: (req.user?.sub ?? req.user?.id ?? null) as number | null,
   });
   // Service-timer: order has been billed (final stage).
@@ -3257,7 +3259,10 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
     if (custPhone && aggregateReady && !alreadySent) {
       const [rCountry] = await db.select({ country: restaurantsTable.country, name: restaurantsTable.name }).from(restaurantsTable).where(eq(restaurantsTable.id, restaurantId));
       const to = toE164(custPhone, rCountry?.country ?? null) ?? custPhone;
-      const orderNum = order?.orderNumber ?? String(updated.orderId);
+      // `orderNum` is consumed by both the WhatsApp template renderer and
+      // the plain-text fallback below — format here so guests never see
+      // "DN-000013" in either channel.
+      const orderNum = formatOrderNumber(order?.orderNumber ?? String(updated.orderId));
       const restName = rCountry?.name ?? "our restaurant";
       const { renderRestaurantEventBody } = await import("../lib/whatsappEventTemplate");
       const rendered = status === "preparing"
@@ -3283,7 +3288,7 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
         const { sendByTemplateKey } = await import("../lib/emailSender");
         sendByTemplateKey("order_ready", custEmail, {
           name: custName,
-          orderNumber: order.orderNumber,
+          orderNumber: formatOrderNumber(order.orderNumber),
           restaurant: restaurant?.name ?? "Restaurant",
           pickupNote: " for pickup",
         }, { restaurantId, recipientType: "customer" }).catch(console.error);
@@ -3298,7 +3303,7 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
         void sendLifecycleSms({
           tenantId: restaurant.tenantId, restaurantId, to: toSms,
           eventKey: "order_ready",
-          variables: { name: custName ?? "there", orderNumber: String(order?.orderNumber ?? updated.orderId), restaurant: restaurant?.name ?? "Restaurant", pickupNote: " for pickup" },
+          variables: { name: custName ?? "there", orderNumber: formatOrderNumber(String(order?.orderNumber ?? updated.orderId)), restaurant: restaurant?.name ?? "Restaurant", pickupNote: " for pickup" },
         });
       }
       // Browser/web-push notification — runs in parallel with WhatsApp and is
@@ -3312,9 +3317,9 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
         targetOrderId: updated.orderId,
         payload: {
           title: "Your order is ready!",
-          body: `Order #${order.orderNumber ?? updated.orderId} is ready for pickup.`,
+          body: `Order #${formatOrderNumber(order.orderNumber ?? updated.orderId)} is ready for pickup.`,
           url: `/orders/${updated.orderId}`,
-          data: { orderId: updated.orderId, type: "order_ready", orderNumber: String(order.orderNumber ?? updated.orderId), customerName: custName ?? "" },
+          data: { orderId: updated.orderId, type: "order_ready", orderNumber: formatOrderNumber(String(order.orderNumber ?? updated.orderId)), customerName: custName ?? "" },
         },
       }).catch((err) => console.warn("web-push order.ready failed", err));
     }
@@ -3929,7 +3934,7 @@ router.post(
         role: (req as any).user?.role ?? null,
         module: "orders", action: "guest_verification.accept",
         entity: "ORDER", entityId: orderId,
-        details: `Accepted guest verification for order ${order.orderNumber}`,
+        details: `Accepted guest verification for order ${formatOrderNumber(order.orderNumber)}`,
       });
     } catch (err) { void err; }
 
@@ -3988,7 +3993,7 @@ router.post(
         entity: "ORDER", entityId: orderId,
         oldValue: { status: order.status } as any,
         newValue: { status: "cancelled", reason } as any,
-        details: `Rejected guest verification for order ${order.orderNumber}: ${reason}`,
+        details: `Rejected guest verification for order ${formatOrderNumber(order.orderNumber)}: ${reason}`,
       });
       return cancelled;
     });

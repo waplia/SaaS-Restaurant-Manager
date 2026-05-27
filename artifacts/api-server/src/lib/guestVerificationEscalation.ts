@@ -18,6 +18,7 @@ import { db, kitchenTicketsTable, ordersTable, notificationsTable, restaurantSet
 import { broadcastEvent } from "./socketio";
 import { pushToStaff } from "./pushNotify";
 import { logger } from "./logger";
+import { formatOrderNumber } from "./orderNumber";
 
 const REPING_AT_MIN = 2;
 const ESCALATE_AT_MIN = 5;
@@ -217,7 +218,7 @@ export async function runGuestVerificationEscalation(now: Date): Promise<{ repin
         await pushToStaff(
           { restaurantId: r.restaurantId, roles: ["manager", "owner"], type: "guest_verification" },
           {
-            title: `Escalation · Guest still unverified · #${r.orderNumber}`,
+            title: `Escalation · Guest still unverified · #${formatOrderNumber(r.orderNumber)}`,
             body: `Held for ${ageWhole} min. Please verify the table or reject the order.`,
             data: { orderId: r.orderId, tableId: r.tableId, type: "guest_verification", screen: "tables", escalation: true },
           },
@@ -225,7 +226,7 @@ export async function runGuestVerificationEscalation(now: Date): Promise<{ repin
         await db.insert(notificationsTable).values({
           restaurantId: r.restaurantId, type: "guest_verification",
           title: `Escalation: guest unverified ${ageWhole}min`,
-          message: `Order #${r.orderNumber} still awaiting staff verification`,
+          message: `Order #${formatOrderNumber(r.orderNumber)} still awaiting staff verification`,
           entityId: r.orderId, entityType: "order",
         });
         broadcastEvent(r.restaurantId, "guest_verification:escalated", { orderId: r.orderId, tableId: r.tableId, ageMin: ageWhole });
@@ -234,7 +235,7 @@ export async function runGuestVerificationEscalation(now: Date): Promise<{ repin
         await pushToStaff(
           { restaurantId: r.restaurantId, roles: ["waiter", "manager", "owner"], type: "guest_verification" },
           {
-            title: `Reminder · Guest waiting · #${r.orderNumber}`,
+            title: `Reminder · Guest waiting · #${formatOrderNumber(r.orderNumber)}`,
             body: `Held for ${ageWhole} min. Accept to fire to kitchen.`,
             data: { orderId: r.orderId, tableId: r.tableId, type: "guest_verification", screen: "tables" },
           },

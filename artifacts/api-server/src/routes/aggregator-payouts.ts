@@ -47,6 +47,7 @@ import {
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { recordAuditLog } from "../lib/audit";
+import { formatOrderNumber } from "../lib/orderNumber";
 
 const router = Router();
 
@@ -338,7 +339,7 @@ async function runReconciliation(sheetId: number, restaurantId: number, tenantId
       expected: expectedNet,
       actual: 0,
       matchMethod: "none",
-      reason: `Order #${o.orderNumber} not present in payout sheet`,
+      reason: `Order #${formatOrderNumber(o.orderNumber)} not present in payout sheet`,
     });
   }
 

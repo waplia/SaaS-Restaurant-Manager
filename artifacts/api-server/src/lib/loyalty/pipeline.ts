@@ -13,6 +13,7 @@ import { maybeGrantMystery } from "./mystery";
 import { getPendingReferralForReferee, markReferralConverted } from "./referrals";
 import { resolveSharedCustomerId } from "./family";
 import { logAudit } from "./audit";
+import { formatOrderNumber } from "../orderNumber";
 
 function pickTier(lifetimePoints: number, cfg: Loyalty2Config) {
   const sorted = [...cfg.tiers].sort((a, b) => a.threshold - b.threshold);
@@ -93,7 +94,7 @@ export async function runOrderPaidPipeline(ctx: OrderPaidContext): Promise<void>
   if (pointsEarned > 0) {
     txns.push({
       customerId: sharedId, restaurantId, points: pointsEarned, type: "earn",
-      reason: `Order #${order.orderNumber}` +
+      reason: `Order #${formatOrderNumber(order.orderNumber)}` +
         (tierMult !== 1 ? ` · ${tier.name} ×${tierMult}` : "") +
         (dp.multiplier > 1 ? ` · ${dp.rule?.label ?? "Double pts"} ×${dp.multiplier}` : ""),
       orderId: order.id, expiresAt: computeExpiry(cfg),
@@ -106,7 +107,7 @@ export async function runOrderPaidPipeline(ctx: OrderPaidContext): Promise<void>
     if (debit > 0) {
       txns.push({
         customerId: sharedId, restaurantId, points: -debit, type: "redeem",
-        reason: `Redeemed for order #${order.orderNumber}`, orderId: order.id,
+        reason: `Redeemed for order #${formatOrderNumber(order.orderNumber)}`, orderId: order.id,
       });
       balanceDelta -= debit;
     }
@@ -148,7 +149,7 @@ export async function runOrderPaidPipeline(ctx: OrderPaidContext): Promise<void>
       if (cb > 0) {
         await creditCashback({
           restaurantId, customerId: sharedId, amount: cb,
-          reason: `Cashback for order #${order.orderNumber}`,
+          reason: `Cashback for order #${formatOrderNumber(order.orderNumber)}`,
           orderId: order.id, expiryDays: cfg.cashback.expiryDays,
         });
         await notify(restaurantId, "cashback_credited", `₹${cb.toFixed(2)} cashback credited`, sharedId);

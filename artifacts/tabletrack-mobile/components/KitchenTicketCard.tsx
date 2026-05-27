@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 interface TicketItemModifier {
   name: string;
@@ -58,7 +59,7 @@ export function KitchenTicketCard({
     ]}>
       <View style={styles.header}>
         <View>
-          <Text style={[styles.order, { color: colors.foreground }, showDelay && { color: "#7f1d1d" }]}>#{orderNumber}</Text>
+          <Text style={[styles.order, { color: colors.foreground }, showDelay && { color: "#7f1d1d" }]}>#{formatOrderNumber(orderNumber)}</Text>
           {tableLabel ? <Text style={[styles.table, { color: colors.mutedForeground }]}>{tableLabel}</Text> : null}
           {showDelay ? (
             <View style={styles.delayBadge}>

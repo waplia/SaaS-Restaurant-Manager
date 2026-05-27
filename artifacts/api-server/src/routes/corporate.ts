@@ -29,6 +29,7 @@ import { requireRole, STAFF_ROLES as AUTH_STAFF_ROLES } from "../middleware/auth
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { z } from "zod/v4";
 import crypto from "crypto";
+import { formatOrderNumber } from "../lib/orderNumber";
 
 const router = Router();
 
@@ -790,7 +791,7 @@ router.post("/restaurants/:restaurantId/corporate/companies/:companyId/generate-
     invoiceId: invoice.id,
     orderId: o.orderId,
     departmentId: o.departmentId,
-    description: `Order ${o.orderNumber}`,
+    description: `Order ${formatOrderNumber(o.orderNumber)}`,
     orderedAt: o.createdAt,
     amount: o.totalAmount,
   })));
