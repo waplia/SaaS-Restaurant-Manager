@@ -47,3 +47,21 @@ export type { AppModalProps } from "./AppModal";
 
 export { AppDropdown } from "./AppDropdown";
 export type { AppDropdownProps, DropdownOption } from "./AppDropdown";
+
+export { RoleHomeCard } from "./RoleHomeCard";
+export type { RoleHomeCardProps } from "./RoleHomeCard";
+
+export { QuickActionButton } from "./QuickActionButton";
+export type { QuickActionButtonProps } from "./QuickActionButton";
+
+export { StatusChip } from "./StatusChip";
+export type { StatusChipProps, StatusChipTone } from "./StatusChip";
+
+export { SwipeActionRow } from "./SwipeActionRow";
+export type { SwipeActionRowProps, SwipeAction } from "./SwipeActionRow";
+
+export { ConfirmationModal } from "./ConfirmationModal";
+export type { ConfirmationModalProps } from "./ConfirmationModal";
+
+export { FloatingActionButton } from "./FloatingActionButton";
+export type { FloatingActionButtonProps } from "./FloatingActionButton";

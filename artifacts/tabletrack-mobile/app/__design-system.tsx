@@ -16,6 +16,12 @@ import {
   AppBottomSheet,
   AppModal,
   AppIcon,
+  RoleHomeCard,
+  QuickActionButton,
+  StatusChip,
+  SwipeActionRow,
+  ConfirmationModal,
+  FloatingActionButton,
 } from "@/components/ui";
 import { useTheme } from "@/theme";
 
@@ -32,6 +38,7 @@ export default function DesignSystemScreen() {
   const [floor, setFloor] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <AppScreen scroll>
@@ -150,6 +157,93 @@ export default function DesignSystemScreen() {
             <AppSkeletonList rows={3} />
           </AppCard>
         </Section>
+
+        <Section title="Role home cards">
+          <View style={{ gap: t.spacing.sm }}>
+            <RoleHomeCard
+              eyebrow="Today"
+              icon="cash-outline"
+              title="Tickets to bill"
+              value="4"
+              subtitle="Served orders waiting for the cashier."
+              badge={{ label: "4", tone: "primary" }}
+              onPress={() => {}}
+            />
+            <RoleHomeCard
+              eyebrow="Action needed"
+              icon="cube-outline"
+              title="Low-stock items"
+              value="12"
+              subtitle="Items at or below their reorder level."
+              badge={{ label: "12", tone: "warning" }}
+              onPress={() => {}}
+            />
+          </View>
+        </Section>
+
+        <Section title="Quick actions">
+          <AppCard>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <QuickActionButton icon="receipt-outline" label="New order" onPress={() => {}} />
+              <QuickActionButton icon="flame-outline" label="Kitchen" onPress={() => {}} />
+              <QuickActionButton icon="cube-outline" label="Stock" onPress={() => {}} />
+              <QuickActionButton icon="megaphone-outline" label="Campaign" onPress={() => {}} />
+              <QuickActionButton icon="lock-closed-outline" label="Close shift" onPress={() => {}} disabled />
+            </View>
+          </AppCard>
+        </Section>
+
+        <Section title="Status chips">
+          <AppCard>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              <StatusChip label="Pending" tone="warning" />
+              <StatusChip label="Preparing" tone="info" />
+              <StatusChip label="Ready" tone="primary" />
+              <StatusChip label="Served" tone="success" />
+              <StatusChip label="Cancelled" tone="danger" />
+              <StatusChip label="Draft" tone="neutral" />
+            </View>
+          </AppCard>
+        </Section>
+
+        <Section title="Swipe action row">
+          <AppCard padding={0}>
+            <SwipeActionRow
+              rightAction={{ label: "Delete", icon: "trash-outline", onPress: () => {} }}
+              leftAction={{ label: "Archive", icon: "archive-outline", onPress: () => {} }}
+            >
+              <View style={{ padding: 14 }}>
+                <AppText variant="bodyMd" weight="semibold">Table 12 — Order #1042</AppText>
+                <AppText variant="small" color="mutedForeground">Swipe left to reveal actions</AppText>
+              </View>
+            </SwipeActionRow>
+          </AppCard>
+        </Section>
+
+        <Section title="Confirmation modal">
+          <AppCard>
+            <AppButton
+              label="Open confirmation"
+              variant="outline"
+              fullWidth
+              onPress={() => setConfirmOpen(true)}
+            />
+          </AppCard>
+        </Section>
+
+        <Section title="Floating action button">
+          <AppCard padding={0}>
+            <View style={{ height: 120 }}>
+              <FloatingActionButton
+                icon="add"
+                label="New order"
+                onPress={() => {}}
+                placement="right"
+                bottomOffset={16}
+              />
+            </View>
+          </AppCard>
+        </Section>
       </View>
 
       <AppBottomSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} title="Bottom sheet">
@@ -159,6 +253,16 @@ export default function DesignSystemScreen() {
         </AppText>
         <AppButton label="Dismiss" fullWidth onPress={() => setSheetOpen(false)} />
       </AppBottomSheet>
+
+      <ConfirmationModal
+        visible={confirmOpen}
+        title="Delete this draft?"
+        message="The order draft and all unsynced items will be removed. This can't be undone."
+        confirmLabel="Delete"
+        tone="destructive"
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => setConfirmOpen(false)}
+      />
 
       <AppModal visible={modalOpen} onClose={() => setModalOpen(false)} title="Are you sure?">
         <AppText variant="body" color="mutedForeground">

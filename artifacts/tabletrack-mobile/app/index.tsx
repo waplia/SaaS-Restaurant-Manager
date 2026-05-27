@@ -5,10 +5,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { roleHomePath } from "@/lib/roles";
 import { hasSeenIntro } from "./intro";
+import { OUTLET_SELECTION_VERSION_KEY } from "@/lib/outletGate";
+import * as SecureStorage from "@/lib/secureStorage";
 
 export default function IndexScreen() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, activeRole, outlets, outletScopeId } = useAuth();
   const colors = useColors();
+  const [outletGateChecked, setOutletGateChecked] = useState(false);
+  const [needsOutletPick, setNeedsOutletPick] = useState(false);
 
   // Async lookup of the intro-seen flag for the current user. While we wait
   // we render the splash so we never flash the dashboard before the intro
@@ -19,7 +23,7 @@ export default function IndexScreen() {
   const [needsIntro, setNeedsIntro] = useState(false);
 
   const userId = user?.id ?? null;
-  const role = user?.role ?? null;
+  const role = activeRole ?? user?.role ?? null;
 
   useEffect(() => {
     if (isLoading) return;
@@ -43,7 +47,24 @@ export default function IndexScreen() {
     return () => { cancelled = true; };
   }, [user, userId, role, isLoading]);
 
-  if (isLoading || !introChecked) {
+  // First-launch outlet picker gate: any user with more than one outlet
+  // must pick one before they can land on a role home. We remember the
+  // pick by stamping `OUTLET_SELECTION_VERSION_KEY:<userId>` once an
+  // outlet is chosen (either here or via the header switcher).
+  useEffect(() => {
+    if (isLoading || !user) { setOutletGateChecked(true); return; }
+    if (outlets.length <= 1) { setOutletGateChecked(true); setNeedsOutletPick(false); return; }
+    if (outletScopeId != null) { setOutletGateChecked(true); setNeedsOutletPick(false); return; }
+    let cancelled = false;
+    void SecureStorage.getItem(`${OUTLET_SELECTION_VERSION_KEY}:${user.id}`).then((stamp) => {
+      if (cancelled) return;
+      setNeedsOutletPick(!stamp);
+      setOutletGateChecked(true);
+    });
+    return () => { cancelled = true; };
+  }, [isLoading, user, outlets.length, outletScopeId]);
+
+  if (isLoading || !introChecked || !outletGateChecked) {
     return (
       <View style={[styles.root, { backgroundColor: "#ffffff" }]}>
         <Image
@@ -71,7 +92,11 @@ export default function IndexScreen() {
     return <Redirect href="/intro" />;
   }
 
-  return <Redirect href={roleHomePath(user.role) as never} />;
+  if (needsOutletPick) {
+    return <Redirect href="/outlet-select" />;
+  }
+
+  return <Redirect href={roleHomePath(role) as never} />;
 }
 
 const styles = StyleSheet.create({

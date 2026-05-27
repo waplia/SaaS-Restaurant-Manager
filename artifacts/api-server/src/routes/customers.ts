@@ -14,10 +14,89 @@ import {
 import { normalizePhone, DEFAULT_ISO } from "@workspace/phone-utils";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { effectiveNotificationTypes } from "../lib/roleNotifications";
 import { recordAuditLog } from "../lib/audit";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+// ─── Role-shared notifications sub-router ──────────────────────────────────
+// Mounted BEFORE the customers-wide guard so chef/cashier/inventory/
+// marketing/accountant/delivery roles (which can't access customer
+// records) can still read and mark-read their role-filtered inbox.
+// Each route declares its own `requireRole` allow-list.
+export const notificationsRouter = Router();
+
+notificationsRouter.get(
+  "/restaurants/:restaurantId/notifications",
+  requireRole(
+    "owner", "manager", "waiter", "captain", "cashier", "chef", "kitchen",
+    "inventory_manager", "marketing", "accountant", "payroll", "hr",
+    "delivery_executive", "super_admin",
+  ),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const { unreadOnly, types, limit } = req.query;
+    const restaurantId = Number(req.params.restaurantId);
+    const conditions: Array<ReturnType<typeof eq> | ReturnType<typeof inArray>> = [
+      eq(notificationsTable.restaurantId, restaurantId),
+    ];
+    if (unreadOnly === "true") conditions.push(eq(notificationsTable.isRead, false));
+
+    // ── Security: derive the allowed `notifications.type` set from the
+    // authenticated role and intersect with any client-requested types.
+    // The client `types=` param is UX-only (and optional); it can NEVER
+    // broaden access beyond the role's allow-list. Owners / managers /
+    // super_admins see every category.
+    const requested = typeof types === "string" && types.trim().length > 0
+      ? types.split(",").map((s) => s.trim()).filter(Boolean)
+      : null;
+    const effective = effectiveNotificationTypes(
+      req.user?.role ?? null,
+      req.user?.isSuperAdmin === true,
+      requested,
+    );
+    if (effective !== null) {
+      if (effective.length === 0) {
+        // Role has no allowed categories → return an empty inbox rather
+        // than an unfiltered query.
+        return void res.json([]);
+      }
+      conditions.push(inArray(notificationsTable.type, effective));
+    }
+
+    const cap = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const rows = await db.select().from(notificationsTable).where(and(...conditions)).orderBy(desc(notificationsTable.createdAt)).limit(cap);
+    res.json(rows);
+  },
+);
+
+notificationsRouter.post(
+  "/restaurants/:restaurantId/notifications/mark-read",
+  requireRole(
+    "owner", "manager", "waiter", "captain", "cashier", "chef", "kitchen",
+    "inventory_manager", "marketing", "accountant", "payroll", "hr",
+    "delivery_executive", "super_admin",
+  ),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const { ids, all } = req.body;
+    const restaurantId = Number(req.params.restaurantId);
+    if (all) {
+      const result = await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.restaurantId, restaurantId));
+      return void res.json({ updated: result.rowCount ?? 0 });
+    }
+    if (ids?.length) {
+      let updated = 0;
+      for (const id of ids as number[]) {
+        await db.update(notificationsTable).set({ isRead: true }).where(and(eq(notificationsTable.id, id), eq(notificationsTable.restaurantId, restaurantId)));
+        updated++;
+      }
+      return void res.json({ updated });
+    }
+    res.json({ updated: 0 });
+  },
+);
 
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
 
@@ -888,16 +967,9 @@ router.delete("/restaurants/:restaurantId/customers/:id/addresses/:addressId", r
   res.status(204).send();
 });
 
-// ─── Notifications (unchanged) ─────────────────────────────────────────────
-
-router.get("/restaurants/:restaurantId/notifications", async (req, res) => {
-  const { unreadOnly } = req.query;
-  const restaurantId = Number(req.params.restaurantId);
-  const conditions: ReturnType<typeof eq>[] = [eq(notificationsTable.restaurantId, restaurantId)];
-  if (unreadOnly === "true") conditions.push(eq(notificationsTable.isRead, false));
-  const rows = await db.select().from(notificationsTable).where(and(...conditions)).orderBy(desc(notificationsTable.createdAt)).limit(50);
-  res.json(rows);
-});
+// ─── Notifications: see role-aware `notificationsRouter` above. The
+// `/send` route stays on the owner-gated customers router because only
+// owners/super-admins create new notifications.
 
 router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
@@ -944,24 +1016,6 @@ router.post("/restaurants/:restaurantId/notifications/send", requireRole("owner"
   }
 
   res.status(201).json(notification);
-});
-
-router.post("/restaurants/:restaurantId/notifications/mark-read", requireRole("owner", "manager", "waiter", "super_admin"), async (req, res) => {
-  const { ids, all } = req.body;
-  const restaurantId = Number(req.params.restaurantId);
-  if (all) {
-    const result = await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.restaurantId, restaurantId));
-    return void res.json({ updated: result.rowCount ?? 0 });
-  }
-  if (ids?.length) {
-    let updated = 0;
-    for (const id of ids as number[]) {
-      await db.update(notificationsTable).set({ isRead: true }).where(and(eq(notificationsTable.id, id), eq(notificationsTable.restaurantId, restaurantId)));
-      updated++;
-    }
-    return void res.json({ updated });
-  }
-  res.json({ updated: 0 });
 });
 
 export default router;

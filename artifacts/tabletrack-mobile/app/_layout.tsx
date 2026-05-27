@@ -131,6 +131,17 @@ function RootLayoutNav() {
       <Stack.Screen name="(waiter)" options={{ headerShown: false }} />
       <Stack.Screen name="(customer)" options={{ headerShown: false }} />
       <Stack.Screen name="(delivery)" options={{ headerShown: false }} />
+      <Stack.Screen name="(chef)" options={{ headerShown: false }} />
+      <Stack.Screen name="(cashier)" options={{ headerShown: false }} />
+      <Stack.Screen name="(inventory)" options={{ headerShown: false }} />
+      <Stack.Screen name="(marketing)" options={{ headerShown: false }} />
+      <Stack.Screen name="(accountant)" options={{ headerShown: false }} />
+      <Stack.Screen name="role-switch" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="outlet-select" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="settings" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="support" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false, presentation: "card" }} />
       <Stack.Screen name="new-order" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="running-order/[tableId]" options={{ headerShown: false }} />
       <Stack.Screen name="notification-settings" options={{ headerShown: false, presentation: "card" }} />

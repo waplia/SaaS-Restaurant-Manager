@@ -1047,6 +1047,38 @@ router.post("/auth/reset-password", resetLimitByIp, resetLimitByEmail, validate(
   res.json({ success: true });
 });
 
+// Permission map mirrored from artifacts/tabletrack-mobile/lib/permissions.ts.
+// The backend still enforces authoritatively via requireRole — this list is
+// exposed so the mobile UI can hide buttons the active role can't use.
+const ROLE_PERMISSIONS_FALLBACK: Record<string, string[]> = {
+  super_admin: ["*"],
+  owner: ["*"],
+  manager: [
+    "order.create", "order.void", "order.refund", "order.discount.apply",
+    "kot.reprint", "bill.print", "bill.split", "payment.capture",
+    "kot.update_status", "kot.86_item",
+    "stock.adjust", "stock.receive_po", "vendor.manage",
+    "shift.open", "shift.close", "cash.drop", "cash.pickup",
+    "delivery.assign",
+    "campaign.create", "coupon.create", "review.respond",
+    "expense.approve", "report.export",
+    "staff.invite", "attendance.edit", "approval.act",
+  ],
+  cashier: ["order.create", "bill.print", "bill.split", "payment.capture", "order.discount.apply", "shift.open", "shift.close", "cash.drop"],
+  waiter: ["order.create", "bill.print", "kot.reprint"],
+  captain: ["order.create", "order.discount.apply", "bill.print", "bill.split", "kot.reprint", "payment.capture"],
+  kitchen: ["kot.update_status", "kot.reprint"],
+  chef: ["kot.update_status", "kot.reprint", "kot.86_item"],
+  inventory_manager: ["stock.adjust", "stock.transfer", "stock.receive_po", "vendor.manage"],
+  hr: ["staff.invite", "attendance.edit"],
+  hr_officer: ["staff.invite", "attendance.edit"],
+  payroll: ["report.export"],
+  marketing: ["campaign.create", "coupon.create", "review.respond"],
+  accountant: ["expense.approve", "settlement.reconcile", "report.export"],
+  auditor: ["report.export"],
+  delivery_executive: ["delivery.mark_picked", "delivery.mark_delivered", "delivery.handover_cod"],
+};
+
 router.get("/auth/me", authenticate, async (req, res) => {
   const [user] = await db
     .select({
@@ -1059,6 +1091,7 @@ router.get("/auth/me", authenticate, async (req, res) => {
       isSuperAdmin: usersTable.isSuperAdmin,
       avatarUrl: usersTable.avatarUrl,
       phone: usersTable.phone,
+      kitchenId: usersTable.kitchenId,
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
@@ -1067,7 +1100,70 @@ router.get("/auth/me", authenticate, async (req, res) => {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  res.json(user);
+
+  // Outlets the caller can see (drives the outlet switcher on mobile).
+  // For owners/super-admins this is every branch of the tenant; for staff
+  // it's the single restaurant they're attached to. We never expose
+  // restaurants from another tenant.
+  let outlets: { id: number; name: string; slug: string | null; city: string | null; logoUrl: string | null; isActive: boolean }[] = [];
+  try {
+    if (user.isSuperAdmin) {
+      outlets = await db
+        .select({
+          id: restaurantsTable.id,
+          name: restaurantsTable.name,
+          slug: restaurantsTable.slug,
+          city: restaurantsTable.city,
+          logoUrl: restaurantsTable.logoUrl,
+          isActive: restaurantsTable.isActive,
+        })
+        .from(restaurantsTable)
+        .where(user.tenantId ? eq(restaurantsTable.tenantId, user.tenantId) : sql`true`)
+        .limit(50);
+    } else if (user.tenantId && (user.role === "owner" || user.role === "manager")) {
+      outlets = await db
+        .select({
+          id: restaurantsTable.id,
+          name: restaurantsTable.name,
+          slug: restaurantsTable.slug,
+          city: restaurantsTable.city,
+          logoUrl: restaurantsTable.logoUrl,
+          isActive: restaurantsTable.isActive,
+        })
+        .from(restaurantsTable)
+        .where(eq(restaurantsTable.tenantId, user.tenantId));
+    } else if (user.restaurantId) {
+      const rows = await db
+        .select({
+          id: restaurantsTable.id,
+          name: restaurantsTable.name,
+          slug: restaurantsTable.slug,
+          city: restaurantsTable.city,
+          logoUrl: restaurantsTable.logoUrl,
+          isActive: restaurantsTable.isActive,
+        })
+        .from(restaurantsTable)
+        .where(eq(restaurantsTable.id, user.restaurantId));
+      outlets = rows;
+    }
+  } catch (err) {
+    req.log?.warn?.({ err }, "auth.me: failed to load outlets");
+  }
+
+  // Roles array: today there's only one role per user. Returned as an
+  // array so the mobile app's "Continue as…" picker works once
+  // multi-role assignments land. Owners can virtually act as any
+  // built-in role via the same picker (their session role still says
+  // "owner" — the picker just changes the active home stack).
+  const roles = [user.role];
+  const permissions = ROLE_PERMISSIONS_FALLBACK[user.role] ?? [];
+
+  res.json({
+    ...user,
+    roles,
+    permissions,
+    outlets,
+  });
 });
 
 export default router;

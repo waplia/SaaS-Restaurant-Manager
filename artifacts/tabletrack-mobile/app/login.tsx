@@ -10,6 +10,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth, type AuthUser } from "@/context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 import { PhoneInput } from "@/components/PhoneInput";
+import { roleHomePath } from "@/lib/roles";
 import Svg, { Path } from "react-native-svg";
 
 function GoogleColorLogo({ size = 18 }: { size?: number }) {
@@ -127,29 +128,15 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-function routeForRole(role: string) {
-  if (role === "owner" || role === "manager" || role === "super_admin") return "/(owner)";
-  if (role === "waiter" || role === "captain") return "/(waiter)/(tabs)";
-  // Kitchen/chef live inside the (owner) stack on the dedicated kitchen screen.
-  // Sending them to (waiter)/notifications used to bounce them via AuthGate and
-  // index.tsx in a redirect loop ("Maximum update depth exceeded"). Keep this
-  // map aligned with `lib/roles.ts:roleHomePath` so a fresh login and a cached
-  // session land on the same screen.
-  if (role === "kitchen" || role === "chef") return "/(owner)/kitchen";
-  if (role === "cashier") return "/(owner)/orders";
-  if (role === "inventory_manager") return "/(owner)/inventory";
-  if (role === "accountant" || role === "payroll") return "/(owner)/finance";
-  if (role === "hr") return "/(owner)/staff";
-  if (role === "marketing") return "/(owner)/growth";
-  if (role === "delivery_executive") return "/(delivery)/my-deliveries";
-  if (role === "customer") return "/(customer)";
-  return "/(owner)";
-}
+// Login lands the user on `roleHomePath(role)` — the single source of
+// truth in `lib/roles.ts` that also drives the cold-start redirect in
+// `app/index.tsx` and the More-menu "Switch role" picker so all three
+// entry points stay aligned (Task #636).
 
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login } = useAuth();
+  const { login, refreshProfile } = useAuth();
   const isWeb = Platform.OS === "web";
 
   const [authSettings, setAuthSettings] = useState<PublicAuthSettings | null>(null);
@@ -204,7 +191,30 @@ export default function LoginScreen() {
 
   async function finishLogin(data: { accessToken: string; refreshToken: string; user: AuthUser }) {
     await login(data.accessToken, data.refreshToken ?? "", data.user);
-    router.replace(routeForRole(data.user.role) as Parameters<typeof router.replace>[0]);
+    // The /auth/login response only carries the legacy single `role`; the
+    // authoritative roles[]/outlets[]/permissions[] come from /auth/me.
+    // Refresh before routing so multi-role users actually hit the
+    // "Continue as…" picker and multi-outlet users hit /outlet-select.
+    try { await refreshProfile(); } catch { /* best-effort */ }
+    // After refreshProfile() the AuthContext exposes the merged user; we
+    // re-read from SecureStorage-backed state via a fresh lookup. We
+    // can't read `user` directly (this callback has the stale closure),
+    // so fall back to the response shape if needed.
+    const baseUrl = getApiBaseUrl();
+    let merged: AuthUser = data.user;
+    try {
+      const res = await fetch(`${baseUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${data.accessToken}` } });
+      if (res.ok) merged = { ...data.user, ...(await res.json()) as Partial<AuthUser> };
+    } catch { /* ignore */ }
+    const roles = Array.isArray(merged.roles) && merged.roles.length > 0 ? merged.roles : [merged.role];
+    const outlets = Array.isArray(merged.outlets) ? merged.outlets : [];
+    if (roles.length > 1) {
+      router.replace("/role-switch" as Parameters<typeof router.replace>[0]);
+    } else if (outlets.length > 1) {
+      router.replace("/outlet-select" as Parameters<typeof router.replace>[0]);
+    } else {
+      router.replace(roleHomePath(merged.role) as Parameters<typeof router.replace>[0]);
+    }
   }
 
   async function handlePasswordLogin() {

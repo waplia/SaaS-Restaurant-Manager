@@ -137,19 +137,19 @@ export function roleHomePath(role: string | undefined | null): string {
     case "super_admin":
       return "/(owner)";
     case "cashier":
-      return "/(owner)/orders";
+      return "/(cashier)";
     case "kitchen":
     case "chef":
-      return "/(owner)/kitchen";
+      return "/(chef)";
     case "inventory_manager":
-      return "/(owner)/inventory";
+      return "/(inventory)";
     case "accountant":
     case "payroll":
-      return "/(owner)/finance";
+      return "/(accountant)";
     case "hr":
       return "/(owner)/staff";
     case "marketing":
-      return "/(owner)/growth";
+      return "/(marketing)";
     case "waiter":
     case "captain":
       return "/(waiter)/(tabs)";
@@ -160,6 +160,35 @@ export function roleHomePath(role: string | undefined | null): string {
     default:
       return "/(owner)";
   }
+}
+
+/**
+ * Role categories used by the notifications screen to filter the inbox.
+ * Each category maps to a set of `notifications.type` values the role
+ * actually cares about — chefs don't need to see marketing campaigns; the
+ * cashier doesn't need every kitchen flip.
+ */
+export const NOTIFICATION_TYPES_BY_ROLE: Record<string, string[] | "all"> = {
+  super_admin: "all",
+  owner: "all",
+  manager: "all",
+  cashier: ["new_order", "order_status", "payment_received", "shift_close", "waiter_call"],
+  waiter: ["new_order", "order_status", "kitchen_ready", "waiter_call", "reservation"],
+  captain: ["new_order", "order_status", "kitchen_ready", "waiter_call", "reservation"],
+  kitchen: ["new_order", "kitchen_ready", "kot_assigned"],
+  chef: ["new_order", "kitchen_ready", "kot_assigned", "low_stock"],
+  inventory_manager: ["low_stock", "po_received", "stock_adjusted", "vendor"],
+  hr: ["attendance", "leave_request", "task_assigned"],
+  payroll: ["attendance", "payroll_run", "report_ready"],
+  marketing: ["campaign", "coupon", "review", "report_ready"],
+  accountant: ["expense_submitted", "settlement", "report_ready"],
+  delivery_executive: ["delivery_assigned", "delivery_status"],
+  customer: ["order_status", "reward", "coupon"],
+};
+
+export function notificationTypesForRole(role: string | null | undefined): string[] | "all" {
+  if (!role) return [];
+  return NOTIFICATION_TYPES_BY_ROLE[role] ?? "all";
 }
 
 export const ROLE_LABEL: Record<string, string> = {

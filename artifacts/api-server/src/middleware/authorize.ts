@@ -17,7 +17,16 @@ export type AppRole =
   | "canteen_admin"
   | "counter_staff"
   | "parent"
-  | "hr_officer";
+  | "hr_officer"
+  // Extended role catalog surfaced by the mobile "Continue as…" picker
+  // (lib/roles.ts). Listed here so requireRole(...) accepts them in
+  // route declarations and matches against the user.role column.
+  | "captain"
+  | "chef"
+  | "inventory_manager"
+  | "marketing"
+  | "payroll"
+  | "hr";
 
 export function requireRole(...roles: AppRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {

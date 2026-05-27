@@ -33,7 +33,7 @@ import salaryRouter from "./salary";
 import schedulingRouter from "./scheduling";
 import payrollRouter from "./payroll";
 import staffIncentivesRouter from "./staff-incentives";
-import customersRouter from "./customers";
+import customersRouter, { notificationsRouter } from "./customers";
 import dashboardRouter from "./dashboard";
 import branchesRouter from "./branches";
 import expensesRouter from "./expenses";
@@ -206,6 +206,9 @@ router.use(salaryRouter);
 router.use(schedulingRouter);
 router.use(payrollRouter);
 router.use(staffIncentivesRouter);
+// Notifications must mount BEFORE customersRouter so its role-aware guards
+// apply instead of the customers-wide owner/manager/waiter/kitchen guard.
+router.use(notificationsRouter);
 router.use(customersRouter);
 router.use(customerQualityRouter);
 router.use(dashboardRouter);
