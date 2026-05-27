@@ -227,6 +227,12 @@ export async function ensureSeededTemplates(restaurantId: number): Promise<BillT
   const haveKeys = new Set(existing.map(t => t.key));
   const missing = SYSTEM_DEFAULT_TEMPLATES.filter(d => !haveKeys.has(d.key));
   if (missing.length === 0) return existing;
+  // We pass `createdAt` / `updatedAt` explicitly because some older
+  // production databases were migrated before the column-level DEFAULT
+  // now() was added — without it, the insert would 23502 and the
+  // `/bill-render` endpoint would silently 500, which is exactly the
+  // regression that triggered this task. Belt-and-suspenders.
+  const nowTs = new Date();
   const inserted = await db
     .insert(billTemplatesTable)
     .values(
@@ -239,6 +245,8 @@ export async function ensureSeededTemplates(restaurantId: number): Promise<BillT
         layout: d.layout,
         isSystem: true,
         isDefault: d.key === "thermal_80",
+        createdAt: nowTs,
+        updatedAt: nowTs,
       })),
     )
     .returning();

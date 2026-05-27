@@ -307,33 +307,46 @@ router.get(
     const channel = (typeof req.query.channel === "string" ? req.query.channel : "web_pos") as BillChannel;
     const templateIdQ = req.query.templateId ? Number(req.query.templateId) : null;
 
-    const [order] = await db
-      .select({ id: ordersTable.id, restaurantId: ordersTable.restaurantId })
-      .from(ordersTable)
-      .where(eq(ordersTable.id, orderId));
-    if (!order || order.restaurantId !== restaurantId) {
-      return void res.status(404).json({ error: "Order not found" });
-    }
+    try {
+      const [order] = await db
+        .select({ id: ordersTable.id, restaurantId: ordersTable.restaurantId })
+        .from(ordersTable)
+        .where(eq(ordersTable.id, orderId));
+      if (!order || order.restaurantId !== restaurantId) {
+        return void res.status(404).json({ error: "Order not found" });
+      }
 
-    const snapshot = await getOrBuildBillSnapshot(orderId);
-    if (!snapshot) return void res.status(404).json({ error: "Order not found" });
+      const snapshot = await getOrBuildBillSnapshot(orderId);
+      if (!snapshot) return void res.status(404).json({ error: "Order not found" });
 
-    const template = templateIdQ
-      ? await getTemplateById(restaurantId, templateIdQ)
-      : await resolveTemplateForChannel(restaurantId, channel);
-    if (!template) return void res.status(404).json({ error: "No template available for this channel" });
+      const template = templateIdQ
+        ? await getTemplateById(restaurantId, templateIdQ)
+        : await resolveTemplateForChannel(restaurantId, channel);
+      if (!template) return void res.status(404).json({ error: "No template available for this channel" });
 
-    const html = renderBillHTML(snapshot, template);
-    if (req.query.format === "json") {
-      const text = renderBillText(snapshot, template);
-      return void res.json({ html, text, snapshot, template });
+      const html = renderBillHTML(snapshot, template);
+      if (req.query.format === "json") {
+        const text = renderBillText(snapshot, template);
+        return void res.json({ html, text, snapshot, template });
+      }
+      if (req.query.format === "text") {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        return void res.send(renderBillText(snapshot, template));
+      }
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(html);
+    } catch (err) {
+      // Without this, any throw inside the handler (template seed failure,
+      // snapshot build crash, renderer bug) surfaces only as a generic
+      // pino "request errored" 500 with no message, making mobile/web
+      // print failures impossible to diagnose. Log the underlying error
+      // and return it as JSON so the caller (printBill) can show it in
+      // the alert.
+      const message = err instanceof Error ? err.message : "Bill render failed";
+      // eslint-disable-next-line no-console
+      console.error(`[bill-render] restaurant=${restaurantId} order=${orderId} channel=${channel}:`, err);
+      return void res.status(500).json({ error: "Bill render failed", detail: message });
     }
-    if (req.query.format === "text") {
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      return void res.send(renderBillText(snapshot, template));
-    }
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(html);
   },
 );
 
