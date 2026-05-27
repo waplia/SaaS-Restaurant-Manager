@@ -44,7 +44,7 @@ const BulkKitchenBody = z.object({
 
 router.use(
   "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "super_admin"),
+  requireRole("owner", "manager", "waiter", "kitchen", "chef", "super_admin"),
   validateRestaurantAccess,
 );
 

@@ -312,7 +312,7 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "cashier", "kitchen", "chef", "delivery_executive", "super_admin"), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
   // Legacy fallback only — kept for back-compat with code paths that
@@ -3237,8 +3237,9 @@ router.patch(
   "/restaurants/:restaurantId/orders/:orderId/items/:itemId/kitchen-status",
   // Task #637 — waiters now mark items served from the Ready queue and
   // per-item bell on the running-order screen, so the waiter role is
-  // accepted here as well.
-  requireRole("owner", "manager", "kitchen", "waiter", "captain", "super_admin"),
+  // accepted here as well. Task #638 — chef role added for the chef
+  // KOT board's per-item tap-to-cycle state machine.
+  requireRole("owner", "manager", "kitchen", "chef", "waiter", "captain", "super_admin"),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const orderId = Number(req.params.orderId);
@@ -3291,7 +3292,59 @@ router.patch(
   },
 );
 
-router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "super_admin"), requirePlanFeature("kitchen_display"), async (req, res) => {
+// Log a chef-supplied delay reason for a kitchen ticket. Emits a
+// `ticket:delayed` event with the reason, drops a `kitchen_delay`
+// notification so managers see it in their inbox, and records an audit
+// log entry. No schema change is required: the reason is propagated via
+// the realtime event + notification message.
+router.post(
+  "/restaurants/:restaurantId/kitchen/tickets/:id/delay-reason",
+  requireRole("owner", "manager", "kitchen", "chef", "super_admin"),
+  requirePlanFeature("kitchen_display"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const ticketId = Number(req.params.id);
+    const reasonRaw = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!reasonRaw) return void res.status(400).json({ error: "reason is required" });
+    const reason = reasonRaw.slice(0, 240);
+    const [ticket] = await db.select().from(kitchenTicketsTable).where(and(
+      eq(kitchenTicketsTable.id, ticketId),
+      eq(kitchenTicketsTable.restaurantId, restaurantId),
+    ));
+    if (!ticket) return void res.status(404).json({ error: "Ticket not found" });
+    const [order] = await db.select({ orderNumber: ordersTable.orderNumber })
+      .from(ordersTable).where(eq(ordersTable.id, ticket.orderId));
+    const orderLabel = order?.orderNumber ?? `#${ticket.orderId}`;
+    broadcastEvent(restaurantId, "ticket:delayed", {
+      id: ticket.id,
+      orderId: ticket.orderId,
+      orderNumber: order?.orderNumber ?? null,
+      kitchenId: ticket.kitchenId,
+      reason,
+      reportedBy: req.user?.id ?? null,
+      reportedAt: new Date().toISOString(),
+    });
+    await db.insert(notificationsTable).values({
+      restaurantId,
+      type: "kitchen_delay",
+      title: "Kitchen delay reported",
+      message: `Order ${orderLabel}: ${reason}`,
+      entityId: ticket.orderId,
+      entityType: "order",
+    }).catch(() => {});
+    broadcastEvent(restaurantId, "notification:new", { type: "kitchen_delay" });
+    try {
+      await recordAuditLog({
+        req, module: "kitchen", action: "ticket.delay_reason",
+        entity: "kitchen_ticket", entityId: ticket.id, restaurantId,
+        newValue: { reason },
+      });
+    } catch (err) { void err; }
+    res.json({ ok: true, ticketId: ticket.id, reason });
+  },
+);
+
+router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/priority", requireRole("owner", "manager", "kitchen", "chef", "super_admin"), requirePlanFeature("kitchen_display"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const [existing] = await db.select().from(kitchenTicketsTable).where(and(eq(kitchenTicketsTable.id, Number(req.params.id)), eq(kitchenTicketsTable.restaurantId, restaurantId)));
   if (!existing) return void res.status(404).json({ error: "Not found" });

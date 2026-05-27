@@ -26,6 +26,45 @@ type Palette = {
   overlay: string;
 };
 
+/**
+ * Dark "kitchen mode" palette used by the chef/kitchen role group only.
+ * Amber accent over near-black surfaces optimised for a hot-line tablet:
+ * high contrast, glanceable timer badges, color-coded ticket borders.
+ */
+export const kitchenPalette: Palette = {
+  text: "#fafaf9",
+  tint: "#fbbf24",
+  background: "#0a0908",
+  foreground: "#fafaf9",
+  card: "#1a1714",
+  cardForeground: "#fafaf9",
+  surface: "#13110f",
+  surfaceAlt: "#231f1c",
+  primary: "#f59e0b",
+  primaryDeep: "#b45309",
+  primaryForeground: "#0a0908",
+  secondary: "#2a2520",
+  secondaryForeground: "#fafaf9",
+  muted: "#1f1c19",
+  mutedForeground: "#a8a29e",
+  accent: "#3f2d11",
+  accentForeground: "#fcd34d",
+  destructive: "#f87171",
+  destructiveForeground: "#fafaf9",
+  border: "#2f2a25",
+  borderStrong: "#44382e",
+  input: "#2a2520",
+  success: "#34d399",
+  successSoft: "#064e3b",
+  warning: "#fbbf24",
+  warningSoft: "#7c2d12",
+  info: "#60a5fa",
+  infoSoft: "#1e3a8a",
+  ai: "#a78bfa",
+  aiSoft: "#3b2470",
+  overlay: "rgba(0,0,0,0.75)",
+};
+
 export const palette: { light: Palette; dark: Palette } = {
   light: {
     text: "#251e1a",
