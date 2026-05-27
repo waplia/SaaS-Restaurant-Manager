@@ -267,7 +267,14 @@ export default function OrdersScreen() {
             const isNew = (o.status ?? "pending") === "pending";
             return (
               <View style={{ marginBottom: 10 }}>
-                <Pressable onPress={() => setOpenOrderId(o.id)}>
+                <Pressable
+                  onPress={() => router.push(`/(cashier)/pay/${o.id}` as never)}
+                  onLongPress={() => setOpenOrderId(o.id)}
+                  delayLongPress={350}
+                >
+                  {/* Tap opens the full bill / payment options page (same as cashier).
+                      Long-press still opens the lightweight order-detail drawer for
+                      managers who want a quick look without leaving the list. */}
                   <OrderCard
                     orderNumber={o.orderNumber ?? String(o.id)}
                     displayNumber={(o as unknown as { orderDisplayNumber?: string | null }).orderDisplayNumber ?? null}
