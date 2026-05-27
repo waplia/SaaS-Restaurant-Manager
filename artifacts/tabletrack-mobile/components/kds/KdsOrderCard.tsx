@@ -174,7 +174,11 @@ function KdsOrderCardImpl({ ticket, itemChecks, onCycleItem, onPrimaryAction, on
                 Haptics.selectionAsync();
                 onCycleItem(item.id);
               }}
-              style={({ pressed }) => [styles.itemRow, pressed && !isHistory && { opacity: 0.7 }]}
+              style={({ pressed }) => [
+                styles.itemRow,
+                { backgroundColor: colors.muted, borderColor: colors.border },
+                pressed && !isHistory && { opacity: 0.7 },
+              ]}
             >
               <Text style={[styles.qty, { color: colors.primary }]}>{item.quantity}×</Text>
               <View style={{ flex: 1 }}>
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
   delayBanner: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, alignSelf: "flex-start" },
   delayBannerText: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#b91c1c", letterSpacing: 0.4 },
   items: { gap: 8 },
-  itemRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 4 },
+  itemRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1 },
   qty: { fontSize: 16, fontFamily: "Inter_700Bold", minWidth: 28 },
   itemName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   itemMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },

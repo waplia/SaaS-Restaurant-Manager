@@ -223,7 +223,12 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
         body: JSON.stringify({ status: CLIENT_TO_SERVER_STATUS[next] }),
         headers: { "content-type": "application/json" },
       });
+      // Bug fix (Task #672): item-level status change must also invalidate
+      // the orders list so waiters' Orders screen reflects which items the
+      // kitchen has started / finished. Without this, the orders detail
+      // drawer stayed stale until the next poll.
       qc.invalidateQueries({ queryKey: ticketsQ.queryKey });
+      qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
     } catch (err) {
       setItemOverrides((m) => ({ ...m, [itemId]: current }));
       showToast("error", (err as Error).message || "Couldn't update item");

@@ -2942,7 +2942,15 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", requirePlanFeature("kit
     const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, t.orderId), eq(ordersTable.restaurantId, restaurantId)));
     const allItems = order ? await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id)) : [];
 
-    // Filter to items whose menu item belongs to this ticket's kitchen
+    // Filter items so each KDS ticket shows ONLY the items belonging to its
+    // KOT round. Prior bug (Task #672): when a running order has multiple
+    // rounds routed to the same kitchen, the kitchen ticket was rendered
+    // with ALL items from the order (filtered only by kitchen), causing
+    // already-cooked items from earlier rounds to reappear on the KDS for
+    // every new round and triggering over-production. We now scope items
+    // strictly by ticket.kotBatchId when set, and fall back to the legacy
+    // kitchen-only filter only for tickets created before kot_batch_id
+    // tracking existed.
     let items = allItems;
     const allMenuItemIds = Array.from(new Set(allItems.map(i => i.menuItemId).filter((x): x is number => x != null)));
     const menuRowsAll = allMenuItemIds.length > 0
@@ -2951,9 +2959,26 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", requirePlanFeature("kit
           .where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, allMenuItemIds)))
       : [];
     const imageById = new Map(menuRowsAll.map(m => [m.id, m.imageUrl ?? null] as const));
-    if (t.kitchenId != null && allItems.length > 0) {
+    if (t.kotBatchId != null) {
+      // A single KOT batch can span multiple kitchens (one ticket is created
+      // per kitchen for the same batch), so combine batch + kitchen scoping
+      // — otherwise this ticket would pull in items routed to a different
+      // kitchen in the same round.
       const itemKitchenById = new Map(menuRowsAll.map(m => [m.id, m.kitchenId ?? defaultKitchenId] as const));
       items = allItems.filter(i => {
+        if (i.kotBatchId !== t.kotBatchId) return false;
+        if (t.kitchenId == null) return true;
+        const k = i.menuItemId != null ? itemKitchenById.get(i.menuItemId) ?? defaultKitchenId : defaultKitchenId;
+        return k === t.kitchenId;
+      });
+    } else if (t.kitchenId != null && allItems.length > 0) {
+      // Legacy fallback: pre-Task #651 tickets have NULL kot_batch_id, so
+      // scope by kitchen mapping. Also exclude items that were assigned to
+      // a later batch (they have a kotBatchId but this ticket doesn't), so
+      // they don't leak into the legacy ticket on the next round.
+      const itemKitchenById = new Map(menuRowsAll.map(m => [m.id, m.kitchenId ?? defaultKitchenId] as const));
+      items = allItems.filter(i => {
+        if (i.kotBatchId != null) return false;
         const k = i.menuItemId != null ? itemKitchenById.get(i.menuItemId) ?? defaultKitchenId : defaultKitchenId;
         return k === t.kitchenId;
       });
@@ -3107,21 +3132,20 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
           .from(menuItemsTable).where(and(eq(menuItemsTable.restaurantId, restaurantId), inArray(menuItemsTable.id, ids)))
       : [];
     const kitchenById = new Map(menuRows.map(m => [m.id, m.kitchenId] as const));
-    // If we scoped by kotBatchId, the batch already represents exactly the
-    // items routed to this kitchen for this round — no extra kitchen filter
-    // needed. Legacy fallback still filters by kitchen mapping, but treats
-    // unmapped menu items (NULL kitchen_id, routed via defaultKitchenId)
-    // as matching the ticket so items aren't silently skipped.
-    const matchIds = updated.kotBatchId != null
-      ? allItems.map(i => i.id)
-      : allItems
-          .filter(i => {
-            if (updated.kitchenId == null) return true;
-            if (i.menuItemId == null) return true;
-            const mk = kitchenById.get(i.menuItemId);
-            return mk == null || mk === updated.kitchenId;
-          })
-          .map(i => i.id);
+    // A single KOT batch can route to multiple kitchens (one ticket per
+    // kitchen sharing the same batch), so we must filter by kitchen even
+    // when scoping by kotBatchId — otherwise marking ticket A "ready" would
+    // also flip items routed to kitchen B in the same round. Unmapped menu
+    // items (NULL kitchen_id → defaultKitchenId) are treated as matching
+    // the ticket so they aren't silently skipped.
+    const matchIds = allItems
+      .filter(i => {
+        if (updated.kitchenId == null) return true;
+        if (i.menuItemId == null) return true;
+        const mk = kitchenById.get(i.menuItemId);
+        return mk == null || mk === updated.kitchenId;
+      })
+      .map(i => i.id);
     if (matchIds.length > 0) {
       const itemUpdates: Record<string, unknown> = { status };
       if (status === "preparing") itemUpdates.startedAt = now;

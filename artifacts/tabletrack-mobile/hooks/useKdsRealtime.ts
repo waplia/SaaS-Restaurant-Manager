@@ -52,16 +52,31 @@ export function useKdsRealtime(restaurantId: number, ticketsQueryKey: readonly u
       socket.on("connect_error", () => setState("polling"));
 
       const invalidateTickets = () => qc.invalidateQueries({ queryKey: ticketsQueryKey });
+      // Bug fix (Task #672): waiters' Orders screen on mobile wasn't
+      // updating to "ready" when the kitchen marked a KOT ready, because
+      // this hook only invalidated the kitchen-tickets query. Mirror the
+      // web `realtime.ts` and broaden invalidation so the orders list,
+      // table layout, and dashboard surfaces also refresh.
+      const invalidateOrdersAndTables = () => {
+        qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+        qc.invalidateQueries({ queryKey: ["tables", restaurantId] });
+        qc.invalidateQueries({ queryKey: ["dashboard", "live-kitchen", restaurantId] });
+      };
 
       socket.on("order:new", (payload: { kitchenId?: number | null } | undefined) => {
         invalidateTickets();
+        invalidateOrdersAndTables();
         handlersRef.current.onNewOrder?.(payload);
       });
       socket.on("ticket:status", () => {
         invalidateTickets();
+        invalidateOrdersAndTables();
         handlersRef.current.onTicketStatus?.();
       });
-      socket.on("order:status", invalidateTickets);
+      socket.on("order:status", () => {
+        invalidateTickets();
+        invalidateOrdersAndTables();
+      });
       socket.on("ticket:delayed", (payload: { kitchenId?: number | null; orderNumber?: string | null } | undefined) => {
         invalidateTickets();
         handlersRef.current.onTicketDelayed?.(payload);
