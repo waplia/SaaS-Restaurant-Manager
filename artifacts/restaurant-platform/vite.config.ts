@@ -59,6 +59,30 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: "es2020",
+    sourcemap: false,
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        // Split heavy third-party libraries into their own long-cacheable
+        // chunks so a code change in app code doesn't bust the vendor cache.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react-dom") || id.includes("/react/") || id.includes("scheduler") || id.includes("wouter")) {
+            return "vendor-react";
+          }
+          if (id.includes("@tanstack")) return "vendor-query";
+          if (id.includes("@radix-ui")) return "vendor-radix";
+          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+          if (id.includes("framer-motion")) return "vendor-motion";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          if (id.includes("date-fns") || id.includes("dayjs")) return "vendor-date";
+          if (id.includes("zod") || id.includes("react-hook-form")) return "vendor-forms";
+          return "vendor";
+        },
+      },
+    },
   },
   server: {
     port,

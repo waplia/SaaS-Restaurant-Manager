@@ -8,6 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useAppSettings } from "@/lib/appSettings";
+import { hasSeenWelcome, markWelcomeSeen } from "@/lib/welcome";
+
+export { hasSeenWelcome, markWelcomeSeen };
 
 const SLIDE_MS = 3800;
 
@@ -18,17 +21,6 @@ type Slide = {
   subtitle: string;
   visual: React.ComponentType;
 };
-
-function welcomeKey(userId: number | string | null | undefined) {
-  return `kl:welcome:seen:${userId ?? "anon"}`;
-}
-
-export function markWelcomeSeen(userId: number | string | null | undefined) {
-  try { localStorage.setItem(welcomeKey(userId), "1"); } catch { /* ignore */ }
-}
-export function hasSeenWelcome(userId: number | string | null | undefined) {
-  try { return localStorage.getItem(welcomeKey(userId)) === "1"; } catch { return false; }
-}
 
 // ---------- visuals ----------
 
