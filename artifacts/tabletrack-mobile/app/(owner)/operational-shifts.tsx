@@ -20,6 +20,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { AppBottomSheet } from "@/components/ui/AppBottomSheet";
 import { AppButton } from "@/components/ui/AppButton";
+import { TimePickerField } from "@/components/TimePickerField";
 
 /**
  * Operational Shifts — mobile parity with the web Staff Scheduling
@@ -382,26 +383,18 @@ export default function OperationalShiftsScreen() {
           placeholder="Morning, Dinner, Late night…"
         />
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <SheetField
-              colors={colors}
-              label="Starts"
-              value={draft.startTime}
-              onChange={v => setDraft(d => ({ ...d, startTime: v }))}
-              placeholder="09:00"
-              numeric
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <SheetField
-              colors={colors}
-              label="Ends"
-              value={draft.endTime}
-              onChange={v => setDraft(d => ({ ...d, endTime: v }))}
-              placeholder="17:00"
-              numeric
-            />
-          </View>
+          <TimePickerField
+            label="Starts"
+            icon="sunny-outline"
+            value={draft.startTime}
+            onChange={(v) => setDraft((d) => ({ ...d, startTime: v }))}
+          />
+          <TimePickerField
+            label="Ends"
+            icon="moon-outline"
+            value={draft.endTime}
+            onChange={(v) => setDraft((d) => ({ ...d, endTime: v }))}
+          />
         </View>
 
         <View style={{ marginTop: 4 }}>

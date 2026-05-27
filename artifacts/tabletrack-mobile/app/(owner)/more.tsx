@@ -30,6 +30,8 @@ const MODULES: ModuleDef[] = [
   { key: "menu", label: "Menu", desc: "Toggle availability, edit", icon: "restaurant-outline", href: "/(owner)/menu", group: "operate" },
   { key: "business_hours", label: "Business Hours", desc: "Set opening & closing time", icon: "time-outline", href: "/(owner)/business-hours", group: "operate" },
   { key: "operational_shifts", label: "Operational Shifts", desc: "Define staff work shifts", icon: "calendar-number-outline", href: "/(owner)/operational-shifts", group: "operate" },
+  { key: "tax_gst", label: "Tax & GST", desc: "Tax rates, compound, exemptions", icon: "receipt-outline", href: "/(owner)/tax-gst", group: "money" },
+  { key: "direct_ordering", label: "Direct Ordering", desc: "Public ordering page & SEO", icon: "globe-outline", href: "/(owner)/direct-ordering", group: "grow" },
   { key: "inventory", label: "Inventory", desc: "Stock, POs, waste, vendors", icon: "cube-outline", href: "/(owner)/inventory", group: "operate", feature: "inventory_management" },
   { key: "approvals", label: "Approvals", desc: "Pending requests", icon: "checkmark-done-outline", href: "/(owner)/approvals", group: "operate" },
   { key: "staff", label: "Staff", desc: "Team roster & roles", icon: "people-outline", href: "/(owner)/staff", group: "people" },
