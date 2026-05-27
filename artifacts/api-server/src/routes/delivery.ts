@@ -174,6 +174,91 @@ router.patch("/restaurants/:restaurantId/delivery/assignments/:id/status", requi
   res.json(updated);
 });
 
+// Save proof-of-delivery photo URL on an assignment
+router.post("/restaurants/:restaurantId/delivery/assignments/:id/proof", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const { proofPhotoUrl } = req.body as { proofPhotoUrl?: string };
+  if (!proofPhotoUrl || typeof proofPhotoUrl !== "string") {
+    return void res.status(400).json({ error: "proofPhotoUrl required" });
+  }
+  const [assignment] = await db.select().from(deliveryAssignmentsTable).where(
+    and(eq(deliveryAssignmentsTable.id, id), eq(deliveryAssignmentsTable.restaurantId, restaurantId)),
+  );
+  if (!assignment) return void res.status(404).json({ error: "Not found" });
+  if (req.user!.role === "delivery_executive" && assignment.riderId !== req.user!.sub) {
+    return void res.status(403).json({ error: "Not your assignment" });
+  }
+  const [updated] = await db.update(deliveryAssignmentsTable)
+    .set({ proofPhotoUrl, updatedAt: new Date() })
+    .where(eq(deliveryAssignmentsTable.id, id))
+    .returning();
+  broadcastEvent(restaurantId, "delivery:updated", { assignment: updated });
+  res.json(updated);
+});
+
+// Mark assignment as customer-unavailable with a reason
+router.post("/restaurants/:restaurantId/delivery/assignments/:id/unavailable", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const { reason } = req.body as { reason?: string };
+  if (!reason || typeof reason !== "string") {
+    return void res.status(400).json({ error: "reason required" });
+  }
+  const [assignment] = await db.select().from(deliveryAssignmentsTable).where(
+    and(eq(deliveryAssignmentsTable.id, id), eq(deliveryAssignmentsTable.restaurantId, restaurantId)),
+  );
+  if (!assignment) return void res.status(404).json({ error: "Not found" });
+  if (req.user!.role === "delivery_executive" && assignment.riderId !== req.user!.sub) {
+    return void res.status(403).json({ error: "Not your assignment" });
+  }
+  const now = new Date();
+  const [updated] = await db.update(deliveryAssignmentsTable)
+    .set({
+      status: "cancelled",
+      cancelledAt: now,
+      unavailableReason: reason,
+      unavailableAt: now,
+      updatedAt: now,
+    })
+    .where(eq(deliveryAssignmentsTable.id, id))
+    .returning();
+  await db.update(ordersTable)
+    .set({ status: "ready", updatedAt: now })
+    .where(eq(ordersTable.id, assignment.orderId));
+  await db.insert(notificationsTable).values({
+    restaurantId,
+    type: "delivery_status",
+    title: "Customer unavailable",
+    message: `Order ${assignment.orderId} returned — ${reason}`,
+    entityId: assignment.orderId,
+    entityType: "order",
+  }).catch(() => {});
+  broadcastEvent(restaurantId, "delivery:updated", { assignment: updated });
+  res.json(updated);
+});
+
+// Single assignment detail (with order + rider)
+router.get("/restaurants/:restaurantId/delivery/assignments/:id", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const id = Number(req.params.id);
+  const [row] = await db
+    .select({
+      assignment: deliveryAssignmentsTable,
+      order: ordersTable,
+      rider: { id: usersTable.id, name: usersTable.name, phone: usersTable.phone },
+    })
+    .from(deliveryAssignmentsTable)
+    .innerJoin(ordersTable, eq(ordersTable.id, deliveryAssignmentsTable.orderId))
+    .innerJoin(usersTable, eq(usersTable.id, deliveryAssignmentsTable.riderId))
+    .where(and(eq(deliveryAssignmentsTable.id, id), eq(deliveryAssignmentsTable.restaurantId, restaurantId)));
+  if (!row) return void res.status(404).json({ error: "Not found" });
+  if (req.user!.role === "delivery_executive" && row.assignment.riderId !== req.user!.sub) {
+    return void res.status(403).json({ error: "Not your assignment" });
+  }
+  res.json({ ...row.assignment, order: row.order, rider: row.rider });
+});
+
 // Mark COD collected on an assignment
 router.post("/restaurants/:restaurantId/delivery/assignments/:id/cod-collected", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
@@ -193,7 +278,9 @@ router.post("/restaurants/:restaurantId/delivery/assignments/:id/cod-collected",
   res.json(updated);
 });
 
-// My deliveries (for the logged-in rider)
+// My deliveries (for the logged-in rider). Order rows include deliveryLat/Lng
+// (when available) so the mobile map tab can plot pins and connect them with
+// a route line.
 router.get("/restaurants/:restaurantId/delivery/my", requireRole(...DELIVERY_OPS_ROLES), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const riderId = req.user!.sub;
@@ -270,29 +357,39 @@ router.get("/restaurants/:restaurantId/delivery/cod-summary", requireRole("owner
   res.json(result);
 });
 
-// Recent COD handovers
-router.get("/restaurants/:restaurantId/delivery/handovers", requireRole("owner", "manager", "cashier", "super_admin"), async (req, res) => {
-  const restaurantId = Number(req.params.restaurantId);
-  const rows = await db
-    .select({
-      handover: codHandoversTable,
-      rider: { id: usersTable.id, name: usersTable.name },
-    })
-    .from(codHandoversTable)
-    .innerJoin(usersTable, eq(usersTable.id, codHandoversTable.riderId))
-    .where(eq(codHandoversTable.restaurantId, restaurantId))
-    .orderBy(desc(codHandoversTable.handedInAt))
-    .limit(50);
-  res.json(rows.map(r => ({ ...r.handover, rider: r.rider })));
-});
-
-// Record a COD handover (rider hands cash to manager/cashier)
-router.post(
+// Recent COD handovers. Riders only see their own.
+router.get(
   "/restaurants/:restaurantId/delivery/handovers",
-  requireRole("owner", "manager", "cashier", "super_admin"),
+  requireRole("owner", "manager", "cashier", "delivery_executive", "super_admin"),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
-    const { riderId, amount, notes } = req.body as { riderId: number; amount: number; notes?: string };
+    const whereClauses = [eq(codHandoversTable.restaurantId, restaurantId)];
+    if (req.user!.role === "delivery_executive") {
+      whereClauses.push(eq(codHandoversTable.riderId, req.user!.sub));
+    }
+    const rows = await db
+      .select({
+        handover: codHandoversTable,
+        rider: { id: usersTable.id, name: usersTable.name },
+      })
+      .from(codHandoversTable)
+      .innerJoin(usersTable, eq(usersTable.id, codHandoversTable.riderId))
+      .where(and(...whereClauses))
+      .orderBy(desc(codHandoversTable.handedInAt))
+      .limit(50);
+    res.json(rows.map(r => ({ ...r.handover, rider: r.rider })));
+  },
+);
+
+// Record a COD handover. Riders self-submit (riderId forced to self);
+// cashiers/managers may submit on a rider's behalf.
+router.post(
+  "/restaurants/:restaurantId/delivery/handovers",
+  requireRole("owner", "manager", "cashier", "delivery_executive", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const { riderId: bodyRiderId, amount, notes } = req.body as { riderId?: number; amount: number; notes?: string };
+    const riderId = req.user!.role === "delivery_executive" ? req.user!.sub : bodyRiderId;
     if (!riderId || !amount || amount <= 0) {
       return void res.status(400).json({ error: "riderId and positive amount required" });
     }

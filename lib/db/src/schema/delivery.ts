@@ -21,6 +21,9 @@ export const deliveryAssignmentsTable = pgTable("delivery_assignments", {
   pickedUpAt: timestamp("picked_up_at"),
   deliveredAt: timestamp("delivered_at"),
   cancelledAt: timestamp("cancelled_at"),
+  proofPhotoUrl: text("proof_photo_url"),
+  unavailableReason: text("unavailable_reason"),
+  unavailableAt: timestamp("unavailable_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -73,6 +73,7 @@
     "expo-notifications": "^0.32.17",
     "expo-print": "^15.0.8",
     "expo-secure-store": "^15.0.8",
+    "react-native-maps": "^1.27.2",
     "socket.io-client": "^4.8.3"
   }
 }

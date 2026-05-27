@@ -86,6 +86,11 @@ export const ordersTable = pgTable("orders", {
   // address, and delivery fee charged. Null for dine-in and immediate orders.
   scheduledFor: timestamp("scheduled_for"),
   deliveryAddress: text("delivery_address"),
+  // Geocoded coordinates for the delivery address. Used by the rider mobile
+  // map tab to plot pins and connect them with a route line. Nullable until
+  // an order has been geocoded (older orders, address-only entries).
+  deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }),
+  deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("0.00"),
   // Task #601 — Running order / single bill per dine-in table. When this
   // order rolls up multiple KOT rounds against one table session, the

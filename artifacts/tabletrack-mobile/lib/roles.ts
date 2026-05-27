@@ -154,7 +154,7 @@ export function roleHomePath(role: string | undefined | null): string {
     case "captain":
       return "/(waiter)/(tabs)";
     case "delivery_executive":
-      return "/(delivery)/my-deliveries";
+      return "/(delivery)/assigned";
     case "customer":
       return "/(customer)";
     default:

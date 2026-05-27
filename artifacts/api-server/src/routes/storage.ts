@@ -31,7 +31,7 @@ const RequestUploadUrlBody = z.object({
  */
 router.post(
   "/restaurants/:restaurantId/storage/uploads/request-url",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "super_admin", "delivery_executive"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
     const parsed = RequestUploadUrlBody.safeParse(req.body);
@@ -105,7 +105,7 @@ async function resolveObjectWithRetry(objectPath: string) {
  */
 router.post(
   "/restaurants/:restaurantId/storage/uploads/finalize",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "super_admin", "delivery_executive"),
   validateRestaurantAccess,
   async (req: Request, res: Response) => {
     const parsed = FinalizeUploadBody.safeParse(req.body);
