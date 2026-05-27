@@ -858,6 +858,31 @@ export function startScheduler(): void {
     }
   });
 
+  // Transient-notification cleanup: kitchen_delay notifications are emitted
+  // by the per-minute delay detector and can accumulate quickly (thousands
+  // per week per restaurant). Once they're more than 24 h old they have no
+  // operational value — the floor has long since moved on — but they still
+  // load into the waiter/owner notification feed and look like "the kitchen
+  // is still sending old delay notifications". Sweep them hourly.
+  registerCron("notifications_cleanup", "0 * * * *", "Hourly: deletes transient notifications (kitchen_delay, etc.) older than 24h so the feed stays current");
+  trackCron("notifications_cleanup", "0 * * * *", async () => {
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const TRANSIENT_TYPES = ["kitchen_delay", "waiter_call"] as const;
+      const deleted = await db.delete(notificationsTable)
+        .where(and(
+          inArray(notificationsTable.type, [...TRANSIENT_TYPES]),
+          lt(notificationsTable.createdAt, cutoff),
+        ))
+        .returning({ id: notificationsTable.id });
+      if (deleted.length > 0) {
+        logger.info({ deleted: deleted.length }, "[notifications] purged stale transient notifications");
+      }
+    } catch (err) {
+      logger.error({ err }, "[notifications] cleanup tick failed");
+    }
+  });
+
   registerCron("staff_task_missed_sweep", "*/5 * * * *", "Detects staff-task scheduled windows that closed without an on-time submission (every 5 min)");
   trackCron("staff_task_missed_sweep", "*/5 * * * *", async () => {
     try {
