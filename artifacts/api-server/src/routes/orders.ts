@@ -362,11 +362,29 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
 
   const conditions: Array<ReturnType<typeof eq> | ReturnType<typeof sql> | undefined> = [eq(ordersTable.restaurantId, restaurantId)];
-  if (status) conditions.push(eq(ordersTable.status, String(status)));
+  // Allow comma-separated multi-value filters (e.g. status=pending,ready,served)
+  // so the cashier app's open-orders queue receives every matching order in
+  // one call. Empty segments are dropped.
+  const splitCsv = (v: unknown): string[] =>
+    String(v).split(",").map((s) => s.trim()).filter(Boolean);
+
+  if (status) {
+    const arr = splitCsv(status);
+    if (arr.length === 1) conditions.push(eq(ordersTable.status, arr[0]));
+    else if (arr.length > 1) conditions.push(inArray(ordersTable.status, arr));
+  }
   if (tableId) conditions.push(eq(ordersTable.tableId, Number(tableId)));
   if (customerId) conditions.push(eq(ordersTable.customerId, Number(customerId)));
-  if (orderType && orderType !== "all") conditions.push(eq(ordersTable.orderType, String(orderType)));
-  if (paymentStatus && paymentStatus !== "all") conditions.push(eq(ordersTable.paymentStatus, String(paymentStatus)));
+  if (orderType && orderType !== "all") {
+    const arr = splitCsv(orderType);
+    if (arr.length === 1) conditions.push(eq(ordersTable.orderType, arr[0]));
+    else if (arr.length > 1) conditions.push(inArray(ordersTable.orderType, arr));
+  }
+  if (paymentStatus && paymentStatus !== "all") {
+    const arr = splitCsv(paymentStatus);
+    if (arr.length === 1) conditions.push(eq(ordersTable.paymentStatus, arr[0]));
+    else if (arr.length > 1) conditions.push(inArray(ordersTable.paymentStatus, arr));
+  }
   // Date-range filter on createdAt. ISO strings only; invalid input is
   // ignored so the rest of the query still runs.
   if (typeof since === "string" && since) {
