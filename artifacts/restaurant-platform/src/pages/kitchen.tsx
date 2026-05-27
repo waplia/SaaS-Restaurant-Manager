@@ -70,7 +70,7 @@ function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | nul
   // and for browser-only sessions.
   if (size === "thermal-80mm" && isDesktopPrintBridgeAvailable()) {
     printKitchenTicketNative({
-      orderNumber: ticket.orderNumber,
+      orderNumber: formatOrderNumber(ticket.orderNumber),
       createdAt: ticket.createdAt,
       tableLabel: ticket.tableNumber ? `Table ${ticket.tableNumber}` : undefined,
       orderType: ticket.orderType,
@@ -85,7 +85,7 @@ function printKitchenTicket(ticket: KitchenTicket, restaurantName?: string | nul
     documentTitle: ticket.kitchen?.printerName
       ? `KOT — ${ticket.kitchen.name} (${ticket.kitchen.printerName})`
       : `KOT — ${ticket.kitchen?.name ?? "Kitchen"}`,
-    orderNumber: ticket.orderNumber,
+    orderNumber: formatOrderNumber(ticket.orderNumber),
     createdAt: ticket.createdAt,
     tableLabel: ticket.tableNumber ? `Table ${ticket.tableNumber}` : undefined,
     orderType: ticket.orderType,

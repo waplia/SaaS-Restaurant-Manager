@@ -232,7 +232,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
       documentTitle: ticket.kitchen?.printerName
         ? `KOT — ${ticket.kitchen.name} (${ticket.kitchen.printerName})`
         : `KOT — ${ticket.kitchen?.name ?? "Kitchen"}`,
-      orderNumber: ticket.orderNumber,
+      orderNumber: formatOrderNumber(ticket.orderNumber),
       createdAt: ticket.createdAt,
       tableLabel: ticket.tableNumber ? `Table ${ticket.tableNumber}` : undefined,
       orderType: ticket.orderType,

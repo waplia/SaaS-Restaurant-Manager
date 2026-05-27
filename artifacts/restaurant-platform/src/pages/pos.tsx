@@ -1800,7 +1800,7 @@ export default function PosPage() {
       ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
       : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
     printReceipt({
-      orderNumber: placedOrder?.orderNumber ?? "",
+      orderNumber: formatOrderNumber(placedOrder?.orderDisplayNumber ?? placedOrder?.orderNumber ?? ""),
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: method,
       amountTendered: details?.amountTendered, customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
@@ -1826,7 +1826,7 @@ export default function PosPage() {
       ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
       : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers }));
     printReceipt({
-      orderNumber: placedOrder?.orderNumber ?? "",
+      orderNumber: formatOrderNumber(placedOrder?.orderDisplayNumber ?? placedOrder?.orderNumber ?? ""),
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType, items: receiptItems, totals: displayTotals, paymentMethod: "card",
       customerName, restaurantName: restaurant?.name, logoUrl: restaurant?.logoUrl ?? undefined,
@@ -1974,7 +1974,7 @@ export default function PosPage() {
           notes: oi.notes ?? undefined,
         }));
     printKitchenTicket({
-      orderNumber: placedOrder.orderNumber,
+      orderNumber: formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber),
       createdAt: placedOrder.createdAt,
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : undefined,
       orderType,
@@ -1990,7 +1990,7 @@ export default function PosPage() {
       return;
     }
     printReceipt({
-      orderNumber: placedOrder.orderNumber,
+      orderNumber: formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber),
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType,
       items: placedOrder
@@ -2078,7 +2078,7 @@ export default function PosPage() {
                       <button
                         key={table.id}
                         onClick={() => handleSelectTable(table)}
-                        title={tblOrder ? `${tblOrder.orderNumber} · ₹${runningTotal.toFixed(0)}` : `Table ${table.tableNumber} (${table.capacity} seats)`}
+                        title={tblOrder ? `${formatOrderNumber(tblOrder.orderDisplayNumber ?? tblOrder.orderNumber)} · ₹${runningTotal.toFixed(0)}` : `Table ${table.tableNumber} (${table.capacity} seats)`}
                         className={cn(
                           "relative flex flex-col items-center justify-center aspect-square rounded-lg border-2 text-xs font-bold transition-all",
                           selectedTableId === table.id
@@ -2375,7 +2375,7 @@ export default function PosPage() {
                 Tap items to add more to this order
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-1.5">
               {(() => {
                 const q = searchQuery.trim().toLowerCase();
                 const src = q ? (allMenuItems as MenuItem[]) : (menuItems as MenuItem[]);
@@ -2411,51 +2411,51 @@ export default function PosPage() {
                     key={item.id}
                     onClick={() => { if (!isOut) handleMenuItemClick(item); }}
                     disabled={isOut}
-                    title={isOut ? "Item is 86'd (out of stock)" : ""}
+                    title={isOut ? "Item is 86'd (out of stock)" : item.name}
                     className={cn(
-                      "group relative text-left p-3 rounded-xl border-2 transition-all duration-150",
+                      "group relative text-left p-1.5 rounded-lg border bg-card transition-all duration-150 overflow-hidden",
                       isOut
                         ? "border-border bg-muted/30 opacity-60 cursor-not-allowed"
-                        : "active:scale-[0.98] hover:shadow-md hover:-translate-y-0.5",
+                        : "active:scale-[0.97] hover:shadow-md hover:-translate-y-0.5",
                       !isOut && (inCart || inLive)
-                        ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5 shadow-sm shadow-primary/20"
-                        : !isOut && "border-border hover:border-primary/50 hover:bg-accent/40"
+                        ? "border-primary/70 bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/30 shadow-sm"
+                        : !isOut && "border-border/70 hover:border-primary/50 hover:bg-accent/30"
                     )}
                   >
                     {item.imageUrl ? (
                       <img
                         src={resolveImageUrl(item.imageUrl)}
                         alt=""
-                        className={cn("w-full aspect-square object-cover rounded-lg mb-2 bg-muted", isOut && "grayscale")}
+                        className={cn("w-full aspect-square object-cover rounded-md mb-1.5 bg-muted", isOut && "grayscale")}
                         onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
-                      <div className="w-full aspect-square rounded-lg bg-muted/40 flex items-center justify-center mb-2">
-                        <ShoppingBag className="w-6 h-6 text-muted-foreground/40" />
+                      <div className="w-full aspect-square rounded-md bg-muted/40 flex items-center justify-center mb-1.5">
+                        <ShoppingBag className="w-5 h-5 text-muted-foreground/40" />
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-1 mb-1">
-                      <p className="text-sm font-medium leading-tight line-clamp-2 flex-1">{item.name}</p>
-                      <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5", item.isVeg ? "bg-green-500" : "bg-red-500")} />
+                      <p className="text-[11px] font-medium leading-tight line-clamp-2 flex-1">{item.name}</p>
+                      <span className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ring-1", item.isVeg ? "bg-green-500 ring-green-600/30" : "bg-red-500 ring-red-600/30")} />
                     </div>
-                    <span className="inline-flex items-center text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full ring-1 ring-primary/20">₹{item.price}</span>
+                    <span className="inline-flex items-center text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md ring-1 ring-primary/20">₹{item.price}</span>
                     {!isOut && (item.tags ?? []).some(t => t.toLowerCase() === "bestseller") && (
-                      <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow flex items-center gap-0.5">
-                        <Flame className="w-2.5 h-2.5" /> Top
+                      <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded shadow flex items-center gap-0.5">
+                        <Flame className="w-2 h-2" /> Top
                       </div>
                     )}
                     {!isOut && (item.tags ?? []).some(t => ["new", "chef special", "chef's special"].includes(t.toLowerCase())) && (
-                      <div className="absolute bottom-12 left-2 bg-violet-500 text-white text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow flex items-center gap-0.5">
-                        <Sparkles className="w-2.5 h-2.5" /> New
+                      <div className="absolute bottom-9 left-1 bg-violet-500 text-white text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded shadow flex items-center gap-0.5">
+                        <Sparkles className="w-2 h-2" /> New
                       </div>
                     )}
                     {isOut && (
-                      <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shadow">
+                      <div className="absolute top-1 left-1 bg-destructive text-destructive-foreground text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded shadow">
                         86'd
                       </div>
                     )}
                     {!isOut && (inCart || inLive) && (
-                      <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
+                      <div className="absolute top-1 right-1 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow ring-2 ring-background">
                         {inCart?.quantity ?? liveItems.filter(li => li.menuItemId === item.id).reduce((s, li) => s + li.quantity, 0)}
                       </div>
                     )}
@@ -2582,7 +2582,7 @@ export default function PosPage() {
 
           {placedOrder && (
             <div className="mx-4 mt-3 px-4 py-2.5 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-xl">
-              <p className="text-xs font-semibold text-green-700 dark:text-green-400">{placedOrder.orderNumber} — placed</p>
+              <p className="text-xs font-semibold text-green-700 dark:text-green-400">{formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber)} — placed</p>
               <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Kitchen notified · Tap menu items to add more</p>
             </div>
           )}
@@ -3143,7 +3143,7 @@ export default function PosPage() {
           logoUrl={restaurant?.logoUrl ?? undefined}
           restaurantAddress={[restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined}
           restaurantPhone={restaurant?.phone ?? undefined}
-          orderNumber={placedOrder.orderNumber}
+          orderNumber={formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber)}
           tableLabel={selectedTable ? `Table ${selectedTable.tableNumber}` : ""}
           orderType={orderType}
           customerName={customerName}
