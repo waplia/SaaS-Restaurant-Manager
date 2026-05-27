@@ -174,6 +174,39 @@ export class ApiClient {
     return this.request<RestaurantInfo>(`/api/restaurants/${restaurantId}`);
   }
 
+  /**
+   * Fetch the channel-mapped rendered bill text from the API. Used by the
+   * print engine so the thermal printer prints the exact same content as
+   * the web/mobile surfaces — a single Settings → Bill Templates change
+   * propagates everywhere.
+   */
+  async renderBillText(restaurantId: number, orderId: number, channel: string): Promise<string> {
+    if (!this.baseUrl) throw new ApiError(0, "API base URL not configured. Open Settings.");
+    const path = `/api/restaurants/${restaurantId}/orders/${orderId}/bill-render?channel=${encodeURIComponent(channel)}&format=text`;
+    const url = `${this.baseUrl}${path}`;
+    const headers: Record<string, string> = { Accept: "text/plain" };
+    const { accessToken } = sessionStore.getTokens();
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    let res = await fetch(url, { method: "GET", headers });
+    if (res.status === 401) {
+      // Reuse the same refresh path as request<T>() by piggy-backing through a
+      // throwaway authed request that triggers refresh, then retry once.
+      try {
+        await this.request<unknown>("/api/auth/me");
+        const { accessToken: refreshed } = sessionStore.getTokens();
+        if (refreshed) headers.Authorization = `Bearer ${refreshed}`;
+        res = await fetch(url, { method: "GET", headers });
+      } catch {
+        // fall through — error handled below
+      }
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, `bill-render failed (${res.status})`, body);
+    }
+    return await res.text();
+  }
+
   // ─── Menu ─────────────────────────────────────────────────────────────
   async listCategories(restaurantId: number): Promise<MenuCategory[]> {
     const data = await this.request<unknown>(`/api/restaurants/${restaurantId}/categories`);

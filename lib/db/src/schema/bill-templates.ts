@@ -100,8 +100,10 @@ export type BillTemplate = typeof billTemplatesTable.$inferSelect;
  */
 export const BILL_CHANNELS = [
   "web_pos",
+  "pos_thermal",
   "desktop_pos",
   "mobile_waiter",
+  "mobile_share",
   "qr_customer",
   "a4_pdf",
   "thermal_print",

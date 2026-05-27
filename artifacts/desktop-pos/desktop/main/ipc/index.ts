@@ -467,6 +467,7 @@ export function registerApiIpc(opts: {
     const payload = buildBillPayload(order, outlet, {
       openDrawer: !!req.openDrawer,
       copies: req.copies,
+      restaurantId,
     });
     const r = await printerEngine.dispatchBill(payload);
     if (!r.ok) throw new Error(r.error);
@@ -550,6 +551,7 @@ export function registerApiIpc(opts: {
       const payload = buildBillPayload(detail, outlet, {
         openDrawer: req.paymentMethod === "cash",
         copies: 1,
+        restaurantId,
       });
       const r = await printerEngine.dispatchBill(payload);
       if (!r.ok) console.warn("[orders:pay] bill print failed:", r.error);
@@ -565,7 +567,7 @@ export function registerApiIpc(opts: {
     try {
       const outlet = await client.getRestaurant(restaurantId).catch(() => null);
       const hasCash = legs.some((l) => l.paymentMethod === "cash");
-      const payload = buildBillPayload(detail, outlet, { openDrawer: hasCash, copies: 1 });
+      const payload = buildBillPayload(detail, outlet, { openDrawer: hasCash, copies: 1, restaurantId });
       const r = await printerEngine.dispatchBill(payload);
       if (!r.ok) console.warn("[orders:split] bill print failed:", r.error);
     } catch (err) {
@@ -683,9 +685,12 @@ function buildKotPayload(order: OrderDetailView): OrderKotPayload {
 function buildBillPayload(
   order: OrderDetailView,
   outlet: ApiRestaurantDetail | null,
-  extra: { openDrawer: boolean; copies?: number },
+  extra: { openDrawer: boolean; copies?: number; restaurantId?: number; channel?: string },
 ): OrderBillPayload {
   const payload: OrderBillPayload = {
+    orderId: order.id,
+    restaurantId: extra.restaurantId,
+    channel: extra.channel ?? "desktop_pos",
     orderNumber: order.orderNumber,
     orderType: order.orderType ?? null,
     tableLabel: order.tableLabel ?? null,

@@ -345,6 +345,8 @@ app.whenReady().then(async () => {
     setScannerEnabled: (v: boolean) => !!saveSettings({ scannerEnabled: v }).scannerEnabled,
     failedStore: failedStore(),
     notifyFailedChanged: () => mainWindow?.webContents.send("printers:failed-changed"),
+    fetchBillText: (restaurantId, orderId, channel) =>
+      apiClient.renderBillText(restaurantId, orderId, channel),
   });
   // Keep the legacy `drawer:open` channel reachable even when no printer
   // module assignments have been wired; the printer handler also registers

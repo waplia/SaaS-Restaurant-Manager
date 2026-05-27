@@ -203,8 +203,10 @@ export const SYSTEM_DEFAULT_TEMPLATES: DefaultTemplate[] = [
  */
 export const CHANNEL_DEFAULT_KEYS: Record<BillChannel, string> = {
   web_pos: "thermal_80",
+  pos_thermal: "thermal_80",
   desktop_pos: "thermal_80",
   mobile_waiter: "a4_invoice",
+  mobile_share: "a4_invoice",
   qr_customer: "qr_order",
   a4_pdf: "a4_invoice",
   thermal_print: "thermal_80",

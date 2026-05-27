@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo, useKitchenTickets } from "@/lib/hooks";
+import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo, useKitchenTickets, useRestaurantId } from "@/lib/hooks";
+import { apiFetch } from "@/lib/api";
 import { useDeliveryExecutives, useAssignRider } from "@/lib/delivery";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,6 +12,20 @@ import { cn, formatOrderNumber } from "@/lib/utils";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
 import type { KitchenTicket } from "@/lib/types";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
+
+async function openPrintWindowWithHtml(html: string, title: string): Promise<void> {
+  const w = window.open("", "_blank", "width=800,height=900");
+  if (!w) throw new Error("Pop-up blocked. Allow pop-ups to print the bill.");
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  const trigger = () => {
+    try { w.document.title = title; } catch { /* ignore */ }
+    try { w.focus(); w.print(); } catch { /* ignore */ }
+  };
+  if (w.document.readyState === "complete") setTimeout(trigger, 150);
+  else w.addEventListener("load", () => setTimeout(trigger, 150));
+}
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -39,6 +54,7 @@ interface OrderDetailDrawerProps {
 export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) {
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId ?? undefined);
   const { data: restaurant } = useRestaurantInfo();
+  const restaurantId = useRestaurantId();
   const payOrder = usePayOrder();
   const updateOrder = useUpdateOrder();
   const assignRider = useAssignRider();
@@ -101,44 +117,23 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
     }
   };
 
-  const handlePrint = () => {
-    if (!order) return;
-    printOrder({
-      size: "a5",
-      documentTitle: order.paymentStatus === "paid" ? "Tax Invoice" : "Receipt",
-
-      orderNumber: order.orderNumber,
-      createdAt: order.createdAt,
-      tableLabel: order.tableId ? `Table ${order.tableId}` : undefined,
-      orderType: order.orderType,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      items: (order.items ?? []).map((it) => ({
-        name: it.menuItemName,
-        quantity: it.quantity,
-        unitPrice: Number(it.unitPrice),
-        lineTotal: Number(it.totalPrice),
-        notes: it.notes,
-      })),
-      subtotal: Number(order.subtotal ?? 0),
-      taxAmount: Number(order.taxAmount ?? 0),
-      serviceCharge: Number(order.serviceCharge ?? 0),
-      discountAmount: Number(order.discountAmount ?? 0),
-      totalAmount: Number(order.totalAmount ?? 0),
-      payment: order.paymentStatus === "paid" && order.paymentMethod
-        ? {
-            method: order.paymentMethod,
-            tendered: order.paymentAmount ? Number(order.paymentAmount) : undefined,
-          }
-        : undefined,
-      footer: order.paymentStatus === "paid" ? "Paid · Thank you for dining with us!" : "Thank you for dining with us!",
-      restaurant: {
-        name: restaurant?.name,
-        logoUrl: restaurant?.logoUrl,
-        address: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || null,
-        phone: restaurant?.phone,
-      },
-    });
+  const handlePrint = async () => {
+    if (!order || !restaurantId) return;
+    try {
+      const res = await apiFetch<{ html: string }>(
+        `/restaurants/${restaurantId}/orders/${order.id}/bill-render?channel=pos_thermal&format=json`,
+      );
+      await openPrintWindowWithHtml(
+        res.html,
+        order.paymentStatus === "paid" ? "Tax Invoice" : "Receipt",
+      );
+    } catch (e) {
+      toast({
+        title: "Print failed",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleReprintTicket = (ticket: KitchenTicket) => {

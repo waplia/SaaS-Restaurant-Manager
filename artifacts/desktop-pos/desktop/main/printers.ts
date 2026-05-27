@@ -221,6 +221,13 @@ export interface PrinterDeps {
   setScannerEnabled: (v: boolean) => boolean;
   failedStore: FailedPrintsStore;
   notifyFailedChanged: () => void;
+  /** Optional: fetch the rendered bill text for a given order from the
+   *  API's `bill-render?format=text` endpoint using the channel-mapped
+   *  template. When provided, `dispatchBill` prefers this over the local
+   *  ESC/POS formatter so a Settings → Bill Templates change actually
+   *  changes what the thermal printer prints. Falls back to the local
+   *  formatter on any error (offline, no template, etc.). */
+  fetchBillText?: (restaurantId: number, orderId: number, channel: string) => Promise<string>;
 }
 
 /**
@@ -405,7 +412,19 @@ export function registerPrinterHandlers(deps: PrinterDeps): PrinterEngine {
       failJob({ kind: "bill", printerName: null, summary: `Bill ${payload.orderNumber} · no printer assigned`, error: "No bill printer configured", payload });
       return { ok: false, error: "No bill printer configured. Assign one in Settings → Printers." };
     }
-    const text = formatBillText(payload);
+    let text = formatBillText(payload);
+    if (deps.fetchBillText && payload.orderId != null && payload.restaurantId != null) {
+      try {
+        const remote = await deps.fetchBillText(
+          payload.restaurantId,
+          payload.orderId,
+          payload.channel ?? "desktop_pos",
+        );
+        if (typeof remote === "string" && remote.trim().length > 0) text = remote;
+      } catch (err) {
+        console.warn("[dispatchBill] API render fell back to local formatter:", (err as Error).message);
+      }
+    }
     const copies = Math.max(1, Math.min(5, payload.copies ?? 1));
     const drawerBefore = deps.getDrawerSettings().kickBefore;
     let firstError: string | null = null;

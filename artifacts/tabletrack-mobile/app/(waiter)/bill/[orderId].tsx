@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Alert } from "@/components/ui/AppAlert";
-import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform, Share } from "react-native";
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform, Share, Linking } from "react-native";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 import { useLocalSearchParams, useNavigation, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -89,26 +90,20 @@ export default function BillScreen() {
 
   const handlePrintBill = async () => {
     if (!order) return;
-    type BillItem = { id: number; menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string };
-    const items = (order.items ?? []) as BillItem[];
-    const lines = items.map(it => `• ${it.menuItemName} x${it.quantity}  ₹${Number(it.totalPrice ?? it.unitPrice).toLocaleString()}`).join("\n");
     const orderNumber = formatOrderNumber(order.orderInternalNumber ?? order.orderNumber ?? id);
-    const subtotal = Number(order.subtotal ?? order.totalAmount);
-    const tax = Number((order as { taxAmount?: string }).taxAmount ?? 0);
-    const discount = Number((order as { discountAmount?: string }).discountAmount ?? 0);
-    const total = Number(order.totalAmount);
-    const message =
-      `Order #${orderNumber}\n` +
-      `------------------------------\n` +
-      `${lines}\n` +
-      `------------------------------\n` +
-      `Subtotal: ₹${subtotal.toLocaleString()}\n` +
-      (tax > 0 ? `Tax: ₹${tax.toFixed(2)}\n` : "") +
-      (discount > 0 ? `Discount: -₹${discount.toFixed(2)}\n` : "") +
-      `Total: ₹${total.toLocaleString()}\n\n` +
-      `Thank you for dining with us!`;
+    const base = getApiBaseUrl();
+    const url = `${base}/api/restaurants/${restaurantId}/orders/${order.id}/bill-render?channel=mobile_share`;
     try {
-      await Share.share({ message, title: `Bill — Order #${orderNumber}` });
+      if (Platform.OS === "web") {
+        await Linking.openURL(url);
+        return;
+      }
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Share.share({ message: url, url, title: `Bill — Order #${orderNumber}` });
+      } else {
+        await Share.share({ message: url, title: `Bill — Order #${orderNumber}` });
+      }
     } catch {
       Alert.alert("Share Bill", "Could not open the share sheet.");
     }

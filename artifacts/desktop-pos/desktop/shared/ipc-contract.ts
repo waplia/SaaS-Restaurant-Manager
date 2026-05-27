@@ -488,6 +488,16 @@ export interface OrderBillPayload {
   /** Open the cash drawer when this print job runs (cash payments only). */
   openDrawer?: boolean;
   copies?: number;
+  /** Order/restaurant ids used by the printer engine to fetch the
+   *  channel-mapped bill text from the API render endpoint. When present
+   *  the engine prefers the API-rendered text so the thermal printer
+   *  matches what web/mobile show; absent or on fetch failure we fall
+   *  back to the local ESC/POS formatter. */
+  orderId?: number;
+  restaurantId?: number;
+  /** Bill template channel for the API render endpoint
+   *  (defaults to "desktop_pos"). */
+  channel?: string;
 }
 
 export interface FailedPrintEntry {
