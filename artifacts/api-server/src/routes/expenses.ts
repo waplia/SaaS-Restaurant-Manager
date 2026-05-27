@@ -48,10 +48,17 @@ router.use(
     "/restaurants/:restaurantId/expenses",
     "/restaurants/:restaurantId/recurring-expenses",
   ],
-  requireRole("owner", "manager", "accountant", "super_admin"),
+  // Cashier is allowed at the gate so the cashier Expenses screen can load
+  // categories and submit expense entries. Mutations that change other
+  // people's data (edit/delete/approve/reject/recurring) still require a
+  // manager-level role via per-route `requireRole` guards below.
+  requireRole("owner", "manager", "accountant", "cashier", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("expense_tracking"),
 );
+
+const MANAGER_EXPENSE_ROLES = ["owner", "manager", "accountant", "super_admin"] as const;
+const restrictToManagers = requireRole(...MANAGER_EXPENSE_ROLES);
 
 const DEFAULT_CATEGORIES: Array<{ name: string; color: string; icon: string; categoryKind: ExpenseCategoryKind }> = [
   { name: "Rent",        color: "#ef4444", icon: "building", categoryKind: "fixed" },
@@ -187,7 +194,7 @@ router.post("/restaurants/:restaurantId/expense-categories", async (req, res) =>
   res.status(201).json(cat);
 });
 
-router.patch("/restaurants/:restaurantId/expense-categories/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/expense-categories/:id", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { name, color, icon, isActive, categoryKind } = req.body;
   const updates: Record<string, unknown> = { name, color, icon, isActive };
@@ -209,7 +216,7 @@ router.patch("/restaurants/:restaurantId/expense-categories/:id", async (req, re
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/expense-categories/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/expense-categories/:id", restrictToManagers, async (req, res) => {
   await db.update(expenseCategoriesTable).set({ isActive: false })
     .where(and(eq(expenseCategoriesTable.id, Number(req.params.id)), eq(expenseCategoriesTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();
@@ -294,7 +301,7 @@ router.post("/restaurants/:restaurantId/expenses", async (req, res) => {
   res.status(201).json(exp);
 });
 
-router.patch("/restaurants/:restaurantId/expenses/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/expenses/:id", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { categoryId, amount, expenseDate, payee, paymentMethod, notes, receiptUrl, branchId } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -329,7 +336,7 @@ router.patch("/restaurants/:restaurantId/expenses/:id", async (req, res) => {
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/expenses/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/expenses/:id", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
   const result = await db.delete(expensesTable)
@@ -385,11 +392,11 @@ async function decideExpense(
   res.json(updated);
 }
 
-router.post("/restaurants/:restaurantId/expenses/:id/approve", (req, res) => decideExpense(req, res, "approved"));
-router.post("/restaurants/:restaurantId/expenses/:id/reject",  (req, res) => decideExpense(req, res, "rejected"));
+router.post("/restaurants/:restaurantId/expenses/:id/approve", restrictToManagers, (req, res) => decideExpense(req, res, "approved"));
+router.post("/restaurants/:restaurantId/expenses/:id/reject",  restrictToManagers, (req, res) => decideExpense(req, res, "rejected"));
 
 // ===== Recurring =====
-router.get("/restaurants/:restaurantId/recurring-expenses", async (req, res) => {
+router.get("/restaurants/:restaurantId/recurring-expenses", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   await generateDueRecurringExpenses(restaurantId);
   const rows = await db.select().from(recurringExpensesTable).where(eq(recurringExpensesTable.restaurantId, restaurantId)).orderBy(desc(recurringExpensesTable.createdAt));
@@ -409,7 +416,7 @@ function isValidDateStr(v: unknown): v is string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
 }
 
-router.post("/restaurants/:restaurantId/recurring-expenses", async (req, res) => {
+router.post("/restaurants/:restaurantId/recurring-expenses", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { name, categoryId, amount, frequency, dayOfMonth, payee, paymentMethod, notes, nextRunDate } = req.body;
   if (!name || !categoryId || !amount) return void res.status(400).json({ error: "name, categoryId, amount required" });
@@ -432,7 +439,7 @@ router.post("/restaurants/:restaurantId/recurring-expenses", async (req, res) =>
   res.status(201).json(tpl);
 });
 
-router.patch("/restaurants/:restaurantId/recurring-expenses/:id", async (req, res) => {
+router.patch("/restaurants/:restaurantId/recurring-expenses/:id", restrictToManagers, async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const { name, categoryId, amount, frequency, dayOfMonth, payee, paymentMethod, notes, nextRunDate, isActive } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -468,7 +475,7 @@ router.patch("/restaurants/:restaurantId/recurring-expenses/:id", async (req, re
   res.json(updated);
 });
 
-router.delete("/restaurants/:restaurantId/recurring-expenses/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/recurring-expenses/:id", restrictToManagers, async (req, res) => {
   await db.delete(recurringExpensesTable)
     .where(and(eq(recurringExpensesTable.id, Number(req.params.id)), eq(recurringExpensesTable.restaurantId, Number(req.params.restaurantId))));
   res.status(204).send();

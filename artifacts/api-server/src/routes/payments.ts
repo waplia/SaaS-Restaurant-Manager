@@ -6,6 +6,7 @@ import {
 } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
+import { lockOpenCashRegister, recordCashSaleMovement } from "./cash-register";
 import { validate } from "../middleware/validate";
 import { z } from "zod";
 
@@ -287,23 +288,44 @@ router.post(
     }
 
     const cat = inferPaymentCategory(method);
-    const [row] = await db.insert(paymentsTable).values({
-      restaurantId,
-      direction,
-      method,
-      paymentCategory: cat.category,
-      paymentSource: cat.source,
-      gatewayCode: cat.gatewayCode,
-      amount: amountNum.toFixed(2),
-      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-      partyType: partyType ?? "other",
-      partyId: partyId ?? null,
-      partyName: partyName ?? null,
-      referenceType: referenceType ?? "manual",
-      referenceId: referenceId ?? null,
-      notes: notes ?? null,
-      recordedBy: req.user?.sub ?? null,
-    } as never).returning();
+    // Cash-in payments must also leave a footprint in the open cash register
+    // session so the cashier's shift screen ("Cash sales" / "Expected") reflects
+    // money that actually entered the drawer. Skip silently when no register is
+    // open (e.g. back-office manual reconciliations) rather than failing.
+    const row = await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(paymentsTable).values({
+        restaurantId,
+        direction,
+        method,
+        paymentCategory: cat.category,
+        paymentSource: cat.source,
+        gatewayCode: cat.gatewayCode,
+        amount: amountNum.toFixed(2),
+        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+        partyType: partyType ?? "other",
+        partyId: partyId ?? null,
+        partyName: partyName ?? null,
+        referenceType: referenceType ?? "manual",
+        referenceId: referenceId ?? null,
+        notes: notes ?? null,
+        recordedBy: req.user?.sub ?? null,
+      } as never).returning();
+
+      if (direction === "in" && method === "cash" && amountNum > 0) {
+        const sessionId = await lockOpenCashRegister(tx, restaurantId);
+        if (sessionId) {
+          await recordCashSaleMovement(tx, {
+            restaurantId,
+            sessionId,
+            amount: amountNum,
+            orderId: referenceType === "order" ? (referenceId ?? undefined) : undefined,
+            userId: req.user?.sub ?? null,
+          });
+        }
+      }
+
+      return inserted;
+    });
 
     res.status(201).json(row);
   },
@@ -363,6 +385,23 @@ router.post(
           notes: notes ?? null,
           recordedBy: req.user?.sub ?? null,
         } as never).returning();
+
+        // Cash settlements must also leave a drawer footprint so the shift
+        // screen's "Cash sales" and "Expected" totals reflect the money in
+        // the till. Silently skip when no register is open (e.g. back-office
+        // reconciliation after the fact).
+        if (method === "cash" && amountNum > 0) {
+          const sid = await lockOpenCashRegister(tx, restaurantId);
+          if (sid) {
+            await recordCashSaleMovement(tx, {
+              restaurantId,
+              sessionId: sid,
+              amount: amountNum,
+              orderId: order.id,
+              userId: req.user?.sub ?? null,
+            });
+          }
+        }
 
         const total = Number(order.totalAmount);
         const cumulativePaid = previouslyPaid + amountNum;

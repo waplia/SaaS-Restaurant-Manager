@@ -426,7 +426,13 @@ function SummaryTile({ label, value, sub, icon, tone = "neutral", onPress }: Sum
           {label.toUpperCase()}
         </AppText>
       </View>
-      <AppText variant="title" weight="bold" numberOfLines={1} adjustsFontSizeToFit>
+      <AppText
+        variant="hero"
+        weight="bold"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ fontSize: 26, lineHeight: 30, marginTop: 2 }}
+      >
         {value}
       </AppText>
       {sub ? (

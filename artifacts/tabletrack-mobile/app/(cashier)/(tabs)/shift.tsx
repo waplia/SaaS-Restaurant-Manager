@@ -260,24 +260,49 @@ export default function CashierShiftScreen() {
           </AppCard>
         ) : (
           <>
-            <AppCard padding={14} shadow="sm" style={{ gap: 8 }}>
+            {/* Hero session card with prominent expected cash */}
+            <AppCard padding={16} shadow="md" style={{ gap: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <AppText variant="micro" color="mutedForeground">SESSION OPEN</AppText>
-                  <AppText variant="h3">#{session!.id}</AppText>
+                  <AppText variant="h2">#{session!.id}</AppText>
+                  <AppText variant="small" color="mutedForeground" numberOfLines={1}>
+                    {session!.openedByName ?? "Cashier"} · {new Date(session!.openedAt).toLocaleString()}
+                  </AppText>
                 </View>
                 <StatusChip label="Open" tone="success" icon="checkmark-circle" />
               </View>
-              <AppText variant="small" color="mutedForeground">
-                {session!.openedByName ?? "Cashier"} · since {new Date(session!.openedAt).toLocaleString()}
-              </AppText>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 6 }}>
-                <Stat label="Opening float" value={fmtCurrency(totals?.openingFloat ?? session!.openingFloat)} />
-                <Stat label="Cash sales" value={fmtCurrency(totals?.cashSales)} />
-                <Stat label="Cash in" value={fmtCurrency(totals?.cashIn)} />
-                <Stat label="Cash out" value={fmtCurrency(totals?.cashOut)} />
+
+              <View
+                style={{
+                  borderRadius: 14,
+                  padding: 14,
+                  backgroundColor: t.colors.accent,
+                  borderWidth: 1,
+                  borderColor: t.colors.border,
+                  gap: 4,
+                }}
+              >
+                <AppText variant="micro" color="mutedForeground">EXPECTED IN DRAWER</AppText>
+                <AppText
+                  variant="hero"
+                  weight="bold"
+                  style={{ fontSize: 34, lineHeight: 38, color: t.colors.primary }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {fmtCurrency(totals?.expectedCash)}
+                </AppText>
+                <AppText variant="small" color="mutedForeground">
+                  Opening {fmtCurrency(totals?.openingFloat ?? session!.openingFloat)} + cash sales {fmtCurrency(totals?.cashSales)}
+                </AppText>
+              </View>
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <Stat label="Cash sales" value={fmtCurrency(totals?.cashSales)} tone="success" />
+                <Stat label="Cash in" value={fmtCurrency(totals?.cashIn)} tone="success" />
+                <Stat label="Cash out" value={fmtCurrency(totals?.cashOut)} tone="warn" />
                 <Stat label="Refunds" value={fmtCurrency(totals?.refunds)} tone="warn" />
-                <Stat label="Expected" value={fmtCurrency(totals?.expectedCash)} tone="primary" />
               </View>
             </AppCard>
 
@@ -488,16 +513,36 @@ export default function CashierShiftScreen() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" | "primary" }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" | "primary" | "success" }) {
   const t = useTheme();
   const fg =
     tone === "primary" ? t.colors.primary
     : tone === "warn" ? "#ca8a04"
+    : tone === "success" ? "#16a34a"
     : t.colors.foreground;
   return (
-    <View style={{ flexBasis: "30%", flexGrow: 1, gap: 2 }}>
+    <View
+      style={{
+        flexBasis: "47%",
+        flexGrow: 1,
+        gap: 2,
+        padding: 10,
+        borderRadius: 10,
+        backgroundColor: t.colors.surface,
+        borderWidth: 1,
+        borderColor: t.colors.border,
+      }}
+    >
       <AppText variant="micro" color="mutedForeground">{label.toUpperCase()}</AppText>
-      <AppText variant="bodyMd" weight="bold" style={{ color: fg }}>{value}</AppText>
+      <AppText
+        variant="h2"
+        weight="bold"
+        style={{ color: fg }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </AppText>
     </View>
   );
 }
