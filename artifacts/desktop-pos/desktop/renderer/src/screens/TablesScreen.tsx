@@ -20,6 +20,25 @@ import { shortOrderNumber } from "../../../shared/orderNumber";
 import { Banner, Button, Spinner, colors } from "../ui/components";
 import { fmtINR } from "./order/types";
 
+/**
+ * Per-table local state: guest count, waiter name, last-cleaned-at.
+ * The backend has no fields for these on FloorTable, so they live on
+ * this terminal so the host stand has a working seating plan.
+ */
+interface LocalTableMeta { guests?: number; waiter?: string; cleanedAt?: number; }
+const TM_KEY = "kp:tableMeta";
+function readTableMeta(): Record<string, LocalTableMeta> {
+  try { return JSON.parse(localStorage.getItem(TM_KEY) ?? "{}"); } catch { return {}; }
+}
+function writeTableMeta(m: Record<string, LocalTableMeta>) {
+  try { localStorage.setItem(TM_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
+function updateTableMeta(id: number, patch: Partial<LocalTableMeta>) {
+  const all = readTableMeta();
+  all[String(id)] = { ...(all[String(id)] ?? {}), ...patch };
+  writeTableMeta(all);
+}
+
 interface Props {
   /** Called when the cashier wants to open a table in the Orders workspace. */
   onOpenTable: (table: FloorTable, orderId: number | null) => void;
@@ -43,6 +62,11 @@ export function TablesScreen({ onOpenTable }: Props) {
   const [info, setInfo] = useState<string | null>(null);
   const [moveDialog, setMoveDialog] = useState<MoveDialogState | null>(null);
   const [moveBusy, setMoveBusy] = useState(false);
+  const [meta, setMeta] = useState<Record<string, LocalTableMeta>>(() => readTableMeta());
+  const setMetaFor = useCallback((id: number, patch: Partial<LocalTableMeta>) => {
+    updateTableMeta(id, patch);
+    setMeta(readTableMeta());
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -190,6 +214,12 @@ export function TablesScreen({ onOpenTable }: Props) {
                   <div style={{ fontSize: 11, color: colors.textMuted }}>{live.status}</div>
                 </div>
               )}
+              <TableMetaRow
+                table={t}
+                meta={meta[String(t.id)] ?? {}}
+                onChange={(patch) => setMetaFor(t.id, patch)}
+                occupied={!!live}
+              />
               <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
                 <Button
                   style={{ flex: 1, padding: "6px 8px", fontSize: 12 }}
@@ -312,6 +342,80 @@ function TableMoveOverlay({ dialog, tables, ordersByTable, busy, onPick, onClose
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TableMetaRow({ table, meta, onChange, occupied }: {
+  table: FloorTable;
+  meta: LocalTableMeta;
+  onChange: (patch: Partial<LocalTableMeta>) => void;
+  occupied: boolean;
+}) {
+  const cleanedAgo = meta.cleanedAt ? Math.floor((Date.now() - meta.cleanedAt) / 60_000) : null;
+  return (
+    <div style={{ marginTop: 6, display: "grid", gap: 4, fontSize: 11 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={{ color: colors.textDim, minWidth: 46 }}>Guests</span>
+        <div style={{ display: "flex", gap: 2 }}>
+          {[1, 2, 4, 6].map(n => (
+            <button
+              key={n}
+              onClick={(e) => { e.stopPropagation(); onChange({ guests: meta.guests === n ? undefined : n }); }}
+              style={{
+                width: 22, height: 22, borderRadius: 4,
+                background: meta.guests === n ? colors.brand : colors.panelAlt,
+                color: meta.guests === n ? "#fff" : colors.textPrimary,
+                border: 0, cursor: "pointer", fontSize: 10, fontWeight: 700,
+              }}
+            >{n}</button>
+          ))}
+          <input
+            type="number"
+            min={0}
+            value={meta.guests && ![1,2,4,6].includes(meta.guests) ? meta.guests : ""}
+            onChange={e => {
+              const v = e.target.value === "" ? undefined : Math.max(0, Number(e.target.value));
+              onChange({ guests: v });
+            }}
+            onClick={e => e.stopPropagation()}
+            placeholder="…"
+            style={{
+              width: 36, height: 22, borderRadius: 4, border: 0,
+              background: colors.panelAlt, color: colors.textPrimary,
+              fontSize: 10, padding: "0 4px", textAlign: "center",
+            }}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={{ color: colors.textDim, minWidth: 46 }}>Waiter</span>
+        <input
+          value={meta.waiter ?? ""}
+          onChange={e => onChange({ waiter: e.target.value || undefined })}
+          onClick={e => e.stopPropagation()}
+          placeholder="—"
+          style={{
+            flex: 1, height: 22, borderRadius: 4, border: 0,
+            background: colors.panelAlt, color: colors.textPrimary,
+            fontSize: 10, padding: "0 6px",
+          }}
+        />
+      </div>
+      {!occupied && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onChange({ cleanedAt: Date.now(), guests: undefined, waiter: undefined }); }}
+          style={{
+            marginTop: 2, padding: "3px 6px", borderRadius: 4,
+            background: cleanedAgo != null && cleanedAgo < 15 ? "rgba(22,163,74,0.18)" : colors.panelAlt,
+            color: cleanedAgo != null && cleanedAgo < 15 ? "#86efac" : colors.textDim,
+            border: 0, cursor: "pointer", fontSize: 10, fontWeight: 600,
+          }}
+          title={meta.cleanedAt ? `Last cleaned: ${new Date(meta.cleanedAt).toLocaleTimeString()}` : "Mark this table as cleaned"}
+        >
+          {cleanedAgo == null ? "Mark cleaned" : `✓ Cleaned ${cleanedAgo}m ago`}
+        </button>
+      )}
     </div>
   );
 }

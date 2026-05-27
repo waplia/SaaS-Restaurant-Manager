@@ -181,6 +181,15 @@ export interface MenuItem {
   modifierGroupCount?: number;
   hasModifiers?: boolean;
   hasRequiredModifiers?: boolean;
+  /** Marked best-seller by the back office. Renders a ⭐ chip on the tile. */
+  isBestseller?: boolean | null;
+  /** Inventory hint — when true, the tile shows a "Low stock" warning. */
+  lowStock?: boolean | null;
+  /** Searchable aliases / tags (SKU, barcode, short codes). */
+  sku?: string | null;
+  barcode?: string | null;
+  aliases?: string[] | null;
+  tags?: string[] | null;
 }
 
 export interface ModifierOption {

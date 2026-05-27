@@ -16,7 +16,9 @@ import type {
   OsPrinter, PrinterAssignments, PrinterRole, DrawerSettings,
   FailedPrintEntry,
 } from "../../../shared/ipc-contract";
-import { Button, Card, Label, Spinner, colors, Banner } from "../ui/components";
+import { Button, Card, Label, Spinner, colors, Banner, Input } from "../ui/components";
+import { useAppPrefs } from "../hooks/useAppPrefs";
+import { broadcastDisplay } from "./CustomerDisplay";
 
 type Tab = "printers" | "hardware";
 
@@ -397,6 +399,8 @@ function DeviceTab({ online }: { online: boolean }) {
         </div>
       </Card>
 
+      <CustomerDisplayCard />
+
       <LocalCacheCard online={online} />
 
       <Card>
@@ -434,6 +438,74 @@ function DeviceTab({ online }: { online: boolean }) {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * Customer-display second-screen card.
+ *
+ * Lets the operator enable the feature, edit the idle tagline, launch a
+ * second window (dragged to the customer-facing monitor) and run a test
+ * so the display content can be verified before service.
+ */
+function CustomerDisplayCard() {
+  const { prefs, update } = useAppPrefs();
+  const [toast, setToast] = useState<string | null>(null);
+  const flash = (m: string) => { setToast(m); window.setTimeout(() => setToast(c => c === m ? null : c), 2500); };
+
+  function launch() {
+    const w = window.open(
+      "#display=customer", "kpCustomerDisplay",
+      "popup=yes,width=1280,height=720"
+    );
+    if (!w) { flash("Browser blocked the popup — allow popups for this app."); return; }
+    flash("Display launched · drag it to the customer-facing monitor.");
+  }
+
+  function test() {
+    broadcastDisplay({
+      status: "active",
+      items: [
+        { name: "Paneer Tikka", quantity: 1, price: 280, lineTotal: 280 },
+        { name: "Garlic Naan",  quantity: 2, price: 60,  lineTotal: 120 },
+      ],
+      subtotal: 400, tax: 20, service: 0, discount: 0, total: 420,
+      tagline: prefs.customerDisplayTagline,
+    });
+    flash("Test payload sent.");
+  }
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontWeight: 700 }}>Customer-facing display</div>
+          <div style={{ color: colors.textDim, fontSize: 12 }}>
+            Second-screen window the customer sees while items are rung up.
+          </div>
+        </div>
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={prefs.customerDisplay}
+            onChange={e => update({ customerDisplay: e.target.checked })}
+          /> Enabled
+        </label>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Label>Idle tagline</Label>
+        <Input
+          value={prefs.customerDisplayTagline}
+          onChange={e => update({ customerDisplayTagline: e.target.value })}
+          placeholder="Welcome — Thank you for dining with us"
+        />
+      </div>
+      {toast && <div style={{ marginTop: 8 }}><Banner kind="info">{toast}</Banner></div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <Button onClick={launch}>⇗ Launch display window</Button>
+        <Button variant="ghost" onClick={test}>Send test payload</Button>
+      </div>
+    </Card>
   );
 }
 

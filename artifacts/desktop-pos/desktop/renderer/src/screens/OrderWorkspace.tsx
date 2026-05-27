@@ -51,6 +51,9 @@ const ORDER_TYPES: Array<{ key: OrderType; label: string }> = [
   { key: "dine_in", label: "Dine-in" },
   { key: "takeaway", label: "Takeaway" },
   { key: "delivery", label: "Delivery" },
+  { key: "qr_order", label: "QR / Online" },
+  { key: "reservation_order", label: "Reservation" },
+  { key: "curbside", label: "Curbside / Tiffin" },
 ];
 
 export type WorkspaceHandoff =
@@ -596,12 +599,15 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
         e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); return;
       }
       if (e.key === "F3") {
-        e.preventDefault(); cartListRef.current?.focus();
-        if (selectedCartIdx == null && cart.length > 0) setSelectedCartIdx(cart.length - 1);
+        e.preventDefault(); setShowCustomer(true); return;
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        cart.length > 0 ? handleHold() : setShowHeld(true);
         return;
       }
-      if (e.key === "F4") { e.preventDefault(); void handleSend(); return; }
-      if (e.key === "F5") { e.preventDefault(); cart.length > 0 ? handleHold() : setShowHeld(true); return; }
+      if (e.key === "F5") { e.preventDefault(); setShowHeld(true); return; }
+      if (e.key === "F6") { e.preventDefault(); void handleSend(); return; }
       if (e.key === "F7") {
         e.preventDefault();
         if (placedOrder) {
@@ -615,7 +621,6 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
         if (placedOrder && placedOrder.paymentStatus !== "paid") setShowPay(true);
         return;
       }
-      if (e.key === "F9") { e.preventDefault(); void handleReprintKot(); return; }
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K" || e.key === "l" || e.key === "L")) {
         e.preventDefault(); setShowCalc(true); return;
       }
@@ -651,6 +656,31 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
     anyModalOpen, cart, selectedCartIdx, handleQtyDelta, handleRemoveLine, handleSend,
     handleHold, handleReprintKot, placedOrder, startNewOrder,
   ]);
+
+  // Listen for global shortcut bus from Workspace.tsx (Ctrl+P / Ctrl+Enter
+  // and any other commands raised from outside the POS pane).
+  useEffect(() => {
+    function onShortcut(ev: Event) {
+      const detail = (ev as CustomEvent<{ key: string }>).detail;
+      if (!detail) return;
+      if (anyModalOpen) return;
+      if (detail.key === "reprint-kot") { void handleReprintKot(); return; }
+      if (detail.key === "send-kot")    { void handleSend(); return; }
+      if (detail.key === "open-customer") { setShowCustomer(true); return; }
+      if (detail.key === "open-held")     { setShowHeld(true); return; }
+      if (detail.key === "open-calc")     { setShowCalc(true); return; }
+      if (detail.key === "print" && placedOrder) {
+        void window.khanalagao.printers.printBillForOrder({ orderId: placedOrder.id })
+          .catch((err) => setOpError(`Bill print failed: ${(err as Error).message}`));
+        return;
+      }
+      if (detail.key === "pay" && placedOrder && placedOrder.paymentStatus !== "paid") {
+        setShowPay(true);
+      }
+    }
+    window.addEventListener("tt:shortcut", onShortcut as EventListener);
+    return () => window.removeEventListener("tt:shortcut", onShortcut as EventListener);
+  }, [anyModalOpen, handleReprintKot, handleSend, placedOrder]);
 
   if (loading) {
     return <div style={{ display: "grid", placeItems: "center", height: "100%" }}><Spinner size={28} /></div>;
@@ -766,7 +796,7 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
           <span>{items.length} items · tax {(taxRate * 100).toFixed(0)}% · service {(serviceRate * 100).toFixed(0)}%</span>
           <span>
             {cart.length} line{cart.length === 1 ? "" : "s"} pending · {fmtINR(localTotals.totalAmount)}
-            {" · "}F2 search · F3 cart · F4 send · Del remove · +/− qty · ? help
+            {" · "}F2 search · F3 customer · F4 hold · F6 send · F7 print · F8 pay · ? help
           </span>
         </div>
       </section>

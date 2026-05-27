@@ -1,41 +1,53 @@
 /**
  * Sound feedback hook. Uses the Web Audio API so the desktop POS gets
- * crisp, low-latency cues without bundling binary assets. Sound preferences
- * persist in localStorage and can be toggled from App Settings.
+ * crisp, low-latency cues without bundling binary assets. Preferences
+ * persist in localStorage and can be edited from App Settings.
  *
- * Tones (frequency, duration, type):
- *   add        — 880Hz, 60ms,  triangle
- *   remove     — 440Hz, 60ms,  triangle
- *   pay        — 660→1040Hz chirp, 220ms, sine
- *   error      — 200Hz square, 180ms
- *   alert      — 1200Hz double-beep
- *   scan       — 1400Hz, 40ms, sine
- *   hold       — 520Hz, 80ms, triangle
- *   kot        — 720Hz then 920Hz, 180ms, sine
+ * Each event has a default tone profile, overridable per-event via the
+ * Tones picker. A "mute for this shift" toggle silences all cues until
+ * cleared or until the local cache is reset.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type SoundKey = "add" | "remove" | "pay" | "error" | "alert" | "scan" | "hold" | "kot";
+export type TonePreset = "default" | "soft" | "bold" | "classic" | "off";
 
 interface SoundPrefs {
   enabled: boolean;
   volume: number;
+  /** Per-event tone preset overrides. */
+  tones: Record<SoundKey, TonePreset>;
+  /** When true, every cue is silenced regardless of `enabled`. */
+  muteForShift: boolean;
 }
 
 const STORAGE_KEY = "kp:soundPrefs";
-const DEFAULTS: SoundPrefs = { enabled: true, volume: 0.5 };
+
+const DEFAULT_TONES: Record<SoundKey, TonePreset> = {
+  add: "default", remove: "default", pay: "default", error: "default",
+  alert: "default", scan: "default", hold: "default", kot: "default",
+};
+
+const DEFAULTS: SoundPrefs = {
+  enabled: true,
+  volume: 0.5,
+  tones: { ...DEFAULT_TONES },
+  muteForShift: false,
+};
 
 function readPrefs(): SoundPrefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULTS };
+    if (!raw) return { ...DEFAULTS, tones: { ...DEFAULT_TONES } };
     const parsed = JSON.parse(raw) as Partial<SoundPrefs>;
     return {
       enabled: parsed.enabled ?? DEFAULTS.enabled,
       volume: Math.max(0, Math.min(1, parsed.volume ?? DEFAULTS.volume)),
+      tones: { ...DEFAULT_TONES, ...(parsed.tones ?? {}) },
+      muteForShift: parsed.muteForShift ?? false,
     };
   } catch {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, tones: { ...DEFAULT_TONES } };
   }
 }
 
@@ -51,9 +63,7 @@ function ctx(): AudioContext | null {
     const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     _ctx = new C();
     return _ctx;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function beep(freq: number, durMs: number, type: OscillatorType, volume: number, when = 0): void {
@@ -96,22 +106,30 @@ function chirp(from: number, to: number, durMs: number, volume: number): void {
   } catch { /* ignore */ }
 }
 
-export function playSound(key: SoundKey, override?: Partial<SoundPrefs>): void {
-  const prefs = override
-    ? { ...readPrefs(), ...override }
-    : readPrefs();
-  if (!prefs.enabled) return;
-  const v = prefs.volume;
+function playForPreset(key: SoundKey, preset: TonePreset, v: number): void {
+  if (preset === "off") return;
+  // Scaling for soft/bold/classic
+  const v2 = preset === "soft" ? v * 0.55 : preset === "bold" ? Math.min(1, v * 1.3) : v;
+  const wave: OscillatorType =
+    preset === "classic" ? "square" : preset === "bold" ? "sawtooth" : "triangle";
   switch (key) {
-    case "add":    return beep(880, 60, "triangle", v);
-    case "remove": return beep(440, 60, "triangle", v);
-    case "pay":    return chirp(660, 1040, 220, v);
-    case "error":  return beep(200, 180, "square", v);
-    case "alert":  beep(1200, 90, "sine", v, 0); beep(1200, 90, "sine", v, 0.13); return;
-    case "scan":   return beep(1400, 40, "sine", v);
-    case "hold":   return beep(520, 80, "triangle", v);
-    case "kot":    beep(720, 90, "sine", v, 0); beep(920, 110, "sine", v, 0.10); return;
+    case "add":    return beep(880, 60, wave, v2);
+    case "remove": return beep(440, 60, wave, v2);
+    case "pay":    return chirp(660, 1040, 240, v2);
+    case "error":  return beep(200, 200, "square", v2);
+    case "alert":  beep(1200, 90, "sine", v2, 0); beep(1200, 90, "sine", v2, 0.13); return;
+    case "scan":   return beep(1400, 40, "sine", v2);
+    case "hold":   return beep(520, 80, wave, v2);
+    case "kot":    beep(720, 90, "sine", v2, 0); beep(920, 110, "sine", v2, 0.10); return;
   }
+}
+
+export function playSound(key: SoundKey, override?: Partial<SoundPrefs>): void {
+  const base = readPrefs();
+  const prefs = override ? { ...base, ...override, tones: { ...base.tones, ...(override.tones ?? {}) } } : base;
+  if (!prefs.enabled || prefs.muteForShift) return;
+  const preset = prefs.tones[key] ?? "default";
+  playForPreset(key, preset, prefs.volume);
 }
 
 /**
@@ -137,9 +155,11 @@ export function useSounds() {
 
   const update = useCallback((patch: Partial<SoundPrefs>) => {
     setPrefs(prev => {
-      const next = {
+      const next: SoundPrefs = {
         enabled: patch.enabled ?? prev.enabled,
         volume: Math.max(0, Math.min(1, patch.volume ?? prev.volume)),
+        muteForShift: patch.muteForShift ?? prev.muteForShift,
+        tones: { ...prev.tones, ...(patch.tones ?? {}) },
       };
       writePrefs(next);
       return next;

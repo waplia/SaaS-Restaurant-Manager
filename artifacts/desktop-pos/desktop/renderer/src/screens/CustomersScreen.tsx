@@ -5,9 +5,20 @@
  * redeemable value, even though redemption itself happens in payment.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { CustomerSummary } from "../../../shared/ipc-contract";
+import type { CustomerSummary, OrderHeader } from "../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../shared/orderNumber";
 import { Banner, Button, Input, Label, Spinner, colors } from "../ui/components";
 import { fmtINR } from "./order/types";
+
+/** Local notes & favourite-customer flags keyed by customer id. */
+interface LocalCustomerMeta { notes?: string; favorite?: boolean; }
+const LCM_KEY = "kp:customerMeta";
+function readMeta(): Record<string, LocalCustomerMeta> {
+  try { return JSON.parse(localStorage.getItem(LCM_KEY) ?? "{}"); } catch { return {}; }
+}
+function writeMeta(m: Record<string, LocalCustomerMeta>) {
+  try { localStorage.setItem(LCM_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
 
 /** Optional fields some backends include but the contract doesn't promise. */
 type CustomerExt = CustomerSummary & {
@@ -79,6 +90,14 @@ export function CustomersScreen({ onUseInOrder }: Props) {
   function call(phone: string) {
     if (!phone) return;
     window.khanalagao.app.openExternal(`tel:${phone.replace(/[^\d+]/g, "")}`).catch(() => undefined);
+  }
+  function sms(phone: string) {
+    if (!phone) return;
+    window.khanalagao.app.openExternal(`sms:${phone.replace(/[^\d+]/g, "")}`).catch(() => undefined);
+  }
+  function email(addr: string) {
+    if (!addr) return;
+    window.khanalagao.app.openExternal(`mailto:${addr}`).catch(() => undefined);
   }
 
   return (
@@ -204,21 +223,144 @@ export function CustomersScreen({ onUseInOrder }: Props) {
             <div style={{ marginTop: 16, display: "grid", gap: 6 }}>
               <Button onClick={() => onUseInOrder(sel)}>Use in current order</Button>
               {sel.phone && (
-                <>
-                  <Button variant="ghost" onClick={() => call(sel.phone!)}>📞 Call {sel.phone}</Button>
-                  <Button variant="ghost" onClick={() => whatsApp(sel.phone!)}>💬 WhatsApp</Button>
-                </>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                  <Button variant="ghost" onClick={() => call(sel.phone!)}>📞 Call</Button>
+                  <Button variant="ghost" onClick={() => whatsApp(sel.phone!)}>💬 WA</Button>
+                  <Button variant="ghost" onClick={() => sms(sel.phone!)}>✉ SMS</Button>
+                </div>
+              )}
+              {sel.email && (
+                <Button variant="ghost" onClick={() => email(sel.email!)}>📧 Email {sel.email}</Button>
               )}
             </div>
 
-            <div style={{ marginTop: 16, fontSize: 11, color: colors.textMuted }}>
-              Customer notes & marketing preferences live in the web admin —
-              this terminal can search, create, and tag a customer to a sale.
-            </div>
+            <CustomerNotes customer={sel} />
+            <CustomerHistory customer={sel} />
           </>
           );
         })()}
       </aside>
+    </div>
+  );
+}
+
+/**
+ * Per-customer notes + favourite flag, stored locally on this terminal.
+ * The shared backend customer record is left untouched.
+ */
+function CustomerNotes({ customer }: { customer: CustomerSummary }) {
+  const [meta, setMeta] = useState<LocalCustomerMeta>(() => readMeta()[String(customer.id)] ?? {});
+  const [draft, setDraft] = useState(meta.notes ?? "");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const m = readMeta()[String(customer.id)] ?? {};
+    setMeta(m); setDraft(m.notes ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer.id]);
+
+  function save() {
+    const all = readMeta();
+    const next: LocalCustomerMeta = { ...meta, notes: draft.trim() || undefined };
+    all[String(customer.id)] = next; writeMeta(all);
+    setMeta(next); setSaved(true);
+    window.setTimeout(() => setSaved(false), 1500);
+  }
+  function toggleFav() {
+    const all = readMeta();
+    const next: LocalCustomerMeta = { ...meta, favorite: !meta.favorite };
+    all[String(customer.id)] = next; writeMeta(all); setMeta(next);
+  }
+
+  return (
+    <div style={{ marginTop: 16, background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <Label>Notes (this terminal)</Label>
+        <button onClick={toggleFav} title="Mark as favourite" style={{
+          background: "transparent", border: 0, cursor: "pointer", fontSize: 18,
+          color: meta.favorite ? "#fbbf24" : colors.textMuted,
+        }}>{meta.favorite ? "★" : "☆"}</button>
+      </div>
+      <textarea
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        rows={3}
+        placeholder="Allergies, preferences, table preference…"
+        style={{
+          width: "100%", background: colors.panelAlt, color: colors.textPrimary,
+          border: `1px solid ${colors.borderStrong}`, borderRadius: 6,
+          padding: "8px 10px", fontSize: 13, fontFamily: "inherit", resize: "vertical",
+        }}
+      />
+      <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: saved ? colors.success : colors.textMuted }}>
+          {saved ? "Saved" : "Stored locally — not synced to server"}
+        </span>
+        <Button variant="ghost" onClick={save} disabled={draft === (meta.notes ?? "")}>Save</Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Recent order history for the selected customer. The terminal backend
+ * doesn't accept a customerId filter on orders:list, so we pull a
+ * window of orders and filter client-side.
+ */
+function CustomerHistory({ customer }: { customer: CustomerSummary }) {
+  const [orders, setOrders] = useState<OrderHeader[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setOrders(null); setErr(null);
+    window.khanalagao.orders.list({ limit: 200 })
+      .then(all => {
+        if (!alive) return;
+        const phone = customer.phone?.replace(/\D+/g, "") ?? "";
+        const mine = all.filter(o =>
+          o.customerId === customer.id ||
+          (phone && o.customerPhone?.replace(/\D+/g, "") === phone)
+        ).slice(0, 20);
+        setOrders(mine);
+      })
+      .catch(e => { if (alive) setErr((e as Error).message); });
+    return () => { alive = false; };
+  }, [customer.id, customer.phone]);
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <Label>Recent orders</Label>
+      {err && <Banner kind="error">{err}</Banner>}
+      {!err && orders === null && <Spinner size={16} />}
+      {orders && orders.length === 0 && (
+        <div style={{ fontSize: 12, color: colors.textMuted, padding: "6px 0" }}>
+          No recent orders found for this customer on this terminal.
+        </div>
+      )}
+      {orders && orders.length > 0 && (
+        <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+          {orders.map(o => (
+            <div key={o.id} style={{
+              display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8,
+              fontSize: 12, padding: "6px 8px", background: colors.bg,
+              borderRadius: 6, border: `1px solid ${colors.border}`,
+              alignItems: "center",
+            }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>#{shortOrderNumber(o)}</div>
+                <div style={{ fontSize: 10, color: colors.textDim }}>
+                  {new Date(o.createdAt).toLocaleString()} · {o.status}
+                </div>
+              </div>
+              <span style={{ fontSize: 10, color: colors.textDim, textTransform: "uppercase" }}>{o.paymentStatus}</span>
+              <b style={{ fontVariantNumeric: "tabular-nums", color: colors.brand }}>
+                {fmtINR(Number(o.totalAmount))}
+              </b>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

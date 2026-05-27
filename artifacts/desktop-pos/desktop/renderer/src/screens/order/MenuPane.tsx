@@ -16,8 +16,8 @@ interface Props {
   onPickItem: (item: MenuItem) => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
   /** Persisted default from useAppPrefs. */
-  layout?: "image" | "compact";
-  onLayoutChange?: (l: "image" | "compact") => void;
+  layout?: "image" | "compact" | "fast";
+  onLayoutChange?: (l: "image" | "compact" | "fast") => void;
   /** Show item images on the tiles (image layout only). */
   showImages?: boolean;
   /** menuItemId → in-cart quantity, used for the corner qty badge. */
@@ -31,9 +31,9 @@ export function MenuPane(props: Props) {
     layout: layoutProp, onLayoutChange, showImages = true, cartQtyByItemId,
   } = props;
 
-  const [localLayout, setLocalLayout] = useState<"image" | "compact">("image");
+  const [localLayout, setLocalLayout] = useState<"image" | "compact" | "fast">("image");
   const layout = layoutProp ?? localLayout;
-  function setLayout(l: "image" | "compact") {
+  function setLayout(l: "image" | "compact" | "fast") {
     if (onLayoutChange) onLayoutChange(l); else setLocalLayout(l);
   }
 
@@ -43,12 +43,20 @@ export function MenuPane(props: Props) {
       if (selectedCategoryId != null && it.categoryId !== selectedCategoryId) return false;
       if (vegFilter === "veg" && !it.isVeg) return false;
       if (vegFilter === "non_veg" && it.isVeg) return false;
-      if (q && !it.name.toLowerCase().includes(q)) return false;
+      if (q) {
+        const hay = [
+          it.name, it.description ?? "", it.sku ?? "", it.barcode ?? "",
+          ...(it.aliases ?? []), ...(it.tags ?? []),
+        ].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
   }, [items, search, selectedCategoryId, vegFilter]);
 
-  const gridCols = layout === "compact"
+  const gridCols = layout === "fast"
+    ? "repeat(auto-fill, minmax(120px, 1fr))"
+    : layout === "compact"
     ? "repeat(auto-fill, minmax(140px, 1fr))"
     : "repeat(auto-fill, minmax(170px, 1fr))";
 
@@ -101,6 +109,7 @@ export function MenuPane(props: Props) {
           <div style={{ width: 1, height: 22, background: colors.border, margin: "0 4px" }} />
           <FilterChip active={layout === "image"} onClick={() => setLayout("image")}>🖼 Cards</FilterChip>
           <FilterChip active={layout === "compact"} onClick={() => setLayout("compact")}>≡ Compact</FilterChip>
+          <FilterChip active={layout === "fast"} onClick={() => setLayout("fast")}>⚡ Fast bill</FilterChip>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
@@ -177,11 +186,11 @@ function FilterChip({ active, onClick, children, color }: {
 
 function ItemCard({ item, onClick, layout, showImage, cartQty }: {
   item: MenuItem; onClick: () => void;
-  layout: "image" | "compact"; showImage: boolean; cartQty: number;
+  layout: "image" | "compact" | "fast"; showImage: boolean; cartQty: number;
 }) {
   const disabled = item.isAvailable === false;
-  const compact = layout === "compact";
-  const img = !compact && showImage ? item.imageUrl : null;
+  const compact = layout === "compact" || layout === "fast";
+  const img = layout === "image" && showImage ? item.imageUrl : null;
 
   return (
     <button
@@ -209,6 +218,25 @@ function ItemCard({ item, onClick, layout, showImage, cartQty }: {
           fontSize: 11, fontWeight: 800, lineHeight: 1.2,
           boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
         }}>×{cartQty}</span>
+      )}
+
+      {item.isBestseller && (
+        <span title="Best-seller" style={{
+          position: "absolute", top: 6, right: 6, zIndex: 1,
+          background: "#facc15", color: "#1a1300",
+          padding: "2px 6px", borderRadius: 999,
+          fontSize: 10, fontWeight: 800, lineHeight: 1.2,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+        }}>★ Top</span>
+      )}
+
+      {item.lowStock && (
+        <span title="Low stock — restock soon" style={{
+          position: "absolute", bottom: 6, right: 6, zIndex: 1,
+          background: "rgba(220,38,38,0.92)", color: "#fff",
+          padding: "2px 6px", borderRadius: 4,
+          fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+        }}>Low</span>
       )}
 
       {img && (

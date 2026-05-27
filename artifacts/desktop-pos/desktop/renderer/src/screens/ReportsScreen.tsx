@@ -21,6 +21,28 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "history", label: "Z-report history" },
 ];
 
+function downloadCsv(name: string, rows: Array<Array<string | number>>) {
+  const body = rows.map(r => r.map(cell => {
+    const s = String(cell ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([body], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${name}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function printReportLines(title: string, lines: string[]) {
+  const text = [title, "─".repeat(32), ...lines, "─".repeat(32), new Date().toLocaleString()].join("\n");
+  try {
+    await window.khanalagao.printers.printReceipt({ text });
+  } catch (e) {
+    window.alert(`Print failed: ${(e as Error).message}\n\n${text}`);
+  }
+}
+
 export function ReportsScreen() {
   const [session, setSession] = useState<CashRegisterCurrent | null>(null);
   const [kpis, setKpis] = useState<ShiftKpis | null>(null);
@@ -105,7 +127,34 @@ export function ReportsScreen() {
         <section style={panelStyle}>
           <header style={hdrStyle}>
             <h3 style={{ margin: 0, fontSize: 16 }}>Current shift</h3>
-            <span style={{ fontSize: 11, color: colors.textMuted }}>auto-refreshes every 30 s</span>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: colors.textMuted }}>auto-refreshes every 30 s</span>
+              <Button variant="ghost" disabled={!kpis} style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                if (!kpis) return;
+                void printReportLines("SHIFT SUMMARY", [
+                  `Orders        ${kpis.orderCount}`,
+                  `Gross         ${fmtINR(kpis.grossRevenue)}`,
+                  `Net           ${fmtINR(kpis.netRevenue)}`,
+                  `Tax           ${fmtINR(kpis.taxCollected)}`,
+                  `Service       ${fmtINR(kpis.serviceCollected)}`,
+                  `Discounts     ${fmtINR(kpis.discountTotal)}`,
+                  `Tips          ${fmtINR(kpis.tipsCollected)}`,
+                  `Avg ticket    ${fmtINR(kpis.averageTicket)}`,
+                  `Voided        ${kpis.voidedCount}`,
+                ]);
+              }}>Print</Button>
+              <Button variant="ghost" disabled={!kpis} style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                if (!kpis) return;
+                downloadCsv(`shift-${session?.session?.id ?? "current"}`, [
+                  ["metric", "value"],
+                  ["orders", kpis.orderCount], ["paid", kpis.paidCount], ["unpaid", kpis.unpaidCount],
+                  ["gross", kpis.grossRevenue], ["net", kpis.netRevenue],
+                  ["tax", kpis.taxCollected], ["service", kpis.serviceCollected],
+                  ["discounts", kpis.discountTotal], ["tips", kpis.tipsCollected],
+                  ["avgTicket", kpis.averageTicket], ["voided", kpis.voidedCount],
+                ]);
+              }}>Export CSV</Button>
+            </div>
           </header>
           {noShift && <Banner kind="info">No open shift on this counter.</Banner>}
           {!noShift && !kpis && <Spinner />}
@@ -131,6 +180,17 @@ export function ReportsScreen() {
         <section style={panelStyle}>
           <header style={hdrStyle}>
             <h3 style={{ margin: 0, fontSize: 16 }}>Payment split</h3>
+            <div style={{ display: "flex", gap: 6 }}>
+              <Button variant="ghost" disabled={!kpis} style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                if (!kpis) return;
+                void printReportLines("TENDER MIX",
+                  kpis.byMethod.map(m => `${m.method.padEnd(14)} ${String(m.count).padStart(4)}  ${fmtINR(m.amount)}`));
+              }}>Print</Button>
+              <Button variant="ghost" disabled={!kpis} style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                if (!kpis) return;
+                downloadCsv("tender-mix", [["method", "count", "amount"], ...kpis.byMethod.map(m => [m.method, m.count, m.amount])]);
+              }}>Export CSV</Button>
+            </div>
           </header>
           {noShift && <Banner kind="info">No open shift on this counter.</Banner>}
           {!noShift && !kpis && <Spinner />}
@@ -181,7 +241,22 @@ export function ReportsScreen() {
         <section style={panelStyle}>
           <header style={hdrStyle}>
             <h3 style={{ margin: 0, fontSize: 16 }}>Cash movements</h3>
-            <span style={{ fontSize: 11, color: colors.textMuted }}>local entries for this device</span>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: colors.textMuted }}>local entries for this device</span>
+              <Button variant="ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                void printReportLines("CASH MOVEMENTS", [
+                  `Cash in   ${fmtINR(cashSummary.in)}`,
+                  `Cash out  ${fmtINR(cashSummary.out)}`,
+                  `Expenses  ${fmtINR(cashSummary.expense)}`,
+                  "─".repeat(32),
+                  ...movements.slice(-30).reverse().map(m => `${m.kind.padEnd(8)} ${fmtINR(m.amount).padStart(10)}  ${m.reason ?? ""}`),
+                ]);
+              }}>Print</Button>
+              <Button variant="ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                downloadCsv("cash-movements", [["at", "kind", "amount", "reason", "cashier"],
+                  ...movements.map(m => [new Date(m.at).toISOString(), m.kind, m.amount, m.reason ?? "", m.cashier ?? ""])]);
+              }}>Export CSV</Button>
+            </div>
           </header>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
             <Kpi label="Cash in" value={fmtINR(cashSummary.in)} />
@@ -217,7 +292,14 @@ export function ReportsScreen() {
         <section style={panelStyle}>
           <header style={hdrStyle}>
             <h3 style={{ margin: 0, fontSize: 16 }}>Z-report history</h3>
-            <span style={{ fontSize: 11, color: colors.textMuted }}>last 30 days · cached locally</span>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: colors.textMuted }}>last 30 days · cached locally</span>
+              <Button variant="ghost" disabled={!zReports?.length} style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => {
+                if (!zReports) return;
+                downloadCsv("z-reports", [["sessionId", "counter", "openedAt", "closedAt", "orderCount", "grossRevenue"],
+                  ...zReports.map(z => [z.sessionId, z.counterName ?? "", z.openedAt, z.closedAt, z.orderCount, z.grossRevenue])]);
+              }}>Export CSV</Button>
+            </div>
           </header>
           {zReports === null && <Spinner />}
           {zReports && zReports.length === 0 && (

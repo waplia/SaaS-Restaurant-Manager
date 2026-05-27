@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import type { CartItem, Totals } from "./types";
 import type { OrderDetailView } from "../../../../shared/ipc-contract";
 import { shortOrderNumber } from "../../../../shared/orderNumber";
 import { Button, colors } from "../../ui/components";
 import { fmtINR } from "./types";
+import { broadcastDisplay } from "../CustomerDisplay";
+import { useAppPrefs } from "../../hooks/useAppPrefs";
 
 interface Props {
   cart: CartItem[];
@@ -46,6 +49,18 @@ interface Props {
   cartListRef?: React.RefObject<HTMLDivElement | null>;
 }
 
+const emptyActionBtn: React.CSSProperties = {
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  gap: 10, padding: "10px 12px", borderRadius: 8,
+  background: colors.panelAlt, border: `1px solid ${colors.border}`,
+  color: colors.textPrimary, cursor: "pointer", fontSize: 13, fontWeight: 600,
+};
+const kbdStyle: React.CSSProperties = {
+  fontFamily: "monospace", fontSize: 10,
+  background: colors.bg, padding: "1px 5px", borderRadius: 4,
+  border: `1px solid ${colors.borderStrong}`, color: colors.textDim,
+};
+
 export function CartPane(props: Props) {
   const {
     cart, placedOrder, totals, taxRate, serviceRate,
@@ -69,6 +84,46 @@ export function CartPane(props: Props) {
   const rounded = Math.round(totals.totalAmount);
   const roundOff = roundOffEnabled ? rounded - totals.totalAmount : 0;
   const grandTotal = totals.totalAmount + roundOff;
+
+  // Live broadcast to the customer-facing second screen. The Hardware
+  // settings card toggles whether the display window is launched; we
+  // always emit so any open display window stays in sync.
+  const { prefs } = useAppPrefs();
+  useEffect(() => {
+    if (!prefs.customerDisplay) return;
+    const allLines = [
+      ...serverItems.map(it => ({
+        name: it.menuItemName ?? "Item",
+        quantity: Number(it.quantity),
+        price: Number(it.unitPrice),
+        lineTotal: Number(it.totalPrice ?? Number(it.unitPrice) * Number(it.quantity)),
+      })),
+      ...cart.map(it => ({
+        name: it.name,
+        quantity: it.quantity,
+        price: it.unitPrice,
+        lineTotal: it.unitPrice * it.quantity,
+      })),
+    ];
+    if (allLines.length === 0) {
+      broadcastDisplay({ status: "idle", tagline: prefs.customerDisplayTagline });
+      return;
+    }
+    broadcastDisplay({
+      status: "active",
+      items: allLines,
+      subtotal: totals.subtotal,
+      tax: totals.taxAmount,
+      service: totals.serviceCharge,
+      discount: totals.discountAmount,
+      total: grandTotal,
+      tagline: prefs.customerDisplayTagline,
+    });
+  }, [
+    prefs.customerDisplay, prefs.customerDisplayTagline,
+    cart, serverItems, totals.subtotal, totals.taxAmount,
+    totals.serviceCharge, totals.discountAmount, grandTotal,
+  ]);
 
   return (
     <aside style={{
@@ -106,8 +161,22 @@ export function CartPane(props: Props) {
         style={{ flex: 1, overflowY: "auto", padding: 8, outline: "none" }}
       >
         {!hasAnyLines && (
-          <div style={{ color: colors.textMuted, textAlign: "center", padding: 32, fontSize: 13 }}>
-            Cart is empty — tap items on the left.
+          <div style={{ color: colors.textMuted, textAlign: "center", padding: "28px 16px", fontSize: 13 }}>
+            <div style={{ marginBottom: 14 }}>Cart is empty — tap items on the left.</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("tt:shortcut", { detail: { key: "open-customer" } }))}
+                style={emptyActionBtn}
+              >👤  Pick customer  <kbd style={kbdStyle}>F3</kbd></button>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("tt:shortcut", { detail: { key: "open-held" } }))}
+                style={emptyActionBtn}
+              >📌  Recall held bill  <kbd style={kbdStyle}>F5</kbd></button>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("tt:shortcut", { detail: { key: "open-calc" } }))}
+                style={emptyActionBtn}
+              >🧮  Calculator  <kbd style={kbdStyle}>Ctrl+L</kbd></button>
+            </div>
           </div>
         )}
 

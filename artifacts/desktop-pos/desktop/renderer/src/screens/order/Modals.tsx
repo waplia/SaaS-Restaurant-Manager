@@ -15,6 +15,7 @@ import { Button, Input, Label, Spinner, colors } from "../../ui/components";
 import {
   type CartModifier, fmtINR, modifierFromOption,
 } from "./types";
+import { CalculatorModal } from "./CalculatorModal";
 
 // ─── Generic shell ─────────────────────────────────────────────────────────
 export function Modal({ title, onClose, children, width = 560 }: {
@@ -444,6 +445,7 @@ export function DiscountModal({ orderId, orderItemId, lineLabel, config, onAppli
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCalc, setShowCalc] = useState(false);
 
   const presets = config?.presetReasons ?? [];
 
@@ -478,7 +480,24 @@ export function DiscountModal({ orderId, orderItemId, lineLabel, config, onAppli
         </div>
       )}
       <Label>{isLine ? "Discount amount (₹, capped at line total)" : "Value"}</Label>
-      <Input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder={isLine || type === "flat" ? "50" : "10"} />
+      <div style={{ display: "flex", gap: 6 }}>
+        <Input
+          type="number"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={isLine || type === "flat" ? "50" : "10"}
+          style={{ flex: 1 }}
+        />
+        <button
+          type="button"
+          onClick={() => setShowCalc(true)}
+          title="Open calculator"
+          style={{
+            background: colors.panelAlt, color: colors.textPrimary, border: 0,
+            borderRadius: 6, padding: "0 14px", fontSize: 16, cursor: "pointer",
+          }}
+        >🧮</button>
+      </div>
       <div style={{ height: 10 }} />
       <Label>Reason</Label>
       {presets.length > 0 ? (
@@ -524,6 +543,12 @@ export function DiscountModal({ orderId, orderItemId, lineLabel, config, onAppli
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button onClick={submit} disabled={busy || !value || !reason}>Apply</Button>
       </div>
+      {showCalc && (
+        <CalculatorModal
+          onClose={() => setShowCalc(false)}
+          onSendToCash={(v) => setValue(v.toFixed(2))}
+        />
+      )}
     </Modal>
   );
 }
@@ -540,18 +565,22 @@ function typeBtn(active: boolean): React.CSSProperties {
 export function HelpModal({ onClose }: { onClose: () => void }) {
   const rows: Array<[string, string]> = [
     ["F2", "Focus menu search"],
-    ["F3", "Focus cart (selects last line)"],
-    ["F4", "Send order / add items"],
-    ["F5", "Hold / recall bills"],
-    ["F7", "Reprint / print bill"],
+    ["F3", "Pick / change customer"],
+    ["F4", "Hold current bill"],
+    ["F5", "Recall held bills"],
+    ["F6", "Send order / KOT"],
+    ["F7", "Print bill"],
     ["F8", "Open payment dialog"],
-    ["F9", "Reprint last KOT"],
+    ["F9", "Open cash drawer"],
+    ["F10", "Close shift"],
+    ["Ctrl+P", "Print bill"],
+    ["Ctrl+Enter", "Open payment"],
+    ["Ctrl+N", "Start a new order"],
     ["Ctrl+L", "Open calculator"],
     ["Ctrl+K", "Open calculator"],
-    ["Ctrl+N", "Start a new order"],
     ["Del", "Remove selected cart line"],
     ["+ / −", "Adjust quantity of selected line"],
-    ["/", "Also focuses menu search"],
+    ["/", "Focus menu search"],
     ["Esc", "Close any modal"],
     ["?", "Show this help"],
   ];

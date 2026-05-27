@@ -21,11 +21,25 @@ import { CounterPickerScreen } from "./screens/CounterPicker";
 import { ShiftOpenScreen } from "./screens/ShiftOpen";
 import { WorkspaceScreen } from "./screens/Workspace";
 import { ConnectionSettingsScreen } from "./screens/ConnectionSettings";
+import { CustomerDisplay } from "./screens/CustomerDisplay";
 import { FullscreenCenter, Spinner } from "./ui/components";
 
 type Override = "settings" | "switch-outlet" | null;
 
+// Customer-display second window: opened by the cashier via window.open
+// with #display=customer in the hash. Renders a completely separate
+// surface that just listens on a BroadcastChannel.
+function isCustomerDisplayWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.hash.includes("display=customer")) return true;
+  if (window.location.search.includes("display=customer")) return true;
+  return false;
+}
+
 export function App() {
+  if (isCustomerDisplayWindow()) {
+    return <CustomerDisplay />;
+  }
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const [version, setVersion] = useState("");
