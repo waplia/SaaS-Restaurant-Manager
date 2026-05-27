@@ -3335,11 +3335,12 @@ router.patch(
           ? await db.select({ kitchenId: menuItemsTable.kitchenId })
               .from(menuItemsTable).where(eq(menuItemsTable.id, updated.menuItemId))
           : [];
-        const ticketScope = updated.kotBatchId != null
-          ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kotBatchId, updated.kotBatchId))
-          : (menuRow?.kitchenId != null
-              ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kitchenId, menuRow.kitchenId))
-              : eq(kitchenTicketsTable.orderId, orderId));
+        // Look up any open ticket(s) for this order. We can't filter by
+        // kotBatchId here because legacy tickets have kot_batch_id=NULL
+        // even when items carry a batch id. Filter by kitchen when known.
+        const ticketScope = menuRow?.kitchenId != null
+          ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kitchenId, menuRow.kitchenId))
+          : eq(kitchenTicketsTable.orderId, orderId);
         const tickets = await db.select().from(kitchenTicketsTable)
           .where(and(ticketScope, notInArray(kitchenTicketsTable.status, ["served", "cancelled"])));
         for (const t of tickets) {
