@@ -15,9 +15,42 @@ router.use(
   validateRestaurantAccess,
 );
 
-// Roles allowed to perform sensitive register operations (close, movements, reports, history).
-// Cashiers can open their own shift and read /current, but management actions stay restricted.
-const MANAGER_ROLES = ["owner", "manager", "super_admin"] as const;
+// Roles allowed to perform register operations (close, movements, reports, history).
+// The cashier is the shift operator and needs to record cash in/out (drawer
+// drops, paid-outs, refunds), view their session and movements, close their
+// own register, and see X/Z reports — so they are included alongside
+// owner/manager/super_admin. Cashier access is further scoped per-session by
+// `assertSessionAccess` so a cashier can only touch sessions they opened.
+const MANAGER_ROLES = ["owner", "manager", "super_admin", "cashier"] as const;
+// Roles with cross-session ("see everyone's shifts") access. Cashier is
+// excluded — they only see their own sessions and aggregate analytics across
+// cashiers (variance history) is management-only.
+const CROSS_SESSION_ROLES = ["owner", "manager", "super_admin"] as const;
+
+// Returns true if the requester is allowed to operate on the given session.
+// Owners/managers/super_admin always pass. Cashier passes only when they
+// opened (or closed) the session themselves.
+function canActOnSession(
+  req: Request,
+  session: { openedByUserId: number | null; closedByUserId: number | null },
+): boolean {
+  const role = req.user?.role;
+  const isSuper = !!req.user?.isSuperAdmin;
+  if (isSuper) return true;
+  if (role === "owner" || role === "manager") return true;
+  if (role === "cashier") {
+    const uid = req.user?.sub ?? null;
+    if (!uid) return false;
+    return session.openedByUserId === uid || session.closedByUserId === uid;
+  }
+  return false;
+}
+
+function isCashierOnly(req: Request): boolean {
+  if (req.user?.isSuperAdmin) return false;
+  const role = req.user?.role;
+  return role === "cashier";
+}
 
 const INR_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 
@@ -110,6 +143,12 @@ router.get("/restaurants/:restaurantId/cash-register/current", async (req, res) 
   const restaurantId = Number(req.params.restaurantId);
   const session = await findOpenSession(db, restaurantId);
   if (!session) return void res.json({ session: null, totals: null });
+  // Cashier can only see the open session if they opened it themselves.
+  // Treat another cashier's open session as "no session" so the UI prompts
+  // them to wait rather than exposing totals/identity of the other shift.
+  if (isCashierOnly(req) && !canActOnSession(req, session)) {
+    return void res.json({ session: null, totals: null });
+  }
   const totals = await computeSessionTotals(db, session.id, restaurantId, Number(session.openingFloat));
   const [openedBy] = session.openedByUserId
     ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, session.openedByUserId))
@@ -131,6 +170,11 @@ router.get("/restaurants/:restaurantId/cash-register/sessions",
       conditions.push(lte(cashRegisterSessionsTable.openedAt, toDate));
     }
     if (status) conditions.push(eq(cashRegisterSessionsTable.status, String(status)));
+    // Cashier sees only sessions they opened. Manager/owner/super_admin see all.
+    if (isCashierOnly(req)) {
+      const uid = req.user?.sub ?? -1;
+      conditions.push(eq(cashRegisterSessionsTable.openedByUserId, uid));
+    }
 
     const limit = Math.min(100, Math.max(1, Number(pageSize)));
     const offset = (Math.max(1, Number(page)) - 1) * limit;
@@ -168,6 +212,9 @@ router.get("/restaurants/:restaurantId/cash-register/sessions/:id",
     const [session] = await db.select().from(cashRegisterSessionsTable)
       .where(and(eq(cashRegisterSessionsTable.id, sessionId), eq(cashRegisterSessionsTable.restaurantId, restaurantId)));
     if (!session) return void res.status(404).json({ error: "Session not found" });
+    if (!canActOnSession(req, session)) {
+      return void res.status(403).json({ error: "You can only view shifts you opened" });
+    }
 
     const [movements, denoms, openedBy, closedBy] = await Promise.all([
       db.select().from(cashMovementsTable)
@@ -273,6 +320,19 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/close",
     const sessionId = Number(req.params.id);
     const userId = req.user?.sub;
     if (!userId) return void res.status(401).json({ error: "Authentication required" });
+
+    // Cashier may only close the session they themselves opened.
+    if (isCashierOnly(req)) {
+      const [own] = await db.select({
+        openedByUserId: cashRegisterSessionsTable.openedByUserId,
+        closedByUserId: cashRegisterSessionsTable.closedByUserId,
+      }).from(cashRegisterSessionsTable)
+        .where(and(eq(cashRegisterSessionsTable.id, sessionId), eq(cashRegisterSessionsTable.restaurantId, restaurantId)));
+      if (!own) return void res.status(404).json({ error: "Session not found" });
+      if (!canActOnSession(req, own)) {
+        return void res.status(403).json({ error: "You can only close shifts you opened" });
+      }
+    }
 
     const { denominations, countedAmount, isBlindClose, closeNotes, varianceReason } = req.body as {
       denominations?: unknown;
@@ -414,6 +474,19 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/movements",
     const userId = req.user?.sub;
     if (!userId) return void res.status(401).json({ error: "Authentication required" });
 
+    // Cashier may only record movements on the session they opened.
+    if (isCashierOnly(req)) {
+      const [own] = await db.select({
+        openedByUserId: cashRegisterSessionsTable.openedByUserId,
+        closedByUserId: cashRegisterSessionsTable.closedByUserId,
+      }).from(cashRegisterSessionsTable)
+        .where(and(eq(cashRegisterSessionsTable.id, sessionId), eq(cashRegisterSessionsTable.restaurantId, restaurantId)));
+      if (!own) return void res.status(404).json({ error: "Session not found" });
+      if (!canActOnSession(req, own)) {
+        return void res.status(403).json({ error: "You can only record movements on shifts you opened" });
+      }
+    }
+
     const { type, amount, reason, referenceType, referenceId } = req.body as {
       type: string;
       amount: number | string;
@@ -539,7 +612,7 @@ async function buildReport(sessionId: number, restaurantId: number) {
 }
 
 router.get("/restaurants/:restaurantId/cash-register/variance-history",
-  requireRole(...MANAGER_ROLES),
+  requireRole(...CROSS_SESSION_ROLES),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const { from, to } = req.query;
@@ -638,6 +711,9 @@ router.get("/restaurants/:restaurantId/cash-register/sessions/:id/x-report",
     const sessionId = Number(req.params.id);
     const report = await buildReport(sessionId, restaurantId);
     if (!report) return void res.status(404).json({ error: "Session not found" });
+    if (!canActOnSession(req, report.session)) {
+      return void res.status(403).json({ error: "You can only view reports for shifts you opened" });
+    }
     res.json({ ...report, kind: "X" });
   },
 );
@@ -649,6 +725,9 @@ router.get("/restaurants/:restaurantId/cash-register/sessions/:id/z-report",
     const sessionId = Number(req.params.id);
     const report = await buildReport(sessionId, restaurantId);
     if (!report) return void res.status(404).json({ error: "Session not found" });
+    if (!canActOnSession(req, report.session)) {
+      return void res.status(403).json({ error: "You can only view reports for shifts you opened" });
+    }
     if (report.session.status !== "closed") {
       return void res.status(400).json({ error: "Z-report is only available for closed sessions" });
     }

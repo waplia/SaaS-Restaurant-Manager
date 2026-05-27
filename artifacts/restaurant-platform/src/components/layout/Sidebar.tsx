@@ -307,7 +307,11 @@ const navConfig: NavEntry[] = [
   // 11. Marketplace
   {
     kind: "group", key: "marketplace", label: "Marketplace", icon: Package, badge: "addon",
-    roles: ["owner", "manager"],
+    // Group is gated to the union of any child role so staff (cashier, waiter,
+    // kitchen) can still reach Hardware & Devices, Printers, Card Terminals and
+    // Download Apps which they own at the device level. Each link inside still
+    // enforces its own narrower `roles` list, so non-staff items remain hidden.
+    roles: ["owner", "manager", "cashier", "waiter", "kitchen", "accountant", "hr_officer", "auditor", "delivery_executive", "staff", "counter_staff", "super_admin"],
     children: [
       { kind: "link", href: "/marketplace", label: "Vendor Marketplace", icon: Package, roles: ["owner", "manager"] },
       { kind: "link", href: "/download-apps", label: "Download Apps", icon: Download, roles: ["owner", "manager", "cashier", "waiter", "kitchen", "accountant", "hr_officer", "auditor", "delivery_executive", "staff", "counter_staff", "super_admin"] },

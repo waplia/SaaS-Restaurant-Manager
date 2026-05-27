@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PortalLayout } from "@/components/portal/PortalLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,11 +17,23 @@ export default function PortalAnnouncementsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-announcements"] }),
   });
 
-  // Auto-mark unread items as read as the user views the page
+  // Auto-mark unread items as read as the user views the page. We track the
+  // ids we've already dispatched a mark-read for so re-renders (or refetches
+  // that briefly include the same unread item before the backend reflects the
+  // read flag) cannot retrigger the mutation and cause a render→mutate→
+  // invalidate→refetch loop ("Maximum update depth exceeded").
+  const dispatchedRef = useRef<Set<number>>(new Set());
   useEffect(() => {
-    list.filter(a => !a.read).forEach(a => markRead.mutate(a.id));
+    for (const a of list) {
+      if (a.read) continue;
+      if (dispatchedRef.current.has(a.id)) continue;
+      dispatchedRef.current.add(a.id);
+      markRead.mutate(a.id);
+    }
+    // markRead is a stable mutation object; depending on `list` (reference) is
+    // intentional — the ref guard above makes the body idempotent per id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.length]);
+  }, [list]);
 
   return (
     <PortalLayout>
