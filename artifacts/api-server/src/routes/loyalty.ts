@@ -7,7 +7,7 @@ import {
   loyaltyStreakStateTable, loyaltyMilestoneGrantsTable,
   loyaltyBirthdayGrantsTable, loyaltyReferralsTable,
 } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
@@ -23,7 +23,7 @@ import {
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 // === Customer-facing summary (also used by staff customer detail panel) ===
 router.get("/restaurants/:restaurantId/loyalty/summary/:customerId", async (req, res) => {

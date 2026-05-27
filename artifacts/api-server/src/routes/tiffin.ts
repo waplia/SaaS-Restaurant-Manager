@@ -17,7 +17,7 @@ import {
   insertTiffinRouteSchema,
   insertTiffinInvoiceSchema,
 } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES as AUTH_STAFF_ROLES, type AppRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { z } from "zod/v4";
 import { broadcastEvent } from "../lib/socketio";
@@ -26,10 +26,7 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId",
-  requireRole(
-    "owner", "manager", "cashier", "waiter", "kitchen",
-    "delivery_executive", "customer", "super_admin",
-  ),
+  requireRole(...AUTH_STAFF_ROLES, "customer" as AppRole),
   validateRestaurantAccess,
 );
 

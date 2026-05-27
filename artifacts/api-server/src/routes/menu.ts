@@ -1,7 +1,7 @@
 import express, { Router } from "express";
 import { eq, and, ilike, gt, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { db, menusTable, menuCategoriesTable, menuItemsTable, modifierGroupsTable, modifiersTable, modifierInventoryMappingsTable, inventoryItemsTable, orderItemsTable, orderItemModifiersTable, ordersTable, subscriptionPlansTable, tenantsTable, restaurantsTable } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { recordLibraryImageUsage } from "../lib/stockFoodImages";
 import { normalizeStoredImageUrl } from "../lib/imageUrl";
@@ -18,7 +18,7 @@ function parseImageMeta(body: Record<string, unknown>): { libraryImageId: number
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 /**
  * Verifies that the menu item identified by itemId belongs to a restaurant

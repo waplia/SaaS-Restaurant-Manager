@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, or, inArray, gte, lte, ne, sql, desc, asc, gt } from "drizzle-orm";
 import { db, floorTablesTable, reservationsTable, reservationPacingRulesTable, waitlistEntriesTable, customersTable, subscriptionPlansTable, tenantsTable, restaurantsTable, ordersTable, orderItemsTable, kitchenTicketsTable, notificationsTable, usersTable } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { idempotency } from "../middleware/idempotency";
@@ -120,7 +120,7 @@ const EmptyTableBody = z.object({}).passthrough();
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/tables", async (req, res) => {
   const rows = await db.select().from(floorTablesTable).where(eq(floorTablesTable.restaurantId, Number(req.params.restaurantId)));

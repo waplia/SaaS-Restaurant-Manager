@@ -4,7 +4,7 @@ import { db, ordersTable, floorTablesTable, kitchenTicketsTable, kitchensTable, 
 import { AIProviderService } from "../lib/aiProviderService";
 import { loadKitchenDelayConfig } from "../lib/kitchenDelay";
 import { generateDueRecurringExpenses } from "./expenses";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
@@ -39,7 +39,7 @@ function istMonthKey(d: Date): string {
   return `${y}-${String(m + 1).padStart(2, "0")}`;
 }
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 /**
  * Parse the optional `?branchId=` query and build a drizzle WHERE clause

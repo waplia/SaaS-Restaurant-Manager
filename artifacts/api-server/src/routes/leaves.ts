@@ -9,7 +9,7 @@ import {
   usersTable,
   auditLogsTable,
 } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { pushToStaff, pushToUserIds } from "../lib/pushNotify";
 
@@ -127,11 +127,7 @@ function daysBetween(from: Date, to: Date, halfDay: boolean): number {
   return halfDay ? Math.max(0.5, inclusive - 0.5) : inclusive;
 }
 
-router.use(
-  "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "super_admin"),
-  validateRestaurantAccess,
-);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 // ---------- Leave policies ----------
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, desc, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 import { db, shiftsTable, staffShiftsTable, attendanceTable, auditLogsTable, usersTable } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 
 const router = Router();
@@ -97,11 +97,7 @@ async function computeAttendanceMetrics(restaurantId: number, userId: number, da
   return { scheduledMinutes, lateMinutes, scheduledShiftId };
 }
 
-router.use(
-  "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "cashier", "delivery_executive", "super_admin"),
-  validateRestaurantAccess,
-);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 // ---------- Shift definitions ----------
 

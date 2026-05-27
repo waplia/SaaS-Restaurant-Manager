@@ -126,6 +126,7 @@ export default function CashierBillsScreen() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cashier-held", restaurantId] });
+      void qc.invalidateQueries({ queryKey: ["cashier-bill-requests", restaurantId] });
       void qc.invalidateQueries({ queryKey: getListOrdersQueryKey(scopedId, { status: OPEN_STATUSES }) });
     },
     onError: (err: unknown) => {
@@ -141,6 +142,7 @@ export default function CashierBillsScreen() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cashier-held", restaurantId] });
+      void qc.invalidateQueries({ queryKey: getListOrdersQueryKey(scopedId, { status: OPEN_STATUSES }) });
     },
     onError: (err: unknown) => {
       Alert.alert("Could not reject", err instanceof Error ? err.message : "Try again.");

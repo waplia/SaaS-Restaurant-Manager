@@ -2,7 +2,7 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { eq, and, count } from "drizzle-orm";
 import { db, tenantsTable, subscriptionPlansTable, usersTable, floorTablesTable, menuItemsTable } from "../lib/db";
-import { requireRole, type AppRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES, type AppRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
   createCashfreeOrder, fetchCashfreeOrder, buildCheckoutUrl, verifyCashfreeWebhook,
@@ -27,13 +27,7 @@ function getStripe(): Stripe | null {
 // "payroll", "marketing") are persisted in the DB for some tenants but are
 // not (yet) members of the `AppRole` union, so we cast the array to keep
 // runtime access semantics identical to before the type cleanup.
-router.use(
-  "/restaurants/:restaurantId",
-  requireRole(
-    ...(["owner", "manager", "waiter", "kitchen", "chef", "cashier", "counter_staff", "canteen_admin", "auditor", "accountant", "staff", "delivery_executive", "food_court_owner", "food_court_cashier", "inventory_manager", "hr", "payroll", "marketing", "super_admin"] as unknown as AppRole[]),
-  ),
-  validateRestaurantAccess,
-);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/subscription", async (req, res) => {
   const tenantId = req.user?.tenantId;

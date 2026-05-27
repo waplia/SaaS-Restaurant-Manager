@@ -79,7 +79,7 @@ import {
   subscriptionPlansTable, isFeatureEnabled,
   tenantsTable, restaurantsTable, usersTable, suppliersTable,
 } from "../lib/db";
-import { requireRole, requireSuperAdmin } from "../middleware/authorize";
+import { requireRole, requireSuperAdmin, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import * as wallet from "../lib/walletService";
 import { recordAuditLog } from "../lib/audit";
@@ -119,7 +119,14 @@ function genGiftCardCode(): string {
 
 // ─── Owner / staff routes (per-restaurant) ──────────────────────────────────
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "cashier", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+// Fintech (wallets / loans / payouts) — sensitive financial data. Scope to
+// its own subpaths so cross-router requests aren't blocked, but keep access
+// limited to roles that actually need it.
+router.use(
+  ["/restaurants/:restaurantId/wallets", "/restaurants/:restaurantId/fintech"],
+  requireRole("owner", "manager", "cashier", "accountant", "auditor", "super_admin"),
+  validateRestaurantAccess,
+);
 
 // Wallets summary for the restaurant scope (restaurant + subscription + recent customer wallets).
 router.get("/restaurants/:restaurantId/wallets", async (req, res) => {

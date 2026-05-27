@@ -28,6 +28,29 @@ export type AppRole =
   | "payroll"
   | "hr";
 
+/**
+ * Canonical "any authenticated staff member" allowlist.
+ *
+ * Use this for the top-level `router.use("/restaurants/:restaurantId", ...)`
+ * gates that protect ALL routes in a router file. Because Express runs every
+ * matching middleware on every request, a narrow gate in one router (e.g.
+ * kitchens.ts) will deny requests destined for ANOTHER router (e.g.
+ * /menu) — so every broad mount gate must use the same wide allowlist.
+ *
+ * Per-route write-protection (POST/PATCH/DELETE) should still use a narrower
+ * `requireRole(...)` on the specific handler.
+ */
+export const STAFF_ROLES: AppRole[] = [
+  "owner", "manager", "waiter", "cashier",
+  "kitchen", "chef", "captain",
+  "delivery_executive",
+  "accountant", "auditor", "staff",
+  "inventory_manager", "marketing", "payroll", "hr", "hr_officer",
+  "food_court_owner", "food_court_cashier",
+  "canteen_admin", "counter_staff",
+  "super_admin",
+];
+
 export function requireRole(...roles: AppRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

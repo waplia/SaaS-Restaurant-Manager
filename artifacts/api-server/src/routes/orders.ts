@@ -47,7 +47,7 @@ async function recordTimerStage(restaurantId: number, orderId: number, stage: st
   }
 }
 import { verifyManagerDiscountOtp } from "../lib/managerOtp";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { requirePlanFeature } from "../middleware/planFeature";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { idempotency } from "../middleware/idempotency";
@@ -312,7 +312,7 @@ async function handleOrderCompletion(orderId: number, restaurantId: number, paid
 
 const router = Router();
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "cashier", "kitchen", "chef", "delivery_executive", "super_admin"), validateRestaurantAccess);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
   // Legacy fallback only — kept for back-compat with code paths that

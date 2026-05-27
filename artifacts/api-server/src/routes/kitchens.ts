@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and, inArray } from "drizzle-orm";
 import { db, kitchensTable, menuItemsTable } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { getDefaultKitchenId } from "../lib/kitchenRouting";
 import { validate } from "../middleware/validate";
@@ -42,11 +42,7 @@ const BulkKitchenBody = z.object({
   kitchenId: z.coerce.number().int().positive().nullable(),
 });
 
-router.use(
-  "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "waiter", "kitchen", "chef", "super_admin"),
-  validateRestaurantAccess,
-);
+router.use("/restaurants/:restaurantId", requireRole(...STAFF_ROLES), validateRestaurantAccess);
 
 router.get("/restaurants/:restaurantId/kitchens", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);

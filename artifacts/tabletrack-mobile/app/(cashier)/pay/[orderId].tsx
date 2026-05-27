@@ -105,6 +105,9 @@ export default function CashierPayScreen() {
     }
     qc.invalidateQueries({ queryKey: getGetOrderQueryKey(restaurantId, id) });
     qc.invalidateQueries({ queryKey: ["/api/restaurants", restaurantId, "orders"] });
+    qc.invalidateQueries({ queryKey: ["cashier-sales-summary", restaurantId] });
+    qc.invalidateQueries({ queryKey: ["cash-register-current", restaurantId] });
+    qc.invalidateQueries({ queryKey: ["cashier-bill-requests", restaurantId] });
   };
 
   const submitSingleApi = async (api: ApiMethod, extra?: Partial<{ amountTendered: number }>) => {

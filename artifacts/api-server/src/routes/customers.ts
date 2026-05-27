@@ -12,7 +12,7 @@ import {
   restaurantsTable,
 } from "../lib/db";
 import { normalizePhone, DEFAULT_ISO } from "@workspace/phone-utils";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { effectiveNotificationTypes } from "../lib/roleNotifications";
 import { recordAuditLog } from "../lib/audit";
@@ -98,7 +98,20 @@ notificationsRouter.post(
   },
 );
 
-router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "kitchen", "super_admin"), validateRestaurantAccess);
+// Customer records contain PII (phone/email/notes). Scope the gate to the
+// /customers subpath so it doesn't deny cross-router requests (e.g. /menu),
+// and restrict access to customer-facing roles only. Other staff roles get
+// 403 here even though they pass the wider router-level gates elsewhere.
+router.use(
+  "/restaurants/:restaurantId/customers",
+  requireRole(
+    "owner", "manager", "waiter", "cashier", "captain",
+    "food_court_owner", "food_court_cashier",
+    "canteen_admin", "counter_staff",
+    "super_admin",
+  ),
+  validateRestaurantAccess,
+);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 

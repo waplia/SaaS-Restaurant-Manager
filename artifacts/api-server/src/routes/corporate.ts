@@ -25,16 +25,19 @@ import {
   insertCorporateBulkOrderSchema,
   insertCorporateScheduledOrderSchema,
 } from "../lib/db";
-import { requireRole } from "../middleware/authorize";
+import { requireRole, STAFF_ROLES as AUTH_STAFF_ROLES } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import { z } from "zod/v4";
 import crypto from "crypto";
 
 const router = Router();
 
+// B2B corporate (companies, invoices, bulk orders) — scope to subpath so
+// cross-router requests aren't blocked, and keep the original narrow
+// allowlist of roles that actually administer corporate accounts.
 router.use(
-  "/restaurants/:restaurantId",
-  requireRole("owner", "manager", "cashier", "super_admin"),
+  "/restaurants/:restaurantId/corporate",
+  requireRole("owner", "manager", "cashier", "accountant", "super_admin"),
   validateRestaurantAccess,
 );
 
