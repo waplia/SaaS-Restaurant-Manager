@@ -10,6 +10,7 @@ import {
   smsMarketingTemplatesTable,
   whatsappMarketingTemplatesTable,
   webPushMarketingTemplatesTable,
+  emailTemplatesTable,
   smsSuppressionListTable,
   whatsappSuppressionListTable,
   webPushSuppressionListTable,
@@ -62,7 +63,7 @@ function parseDate(input: unknown): { ok: true; value: Date | null } | { ok: fal
 
 router.use(
   "/restaurants/:restaurantId/growth",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "marketing", "super_admin"),
   validateRestaurantAccess,
 );
 
@@ -415,6 +416,21 @@ router.post("/restaurants/:restaurantId/growth/campaigns/:id/test-send", async (
 router.post("/restaurants/:restaurantId/growth/campaigns/:id/launch", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
+  // Approval gate: launching requires the `campaign.launch` permission.
+  // Owners / managers / super_admin always have it; other roles (e.g.
+  // marketing) save drafts that require approval. Per-user permission
+  // overrides on req.user.permissions can grant launch to anyone.
+  const role = req.user?.role;
+  const perms = (req.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+  const canLaunch =
+    role === "owner" || role === "manager" || role === "super_admin"
+    || perms.includes("campaign.launch");
+  if (!canLaunch) {
+    return void res.status(403).json({
+      error: "You don't have permission to launch campaigns. Ask an owner or manager to approve.",
+      code: "requires_approval",
+    });
+  }
   const [c] = await db.select().from(campaignsTable)
     .where(and(eq(campaignsTable.id, id), eq(campaignsTable.restaurantId, restaurantId)));
   if (!c) return void res.status(404).json({ error: "Not found" });
@@ -585,6 +601,25 @@ function templateTableFor(channel: string) {
 
 router.get("/restaurants/:restaurantId/growth/templates/:channel", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  if (req.params.channel === "email") {
+    // Email templates live in the shared `emailTemplatesTable` (scope =
+    // "platform" for built-ins, "restaurant" for tenant-owned). The
+    // `isEnabled` flag plays the role that `isActive` does on the other
+    // per-channel marketing template tables, and the response is shaped
+    // to match (so the mobile UI can stay channel-agnostic).
+    const rows = await db.select().from(emailTemplatesTable)
+      .where(sql`((${emailTemplatesTable.scope} = 'platform' AND ${emailTemplatesTable.isGlobal} = true)
+              OR (${emailTemplatesTable.scope} = 'restaurant' AND ${emailTemplatesTable.restaurantId} = ${restaurantId}))
+              AND ${emailTemplatesTable.isEnabled} = true
+              AND ${emailTemplatesTable.isHidden} = false`)
+      .orderBy(desc(emailTemplatesTable.updatedAt))
+      .limit(500);
+    return void res.json(rows.map(r => ({
+      id: r.id, name: r.name, category: r.category, body: r.body,
+      title: r.subject, isGlobal: r.scope === "platform" || r.isGlobal,
+      updatedAt: r.updatedAt,
+    })));
+  }
   const t = templateTableFor(req.params.channel);
   if (!t) return void res.status(400).json({ error: "invalid channel" });
   const rows = await db.select().from(t).where(sql`(${t.restaurantId} = ${restaurantId} OR ${t.isGlobal} = true) AND ${t.isActive} = true`)
@@ -594,6 +629,26 @@ router.get("/restaurants/:restaurantId/growth/templates/:channel", async (req, r
 
 router.post("/restaurants/:restaurantId/growth/templates/:channel", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  if (req.params.channel === "email") {
+    const { name, category, body, title, subject } = req.body ?? {};
+    if (!name || !body) return void res.status(400).json({ error: "name and body are required" });
+    const [row] = await db.insert(emailTemplatesTable).values({
+      key: String(name).toLowerCase().replace(/\s+/g, "_").slice(0, 120),
+      name: String(name).slice(0, 200),
+      category: (category || "marketing") as never,
+      subject: String(subject || title || name).slice(0, 200),
+      body: String(body),
+      scope: "restaurant",
+      restaurantId,
+      isGlobal: false,
+      isEnabled: true,
+      status: "approved",
+    }).returning();
+    return void res.status(201).json({
+      id: row.id, name: row.name, category: row.category, body: row.body,
+      title: row.subject, isGlobal: false, updatedAt: row.updatedAt,
+    });
+  }
   const t = templateTableFor(req.params.channel);
   if (!t) return void res.status(400).json({ error: "invalid channel" });
   const { key, name, category, body, title, iconUrl, imageUrl, clickUrl, language, metaTemplateName } = req.body ?? {};
@@ -620,6 +675,27 @@ router.post("/restaurants/:restaurantId/growth/templates/:channel", async (req, 
 router.patch("/restaurants/:restaurantId/growth/templates/:channel/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
+  if (req.params.channel === "email") {
+    const b = req.body ?? {};
+    const update: Record<string, unknown> = { updatedAt: new Date() };
+    if (b.name !== undefined) update.name = String(b.name).slice(0, 200);
+    if (b.category !== undefined) update.category = b.category;
+    if (b.body !== undefined) update.body = String(b.body);
+    if (b.title !== undefined) update.subject = String(b.title).slice(0, 200);
+    if (b.subject !== undefined) update.subject = String(b.subject).slice(0, 200);
+    if (b.isActive !== undefined) update.isEnabled = !!b.isActive;
+    const [row] = await db.update(emailTemplatesTable).set(update as never)
+      .where(and(
+        eq(emailTemplatesTable.id, id),
+        eq(emailTemplatesTable.restaurantId, restaurantId),
+        eq(emailTemplatesTable.scope, "restaurant"),
+      )).returning();
+    if (!row) return void res.status(404).json({ error: "Not found" });
+    return void res.json({
+      id: row.id, name: row.name, category: row.category, body: row.body,
+      title: row.subject, isGlobal: false, updatedAt: row.updatedAt,
+    });
+  }
   const t = templateTableFor(req.params.channel);
   if (!t) return void res.status(400).json({ error: "invalid channel" });
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -636,6 +712,14 @@ router.patch("/restaurants/:restaurantId/growth/templates/:channel/:id", async (
 router.delete("/restaurants/:restaurantId/growth/templates/:channel/:id", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const id = Number(req.params.id);
+  if (req.params.channel === "email") {
+    await db.delete(emailTemplatesTable).where(and(
+      eq(emailTemplatesTable.id, id),
+      eq(emailTemplatesTable.restaurantId, restaurantId),
+      eq(emailTemplatesTable.scope, "restaurant"),
+    ));
+    return void res.status(204).send();
+  }
   const t = templateTableFor(req.params.channel);
   if (!t) return void res.status(400).json({ error: "invalid channel" });
   await db.delete(t).where(and(eq(t.id, id), eq(t.restaurantId, restaurantId)));

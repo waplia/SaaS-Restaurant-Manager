@@ -36,13 +36,13 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId/reviews/:rest",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "marketing", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("khana_ai_enabled"),
 );
 router.use(
   "/restaurants/:restaurantId/review-qrs/:rest",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "marketing", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("khana_ai_enabled"),
 );
@@ -433,6 +433,28 @@ Return ONLY JSON: {
     }
   },
 );
+
+// Create a manual reply draft (no AI). Used when AI is unavailable or the
+// user wants to write their own reply from scratch.
+router.post("/restaurants/:restaurantId/reviews/replies", async (req: Request, res: Response) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const externalReviewId = typeof b.externalReviewId === "number" ? b.externalReviewId : null;
+  const draftReply = typeof b.draftReply === "string" ? b.draftReply.slice(0, 4000) : "";
+  const reviewSnapshot = typeof b.reviewSnapshot === "string" ? b.reviewSnapshot.slice(0, 4000) : "";
+  const tone = typeof b.tone === "string" ? b.tone : "friendly";
+  if (!externalReviewId) return void res.status(400).json({ error: "externalReviewId required" });
+  const [draft] = await db.insert(reviewRepliesTable).values({
+    externalReviewId,
+    restaurantId,
+    reviewSnapshot,
+    tone,
+    draftReply,
+    status: "draft",
+    createdBy: req.user?.sub ?? null,
+  }).returning();
+  res.status(201).json({ draft });
+});
 
 router.patch("/restaurants/:restaurantId/reviews/replies/:replyId", async (req: Request, res: Response) => {
   const restaurantId = Number(req.params.restaurantId);

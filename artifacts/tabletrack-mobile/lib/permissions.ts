@@ -38,6 +38,7 @@ export type PermissionAction =
   | "delivery.handover_cod"
   // Marketing
   | "campaign.create"
+  | "campaign.launch"
   | "coupon.create"
   | "review.respond"
   // Accountant
@@ -59,7 +60,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlyArray<PermissionAction>> = {
     "stock.adjust", "stock.receive_po", "vendor.manage",
     "shift.open", "shift.close", "cash.drop", "cash.pickup",
     "delivery.assign",
-    "campaign.create", "coupon.create", "review.respond",
+    "campaign.create", "campaign.launch", "coupon.create", "review.respond",
     "expense.approve", "report.export",
     "staff.invite", "attendance.edit", "approval.act",
   ],
@@ -91,6 +92,8 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlyArray<PermissionAction>> = {
     "report.export",
   ],
   marketing: [
+    // Note: no "campaign.launch" — marketing role drafts campaigns that
+    // require owner/manager approval to launch.
     "campaign.create", "coupon.create", "review.respond",
   ],
   accountant: [
