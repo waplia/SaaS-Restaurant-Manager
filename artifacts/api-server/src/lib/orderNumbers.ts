@@ -192,11 +192,63 @@ export function normalizeOutletCode(raw: string | null | undefined, fallbackName
 }
 
 /**
+ * Derive a JPR01-style base code from a branch name: take the initials
+ * of the first three words (or letters of the first word) and uppercase.
+ */
+function deriveBaseFromName(name: string | null | undefined): string {
+  const cleaned = (name ?? "").trim();
+  if (!cleaned) return "OUT";
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return words.slice(0, 3).map(w => w[0]).join("").toUpperCase().replace(/[^A-Z0-9]/g, "") || "OUT";
+  }
+  return cleaned.slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, "") || "OUT";
+}
+
+/**
+ * Pick a unique-per-restaurant outlet code given a desired base. Tries
+ * `BASE`, `BASE01`, `BASE02`, … until it finds one no other branch in
+ * the restaurant is using. Always returns a 3–6 char uppercase code.
+ */
+async function pickUniqueOutletCode(
+  restaurantId: number,
+  baseRaw: string,
+  excludeBranchId: number | null,
+  exec: Executor,
+): Promise<string> {
+  const base = normalizeOutletCode(baseRaw, "OUT");
+  const trunkLen = Math.min(4, Math.max(2, base.length));
+  const trunk = base.slice(0, trunkLen);
+  const rows = await exec
+    .select({ id: branchesTable.id, outletCode: branchesTable.outletCode })
+    .from(branchesTable)
+    .where(eq(branchesTable.restaurantId, restaurantId));
+  const taken = new Set(
+    rows
+      .filter(r => excludeBranchId == null || r.id !== excludeBranchId)
+      .map(r => (r.outletCode ?? "").toUpperCase())
+      .filter(Boolean),
+  );
+  if (!taken.has(base)) return base;
+  for (let i = 1; i <= 99; i++) {
+    const candidate = `${trunk}${String(i).padStart(2, "0")}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  // 99+ branches under the same trunk is astronomically unlikely. Append
+  // the branch id as a last resort so we still return a unique value.
+  return `${trunk}${(excludeBranchId ?? Date.now()).toString(36).toUpperCase().slice(-3)}`.slice(0, 6);
+}
+
+/**
  * Look up — or derive and persist — the outlet code for a branch. Falls
  * back to a restaurant-level code (derived from slug/name) when the order
  * is not bound to a branch. Honours `outletWiseSequence=false` by always
  * returning the restaurant-level code so the sequence collapses to one
  * shared counter.
+ *
+ * When a branch has a missing/invalid/colliding outlet code, this picks
+ * a fresh JPR01-style unique code (per restaurant) and persists it so
+ * subsequent orders are deterministic.
  */
 export async function resolveOutletCode(
   restaurantId: number,
@@ -210,19 +262,31 @@ export async function resolveOutletCode(
       .from(branchesTable)
       .where(and(eq(branchesTable.id, branchId), eq(branchesTable.restaurantId, restaurantId)));
     if (b) {
-      const stored = normalizeOutletCode(b.outletCode, b.name);
-      if (stored !== (b.outletCode ?? "")) {
-        await exec.update(branchesTable).set({ outletCode: stored, updatedAt: new Date() })
-          .where(eq(branchesTable.id, b.id));
+      const stored = (b.outletCode ?? "").toUpperCase();
+      // Valid + globally unique-per-restaurant? Reuse as-is.
+      if (/^[A-Z0-9]{3,6}$/.test(stored)) {
+        const dupes = await exec
+          .select({ id: branchesTable.id })
+          .from(branchesTable)
+          .where(and(
+            eq(branchesTable.restaurantId, restaurantId),
+            eq(branchesTable.outletCode, stored),
+          ));
+        if (dupes.length <= 1) return { outletCode: stored, branchId: b.id };
       }
-      return { outletCode: stored, branchId: b.id };
+      // Need a fresh unique code derived from the branch name.
+      const base = deriveBaseFromName(b.name);
+      const chosen = await pickUniqueOutletCode(restaurantId, base, b.id, exec);
+      await exec.update(branchesTable).set({ outletCode: chosen, updatedAt: new Date() })
+        .where(eq(branchesTable.id, b.id));
+      return { outletCode: chosen, branchId: b.id };
     }
   }
   const [r] = await exec
     .select({ slug: restaurantsTable.slug, name: restaurantsTable.name })
     .from(restaurantsTable)
     .where(eq(restaurantsTable.id, restaurantId));
-  return { outletCode: normalizeOutletCode(null, r?.slug ?? r?.name ?? "MAIN"), branchId: outletWise ? 0 : 0 };
+  return { outletCode: normalizeOutletCode(null, r?.slug ?? r?.name ?? "MAIN"), branchId: 0 };
 }
 
 export type MintedNumbers = {
