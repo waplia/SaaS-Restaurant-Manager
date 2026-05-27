@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Alert } from "@/components/ui/AppAlert";
-import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform, Share, Linking } from "react-native";
-import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform } from "react-native";
+import { printBill } from "@/lib/printBill";
 import { useLocalSearchParams, useNavigation, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,7 +28,7 @@ export default function BillScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const qc = useQueryClient();
-  const { restaurantId } = useAuth();
+  const { restaurantId, accessToken } = useAuth();
   const isWeb = Platform.OS === "web";
   const id = Number(orderId);
 
@@ -91,22 +91,17 @@ export default function BillScreen() {
   const handlePrintBill = async () => {
     if (!order) return;
     const orderNumber = formatOrderNumber(order.orderInternalNumber ?? order.orderNumber ?? id);
-    const base = getApiBaseUrl();
-    const url = `${base}/api/restaurants/${restaurantId}/orders/${order.id}/bill-render?channel=mobile_share`;
-    try {
-      if (Platform.OS === "web") {
-        await Linking.openURL(url);
-        return;
-      }
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Share.share({ message: url, url, title: `Bill — Order #${orderNumber}` });
-      } else {
-        await Share.share({ message: url, title: `Bill — Order #${orderNumber}` });
-      }
-    } catch {
-      Alert.alert("Share Bill", "Could not open the share sheet.");
-    }
+    // printBill() fetches the rendered HTML from /bill-render and hands
+    // it to AirPrint / Android Print on native (Save PDF / WhatsApp /
+    // any AirPrint printer all flow from there) or opens it in a new
+    // tab on web. No more "shared the URL as a text message".
+    await printBill({
+      restaurantId,
+      orderId: order.id,
+      orderNumber,
+      accessToken,
+      channel: "mobile_share",
+    });
   };
 
   if (isLoading) {

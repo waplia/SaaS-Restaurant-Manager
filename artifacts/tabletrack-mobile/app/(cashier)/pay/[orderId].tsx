@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
-  View, Pressable, ScrollView, ActivityIndicator, Share, Platform,
+  View, Pressable, ScrollView, ActivityIndicator, Platform,
 } from "react-native";
+import { printBill } from "@/lib/printBill";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,7 +59,7 @@ export default function CashierPayScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const { restaurantId } = useAuth();
+  const { restaurantId, accessToken } = useAuth();
   const id = Number(orderId);
 
   const canSplit = usePermission("bill.split");
@@ -206,22 +207,18 @@ export default function CashierPayScreen() {
     if (m.api) await submitSingleApi(m.api);
   };
 
-  const printBill = async () => {
+  const handlePrintBill = async () => {
     if (!order) return;
-    type Item = { menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string };
-    const items = ((order.items ?? []) as Item[])
-      .map((it) => `• ${it.menuItemName} ×${it.quantity}  ${fmt(it.totalPrice ?? it.unitPrice)}`)
-      .join("\n");
-    const message =
-      `Order #${orderNumber}\n` +
-      "------------------------------\n" +
-      `${items}\n` +
-      "------------------------------\n" +
-      `Subtotal: ${fmt(order.subtotal)}\n` +
-      `Total:    ${fmt(order.totalAmount)}\n\n` +
-      "Thank you!";
-    try { await Share.share({ message, title: `Bill — #${orderNumber}` }); }
-    catch { Alert.alert("Print", "Could not open share sheet."); }
+    // Pull the real rendered bill from the server (honors the outlet's
+    // active template, logo, tax breakdown, etc.) and route through the
+    // OS print sheet — no more hand-rolled plain-text receipts.
+    await printBill({
+      restaurantId,
+      orderId: order.id,
+      orderNumber,
+      accessToken,
+      channel: "pos_thermal",
+    });
   };
 
   if (isLoading) {
@@ -523,7 +520,7 @@ export default function CashierPayScreen() {
             label="Print bill"
             variant="outline"
             leftIcon="print-outline"
-            onPress={printBill}
+            onPress={handlePrintBill}
             style={{ flex: 1 }}
           />
           {!isPaid ? (
